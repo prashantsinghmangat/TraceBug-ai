@@ -3,8 +3,15 @@
 // Zero dependencies — all vanilla DOM + inline styles.
 // Reads session data directly from localStorage.
 
-import { getAllSessions, deleteSession, clearAllSessions } from "./storage";
-import { StoredSession } from "./types";
+import { getAllSessions, deleteSession, clearAllSessions, addAnnotation } from "./storage";
+import { StoredSession, Annotation } from "./types";
+import { captureScreenshot, getScreenshots } from "./screenshot";
+import { buildReport } from "./report-builder";
+import { generateGitHubIssue } from "./github-issue";
+import { generateJiraTicket } from "./jira-issue";
+import { generatePdfReport } from "./pdf-generator";
+import { generateBugTitle } from "./title-generator";
+import { captureEnvironment } from "./environment";
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -290,6 +297,18 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     </div>
   </div>`;
 
+  // ── QA Toolbar ──
+  html += `<div style="background:#0c1222;border:1px solid #1e3a5f;border-radius:10px;padding:10px;margin-bottom:14px">
+    <div style="font-size:10px;color:#60a5fa;font-weight:700;margin-bottom:8px;font-family:system-ui,sans-serif">QA TOOLS</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button id="bt-screenshot" style="${smallBtnStyle("#22d3ee")}font-size:10px">📸 Screenshot</button>
+      <button id="bt-add-note" style="${smallBtnStyle("#a78bfa")}font-size:10px">📝 Add Note</button>
+      <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:10px">🐙 GitHub Issue</button>
+      <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:10px">🎫 Jira Ticket</button>
+      <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:10px">📄 PDF Report</button>
+    </div>
+  </div>`;
+
   // ── Session overview card ──
   html += `<div style="background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:14px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -444,6 +463,54 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       </div>
       <pre style="color:#bbf7d0;font-size:12px;white-space:pre-wrap;line-height:1.7;margin:0">${escapeHtml(s.reproSteps)}</pre>
       ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:system-ui,sans-serif">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml(s.errorSummary)}</pre></div>` : ""}
+    </div>`;
+  }
+
+  // ── Tester Annotations ──
+  const annotations = s.annotations || [];
+  if (annotations.length > 0) {
+    html += `<div style="border:1px solid #1e3a5f;background:#0c1222;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:10px;font-family:system-ui,sans-serif">📝 Tester Notes (${annotations.length})</div>`;
+    for (const note of annotations) {
+      const sevColor = note.severity === "critical" ? "#ef4444" : note.severity === "major" ? "#f97316" : note.severity === "minor" ? "#3b82f6" : "#888";
+      html += `<div style="border:1px solid #2a2a3e;background:#12121f;border-radius:6px;padding:10px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;font-weight:600;text-transform:uppercase">${note.severity}</span>
+          <span style="font-size:10px;color:#555">${new Date(note.timestamp).toLocaleTimeString()}</span>
+        </div>
+        <div style="color:#e0e0e0;font-size:12px;line-height:1.4">${escapeHtml(note.text)}</div>
+        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:#22c55e;font-weight:600">Expected:</span> <span style="color:#aaa">${escapeHtml(note.expected)}</span></div>` : ""}
+        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:#ef4444;font-weight:600">Actual:</span> <span style="color:#aaa">${escapeHtml(note.actual)}</span></div>` : ""}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // ── Screenshots ──
+  const screenshots = getScreenshots();
+  if (screenshots.length > 0) {
+    html += `<div style="border:1px solid #2a2a3e;background:#12121f;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:10px;font-family:system-ui,sans-serif">📸 Screenshots (${screenshots.length})</div>`;
+    for (const ss of screenshots) {
+      html += `<div style="margin-bottom:10px">
+        <div style="font-size:10px;color:#888;margin-bottom:4px">${escapeHtml(ss.filename)} — ${escapeHtml(ss.page)}</div>
+        <img src="${ss.dataUrl}" style="max-width:100%;border:1px solid #2a2a3e;border-radius:6px" />
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // ── Environment Info ──
+  const envInfo = s.environment;
+  if (envInfo) {
+    html += `<div style="background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px;font-family:system-ui,sans-serif">🖥 Environment</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">Browser</span><div style="font-size:12px;color:#e0e0e0">${escapeHtml(envInfo.browser)} ${escapeHtml(envInfo.browserVersion)}</div></div>
+        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">OS</span><div style="font-size:12px;color:#e0e0e0">${escapeHtml(envInfo.os)}</div></div>
+        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">Viewport</span><div style="font-size:12px;color:#e0e0e0">${escapeHtml(envInfo.viewport)}</div></div>
+        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">Device</span><div style="font-size:12px;color:#e0e0e0">${envInfo.deviceType}</div></div>
+      </div>
     </div>`;
   }
 
@@ -657,6 +724,136 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     if (confirm("Delete this session?")) {
       deleteSession(session.sessionId);
       renderPanel(panel);
+    }
+  });
+
+  // ── QA Toolbar handlers ──
+
+  // Screenshot
+  const ssBtn = content.querySelector("#bt-screenshot");
+  if (ssBtn) {
+    ssBtn.addEventListener("click", async () => {
+      (ssBtn as HTMLElement).textContent = "📸 Capturing...";
+      try {
+        const lastEvent = s.events[s.events.length - 1] || null;
+        const ss = await captureScreenshot(lastEvent);
+        (ssBtn as HTMLElement).textContent = `✓ ${ss.filename}`;
+        setTimeout(() => { (ssBtn as HTMLElement).textContent = "📸 Screenshot"; }, 3000);
+      } catch {
+        (ssBtn as HTMLElement).textContent = "✗ Failed";
+        setTimeout(() => { (ssBtn as HTMLElement).textContent = "📸 Screenshot"; }, 2000);
+      }
+    });
+  }
+
+  // Add Note
+  const noteBtn = content.querySelector("#bt-add-note");
+  if (noteBtn) {
+    noteBtn.addEventListener("click", () => {
+      showNoteDialog(s.sessionId, panel, session);
+    });
+  }
+
+  // GitHub Issue
+  const ghBtn = content.querySelector("#bt-github-issue");
+  if (ghBtn) {
+    ghBtn.addEventListener("click", () => {
+      const report = buildReport(session);
+      const md = generateGitHubIssue(report);
+      navigator.clipboard.writeText(md).then(() => {
+        (ghBtn as HTMLElement).textContent = "✓ Copied!";
+        setTimeout(() => { (ghBtn as HTMLElement).textContent = "🐙 GitHub Issue"; }, 2000);
+      });
+    });
+  }
+
+  // Jira Ticket
+  const jiraBtn = content.querySelector("#bt-jira-ticket");
+  if (jiraBtn) {
+    jiraBtn.addEventListener("click", () => {
+      const report = buildReport(session);
+      const ticket = generateJiraTicket(report);
+      const text = `Summary: ${ticket.summary}\nPriority: ${ticket.priority}\nLabels: ${ticket.labels.join(", ")}\n\n${ticket.description}`;
+      navigator.clipboard.writeText(text).then(() => {
+        (jiraBtn as HTMLElement).textContent = "✓ Copied!";
+        setTimeout(() => { (jiraBtn as HTMLElement).textContent = "🎫 Jira Ticket"; }, 2000);
+      });
+    });
+  }
+
+  // PDF Report
+  const pdfBtn = content.querySelector("#bt-download-pdf");
+  if (pdfBtn) {
+    pdfBtn.addEventListener("click", () => {
+      const report = buildReport(session);
+      generatePdfReport(report);
+    });
+  }
+}
+
+// ── Note dialog ───────────────────────────────────────────────────────────
+
+function showNoteDialog(sessionId: string, panel: HTMLElement, session: StoredSession): void {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+
+  overlay.innerHTML = `
+    <div style="background:#12121f;border:1px solid #2a2a3e;border-radius:12px;padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;font-family:system-ui,sans-serif">📝 Add Tester Note</div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">What did you observe?</label>
+        <textarea id="bt-note-text" style="width:100%;height:60px;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit;resize:vertical" placeholder="Describe the issue..."></textarea>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">Expected behavior</label>
+        <input id="bt-note-expected" style="width:100%;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit" placeholder="What should happen?" />
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">Actual behavior</label>
+        <input id="bt-note-actual" style="width:100%;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit" placeholder="What actually happened?" />
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">Severity</label>
+        <select id="bt-note-severity" style="width:100%;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit">
+          <option value="critical">Critical — App broken/unusable</option>
+          <option value="major">Major — Feature not working</option>
+          <option value="minor" selected>Minor — Cosmetic/UX issue</option>
+          <option value="info">Info — Observation/Note</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="bt-note-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
+        <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Save Note</button>
+      </div>
+    </div>
+  `;
+
+  const panelEl = panel.querySelector("#bt-content") || panel;
+  panelEl.appendChild(overlay);
+
+  overlay.querySelector("#bt-note-cancel")!.addEventListener("click", () => overlay.remove());
+
+  overlay.querySelector("#bt-note-save")!.addEventListener("click", () => {
+    const text = (overlay.querySelector("#bt-note-text") as HTMLTextAreaElement).value.trim();
+    if (!text) return;
+
+    const annotation: Annotation = {
+      id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      text,
+      expected: (overlay.querySelector("#bt-note-expected") as HTMLInputElement).value.trim() || undefined,
+      actual: (overlay.querySelector("#bt-note-actual") as HTMLInputElement).value.trim() || undefined,
+      severity: (overlay.querySelector("#bt-note-severity") as HTMLSelectElement).value as Annotation["severity"],
+    };
+
+    addAnnotation(sessionId, annotation);
+    overlay.remove();
+
+    // Refresh the session view
+    const updatedSessions = getAllSessions();
+    const updatedSession = updatedSessions.find(s => s.sessionId === sessionId);
+    if (updatedSession) {
+      renderSessionDetail(panel, updatedSession);
     }
   });
 }

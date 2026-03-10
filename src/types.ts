@@ -56,4 +56,74 @@ export interface StoredSession {
   reproSteps: string | null;
   errorSummary: string | null;
   events: TraceBugEvent[];
+  annotations: Annotation[];
+  environment: EnvironmentInfo | null;
+}
+
+// ── Annotation (tester notes) ─────────────────────────────────────────────
+
+export interface Annotation {
+  id: string;
+  timestamp: number;
+  text: string;
+  expected?: string;
+  actual?: string;
+  severity: "critical" | "major" | "minor" | "info";
+  screenshotId?: string;
+}
+
+// ── Screenshot ────────────────────────────────────────────────────────────
+
+export interface ScreenshotData {
+  id: string;
+  timestamp: number;
+  dataUrl: string;
+  filename: string;
+  eventContext: string;
+  page: string;
+  width: number;
+  height: number;
+}
+
+// ── Environment ───────────────────────────────────────────────────────────
+
+export interface EnvironmentInfo {
+  browser: string;
+  browserVersion: string;
+  os: string;
+  viewport: string;
+  screenResolution: string;
+  language: string;
+  timezone: string;
+  userAgent: string;
+  url: string;
+  deviceType: "desktop" | "tablet" | "mobile";
+  connectionType: string;
+  timestamp: number;
+}
+
+// ── Bug Report ────────────────────────────────────────────────────────────
+
+export interface BugReport {
+  title: string;
+  steps: string;
+  environment: EnvironmentInfo;
+  consoleErrors: { message: string; stack?: string; timestamp: number }[];
+  networkErrors: { method: string; url: string; status: number; duration: number; timestamp: number }[];
+  annotations: Annotation[];
+  screenshots: ScreenshotData[];
+  timeline: TimelineEntry[];
+  session: StoredSession;
+  generatedAt: number;
+}
+
+// ── Timeline ──────────────────────────────────────────────────────────────
+
+export interface TimelineEntry {
+  timestamp: number;
+  elapsed: string;
+  type: string;
+  description: string;
+  isError: boolean;
+  page: string;
 }

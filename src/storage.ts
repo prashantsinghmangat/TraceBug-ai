@@ -1,7 +1,7 @@
 // ── localStorage-based storage engine ─────────────────────────────────────
 // All session data lives in the browser. Nothing leaves the machine.
 
-import { TraceBugEvent, StoredSession } from "./types";
+import { TraceBugEvent, StoredSession, Annotation, EnvironmentInfo } from "./types";
 
 const SESSIONS_KEY = "tracebug_sessions";
 const SESSION_ID_KEY = "tracebug_session_id";
@@ -63,6 +63,8 @@ export function getOrCreateSession(
       reproSteps: null,
       errorSummary: null,
       events: [],
+      annotations: [],
+      environment: null,
     };
     sessions.push(session);
     saveSessions(sessions);
@@ -92,6 +94,8 @@ export function appendEvent(
       reproSteps: null,
       errorSummary: null,
       events: [],
+      annotations: [],
+      environment: null,
     };
     sessions.push(session);
   }
@@ -138,6 +142,30 @@ export function updateSessionError(
 
 export function deleteSession(sessionId: string): void {
   const sessions = getAllSessions().filter((s) => s.sessionId !== sessionId);
+  saveSessions(sessions);
+}
+
+// ── Add annotation to session ────────────────────────────────────────────
+
+export function addAnnotation(sessionId: string, annotation: Annotation): void {
+  const sessions = getAllSessions();
+  const session = sessions.find((s) => s.sessionId === sessionId);
+  if (!session) return;
+
+  if (!session.annotations) session.annotations = [];
+  session.annotations.push(annotation);
+  session.updatedAt = Date.now();
+  saveSessions(sessions);
+}
+
+// ── Save environment info to session ─────────────────────────────────────
+
+export function saveEnvironment(sessionId: string, env: EnvironmentInfo): void {
+  const sessions = getAllSessions();
+  const session = sessions.find((s) => s.sessionId === sessionId);
+  if (!session) return;
+
+  session.environment = env;
   saveSessions(sessions);
 }
 
