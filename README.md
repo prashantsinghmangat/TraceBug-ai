@@ -1,6 +1,6 @@
-# TraceBug AI
+# TraceBug SDK
 
-Zero-backend bug reproduction tool. Install as a dependency, runs entirely in the browser, stores everything in `localStorage`. When an error occurs, it auto-generates human-readable reproduction steps.
+Zero-backend bug reproduction tool for the browser. Records user sessions and auto-generates human-readable reproduction steps when errors occur.
 
 No servers. No databases. No API keys. Just `npm install` and go.
 
@@ -44,26 +44,26 @@ That's it. The SDK will:
 
 ## Installation
 
-### From a .tgz file (offline sharing)
+### From npm
 
 ```bash
-# The person sharing runs:
-npm pack
-
-# The person installing runs:
-npm install ./tracebug-sdk-1.0.0.tgz
+npm install tracebug-sdk
 ```
 
 ### From GitHub
 
 ```bash
-npm install github:YOUR_USERNAME/tracebug-ai
+npm install github:prashantsinghmangat/tracebug-ai
 ```
 
-### From npm (coming soon)
+### From a .tgz file (offline sharing)
 
 ```bash
-npm install tracebug-sdk
+# Generate the package:
+npm pack
+
+# Install from the file:
+npm install ./tracebug-sdk-1.0.0.tgz
 ```
 
 ## Configuration
@@ -74,13 +74,32 @@ TraceBug.init({
   maxEvents: 200,             // Max events per session (default 200)
   maxSessions: 50,            // Max sessions in localStorage (default 50)
   enableDashboard: true,      // Show the 🐛 button (default true)
+  enabled: "auto",            // Control when SDK is active (see below)
 });
 ```
+
+### `enabled` option
+
+Controls when TraceBug is active. Default: `"auto"`
+
+| Value | Behavior |
+|-------|----------|
+| `"auto"` | Enabled in dev/staging, disabled in production. Detects via `import.meta.env`, `process.env.NODE_ENV`, or hostname. |
+| `"development"` | Only enabled when `NODE_ENV` is `"development"` |
+| `"staging"` | Enabled in dev + staging (hostname contains `staging`, `stg`, `uat`, `qa`) |
+| `"all"` | Always enabled, including production (use with caution) |
+| `"off"` | Completely disabled — SDK does nothing |
+| `string[]` | Custom list of allowed hostnames, e.g. `["localhost", "staging.myapp.com"]` |
 
 ## Programmatic API
 
 ```typescript
-import TraceBug, { getAllSessions, clearAllSessions, deleteSession } from "tracebug-sdk";
+import TraceBug, {
+  getAllSessions,
+  clearAllSessions,
+  deleteSession,
+  generateReproSteps,
+} from "tracebug-sdk";
 
 // Pause / resume recording
 TraceBug.pauseRecording();
@@ -140,7 +159,6 @@ The SDK **never captures its own events**. Clicks on the 🐛 button, interactio
   - **HTML** — standalone visual report (dark theme, opens in any browser)
 - **Copy Full Report** to clipboard
 - **Always on top** — dashboard uses max z-index with `!important` CSS, cannot be overlapped by app UI
-- **Close button** slides outside panel when open, always accessible
 
 ## Framework Compatibility
 
@@ -154,50 +172,6 @@ The SDK ships dual format (CJS + ESM) with conditional exports:
 
 Bundlers automatically pick the right format via the `exports` field in `package.json`.
 
-## Try the Example App
-
-```bash
-cd example-app
-npm install
-npm run dev
-```
-
-Open http://localhost:3000 and:
-
-1. Click **"Go to Vendor Page"**
-2. Click **"Edit"**
-3. Change Status to **Inactive**
-4. Click **"Update"** → triggers TypeError
-5. Click the **🐛** button in the bottom-right corner
-6. See the auto-generated reproduction steps + event timeline
-7. Download the report as JSON, text, or HTML
-
-## Building the SDK
-
-```bash
-npm install
-npm run build
-```
-
-Output goes to `dist/` (both `index.js` and `index.cjs`). The `prepare` script auto-builds when installed from GitHub.
-
-### Local development
-
-```bash
-cd tracebug-ai
-npm link
-
-cd your-app
-npm link tracebug-sdk
-```
-
-### Creating a shareable .tgz
-
-```bash
-npm pack
-# Share tracebug-sdk-1.0.0.tgz with your team
-```
-
 ## Uninstall
 
 ```bash
@@ -205,12 +179,6 @@ npm uninstall tracebug-sdk
 ```
 
 Then remove the `TraceBug.init()` call from your app's entry file.
-
-## Author
-
-Created and coded by **Prashant Singh Mangat**
-- GitHub: [github.com/prashantsinghmangat](https://github.com/prashantsinghmangat)
-- Repo: [github.com/prashantsinghmangat/TraceBug-ai](https://github.com/prashantsinghmangat/TraceBug-ai)
 
 ## License
 
