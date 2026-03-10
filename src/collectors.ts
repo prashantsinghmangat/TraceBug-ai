@@ -279,6 +279,56 @@ export function collectApiRequests(emit: Emit): () => void {
   };
 }
 
+// ── XMLHttpRequest interception ───────────────────────────────────────────
+
+export function collectXhrRequests(emit: Emit): () => void {
+  const OrigXHR = window.XMLHttpRequest;
+  const origOpen = OrigXHR.prototype.open;
+  const origSend = OrigXHR.prototype.send;
+
+  OrigXHR.prototype.open = function (method: string, url: string | URL, ...rest: any[]) {
+    (this as any)._tb_method = method;
+    (this as any)._tb_url = typeof url === "string" ? url : url.toString();
+    return origOpen.apply(this, [method, url, ...rest] as any);
+  };
+
+  OrigXHR.prototype.send = function (body?: any) {
+    const xhr = this;
+    const start = Date.now();
+    const method = (xhr as any)._tb_method || "GET";
+    const url = (xhr as any)._tb_url || "";
+
+    xhr.addEventListener("loadend", function () {
+      emit("api_request", {
+        request: {
+          url: url.slice(0, 500),
+          method: method.toUpperCase(),
+          statusCode: xhr.status,
+          durationMs: Date.now() - start,
+        },
+      });
+    });
+
+    xhr.addEventListener("error", function () {
+      emit("api_request", {
+        request: {
+          url: url.slice(0, 500),
+          method: method.toUpperCase(),
+          statusCode: 0,
+          durationMs: Date.now() - start,
+        },
+      });
+    });
+
+    return origSend.call(this, body);
+  };
+
+  return () => {
+    OrigXHR.prototype.open = origOpen;
+    OrigXHR.prototype.send = origSend;
+  };
+}
+
 // ── Errors (window.onerror + unhandledrejection + console.error) ──────────
 
 export function collectErrors(emit: Emit): () => void {

@@ -12,8 +12,24 @@
 // That's it. No backend, no API keys, no config.
 // Events are stored in localStorage. A dashboard panel appears in-browser.
 
-import { TraceBugConfig, TraceBugEvent, EventType, StoredSession } from "./types";
-import { getSessionId, appendEvent, updateSessionError, getAllSessions } from "./storage";
+import {
+  TraceBugConfig,
+  TraceBugEvent,
+  EventType,
+  StoredSession,
+  BugReport,
+  Annotation,
+  ScreenshotData,
+  EnvironmentInfo,
+} from "./types";
+import {
+  getSessionId,
+  appendEvent,
+  updateSessionError,
+  getAllSessions,
+  addAnnotation,
+  saveEnvironment,
+} from "./storage";
 import { generateReproSteps } from "./repro-generator";
 import { mountDashboard, setRecordingState, updateRecordingState } from "./dashboard";
 import {
@@ -23,18 +39,47 @@ import {
   collectFormSubmits,
   collectRouteChanges,
   collectApiRequests,
+  collectXhrRequests,
   collectErrors,
 } from "./collectors";
+import { captureEnvironment } from "./environment";
+import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
+import { buildReport } from "./report-builder";
+import { generateGitHubIssue } from "./github-issue";
+import { generateJiraTicket } from "./jira-issue";
+import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
+import { generateBugTitle, generateFlowSummary } from "./title-generator";
+import { buildTimeline, formatTimelineText } from "./timeline-builder";
 
-export { TraceBugConfig, TraceBugEvent, StoredSession } from "./types";
+// ── Public exports ────────────────────────────────────────────────────────
+
+export {
+  TraceBugConfig,
+  TraceBugEvent,
+  StoredSession,
+  BugReport,
+  Annotation,
+  ScreenshotData,
+  EnvironmentInfo,
+} from "./types";
 export { getAllSessions, clearAllSessions, deleteSession } from "./storage";
 export { generateReproSteps } from "./repro-generator";
+export { captureEnvironment } from "./environment";
+export { captureScreenshot, getScreenshots } from "./screenshot";
+export { buildReport } from "./report-builder";
+export { generateGitHubIssue } from "./github-issue";
+export { generateJiraTicket } from "./jira-issue";
+export type { JiraTicket } from "./jira-issue";
+export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
+export { generateBugTitle, generateFlowSummary } from "./title-generator";
+export { buildTimeline, formatTimelineText } from "./timeline-builder";
 
 class TraceBugSDK {
   private config: TraceBugConfig | null = null;
   private cleanups: (() => void)[] = [];
   private initialized = false;
   private recording = true;
+  private sessionId: string | null = null;
 
   /**
    * Initialize TraceBug. Call once on app startup.
@@ -45,7 +90,8 @@ class TraceBugSDK {
    *  - projectId:       Required. Identifies your app.
    *  - maxEvents:       Max events per session in storage (default 200).
    *  - maxSessions:     Max sessions kept in localStorage (default 50).
-   *  - enableDashboard: Show the floating 🐛 button (default true).
+   *  - enableDashboard: Show the floating bug button (default true).
+   *  - enabled:         Control when SDK is active (default "auto").
    */
   init(config: TraceBugConfig): void {
     if (this.initialized) {
@@ -68,7 +114,12 @@ class TraceBugSDK {
 
     this.initialized = true;
     this.recording = true;
-    const sessionId = getSessionId();
+    this.sessionId = getSessionId();
+    const sessionId = this.sessionId;
+
+    // ── Capture environment info automatically ─────────────────────
+    const env = captureEnvironment();
+    saveEnvironment(sessionId, env);
 
     // ── Emit function — collectors call this with raw event data ───────
     const emit = (type: EventType, data: Record<string, any>) => {
@@ -105,6 +156,7 @@ class TraceBugSDK {
     this.cleanups.push(collectFormSubmits(emit));
     this.cleanups.push(collectRouteChanges(emit));
     this.cleanups.push(collectApiRequests(emit));
+    this.cleanups.push(collectXhrRequests(emit));
     this.cleanups.push(collectErrors(emit));
 
     // ── Mount in-browser dashboard ────────────────────────────────────
@@ -143,6 +195,111 @@ class TraceBugSDK {
     return this.recording;
   }
 
+  /** Get current session ID */
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
+  // ── Screenshot ──────────────────────────────────────────────────────
+
+  /** Capture a screenshot of the current page */
+  async takeScreenshot(): Promise<ScreenshotData | null> {
+    if (!this.sessionId) return null;
+
+    // Get the last event for context-aware naming
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    const lastEvent = session?.events[session.events.length - 1] || null;
+
+    const screenshot = await captureScreenshot(lastEvent);
+    console.info(`[TraceBug] Screenshot captured: ${screenshot.filename}`);
+    return screenshot;
+  }
+
+  /** Get all screenshots from current session */
+  getScreenshots(): ScreenshotData[] {
+    return getScreenshots();
+  }
+
+  // ── Annotations ─────────────────────────────────────────────────────
+
+  /** Add a tester note/annotation to the current session */
+  addNote(options: {
+    text: string;
+    expected?: string;
+    actual?: string;
+    severity?: Annotation["severity"];
+    screenshotId?: string;
+  }): void {
+    if (!this.sessionId) return;
+
+    const annotation: Annotation = {
+      id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      text: options.text,
+      expected: options.expected,
+      actual: options.actual,
+      severity: options.severity || "info",
+      screenshotId: options.screenshotId,
+    };
+
+    addAnnotation(this.sessionId, annotation);
+    console.info(`[TraceBug] Note added: "${options.text}"`);
+  }
+
+  // ── Report Generation ───────────────────────────────────────────────
+
+  /** Generate a complete bug report for the current session */
+  generateReport(): BugReport | null {
+    if (!this.sessionId) return null;
+
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    if (!session) return null;
+
+    return buildReport(session);
+  }
+
+  /** Generate GitHub issue markdown */
+  getGitHubIssue(): string | null {
+    const report = this.generateReport();
+    if (!report) return null;
+    return generateGitHubIssue(report);
+  }
+
+  /** Generate Jira ticket payload */
+  getJiraTicket() {
+    const report = this.generateReport();
+    if (!report) return null;
+    return generateJiraTicket(report);
+  }
+
+  /** Download a PDF bug report */
+  downloadPdf(): void {
+    const report = this.generateReport();
+    if (!report) {
+      console.warn("[TraceBug] No session data to generate PDF.");
+      return;
+    }
+    generatePdfReport(report);
+  }
+
+  /** Get auto-generated bug title */
+  getBugTitle(): string | null {
+    if (!this.sessionId) return null;
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    if (!session) return null;
+    return generateBugTitle(session);
+  }
+
+  /** Get environment info */
+  getEnvironment(): EnvironmentInfo {
+    return captureEnvironment();
+  }
+
+  // ── Private methods ─────────────────────────────────────────────────
+
   /**
    * Determine if TraceBug should be active based on the `enabled` config.
    */
@@ -173,8 +330,6 @@ class TraceBugSDK {
     }
 
     // "auto" — default behavior
-    // Enabled if: development, localhost, 127.0.0.1, staging hosts
-    // Disabled if: production and not a staging host
     if (env === "production" && !isStaging) {
       return false;
     }
@@ -247,7 +402,7 @@ class TraceBugSDK {
       );
 
       console.info(
-        "[TraceBug] Bug report generated. Click 🐛 to view reproduction steps."
+        "[TraceBug] Bug report generated. Click the bug button to view reproduction steps."
       );
     }, 100);
   }
@@ -261,6 +416,8 @@ class TraceBugSDK {
     this.initialized = false;
     this.config = null;
     this.recording = false;
+    this.sessionId = null;
+    clearScreenshots();
   }
 }
 
