@@ -105,20 +105,21 @@ cd example-app && npm install && npm run dev
 
 ## Installation in Any Project
 
-### Quick install from local path
+### From npm
 ```bash
-npm install d:/Project/test/tracebug-ai/tracebug-sdk-1.0.0.tgz
+npm install tracebug-sdk
 ```
 
 ### From GitHub
 ```bash
-npm install github:USERNAME/tracebug-ai
+npm install github:prashantsinghmangat/tracebug-ai
 ```
 
-### Generate .tgz for sharing
+### From .tgz (offline sharing)
 ```bash
 cd tracebug-ai && npm pack
 # Share tracebug-sdk-1.0.0.tgz
+npm install ./tracebug-sdk-1.0.0.tgz
 ```
 
 ### Usage (2 lines of code)
@@ -153,6 +154,7 @@ TraceBug.init({
   maxEvents: 200,             // Max events per session (default 200)
   maxSessions: 50,            // Max sessions in localStorage (default 50)
   enableDashboard: true,      // Show the floating bug button (default true)
+  enabled: "auto",            // "auto" | "development" | "staging" | "all" | "off" | string[]
 });
 ```
 
