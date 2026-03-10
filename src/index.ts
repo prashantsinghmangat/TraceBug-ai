@@ -43,7 +43,7 @@ import {
   collectErrors,
 } from "./collectors";
 import { captureEnvironment } from "./environment";
-import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
+import { captureScreenshot, getScreenshots, clearScreenshots, downloadAllScreenshots } from "./screenshot";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
@@ -65,7 +65,7 @@ export {
 export { getAllSessions, clearAllSessions, deleteSession } from "./storage";
 export { generateReproSteps } from "./repro-generator";
 export { captureEnvironment } from "./environment";
-export { captureScreenshot, getScreenshots } from "./screenshot";
+export { captureScreenshot, getScreenshots, downloadAllScreenshots } from "./screenshot";
 export { buildReport } from "./report-builder";
 export { generateGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";

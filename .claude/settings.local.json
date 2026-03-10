@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config:*)",
+      "Bash(npm view:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npm pack:*)",
+      "Bash(npx tsup:*)",
+      "Bash(ls -la d:/Project/TraceBug-ai/src/*.ts)",
+      "Read(//d/Project/TraceBug-ai/**)"
+    ]
+  }
+}

@@ -9,6 +9,26 @@ type Emit = (type: EventType, data: Record<string, any>) => void;
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
 
+/** Internal/framework URLs that should not be tracked */
+const INTERNAL_URL_PATTERNS = [
+  /__nextjs_original-stack-frame/,
+  /\/_next\/static\/webpack/,
+  /\/__webpack_hmr/,
+  /\.hot-update\./,
+  /\/sockjs-node\//,
+  /\/turbopack-hmr\//,
+  /\/_next\/webpack-hmr/,
+  /\/webpack-dev-server\//,
+  /\/__vite_ping/,
+  /\/@vite\/client/,
+  /\/@react-refresh/,
+];
+
+/** Check if a URL is internal framework traffic that should be skipped */
+function isInternalUrl(url: string): boolean {
+  return INTERNAL_URL_PATTERNS.some(pattern => pattern.test(url));
+}
+
 /** Check if an element belongs to the TraceBug dashboard — skip our own events */
 function isTraceBugElement(el: HTMLElement | null): boolean {
   if (!el) return false;
@@ -250,6 +270,11 @@ export function collectApiRequests(emit: Emit): () => void {
     const method = init?.method || "GET";
     const start = Date.now();
 
+    // Skip internal framework requests
+    if (isInternalUrl(url)) {
+      return originalFetch.call(window, input, init);
+    }
+
     try {
       const response = await originalFetch.call(window, input, init);
       emit("api_request", {
@@ -297,6 +322,11 @@ export function collectXhrRequests(emit: Emit): () => void {
     const start = Date.now();
     const method = (xhr as any)._tb_method || "GET";
     const url = (xhr as any)._tb_url || "";
+
+    // Skip internal framework requests
+    if (isInternalUrl(url)) {
+      return origSend.call(this, body);
+    }
 
     xhr.addEventListener("loadend", function () {
       emit("api_request", {
