@@ -165,6 +165,23 @@ function buildEventLabel(event: TraceBugEvent): string {
   }
 }
 
+/** Download all captured screenshots as individual PNG files */
+export function downloadAllScreenshots(): void {
+  for (const ss of screenshots) {
+    downloadDataUrl(ss.dataUrl, ss.filename);
+  }
+}
+
+/** Download a single dataUrl as a file */
+function downloadDataUrl(dataUrl: string, filename: string): void {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function sanitizeFilename(str: string): string {
   return str
     .toLowerCase()

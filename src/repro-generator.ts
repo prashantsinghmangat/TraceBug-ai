@@ -24,6 +24,9 @@ export function generateReproSteps(
   // Track state for smarter descriptions
   let currentPage = "";
 
+  // Track last step text to avoid duplicates
+  let lastStepText = "";
+
   for (const event of events) {
     switch (event.type) {
       case "route_change": {
@@ -37,7 +40,11 @@ export function generateReproSteps(
       case "click": {
         const el = event.data.element;
         const label = describeElement(el);
-        steps.push(`${stepNum++}. Click ${label}`);
+        const stepText = `Click ${label}`;
+        if (stepText !== lastStepText) {
+          steps.push(`${stepNum++}. ${stepText}`);
+          lastStepText = stepText;
+        }
         break;
       }
 
@@ -93,7 +100,11 @@ export function generateReproSteps(
       case "error":
       case "unhandled_rejection": {
         const errMsg = event.data.error?.message || errorMessage;
-        steps.push(`${stepNum++}. ❌ Error occurs: "${errMsg}"`);
+        const stepText = `❌ Error: "${errMsg}"`;
+        if (stepText !== lastStepText) {
+          steps.push(`${stepNum++}. ${stepText}`);
+          lastStepText = stepText;
+        }
         break;
       }
 
@@ -101,7 +112,11 @@ export function generateReproSteps(
         const msg = event.data.error?.message || "";
         // Only include if it looks like a real error, skip React dev warnings etc.
         if (msg.length > 0 && !msg.includes("Warning:") && !msg.includes("DevTools")) {
-          steps.push(`${stepNum++}. Console error: "${msg.slice(0, 120)}"`);
+          const stepText = `Console error: "${msg.slice(0, 120)}"`;
+          if (stepText !== lastStepText) {
+            steps.push(`${stepNum++}. ${stepText}`);
+            lastStepText = stepText;
+          }
         }
         break;
       }
@@ -128,7 +143,9 @@ function describeElement(el: any): string {
   if (!el) return "an element";
 
   const tag = el.tag || "";
-  const text = (el.text || "").trim();
+  const rawText = (el.text || "").trim();
+  // Clean multi-line text (e.g. dropdown showing "Active\nInactive") — take first line only
+  const text = rawText.includes("\n") ? rawText.split("\n")[0].trim() : rawText;
   const id = el.id || "";
   const ariaLabel = el.ariaLabel || "";
 

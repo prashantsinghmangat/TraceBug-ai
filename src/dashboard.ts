@@ -4,8 +4,8 @@
 // Reads session data directly from localStorage.
 
 import { getAllSessions, deleteSession, clearAllSessions, addAnnotation } from "./storage";
-import { StoredSession, Annotation } from "./types";
-import { captureScreenshot, getScreenshots } from "./screenshot";
+import { StoredSession, Annotation, ScreenshotData } from "./types";
+import { captureScreenshot, getScreenshots, downloadAllScreenshots } from "./screenshot";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
@@ -147,9 +147,32 @@ export function mountDashboard(): () => void {
   root.appendChild(panel);
   document.documentElement.appendChild(root);
 
+  // ── Keyboard shortcut: Ctrl+Shift+S for screenshot ─────────────────
+  const keyHandler = async (e: KeyboardEvent) => {
+    if (e.ctrlKey && e.shiftKey && e.key === "S") {
+      e.preventDefault();
+      // Get current session's last event for context
+      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
+      const currentSession = sessions[0];
+      const lastEvent = currentSession?.events[currentSession.events.length - 1] || null;
+
+      showToast("📸 Capturing screenshot...", root);
+      try {
+        const ss = await captureScreenshot(lastEvent);
+        showToast(`✓ Screenshot: ${ss.filename}`, root);
+        // Open annotation editor
+        showAnnotationEditor(ss, root);
+      } catch {
+        showToast("✗ Screenshot failed", root);
+      }
+    }
+  };
+  document.addEventListener("keydown", keyHandler);
+
   return () => {
     root.remove();
     style.remove();
+    document.removeEventListener("keydown", keyHandler);
   };
 }
 
@@ -729,7 +752,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
 
   // ── QA Toolbar handlers ──
 
-  // Screenshot
+  // Screenshot — capture + open annotation editor
   const ssBtn = content.querySelector("#bt-screenshot");
   if (ssBtn) {
     ssBtn.addEventListener("click", async () => {
@@ -739,6 +762,9 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
         const ss = await captureScreenshot(lastEvent);
         (ssBtn as HTMLElement).textContent = `✓ ${ss.filename}`;
         setTimeout(() => { (ssBtn as HTMLElement).textContent = "📸 Screenshot"; }, 3000);
+        // Open annotation editor for the captured screenshot
+        const root = document.getElementById("tracebug-root");
+        if (root) showAnnotationEditor(ss, root);
       } catch {
         (ssBtn as HTMLElement).textContent = "✗ Failed";
         setTimeout(() => { (ssBtn as HTMLElement).textContent = "📸 Screenshot"; }, 2000);
@@ -763,6 +789,10 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       navigator.clipboard.writeText(md).then(() => {
         (ghBtn as HTMLElement).textContent = "✓ Copied!";
         setTimeout(() => { (ghBtn as HTMLElement).textContent = "🐙 GitHub Issue"; }, 2000);
+        // Auto-download screenshots so user can attach them to the issue
+        if (report.screenshots.length > 0) {
+          downloadAllScreenshots();
+        }
       });
     });
   }
@@ -777,6 +807,10 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       navigator.clipboard.writeText(text).then(() => {
         (jiraBtn as HTMLElement).textContent = "✓ Copied!";
         setTimeout(() => { (jiraBtn as HTMLElement).textContent = "🎫 Jira Ticket"; }, 2000);
+        // Auto-download screenshots so user can attach them to the ticket
+        if (report.screenshots.length > 0) {
+          downloadAllScreenshots();
+        }
       });
     });
   }
@@ -1232,4 +1266,333 @@ function escapeHtml(str: string): string {
 
 function smallBtnStyle(color: string): string {
   return `background:${color}22;color:${color};border:1px solid ${color}44;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;font-family:inherit;`;
+}
+
+// ── Toast notification ────────────────────────────────────────────────────
+
+function showToast(message: string, root: HTMLElement): void {
+  // Remove existing toast
+  const existing = root.querySelector(".bt-toast");
+  if (existing) existing.remove();
+
+  const toast = document.createElement("div");
+  toast.className = "bt-toast";
+  toast.style.cssText = `
+    position:fixed;top:20px;left:50%;transform:translateX(-50%);
+    background:#1a1a2e;color:#e0e0e0;border:1px solid #3b82f6;
+    border-radius:8px;padding:10px 20px;font-size:13px;
+    font-family:system-ui,sans-serif;z-index:2147483647;
+    box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:auto;
+    transition:opacity 0.3s;
+  `;
+  toast.textContent = message;
+  root.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+// ── Screenshot annotation editor ──────────────────────────────────────────
+// Provides draw tools: rectangle highlight, arrow, and text overlay.
+// All drawing is done on a canvas overlay on top of the screenshot.
+
+function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): void {
+  const overlay = document.createElement("div");
+  overlay.id = "bt-annotation-overlay";
+  overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.85);z-index:2147483647;
+    display:flex;flex-direction:column;align-items:center;
+    justify-content:center;pointer-events:auto;
+    font-family:system-ui,sans-serif;
+  `;
+
+  // Calculate image dimensions to fit screen
+  const maxW = window.innerWidth * 0.85;
+  const maxH = window.innerHeight * 0.78;
+  const imgRatio = screenshot.width / screenshot.height;
+  let displayW = screenshot.width;
+  let displayH = screenshot.height;
+  if (displayW > maxW) { displayW = maxW; displayH = displayW / imgRatio; }
+  if (displayH > maxH) { displayH = maxH; displayW = displayH * imgRatio; }
+  displayW = Math.round(displayW);
+  displayH = Math.round(displayH);
+
+  // Toolbar
+  const toolbarHtml = `
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <span style="color:#888;font-size:11px;margin-right:8px">ANNOTATE:</span>
+      <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(true)}">▭ Highlight</button>
+      <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">→ Arrow</button>
+      <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">T Text</button>
+      <span style="color:#333;margin:0 4px">|</span>
+      <button class="bt-ann-tool" data-tool="color-red" style="background:#ef4444;border:2px solid #ef4444;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-yellow" style="background:#eab308;border:2px solid #eab308;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-green" style="background:#22c55e;border:2px solid #22c55e;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-blue" style="background:#3b82f6;border:2px solid #3b82f6;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <span style="color:#333;margin:0 4px">|</span>
+      <button id="bt-ann-undo" style="${annActionBtnStyle()}">↩ Undo</button>
+      <button id="bt-ann-clear" style="${annActionBtnStyle()}">✕ Clear</button>
+      <div style="flex:1"></div>
+      <span style="color:#555;font-size:10px">Ctrl+Shift+S</span>
+    </div>
+  `;
+
+  // Bottom actions
+  const actionsHtml = `
+    <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:13px;font-family:inherit">✓ Save Annotated</button>
+      <button id="bt-ann-download" style="background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">↓ Download</button>
+      <button id="bt-ann-cancel" style="background:#66666622;color:#888;border:1px solid #66666644;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
+      <div style="flex:1"></div>
+      <span style="color:#555;font-size:10px">${screenshot.filename}</span>
+    </div>
+  `;
+
+  overlay.innerHTML = `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`;
+  root.appendChild(overlay);
+
+  // Set up canvas
+  const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap") as HTMLElement;
+  const img = new Image();
+  img.onload = () => {
+    img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:6px;display:block;user-select:none;pointer-events:none`;
+    canvasWrap.appendChild(img);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = displayW;
+    canvas.height = displayH;
+    canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:6px;`;
+    canvasWrap.appendChild(canvas);
+
+    initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root);
+  };
+  img.src = screenshot.dataUrl;
+
+  // Cancel
+  overlay.querySelector("#bt-ann-cancel")!.addEventListener("click", () => overlay.remove());
+
+  // Close on Escape
+  const escHandler = (e: KeyboardEvent) => {
+    if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", escHandler); }
+  };
+  document.addEventListener("keydown", escHandler);
+}
+
+interface DrawAction {
+  type: "rect" | "arrow" | "text";
+  color: string;
+  startX: number; startY: number;
+  endX: number; endY: number;
+  text?: string;
+}
+
+function initAnnotationCanvas(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+  overlay: HTMLElement,
+  screenshot: ScreenshotData,
+  root: HTMLElement
+): void {
+  const ctx = canvas.getContext("2d")!;
+  const actions: DrawAction[] = [];
+  let currentTool: "rect" | "arrow" | "text" = "rect";
+  let currentColor = "#ef4444";
+  let isDrawing = false;
+  let startX = 0, startY = 0;
+
+  function redraw(): void {
+    ctx.clearRect(0, 0, width, height);
+    for (const action of actions) {
+      drawAction(ctx, action);
+    }
+  }
+
+  function drawAction(c: CanvasRenderingContext2D, a: DrawAction): void {
+    c.strokeStyle = a.color;
+    c.fillStyle = a.color;
+    c.lineWidth = 2.5;
+
+    if (a.type === "rect") {
+      const w = a.endX - a.startX;
+      const h = a.endY - a.startY;
+      // Semi-transparent fill
+      c.globalAlpha = 0.15;
+      c.fillRect(a.startX, a.startY, w, h);
+      c.globalAlpha = 1;
+      c.strokeRect(a.startX, a.startY, w, h);
+    } else if (a.type === "arrow") {
+      drawArrow(c, a.startX, a.startY, a.endX, a.endY, a.color);
+    } else if (a.type === "text" && a.text) {
+      c.font = "bold 14px system-ui, sans-serif";
+      // Background for readability
+      const metrics = c.measureText(a.text);
+      const padding = 4;
+      c.globalAlpha = 0.85;
+      c.fillStyle = "#000";
+      c.fillRect(a.startX - padding, a.startY - 16, metrics.width + padding * 2, 22);
+      c.globalAlpha = 1;
+      c.fillStyle = a.color;
+      c.fillText(a.text, a.startX, a.startY);
+    }
+  }
+
+  function drawArrow(c: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, color: string): void {
+    const headLen = 12;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+
+    c.strokeStyle = color;
+    c.fillStyle = color;
+    c.lineWidth = 2.5;
+
+    // Line
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.lineTo(x2, y2);
+    c.stroke();
+
+    // Arrowhead
+    c.beginPath();
+    c.moveTo(x2, y2);
+    c.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+    c.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+    c.closePath();
+    c.fill();
+  }
+
+  // Tool selection
+  overlay.querySelectorAll(".bt-ann-tool").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tool = (btn as HTMLElement).dataset.tool || "";
+      if (tool.startsWith("color-")) {
+        currentColor = getComputedStyle(btn as HTMLElement).backgroundColor;
+        // Update all color buttons border
+        overlay.querySelectorAll("[data-tool^='color-']").forEach(cb => {
+          (cb as HTMLElement).style.border = `2px solid ${getComputedStyle(cb as HTMLElement).backgroundColor}`;
+        });
+        (btn as HTMLElement).style.border = `2px solid #fff`;
+        return;
+      }
+      currentTool = tool as "rect" | "arrow" | "text";
+      // Update active state
+      overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach(tb => {
+        (tb as HTMLElement).style.background = "#22222244";
+        (tb as HTMLElement).style.color = "#888";
+        (tb as HTMLElement).style.borderColor = "#33333344";
+      });
+      (btn as HTMLElement).style.background = "#3b82f633";
+      (btn as HTMLElement).style.color = "#3b82f6";
+      (btn as HTMLElement).style.borderColor = "#3b82f6";
+    });
+  });
+
+  // Mouse drawing
+  canvas.addEventListener("mousedown", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+
+    if (currentTool === "text") {
+      const text = prompt("Enter annotation text:");
+      if (text) {
+        actions.push({ type: "text", color: currentColor, startX, startY, endX: startX, endY: startY, text });
+        redraw();
+      }
+      return;
+    }
+
+    isDrawing = true;
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!isDrawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const curX = e.clientX - rect.left;
+    const curY = e.clientY - rect.top;
+
+    // Preview
+    redraw();
+    const preview: DrawAction = { type: currentTool, color: currentColor, startX, startY, endX: curX, endY: curY };
+    drawAction(ctx, preview);
+  });
+
+  canvas.addEventListener("mouseup", (e) => {
+    if (!isDrawing) return;
+    isDrawing = false;
+    const rect = canvas.getBoundingClientRect();
+    const endX = e.clientX - rect.left;
+    const endY = e.clientY - rect.top;
+
+    // Skip tiny drags (accidental clicks)
+    if (Math.abs(endX - startX) < 5 && Math.abs(endY - startY) < 5) {
+      redraw();
+      return;
+    }
+
+    actions.push({ type: currentTool, color: currentColor, startX, startY, endX, endY });
+    redraw();
+  });
+
+  // Undo
+  overlay.querySelector("#bt-ann-undo")!.addEventListener("click", () => {
+    actions.pop();
+    redraw();
+  });
+
+  // Clear
+  overlay.querySelector("#bt-ann-clear")!.addEventListener("click", () => {
+    actions.length = 0;
+    redraw();
+  });
+
+  // Save annotated — merge annotations into the screenshot dataUrl
+  overlay.querySelector("#bt-ann-save")!.addEventListener("click", () => {
+    const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
+    screenshot.dataUrl = merged;
+    showToast("✓ Annotations saved to screenshot", root);
+    overlay.remove();
+  });
+
+  // Download
+  overlay.querySelector("#bt-ann-download")!.addEventListener("click", () => {
+    const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
+    const a = document.createElement("a");
+    a.href = merged;
+    a.download = screenshot.filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast(`✓ Downloaded: ${screenshot.filename}`, root);
+  });
+}
+
+function mergeAnnotations(baseDataUrl: string, annotationCanvas: HTMLCanvasElement, w: number, h: number): string {
+  const mergeCanvas = document.createElement("canvas");
+  mergeCanvas.width = w;
+  mergeCanvas.height = h;
+  const mCtx = mergeCanvas.getContext("2d")!;
+
+  // Draw base image
+  const img = new Image();
+  img.src = baseDataUrl;
+  mCtx.drawImage(img, 0, 0, w, h);
+
+  // Draw annotations on top
+  mCtx.drawImage(annotationCanvas, 0, 0);
+
+  return mergeCanvas.toDataURL("image/png", 0.9);
+}
+
+function annToolBtnStyle(active: boolean): string {
+  if (active) {
+    return "background:#3b82f633;color:#3b82f6;border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;";
+  }
+  return "background:#22222244;color:#888;border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;";
+}
+
+function annActionBtnStyle(): string {
+  return "background:#22222244;color:#888;border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit;";
 }

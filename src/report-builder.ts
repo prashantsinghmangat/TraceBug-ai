@@ -23,14 +23,20 @@ export function buildReport(
     steps = result.reproSteps;
   }
 
-  // Collect console errors
+  // Collect console errors (deduplicated by message)
+  const seenErrors = new Set<string>();
   const consoleErrors = session.events
     .filter(e => ["error", "unhandled_rejection", "console_error"].includes(e.type))
     .map(e => ({
       message: e.data.error?.message || "",
       stack: e.data.error?.stack,
       timestamp: e.timestamp,
-    }));
+    }))
+    .filter(e => {
+      if (seenErrors.has(e.message)) return false;
+      seenErrors.add(e.message);
+      return true;
+    });
 
   // Collect network errors
   const networkErrors = session.events

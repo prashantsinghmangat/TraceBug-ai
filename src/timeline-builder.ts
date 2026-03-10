@@ -9,6 +9,7 @@ export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
 
   const startTs = events[0].timestamp;
   const timeline: TimelineEntry[] = [];
+  let lastDescription = "";
 
   for (const ev of events) {
     const elapsed = formatElapsed(ev.timestamp - startTs);
@@ -16,11 +17,18 @@ export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
     const isApiError = ev.type === "api_request" &&
       (ev.data.request?.statusCode >= 400 || ev.data.request?.statusCode === 0);
 
+    const description = describeTimelineEvent(ev);
+
+    // Deduplicate consecutive identical entries (same type + description)
+    const entryKey = `${ev.type}:${description}`;
+    if (entryKey === lastDescription) continue;
+    lastDescription = entryKey;
+
     timeline.push({
       timestamp: ev.timestamp,
       elapsed,
       type: ev.type,
-      description: describeTimelineEvent(ev),
+      description,
       isError: isError || isApiError,
       page: ev.page,
     });
@@ -44,8 +52,10 @@ function describeTimelineEvent(ev: TraceBugEvent): string {
   switch (ev.type) {
     case "click": {
       const el = ev.data.element;
-      const target = el?.text?.trim() || el?.ariaLabel || el?.id || el?.tag || "element";
-      return `click ${target.slice(0, 50)}`;
+      let target = el?.text?.trim() || el?.ariaLabel || el?.id || el?.tag || "element";
+      // Clean multi-line text (e.g. dropdown showing all options)
+      if (target.includes("\n")) target = target.split("\n")[0].trim();
+      return `click "${target.slice(0, 50)}"`;
     }
     case "input": {
       const name = ev.data.element?.name || ev.data.element?.id || "field";
