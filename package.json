@@ -23,7 +23,8 @@
   ],
   "scripts": {
     "build": "tsup",
-    "build:extension": "tsup && echo Extension SDK built at tracebug-extension/tracebug-sdk.js",
+    "build:all": "tsup && echo [OK] npm package: dist/ && echo [OK] Chrome extension: tracebug-extension/tracebug-sdk.js",
+    "build:example": "tsup && cd example-app && npm install && echo [OK] Example app updated",
     "dev": "tsup --watch",
     "prepare": "tsup"
   },
