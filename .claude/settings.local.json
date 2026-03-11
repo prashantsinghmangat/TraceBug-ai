@@ -8,7 +8,8 @@
       "Bash(npm pack:*)",
       "Bash(npx tsup:*)",
       "Bash(ls -la d:/Project/TraceBug-ai/src/*.ts)",
-      "Read(//d/Project/TraceBug-ai/**)"
+      "Read(//d/Project/TraceBug-ai/**)",
+      "Bash(node -e \":*)"
     ]
   }
 }

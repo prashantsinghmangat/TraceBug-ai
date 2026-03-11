@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Zero-backend, browser-only SDK that records user sessions and generates bug reproduction steps. Data stays in localStorage.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -23,6 +23,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "build:extension": "tsup && echo Extension SDK built at tracebug-extension/tracebug-sdk.js",
     "dev": "tsup --watch",
     "prepare": "tsup"
   },
