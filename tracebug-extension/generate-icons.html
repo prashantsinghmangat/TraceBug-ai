@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head><title>Generate TraceBug Icons</title></head>
+<body>
+<h2>Right-click each icon and "Save image as" to the icons/ folder</h2>
+<div style="display:flex;gap:20px;align-items:end;padding:20px;">
+  <div>
+    <p>icon16.png</p>
+    <canvas id="c16" width="16" height="16"></canvas>
+  </div>
+  <div>
+    <p>icon48.png</p>
+    <canvas id="c48" width="48" height="48"></canvas>
+  </div>
+  <div>
+    <p>icon128.png</p>
+    <canvas id="c128" width="128" height="128"></canvas>
+  </div>
+</div>
+<div style="padding:20px">
+  <h3>Or download all:</h3>
+  <button onclick="downloadAll()">Download All Icons</button>
+</div>
+<script>
+function drawIcon(canvas) {
+  const ctx = canvas.getContext('2d');
+  const s = canvas.width;
+  const c = s / 2;
+  const r = s * 0.35;
+
+  // Background circle
+  ctx.beginPath();
+  ctx.arc(c, c, s * 0.45, 0, Math.PI * 2);
+  ctx.fillStyle = '#1e293b';
+  ctx.fill();
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(c, c, r, 0, Math.PI * 2);
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = s * 0.08;
+  ctx.stroke();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(c, c, s * 0.12, 0, Math.PI * 2);
+  ctx.fillStyle = '#ef4444';
+  ctx.fill();
+
+  // Crosshair lines
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = s * 0.06;
+
+  // Top
+  ctx.beginPath();
+  ctx.moveTo(c, c - r - s*0.06);
+  ctx.lineTo(c, c - r + s*0.08);
+  ctx.stroke();
+  // Bottom
+  ctx.beginPath();
+  ctx.moveTo(c, c + r - s*0.08);
+  ctx.lineTo(c, c + r + s*0.06);
+  ctx.stroke();
+  // Left
+  ctx.beginPath();
+  ctx.moveTo(c - r - s*0.06, c);
+  ctx.lineTo(c - r + s*0.08, c);
+  ctx.stroke();
+  // Right
+  ctx.beginPath();
+  ctx.moveTo(c + r - s*0.08, c);
+  ctx.lineTo(c + r + s*0.06, c);
+  ctx.stroke();
+}
+
+drawIcon(document.getElementById('c16'));
+drawIcon(document.getElementById('c48'));
+drawIcon(document.getElementById('c128'));
+
+function downloadAll() {
+  ['c16','c48','c128'].forEach(id => {
+    const canvas = document.getElementById(id);
+    const size = canvas.width;
+    const a = document.createElement('a');
+    a.download = 'icon' + size + '.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  });
+}
+</script>
+</body>
+</html>

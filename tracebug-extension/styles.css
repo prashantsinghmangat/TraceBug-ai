@@ -1,0 +1,469 @@
+/* ── TraceBug Extension Popup ─────────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 340px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  background: #0c1222;
+  color: #e2e8f0;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.popup {
+  padding: 16px;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #1e293b;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-text {
+  font-size: 17px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: -0.3px;
+}
+
+.version {
+  font-size: 10px;
+  color: #64748b;
+  background: #1a2332;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* ── Unavailable State ───────────────────────────────────────────────────── */
+
+.unavailable {
+  text-align: center;
+  padding: 32px 16px;
+}
+
+.unavailable-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.unavailable-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.unavailable-sub {
+  font-size: 12px;
+  color: #475569;
+}
+
+/* ── Site Info ────────────────────────────────────────────────────────────── */
+
+.site-info {
+  background: #131c2e;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.site-hostname {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f8fafc;
+  margin-bottom: 3px;
+}
+
+.site-url {
+  font-size: 11px;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 300px;
+}
+
+/* ── Toggle ──────────────────────────────────────────────────────────────── */
+
+.toggle-section {
+  margin-bottom: 10px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 10px 14px;
+  background: #131c2e;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.toggle-label:hover {
+  border-color: #334155;
+  background: #172033;
+}
+
+.toggle-label.active {
+  border-color: #22c55e40;
+  background: #22c55e08;
+}
+
+.toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: #334155;
+  border-radius: 11px;
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 3px;
+  top: 3px;
+  background: #94a3b8;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: #22c55e;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: #fff;
+}
+
+/* ── Status Dot ──────────────────────────────────────────────────────────── */
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #475569;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.status-dot.active {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e80;
+}
+
+/* ── Recording Bar ───────────────────────────────────────────────────────── */
+
+.recording-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #22c55e10;
+  border: 1px solid #22c55e30;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #22c55e;
+  font-weight: 500;
+}
+
+.recording-pulse {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  animation: recPulse 1.5s infinite;
+}
+
+@keyframes recPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 #22c55e60; }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px #22c55e00; }
+}
+
+/* ── Quick Actions ───────────────────────────────────────────────────────── */
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #131c2e;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.action-btn:hover {
+  background: #172033;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+
+.action-btn:active {
+  transform: scale(0.97);
+}
+
+.action-btn svg {
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.action-btn:hover svg {
+  opacity: 1;
+}
+
+.action-btn.github:hover {
+  border-color: #64748b;
+}
+
+.action-btn.jira:hover {
+  border-color: #3b82f6;
+}
+
+.action-btn.success {
+  border-color: #22c55e !important;
+  background: #22c55e12;
+  color: #22c55e;
+}
+
+.action-btn.error {
+  border-color: #ef4444 !important;
+  background: #ef444412;
+  color: #ef4444;
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+
+.toast-area {
+  margin-bottom: 10px;
+  animation: toastIn 0.3s ease;
+}
+
+.toast-content {
+  padding: 8px 12px;
+  background: #22c55e15;
+  border: 1px solid #22c55e40;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #22c55e;
+  text-align: center;
+  font-weight: 500;
+}
+
+.toast-content.error {
+  background: #ef444415;
+  border-color: #ef444440;
+  color: #ef4444;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Sites List ──────────────────────────────────────────────────────────── */
+
+.sites-section {
+  margin-bottom: 10px;
+}
+
+.sites-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #475569;
+  margin-bottom: 6px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.sites-count {
+  background: #1e293b;
+  color: #64748b;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+}
+
+.sites-list {
+  background: #131c2e;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.no-sites {
+  padding: 14px;
+  text-align: center;
+  color: #334155;
+  font-size: 12px;
+}
+
+.site-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1a2332;
+  transition: background 0.15s;
+}
+
+.site-item:last-child {
+  border-bottom: none;
+}
+
+.site-item:hover {
+  background: #172033;
+}
+
+.site-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 4px #22c55e60;
+}
+
+.site-item-name {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.site-remove {
+  background: none;
+  border: none;
+  color: #334155;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.site-remove:hover {
+  color: #ef4444;
+  background: #ef444415;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+
+.footer {
+  text-align: center;
+  padding-top: 10px;
+  border-top: 1px solid #1a2332;
+  font-size: 11px;
+  color: #334155;
+}
+
+.footer a {
+  color: #475569;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.footer a:hover {
+  color: #94a3b8;
+}
+
+.sep {
+  margin: 0 5px;
+  color: #1e293b;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
