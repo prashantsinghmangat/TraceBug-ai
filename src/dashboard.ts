@@ -12,6 +12,7 @@ import { generateJiraTicket } from "./jira-issue";
 import { generatePdfReport } from "./pdf-generator";
 import { generateBugTitle } from "./title-generator";
 import { captureEnvironment } from "./environment";
+import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts } from "./voice-recorder";
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -329,6 +330,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:10px">🐙 GitHub Issue</button>
       <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:10px">🎫 Jira Ticket</button>
       <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:10px">📄 PDF Report</button>
+      ${isVoiceSupported() ? `<button id="bt-voice-note" style="${smallBtnStyle("#f59e0b")}font-size:10px">🎤 Voice Note</button>` : ""}
     </div>
   </div>`;
 
@@ -823,6 +825,14 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       generatePdfReport(report);
     });
   }
+
+  // Voice Note
+  const voiceBtn = content.querySelector("#bt-voice-note");
+  if (voiceBtn) {
+    voiceBtn.addEventListener("click", () => {
+      showVoiceDialog(s.sessionId, panel, session);
+    });
+  }
 }
 
 // ── Note dialog ───────────────────────────────────────────────────────────
@@ -884,6 +894,137 @@ function showNoteDialog(sessionId: string, panel: HTMLElement, session: StoredSe
     overlay.remove();
 
     // Refresh the session view
+    const updatedSessions = getAllSessions();
+    const updatedSession = updatedSessions.find(s => s.sessionId === sessionId);
+    if (updatedSession) {
+      renderSessionDetail(panel, updatedSession);
+    }
+  });
+}
+
+// ── Voice recording dialog ────────────────────────────────────────────────
+
+function showVoiceDialog(sessionId: string, panel: HTMLElement, session: StoredSession): void {
+  const overlay = document.createElement("div");
+  overlay.id = "bt-voice-overlay";
+  overlay.dataset.tracebug = "voice-dialog";
+  overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+
+  overlay.innerHTML = `
+    <div style="background:#12121f;border:1px solid #2a2a3e;border-radius:12px;padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;font-family:system-ui,sans-serif">🎤 Voice Bug Description</div>
+      <div style="font-size:11px;color:#666;margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
+      <div id="bt-voice-status" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div id="bt-voice-dot" style="width:10px;height:10px;border-radius:50%;background:#666"></div>
+        <span id="bt-voice-status-text" style="font-size:11px;color:#888">Click Start to begin recording</span>
+      </div>
+      <textarea id="bt-voice-transcript" style="width:100%;height:100px;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit;resize:vertical" placeholder="Your speech will appear here...&#10;&#10;You can also type or edit the text manually."></textarea>
+      <div id="bt-voice-interim" style="font-size:11px;color:#f59e0b88;min-height:20px;margin-top:4px;font-style:italic"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button id="bt-voice-start" style="background:#22c55e;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit;flex:1">🎤 Start Recording</button>
+        <button id="bt-voice-stop" style="background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit;flex:1;display:none">⏹ Stop</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+        <button id="bt-voice-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
+        <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Save as Note</button>
+      </div>
+    </div>
+  `;
+
+  const panelEl = panel.querySelector("#bt-content") || panel;
+  panelEl.appendChild(overlay);
+
+  const transcriptEl = overlay.querySelector("#bt-voice-transcript") as HTMLTextAreaElement;
+  const interimEl = overlay.querySelector("#bt-voice-interim") as HTMLElement;
+  const startBtn = overlay.querySelector("#bt-voice-start") as HTMLButtonElement;
+  const stopBtn = overlay.querySelector("#bt-voice-stop") as HTMLButtonElement;
+  const dot = overlay.querySelector("#bt-voice-dot") as HTMLElement;
+  const statusText = overlay.querySelector("#bt-voice-status-text") as HTMLElement;
+
+  let pulseInterval: any = null;
+
+  startBtn.addEventListener("click", () => {
+    const started = startVoiceRecording({
+      onUpdate: (text, interim) => {
+        transcriptEl.value = text;
+        interimEl.textContent = interim ? `...${interim}` : "";
+        // Auto-scroll to bottom
+        transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      },
+      onStatus: (status, message) => {
+        if (status === "recording") {
+          dot.style.background = "#22c55e";
+          statusText.textContent = "Listening... speak now";
+          statusText.style.color = "#22c55e";
+          startBtn.style.display = "none";
+          stopBtn.style.display = "block";
+          // Pulse animation
+          pulseInterval = setInterval(() => {
+            dot.style.opacity = dot.style.opacity === "0.4" ? "1" : "0.4";
+          }, 500);
+        } else if (status === "stopped") {
+          dot.style.background = "#666";
+          statusText.textContent = "Recording stopped";
+          statusText.style.color = "#888";
+          startBtn.style.display = "block";
+          startBtn.textContent = "🎤 Record More";
+          stopBtn.style.display = "none";
+          interimEl.textContent = "";
+          if (pulseInterval) { clearInterval(pulseInterval); pulseInterval = null; }
+          dot.style.opacity = "1";
+        } else if (status === "error") {
+          dot.style.background = "#ef4444";
+          statusText.textContent = message || "Error occurred";
+          statusText.style.color = "#ef4444";
+          startBtn.style.display = "block";
+          startBtn.textContent = "🎤 Try Again";
+          stopBtn.style.display = "none";
+          if (pulseInterval) { clearInterval(pulseInterval); pulseInterval = null; }
+          dot.style.opacity = "1";
+        }
+      },
+    });
+
+    if (!started && !isVoiceSupported()) {
+      statusText.textContent = "Speech recognition not supported in this browser.";
+      statusText.style.color = "#ef4444";
+    }
+  });
+
+  stopBtn.addEventListener("click", () => {
+    stopVoiceRecording();
+  });
+
+  // Cancel
+  overlay.querySelector("#bt-voice-cancel")!.addEventListener("click", () => {
+    if (isVoiceRecording()) stopVoiceRecording();
+    if (pulseInterval) clearInterval(pulseInterval);
+    overlay.remove();
+  });
+
+  // Save as annotation
+  overlay.querySelector("#bt-voice-save")!.addEventListener("click", () => {
+    if (isVoiceRecording()) stopVoiceRecording();
+    if (pulseInterval) clearInterval(pulseInterval);
+
+    const text = transcriptEl.value.trim();
+    if (!text) {
+      statusText.textContent = "No text to save. Record or type something first.";
+      statusText.style.color = "#ef4444";
+      return;
+    }
+
+    const annotation: Annotation = {
+      id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      text: `🎤 ${text}`,
+      severity: "major",
+    };
+
+    addAnnotation(sessionId, annotation);
+    overlay.remove();
+
+    // Refresh session view
     const updatedSessions = getAllSessions();
     const updatedSession = updatedSessions.find(s => s.sessionId === sessionId);
     if (updatedSession) {
@@ -1364,6 +1505,7 @@ function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): vo
     const canvas = document.createElement("canvas");
     canvas.width = displayW;
     canvas.height = displayH;
+    canvas.dataset.tracebug = "annotation-canvas";
     canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:6px;`;
     canvasWrap.appendChild(canvas);
 

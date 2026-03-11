@@ -50,6 +50,7 @@ import { generateJiraTicket } from "./jira-issue";
 import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
 import { generateBugTitle, generateFlowSummary } from "./title-generator";
 import { buildTimeline, formatTimelineText } from "./timeline-builder";
+import { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 
 // ── Public exports ────────────────────────────────────────────────────────
 
@@ -73,6 +74,8 @@ export type { JiraTicket } from "./jira-issue";
 export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
 export { generateBugTitle, generateFlowSummary } from "./title-generator";
 export { buildTimeline, formatTimelineText } from "./timeline-builder";
+export { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
+export type { VoiceTranscript } from "./voice-recorder";
 
 class TraceBugSDK {
   private config: TraceBugConfig | null = null;
@@ -247,6 +250,36 @@ class TraceBugSDK {
     console.info(`[TraceBug] Note added: "${options.text}"`);
   }
 
+  // ── Voice Recording ─────────────────────────────────────────────────
+
+  /** Check if voice recording is supported */
+  isVoiceSupported(): boolean {
+    return isVoiceSupported();
+  }
+
+  /** Start voice recording for bug description */
+  startVoiceRecording(options?: {
+    onUpdate?: (text: string, interim: string) => void;
+    onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
+  }): boolean {
+    return startVoiceRecording(options);
+  }
+
+  /** Stop voice recording and return transcript */
+  stopVoiceRecording() {
+    return stopVoiceRecording();
+  }
+
+  /** Check if voice is currently recording */
+  isVoiceRecording(): boolean {
+    return isVoiceRecording();
+  }
+
+  /** Get all voice transcripts */
+  getVoiceTranscripts() {
+    return getVoiceTranscripts();
+  }
+
   // ── Report Generation ───────────────────────────────────────────────
 
   /** Generate a complete bug report for the current session */
@@ -418,6 +451,7 @@ class TraceBugSDK {
     this.recording = false;
     this.sessionId = null;
     clearScreenshots();
+    clearVoiceTranscripts();
   }
 }
 
