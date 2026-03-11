@@ -35,17 +35,19 @@ function isTraceBugElement(el: HTMLElement | null): boolean {
   if (!el) return false;
   // Quick ID checks
   if (el.id === ROOT_ID || el.id === BTN_ID || el.id === PANEL_ID) return true;
+  // Direct attribute check on the element itself
+  if (el.dataset && el.dataset.tracebug) return true;
   // Walk up the DOM — if any ancestor is #tracebug-root, it's ours
   const root = document.getElementById(ROOT_ID);
   if (root && root.contains(el)) return true;
-  // Also check for TraceBug annotation overlays and modals
-  // (they may be appended outside #tracebug-root)
+  // Also check for TraceBug annotation overlays, voice dialogs, and modals
+  // (they may be appended outside #tracebug-root in some edge cases)
   let node: HTMLElement | null = el;
   while (node) {
     const id = node.id || "";
     if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
-    if (node.className && typeof node.className === "string" &&
-      (node.className.includes("tracebug-") || node.className.includes("bt-ann"))) return true;
+    const cn = typeof node.className === "string" ? node.className : "";
+    if (cn.includes("tracebug-") || cn.includes("bt-ann") || cn.includes("bt-voice")) return true;
     if (node.dataset && node.dataset.tracebug) return true;
     node = node.parentElement;
   }

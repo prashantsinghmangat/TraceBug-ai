@@ -113,8 +113,18 @@ export interface BugReport {
   annotations: Annotation[];
   screenshots: ScreenshotData[];
   timeline: TimelineEntry[];
+  voiceTranscripts: VoiceTranscriptData[];
   session: StoredSession;
   generatedAt: number;
+}
+
+// ── Voice Transcript ─────────────────────────────────────────────────────
+
+export interface VoiceTranscriptData {
+  id: string;
+  timestamp: number;
+  text: string;
+  duration: number;
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────

@@ -68,6 +68,14 @@ export function generateGitHubIssue(report: BugReport): string {
     md += `\n`;
   }
 
+  // Voice Description (if any)
+  if (report.voiceTranscripts && report.voiceTranscripts.length > 0) {
+    md += `### Bug Description (Voice)\n\n`;
+    for (const vt of report.voiceTranscripts) {
+      md += `> ${vt.text}\n\n`;
+    }
+  }
+
   // Screenshots — filenames listed, auto-downloaded for drag-and-drop
   if (report.screenshots.length > 0) {
     md += `### Screenshots\n\n`;

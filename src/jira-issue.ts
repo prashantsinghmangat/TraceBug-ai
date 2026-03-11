@@ -76,6 +76,16 @@ export function generateJiraTicket(report: BugReport): JiraTicket {
     desc += `\n`;
   }
 
+  // Voice Description
+  if (report.voiceTranscripts && report.voiceTranscripts.length > 0) {
+    desc += `h3. Bug Description (Voice)\n`;
+    desc += `{quote}\n`;
+    for (const vt of report.voiceTranscripts) {
+      desc += `${vt.text}\n`;
+    }
+    desc += `{quote}\n\n`;
+  }
+
   // Screenshots — filenames listed, auto-downloaded for attachment
   if (report.screenshots.length > 0) {
     desc += `h3. Screenshots\n`;

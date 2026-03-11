@@ -2,9 +2,10 @@
 // Assembles a complete BugReport from session data, screenshots, and env info.
 // One-click report generation — collects everything into a structured object.
 
-import { BugReport, StoredSession, ScreenshotData, EnvironmentInfo, Annotation } from "./types";
+import { BugReport, StoredSession, ScreenshotData, EnvironmentInfo, Annotation, VoiceTranscriptData } from "./types";
 import { captureEnvironment } from "./environment";
 import { getScreenshots } from "./screenshot";
+import { getVoiceTranscripts } from "./voice-recorder";
 import { generateBugTitle } from "./title-generator";
 import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
@@ -55,6 +56,9 @@ export function buildReport(
   // Timeline
   const timeline = buildTimeline(session.events);
 
+  // Voice transcripts from memory
+  const voiceTranscripts = getVoiceTranscripts();
+
   // Auto-generate title
   const title = generateBugTitle(session);
 
@@ -67,6 +71,7 @@ export function buildReport(
     annotations: session.annotations || [],
     screenshots,
     timeline,
+    voiceTranscripts,
     session,
     generatedAt: Date.now(),
   };

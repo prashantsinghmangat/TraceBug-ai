@@ -26,6 +26,7 @@ var TraceBugModule = (() => {
     captureEnvironment: () => captureEnvironment,
     captureScreenshot: () => captureScreenshot,
     clearAllSessions: () => clearAllSessions,
+    clearVoiceTranscripts: () => clearVoiceTranscripts,
     default: () => src_default,
     deleteSession: () => deleteSession,
     downloadAllScreenshots: () => downloadAllScreenshots,
@@ -38,7 +39,12 @@ var TraceBugModule = (() => {
     generatePdfReport: () => generatePdfReport,
     generateReproSteps: () => generateReproSteps,
     getAllSessions: () => getAllSessions,
-    getScreenshots: () => getScreenshots
+    getScreenshots: () => getScreenshots,
+    getVoiceTranscripts: () => getVoiceTranscripts,
+    isVoiceRecording: () => isVoiceRecording,
+    isVoiceSupported: () => isVoiceSupported,
+    startVoiceRecording: () => startVoiceRecording,
+    stopVoiceRecording: () => stopVoiceRecording
   });
 
   // src/storage.ts
@@ -519,6 +525,131 @@ var TraceBugModule = (() => {
     return "unknown";
   }
 
+  // src/voice-recorder.ts
+  var recognition = null;
+  var isRecording = false;
+  var transcript = "";
+  var interimTranscript = "";
+  var startTime = 0;
+  var transcripts = [];
+  var onTranscriptUpdate = null;
+  var onStatusChange = null;
+  function isVoiceSupported() {
+    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+  function startVoiceRecording(options) {
+    var _a;
+    if (isRecording) return false;
+    if (!isVoiceSupported()) {
+      (_a = options == null ? void 0 : options.onStatus) == null ? void 0 : _a.call(options, "error", "Speech recognition not supported in this browser.");
+      return false;
+    }
+    onTranscriptUpdate = (options == null ? void 0 : options.onUpdate) || null;
+    onStatusChange = (options == null ? void 0 : options.onStatus) || null;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
+    recognition.maxAlternatives = 1;
+    transcript = "";
+    interimTranscript = "";
+    startTime = Date.now();
+    recognition.onresult = (event) => {
+      let final = "";
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          final += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      if (final) {
+        transcript += (transcript ? " " : "") + cleanTranscript(final.trim());
+      }
+      interimTranscript = interim;
+      onTranscriptUpdate == null ? void 0 : onTranscriptUpdate(transcript, interimTranscript);
+    };
+    recognition.onerror = (event) => {
+      const errorMessages = {
+        "not-allowed": "Microphone access denied. Please allow microphone permission.",
+        "no-speech": "No speech detected. Try speaking louder.",
+        "network": "Network error. Speech recognition requires an internet connection.",
+        "audio-capture": "No microphone found. Please connect a microphone.",
+        "aborted": "Recording was cancelled."
+      };
+      const message = errorMessages[event.error] || `Speech recognition error: ${event.error}`;
+      if (event.error === "no-speech") return;
+      isRecording = false;
+      onStatusChange == null ? void 0 : onStatusChange("error", message);
+    };
+    recognition.onend = () => {
+      if (isRecording) {
+        try {
+          recognition.start();
+        } catch (e) {
+          isRecording = false;
+          onStatusChange == null ? void 0 : onStatusChange("stopped");
+        }
+        return;
+      }
+      onStatusChange == null ? void 0 : onStatusChange("stopped");
+    };
+    try {
+      recognition.start();
+      isRecording = true;
+      onStatusChange == null ? void 0 : onStatusChange("recording");
+      return true;
+    } catch (err) {
+      onStatusChange == null ? void 0 : onStatusChange("error", err.message || "Failed to start voice recording.");
+      return false;
+    }
+  }
+  function stopVoiceRecording() {
+    if (!isRecording || !recognition) return null;
+    isRecording = false;
+    try {
+      recognition.stop();
+    } catch (e) {
+    }
+    recognition = null;
+    if (interimTranscript.trim()) {
+      transcript += (transcript ? " " : "") + cleanTranscript(interimTranscript.trim());
+      interimTranscript = "";
+    }
+    if (!transcript.trim()) return null;
+    const result = {
+      id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: startTime,
+      text: transcript.trim(),
+      duration: Date.now() - startTime
+    };
+    transcripts.push(result);
+    onTranscriptUpdate = null;
+    onStatusChange = null;
+    return result;
+  }
+  function isVoiceRecording() {
+    return isRecording;
+  }
+  function getVoiceTranscripts() {
+    return [...transcripts];
+  }
+  function clearVoiceTranscripts() {
+    transcripts.length = 0;
+  }
+  function cleanTranscript(text) {
+    if (!text) return text;
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+    if (!/[.!?]$/.test(text.trim())) {
+      text = text.trim() + ".";
+    }
+    text = text.replace(/\bperiod\b/gi, ".").replace(/\bcomma\b/gi, ",").replace(/\bquestion mark\b/gi, "?").replace(/\bexclamation mark\b/gi, "!").replace(/\bnew line\b/gi, "\n").replace(/\s+/g, " ").replace(/\s+([.,!?])/g, "$1").replace(/([.!?])\s+([a-z])/g, (_m, p, c) => `${p} ${c.toUpperCase()}`);
+    return text;
+  }
+
   // src/title-generator.ts
   function generateBugTitle(session) {
     var _a;
@@ -795,6 +926,7 @@ var TraceBugModule = (() => {
     });
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
     const timeline = buildTimeline(session.events);
+    const voiceTranscripts = getVoiceTranscripts();
     const title = generateBugTitle(session);
     return {
       title,
@@ -805,6 +937,7 @@ var TraceBugModule = (() => {
       annotations: session.annotations || [],
       screenshots: screenshots2,
       timeline,
+      voiceTranscripts,
       session,
       generatedAt: Date.now()
     };
@@ -892,6 +1025,16 @@ var TraceBugModule = (() => {
       }
       md += `
 `;
+    }
+    if (report.voiceTranscripts && report.voiceTranscripts.length > 0) {
+      md += `### Bug Description (Voice)
+
+`;
+      for (const vt of report.voiceTranscripts) {
+        md += `> ${vt.text}
+
+`;
+      }
     }
     if (report.screenshots.length > 0) {
       md += `### Screenshots
@@ -1001,6 +1144,19 @@ Application throws error:
 `;
       }
       desc += `
+`;
+    }
+    if (report.voiceTranscripts && report.voiceTranscripts.length > 0) {
+      desc += `h3. Bug Description (Voice)
+`;
+      desc += `{quote}
+`;
+      for (const vt of report.voiceTranscripts) {
+        desc += `${vt.text}
+`;
+      }
+      desc += `{quote}
+
 `;
     }
     if (report.screenshots.length > 0) {
@@ -1179,6 +1335,16 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
 `;
       }
     }
+    if (report.voiceTranscripts && report.voiceTranscripts.length > 0) {
+      html += `<h2>Bug Description (Voice)</h2>
+`;
+      for (const vt of report.voiceTranscripts) {
+        html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin:8px 0;font-style:italic;color:#92400e">
+        <span style="font-size:16px;margin-right:6px">\u{1F3A4}</span> ${escapeHtml(vt.text)}
+      </div>
+`;
+      }
+    }
     if (report.consoleErrors.length > 0) {
       html += `<h2>Console Errors <span class="badge badge-error">${report.consoleErrors.length}</span></h2>
 `;
@@ -1260,23 +1426,23 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   var BTN_ID2 = "tracebug-dashboard-btn";
   var _isRecording = true;
   var _onToggleRecording = null;
-  function setRecordingState(isRecording, onToggle) {
-    _isRecording = isRecording;
+  function setRecordingState(isRecording2, onToggle) {
+    _isRecording = isRecording2;
     _onToggleRecording = onToggle;
   }
-  function updateRecordingState(isRecording) {
-    _isRecording = isRecording;
+  function updateRecordingState(isRecording2) {
+    _isRecording = isRecording2;
     const indicator = document.getElementById("bt-rec-indicator");
     if (indicator) {
-      indicator.style.background = isRecording ? "#22c55e" : "#ef4444";
-      indicator.title = isRecording ? "Recording" : "Paused";
+      indicator.style.background = isRecording2 ? "#22c55e" : "#ef4444";
+      indicator.title = isRecording2 ? "Recording" : "Paused";
     }
     const recBtn = document.getElementById("bt-rec-toggle");
     if (recBtn) {
-      recBtn.textContent = isRecording ? "\u23F8 Pause" : "\u25B6 Record";
-      recBtn.style.color = isRecording ? "#fbbf24" : "#22c55e";
-      recBtn.style.borderColor = isRecording ? "#fbbf2444" : "#22c55e44";
-      recBtn.style.background = isRecording ? "#fbbf2422" : "#22c55e22";
+      recBtn.textContent = isRecording2 ? "\u23F8 Pause" : "\u25B6 Record";
+      recBtn.style.color = isRecording2 ? "#fbbf24" : "#22c55e";
+      recBtn.style.borderColor = isRecording2 ? "#fbbf2444" : "#22c55e44";
+      recBtn.style.background = isRecording2 ? "#fbbf2422" : "#22c55e22";
     }
   }
   function mountDashboard() {
@@ -1529,6 +1695,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:10px">\u{1F419} GitHub Issue</button>
       <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:10px">\u{1F3AB} Jira Ticket</button>
       <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:10px">\u{1F4C4} PDF Report</button>
+      ${isVoiceSupported() ? `<button id="bt-voice-note" style="${smallBtnStyle("#f59e0b")}font-size:10px">\u{1F3A4} Voice Note</button>` : ""}
     </div>
   </div>`;
     html += `<div style="background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:14px;margin-bottom:14px">
@@ -1979,6 +2146,12 @@ ${ticket.description}`;
         generatePdfReport(report);
       });
     }
+    const voiceBtn = content.querySelector("#bt-voice-note");
+    if (voiceBtn) {
+      voiceBtn.addEventListener("click", () => {
+        showVoiceDialog(s.sessionId, panel, session);
+      });
+    }
   }
   function showNoteDialog(sessionId, panel, session) {
     const overlay = document.createElement("div");
@@ -2026,6 +2199,122 @@ ${ticket.description}`;
         expected: overlay.querySelector("#bt-note-expected").value.trim() || void 0,
         actual: overlay.querySelector("#bt-note-actual").value.trim() || void 0,
         severity: overlay.querySelector("#bt-note-severity").value
+      };
+      addAnnotation(sessionId, annotation);
+      overlay.remove();
+      const updatedSessions = getAllSessions();
+      const updatedSession = updatedSessions.find((s) => s.sessionId === sessionId);
+      if (updatedSession) {
+        renderSessionDetail(panel, updatedSession);
+      }
+    });
+  }
+  function showVoiceDialog(sessionId, panel, session) {
+    const overlay = document.createElement("div");
+    overlay.id = "bt-voice-overlay";
+    overlay.dataset.tracebug = "voice-dialog";
+    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+    overlay.innerHTML = `
+    <div style="background:#12121f;border:1px solid #2a2a3e;border-radius:12px;padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;font-family:system-ui,sans-serif">\u{1F3A4} Voice Bug Description</div>
+      <div style="font-size:11px;color:#666;margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
+      <div id="bt-voice-status" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div id="bt-voice-dot" style="width:10px;height:10px;border-radius:50%;background:#666"></div>
+        <span id="bt-voice-status-text" style="font-size:11px;color:#888">Click Start to begin recording</span>
+      </div>
+      <textarea id="bt-voice-transcript" style="width:100%;height:100px;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit;resize:vertical" placeholder="Your speech will appear here...&#10;&#10;You can also type or edit the text manually."></textarea>
+      <div id="bt-voice-interim" style="font-size:11px;color:#f59e0b88;min-height:20px;margin-top:4px;font-style:italic"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button id="bt-voice-start" style="background:#22c55e;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit;flex:1">\u{1F3A4} Start Recording</button>
+        <button id="bt-voice-stop" style="background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit;flex:1;display:none">\u23F9 Stop</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+        <button id="bt-voice-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
+        <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Save as Note</button>
+      </div>
+    </div>
+  `;
+    const panelEl = panel.querySelector("#bt-content") || panel;
+    panelEl.appendChild(overlay);
+    const transcriptEl = overlay.querySelector("#bt-voice-transcript");
+    const interimEl = overlay.querySelector("#bt-voice-interim");
+    const startBtn = overlay.querySelector("#bt-voice-start");
+    const stopBtn = overlay.querySelector("#bt-voice-stop");
+    const dot = overlay.querySelector("#bt-voice-dot");
+    const statusText = overlay.querySelector("#bt-voice-status-text");
+    let pulseInterval = null;
+    startBtn.addEventListener("click", () => {
+      const started = startVoiceRecording({
+        onUpdate: (text, interim) => {
+          transcriptEl.value = text;
+          interimEl.textContent = interim ? `...${interim}` : "";
+          transcriptEl.scrollTop = transcriptEl.scrollHeight;
+        },
+        onStatus: (status, message) => {
+          if (status === "recording") {
+            dot.style.background = "#22c55e";
+            statusText.textContent = "Listening... speak now";
+            statusText.style.color = "#22c55e";
+            startBtn.style.display = "none";
+            stopBtn.style.display = "block";
+            pulseInterval = setInterval(() => {
+              dot.style.opacity = dot.style.opacity === "0.4" ? "1" : "0.4";
+            }, 500);
+          } else if (status === "stopped") {
+            dot.style.background = "#666";
+            statusText.textContent = "Recording stopped";
+            statusText.style.color = "#888";
+            startBtn.style.display = "block";
+            startBtn.textContent = "\u{1F3A4} Record More";
+            stopBtn.style.display = "none";
+            interimEl.textContent = "";
+            if (pulseInterval) {
+              clearInterval(pulseInterval);
+              pulseInterval = null;
+            }
+            dot.style.opacity = "1";
+          } else if (status === "error") {
+            dot.style.background = "#ef4444";
+            statusText.textContent = message || "Error occurred";
+            statusText.style.color = "#ef4444";
+            startBtn.style.display = "block";
+            startBtn.textContent = "\u{1F3A4} Try Again";
+            stopBtn.style.display = "none";
+            if (pulseInterval) {
+              clearInterval(pulseInterval);
+              pulseInterval = null;
+            }
+            dot.style.opacity = "1";
+          }
+        }
+      });
+      if (!started && !isVoiceSupported()) {
+        statusText.textContent = "Speech recognition not supported in this browser.";
+        statusText.style.color = "#ef4444";
+      }
+    });
+    stopBtn.addEventListener("click", () => {
+      stopVoiceRecording();
+    });
+    overlay.querySelector("#bt-voice-cancel").addEventListener("click", () => {
+      if (isVoiceRecording()) stopVoiceRecording();
+      if (pulseInterval) clearInterval(pulseInterval);
+      overlay.remove();
+    });
+    overlay.querySelector("#bt-voice-save").addEventListener("click", () => {
+      if (isVoiceRecording()) stopVoiceRecording();
+      if (pulseInterval) clearInterval(pulseInterval);
+      const text = transcriptEl.value.trim();
+      if (!text) {
+        statusText.textContent = "No text to save. Record or type something first.";
+        statusText.style.color = "#ef4444";
+        return;
+      }
+      const annotation = {
+        id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        text: `\u{1F3A4} ${text}`,
+        severity: "major"
       };
       addAnnotation(sessionId, annotation);
       overlay.remove();
@@ -2494,6 +2783,7 @@ ${"-".repeat(40)}
       const canvas = document.createElement("canvas");
       canvas.width = displayW;
       canvas.height = displayH;
+      canvas.dataset.tracebug = "annotation-canvas";
       canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:6px;`;
       canvasWrap.appendChild(canvas);
       initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root);
@@ -2690,13 +2980,15 @@ ${"-".repeat(40)}
   function isTraceBugElement(el) {
     if (!el) return false;
     if (el.id === ROOT_ID || el.id === BTN_ID3 || el.id === PANEL_ID3) return true;
+    if (el.dataset && el.dataset.tracebug) return true;
     const root = document.getElementById(ROOT_ID);
     if (root && root.contains(el)) return true;
     let node = el;
     while (node) {
       const id = node.id || "";
       if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
-      if (node.className && typeof node.className === "string" && (node.className.includes("tracebug-") || node.className.includes("bt-ann"))) return true;
+      const cn = typeof node.className === "string" ? node.className : "";
+      if (cn.includes("tracebug-") || cn.includes("bt-ann") || cn.includes("bt-voice")) return true;
       if (node.dataset && node.dataset.tracebug) return true;
       node = node.parentElement;
     }
@@ -3115,6 +3407,27 @@ ${"-".repeat(40)}
       addAnnotation(this.sessionId, annotation);
       console.info(`[TraceBug] Note added: "${options.text}"`);
     }
+    // ── Voice Recording ─────────────────────────────────────────────────
+    /** Check if voice recording is supported */
+    isVoiceSupported() {
+      return isVoiceSupported();
+    }
+    /** Start voice recording for bug description */
+    startVoiceRecording(options) {
+      return startVoiceRecording(options);
+    }
+    /** Stop voice recording and return transcript */
+    stopVoiceRecording() {
+      return stopVoiceRecording();
+    }
+    /** Check if voice is currently recording */
+    isVoiceRecording() {
+      return isVoiceRecording();
+    }
+    /** Get all voice transcripts */
+    getVoiceTranscripts() {
+      return getVoiceTranscripts();
+    }
     // ── Report Generation ───────────────────────────────────────────────
     /** Generate a complete bug report for the current session */
     generateReport() {
@@ -3249,6 +3562,7 @@ ${"-".repeat(40)}
       this.recording = false;
       this.sessionId = null;
       clearScreenshots();
+      clearVoiceTranscripts();
     }
   };
   var TraceBug = new TraceBugSDK();

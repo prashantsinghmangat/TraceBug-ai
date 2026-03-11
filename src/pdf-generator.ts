@@ -127,6 +127,16 @@ function buildPdfHtml(report: BugReport): string {
     }
   }
 
+  // Voice Description
+  if (report.voiceTranscripts && report.voiceTranscripts.length > 0) {
+    html += `<h2>Bug Description (Voice)</h2>\n`;
+    for (const vt of report.voiceTranscripts) {
+      html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin:8px 0;font-style:italic;color:#92400e">
+        <span style="font-size:16px;margin-right:6px">🎤</span> ${escapeHtml(vt.text)}
+      </div>\n`;
+    }
+  }
+
   // Console Errors
   if (report.consoleErrors.length > 0) {
     html += `<h2>Console Errors <span class="badge badge-error">${report.consoleErrors.length}</span></h2>\n`;
