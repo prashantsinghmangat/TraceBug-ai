@@ -608,13 +608,17 @@ var TraceBugModule = (() => {
     }
   }
   function stopVoiceRecording() {
-    if (!isRecording || !recognition) return null;
+    if (!isRecording && !recognition) return null;
     isRecording = false;
-    try {
-      recognition.stop();
-    } catch (e) {
+    onStatusChange == null ? void 0 : onStatusChange("stopped");
+    if (recognition) {
+      try {
+        recognition.onend = null;
+        recognition.stop();
+      } catch (e) {
+      }
+      recognition = null;
     }
-    recognition = null;
     if (interimTranscript.trim()) {
       transcript += (transcript ? " " : "") + cleanTranscript(interimTranscript.trim());
       interimTranscript = "";

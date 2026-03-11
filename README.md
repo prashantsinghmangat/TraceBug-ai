@@ -15,14 +15,15 @@ Tester uses the app normally
   ↓
 SDK silently captures: clicks, inputs, navigation, API calls, errors, environment
   ↓
-Tester finds a bug → clicks 📸 Screenshot → adds a note ("Expected X, got Y")
+Tester finds a bug → clicks 📸 Screenshot → adds a note or 🎤 voice description
   ↓
 Clicks "GitHub Issue" or "Jira Ticket"
   ↓
 Complete bug report copied to clipboard:
   - Auto-generated title
   - Steps to reproduce
-  - Screenshots
+  - Screenshots with annotations
+  - Voice bug description
   - Console errors + stack traces
   - Failed network requests
   - Environment (browser, OS, viewport)
@@ -82,6 +83,7 @@ Works on Chrome, Edge, Brave, and Opera.
 | **📝 Add Note** | Tester adds Expected/Actual/Severity — becomes part of the bug report |
 | **🐙 GitHub Issue** | Generates complete GitHub issue markdown — copies to clipboard |
 | **🎫 Jira Ticket** | Generates Jira-compatible ticket with priority, labels, description |
+| **🎤 Voice Note** | Speak to describe the bug — speech-to-text, auto-included in reports |
 | **📄 PDF Report** | Opens printable bug report — save as PDF from browser |
 
 ### Auto-Generated
@@ -164,6 +166,28 @@ const screenshot = await TraceBug.takeScreenshot();
 const allScreenshots = TraceBug.getScreenshots();
 ```
 
+### Voice Recording
+
+```typescript
+// Check if voice recording is supported in the browser
+if (TraceBug.isVoiceSupported()) {
+  // Start recording — speech-to-text via Web Speech API (free, no API keys)
+  TraceBug.startVoiceRecording({
+    onUpdate: (text, interim) => console.log("Transcript:", text),
+    onStatus: (status, msg) => console.log("Status:", status),
+  });
+
+  // Stop recording — returns the transcript
+  const transcript = TraceBug.stopVoiceRecording();
+  // → { id, timestamp, text: "When I click update the page breaks", duration }
+
+  // Get all voice transcripts
+  TraceBug.getVoiceTranscripts();
+}
+```
+
+Voice transcripts are automatically included in GitHub Issue, Jira Ticket, and PDF reports.
+
 ### Tester Notes
 
 ```typescript
@@ -231,7 +255,7 @@ import {
 The in-browser dashboard includes:
 
 - **Session list** with error/healthy indicators and "Repro Ready" badges
-- **QA Toolbar**: Screenshot, Add Note, GitHub Issue, Jira Ticket, PDF Report
+- **QA Toolbar**: Screenshot, Add Note, Voice Note, GitHub Issue, Jira Ticket, PDF Report
 - **Session Overview**: duration, events, pages, API calls
 - **Problems Detected**: critical / warning / info severity
 - **Error Details**: type classification + stack trace
