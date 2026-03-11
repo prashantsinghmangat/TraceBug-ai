@@ -53,7 +53,7 @@
           ? window.TraceBug.getGitHubIssue()
           : null;
         if (gh) {
-          navigator.clipboard.writeText(gh).then(function () {
+          copyToClipboard(gh).then(function () {
             showToast("GitHub issue copied to clipboard!");
           });
         } else {
@@ -67,7 +67,7 @@
           : null;
         if (jira) {
           var text = jira.summary + "\n\n" + jira.description;
-          navigator.clipboard.writeText(text).then(function () {
+          copyToClipboard(text).then(function () {
             showToast("Jira ticket copied to clipboard!");
           });
         } else {
@@ -76,6 +76,30 @@
         break;
     }
   });
+
+  // ── Clipboard (with fallback for unfocused documents) ──────────────────────
+
+  function copyToClipboard(text) {
+    // Try modern API first
+    if (navigator.clipboard && document.hasFocus()) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Fallback: textarea + execCommand (works even when page is not focused)
+    return new Promise(function (resolve) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute(
+        "style",
+        "position:fixed;left:-9999px;top:-9999px;opacity:0"
+      );
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      resolve();
+    });
+  }
 
   // ── Toast ─────────────────────────────────────────────────────────────────
 
