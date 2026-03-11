@@ -2668,6 +2668,7 @@ ${"-".repeat(40)}
   }
 
   // src/collectors.ts
+  var ROOT_ID = "tracebug-root";
   var PANEL_ID3 = "tracebug-dashboard-panel";
   var BTN_ID3 = "tracebug-dashboard-btn";
   var INTERNAL_URL_PATTERNS = [
@@ -2688,11 +2689,17 @@ ${"-".repeat(40)}
   }
   function isTraceBugElement(el) {
     if (!el) return false;
-    if (el.id === BTN_ID3 || el.id === PANEL_ID3) return true;
-    const panel = document.getElementById(PANEL_ID3);
-    const btn = document.getElementById(BTN_ID3);
-    if (panel && panel.contains(el)) return true;
-    if (btn && btn.contains(el)) return true;
+    if (el.id === ROOT_ID || el.id === BTN_ID3 || el.id === PANEL_ID3) return true;
+    const root = document.getElementById(ROOT_ID);
+    if (root && root.contains(el)) return true;
+    let node = el;
+    while (node) {
+      const id = node.id || "";
+      if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
+      if (node.className && typeof node.className === "string" && (node.className.includes("tracebug-") || node.className.includes("bt-ann"))) return true;
+      if (node.dataset && node.dataset.tracebug) return true;
+      node = node.parentElement;
+    }
     return false;
   }
   function collectClicks(emit) {

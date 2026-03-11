@@ -6,6 +6,7 @@ import { EventType } from "./types";
 
 type Emit = (type: EventType, data: Record<string, any>) => void;
 
+const ROOT_ID = "tracebug-root";
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
 
@@ -29,14 +30,25 @@ function isInternalUrl(url: string): boolean {
   return INTERNAL_URL_PATTERNS.some(pattern => pattern.test(url));
 }
 
-/** Check if an element belongs to the TraceBug dashboard — skip our own events */
+/** Check if an element belongs to TraceBug UI — skip our own events */
 function isTraceBugElement(el: HTMLElement | null): boolean {
   if (!el) return false;
-  if (el.id === BTN_ID || el.id === PANEL_ID) return true;
-  const panel = document.getElementById(PANEL_ID);
-  const btn = document.getElementById(BTN_ID);
-  if (panel && panel.contains(el)) return true;
-  if (btn && btn.contains(el)) return true;
+  // Quick ID checks
+  if (el.id === ROOT_ID || el.id === BTN_ID || el.id === PANEL_ID) return true;
+  // Walk up the DOM — if any ancestor is #tracebug-root, it's ours
+  const root = document.getElementById(ROOT_ID);
+  if (root && root.contains(el)) return true;
+  // Also check for TraceBug annotation overlays and modals
+  // (they may be appended outside #tracebug-root)
+  let node: HTMLElement | null = el;
+  while (node) {
+    const id = node.id || "";
+    if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
+    if (node.className && typeof node.className === "string" &&
+      (node.className.includes("tracebug-") || node.className.includes("bt-ann"))) return true;
+    if (node.dataset && node.dataset.tracebug) return true;
+    node = node.parentElement;
+  }
   return false;
 }
 

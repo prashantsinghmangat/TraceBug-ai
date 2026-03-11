@@ -4,7 +4,7 @@ One-stop bug reproduction tool for QA testers and developers. Records user sessi
 
 **Minimum effort from tester. Maximum debugging output for developer.**
 
-No servers. No databases. No API keys. Just `npm install` and go.
+No servers. No databases. No API keys. Just install and go.
 
 **Works with any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, SvelteKit, Remix, Astro, or plain HTML.
 
@@ -31,7 +31,11 @@ Complete bug report copied to clipboard:
 Paste into GitHub/Jira → Developer has everything. No back-and-forth.
 ```
 
-## Quick Start (2 lines)
+## Two Ways to Use TraceBug
+
+### Option 1: npm Package (For Developers)
+
+Install the SDK in your project — best for teams who want TraceBug always active on dev/staging.
 
 ```bash
 npm install tracebug-sdk
@@ -39,9 +43,19 @@ npm install tracebug-sdk
 
 ```typescript
 import TraceBug from "tracebug-sdk";
-
 TraceBug.init({ projectId: "my-app" });
 ```
+
+### Option 2: Chrome Extension (For Non-Developers)
+
+Install the browser extension — no code needed. QA testers, PMs, and clients can use it on **any website**.
+
+1. Download the `tracebug-extension/` folder
+2. Open `chrome://extensions/` → Enable **Developer mode**
+3. Click **Load unpacked** → select the `tracebug-extension` folder
+4. Click the TraceBug icon on any site → toggle **"Enable on this site"**
+
+Works on Chrome, Edge, Brave, and Opera.
 
 ## Features
 
@@ -79,6 +93,12 @@ TraceBug.init({ projectId: "my-app" });
 | **Session Timeline** | Debug timeline with elapsed timestamps for every event |
 | **Environment Snapshot** | Browser version, OS, viewport, device type, connection |
 
+### Smart Filtering
+
+- **SDK self-filtering**: TraceBug never records its own UI interactions (clicks on the dashboard, annotation canvas, buttons)
+- **Framework noise removal**: Internal dev-server requests (webpack HMR, Vite ping, Next.js stack frames) are automatically excluded from timeline and reports
+- **Duplicate error dedup**: Consecutive identical errors are collapsed
+
 ## Installation
 
 ### From npm
@@ -92,6 +112,10 @@ npm install tracebug-sdk
 ```bash
 npm install github:prashantsinghmangat/tracebug-ai
 ```
+
+### Chrome Extension (No Code Required)
+
+See [Chrome Extension](#chrome-extension) section below.
 
 ## Configuration
 
@@ -219,11 +243,96 @@ The in-browser dashboard includes:
 - **Reproduction Steps**: auto-generated with copy button
 - **Export**: JSON, Text, HTML, PDF, GitHub Issue, Jira Ticket
 
+## Chrome Extension
+
+The TraceBug Chrome Extension lets **non-developers** use all TraceBug features without writing code.
+
+### How to Install
+
+1. Open `chrome://extensions/`
+2. Enable **Developer mode** (toggle in top-right)
+3. Click **Load unpacked**
+4. Select the `tracebug-extension/` folder from this repo
+5. TraceBug icon appears in the toolbar
+
+### How to Use
+
+1. Navigate to any website (staging, production, localhost, internal tools)
+2. Click the TraceBug extension icon in the toolbar
+3. Toggle **"Enable on this site"** — the page reloads with TraceBug active
+4. The floating bug button appears on the page
+5. Use all QA tools: screenshots, notes, GitHub/Jira issues, PDF reports
+6. Quick actions also available directly from the extension popup
+
+### Extension Features
+
+- **Per-site toggle** — enable only on sites you're testing
+- **Badge indicator** — shows "ON" in green when active on current tab
+- **Quick actions** — Screenshot, PDF Report, GitHub Issue, Jira Ticket from the popup
+- **Active sites list** — manage all enabled sites from the popup
+- **CSP-safe** — uses `chrome.scripting.executeScript` with `world: "MAIN"` to bypass Content Security Policy restrictions
+- **No inline scripts** — fully compliant with strict CSP headers
+
+### Browser Compatibility
+
+| Browser | Supported |
+|---------|-----------|
+| Google Chrome | Yes |
+| Microsoft Edge | Yes |
+| Brave | Yes |
+| Opera | Yes |
+| Firefox | Coming soon |
+
+### Publishing to Chrome Web Store
+
+1. Create a developer account at the Chrome Web Store Developer Console
+2. Pay the one-time $5 registration fee
+3. Zip the `tracebug-extension/` folder
+4. Upload → fill in listing details → submit for review
+
+## Build from Source
+
+```bash
+# Clone the repo
+git clone https://github.com/prashantsinghmangat/tracebug-ai.git
+cd tracebug-ai
+
+# Install dependencies
+npm install
+
+# Build SDK (produces CJS + ESM + IIFE for extension)
+npm run build
+
+# Output:
+#   dist/index.js              — ESM (npm package)
+#   dist/index.cjs             — CJS (npm package)
+#   dist/index.d.ts            — TypeScript declarations
+#   tracebug-extension/tracebug-sdk.js — IIFE (Chrome Extension)
+```
+
+### Run Example App
+
+```bash
+cd example-app
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+### Test the Example Bug
+
+1. Go to `/vendor`
+2. Click "Edit"
+3. Change Status to "Inactive"
+4. Click "Update" — triggers TypeError
+5. Click the bug button to see the report with reproduction steps
+
 ## Privacy
 
 - Sensitive fields auto-redacted (`password`, `secret`, `token`, `ssn`, `credit`)
 - All data stays in `localStorage` — nothing leaves the browser
 - SDK never captures its own UI interactions
+- No external servers, no tracking, no analytics
 
 ## Framework Compatibility
 
@@ -231,9 +340,12 @@ The in-browser dashboard includes:
 |--------|------|------------|
 | ESM (`import`) | `dist/index.js` | Vite, Next.js, Nuxt, SvelteKit, modern webpack |
 | CJS (`require`) | `dist/index.cjs` | Angular CLI, older webpack, Node.js |
-| TypeScript | `dist/index.d.ts` | Full type support in both modes |
+| IIFE (global) | `tracebug-extension/tracebug-sdk.js` | Chrome Extension, plain `<script>` tag |
+| TypeScript | `dist/index.d.ts` | Full type support in both ESM and CJS |
 
 ## Uninstall
+
+### npm Package
 
 ```bash
 npm uninstall tracebug-sdk
@@ -241,6 +353,16 @@ npm uninstall tracebug-sdk
 
 Then remove the `TraceBug.init()` call from your app's entry file.
 
+### Chrome Extension
+
+Go to `chrome://extensions/` → click **Remove** on TraceBug.
+
 ## License
 
 MIT
+
+## Author
+
+**Prashant Singh Mangat**
+- GitHub: [prashantsinghmangat](https://github.com/prashantsinghmangat)
+- npm: [tracebug-sdk](https://www.npmjs.com/package/tracebug-sdk)
