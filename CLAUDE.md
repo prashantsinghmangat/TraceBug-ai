@@ -1,45 +1,111 @@
 # TraceBug AI - Project Context
 
-## What is this?
-Zero-backend, browser-only SDK that records user sessions and auto-generates bug reproduction steps. All data stays in localStorage. No servers, no API keys, no external dependencies.
+## What is TraceBug?
+TraceBug is a **one-stop QA testing tool** that records user sessions and auto-generates developer-ready bug reports. It solves the #1 problem in software teams: **testers finding bugs but developers not being able to reproduce them**.
 
-Available as both an **npm package** (for developers) and a **Chrome Extension** (for non-developers).
+Zero-backend, browser-only. All data stays in localStorage. No servers, no API keys, no external dependencies.
+
+Available as:
+- **npm package** (`tracebug-sdk`) — for developers to embed in their apps
+- **Chrome Extension** — for non-developers (QA testers, PMs, clients) to use on ANY website
 
 Works with **any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, Remix, Astro, plain HTML — anything that runs in a browser.
+
+## The Problem It Solves
+
+```
+BEFORE TraceBug:
+  Tester: "The page is broken"
+  Developer: "What did you click? What browser? Can you reproduce it?"
+  Tester: "I don't remember exactly..."
+  → 3 days of back-and-forth
+
+AFTER TraceBug:
+  Tester finds bug → clicks 🐛 button → gets complete report:
+    - Auto-generated reproduction steps
+    - Screenshots with annotations
+    - Console errors + stack traces
+    - Network failures
+    - Browser/OS/viewport info
+    - Session timeline
+    - Voice description of the bug
+  → Pastes into Jira/GitHub → Developer has everything. Zero back-and-forth.
+```
 
 ## How It Works
 1. User interacts with the app (clicks, types, navigates, triggers API calls)
 2. SDK silently captures all events into localStorage (grouped by session)
 3. Each page load creates a new session automatically
 4. When an error occurs, reproduction steps are generated instantly in-browser
-5. Developer clicks the floating bug button to view the full session report
-6. Reports can be downloaded as JSON, text, standalone HTML, or PDF
-7. One-click GitHub issue / Jira ticket generation with copy to clipboard
+5. Tester can capture screenshots, add voice descriptions, annotate with notes
+6. One-click export to GitHub Issue, Jira Ticket, or PDF report
+7. Developer gets a complete, developer-ready bug report with zero effort from the tester
+
+## Feature Overview
+
+### Core Recording
+- **Click tracking** — tag, text, id, className, aria-label, role, data-testid, href, button type
+- **Input tracking** — field name, type, actual value (sensitive fields auto-redacted), placeholder
+- **Select/dropdown tracking** — selected option, all available options, field name
+- **Form submission tracking** — form id, action, method, all field values (passwords redacted)
+- **Route/navigation tracking** — from path to path
+- **API request tracking** — fetch + XMLHttpRequest, URL, method, status, duration
+- **Error tracking** — message, stack trace, source file, line, column
+- **Console error tracking** — console.error() arguments
+- **Unhandled rejection tracking** — promise rejection reason + stack
+
+### QA Tools (Dashboard Toolbar)
+- **Screenshots** — capture via html2canvas with smart auto-naming from event context
+- **Screenshot Annotation** — draw rectangles, arrows, text overlays on screenshots with color picker
+- **Add Note** — tester annotations with Expected/Actual/Severity fields
+- **Voice Note** — speech-to-text bug description using Web Speech API (free, no API keys)
+- **GitHub Issue** — one-click generates markdown, copies to clipboard, auto-downloads screenshots
+- **Jira Ticket** — one-click generates Jira markup, copies to clipboard
+- **PDF Report** — print-optimized HTML report, opens browser print dialog
+
+### Smart Features
+- **Auto bug title generation** — heuristic-based, e.g. "Vendor Update Fails — TypeError"
+- **Auto flow summary** — e.g. "Click 'Edit' → Select 'Inactive' → Click 'Update'"
+- **Session timeline** — elapsed timestamps, color-coded event types
+- **Environment auto-capture** — browser, OS, viewport, device type, connection type
+- **Framework noise filtering** — auto-filters Next.js/Webpack/Vite internal requests
+- **Error deduplication** — consecutive identical errors collapsed
+- **Privacy** — passwords, credit cards, SSNs, tokens auto-redacted as `[REDACTED]`
+- **SDK self-filtering** — TraceBug's own UI interactions never appear in the timeline
+
+### Voice-to-Bug-Report
+- Uses **Web Speech API** (SpeechRecognition) — completely free, no paid APIs
+- Real-time transcript display with interim results
+- Auto-punctuation cleanup (capitalize, add periods, spoken "period"/"comma" converted)
+- Continuous mode with auto-restart on browser timeout
+- Saved as tester annotation, included in GitHub/Jira/PDF reports
+- Works in Chrome, Edge, Brave, Opera (all Chromium browsers)
 
 ## Project Structure
 ```
 tracebug-ai/
 ├── src/                       # SDK source (published as "tracebug-sdk")
-│   ├── index.ts               # Entry point — TraceBug.init(), pause/resume, destroy, screenshot, notes, reports
-│   ├── types.ts               # TypeScript interfaces (TraceBugConfig, TraceBugEvent, StoredSession, BugReport, Annotation, etc.)
-│   ├── collectors.ts          # Event collectors with SDK self-filtering (isTraceBugElement) + framework noise filtering
+│   ├── index.ts               # Entry point — TraceBug class with all public methods
+│   ├── types.ts               # TypeScript interfaces (all shared types)
+│   ├── collectors.ts          # Event collectors with self-filtering + framework noise filtering
 │   ├── storage.ts             # localStorage persistence — sessions, annotations, environment
 │   ├── repro-generator.ts     # Generates human-readable reproduction steps from events
-│   ├── dashboard.ts           # In-browser slide-out panel with QA toolbar (vanilla DOM, !important CSS, appended to <html>)
-│   ├── environment.ts         # Auto-captures browser, OS, viewport, device, connection info
-│   ├── screenshot.ts          # Screenshot capture with smart auto-naming from event context
-│   ├── title-generator.ts     # Auto-generates bug titles and flow summaries from session events
+│   ├── dashboard.ts           # In-browser slide-out panel with QA toolbar (vanilla DOM)
+│   ├── environment.ts         # Auto-captures browser, OS, viewport, device, connection
+│   ├── screenshot.ts          # Screenshot capture with html2canvas + smart auto-naming
+│   ├── voice-recorder.ts      # Web Speech API voice-to-text for bug descriptions
+│   ├── title-generator.ts     # Auto-generates bug titles and flow summaries
 │   ├── timeline-builder.ts    # Builds debug timeline with elapsed timestamps
-│   ├── report-builder.ts      # Assembles complete BugReport from session data
+│   ├── report-builder.ts      # Assembles complete BugReport from all data sources
 │   ├── github-issue.ts        # GitHub issue markdown generator
 │   ├── jira-issue.ts          # Jira ticket template generator (Jira markup format)
 │   └── pdf-generator.ts       # Print-optimized HTML report (save as PDF from browser)
 ├── tracebug-extension/        # Chrome Extension (Manifest V3)
-│   ├── manifest.json          # Extension config — permissions, content scripts, web accessible resources
+│   ├── manifest.json          # Extension config — permissions, content scripts
 │   ├── background.js          # Service worker — site enable/disable, SDK injection via chrome.scripting API
 │   ├── content-script.js      # Bridge between popup/background and page-context SDK
 │   ├── tracebug-init.js       # Page-context initializer — SDK init + extension action handlers
-│   ├── tracebug-sdk.js        # Auto-built IIFE bundle (from tsup, ~145KB)
+│   ├── tracebug-sdk.js        # Auto-built IIFE bundle (from tsup, ~160KB) — DO NOT EDIT MANUALLY
 │   ├── popup.html             # Extension popup UI
 │   ├── popup.js               # Popup logic — toggle, quick actions, site list
 │   ├── styles.css             # Dark-themed popup styles
@@ -55,8 +121,8 @@ tracebug-ai/
 ├── tsconfig.json              # TypeScript config (target ES2018, module ES2020)
 ├── tsup.config.ts             # tsup bundler config — CJS + ESM + IIFE (extension)
 └── dist/                      # Built output (gitignored, auto-built via prepare script)
-    ├── index.js               # ESM output
-    ├── index.cjs              # CJS output
+    ├── index.js               # ESM output (~151KB)
+    ├── index.cjs              # CJS output (~153KB)
     ├── index.d.ts             # TypeScript declarations (ESM)
     └── index.d.cts            # TypeScript declarations (CJS)
 ```
@@ -69,6 +135,7 @@ tracebug-ai/
 - Entry 2: IIFE (`tracebug-extension/tracebug-sdk.js`) for Chrome Extension
 - IIFE build exposes `window.TraceBug` via footer script with `__TRACEBUG_LOADED__` guard
 - `package.json` uses conditional `exports` field so bundlers pick the right format
+- Single `npm run build` command builds ALL outputs (npm + extension)
 
 ### Chrome Extension Architecture
 - **Manifest V3** with `scripting`, `storage`, `tabs`, `activeTab` permissions
@@ -93,8 +160,9 @@ tracebug-ai/
 
 ### SDK Self-Filtering
 - All collectors check `isTraceBugElement()` before emitting events
-- Checks `#tracebug-root` container, then walks up DOM looking for `id="tracebug-*"`, `class="tracebug-*"`, or `data-tracebug` attributes
-- Filters screenshot annotation canvas, save buttons, and all dashboard UI
+- Checks `#tracebug-root` container, then walks up DOM looking for `id="tracebug-*"`, `id="bt-*"`, `class="tracebug-*"`, `class="bt-ann*"`, `class="bt-voice*"`, or `data-tracebug` attributes
+- Annotation canvas has `data-tracebug="annotation-canvas"` attribute
+- Voice dialog has `data-tracebug="voice-dialog"` attribute
 - SDK's own interactions never appear in the event timeline
 
 ### Framework Noise Filtering
@@ -104,24 +172,17 @@ tracebug-ai/
   - Vite: `__vite_ping`, `@vite/client`, `@react-refresh`
   - General: `sockjs-node`, `turbopack-hmr`
 
-## Event Types Captured
-
-| Type | What it captures |
-|------|-----------------|
-| `click` | tag, text, id, className, aria-label, role, data-testid, href (links), button type, form context |
-| `input` | field name, type, actual value (sensitive fields auto-redacted), placeholder, checked state (checkbox/radio) |
-| `select_change` | selected option text + value, all available options, field name |
-| `form_submit` | form id, action, method, all field names + values (passwords redacted) |
-| `route_change` | from path → to path |
-| `api_request` | URL, method, status code, duration in ms (fetch + XMLHttpRequest) |
-| `error` | message, stack trace, source file, line, column |
-| `console_error` | console.error() arguments joined |
-| `unhandled_rejection` | promise rejection reason + stack |
+### Voice Recording
+- Uses Web Speech API (SpeechRecognition / webkitSpeechRecognition)
+- Zero cost — uses browser's built-in speech recognition
+- No audio stored — only text transcripts saved in memory
+- Auto-restarts on browser timeout (continuous mode)
+- Transcript cleaned up: capitalized, punctuated, spoken punctuation converted
 
 ## Dashboard Features
 - **Session list** with red/green dot indicators (error/healthy) and "Repro Ready" badges
 - **Recording toggle** — pause/resume button with live green/red indicator dot
-- **QA Toolbar**: Screenshot, Add Note, GitHub Issue, Jira Ticket, PDF Report
+- **QA Toolbar**: Screenshot, Add Note, Voice Note, GitHub Issue, Jira Ticket, PDF Report
 - **Session detail view**:
   - Session Overview card (duration, events, pages, API calls, error status)
   - Problems Detected panel (critical/warning/info severity with counts)
@@ -129,26 +190,31 @@ tracebug-ai/
   - Performance insights (avg/slowest response time, success %, per-API breakdown with bars)
   - Rich event timeline with time gap indicators, color-coded icons, inline values
   - Reproduction Steps section with copy button
-  - Tester Notes display (annotations with severity badges)
+  - Tester Notes display (annotations with severity badges, including voice notes)
   - Screenshots gallery (inline images with filenames)
   - Environment Info grid (browser, OS, viewport, device)
 - **Download reports**: JSON, Text, HTML, PDF
 - **Copy to clipboard**: Full Report, GitHub Issue, Jira Ticket
+- **Screenshot annotation editor**: rectangle highlights, arrows, text overlays, color picker, undo
 - Event types color-coded: clicks (blue), inputs (purple), selects (green), forms (orange), navigation (cyan), API (yellow), errors (red)
 
 ## Build & Run
 ```bash
-# Build SDK (produces CJS + ESM + IIFE for extension)
+# Build SDK (produces CJS + ESM + IIFE for extension — single command does everything)
 cd tracebug-ai && npm install && npm run build
 
 # Run example app
 cd example-app && npm install && npm run dev
 # Open http://localhost:3000
 
+# Build + update example app in one command
+npm run build:example
+
 # Load Chrome Extension
 # 1. Open chrome://extensions/
 # 2. Enable Developer mode
 # 3. Click Load unpacked → select tracebug-extension/ folder
+# 4. After code changes: npm run build → refresh extension in chrome://extensions/
 ```
 
 ## Installation in Any Project
@@ -193,6 +259,16 @@ const allScreenshots = TraceBug.getScreenshots();
 // Tester notes
 TraceBug.addNote({ text: "...", expected: "...", actual: "...", severity: "critical" });
 
+// Voice recording
+TraceBug.isVoiceSupported();     // boolean — check browser support
+TraceBug.startVoiceRecording({   // start speech-to-text
+  onUpdate: (text, interim) => console.log(text),
+  onStatus: (status, msg) => console.log(status, msg),
+});
+TraceBug.stopVoiceRecording();   // returns VoiceTranscript
+TraceBug.isVoiceRecording();     // boolean
+TraceBug.getVoiceTranscripts();  // VoiceTranscript[]
+
 // Reports
 const report = TraceBug.generateReport();
 const title = TraceBug.getBugTitle();
@@ -229,6 +305,7 @@ TraceBug.init({
 - **Prepare script**: `npm pack` and `npm install` from GitHub both trigger `tsup` build automatically.
 - **Extension SDK**: `tracebug-extension/tracebug-sdk.js` is auto-built by tsup. Do not edit it manually.
 - **Screenshots in memory**: Screenshots are stored in memory (not localStorage) to avoid quota issues.
+- **Voice transcripts in memory**: Voice transcripts stored in memory, included in reports when generated.
 
 ## Uninstall
 ```bash

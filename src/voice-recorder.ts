@@ -122,17 +122,22 @@ export function startVoiceRecording(options?: {
 
 /** Stop voice recording and return the transcript */
 export function stopVoiceRecording(): VoiceTranscript | null {
-  if (!isRecording || !recognition) return null;
+  if (!isRecording && !recognition) return null;
 
   isRecording = false;
 
-  try {
-    recognition.stop();
-  } catch {
-    // Already stopped
-  }
+  // Immediately notify UI that recording stopped (don't wait for async onend)
+  onStatusChange?.("stopped");
 
-  recognition = null;
+  if (recognition) {
+    try {
+      recognition.onend = null; // Prevent double "stopped" callback
+      recognition.stop();
+    } catch {
+      // Already stopped
+    }
+    recognition = null;
+  }
 
   // Append any interim text that wasn't finalized
   if (interimTranscript.trim()) {
