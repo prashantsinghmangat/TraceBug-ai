@@ -34,44 +34,48 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/40 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="text-primary"
-            >
-              <path
-                d="M12 2C8.5 2 6 4.5 6 8v1H4.5C3.7 9 3 9.7 3 10.5v1C3 12.3 3.7 13 4.5 13H6v2H4.5C3.7 15 3 15.7 3 16.5v1C3 18.3 3.7 19 4.5 19H6c.3 1.7 1.3 3 2.8 3.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M12 2C15.5 2 18 4.5 18 8v1h1.5c.8 0 1.5.7 1.5 1.5v1c0 .8-.7 1.5-1.5 1.5H18v2h1.5c.8 0 1.5.7 1.5 1.5v1c0 .8-.7 1.5-1.5 1.5H18c-.3 1.7-1.3 3-2.8 3.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-              <ellipse
-                cx="12"
-                cy="14"
-                rx="5"
-                ry="7"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <circle cx="10" cy="12" r="1" fill="currentColor" />
-              <circle cx="14" cy="12" r="1" fill="currentColor" />
-              <path
-                d="M10 16h4"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
+          <svg width="32" height="32" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+            <defs>
+              <linearGradient id="nb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#1A1530"/>
+                <stop offset="100%" stopColor="#0B0B0F"/>
+              </linearGradient>
+              <linearGradient id="nb-primary" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#9B7DFF"/>
+                <stop offset="50%" stopColor="#7B61FF"/>
+                <stop offset="100%" stopColor="#00E5FF"/>
+              </linearGradient>
+              <linearGradient id="nb-scan" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#00E5FF" stopOpacity="0"/>
+                <stop offset="30%" stopColor="#00E5FF" stopOpacity="0.9"/>
+                <stop offset="70%" stopColor="#7B61FF" stopOpacity="0.9"/>
+                <stop offset="100%" stopColor="#7B61FF" stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            <rect x="4" y="4" width="88" height="88" rx="22" fill="url(#nb-bg)"/>
+            <rect x="4" y="4" width="88" height="88" rx="22" fill="none" stroke="url(#nb-primary)" strokeWidth="1.2" opacity="0.35"/>
+            <path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#nb-primary)" opacity="0.12"/>
+            <path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#nb-primary)" strokeWidth="1.6"/>
+            <rect x="22" y="40" width="52" height="2.5" rx="1.25" fill="url(#nb-scan)" opacity="0.9"/>
+            <line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="21" cy="16" r="3" fill="#9B7DFF"/>
+            <circle cx="21" cy="16" r="1.2" fill="white"/>
+            <line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" strokeWidth="2" strokeLinecap="round"/>
+            <circle cx="75" cy="16" r="3" fill="#00E5FF"/>
+            <circle cx="75" cy="16" r="1.2" fill="white"/>
+            <line x1="30" y1="36" x2="17" y2="32" stroke="#7B61FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.75"/>
+            <line x1="30" y1="43" x2="15" y2="43" stroke="#7B61FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.75"/>
+            <line x1="30" y1="50" x2="17" y2="54" stroke="#7B61FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.75"/>
+            <line x1="66" y1="36" x2="79" y2="32" stroke="#00E5FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.75"/>
+            <line x1="66" y1="43" x2="81" y2="43" stroke="#00E5FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.75"/>
+            <line x1="66" y1="50" x2="79" y2="54" stroke="#00E5FF" strokeWidth="1.5" strokeLinecap="round" opacity="0.75"/>
+            <circle cx="48" cy="41" r="4.5" fill="url(#nb-primary)"/>
+            <circle cx="48" cy="41" r="1.9" fill="white"/>
+            <circle cx="41" cy="34" r="2.2" fill="#00E5FF" opacity="0.9"/>
+            <circle cx="41" cy="34" r="0.9" fill="white"/>
+            <circle cx="55" cy="34" r="2.2" fill="#9B7DFF" opacity="0.9"/>
+            <circle cx="55" cy="34" r="0.9" fill="white"/>
+          </svg>
           <span className="text-text-primary font-bold text-lg tracking-tight group-hover:text-accent transition-colors">
             TraceBug
           </span>
