@@ -11,7 +11,10 @@
       "Read(//d/Project/TraceBug-ai/**)",
       "Bash(node -e \":*)",
       "Bash(npx next:*)",
-      "Bash(node_modules/.bin/next build:*)"
+      "Bash(node_modules/.bin/next build:*)",
+      "Bash(npm version:*)",
+      "Bash(npm publish:*)",
+      "Bash(npm whoami:*)"
     ]
   }
 }
