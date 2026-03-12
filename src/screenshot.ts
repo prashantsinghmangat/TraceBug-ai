@@ -8,6 +8,7 @@ import { ScreenshotData, TraceBugEvent } from "./types";
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
 
+const MAX_SCREENSHOTS = 50;
 let screenshotCounter = 0;
 const screenshots: ScreenshotData[] = [];
 let html2canvasLoaded: ((element: HTMLElement, options?: any) => Promise<HTMLCanvasElement>) | null = null;
@@ -81,6 +82,12 @@ export async function captureScreenshot(
   };
 
   screenshots.push(screenshot);
+
+  // Cap screenshots to prevent unbounded memory growth (each is a full data URL)
+  if (screenshots.length > MAX_SCREENSHOTS) {
+    screenshots.splice(0, screenshots.length - MAX_SCREENSHOTS);
+  }
+
   return screenshot;
 }
 
@@ -110,7 +117,7 @@ async function getHtml2Canvas(): Promise<((el: HTMLElement, opts?: any) => Promi
       return html2canvasLoaded;
     }
   } catch {
-    // Silently fail — fallback will be used
+    // Silently fail — canvas fallback will be used (safe for CSP-strict sites)
   }
 
   return null;

@@ -30,6 +30,19 @@ function isInternalUrl(url: string): boolean {
   return INTERNAL_URL_PATTERNS.some(pattern => pattern.test(url));
 }
 
+/** Cached reference to the TraceBug root element */
+let _rootCache: HTMLElement | null | undefined;
+function getRoot(): HTMLElement | null {
+  if (_rootCache === undefined) {
+    _rootCache = document.getElementById(ROOT_ID);
+  }
+  // Re-check if cached value was removed from DOM
+  if (_rootCache && !_rootCache.isConnected) {
+    _rootCache = document.getElementById(ROOT_ID);
+  }
+  return _rootCache;
+}
+
 /** Check if an element belongs to TraceBug UI — skip our own events */
 function isTraceBugElement(el: HTMLElement | null): boolean {
   if (!el) return false;
@@ -38,7 +51,7 @@ function isTraceBugElement(el: HTMLElement | null): boolean {
   // Direct attribute check on the element itself
   if (el.dataset && el.dataset.tracebug) return true;
   // Walk up the DOM — if any ancestor is #tracebug-root, it's ours
-  const root = document.getElementById(ROOT_ID);
+  const root = getRoot();
   if (root && root.contains(el)) return true;
   // Also check for TraceBug annotation overlays, voice dialogs, and modals
   // (they may be appended outside #tracebug-root in some edge cases)
@@ -325,17 +338,19 @@ export function collectXhrRequests(emit: Emit): () => void {
   const origOpen = OrigXHR.prototype.open;
   const origSend = OrigXHR.prototype.send;
 
+  const xhrMeta = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
+
   OrigXHR.prototype.open = function (method: string, url: string | URL, ...rest: any[]) {
-    (this as any)._tb_method = method;
-    (this as any)._tb_url = typeof url === "string" ? url : url.toString();
+    xhrMeta.set(this, { method, url: typeof url === "string" ? url : url.toString() });
     return origOpen.apply(this, [method, url, ...rest] as any);
   };
 
   OrigXHR.prototype.send = function (body?: any) {
     const xhr = this;
     const start = Date.now();
-    const method = (xhr as any)._tb_method || "GET";
-    const url = (xhr as any)._tb_url || "";
+    const meta = xhrMeta.get(xhr);
+    const method = meta?.method || "GET";
+    const url = meta?.url || "";
 
     // Skip internal framework requests
     if (isInternalUrl(url)) {
@@ -402,14 +417,26 @@ export function collectErrors(emit: Emit): () => void {
   window.addEventListener("unhandledrejection", onRejection);
 
   const origConsoleError = console.error;
+  let _insideEmit = false;
   console.error = function (...args: any[]) {
-    emit("console_error", {
-      error: {
-        message: args
-          .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-          .join(" "),
-      },
-    });
+    // Guard against infinite loop: if emit() triggers console.error internally,
+    // skip re-emitting to avoid recursion
+    if (_insideEmit) {
+      origConsoleError.apply(console, args);
+      return;
+    }
+    _insideEmit = true;
+    try {
+      emit("console_error", {
+        error: {
+          message: args
+            .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+            .join(" "),
+        },
+      });
+    } finally {
+      _insideEmit = false;
+    }
     origConsoleError.apply(console, args);
   };
 
