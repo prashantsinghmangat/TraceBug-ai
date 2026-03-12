@@ -74,8 +74,38 @@ var TraceBugModule = (() => {
       }
     }
   }
+  var _cachedSessions = null;
+  var _pendingFlush = null;
+  var FLUSH_INTERVAL_MS = 1e3;
+  function getCachedSessions() {
+    if (!_cachedSessions) {
+      _cachedSessions = getAllSessions();
+    }
+    return _cachedSessions;
+  }
+  function scheduleFlush() {
+    if (_pendingFlush) return;
+    _pendingFlush = setTimeout(() => {
+      _pendingFlush = null;
+      if (_cachedSessions) {
+        saveSessions(_cachedSessions);
+      }
+    }, FLUSH_INTERVAL_MS);
+  }
+  function flushPendingEvents() {
+    if (_pendingFlush) {
+      clearTimeout(_pendingFlush);
+      _pendingFlush = null;
+    }
+    if (_cachedSessions) {
+      saveSessions(_cachedSessions);
+    }
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", flushPendingEvents);
+  }
   function appendEvent(sessionId, event, maxEvents, maxSessions) {
-    let sessions = getAllSessions();
+    let sessions = getCachedSessions();
     let session = sessions.find((s) => s.sessionId === sessionId);
     if (!session) {
       session = {
@@ -100,8 +130,9 @@ var TraceBugModule = (() => {
     }
     if (sessions.length > maxSessions) {
       sessions = sessions.slice(-maxSessions);
+      _cachedSessions = sessions;
     }
-    saveSessions(sessions);
+    scheduleFlush();
   }
   function updateSessionError(sessionId, errorMessage, errorStack, reproSteps, errorSummary) {
     const sessions = getAllSessions();
@@ -312,6 +343,7 @@ var TraceBugModule = (() => {
   // src/screenshot.ts
   var PANEL_ID = "tracebug-dashboard-panel";
   var BTN_ID = "tracebug-dashboard-btn";
+  var MAX_SCREENSHOTS = 50;
   var screenshotCounter = 0;
   var screenshots = [];
   var html2canvasLoaded = null;
@@ -367,6 +399,9 @@ var TraceBugModule = (() => {
       height
     };
     screenshots.push(screenshot);
+    if (screenshots.length > MAX_SCREENSHOTS) {
+      screenshots.splice(0, screenshots.length - MAX_SCREENSHOTS);
+    }
     return screenshot;
   }
   async function getHtml2Canvas() {
@@ -583,7 +618,10 @@ var TraceBugModule = (() => {
       const message = errorMessages[event.error] || `Speech recognition error: ${event.error}`;
       if (event.error === "no-speech") return;
       isRecording = false;
+      recognition = null;
       onStatusChange == null ? void 0 : onStatusChange("error", message);
+      onStatusChange = null;
+      onTranscriptUpdate = null;
     };
     recognition.onend = () => {
       if (isRecording) {
@@ -2981,11 +3019,21 @@ ${"-".repeat(40)}
   function isInternalUrl(url) {
     return INTERNAL_URL_PATTERNS.some((pattern) => pattern.test(url));
   }
+  var _rootCache;
+  function getRoot() {
+    if (_rootCache === void 0) {
+      _rootCache = document.getElementById(ROOT_ID);
+    }
+    if (_rootCache && !_rootCache.isConnected) {
+      _rootCache = document.getElementById(ROOT_ID);
+    }
+    return _rootCache;
+  }
   function isTraceBugElement(el) {
     if (!el) return false;
     if (el.id === ROOT_ID || el.id === BTN_ID3 || el.id === PANEL_ID3) return true;
     if (el.dataset && el.dataset.tracebug) return true;
-    const root = document.getElementById(ROOT_ID);
+    const root = getRoot();
     if (root && root.contains(el)) return true;
     let node = el;
     while (node) {
@@ -3193,16 +3241,17 @@ ${"-".repeat(40)}
     const OrigXHR = window.XMLHttpRequest;
     const origOpen = OrigXHR.prototype.open;
     const origSend = OrigXHR.prototype.send;
+    const xhrMeta = /* @__PURE__ */ new WeakMap();
     OrigXHR.prototype.open = function(method, url, ...rest) {
-      this._tb_method = method;
-      this._tb_url = typeof url === "string" ? url : url.toString();
+      xhrMeta.set(this, { method, url: typeof url === "string" ? url : url.toString() });
       return origOpen.apply(this, [method, url, ...rest]);
     };
     OrigXHR.prototype.send = function(body) {
       const xhr = this;
       const start = Date.now();
-      const method = xhr._tb_method || "GET";
-      const url = xhr._tb_url || "";
+      const meta = xhrMeta.get(xhr);
+      const method = (meta == null ? void 0 : meta.method) || "GET";
+      const url = (meta == null ? void 0 : meta.url) || "";
       if (isInternalUrl(url)) {
         return origSend.call(this, body);
       }
@@ -3258,12 +3307,22 @@ ${"-".repeat(40)}
     };
     window.addEventListener("unhandledrejection", onRejection);
     const origConsoleError = console.error;
+    let _insideEmit = false;
     console.error = function(...args) {
-      emit("console_error", {
-        error: {
-          message: args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
-        }
-      });
+      if (_insideEmit) {
+        origConsoleError.apply(console, args);
+        return;
+      }
+      _insideEmit = true;
+      try {
+        emit("console_error", {
+          error: {
+            message: args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
+          }
+        });
+      } finally {
+        _insideEmit = false;
+      }
       origConsoleError.apply(console, args);
     };
     return () => {
@@ -3559,6 +3618,7 @@ ${"-".repeat(40)}
      * Tear down the SDK — removes all listeners and the dashboard.
      */
     destroy() {
+      flushPendingEvents();
       this.cleanups.forEach((fn) => fn());
       this.cleanups = [];
       this.initialized = false;

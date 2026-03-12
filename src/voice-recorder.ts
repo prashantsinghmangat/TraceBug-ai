@@ -92,7 +92,10 @@ export function startVoiceRecording(options?: {
     if (event.error === "no-speech") return;
 
     isRecording = false;
+    recognition = null;
     onStatusChange?.("error", message);
+    onStatusChange = null;
+    onTranscriptUpdate = null;
   };
 
   recognition.onend = () => {

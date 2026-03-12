@@ -29,6 +29,7 @@ import {
   getAllSessions,
   addAnnotation,
   saveEnvironment,
+  flushPendingEvents,
 } from "./storage";
 import { generateReproSteps } from "./repro-generator";
 import { mountDashboard, setRecordingState, updateRecordingState } from "./dashboard";
@@ -444,6 +445,7 @@ class TraceBugSDK {
    * Tear down the SDK — removes all listeners and the dashboard.
    */
   destroy(): void {
+    flushPendingEvents(); // Write any buffered events before teardown
     this.cleanups.forEach((fn) => fn());
     this.cleanups = [];
     this.initialized = false;

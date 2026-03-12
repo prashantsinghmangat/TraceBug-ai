@@ -72,6 +72,45 @@ export function getOrCreateSession(
   return session;
 }
 
+// ── Batched writes — avoid blocking main thread on every event ────────────
+
+let _cachedSessions: StoredSession[] | null = null;
+let _pendingFlush: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_INTERVAL_MS = 1000;
+
+function getCachedSessions(): StoredSession[] {
+  if (!_cachedSessions) {
+    _cachedSessions = getAllSessions();
+  }
+  return _cachedSessions;
+}
+
+function scheduleFlush(): void {
+  if (_pendingFlush) return;
+  _pendingFlush = setTimeout(() => {
+    _pendingFlush = null;
+    if (_cachedSessions) {
+      saveSessions(_cachedSessions);
+    }
+  }, FLUSH_INTERVAL_MS);
+}
+
+/** Flush any pending writes immediately (called on beforeunload / destroy) */
+export function flushPendingEvents(): void {
+  if (_pendingFlush) {
+    clearTimeout(_pendingFlush);
+    _pendingFlush = null;
+  }
+  if (_cachedSessions) {
+    saveSessions(_cachedSessions);
+  }
+}
+
+// Flush on page unload so no events are lost
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", flushPendingEvents);
+}
+
 // ── Append an event to a session ──────────────────────────────────────────
 
 export function appendEvent(
@@ -80,7 +119,7 @@ export function appendEvent(
   maxEvents: number,
   maxSessions: number
 ): void {
-  let sessions = getAllSessions();
+  let sessions = getCachedSessions();
 
   let session = sessions.find((s) => s.sessionId === sessionId);
   if (!session) {
@@ -111,9 +150,10 @@ export function appendEvent(
   // Trim old sessions if over limit
   if (sessions.length > maxSessions) {
     sessions = sessions.slice(-maxSessions);
+    _cachedSessions = sessions;
   }
 
-  saveSessions(sessions);
+  scheduleFlush();
 }
 
 // ── Update session with error + repro steps ───────────────────────────────
