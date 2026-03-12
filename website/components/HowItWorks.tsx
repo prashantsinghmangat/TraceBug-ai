@@ -1,13 +1,10 @@
+import { IconExtension, IconRecord, IconBugReport, IconExport } from "./Icons";
+
 export default function HowItWorks() {
   const steps = [
     {
       number: "01",
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" strokeLinecap="round"/>
-          <path d="M8 12l2 2 6-6" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
+      icon: <IconExtension size={28} />,
       title: "Install Chrome Extension",
       description:
         "Load the TraceBug extension in Chrome via Developer Mode, or install the SDK into your app with 2 lines of code.",
@@ -19,12 +16,7 @@ export default function HowItWorks() {
     },
     {
       number: "02",
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
-        </svg>
-      ),
+      icon: <IconRecord size={28} />,
       title: "Start TraceBug Session",
       description:
         "Click the 🐛 floating button or the extension popup to enable recording. A green dot confirms TraceBug is active.",
@@ -36,12 +28,7 @@ export default function HowItWorks() {
     },
     {
       number: "03",
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M15 15l-5-5M15 9H9v6" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="12" cy="12" r="9"/>
-        </svg>
-      ),
+      icon: <IconBugReport size={28} />,
       title: "Reproduce the Bug",
       description:
         "Navigate through the app as you normally would. Click buttons, fill forms, trigger the error. TraceBug captures everything silently in the background.",
@@ -53,13 +40,7 @@ export default function HowItWorks() {
     },
     {
       number: "04",
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <path d="M12 18v-6M9 15l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
+      icon: <IconExport size={28} />,
       title: "Generate Bug Report Instantly",
       description:
         "Open the dashboard, select the session, and click GitHub Issue or Jira Ticket. A complete, developer-ready report is copied to your clipboard in under 10 seconds.",

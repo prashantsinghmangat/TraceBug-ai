@@ -1,0 +1,69 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#13102A"/>
+      <stop offset="100%" stop-color="#0B0B0F"/>
+    </linearGradient>
+    <linearGradient id="primary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9B7DFF"/>
+      <stop offset="50%" stop-color="#7B61FF"/>
+      <stop offset="100%" stop-color="#00E5FF"/>
+    </linearGradient>
+    <linearGradient id="scan" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/>
+      <stop offset="30%" stop-color="#00E5FF" stop-opacity="0.9"/>
+      <stop offset="70%" stop-color="#7B61FF" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7B61FF" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="127" height="127" rx="27.5" fill="none" stroke="url(#primary)" stroke-width="1.2" opacity="0.35"/>
+  <!-- Glow -->
+  <circle cx="64" cy="64" r="50" fill="url(#glow)" opacity="0.5"/>
+  <!-- Body hexagon -->
+  <path d="M64 24 L94 41 L94 75 L64 92 L34 75 L34 41 Z" fill="url(#primary)" opacity="0.1"/>
+  <path d="M64 24 L94 41 L94 75 L64 92 L34 75 L34 41 Z" fill="none" stroke="url(#primary)" stroke-width="2"/>
+  <!-- Inner hex detail -->
+  <path d="M64 34 L84 45 L84 67 L64 78 L44 67 L44 45 Z" fill="none" stroke="url(#primary)" stroke-width="0.7" opacity="0.2"/>
+  <!-- Scan line -->
+  <rect x="24" y="57" width="80" height="3.5" rx="1.75" fill="url(#scan)" opacity="0.9"/>
+  <!-- Antennae left -->
+  <line x1="44" y1="40" x2="27" y2="22" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="27" cy="22" r="5" fill="#13102A"/>
+  <circle cx="27" cy="22" r="5" stroke="#9B7DFF" stroke-width="2"/>
+  <circle cx="27" cy="22" r="2" fill="#9B7DFF"/>
+  <!-- Antennae right -->
+  <line x1="84" y1="40" x2="101" y2="22" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="101" cy="22" r="5" fill="#13102A"/>
+  <circle cx="101" cy="22" r="5" stroke="#00E5FF" stroke-width="2"/>
+  <circle cx="101" cy="22" r="2" fill="#00E5FF"/>
+  <!-- Legs left -->
+  <line x1="34" y1="49" x2="17" y2="44" stroke="#7B61FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <line x1="34" y1="58" x2="14" y2="58" stroke="#7B61FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <line x1="34" y1="67" x2="17" y2="72" stroke="#7B61FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <circle cx="17" cy="44" r="2.5" fill="#7B61FF" opacity="0.5"/>
+  <circle cx="14" cy="58" r="2.5" fill="#7B61FF" opacity="0.5"/>
+  <circle cx="17" cy="72" r="2.5" fill="#7B61FF" opacity="0.5"/>
+  <!-- Legs right -->
+  <line x1="94" y1="49" x2="111" y2="44" stroke="#00E5FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <line x1="94" y1="58" x2="114" y2="58" stroke="#00E5FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <line x1="94" y1="67" x2="111" y2="72" stroke="#00E5FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+  <circle cx="111" cy="44" r="2.5" fill="#00E5FF" opacity="0.5"/>
+  <circle cx="114" cy="58" r="2.5" fill="#00E5FF" opacity="0.5"/>
+  <circle cx="111" cy="72" r="2.5" fill="#00E5FF" opacity="0.5"/>
+  <!-- Eyes -->
+  <circle cx="54" cy="46" r="3.5" fill="#00E5FF" opacity="0.85"/>
+  <circle cx="54" cy="46" r="1.4" fill="white"/>
+  <circle cx="74" cy="46" r="3.5" fill="#9B7DFF" opacity="0.85"/>
+  <circle cx="74" cy="46" r="1.4" fill="white"/>
+  <!-- Core -->
+  <circle cx="64" cy="58" r="7" fill="url(#primary)"/>
+  <circle cx="64" cy="58" r="3" fill="white" opacity="0.95"/>
+  <!-- Body edge nodes -->
+  <circle cx="34" cy="58" r="2" fill="#7B61FF" opacity="0.6"/>
+  <circle cx="94" cy="58" r="2" fill="#00E5FF" opacity="0.6"/>
+</svg>

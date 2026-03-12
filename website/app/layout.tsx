@@ -9,6 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://tracebug.netlify.app"),
   title: "TraceBug — Automatic Bug Reporting for Developers",
   description:
     "TraceBug records user sessions and generates developer-ready bug reports with steps, screenshots, console errors, and network logs. Zero backend, browser only, free.",
@@ -23,16 +24,22 @@ export const metadata: Metadata = {
     "network logs",
   ],
   authors: [{ name: "TraceBug" }],
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-icon.svg",
+  },
   openGraph: {
     title: "TraceBug — Automatic Bug Reporting for Developers",
     description:
       "TraceBug records user sessions and generates developer-ready bug reports with steps, screenshots, console errors, and network logs.",
     type: "website",
-    url: "https://tracebug.dev",
+    url: "https://tracebug.netlify.app",
     siteName: "TraceBug",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image.svg",
         width: 1200,
         height: 630,
         alt: "TraceBug — Automatic Bug Reporting",
@@ -44,7 +51,7 @@ export const metadata: Metadata = {
     title: "TraceBug — Automatic Bug Reporting for Developers",
     description:
       "TraceBug records user sessions and generates developer-ready bug reports automatically.",
-    images: ["/og-image.png"],
+    images: ["/og-image.svg"],
   },
   robots: {
     index: true,
@@ -55,7 +62,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0B0B0F",
+  themeColor: "#7B61FF",
 };
 
 export default function RootLayout({

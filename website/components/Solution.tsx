@@ -1,12 +1,12 @@
+import {
+  IconClick, IconConsole, IconNetwork, IconScreenshot,
+  IconEnvironment, IconVoice, IconTimeline, IconStackTrace,
+} from "./Icons";
+
 export default function Solution() {
   const captures = [
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M15 15l-5-5M15 9H9v6" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="12" cy="12" r="9"/>
-        </svg>
-      ),
+      icon: <IconClick size={20} />,
       label: "User Clicks",
       desc: "Tag, text, id, aria-label, role, data-testid — every click recorded with full element context",
       color: "text-blue-400",
@@ -15,9 +15,11 @@ export default function Solution() {
     },
     {
       icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="5" width="18" height="14" rx="2"/>
-          <path d="M7 10h10M7 14h6" strokeLinecap="round"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="5" width="18" height="14" rx="2" stroke="#7B61FF" strokeWidth="1.5" fill="rgba(123,97,255,0.1)"/>
+          <line x1="7" y1="10" x2="17" y2="10" stroke="#00E5FF" strokeWidth="1.3" strokeLinecap="round"/>
+          <line x1="7" y1="14" x2="13" y2="14" stroke="#9B7DFF" strokeWidth="1.3" strokeLinecap="round"/>
+          <circle cx="19" cy="7" r="2" fill="#FF4D6D" opacity="0.9"/>
         </svg>
       ),
       label: "Form Inputs",
@@ -27,11 +29,7 @@ export default function Solution() {
       border: "border-purple-500/20",
     },
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M3 12h18M12 3l9 9-9 9" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      ),
+      icon: <IconTimeline size={20} />,
       label: "Navigation",
       desc: "Every route change tracked — from path, to path, timestamp, duration on page",
       color: "text-cyan-400",
@@ -39,12 +37,7 @@ export default function Solution() {
       border: "border-cyan-500/20",
     },
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 9v4M12 17h.01" strokeLinecap="round"/>
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-        </svg>
-      ),
+      icon: <IconStackTrace size={20} />,
       label: "Console Errors",
       desc: "Full error messages, stack traces, source files, line numbers — everything a dev needs",
       color: "text-red-400",
@@ -52,12 +45,7 @@ export default function Solution() {
       border: "border-red-500/20",
     },
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" strokeLinecap="round"/>
-        </svg>
-      ),
+      icon: <IconNetwork size={20} />,
       label: "Network Calls",
       desc: "Fetch + XHR, URL, method, status code, duration — failed API calls flagged automatically",
       color: "text-yellow-400",
@@ -65,12 +53,7 @@ export default function Solution() {
       border: "border-yellow-500/20",
     },
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="3" width="18" height="14" rx="2"/>
-          <path d="M8 21h8M12 17v4" strokeLinecap="round"/>
-        </svg>
-      ),
+      icon: <IconScreenshot size={20} />,
       label: "Screenshots",
       desc: "html2canvas-powered snapshots with smart auto-naming, annotation, and drawing tools",
       color: "text-green-400",
@@ -78,12 +61,7 @@ export default function Solution() {
       border: "border-green-500/20",
     },
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="2" y="3" width="20" height="14" rx="2"/>
-          <path d="M8 21h8M12 17v4M2 7h20M8 3v4M16 3v4" strokeLinecap="round"/>
-        </svg>
-      ),
+      icon: <IconEnvironment size={20} />,
       label: "Environment Data",
       desc: "Browser, OS version, viewport size, device type, connection type — auto-captured",
       color: "text-orange-400",
@@ -91,12 +69,7 @@ export default function Solution() {
       border: "border-orange-500/20",
     },
     {
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
-          <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" strokeLinecap="round"/>
-        </svg>
-      ),
+      icon: <IconVoice size={20} />,
       label: "Voice Descriptions",
       desc: "Web Speech API — testers describe bugs by voice, transcript saved in the report",
       color: "text-pink-400",
