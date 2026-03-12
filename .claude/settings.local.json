@@ -9,7 +9,9 @@
       "Bash(npx tsup:*)",
       "Bash(ls -la d:/Project/TraceBug-ai/src/*.ts)",
       "Read(//d/Project/TraceBug-ai/**)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(npx next:*)",
+      "Bash(node_modules/.bin/next build:*)"
     ]
   }
 }
