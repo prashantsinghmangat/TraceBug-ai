@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TraceBug — QA Bug Reporter",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Record bugs, capture screenshots, and generate developer-ready bug reports. No coding required.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
@@ -24,9 +24,9 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "icons/icon16.svg",
-      "48": "icons/icon48.svg",
-      "128": "icons/icon128.svg"
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     },
     "default_title": "TraceBug — QA Bug Reporter"
   },
@@ -47,8 +47,8 @@
   ],
 
   "icons": {
-    "16": "icons/icon16.svg",
-    "48": "icons/icon48.svg",
-    "128": "icons/icon128.svg"
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   }
 }
