@@ -31,17 +31,9 @@
     "default_title": "TraceBug — QA Bug Reporter"
   },
 
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content-script.js"],
-      "run_at": "document_idle"
-    }
-  ],
-
   "web_accessible_resources": [
     {
-      "resources": ["tracebug-sdk.js", "tracebug-init.js"],
+      "resources": ["content-script.js", "tracebug-sdk.js", "tracebug-init.js"],
       "matches": ["<all_urls>"]
     }
   ],

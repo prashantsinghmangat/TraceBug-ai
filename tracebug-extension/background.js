@@ -62,6 +62,12 @@ async function injectSDK(tabId) {
   injectedTabs.add(tabId);
 
   try {
+    // Inject content script (message bridge between extension and page)
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content-script.js"],
+    });
+
     // Inject SDK bundle into page context
     await chrome.scripting.executeScript({
       target: { tabId },
