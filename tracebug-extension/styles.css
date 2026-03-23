@@ -9,7 +9,7 @@
 body {
   width: 340px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  background: #0c1222;
+  background: #0B0B0F;
   color: #e2e8f0;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
@@ -27,7 +27,7 @@ body {
   justify-content: space-between;
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid #1E1E2E;
 }
 
 .logo {
@@ -51,8 +51,9 @@ body {
 
 .version {
   font-size: 10px;
-  color: #64748b;
-  background: #1a2332;
+  color: #7B61FF;
+  background: rgba(123,97,255,0.1);
+  border: 1px solid rgba(123,97,255,0.2);
   padding: 3px 8px;
   border-radius: 10px;
   font-weight: 500;
@@ -85,8 +86,8 @@ body {
 /* ── Site Info ────────────────────────────────────────────────────────────── */
 
 .site-info {
-  background: #131c2e;
-  border: 1px solid #1e293b;
+  background: #13131A;
+  border: 1px solid #1E1E2E;
   border-radius: 10px;
   padding: 12px 14px;
   margin-bottom: 10px;
@@ -120,15 +121,15 @@ body {
   justify-content: space-between;
   cursor: pointer;
   padding: 10px 14px;
-  background: #131c2e;
-  border: 1px solid #1e293b;
+  background: #13131A;
+  border: 1px solid #1E1E2E;
   border-radius: 10px;
   transition: all 0.2s;
 }
 
 .toggle-label:hover {
-  border-color: #334155;
-  background: #172033;
+  border-color: rgba(123,97,255,0.3);
+  background: #16161E;
 }
 
 .toggle-label.active {
@@ -164,7 +165,7 @@ body {
 .toggle-slider {
   position: absolute;
   inset: 0;
-  background: #334155;
+  background: #2A2A3E;
   border-radius: 11px;
   transition: background 0.3s;
   cursor: pointer;
@@ -250,8 +251,8 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: #131c2e;
-  border: 1px solid #1e293b;
+  background: #13131A;
+  border: 1px solid #1E1E2E;
   border-radius: 10px;
   color: #cbd5e1;
   font-size: 12px;
@@ -262,8 +263,8 @@ body {
 }
 
 .action-btn:hover {
-  background: #172033;
-  border-color: #334155;
+  background: #16161E;
+  border-color: rgba(123,97,255,0.3);
   color: #f1f5f9;
 }
 
@@ -349,7 +350,7 @@ body {
 }
 
 .sites-count {
-  background: #1e293b;
+  background: #1E1E2E;
   color: #64748b;
   padding: 1px 7px;
   border-radius: 8px;
@@ -357,8 +358,8 @@ body {
 }
 
 .sites-list {
-  background: #131c2e;
-  border: 1px solid #1e293b;
+  background: #13131A;
+  border: 1px solid #1E1E2E;
   border-radius: 10px;
   max-height: 100px;
   overflow-y: auto;
@@ -367,7 +368,7 @@ body {
 .no-sites {
   padding: 14px;
   text-align: center;
-  color: #334155;
+  color: #2A2A3E;
   font-size: 12px;
 }
 
@@ -376,7 +377,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #1a2332;
+  border-bottom: 1px solid #1E1E2E;
   transition: background 0.15s;
 }
 
@@ -385,7 +386,7 @@ body {
 }
 
 .site-item:hover {
-  background: #172033;
+  background: #16161E;
 }
 
 .site-item-left {
@@ -410,7 +411,7 @@ body {
 .site-remove {
   background: none;
   border: none;
-  color: #334155;
+  color: #2A2A3E;
   cursor: pointer;
   font-size: 14px;
   padding: 2px 6px;
@@ -429,9 +430,9 @@ body {
 .footer {
   text-align: center;
   padding-top: 10px;
-  border-top: 1px solid #1a2332;
+  border-top: 1px solid #1E1E2E;
   font-size: 11px;
-  color: #334155;
+  color: #2A2A3E;
 }
 
 .footer a {
@@ -460,10 +461,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #1E1E2E;
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #2A2A3E;
 }
