@@ -72,6 +72,51 @@ export interface Annotation {
   screenshotId?: string;
 }
 
+// ── Element Annotation (onUI-style element feedback) ─────────────────────
+
+export type AnnotationIntent = "fix" | "redesign" | "remove" | "question";
+
+export interface ElementAnnotation {
+  id: string;
+  timestamp: number;
+  selector: string;
+  tagName: string;
+  innerText: string;
+  boundingRect: { x: number; y: number; width: number; height: number };
+  intent: AnnotationIntent;
+  severity: "critical" | "major" | "minor" | "info";
+  comment: string;
+  page: string;
+  scrollX: number;
+  scrollY: number;
+}
+
+// ── Draw Region (layout/spacing markup) ──────────────────────────────────
+
+export interface DrawRegion {
+  id: string;
+  timestamp: number;
+  shape: "rect" | "ellipse";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  comment: string;
+  color: string;
+  page: string;
+  scrollX: number;
+  scrollY: number;
+}
+
+// ── Annotation Report ────────────────────────────────────────────────────
+
+export interface UIAnnotationReport {
+  elementAnnotations: ElementAnnotation[];
+  drawRegions: DrawRegion[];
+  page: string;
+  timestamp: number;
+}
+
 // ── Screenshot ────────────────────────────────────────────────────────────
 
 export interface ScreenshotData {

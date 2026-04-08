@@ -47,5 +47,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       );
       sendResponse({ ok: true });
       break;
+
+    case "TOGGLE_ANNOTATE":
+      window.dispatchEvent(
+        new CustomEvent("tracebug-ext-action", {
+          detail: { action: "annotate" },
+        })
+      );
+      sendResponse({ ok: true });
+      break;
+
+    case "TOGGLE_DRAW":
+      window.dispatchEvent(
+        new CustomEvent("tracebug-ext-action", {
+          detail: { action: "draw" },
+        })
+      );
+      sendResponse({ ok: true });
+      break;
+
+    case "EXPORT_ANNOTATIONS":
+      window.dispatchEvent(
+        new CustomEvent("tracebug-ext-action", {
+          detail: { action: "export_annotations" },
+        })
+      );
+      sendResponse({ ok: true });
+      break;
   }
 });

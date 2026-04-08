@@ -160,7 +160,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Forward quick actions from popup to content script
   if (
-    ["TAKE_SCREENSHOT", "GENERATE_REPORT", "COPY_GITHUB_ISSUE", "COPY_JIRA_TICKET"].includes(message.type)
+    ["TAKE_SCREENSHOT", "GENERATE_REPORT", "COPY_GITHUB_ISSUE", "COPY_JIRA_TICKET", "TOGGLE_ANNOTATE", "TOGGLE_DRAW", "EXPORT_ANNOTATIONS"].includes(message.type)
   ) {
     if (message.tabId) {
       chrome.tabs.sendMessage(message.tabId, message).catch(() => {});

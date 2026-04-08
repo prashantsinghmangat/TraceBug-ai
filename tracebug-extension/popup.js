@@ -65,6 +65,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // ── Quick action handlers ─────────────────────────────────────────────
+  document.getElementById("btnAnnotate").addEventListener("click", () => {
+    sendAction("TOGGLE_ANNOTATE");
+    showButtonSuccess("btnAnnotate", "Active!");
+    // Close popup so user can interact with page
+    setTimeout(() => window.close(), 300);
+  });
+
+  document.getElementById("btnDraw").addEventListener("click", () => {
+    sendAction("TOGGLE_DRAW");
+    showButtonSuccess("btnDraw", "Active!");
+    setTimeout(() => window.close(), 300);
+  });
+
   document.getElementById("btnScreenshot").addEventListener("click", () => {
     sendAction("TAKE_SCREENSHOT");
     showButtonSuccess("btnScreenshot", "Captured!");
