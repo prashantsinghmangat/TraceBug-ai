@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Build SDK
+        run: npm run build
+      - name: Check bundle sizes
+        run: |
+          ESM_SIZE=$(wc -c < dist/index.js)
+          CJS_SIZE=$(wc -c < dist/index.cjs)
+          IIFE_SIZE=$(wc -c < tracebug-extension/tracebug-sdk.js)
+          echo "=== Bundle Sizes ==="
+          echo "ESM:  $ESM_SIZE bytes ($(($ESM_SIZE / 1024)) KB)"
+          echo "CJS:  $CJS_SIZE bytes ($(($CJS_SIZE / 1024)) KB)"
+          echo "IIFE: $IIFE_SIZE bytes ($(($IIFE_SIZE / 1024)) KB)"
+          if [ $ESM_SIZE -gt 300000 ]; then
+            echo "::warning::ESM bundle exceeds 300KB ($ESM_SIZE bytes)"
+          fi

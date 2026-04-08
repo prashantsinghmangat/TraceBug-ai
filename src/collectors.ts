@@ -260,47 +260,41 @@ export function collectApiRequests(emit: Emit): () => void {
     input: RequestInfo | URL,
     init?: RequestInit
   ): Promise<Response> {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-        ? input.href
-        : input.url;
-    const method = init?.method || "GET";
+    // Extract URL/method safely — handle Request objects, URL objects, strings
+    let url = '';
+    let method = 'GET';
+    try {
+      if (typeof input === 'string') { url = input; }
+      else if (input instanceof URL) { url = input.href; }
+      else if (input && typeof input === 'object' && 'url' in input) { url = (input as Request).url; method = (input as Request).method || 'GET'; }
+      if (init?.method) method = init.method;
+    } catch {}
+
     const start = Date.now();
 
     // Skip internal framework requests
-    if (isInternalUrl(url)) {
-      return originalFetch.call(window, input, init);
-    }
+    try { if (url && isInternalUrl(url)) return originalFetch.call(window, input, init); } catch {}
 
+    // ALWAYS call the original fetch — tracking failures must never break user requests
     try {
       const response = await originalFetch.call(window, input, init);
-      emit("api_request", {
-        request: {
-          url: url.slice(0, 500),
-          method: method.toUpperCase(),
-          statusCode: response.status,
-          durationMs: Date.now() - start,
-        },
-      });
+      try {
+        emit("api_request", {
+          request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start },
+        });
+      } catch {} // tracking failure — swallow silently
       return response;
     } catch (err) {
-      emit("api_request", {
-        request: {
-          url: url.slice(0, 500),
-          method: method.toUpperCase(),
-          statusCode: 0,
-          durationMs: Date.now() - start,
-        },
-      });
-      throw err;
+      try {
+        emit("api_request", {
+          request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start },
+        });
+      } catch {} // tracking failure — swallow silently
+      throw err; // re-throw the original error to the caller
     }
   };
 
-  return () => {
-    window.fetch = originalFetch;
-  };
+  return () => { window.fetch = originalFetch; };
 }
 
 // ── XMLHttpRequest interception ───────────────────────────────────────────
@@ -313,51 +307,34 @@ export function collectXhrRequests(emit: Emit): () => void {
   const xhrMeta = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
 
   OrigXHR.prototype.open = function (method: string, url: string | URL, ...rest: any[]) {
-    xhrMeta.set(this, { method, url: typeof url === "string" ? url : url.toString() });
+    try { xhrMeta.set(this, { method, url: typeof url === "string" ? url : url.toString() }); } catch {}
     return origOpen.apply(this, [method, url, ...rest] as any);
   };
 
   OrigXHR.prototype.send = function (body?: any) {
-    const xhr = this;
-    const start = Date.now();
-    const meta = xhrMeta.get(xhr);
-    const method = meta?.method || "GET";
-    const url = meta?.url || "";
+    try {
+      const xhr = this;
+      const start = Date.now();
+      const meta = xhrMeta.get(xhr);
+      const method = meta?.method || "GET";
+      const url = meta?.url || "";
 
-    // Skip internal framework requests
-    if (isInternalUrl(url)) {
-      return origSend.call(this, body);
+      if (isInternalUrl(url)) return origSend.call(this, body);
+
+      xhr.addEventListener("loadend", function () {
+        try { emit("api_request", { request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } }); } catch {}
+      });
+      xhr.addEventListener("error", function () {
+        try { emit("api_request", { request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start } }); } catch {}
+      });
+    } catch (err) {
+      if (typeof console !== 'undefined') console.warn('[TraceBug] XHR capture error:', err);
     }
-
-    xhr.addEventListener("loadend", function () {
-      emit("api_request", {
-        request: {
-          url: url.slice(0, 500),
-          method: method.toUpperCase(),
-          statusCode: xhr.status,
-          durationMs: Date.now() - start,
-        },
-      });
-    });
-
-    xhr.addEventListener("error", function () {
-      emit("api_request", {
-        request: {
-          url: url.slice(0, 500),
-          method: method.toUpperCase(),
-          statusCode: 0,
-          durationMs: Date.now() - start,
-        },
-      });
-    });
-
+    // ALWAYS call the original send — never eat a user's XHR request
     return origSend.call(this, body);
   };
 
-  return () => {
-    OrigXHR.prototype.open = origOpen;
-    OrigXHR.prototype.send = origSend;
-  };
+  return () => { OrigXHR.prototype.open = origOpen; OrigXHR.prototype.send = origSend; };
 }
 
 // ── Errors (window.onerror + unhandledrejection + console.error) ──────────
@@ -366,49 +343,36 @@ export function collectErrors(emit: Emit): () => void {
   const prevOnError = window.onerror;
 
   window.onerror = (msg, source, line, col, error) => {
-    emit("error", {
-      error: {
-        message: typeof msg === "string" ? msg : "Unknown error",
-        stack: error?.stack,
-        source,
-        line,
-        column: col,
-      },
-    });
-    if (prevOnError) prevOnError(msg, source, line, col, error);
+    try {
+      emit("error", {
+        error: {
+          message: typeof msg === "string" ? msg : "Unknown error",
+          stack: error?.stack, source, line, column: col,
+        },
+      });
+    } catch {}
+    if (prevOnError) { try { prevOnError(msg, source, line, col, error); } catch {} }
   };
 
   const onRejection = (e: PromiseRejectionEvent) => {
-    emit("unhandled_rejection", {
-      error: {
-        message: e.reason?.message || String(e.reason),
-        stack: e.reason?.stack,
-      },
-    });
+    try {
+      emit("unhandled_rejection", {
+        error: { message: e.reason?.message || String(e.reason), stack: e.reason?.stack },
+      });
+    } catch {}
   };
   window.addEventListener("unhandledrejection", onRejection);
 
   const origConsoleError = console.error;
   let _insideEmit = false;
   console.error = function (...args: any[]) {
-    // Guard against infinite loop: if emit() triggers console.error internally,
-    // skip re-emitting to avoid recursion
-    if (_insideEmit) {
-      origConsoleError.apply(console, args);
-      return;
-    }
+    if (_insideEmit) { origConsoleError.apply(console, args); return; }
     _insideEmit = true;
     try {
       emit("console_error", {
-        error: {
-          message: args
-            .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
-            .join(" "),
-        },
+        error: { message: args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ") },
       });
-    } finally {
-      _insideEmit = false;
-    }
+    } catch {} finally { _insideEmit = false; }
     origConsoleError.apply(console, args);
   };
 
@@ -430,12 +394,10 @@ export function collectConsoleWarnings(emit: Emit): () => void {
     _inside = true;
     try {
       emit("console_warn", {
-        error: {
-          message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" "),
-        },
+        error: { message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ") },
       });
-    } finally { _inside = false; }
-    origWarn.apply(console, args);
+    } catch {} finally { _inside = false; }
+    origWarn.apply(console, args); // ALWAYS call original
   };
   return () => { console.warn = origWarn; };
 }
@@ -453,12 +415,10 @@ export function collectConsoleLogs(emit: Emit): () => void {
     _count++;
     try {
       emit("console_log", {
-        error: {
-          message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" "),
-        },
+        error: { message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ") },
       });
-    } finally { _inside = false; }
-    origLog.apply(console, args);
+    } catch {} finally { _inside = false; }
+    origLog.apply(console, args); // ALWAYS call original
   };
   return () => { console.log = origLog; };
 }

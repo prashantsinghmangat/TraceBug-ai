@@ -134,105 +134,107 @@ class TraceBugSDK {
       return;
     }
 
-    this.config = {
-      maxEvents: 200,
-      maxSessions: 50,
-      enableDashboard: true,
-      theme: "dark",
-      toolbarPosition: "right",
-      minimized: false,
-      captureConsole: "errors",
-      ...config,
-    };
-
-    this.initialized = true;
-    this.recording = true;
-    this.sessionId = getSessionId();
-    const sessionId = this.sessionId;
-
-    // ── Inject theme CSS custom properties ────────────────────────
-    injectTheme(this.config.theme!);
-
-    // ── Capture environment info automatically ─────────────────────
-    const env = captureEnvironment();
-    saveEnvironment(sessionId, env);
-
-    // ── Emit function — collectors call this with raw event data ───────
-    const emit = (type: EventType, data: Record<string, any>) => {
-      if (!this.recording) return; // Skip when paused
-
-      let event: TraceBugEvent | null = {
-        id: Math.random().toString(36).slice(2, 10),
-        sessionId,
-        projectId: this.config!.projectId,
-        type,
-        page: window.location.pathname,
-        timestamp: Date.now(),
-        data,
+    try {
+      this.config = {
+        maxEvents: 200,
+        maxSessions: 50,
+        enableDashboard: true,
+        theme: "dark",
+        toolbarPosition: "right",
+        minimized: false,
+        captureConsole: "errors",
+        ...config,
       };
 
-      // Run through plugin filters
-      event = runEventPlugins(event);
-      if (!event) return; // Plugin filtered out the event
+      this.initialized = true;
+      this.recording = true;
+      this.sessionId = getSessionId();
+      const sessionId = this.sessionId;
 
-      // Persist to localStorage
-      appendEvent(
-        sessionId,
-        event,
-        this.config!.maxEvents!,
-        this.config!.maxSessions!
-      );
+      // ── Inject theme CSS custom properties ────────────────────────
+      try { injectTheme(this.config.theme!); } catch {}
 
-      // When an error occurs, auto-generate reproduction steps
-      if (type === "error" || type === "unhandled_rejection") {
-        this.processError(sessionId, data.error?.message, data.error?.stack);
-        emitHook("error:captured", event);
-      }
-    };
+      // ── Capture environment info automatically ─────────────────────
+      try {
+        const env = captureEnvironment();
+        saveEnvironment(sessionId, env);
+      } catch {}
 
-    // ── Start all collectors ──────────────────────────────────────────
-    this.cleanups.push(collectClicks(emit));
-    this.cleanups.push(collectInputs(emit));
-    this.cleanups.push(collectSelectChanges(emit));
-    this.cleanups.push(collectFormSubmits(emit));
-    this.cleanups.push(collectRouteChanges(emit));
-    this.cleanups.push(collectApiRequests(emit));
-    this.cleanups.push(collectXhrRequests(emit));
+      // ── Emit function — collectors call this with raw event data ───────
+      const emit = (type: EventType, data: Record<string, any>) => {
+        try {
+          if (!this.recording) return;
 
-    // Console capture — configurable level
-    const consoleLevel = this.config.captureConsole ?? "errors";
-    if (consoleLevel !== "none") {
-      this.cleanups.push(collectErrors(emit));
-      if (consoleLevel === "warnings" || consoleLevel === "all") {
-        this.cleanups.push(collectConsoleWarnings(emit));
-      }
-      if (consoleLevel === "all") {
-        this.cleanups.push(collectConsoleLogs(emit));
-      }
-    } else {
-      // Still collect runtime errors and unhandled rejections, just not console
-      this.cleanups.push(collectErrors(emit));
-    }
+          let event: TraceBugEvent | null = {
+            id: Math.random().toString(36).slice(2, 10),
+            sessionId,
+            projectId: this.config!.projectId,
+            type,
+            page: window.location.pathname,
+            timestamp: Date.now(),
+            data,
+          };
 
-    // ── Mount in-browser dashboard ────────────────────────────────────
-    if (this.config.enableDashboard) {
-      // Wire recording toggle so dashboard can pause/resume
-      setRecordingState(this.recording, () => {
-        if (this.recording) {
-          this.pauseRecording();
-        } else {
-          this.resumeRecording();
+          event = runEventPlugins(event);
+          if (!event) return;
+
+          appendEvent(sessionId, event, this.config!.maxEvents!, this.config!.maxSessions!);
+
+          if (type === "error" || type === "unhandled_rejection") {
+            this.processError(sessionId, data.error?.message, data.error?.stack);
+            emitHook("error:captured", event);
+          }
+        } catch (err) {
+          if (typeof console !== 'undefined') console.warn('[TraceBug] Event emit error:', err);
         }
-        updateRecordingState(this.recording);
-      });
-      this.cleanups.push(mountDashboard(this.config.toolbarPosition));
+      };
+
+      // ── Start all collectors ──────────────────────────────────────────
+      this.cleanups.push(collectClicks(emit));
+      this.cleanups.push(collectInputs(emit));
+      this.cleanups.push(collectSelectChanges(emit));
+      this.cleanups.push(collectFormSubmits(emit));
+      this.cleanups.push(collectRouteChanges(emit));
+      this.cleanups.push(collectApiRequests(emit));
+      this.cleanups.push(collectXhrRequests(emit));
+
+      // Console capture — configurable level
+      const consoleLevel = this.config.captureConsole ?? "errors";
+      if (consoleLevel !== "none") {
+        this.cleanups.push(collectErrors(emit));
+        if (consoleLevel === "warnings" || consoleLevel === "all") {
+          this.cleanups.push(collectConsoleWarnings(emit));
+        }
+        if (consoleLevel === "all") {
+          this.cleanups.push(collectConsoleLogs(emit));
+        }
+      } else {
+        this.cleanups.push(collectErrors(emit));
+      }
+
+      // ── Mount in-browser dashboard ────────────────────────────────────
+      if (this.config.enableDashboard) {
+        try {
+          setRecordingState(this.recording, () => {
+            if (this.recording) { this.pauseRecording(); } else { this.resumeRecording(); }
+            updateRecordingState(this.recording);
+          });
+          this.cleanups.push(mountDashboard(this.config.toolbarPosition));
+        } catch (err) {
+          console.warn('[TraceBug] Dashboard mount failed:', err);
+        }
+      }
+
+      emitHook("session:start", sessionId);
+
+      console.info(
+        `[TraceBug] Initialized — project: ${config.projectId}, session: ${sessionId}`
+      );
+    } catch (err) {
+      console.warn('[TraceBug] Failed to initialize:', err);
+      this.initialized = false;
+      return;
     }
-
-    emitHook("session:start", sessionId);
-
-    console.info(
-      `[TraceBug] Initialized — project: ${config.projectId}, session: ${sessionId}`
-    );
   }
 
   /** Pause recording — events will not be captured until resumed */
@@ -485,6 +487,60 @@ class TraceBugSDK {
     const session = sessions.find(s => s.sessionId === this.sessionId);
     if (!session) return null;
     return JSON.stringify(session, null, 2);
+  }
+
+  /** Flag the current session as a bug */
+  markAsBug(): void {
+    if (!this.sessionId) return;
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    if (session) {
+      session.isBug = true;
+      // Persist by re-saving
+      try {
+        const key = "tracebug_sessions";
+        localStorage.setItem(key, JSON.stringify(sessions));
+      } catch {}
+    }
+  }
+
+  /**
+   * Get a compact 2-3 sentence summary for Slack/Teams.
+   * Example: "Bug on /vendor — TypeError: Cannot read 'status' after clicking Edit → selecting Inactive → clicking Update. Chrome 121, Windows 11."
+   */
+  getCompactReport(): string | null {
+    if (!this.sessionId) return null;
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    if (!session) return null;
+
+    const page = session.events[0]?.page || "/";
+    const error = session.errorMessage || "no errors";
+    const env = session.environment;
+    const browser = env ? `${env.browser} ${env.browserVersion}` : "Unknown browser";
+    const os = env ? env.os : "Unknown OS";
+
+    // Build short flow from last ~5 user actions
+    const actions = session.events
+      .filter(e => ["click", "input", "select_change", "form_submit"].includes(e.type))
+      .slice(-5)
+      .map(e => {
+        if (e.type === "click") return `clicking ${e.data.element?.text?.slice(0, 30) || e.data.element?.tag || "element"}`;
+        if (e.type === "input") return `typing in ${e.data.element?.name || "field"}`;
+        if (e.type === "select_change") return `selecting "${e.data.element?.selectedText?.slice(0, 20) || "option"}"`;
+        if (e.type === "form_submit") return `submitting form`;
+        return e.type;
+      });
+
+    const flow = actions.length > 0 ? ` after ${actions.join(" \u2192 ")}` : "";
+    const failedApis = session.events
+      .filter(e => e.type === "api_request" && (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0))
+      .slice(0, 1)
+      .map(e => `${e.data.request?.method} ${e.data.request?.url?.split("?")[0]?.slice(-40)} returned ${e.data.request?.statusCode}`);
+
+    const apiNote = failedApis.length > 0 ? ` ${failedApis[0]}.` : "";
+
+    return `Bug on ${page} \u2014 ${error}${flow}.${apiNote} ${browser}, ${os}.`;
   }
 
   // ── Private methods ─────────────────────────────────────────────────

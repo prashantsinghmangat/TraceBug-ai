@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     siteName: "TraceBug",
     images: [
       {
-        url: "/og-image.svg",
+        url: "/api/og",
         width: 1200,
         height: 630,
         alt: "TraceBug — Automatic Bug Reporting",
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     title: "TraceBug — Automatic Bug Reporting for Developers",
     description:
       "TraceBug records user sessions and generates developer-ready bug reports automatically.",
-    images: ["/og-image.svg"],
+    images: ["/api/og"],
   },
   robots: {
     index: true,
@@ -72,6 +72,27 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "TraceBug",
+              description: "Zero-backend, browser-only QA tool that records user sessions and generates developer-ready bug reports.",
+              applicationCategory: "DeveloperApplication",
+              operatingSystem: "Any (browser-based)",
+              offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+              author: { "@type": "Person", name: "Prashant Singh Mangat", url: "https://github.com/prashantsinghmangat" },
+              url: "https://tracebug.netlify.app",
+              downloadUrl: "https://www.npmjs.com/package/tracebug-sdk",
+              softwareVersion: "1.2.0",
+              license: "https://opensource.org/licenses/MIT",
+            }),
+          }}
+        />
+      </head>
       <body className="bg-background text-text-primary antialiased">
         {children}
       </body>

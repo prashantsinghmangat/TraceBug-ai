@@ -3,8 +3,19 @@
 // Falls back to a DOM snapshot if html2canvas is unavailable.
 // Screenshots stored in memory (not localStorage) to avoid quota issues.
 
-import html2canvasLib from "html2canvas";
 import { ScreenshotData, TraceBugEvent } from "./types";
+
+// Lazy-load html2canvas — only fetched when user takes a screenshot
+let _html2canvas: typeof import('html2canvas').default | null = null;
+async function getHtml2Canvas() {
+  if (!_html2canvas) {
+    try {
+      const mod = await import('html2canvas');
+      _html2canvas = mod.default;
+    } catch {}
+  }
+  return _html2canvas;
+}
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -44,7 +55,7 @@ export async function captureScreenshot(
   let height = window.innerHeight;
 
   try {
-    const renderer = html2canvasLib;
+    const renderer = await getHtml2Canvas();
     if (renderer) {
       const canvas = await renderer(document.body, {
         useCORS: true,

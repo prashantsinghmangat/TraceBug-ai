@@ -37,7 +37,7 @@ export default function Footer() {
       title: "Legal",
       links: [
         { label: "MIT License", href: "https://github.com/prashantsinghmangat/tracebug-ai/blob/main/LICENSE", external: true },
-        { label: "Privacy Policy", href: "#" },
+        { label: "Privacy Policy", href: "/privacy" },
         { label: "Open Source", href: "https://github.com/prashantsinghmangat/tracebug-ai", external: true },
       ],
     },

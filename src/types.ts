@@ -99,6 +99,7 @@ export interface StoredSession {
   events: TraceBugEvent[];
   annotations: Annotation[];
   environment: EnvironmentInfo | null;
+  isBug?: boolean;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────
