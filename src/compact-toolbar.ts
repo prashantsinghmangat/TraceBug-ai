@@ -99,9 +99,10 @@ export function mountCompactToolbar(
         activateElementAnnotateMode(root, () => {
           _updateAnnotationCount(toolbar);
           showToast("Annotation saved", root);
+        }, () => {
+          _updateActiveStates(toolbar);
         });
         _updateActiveStates(toolbar);
-        showToast("Annotate mode: Click elements to annotate. Shift+click for multi-select.", root);
       }
     },
     "tracebug-toolbar-annotate-btn"
@@ -121,9 +122,10 @@ export function mountCompactToolbar(
         activateDrawMode(root, () => {
           _updateAnnotationCount(toolbar);
           showToast("Region saved", root);
+        }, () => {
+          _updateActiveStates(toolbar);
         });
         _updateActiveStates(toolbar);
-        showToast("Draw mode: Drag to draw rectangles or ellipses.", root);
       }
     },
     "tracebug-toolbar-draw-btn"
@@ -237,21 +239,21 @@ function _createToolbarBtn(
   btn.title = title;
   btn.innerHTML = iconHtml;
   btn.style.cssText = `
-    width: 32px; height: 32px; border-radius: 8px; border: none;
-    background: transparent; color: #888; cursor: pointer;
+    width: 34px; height: 34px; border-radius: 8px; border: none;
+    background: transparent; color: #aaa; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     padding: 0; transition: all 0.15s;
   `;
   btn.addEventListener("mouseenter", () => {
     if (!btn.classList.contains("tb-active")) {
-      btn.style.background = "#ffffff11";
-      btn.style.color = "#e0e0e0";
+      btn.style.background = "#ffffff15";
+      btn.style.color = "#fff";
     }
   });
   btn.addEventListener("mouseleave", () => {
     if (!btn.classList.contains("tb-active")) {
       btn.style.background = "transparent";
-      btn.style.color = "#888";
+      btn.style.color = "#aaa";
     }
   });
   btn.addEventListener("click", onClick);

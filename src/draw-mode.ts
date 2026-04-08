@@ -10,9 +10,16 @@ let _cleanup: (() => void) | null = null;
 let _currentShape: "rect" | "ellipse" = "rect";
 let _currentColor = "#7B61FF";
 let _onUpdate: (() => void) | null = null;
+let _onDeactivate: (() => void) | null = null;
 
-const COLORS = ["#7B61FF", "#ef4444", "#eab308", "#22c55e", "#3b82f6"];
-const MAX_CANVAS_DIM = 32767; // Browser canvas pixel limit
+const COLORS: { value: string; label: string }[] = [
+  { value: "#7B61FF", label: "Purple" },
+  { value: "#ef4444", label: "Red" },
+  { value: "#eab308", label: "Yellow" },
+  { value: "#22c55e", label: "Green" },
+  { value: "#3b82f6", label: "Blue" },
+];
+const MAX_CANVAS_DIM = 32767;
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -20,15 +27,20 @@ export function isDrawModeActive(): boolean {
   return _active;
 }
 
-export function activateDrawMode(root: HTMLElement, onUpdate?: () => void): void {
+export function activateDrawMode(
+  root: HTMLElement,
+  onUpdate?: () => void,
+  onDeactivate?: () => void
+): void {
   if (_active) return;
   _active = true;
   _onUpdate = onUpdate || null;
+  _onDeactivate = onDeactivate || null;
 
-  // Full-document canvas overlay
   const docW = Math.min(document.documentElement.scrollWidth, MAX_CANVAS_DIM);
   const docH = Math.min(document.documentElement.scrollHeight, MAX_CANVAS_DIM);
 
+  // ── Full-document canvas overlay ───────────────────────────────────
   const canvas = document.createElement("canvas");
   canvas.id = "tracebug-draw-canvas";
   canvas.dataset.tracebug = "draw-canvas";
@@ -41,13 +53,11 @@ export function activateDrawMode(root: HTMLElement, onUpdate?: () => void): void
   `;
   root.appendChild(canvas);
 
-  // Shape toolbar — small floating bar at top center
+  // ── Mode banner + toolbar at top ───────────────────────────────────
   const toolbar = _createToolbar(root);
   root.appendChild(toolbar);
 
   const ctx = canvas.getContext("2d")!;
-
-  // Render existing regions for this page
   _redrawAllRegions(ctx, docW, docH);
 
   let isDrawing = false;
@@ -56,6 +66,7 @@ export function activateDrawMode(root: HTMLElement, onUpdate?: () => void): void
   const onMouseDown = (e: MouseEvent) => {
     if (!_active) return;
     if ((e.target as HTMLElement)?.closest("#tracebug-draw-toolbar")) return;
+    if ((e.target as HTMLElement)?.closest("[data-tracebug='draw-comment-input']")) return;
 
     const rect = canvas.getBoundingClientRect();
     startX = e.clientX - rect.left + window.scrollX;
@@ -69,7 +80,6 @@ export function activateDrawMode(root: HTMLElement, onUpdate?: () => void): void
     const curX = e.clientX - rect.left + window.scrollX;
     const curY = e.clientY - rect.top + window.scrollY;
 
-    // Redraw all + preview
     _redrawAllRegions(ctx, docW, docH);
     _drawShape(ctx, _currentShape, _currentColor, startX, startY, curX - startX, curY - startY, 0.3);
   };
@@ -84,27 +94,32 @@ export function activateDrawMode(root: HTMLElement, onUpdate?: () => void): void
     const w = endX - startX;
     const h = endY - startY;
 
-    // Skip tiny drags
     if (Math.abs(w) < 10 && Math.abs(h) < 10) {
       _redrawAllRegions(ctx, docW, docH);
       return;
     }
 
-    // Normalize negative dimensions
     const normX = w < 0 ? startX + w : startX;
     const normY = h < 0 ? startY + h : startY;
     const normW = Math.abs(w);
     const normH = Math.abs(h);
 
-    // Show inline comment input
     _showCommentInput(normX, normY, normW, normH, root, ctx, docW, docH);
+  };
+
+  // Escape key to exit
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      deactivateDrawMode();
+    }
   };
 
   canvas.addEventListener("mousedown", onMouseDown);
   canvas.addEventListener("mousemove", onMouseMove);
   canvas.addEventListener("mouseup", onMouseUp);
+  document.addEventListener("keydown", onKeyDown, { capture: true });
 
-  // Resize observer to handle dynamic page height
   const resizeObserver = new ResizeObserver(() => {
     const newW = Math.min(document.documentElement.scrollWidth, MAX_CANVAS_DIM);
     const newH = Math.min(document.documentElement.scrollHeight, MAX_CANVAS_DIM);
@@ -123,10 +138,13 @@ export function activateDrawMode(root: HTMLElement, onUpdate?: () => void): void
     canvas.removeEventListener("mousedown", onMouseDown);
     canvas.removeEventListener("mousemove", onMouseMove);
     canvas.removeEventListener("mouseup", onMouseUp);
+    document.removeEventListener("keydown", onKeyDown, { capture: true });
     resizeObserver.disconnect();
     canvas.remove();
     toolbar.remove();
     _onUpdate = null;
+    if (_onDeactivate) _onDeactivate();
+    _onDeactivate = null;
   };
 }
 
@@ -144,80 +162,113 @@ function _createToolbar(root: HTMLElement): HTMLElement {
   bar.id = "tracebug-draw-toolbar";
   bar.dataset.tracebug = "draw-toolbar";
   bar.style.cssText = `
-    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-    z-index: 2147483647; display: flex; align-items: center; gap: 6px;
-    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 10px;
-    padding: 8px 14px; font-family: system-ui, sans-serif;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 2147483647; display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(90deg, #7B61FF, #5B3FDF);
+    padding: 10px 20px; font-family: system-ui, -apple-system, sans-serif;
+    box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
+    animation: tracebug-draw-slide 0.2s ease;
   `;
 
-  // Shape buttons
+  // Add animation
+  const styleTag = document.createElement("style");
+  styleTag.id = "tracebug-draw-styles";
+  styleTag.dataset.tracebug = "draw-styles";
+  styleTag.textContent = `
+    @keyframes tracebug-draw-slide { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+  `;
+  document.head.appendChild(styleTag);
+
+  // Mode indicator
+  const modeLabel = document.createElement("div");
+  modeLabel.style.cssText = "display:flex;align-items:center;gap:8px;margin-right:8px";
+  modeLabel.innerHTML = `
+    <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
+    <span style="color:#fff;font-weight:600;font-size:13px">Draw Mode</span>
+  `;
+  // Reuse pulse animation from annotate
+  if (!document.getElementById("tracebug-annotate-styles")) {
+    const pulseStyle = document.createElement("style");
+    pulseStyle.id = "tracebug-draw-pulse";
+    pulseStyle.textContent = `@keyframes tracebug-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`;
+    document.head.appendChild(pulseStyle);
+  }
+  bar.appendChild(modeLabel);
+
+  // Separator
+  bar.appendChild(_sep());
+
+  // Shape buttons with labels
   const shapes: Array<{ shape: "rect" | "ellipse"; label: string; icon: string }> = [
-    { shape: "rect", label: "Rectangle", icon: "▭" },
-    { shape: "ellipse", label: "Ellipse", icon: "○" },
+    { shape: "rect", label: "Rectangle", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
+    { shape: "ellipse", label: "Ellipse", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
   ];
 
   for (const s of shapes) {
     const btn = document.createElement("button");
     btn.dataset.tracebug = "draw-tool-btn";
+    btn.dataset.shape = s.shape;
     btn.title = s.label;
-    btn.textContent = s.icon;
+    btn.innerHTML = `${s.icon}<span style="margin-left:4px;font-size:11px">${s.label}</span>`;
     btn.style.cssText = _toolBtnStyle(s.shape === _currentShape);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       _currentShape = s.shape;
       bar.querySelectorAll("[data-tracebug='draw-tool-btn']").forEach(b => {
-        const isActive = (b as HTMLElement).title === shapes.find(sh => sh.shape === _currentShape)?.label;
-        (b as HTMLElement).style.cssText = _toolBtnStyle(isActive || false);
+        (b as HTMLElement).style.cssText = _toolBtnStyle((b as HTMLElement).dataset.shape === _currentShape);
       });
     });
     bar.appendChild(btn);
   }
 
-  // Separator
-  const sep = document.createElement("div");
-  sep.style.cssText = "width:1px;height:20px;background:#3a3a5e;margin:0 4px";
-  bar.appendChild(sep);
+  bar.appendChild(_sep());
 
-  // Color buttons
-  for (const color of COLORS) {
+  // Color buttons with tooltips
+  for (const c of COLORS) {
     const btn = document.createElement("button");
     btn.dataset.tracebug = "draw-color-btn";
+    btn.dataset.color = c.value;
+    btn.title = c.label;
     btn.style.cssText = `
-      width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
-      background: ${color}; border: 2px solid ${color === _currentColor ? "#fff" : color};
-      padding: 0; margin: 0;
+      width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+      background: ${c.value}; padding: 0; margin: 0; transition: all 0.15s;
+      border: 2px solid ${c.value === _currentColor ? "#fff" : "transparent"};
+      box-shadow: ${c.value === _currentColor ? "0 0 0 2px rgba(255,255,255,0.3)" : "none"};
     `;
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      _currentColor = color;
+      _currentColor = c.value;
       bar.querySelectorAll("[data-tracebug='draw-color-btn']").forEach(b => {
-        const bg = (b as HTMLElement).style.background;
-        (b as HTMLElement).style.borderColor = bg === _currentColor ? "#fff" : bg;
+        const isActive = (b as HTMLElement).dataset.color === _currentColor;
+        (b as HTMLElement).style.borderColor = isActive ? "#fff" : "transparent";
+        (b as HTMLElement).style.boxShadow = isActive ? "0 0 0 2px rgba(255,255,255,0.3)" : "none";
       });
-      // Simpler: just reset all then highlight current
-      bar.querySelectorAll("[data-tracebug='draw-color-btn']").forEach(b => {
-        (b as HTMLElement).style.borderColor = (b as HTMLElement).style.background;
-      });
-      btn.style.borderColor = "#fff";
     });
     bar.appendChild(btn);
   }
 
-  // Separator
-  const sep2 = document.createElement("div");
-  sep2.style.cssText = "width:1px;height:20px;background:#3a3a5e;margin:0 4px";
-  bar.appendChild(sep2);
+  // Spacer
+  const spacer = document.createElement("div");
+  spacer.style.flex = "1";
+  bar.appendChild(spacer);
+
+  // Hint
+  const hint = document.createElement("span");
+  hint.style.cssText = "color:rgba(255,255,255,0.5);font-size:11px;margin-right:8px";
+  hint.textContent = "Drag to draw. Esc to exit.";
+  bar.appendChild(hint);
 
   // Done button
   const doneBtn = document.createElement("button");
   doneBtn.dataset.tracebug = "draw-done-btn";
   doneBtn.textContent = "Done";
   doneBtn.style.cssText = `
-    background: #22c55e33; color: #22c55e; border: 1px solid #22c55e;
-    border-radius: 6px; padding: 4px 12px; cursor: pointer;
-    font-size: 12px; font-weight: 600; font-family: inherit;
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+    color: #fff; border-radius: 6px; padding: 6px 16px; cursor: pointer;
+    font-size: 12px; font-weight: 500; font-family: inherit; transition: all 0.15s;
   `;
+  doneBtn.addEventListener("mouseenter", () => { doneBtn.style.background = "rgba(255,255,255,0.25)"; });
+  doneBtn.addEventListener("mouseleave", () => { doneBtn.style.background = "rgba(255,255,255,0.15)"; });
   doneBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     deactivateDrawMode();
@@ -225,6 +276,13 @@ function _createToolbar(root: HTMLElement): HTMLElement {
   bar.appendChild(doneBtn);
 
   return bar;
+}
+
+function _sep(): HTMLElement {
+  const d = document.createElement("div");
+  d.dataset.tracebug = "draw-sep";
+  d.style.cssText = "width:1px;height:22px;background:rgba(255,255,255,0.2);margin:0 4px;flex-shrink:0";
+  return d;
 }
 
 // ── Drawing ───────────────────────────────────────────────────────────────
@@ -272,32 +330,51 @@ function _redrawAllRegions(ctx: CanvasRenderingContext2D, w: number, h: number):
 
     _drawShape(ctx, r.shape, r.color, r.x, r.y, r.width, r.height, 0.12);
 
-    // Number label
-    ctx.font = "bold 12px system-ui, sans-serif";
+    // Number label with better readability
+    ctx.font = "bold 12px system-ui, -apple-system, sans-serif";
     const label = String(i + 1);
     const metrics = ctx.measureText(label);
     const lx = r.x + 4;
     const ly = r.y + 4;
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = "#000";
-    ctx.fillRect(lx - 2, ly - 2, metrics.width + 10, 18);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = r.color;
-    ctx.fillText(label, lx + 3, ly + 12);
 
-    // Comment label (if exists)
+    // Background pill
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = r.color;
+    const pillW = metrics.width + 12;
+    _roundRect(ctx, lx, ly, pillW, 20, 4);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, lx + 6, ly + 14);
+
+    // Comment label
     if (r.comment) {
-      const cLabel = r.comment.slice(0, 30) + (r.comment.length > 30 ? "..." : "");
+      const cLabel = r.comment.slice(0, 40) + (r.comment.length > 40 ? "..." : "");
+      ctx.font = "11px system-ui, -apple-system, sans-serif";
       const cMetrics = ctx.measureText(cLabel);
-      ctx.globalAlpha = 0.8;
+      ctx.globalAlpha = 0.85;
       ctx.fillStyle = "#000";
-      ctx.fillRect(lx + metrics.width + 14, ly - 2, cMetrics.width + 8, 18);
+      _roundRect(ctx, lx + pillW + 6, ly, cMetrics.width + 12, 20, 4);
+      ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.font = "11px system-ui, sans-serif";
       ctx.fillStyle = "#e0e0e0";
-      ctx.fillText(cLabel, lx + metrics.width + 18, ly + 12);
+      ctx.fillText(cLabel, lx + pillW + 12, ly + 14);
     }
   }
+}
+
+function _roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 // ── Comment Input ─────────────────────────────────────────────────────────
@@ -307,54 +384,61 @@ function _showCommentInput(
   root: HTMLElement,
   ctx: CanvasRenderingContext2D, canvasW: number, canvasH: number
 ): void {
-  // Show shape immediately with dashed style
   _redrawAllRegions(ctx, canvasW, canvasH);
   ctx.setLineDash([6, 4]);
   _drawShape(ctx, _currentShape, _currentColor, x, y, w, h, 0.15);
   ctx.setLineDash([]);
 
-  // Floating input near the shape
+  // Smart positioning — prefer below shape, fallback above
+  let inputTop = y + h + 10;
+  const inputLeft = x;
+  if (inputTop + 60 > canvasH || (inputTop - window.scrollY + 60 > window.innerHeight)) {
+    inputTop = Math.max(10, y - 60);
+  }
+
   const input = document.createElement("div");
   input.dataset.tracebug = "draw-comment-input";
   input.style.cssText = `
     position: absolute; z-index: 2147483647;
-    left: ${x}px; top: ${y + h + 8}px;
-    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 8px;
-    padding: 10px; font-family: system-ui, sans-serif;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    display: flex; gap: 6px; align-items: center;
+    left: ${inputLeft}px; top: ${inputTop}px;
+    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 10px;
+    padding: 12px; font-family: system-ui, -apple-system, sans-serif;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: flex; gap: 8px; align-items: center;
+    animation: tracebug-draw-slide 0.15s ease;
   `;
 
   const textInput = document.createElement("input");
   textInput.type = "text";
-  textInput.placeholder = "Add comment (optional)...";
+  textInput.placeholder = "Describe this region (optional)";
   textInput.style.cssText = `
     background: #0f0f1a; border: 1px solid #3a3a5e; color: #e0e0e0;
-    padding: 6px 10px; border-radius: 6px; font-size: 12px;
-    font-family: inherit; width: 200px; outline: none;
+    padding: 8px 12px; border-radius: 8px; font-size: 13px;
+    font-family: inherit; width: 240px; outline: none;
   `;
 
   const saveBtn = document.createElement("button");
-  saveBtn.textContent = "Add";
+  saveBtn.textContent = "Save";
   saveBtn.dataset.tracebug = "draw-save-btn";
   saveBtn.style.cssText = `
-    background: #7B61FF; border: none; color: #fff; padding: 6px 12px;
-    border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
-    font-family: inherit;
+    background: #7B61FF; border: none; color: #fff; padding: 8px 14px;
+    border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
+    font-family: inherit; box-shadow: 0 2px 6px rgba(123,97,255,0.3);
+    transition: all 0.15s; white-space: nowrap;
   `;
 
-  const cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "Skip";
-  cancelBtn.dataset.tracebug = "draw-cancel-btn";
-  cancelBtn.style.cssText = `
-    background: none; border: 1px solid #3a3a5e; color: #888;
-    padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
-    font-family: inherit;
+  const skipBtn = document.createElement("button");
+  skipBtn.textContent = "No comment";
+  skipBtn.dataset.tracebug = "draw-cancel-btn";
+  skipBtn.style.cssText = `
+    background: none; border: 1px solid #3a3a5e; color: #999;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: all 0.15s; white-space: nowrap;
   `;
 
   input.appendChild(textInput);
   input.appendChild(saveBtn);
-  input.appendChild(cancelBtn);
+  input.appendChild(skipBtn);
   root.appendChild(input);
 
   setTimeout(() => textInput.focus(), 50);
@@ -382,9 +466,9 @@ function _showCommentInput(
     save(textInput.value.trim());
   });
 
-  cancelBtn.addEventListener("click", (e) => {
+  skipBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    save(""); // Save without comment
+    save("");
   });
 
   textInput.addEventListener("keydown", (e) => {
@@ -399,7 +483,7 @@ function _showCommentInput(
 
 function _toolBtnStyle(active: boolean): string {
   if (active) {
-    return `background:#7B61FF33;color:#7B61FF;border:1px solid #7B61FF;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:14px;font-family:inherit;`;
+    return `background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
   }
-  return `background:#22222244;color:#888;border:1px solid #33333344;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:14px;font-family:inherit;`;
+  return `background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
 }

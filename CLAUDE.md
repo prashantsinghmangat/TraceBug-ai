@@ -63,6 +63,13 @@ AFTER TraceBug:
 - **Jira Ticket** — one-click generates Jira markup, copies to clipboard
 - **PDF Report** — print-optimized HTML report, opens browser print dialog
 
+### UI Annotation Tools
+- **Element Annotate Mode** — click any element to select it, attach structured feedback (intent, severity, comment). Shift+click for multi-select. Page scroll freezes during annotation. Persistent numbered badges on annotated elements. `Ctrl+Shift+A`
+- **Draw Mode** — drag rectangles or ellipses directly on the live page to mark layout/spacing/alignment regions. Each region gets a comment. Full toolbar with shape/color pickers. `Ctrl+Shift+D`
+- **Compact Toolbar** — minimal vertical rail on the right edge of the screen (replaced old floating bug button). Contains: logo (session panel), annotate, draw, screenshot, annotation list, settings (pop-out card).
+- **Annotation List Panel** — view all element annotations and draw regions in the slide-out panel. Export as Markdown or JSON. Copy to clipboard. Delete individual annotations.
+- **Annotation Export** — JSON and Markdown export formats for all annotations
+
 ### Smart Features
 - **Auto bug title generation** — heuristic-based, e.g. "Vendor Update Fails — TypeError"
 - **Auto flow summary** — e.g. "Click 'Edit' → Select 'Inactive' → Click 'Update'"
@@ -91,6 +98,10 @@ tracebug-ai/
 │   ├── storage.ts             # localStorage persistence — sessions, annotations, environment
 │   ├── repro-generator.ts     # Generates human-readable reproduction steps from events
 │   ├── dashboard.ts           # In-browser slide-out panel with QA toolbar (vanilla DOM)
+│   ├── compact-toolbar.ts     # Minimal vertical rail toolbar (replaces old floating button)
+│   ├── element-annotate.ts    # Element-level annotation mode with multi-select
+│   ├── draw-mode.ts           # Rectangle/ellipse drawing on live page
+│   ├── annotation-store.ts    # In-memory annotation store with JSON/Markdown export
 │   ├── environment.ts         # Auto-captures browser, OS, viewport, device, connection
 │   ├── screenshot.ts          # Screenshot capture with html2canvas + smart auto-naming
 │   ├── voice-recorder.ts      # Web Speech API voice-to-text for bug descriptions
@@ -120,6 +131,14 @@ tracebug-ai/
 ├── package.json               # SDK config — dual CJS/ESM, conditional exports
 ├── tsconfig.json              # TypeScript config (target ES2018, module ES2020)
 ├── tsup.config.ts             # tsup bundler config — CJS + ESM + IIFE (extension)
+├── docs/                      # Documentation
+│   ├── getting-started.md     # Install, setup, first use
+│   ├── api-reference.md       # Full programmatic API reference
+│   ├── configuration.md       # All config options explained
+│   ├── bug-reporting.md       # Screenshots, notes, voice, export
+│   ├── annotate-and-draw.md   # Element annotation & draw mode
+│   ├── chrome-extension.md    # Extension install & usage
+│   └── architecture.md        # How TraceBug works internally
 └── dist/                      # Built output (gitignored, auto-built via prepare script)
     ├── index.js               # ESM output (~151KB)
     ├── index.cjs              # CJS output (~153KB)
@@ -282,6 +301,23 @@ const sessions = getAllSessions();
 clearAllSessions();
 deleteSession("session-id");
 
+// Element Annotate Mode
+TraceBug.activateAnnotateMode();
+TraceBug.deactivateAnnotateMode();
+TraceBug.isAnnotateModeActive();
+
+// Draw Mode
+TraceBug.activateDrawMode();
+TraceBug.deactivateDrawMode();
+TraceBug.isDrawModeActive();
+
+// UI Annotations export
+const report = TraceBug.getAnnotationReport();
+TraceBug.exportAnnotationsJSON();
+TraceBug.exportAnnotationsMarkdown();
+await TraceBug.copyAnnotationsToClipboard("markdown");
+TraceBug.clearAnnotations();
+
 // Tear down completely
 TraceBug.destroy();
 ```
@@ -299,13 +335,17 @@ TraceBug.init({
 
 ## Key Patterns & Rules
 - **example-app/tracebug-init.tsx**: Uses dynamic `import("tracebug-sdk")` — NOT an inlined SDK copy. Requires the built SDK to be installed.
-- **No runtime deps**: SDK has zero runtime dependencies. Only devDeps are `typescript` and `tsup`.
+- **No runtime deps**: SDK has one runtime dep (html2canvas). DevDeps are `typescript` and `tsup`.
 - **Privacy**: Sensitive fields (password, credit card, SSN, tokens) are auto-redacted as `[REDACTED]`.
 - **Build tool**: `tsup` (not raw `tsc`) — configured in `tsup.config.ts` with two build targets.
 - **Prepare script**: `npm pack` and `npm install` from GitHub both trigger `tsup` build automatically.
 - **Extension SDK**: `tracebug-extension/tracebug-sdk.js` is auto-built by tsup. Do not edit it manually.
 - **Screenshots in memory**: Screenshots are stored in memory (not localStorage) to avoid quota issues.
 - **Voice transcripts in memory**: Voice transcripts stored in memory, included in reports when generated.
+- **Element annotations in memory**: Element annotations and draw regions stored in memory via annotation-store.ts.
+- **Compact toolbar replaces old button**: The old 48px floating bug button is replaced by a vertical rail toolbar.
+- **Mode banners**: Annotate and Draw modes show a purple gradient banner at the top of the page with instructions and exit controls.
+- **Escape key exits modes**: Both annotate and draw modes can be exited with the Escape key.
 
 ## Uninstall
 ```bash
