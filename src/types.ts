@@ -19,6 +19,45 @@ export interface TraceBugConfig {
    * - string[]      → Custom list of allowed hostnames, e.g. ["localhost", "staging.myapp.com"]
    */
   enabled?: "auto" | "development" | "staging" | "all" | "off" | string[];
+
+  /**
+   * Color theme. Default: "dark"
+   * - "dark"  → Dark navy background (default)
+   * - "light" → Light background
+   * - "auto"  → Follows system prefers-color-scheme
+   */
+  theme?: "light" | "dark" | "auto";
+
+  /**
+   * Toolbar position. Default: "right"
+   * - "right"        → Vertical rail on right edge (default)
+   * - "left"         → Vertical rail on left edge
+   * - "bottom-right" → Horizontal bar at bottom-right
+   * - "bottom-left"  → Horizontal bar at bottom-left
+   */
+  toolbarPosition?: "right" | "left" | "bottom-right" | "bottom-left";
+
+  /** Start toolbar in minimized (single FAB) mode. Default: false */
+  minimized?: boolean;
+
+  /**
+   * Custom keyboard shortcuts.
+   * Default: { screenshot: 'ctrl+shift+s', annotate: 'ctrl+shift+a', draw: 'ctrl+shift+d' }
+   */
+  shortcuts?: {
+    screenshot?: string;
+    annotate?: string;
+    draw?: string;
+  };
+
+  /**
+   * Console log capture level. Default: "errors"
+   * - "errors"   → Only console.error (backward compatible)
+   * - "warnings" → console.error + console.warn
+   * - "all"      → console.error + console.warn + console.log (capped at last 50)
+   * - "none"     → No console interception
+   */
+  captureConsole?: "errors" | "warnings" | "all" | "none";
 }
 
 // ── Event types ───────────────────────────────────────────────────────────
@@ -32,6 +71,8 @@ export type EventType =
   | "api_request"
   | "error"
   | "console_error"
+  | "console_warn"
+  | "console_log"
   | "unhandled_rejection";
 
 export interface TraceBugEvent {

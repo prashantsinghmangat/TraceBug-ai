@@ -164,8 +164,8 @@ function _createToolbar(root: HTMLElement): HTMLElement {
   bar.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0;
     z-index: 2147483647; display: flex; align-items: center; gap: 8px;
-    background: linear-gradient(90deg, #7B61FF, #5B3FDF);
-    padding: 10px 20px; font-family: system-ui, -apple-system, sans-serif;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #7B61FF), var(--tb-gradient-end, #5B3FDF));
+    padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
     animation: tracebug-draw-slide 0.2s ease;
   `;
@@ -402,7 +402,7 @@ function _showCommentInput(
     position: absolute; z-index: 2147483647;
     left: ${inputLeft}px; top: ${inputTop}px;
     background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 10px;
-    padding: 12px; font-family: system-ui, -apple-system, sans-serif;
+    padding: 12px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
     display: flex; gap: 8px; align-items: center;
     animation: tracebug-draw-slide 0.15s ease;
@@ -483,7 +483,7 @@ function _showCommentInput(
 
 function _toolBtnStyle(active: boolean): string {
   if (active) {
-    return `background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
+    return `background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:var(--tb-radius-md, 8px);padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
   }
-  return `background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
+  return `background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:var(--tb-radius-md, 8px);padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
 }

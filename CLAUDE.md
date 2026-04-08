@@ -70,6 +70,53 @@ AFTER TraceBug:
 - **Annotation List Panel** — view all element annotations and draw regions in the slide-out panel. Export as Markdown or JSON. Copy to clipboard. Delete individual annotations.
 - **Annotation Export** — JSON and Markdown export formats for all annotations
 
+### Theme System
+- **Dark/Light/Auto themes** — `TraceBug.init({ theme: 'dark' | 'light' | 'auto' })`
+- CSS custom property design tokens (`--tb-bg-primary`, `--tb-accent`, `--tb-error`, etc.)
+- Auto theme follows `prefers-color-scheme` in 'auto' mode
+- All components use theme variables for consistent theming
+
+### First-Run Onboarding
+- **4-step tooltip tour** shown once on first use, stored in `tracebug_onboarding_complete`
+- **Help button** ("?") at bottom of toolbar replays the tour
+- **Pulse animation** on logo for first 10 seconds if user hasn't interacted
+
+### Toolbar & Layout
+- **Configurable position**: `TraceBug.init({ toolbarPosition: 'right' | 'left' | 'bottom-right' | 'bottom-left' })`
+- **Drag to reposition** — toolbar can be dragged anywhere, position persisted in localStorage
+- **Mobile responsive**: viewport < 768px collapses to FAB, panel becomes bottom sheet
+- **Touch support** for drag on mobile devices
+
+### Dashboard Tabs
+- Session detail view split into **4 tabs**: Overview, Timeline, Errors, Export
+- **Sticky header** with bug title + severity badge + back button
+- **Session search/filter** — filter by "has errors" / "healthy", text search across sessions
+- **Auto session naming** — sessions named by primary page visited (e.g., "Login Session")
+- **Session preview** — each card shows last error or last action, not just event count
+
+### Plugin System
+- `TraceBug.use({ name, onEvent, onReport, onExport })` — plugin API
+- `TraceBug.on('event', callback)` — hook system for events
+- Hooks: `session:start`, `error:captured`, `screenshot:taken`, `report:generated`, etc.
+- Plugins can filter, transform, or enrich events before storage
+- Enables community plugins: Slack webhook, Linear integration, etc.
+
+### Console Capture
+- **Configurable level**: `TraceBug.init({ captureConsole: 'errors' | 'warnings' | 'all' | 'none' })`
+- `console.warn` capture as warning events (when level is 'warnings' or 'all')
+- `console.log` capture as info events, capped at 50 (when level is 'all')
+
+### CI/CD Helpers
+- `TraceBug.getErrorCount()` — for test assertions
+- `TraceBug.exportSessionJSON()` — clean JSON for CI artifacts
+
+### Accessibility (A11y)
+- `aria-label` on all toolbar buttons (icon-only)
+- `role="dialog"` on panel, `role="complementary"` on root
+- Visible focus rings (2px solid accent color) via `:focus-visible`
+- `aria-live="polite"` region announces mode changes and toast messages
+- All interactive elements keyboard-navigable
+
 ### Smart Features
 - **Auto bug title generation** — heuristic-based, e.g. "Vendor Update Fails — TypeError"
 - **Auto flow summary** — e.g. "Click 'Edit' → Select 'Inactive' → Click 'Update'"
@@ -102,6 +149,9 @@ tracebug-ai/
 │   ├── element-annotate.ts    # Element-level annotation mode with multi-select
 │   ├── draw-mode.ts           # Rectangle/ellipse drawing on live page
 │   ├── annotation-store.ts    # In-memory annotation store with JSON/Markdown export
+│   ├── theme.ts               # CSS custom property design token system (light/dark/auto)
+│   ├── onboarding.ts          # First-run tooltip tour + help button replay
+│   ├── plugin-system.ts       # Plugin API + event hook system
 │   ├── environment.ts         # Auto-captures browser, OS, viewport, device, connection
 │   ├── screenshot.ts          # Screenshot capture with html2canvas + smart auto-naming
 │   ├── voice-recorder.ts      # Web Speech API voice-to-text for bug descriptions
@@ -318,6 +368,25 @@ TraceBug.exportAnnotationsMarkdown();
 await TraceBug.copyAnnotationsToClipboard("markdown");
 TraceBug.clearAnnotations();
 
+// Plugin System
+TraceBug.use({
+  name: 'my-plugin',
+  onEvent: (event) => event,           // filter/transform events
+  onReport: (report) => report,        // enrich reports
+  onExport: (format, data) => data,    // custom export targets
+});
+TraceBug.removePlugin('my-plugin');
+
+// Hook System
+TraceBug.on('session:start', (sessionId) => {});
+TraceBug.on('error:captured', (error) => {});
+TraceBug.on('screenshot:taken', (screenshot) => {});
+TraceBug.on('report:generated', (report) => {});
+
+// CI/CD Helpers
+TraceBug.getErrorCount();              // for test assertions
+TraceBug.exportSessionJSON();          // JSON for CI artifacts
+
 // Tear down completely
 TraceBug.destroy();
 ```
@@ -330,6 +399,15 @@ TraceBug.init({
   maxSessions: 50,            // Max sessions in localStorage (default 50)
   enableDashboard: true,      // Show the floating bug button (default true)
   enabled: "auto",            // "auto" | "development" | "staging" | "all" | "off" | string[]
+  theme: "dark",              // "dark" | "light" | "auto" (follows system preference)
+  toolbarPosition: "right",   // "right" | "left" | "bottom-right" | "bottom-left"
+  minimized: false,           // Start in minimized FAB mode
+  captureConsole: "errors",   // "errors" | "warnings" | "all" | "none"
+  shortcuts: {                // Custom keyboard shortcuts
+    screenshot: "ctrl+shift+s",
+    annotate: "ctrl+shift+a",
+    draw: "ctrl+shift+d",
+  },
 });
 ```
 

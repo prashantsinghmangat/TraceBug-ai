@@ -16,6 +16,8 @@ TraceBug silently captures these events as users interact with the app:
 | **API Requests** | URL, method, status code, duration (fetch + XMLHttpRequest) |
 | **Errors** | Message, stack trace, source file, line, column |
 | **Console Errors** | console.error() arguments |
+| **Console Warnings** | console.warn() arguments (when `captureConsole: "warnings"` or `"all"`) |
+| **Console Logs** | console.log() arguments, last 50 (when `captureConsole: "all"`) |
 | **Promise Rejections** | Rejection reason + stack trace |
 
 ### Privacy
@@ -40,12 +42,19 @@ Click the **TraceBug logo** in the compact toolbar to open the session panel. It
 
 ### Session List
 - All recorded sessions sorted by most recent
+- **Search bar** — filter sessions by error message, page URL, or session ID
+- **Filter dropdown** — "All", "Has errors", "Healthy"
 - Red dot = session has errors, Green dot = healthy
 - "Repro Ready" badge when reproduction steps are available
-- Event count and time ago
+- **Auto-named sessions** — e.g., "Login Session", "Vendor Session" (based on primary page)
+- **Preview line** — shows last error or last action, not just event count
 
 ### Session Detail (click a session)
 
+The detail view has a **sticky header** with the auto-generated bug title and severity badge, plus a **tabbed layout**:
+
+#### Overview Tab
+- **QA Tools** — Screenshot, Add Note, Voice Note
 - **Session Overview** — Duration, events, pages visited, API calls, error status
 - **Problems Detected** — Critical/warning/info issues with icons and details
 - **Error Details** — Error type classification, message, stack trace, source location
@@ -54,7 +63,23 @@ Click the **TraceBug logo** in the compact toolbar to open the session panel. It
 - **Tester Notes** — All annotations with severity badges
 - **Screenshots** — Inline images with filenames
 - **Environment** — Browser, OS, viewport, device type
-- **Event Timeline** — Chronological events with color-coded icons, time gaps, inline values
+
+#### Timeline Tab
+- Full chronological event stream with color-coded icons
+- Time gap indicators between events
+- Inline values for each event type
+- API calls show method, status, duration with visual bars
+
+#### Errors Tab (only shown if errors exist)
+- Grouped error details with type classification
+- Stack traces with expandable view
+- Error count badge on the tab
+
+#### Export Tab
+- **Issue Trackers** — GitHub Issue (Markdown), Jira Ticket
+- **Downloads** — PDF Report, JSON, Text Report, HTML Report
+- **Clipboard** — Copy Full Report (plain text)
+- **Delete** — Delete this session
 
 ## Screenshots
 

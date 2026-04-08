@@ -9,6 +9,15 @@ TraceBug.init({
   maxSessions: 50,
   enableDashboard: true,
   enabled: "auto",
+  theme: "dark",
+  toolbarPosition: "right",
+  minimized: false,
+  captureConsole: "errors",
+  shortcuts: {
+    screenshot: "ctrl+shift+s",
+    annotate: "ctrl+shift+a",
+    draw: "ctrl+shift+d",
+  },
 });
 ```
 
@@ -97,6 +106,77 @@ TraceBug.init({ projectId: "my-app", enabled: "all" });
 
 // Completely disable
 TraceBug.init({ projectId: "my-app", enabled: "off" });
+```
+
+### `theme`
+
+Controls the visual theme for all TraceBug UI.
+
+| Value | Behavior |
+|-------|----------|
+| `"dark"` | Dark navy background (default) |
+| `"light"` | Light background |
+| `"auto"` | Follows system `prefers-color-scheme`, updates live |
+
+```typescript
+TraceBug.init({ projectId: "my-app", theme: "auto" });
+```
+
+### `toolbarPosition`
+
+Controls where the compact toolbar appears on screen.
+
+| Value | Behavior |
+|-------|----------|
+| `"right"` | Vertical rail on right edge (default) |
+| `"left"` | Vertical rail on left edge |
+| `"bottom-right"` | Horizontal bar at bottom-right |
+| `"bottom-left"` | Horizontal bar at bottom-left |
+
+The toolbar can also be **dragged** to any position by the user. Dragged position is persisted in localStorage.
+
+```typescript
+TraceBug.init({ projectId: "my-app", toolbarPosition: "left" });
+```
+
+### `minimized`
+
+Start the toolbar in minimized (single FAB) mode. Users can expand it by clicking.
+
+- **Default:** `false`
+
+```typescript
+TraceBug.init({ projectId: "my-app", minimized: true });
+```
+
+### `captureConsole`
+
+Controls which console methods are captured as events.
+
+| Value | Behavior |
+|-------|----------|
+| `"errors"` | Only `console.error` (default, backward compatible) |
+| `"warnings"` | `console.error` + `console.warn` |
+| `"all"` | `console.error` + `console.warn` + `console.log` (last 50 logs) |
+| `"none"` | No console interception (runtime errors still captured) |
+
+```typescript
+TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
+```
+
+### `shortcuts`
+
+Custom keyboard shortcuts for common actions. Uses `ctrl+shift+<key>` format.
+
+```typescript
+TraceBug.init({
+  projectId: "my-app",
+  shortcuts: {
+    screenshot: "ctrl+shift+s",   // Default
+    annotate: "ctrl+shift+a",     // Default
+    draw: "ctrl+shift+d",         // Default
+  },
+});
 ```
 
 ## Session Behavior

@@ -46,8 +46,8 @@ export function activateElementAnnotateMode(
   _modeBanner.dataset.tracebug = "annotate-banner";
   _modeBanner.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-    background: linear-gradient(90deg, #7B61FF, #5B3FDF); color: #fff;
-    padding: 10px 20px; font-family: system-ui, -apple-system, sans-serif;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #7B61FF), var(--tb-gradient-end, #5B3FDF)); color: #fff;
+    padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
     box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
     animation: tracebug-slide-down 0.2s ease;
@@ -413,7 +413,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
     position: fixed; z-index: 2147483647;
     left: ${left}px; top: ${top}px; width: 310px;
     background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 12px;
-    padding: 18px; font-family: system-ui, -apple-system, sans-serif; font-size: 13px;
+    padding: 18px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif); font-size: 13px;
     color: #e0e0e0; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
     animation: tracebug-slide-down 0.15s ease;
   `;
@@ -428,7 +428,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
       <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">
         ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
       </div>
-      <div style="font-size:11px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${selectorText}">
+      <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${selectorText}">
         &lt;${tagText}&gt;${previewText ? ` "${previewText}"` : ""}
       </div>
     </div>
@@ -445,7 +445,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
     <div style="margin-bottom:12px">
       <div style="font-size:11px;color:#999;margin-bottom:6px;font-weight:500">Priority</div>
-      <select id="tracebug-sev-select" style="width:100%;background:#0f0f1a;border:1px solid #3a3a5e;color:#e0e0e0;padding:8px 10px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer">
+      <select id="tracebug-sev-select" style="width:100%;background:#0f0f1a;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-primary, #e0e0e0);padding:8px 10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;cursor:pointer">
         <option value="critical">Critical - Blocks users</option>
         <option value="major">Major - Significant issue</option>
         <option value="minor" selected>Minor - Small improvement</option>
@@ -458,13 +458,13 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
         <span style="font-size:11px;color:#999;font-weight:500">Describe the issue</span>
         <span id="tracebug-char-count" style="font-size:10px;color:#555">0 / 500</span>
       </div>
-      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:#0f0f1a;border:1px solid #3a3a5e;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
+      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:#0f0f1a;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-primary, #e0e0e0);padding:10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
       <div id="tracebug-comment-error" style="font-size:11px;color:#ef4444;margin-top:4px;display:none">Please describe the issue before saving.</div>
     </div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid #3a3a5e;color:#aaa;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#7B61FF;border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
+      <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
+      <button id="tracebug-ann-save" style="background:#7B61FF;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
     </div>
   `;
 
@@ -557,9 +557,9 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 function _intentBtnStyle(intent: AnnotationIntent, active: boolean): string {
   const color = _intentColor(intent);
   if (active) {
-    return `background:${color}33;color:${color};border:1px solid ${color};border-radius:8px;padding:6px 11px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.15s;`;
+    return `background:${color}33;color:${color};border:1px solid ${color};border-radius:var(--tb-radius-md, 8px);padding:6px 11px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.15s;`;
   }
-  return `background:#ffffff06;color:#999;border:1px solid #33333366;border-radius:8px;padding:6px 11px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 0.15s;`;
+  return `background:#ffffff06;color:#999;border:1px solid #33333366;border-radius:var(--tb-radius-md, 8px);padding:6px 11px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 0.15s;`;
 }
 
 function _intentColor(intent: AnnotationIntent): string {
