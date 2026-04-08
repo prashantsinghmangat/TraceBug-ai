@@ -1383,13 +1383,15 @@ function renderAnnotationList(panel: HTMLElement): void {
   panel.innerHTML = `
     <div style="padding:16px 20px;border-bottom:1px solid #2a2a3e;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
-        <div style="font-size:16px;font-weight:700;color:#fff;font-family:system-ui,sans-serif">UI Annotations</div>
-        <div style="font-size:11px;color:#666;margin-top:2px">${elAnnotations.length} element${elAnnotations.length !== 1 ? "s" : ""} · ${drawRegions.length} region${drawRegions.length !== 1 ? "s" : ""}</div>
+        <div style="font-size:16px;font-weight:700;color:#fff;font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
+        <div style="font-size:11px;color:#666;margin-top:3px">${elAnnotations.length} element annotation${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} draw region${drawRegions.length !== 1 ? "s" : ""}</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button id="bt-ann-export-md" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Copy as Markdown">MD</button>
-        <button id="bt-ann-export-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Copy as JSON">JSON</button>
-        <button id="bt-ann-clear-all" style="${smallBtnStyle("#ef4444")}font-size:10px">Clear</button>
+        ${total > 0 ? `
+          <button id="bt-ann-export-md" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Copy all annotations as Markdown">Copy MD</button>
+          <button id="bt-ann-export-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Copy all annotations as JSON">Copy JSON</button>
+          <button id="bt-ann-clear-all" style="${smallBtnStyle("#ef4444")}font-size:10px" title="Remove all annotations">Clear All</button>
+        ` : ""}
       </div>
     </div>
     <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
@@ -1397,35 +1399,60 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   const content = panel.querySelector("#bt-ann-list-content") as HTMLElement;
 
-  // Export buttons
-  panel.querySelector("#bt-ann-export-md")!.addEventListener("click", async () => {
-    const ok = await copyToClipboard("markdown");
-    const btn = panel.querySelector("#bt-ann-export-md") as HTMLElement;
-    btn.textContent = ok ? "Copied!" : "Failed";
-    setTimeout(() => btn.textContent = "MD", 2000);
-  });
+  if (total > 0) {
+    // Export buttons
+    panel.querySelector("#bt-ann-export-md")?.addEventListener("click", async () => {
+      const ok = await copyToClipboard("markdown");
+      const btn = panel.querySelector("#bt-ann-export-md") as HTMLElement;
+      if (ok) {
+        btn.textContent = "Copied!";
+        btn.style.background = "#22c55e33";
+        btn.style.color = "#22c55e";
+        btn.style.borderColor = "#22c55e44";
+      } else {
+        btn.textContent = "Failed";
+      }
+      setTimeout(() => { btn.textContent = "Copy MD"; btn.style.cssText = `${smallBtnStyle("#a78bfa")}font-size:10px`; }, 2000);
+    });
 
-  panel.querySelector("#bt-ann-export-json")!.addEventListener("click", async () => {
-    const ok = await copyToClipboard("json");
-    const btn = panel.querySelector("#bt-ann-export-json") as HTMLElement;
-    btn.textContent = ok ? "Copied!" : "Failed";
-    setTimeout(() => btn.textContent = "JSON", 2000);
-  });
+    panel.querySelector("#bt-ann-export-json")?.addEventListener("click", async () => {
+      const ok = await copyToClipboard("json");
+      const btn = panel.querySelector("#bt-ann-export-json") as HTMLElement;
+      if (ok) {
+        btn.textContent = "Copied!";
+        btn.style.background = "#22c55e33";
+        btn.style.color = "#22c55e";
+        btn.style.borderColor = "#22c55e44";
+      } else {
+        btn.textContent = "Failed";
+      }
+      setTimeout(() => { btn.textContent = "Copy JSON"; btn.style.cssText = `${smallBtnStyle("#22d3ee")}font-size:10px`; }, 2000);
+    });
 
-  panel.querySelector("#bt-ann-clear-all")!.addEventListener("click", () => {
-    if (confirm("Clear all UI annotations?")) {
-      clearAllAnnotations();
-      clearAnnotationBadges();
-      renderAnnotationList(panel);
-    }
-  });
+    panel.querySelector("#bt-ann-clear-all")?.addEventListener("click", () => {
+      if (confirm("Remove all annotations? This cannot be undone.")) {
+        clearAllAnnotations();
+        clearAnnotationBadges();
+        renderAnnotationList(panel);
+      }
+    });
+  }
 
   if (total === 0) {
     content.innerHTML = `
-      <div style="text-align:center;padding:60px 20px;color:#555">
-        <div style="font-size:36px;margin-bottom:12px">+</div>
-        <div style="font-family:system-ui,sans-serif">No annotations yet.</div>
-        <div style="font-size:11px;margin-top:8px;color:#444">Use Annotate mode or Draw mode to add annotations.</div>
+      <div style="text-align:center;padding:48px 24px;color:#666">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 3"/>
+        </svg>
+        <div style="font-family:system-ui,sans-serif;font-size:14px;font-weight:600;color:#888;margin-bottom:6px">Ready to annotate</div>
+        <div style="font-size:12px;line-height:1.5;color:#555;max-width:260px;margin:0 auto">
+          Use <strong style="color:#7B61FF">Annotate</strong> to click elements or <strong style="color:#7B61FF">Draw</strong> to mark regions on the page.
+        </div>
+        <div style="font-size:11px;color:#444;margin-top:12px">
+          Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
+          <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace;margin-left:4px">Ctrl+Shift+D</span>
+        </div>
       </div>
     `;
     return;
@@ -1435,40 +1462,45 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   // Element annotations
   if (elAnnotations.length > 0) {
-    html += `<div style="font-size:10px;color:#7B61FF;font-weight:700;margin-bottom:8px;font-family:system-ui,sans-serif">ELEMENT ANNOTATIONS</div>`;
+    html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
     for (let i = 0; i < elAnnotations.length; i++) {
       const a = elAnnotations[i];
       const intentColor = _getIntentColor(a.intent);
       const sevColor = a.severity === "critical" ? "#ef4444" : a.severity === "major" ? "#f97316" : a.severity === "minor" ? "#3b82f6" : "#888";
-      html += `<div style="border:1px solid #2a2a3e;border-radius:8px;padding:10px;margin-bottom:8px;background:#12121f">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <span style="width:20px;height:20px;border-radius:50%;background:${intentColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
-          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a.intent}</span>
-          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;text-transform:uppercase">${a.severity}</span>
-          <button class="bt-ann-delete" data-id="${a.id}" style="margin-left:auto;background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:2px" title="Delete">x</button>
+      const ago = timeAgo(a.timestamp);
+      html += `<div style="border:1px solid #2a2a3e;border-radius:10px;padding:12px;margin-bottom:8px;background:#12121f;transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="width:22px;height:22px;border-radius:50%;background:${intentColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a.intent}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500">${a.severity}</span>
+          <span style="font-size:10px;color:#555;margin-left:auto">${ago}</span>
+          <button class="bt-ann-delete" data-id="${a.id}" style="background:#ef444415;border:1px solid #ef444433;color:#ef4444;cursor:pointer;font-size:11px;padding:3px 8px;border-radius:4px;font-family:inherit" title="Delete this annotation">Delete</button>
         </div>
-        <div style="font-size:11px;color:#888;margin-bottom:4px;font-family:monospace">&lt;${escapeHtml(a.tagName)}&gt; ${escapeHtml(a.innerText.slice(0, 50))}</div>
-        <div style="font-size:11px;color:#e0e0e0;line-height:1.4">${escapeHtml(a.comment)}</div>
-        <div style="font-size:9px;color:#444;margin-top:4px">${escapeHtml(a.page)} · ${escapeHtml(a.selector.slice(0, 50))}</div>
+        <div style="font-size:11px;color:#777;margin-bottom:6px">
+          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml(a.tagName)}&gt;</span>
+          ${a.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml(a.innerText.slice(0, 40))}"</span>` : ""}
+        </div>
+        <div style="font-size:12px;color:#e0e0e0;line-height:1.5">${escapeHtml(a.comment)}</div>
       </div>`;
     }
   }
 
   // Draw regions
   if (drawRegions.length > 0) {
-    html += `<div style="font-size:10px;color:#00E5FF;font-weight:700;margin-top:12px;margin-bottom:8px;font-family:system-ui,sans-serif">DRAW REGIONS</div>`;
+    html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
     for (let i = 0; i < drawRegions.length; i++) {
       const r = drawRegions[i];
       const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
-      html += `<div style="border:1px solid #2a2a3e;border-radius:8px;padding:10px;margin-bottom:8px;background:#12121f">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <span style="width:20px;height:20px;border-radius:${r.shape === "ellipse" ? "50%" : "4px"};background:${r.color}44;border:2px solid ${r.color};display:flex;align-items:center;justify-content:center;flex-shrink:0"></span>
-          <span style="font-size:11px;color:#e0e0e0;font-weight:600">${shapeLabel}</span>
-          <span style="font-size:10px;color:#555">${Math.round(r.width)}x${Math.round(r.height)} at (${Math.round(r.x)}, ${Math.round(r.y)})</span>
-          <button class="bt-ann-delete" data-id="${r.id}" style="margin-left:auto;background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:2px" title="Delete">x</button>
+      const ago = timeAgo(r.timestamp);
+      html += `<div style="border:1px solid #2a2a3e;border-radius:10px;padding:12px;margin-bottom:8px;background:#12121f;transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="width:22px;height:22px;border-radius:${r.shape === "ellipse" ? "50%" : "5px"};background:${r.color}33;border:2px solid ${r.color};display:flex;align-items:center;justify-content:center;flex-shrink:0"></span>
+          <span style="font-size:12px;color:#e0e0e0;font-weight:600">${shapeLabel}</span>
+          <span style="font-size:10px;color:#555">${Math.round(r.width)} x ${Math.round(r.height)}</span>
+          <span style="font-size:10px;color:#555;margin-left:auto">${ago}</span>
+          <button class="bt-ann-delete" data-id="${r.id}" style="background:#ef444415;border:1px solid #ef444433;color:#ef4444;cursor:pointer;font-size:11px;padding:3px 8px;border-radius:4px;font-family:inherit" title="Delete this region">Delete</button>
         </div>
-        <div style="font-size:11px;color:#e0e0e0;line-height:1.4">${r.comment ? escapeHtml(r.comment) : '<span style="color:#444">No comment</span>'}</div>
-        <div style="font-size:9px;color:#444;margin-top:4px">${escapeHtml(r.page)}</div>
+        <div style="font-size:12px;color:#e0e0e0;line-height:1.5">${r.comment ? escapeHtml(r.comment) : '<span style="color:#555;font-style:italic">No comment added</span>'}</div>
       </div>`;
     }
   }
@@ -1501,27 +1533,41 @@ function _getIntentColor(intent: string): string {
 // ── Toast notification ────────────────────────────────────────────────────
 
 function showToast(message: string, root: HTMLElement): void {
-  // Remove existing toast
   const existing = root.querySelector(".bt-toast");
   if (existing) existing.remove();
 
   const toast = document.createElement("div");
   toast.className = "bt-toast";
+  toast.dataset.tracebug = "toast";
   toast.style.cssText = `
-    position:fixed;top:20px;left:50%;transform:translateX(-50%);
-    background:#1a1a2e;color:#e0e0e0;border:1px solid #3b82f6;
-    border-radius:8px;padding:10px 20px;font-size:13px;
-    font-family:system-ui,sans-serif;z-index:2147483647;
-    box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:auto;
-    transition:opacity 0.3s;
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:#1a1a2eee;color:#e0e0e0;border:1px solid #3a3a5e;
+    border-radius:10px;padding:10px 20px;font-size:13px;
+    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
+    max-width:420px;text-align:center;line-height:1.4;
+    animation:tracebug-toast-in 0.2s ease;
   `;
+
+  // Add toast animation if not present
+  if (!document.getElementById("tracebug-toast-anim")) {
+    const style = document.createElement("style");
+    style.id = "tracebug-toast-anim";
+    style.textContent = `
+      @keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    `;
+    document.head.appendChild(style);
+  }
+
   toast.textContent = message;
   root.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = "0";
+    toast.style.transform = "translateX(-50%) translateY(8px)";
+    toast.style.transition = "all 0.3s ease";
     setTimeout(() => toast.remove(), 300);
-  }, 2500);
+  }, 3000);
 }
 
 // ── Screenshot annotation editor ──────────────────────────────────────────

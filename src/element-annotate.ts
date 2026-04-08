@@ -11,8 +11,10 @@ let _selectedElements: Map<string, { element: Element; rect: DOMRect; index: num
 let _highlightOverlay: HTMLElement | null = null;
 let _selectionOverlays: HTMLElement[] = [];
 let _popover: HTMLElement | null = null;
+let _modeBanner: HTMLElement | null = null;
 let _counter = 0;
 let _onUpdate: (() => void) | null = null;
+let _onDeactivate: (() => void) | null = null;
 let _persistentBadges: HTMLElement[] = [];
 let _badgeRoot: HTMLElement | null = null;
 
@@ -27,27 +29,73 @@ export function isElementAnnotateActive(): boolean {
 
 export function activateElementAnnotateMode(
   root: HTMLElement,
-  onUpdate?: () => void
+  onUpdate?: () => void,
+  onDeactivate?: () => void
 ): void {
   if (_active) return;
   _active = true;
   _onUpdate = onUpdate || null;
+  _onDeactivate = onDeactivate || null;
   _badgeRoot = root;
   _counter = 0;
   _selectedElements.clear();
 
-  // Create hover highlight overlay
+  // ── Mode banner — persistent indicator at top ──────────────────────
+  _modeBanner = document.createElement("div");
+  _modeBanner.id = "tracebug-annotate-banner";
+  _modeBanner.dataset.tracebug = "annotate-banner";
+  _modeBanner.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
+    background: linear-gradient(90deg, #7B61FF, #5B3FDF); color: #fff;
+    padding: 10px 20px; font-family: system-ui, -apple-system, sans-serif;
+    font-size: 13px; display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
+    animation: tracebug-slide-down 0.2s ease;
+  `;
+  _modeBanner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
+      <span style="font-weight:600">Annotate Mode</span>
+      <span style="opacity:0.7;font-size:12px">Click an element to annotate it. Hold Shift to select multiple.</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="opacity:0.5;font-size:11px">Esc to exit</span>
+      <button id="tracebug-annotate-exit" data-tracebug="annotate-exit" style="
+        background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+        color: #fff; padding: 5px 14px; border-radius: 6px; cursor: pointer;
+        font-size: 12px; font-family: inherit; font-weight: 500;
+      ">Exit</button>
+    </div>
+  `;
+  // Add keyframe animations
+  const styleTag = document.createElement("style");
+  styleTag.id = "tracebug-annotate-styles";
+  styleTag.dataset.tracebug = "annotate-styles";
+  styleTag.textContent = `
+    @keyframes tracebug-slide-down { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+    @keyframes tracebug-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  `;
+  document.head.appendChild(styleTag);
+  root.appendChild(_modeBanner);
+
+  // Exit button in banner
+  _modeBanner.querySelector("#tracebug-annotate-exit")!.addEventListener("click", (e) => {
+    e.stopPropagation();
+    deactivateElementAnnotateMode();
+  });
+
+  // ── Hover highlight overlay ────────────────────────────────────────
   _highlightOverlay = document.createElement("div");
   _highlightOverlay.id = "tracebug-element-highlight";
   _highlightOverlay.dataset.tracebug = "element-highlight";
   _highlightOverlay.style.cssText = `
     position: fixed; pointer-events: none; z-index: 2147483646;
     border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(123, 97, 255, 0.08);
-    border-radius: 3px; transition: all 0.05s ease; display: none;
+    border-radius: 3px; transition: all 0.08s ease; display: none;
   `;
   root.appendChild(_highlightOverlay);
 
-  // Freeze scroll
+  // ── Freeze scroll ──────────────────────────────────────────────────
   const savedOverflowHtml = document.documentElement.style.overflow;
   const savedOverflowBody = document.body.style.overflow;
   const savedScrollY = window.scrollY;
@@ -59,17 +107,19 @@ export function activateElementAnnotateMode(
   window.addEventListener("wheel", preventScroll, { passive: false, capture: true });
   window.addEventListener("touchmove", preventScroll, { passive: false, capture: true });
 
-  // Mousemove — highlight hovered element
+  // ── Mousemove — highlight hovered element ──────────────────────────
   const onMouseMove = (e: MouseEvent) => {
     if (!_active || !_highlightOverlay) return;
-    if (_popover) return; // Don't update highlight while popover is open
+    if (_popover) return;
 
     const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement;
     if (!el || _isOurElement(el)) {
       _highlightOverlay.style.display = "none";
+      document.body.style.cursor = "default";
       return;
     }
 
+    document.body.style.cursor = "crosshair";
     const rect = el.getBoundingClientRect();
     _highlightOverlay.style.display = "block";
     _highlightOverlay.style.left = rect.left + "px";
@@ -78,15 +128,13 @@ export function activateElementAnnotateMode(
     _highlightOverlay.style.height = rect.height + "px";
   };
 
-  // Click — select element
+  // ── Click — select element ─────────────────────────────────────────
   const onClick = (e: MouseEvent) => {
     if (!_active) return;
 
-    // Let clicks on TraceBug UI through (toolbar, popover, etc.)
     const target = e.target as HTMLElement;
     if (target && _isOurElement(target)) return;
 
-    // If popover is open and click is outside it, close it
     if (_popover) {
       _popover.remove();
       _popover = null;
@@ -105,24 +153,22 @@ export function activateElementAnnotateMode(
     const selector = _computeSelector(el);
 
     if (e.shiftKey) {
-      // Multi-select: add to selection
       if (!_selectedElements.has(selector)) {
         _counter++;
         _selectedElements.set(selector, { element: el, rect: el.getBoundingClientRect(), index: _counter });
         _renderSelectionOverlay(el, _counter, root);
+        _updateBannerCount();
       }
     } else {
-      // Single select: clear previous, select new
       _clearSelections();
       _counter++;
       _selectedElements.set(selector, { element: el, rect: el.getBoundingClientRect(), index: _counter });
       _renderSelectionOverlay(el, _counter, root);
-      // Show feedback popover
       _showFeedbackPopover(el, root);
     }
   };
 
-  // Right-click — show popover for multi-selected elements
+  // ── Right-click — show popover for multi-selected elements ─────────
   const onContext = (e: MouseEvent) => {
     if (!_active) return;
     if (_selectedElements.size > 0) {
@@ -134,33 +180,55 @@ export function activateElementAnnotateMode(
     }
   };
 
+  // ── Escape key — exit mode ─────────────────────────────────────────
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (_popover) {
+        _popover.remove();
+        _popover = null;
+        _clearSelections();
+      } else {
+        deactivateElementAnnotateMode();
+      }
+    }
+  };
+
   document.addEventListener("mousemove", onMouseMove, { capture: true });
   document.addEventListener("click", onClick, { capture: true });
   document.addEventListener("contextmenu", onContext, { capture: true });
+  document.addEventListener("keydown", onKeyDown, { capture: true });
 
   _cleanup = () => {
     _active = false;
     document.removeEventListener("mousemove", onMouseMove, { capture: true });
     document.removeEventListener("click", onClick, { capture: true });
     document.removeEventListener("contextmenu", onContext, { capture: true });
+    document.removeEventListener("keydown", onKeyDown, { capture: true });
     window.removeEventListener("wheel", preventScroll, { capture: true } as any);
     window.removeEventListener("touchmove", preventScroll, { capture: true } as any);
 
-    // Restore scroll
+    // Restore scroll & cursor
     document.documentElement.style.overflow = savedOverflowHtml;
     document.body.style.overflow = savedOverflowBody;
+    document.body.style.cursor = "";
     window.scrollTo(savedScrollX, savedScrollY);
 
-    // Clean up overlays
+    // Clean up UI
     _highlightOverlay?.remove();
     _highlightOverlay = null;
+    _modeBanner?.remove();
+    _modeBanner = null;
+    document.getElementById("tracebug-annotate-styles")?.remove();
     _clearSelections();
     _popover?.remove();
     _popover = null;
     _onUpdate = null;
 
-    // Refresh persistent badges so they stay visible after exiting annotate mode
+    // Refresh persistent badges
     if (_badgeRoot) _refreshPersistentBadges(_badgeRoot);
+    if (_onDeactivate) _onDeactivate();
+    _onDeactivate = null;
   };
 }
 
@@ -174,7 +242,6 @@ export function deactivateElementAnnotateMode(): void {
 // ── Persistent annotation badges on page ──────────────────────────────────
 
 function _refreshPersistentBadges(root: HTMLElement): void {
-  // Clear old badges
   _persistentBadges.forEach(b => b.remove());
   _persistentBadges = [];
 
@@ -202,17 +269,18 @@ function _refreshPersistentBadges(root: HTMLElement): void {
     root.appendChild(outline);
     _persistentBadges.push(outline);
 
-    // Numbered badge
+    // Numbered badge with tooltip
     const badge = document.createElement("div");
     badge.dataset.tracebug = "annotation-badge";
+    badge.title = `${a.intent.toUpperCase()}: ${a.comment.slice(0, 60)}`;
     badge.style.cssText = `
-      position: fixed; z-index: 2147483645; pointer-events: none;
+      position: fixed; z-index: 2147483645; pointer-events: auto; cursor: default;
       left: ${rect.right - 10}px; top: ${rect.top - 10}px;
       width: 20px; height: 20px; border-radius: 50%;
       background: ${_intentColor(a.intent)}; color: #fff;
       font-size: 10px; font-weight: 700; font-family: system-ui, sans-serif;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.4);
     `;
     badge.textContent = String(i + 1);
     root.appendChild(badge);
@@ -220,19 +288,26 @@ function _refreshPersistentBadges(root: HTMLElement): void {
   }
 }
 
-/** Show/refresh annotation badges on the page. Call after page load or annotation changes. */
 export function showAnnotationBadges(root: HTMLElement): void {
   _badgeRoot = root;
   _refreshPersistentBadges(root);
 }
 
-/** Remove all persistent badges from the page */
 export function clearAnnotationBadges(): void {
   _persistentBadges.forEach(b => b.remove());
   _persistentBadges = [];
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────
+
+function _updateBannerCount(): void {
+  if (!_modeBanner) return;
+  const count = _selectedElements.size;
+  if (count > 1) {
+    const textEl = _modeBanner.querySelector("span:nth-child(3)") as HTMLElement;
+    if (textEl) textEl.textContent = `${count} elements selected. Right-click to add feedback.`;
+  }
+}
 
 function _isOurElement(el: HTMLElement | null): boolean {
   if (!el) return false;
@@ -287,7 +362,6 @@ function _clearSelections(): void {
 function _renderSelectionOverlay(el: Element, index: number, root: HTMLElement): void {
   const rect = el.getBoundingClientRect();
 
-  // Selection box
   const box = document.createElement("div");
   box.dataset.tracebug = "selection-overlay";
   box.style.cssText = `
@@ -296,17 +370,18 @@ function _renderSelectionOverlay(el: Element, index: number, root: HTMLElement):
     width: ${rect.width + 4}px; height: ${rect.height + 4}px;
     border: 2px solid ${SELECTION_COLOR}; border-radius: 3px;
     background: rgba(0, 229, 255, 0.06);
+    animation: tracebug-slide-down 0.15s ease;
   `;
 
-  // Number badge
   const badge = document.createElement("div");
   badge.dataset.tracebug = "selection-badge";
   badge.style.cssText = `
     position: absolute; top: -10px; right: -10px;
-    width: 20px; height: 20px; border-radius: 50%;
+    width: 22px; height: 22px; border-radius: 50%;
     background: ${SELECTION_COLOR}; color: #000;
     font-size: 11px; font-weight: 700; font-family: system-ui, sans-serif;
     display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   `;
   badge.textContent = String(index);
   box.appendChild(badge);
@@ -326,63 +401,89 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
   popover.id = "tracebug-annotate-popover";
   popover.dataset.tracebug = "annotate-popover";
 
-  // Position: prefer below the element, fallback to above if near bottom
-  let top = rect.bottom + 8;
-  let left = Math.max(8, Math.min(rect.left, window.innerWidth - 320));
-  if (top + 320 > window.innerHeight) {
-    top = Math.max(8, rect.top - 328);
+  // Smart positioning: below element, fallback above, then center
+  let top = rect.bottom + 10;
+  let left = Math.max(12, Math.min(rect.left, window.innerWidth - 330));
+  if (top + 360 > window.innerHeight) {
+    top = Math.max(50, rect.top - 370);
   }
+  if (top < 50) top = 50; // Don't overlap banner
 
   popover.style.cssText = `
     position: fixed; z-index: 2147483647;
-    left: ${left}px; top: ${top}px; width: 300px;
-    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 10px;
-    padding: 16px; font-family: system-ui, sans-serif; font-size: 13px;
-    color: #e0e0e0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    left: ${left}px; top: ${top}px; width: 310px;
+    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 12px;
+    padding: 18px; font-family: system-ui, -apple-system, sans-serif; font-size: 13px;
+    color: #e0e0e0; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    animation: tracebug-slide-down 0.15s ease;
   `;
 
   const tagText = targetEl.tagName.toLowerCase();
   const previewText = (targetEl.innerText || "").slice(0, 40);
   const selectedCount = _selectedElements.size;
+  const selectorText = _computeSelector(targetEl);
 
   popover.innerHTML = `
-    <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:#888;margin-bottom:4px">${selectedCount > 1 ? `${selectedCount} elements selected` : `&lt;${tagText}&gt;`}${previewText ? ` "${previewText}"` : ""}</div>
-    </div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;color:#888;margin-bottom:6px">Intent</div>
-      <div style="display:flex;gap:4px" id="tracebug-intent-btns">
-        <button data-intent="fix" style="${_intentBtnStyle("fix", true)}">Fix</button>
-        <button data-intent="redesign" style="${_intentBtnStyle("redesign", false)}">Redesign</button>
-        <button data-intent="remove" style="${_intentBtnStyle("remove", false)}">Remove</button>
-        <button data-intent="question" style="${_intentBtnStyle("question", false)}">Question</button>
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">
+        ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
+      </div>
+      <div style="font-size:11px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${selectorText}">
+        &lt;${tagText}&gt;${previewText ? ` "${previewText}"` : ""}
       </div>
     </div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;color:#888;margin-bottom:6px">Severity</div>
-      <select id="tracebug-sev-select" style="width:100%;background:#0f0f1a;border:1px solid #3a3a5e;color:#e0e0e0;padding:6px 8px;border-radius:6px;font-size:12px;font-family:inherit">
-        <option value="critical">Critical</option>
-        <option value="major">Major</option>
-        <option value="minor" selected>Minor</option>
-        <option value="info">Info</option>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;font-weight:500">What needs to happen?</div>
+      <div style="display:flex;gap:5px" id="tracebug-intent-btns">
+        <button data-intent="fix" title="This element has a bug that needs fixing" style="${_intentBtnStyle("fix", true)}">Bug Fix</button>
+        <button data-intent="redesign" title="This element needs a design or UX change" style="${_intentBtnStyle("redesign", false)}">Redesign</button>
+        <button data-intent="remove" title="This element should be removed" style="${_intentBtnStyle("remove", false)}">Remove</button>
+        <button data-intent="question" title="I have a question about this element" style="${_intentBtnStyle("question", false)}">Question</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:#999;margin-bottom:6px;font-weight:500">Priority</div>
+      <select id="tracebug-sev-select" style="width:100%;background:#0f0f1a;border:1px solid #3a3a5e;color:#e0e0e0;padding:8px 10px;border-radius:8px;font-size:13px;font-family:inherit;cursor:pointer">
+        <option value="critical">Critical - Blocks users</option>
+        <option value="major">Major - Significant issue</option>
+        <option value="minor" selected>Minor - Small improvement</option>
+        <option value="info">Info - Just a note</option>
       </select>
     </div>
-    <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:#888;margin-bottom:6px">Comment</div>
-      <textarea id="tracebug-ann-comment" rows="3" placeholder="Describe the issue..." style="width:100%;background:#0f0f1a;border:1px solid #3a3a5e;color:#e0e0e0;padding:8px;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:11px;color:#999;font-weight:500">Describe the issue</span>
+        <span id="tracebug-char-count" style="font-size:10px;color:#555">0 / 500</span>
+      </div>
+      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:#0f0f1a;border:1px solid #3a3a5e;color:#e0e0e0;padding:10px;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
+      <div id="tracebug-comment-error" style="font-size:11px;color:#ef4444;margin-top:4px;display:none">Please describe the issue before saving.</div>
     </div>
+
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button id="tracebug-ann-cancel" style="background:none;border:1px solid #3a3a5e;color:#888;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#7B61FF;border:none;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">Save</button>
+      <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid #3a3a5e;color:#aaa;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
+      <button id="tracebug-ann-save" style="background:#7B61FF;border:none;color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
     </div>
   `;
 
   root.appendChild(popover);
   _popover = popover;
 
-  // Focus comment textarea
+  // Focus & character count
   const commentEl = popover.querySelector("#tracebug-ann-comment") as HTMLTextAreaElement;
+  const charCount = popover.querySelector("#tracebug-char-count") as HTMLElement;
+  const errorEl = popover.querySelector("#tracebug-comment-error") as HTMLElement;
   setTimeout(() => commentEl?.focus(), 50);
+
+  commentEl.addEventListener("input", () => {
+    charCount.textContent = `${commentEl.value.length} / 500`;
+    if (commentEl.value.trim()) {
+      commentEl.style.borderColor = "#3a3a5e";
+      errorEl.style.display = "none";
+    }
+  });
 
   // Intent buttons
   let selectedIntent: AnnotationIntent = "fix";
@@ -414,11 +515,11 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
     if (!comment) {
       commentEl.style.borderColor = "#ef4444";
+      errorEl.style.display = "block";
       commentEl.focus();
       return;
     }
 
-    // Save annotation for each selected element
     for (const [selector, entry] of _selectedElements) {
       const el = entry.element as HTMLElement;
       const bRect = el.getBoundingClientRect();
@@ -444,21 +545,21 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
     popover.remove();
     _popover = null;
     _clearSelections();
-    // Show persistent badges for all saved annotations
     _refreshPersistentBadges(root);
     if (_onUpdate) _onUpdate();
   });
 
   // Prevent clicks inside popover from triggering element selection
   popover.addEventListener("click", (e) => e.stopPropagation());
+  popover.addEventListener("mousedown", (e) => e.stopPropagation());
 }
 
 function _intentBtnStyle(intent: AnnotationIntent, active: boolean): string {
   const color = _intentColor(intent);
   if (active) {
-    return `background:${color}33;color:${color};border:1px solid ${color};border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;`;
+    return `background:${color}33;color:${color};border:1px solid ${color};border-radius:8px;padding:6px 11px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.15s;`;
   }
-  return `background:#22222244;color:#888;border:1px solid #33333344;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-family:inherit;`;
+  return `background:#ffffff06;color:#999;border:1px solid #33333366;border-radius:8px;padding:6px 11px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 0.15s;`;
 }
 
 function _intentColor(intent: AnnotationIntent): string {

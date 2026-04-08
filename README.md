@@ -75,16 +75,24 @@ Works on Chrome, Edge, Brave, and Opera.
 | **Unhandled Rejections** | Promise rejection reason + stack |
 | **Environment** | Browser, OS, viewport, device type, connection, language, timezone |
 
+### UI Annotation Tools
+
+| Tool | What it does |
+|------|-------------|
+| **Annotate Mode** | Click any element to attach feedback (intent, severity, comment). Shift+click for multi-select. `Ctrl+Shift+A` |
+| **Draw Mode** | Drag rectangles or ellipses on the live page to mark layout/spacing issues. `Ctrl+Shift+D` |
+| **Annotation List** | View, export (Markdown/JSON), and manage all annotations in the panel |
+
 ### QA Tools (One Click)
 
 | Tool | What it does |
 |------|-------------|
-| **📸 Screenshot** | Captures page screenshot with auto-generated name (e.g., `01_click_add_vendor.png`) |
-| **📝 Add Note** | Tester adds Expected/Actual/Severity — becomes part of the bug report |
-| **🐙 GitHub Issue** | Generates complete GitHub issue markdown — copies to clipboard |
-| **🎫 Jira Ticket** | Generates Jira-compatible ticket with priority, labels, description |
-| **🎤 Voice Note** | Speak to describe the bug — speech-to-text, auto-included in reports |
-| **📄 PDF Report** | Opens printable bug report — save as PDF from browser |
+| **Screenshot** | Captures page screenshot with auto-generated name (e.g., `01_click_add_vendor.png`) |
+| **Add Note** | Tester adds Expected/Actual/Severity — becomes part of the bug report |
+| **GitHub Issue** | Generates complete GitHub issue markdown — copies to clipboard |
+| **Jira Ticket** | Generates Jira-compatible ticket with priority, labels, description |
+| **Voice Note** | Speak to describe the bug — speech-to-text, auto-included in reports |
+| **PDF Report** | Opens printable bug report — save as PDF from browser |
 
 ### Auto-Generated
 
@@ -250,22 +258,69 @@ import {
 } from "tracebug-sdk";
 ```
 
+### Element Annotation & Draw
+
+```typescript
+// Activate modes programmatically
+TraceBug.activateAnnotateMode();   // Click elements to annotate
+TraceBug.activateDrawMode();       // Draw shapes on the page
+
+// Check state
+TraceBug.isAnnotateModeActive();
+TraceBug.isDrawModeActive();
+
+// Export all annotations
+const report = TraceBug.getAnnotationReport();
+const md = TraceBug.exportAnnotationsMarkdown();
+await TraceBug.copyAnnotationsToClipboard("markdown");
+
+// Deactivate
+TraceBug.deactivateAnnotateMode();
+TraceBug.deactivateDrawMode();
+TraceBug.clearAnnotations();
+```
+
 ## Dashboard
 
-The in-browser dashboard includes:
+The compact toolbar on the right edge of the screen provides:
 
-- **Session list** with error/healthy indicators and "Repro Ready" badges
-- **QA Toolbar**: Screenshot, Add Note, Voice Note, GitHub Issue, Jira Ticket, PDF Report
-- **Session Overview**: duration, events, pages, API calls
-- **Problems Detected**: critical / warning / info severity
-- **Error Details**: type classification + stack trace
-- **Performance Insights**: avg/slowest response, success rate, per-API breakdown
-- **Tester Notes**: all annotations with Expected/Actual/Severity
-- **Screenshots Gallery**: all captured screenshots with filenames
-- **Environment Info**: browser, OS, viewport, device type
-- **Event Timeline**: color-coded, time-gapped, rich event details
-- **Reproduction Steps**: auto-generated with copy button
-- **Export**: JSON, Text, HTML, PDF, GitHub Issue, Jira Ticket
+- **Session panel** (logo button) — Full bug reporting with timeline, errors, export
+- **Annotate mode** — Click elements to attach feedback
+- **Draw mode** — Draw rectangles/ellipses for layout issues
+- **Screenshot** — Capture with annotation editor
+- **Annotation list** — View/export/delete all annotations
+- **Settings** — Pause recording, view stats, clear data
+
+### Session Panel Details
+
+- Session list with error/healthy indicators and "Repro Ready" badges
+- QA Toolbar: Screenshot, Add Note, Voice Note, GitHub Issue, Jira Ticket, PDF Report
+- Session overview, problems detected, error details, performance insights
+- Tester notes, screenshots gallery, environment info
+- Color-coded event timeline with rich details
+- Auto-generated reproduction steps with copy button
+- Export: JSON, Text, HTML, PDF, GitHub Issue, Jira Ticket
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+A` | Toggle annotate mode |
+| `Ctrl+Shift+D` | Toggle draw mode |
+| `Ctrl+Shift+S` | Take screenshot |
+| `Esc` | Exit current mode |
+
+## Documentation
+
+Full documentation is in the [`docs/`](docs/) folder:
+
+- [Getting Started](docs/getting-started.md) — Install, setup, first use
+- [API Reference](docs/api-reference.md) — Complete programmatic API
+- [Configuration](docs/configuration.md) — All config options explained
+- [Bug Reporting](docs/bug-reporting.md) — Screenshots, notes, voice, export
+- [Annotate & Draw](docs/annotate-and-draw.md) — UI annotation features
+- [Chrome Extension](docs/chrome-extension.md) — Extension install & usage
+- [Architecture](docs/architecture.md) — How TraceBug works internally
 
 ## Chrome Extension
 
@@ -292,10 +347,10 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 
 - **Per-site toggle** — enable only on sites you're testing
 - **Badge indicator** — shows "ON" in green when active on current tab
-- **Quick actions** — Screenshot, PDF Report, GitHub Issue, Jira Ticket from the popup
+- **Quick actions** — Annotate, Draw, Screenshot, PDF Report, GitHub Issue, Jira Ticket from the popup
 - **Active sites list** — manage all enabled sites from the popup
+- **Compact toolbar on page** — same full-featured toolbar as the npm SDK
 - **CSP-safe** — uses `chrome.scripting.executeScript` with `world: "MAIN"` to bypass Content Security Policy restrictions
-- **No inline scripts** — fully compliant with strict CSP headers
 
 ### Browser Compatibility
 
