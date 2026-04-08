@@ -46,6 +46,8 @@ import {
   collectApiRequests,
   collectXhrRequests,
   collectErrors,
+  collectConsoleWarnings,
+  collectConsoleLogs,
 } from "./collectors";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots, downloadAllScreenshots } from "./screenshot";
@@ -63,6 +65,13 @@ import {
   exportAsJSON as exportAnnotationsJSON, exportAsMarkdown as exportAnnotationsMD,
   copyToClipboard as copyAnnotationsToClipboard, clearAllAnnotations,
 } from "./annotation-store";
+import { injectTheme, removeTheme } from "./theme";
+import {
+  TraceBugPlugin,
+  registerPlugin, unregisterPlugin, getPlugins,
+  runEventPlugins, runReportPlugins,
+  onHook, emitHook, clearAllPlugins,
+} from "./plugin-system";
 
 // ── Public exports ────────────────────────────────────────────────────────
 
@@ -92,6 +101,7 @@ export { generateBugTitle, generateFlowSummary } from "./title-generator";
 export { buildTimeline, formatTimelineText } from "./timeline-builder";
 export { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 export type { VoiceTranscript } from "./voice-recorder";
+export type { TraceBugPlugin } from "./plugin-system";
 
 class TraceBugSDK {
   private config: TraceBugConfig | null = null;
@@ -128,6 +138,10 @@ class TraceBugSDK {
       maxEvents: 200,
       maxSessions: 50,
       enableDashboard: true,
+      theme: "dark",
+      toolbarPosition: "right",
+      minimized: false,
+      captureConsole: "errors",
       ...config,
     };
 
@@ -135,6 +149,9 @@ class TraceBugSDK {
     this.recording = true;
     this.sessionId = getSessionId();
     const sessionId = this.sessionId;
+
+    // ── Inject theme CSS custom properties ────────────────────────
+    injectTheme(this.config.theme!);
 
     // ── Capture environment info automatically ─────────────────────
     const env = captureEnvironment();
@@ -144,7 +161,7 @@ class TraceBugSDK {
     const emit = (type: EventType, data: Record<string, any>) => {
       if (!this.recording) return; // Skip when paused
 
-      const event: TraceBugEvent = {
+      let event: TraceBugEvent | null = {
         id: Math.random().toString(36).slice(2, 10),
         sessionId,
         projectId: this.config!.projectId,
@@ -153,6 +170,10 @@ class TraceBugSDK {
         timestamp: Date.now(),
         data,
       };
+
+      // Run through plugin filters
+      event = runEventPlugins(event);
+      if (!event) return; // Plugin filtered out the event
 
       // Persist to localStorage
       appendEvent(
@@ -165,6 +186,7 @@ class TraceBugSDK {
       // When an error occurs, auto-generate reproduction steps
       if (type === "error" || type === "unhandled_rejection") {
         this.processError(sessionId, data.error?.message, data.error?.stack);
+        emitHook("error:captured", event);
       }
     };
 
@@ -176,7 +198,21 @@ class TraceBugSDK {
     this.cleanups.push(collectRouteChanges(emit));
     this.cleanups.push(collectApiRequests(emit));
     this.cleanups.push(collectXhrRequests(emit));
-    this.cleanups.push(collectErrors(emit));
+
+    // Console capture — configurable level
+    const consoleLevel = this.config.captureConsole ?? "errors";
+    if (consoleLevel !== "none") {
+      this.cleanups.push(collectErrors(emit));
+      if (consoleLevel === "warnings" || consoleLevel === "all") {
+        this.cleanups.push(collectConsoleWarnings(emit));
+      }
+      if (consoleLevel === "all") {
+        this.cleanups.push(collectConsoleLogs(emit));
+      }
+    } else {
+      // Still collect runtime errors and unhandled rejections, just not console
+      this.cleanups.push(collectErrors(emit));
+    }
 
     // ── Mount in-browser dashboard ────────────────────────────────────
     if (this.config.enableDashboard) {
@@ -189,8 +225,10 @@ class TraceBugSDK {
         }
         updateRecordingState(this.recording);
       });
-      this.cleanups.push(mountDashboard());
+      this.cleanups.push(mountDashboard(this.config.toolbarPosition));
     }
+
+    emitHook("session:start", sessionId);
 
     console.info(
       `[TraceBug] Initialized — project: ${config.projectId}, session: ${sessionId}`
@@ -410,6 +448,45 @@ class TraceBugSDK {
     clearAllAnnotations();
   }
 
+  // ── Plugin System ──────────────────────────────────────────────────
+
+  /** Register a plugin */
+  use(plugin: TraceBugPlugin): void {
+    registerPlugin(plugin);
+  }
+
+  /** Unregister a plugin by name */
+  removePlugin(name: string): void {
+    unregisterPlugin(name);
+  }
+
+  /** Subscribe to a hook event. Returns unsubscribe function. */
+  on(event: string, callback: (...args: any[]) => void): () => void {
+    return onHook(event as any, callback);
+  }
+
+  // ── CI/CD Helpers ─────────────────────────────────────────────────
+
+  /** Get error count for the current session (useful for CI assertions) */
+  getErrorCount(): number {
+    if (!this.sessionId) return 0;
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    if (!session) return 0;
+    return session.events.filter(e =>
+      e.type === "error" || e.type === "unhandled_rejection"
+    ).length;
+  }
+
+  /** Export current session as JSON (for CI artifact upload) */
+  exportSessionJSON(): string | null {
+    if (!this.sessionId) return null;
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId);
+    if (!session) return null;
+    return JSON.stringify(session, null, 2);
+  }
+
   // ── Private methods ─────────────────────────────────────────────────
 
   /**
@@ -535,6 +612,8 @@ class TraceBugSDK {
     deactivateElementAnnotateMode();
     deactivateDrawMode();
     clearAllAnnotations();
+    clearAllPlugins();
+    removeTheme();
   }
 }
 

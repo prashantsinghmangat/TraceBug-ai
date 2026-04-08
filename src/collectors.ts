@@ -446,3 +446,47 @@ export function collectErrors(emit: Emit): () => void {
     console.error = origConsoleError;
   };
 }
+
+/**
+ * Capture console.warn events.
+ */
+export function collectConsoleWarnings(emit: Emit): () => void {
+  const origWarn = console.warn;
+  let _inside = false;
+  console.warn = function (...args: any[]) {
+    if (_inside) { origWarn.apply(console, args); return; }
+    _inside = true;
+    try {
+      emit("console_warn", {
+        error: {
+          message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" "),
+        },
+      });
+    } finally { _inside = false; }
+    origWarn.apply(console, args);
+  };
+  return () => { console.warn = origWarn; };
+}
+
+/**
+ * Capture console.log events (capped at last 50 in storage).
+ */
+export function collectConsoleLogs(emit: Emit): () => void {
+  const origLog = console.log;
+  let _inside = false;
+  let _count = 0;
+  console.log = function (...args: any[]) {
+    if (_inside || _count >= 50) { origLog.apply(console, args); return; }
+    _inside = true;
+    _count++;
+    try {
+      emit("console_log", {
+        error: {
+          message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" "),
+        },
+      });
+    } finally { _inside = false; }
+    origLog.apply(console, args);
+  };
+  return () => { console.log = origLog; };
+}

@@ -47,6 +47,25 @@ After initialization, a **vertical toolbar rail** appears on the right edge of y
 | Camera | Take screenshot | `Ctrl+Shift+S` |
 | List | View all annotations | — |
 | Gear | Settings (pause recording, clear data) | — |
+| ? | Help — replay the onboarding tour | — |
+
+**First-run tour:** On first use, a 4-step tooltip sequence walks you through the toolbar. Click "?" to replay it anytime.
+
+**Toolbar position:** The toolbar defaults to the right edge, but you can change it:
+
+```typescript
+TraceBug.init({ projectId: "my-app", toolbarPosition: "left" });
+```
+
+You can also **drag** the toolbar anywhere on screen — the position is remembered.
+
+**Themes:** TraceBug supports dark (default), light, and auto (follows system preference):
+
+```typescript
+TraceBug.init({ projectId: "my-app", theme: "auto" });
+```
+
+**Mobile:** On viewports < 768px, the toolbar collapses to a single floating button. Tap to expand. The session panel becomes a full-width bottom sheet.
 
 ## Quick Workflow
 
@@ -85,10 +104,51 @@ TraceBug works with any frontend framework that runs in a browser:
 - Vite (any framework)
 - Plain HTML/JS
 
+## Plugins
+
+Extend TraceBug without forking:
+
+```typescript
+TraceBug.use({
+  name: "slack-webhook",
+  onReport: (report) => {
+    fetch("https://hooks.slack.com/...", {
+      method: "POST",
+      body: JSON.stringify({ text: report.title }),
+    });
+    return report;
+  },
+});
+```
+
+## Hooks
+
+Subscribe to lifecycle events:
+
+```typescript
+TraceBug.on("error:captured", (error) => {
+  console.log("Bug found:", error.data.error.message);
+});
+```
+
+## CI/CD Integration
+
+Use TraceBug in headless mode for automated testing:
+
+```typescript
+TraceBug.init({ projectId: "my-app", enableDashboard: false, enabled: "all" });
+
+// After test:
+expect(TraceBug.getErrorCount()).toBe(0);
+
+// Upload session data as artifact on failure:
+const json = TraceBug.exportSessionJSON();
+```
+
 ## Next Steps
 
-- [Configuration](configuration.md) — All config options
-- [API Reference](api-reference.md) — Full programmatic API
+- [Configuration](configuration.md) — All config options (theme, position, console capture)
+- [API Reference](api-reference.md) — Full programmatic API (plugins, hooks, CI helpers)
 - [Bug Reporting](bug-reporting.md) — Screenshots, notes, voice, export
 - [Annotate & Draw](annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](chrome-extension.md) — Use on any website without code

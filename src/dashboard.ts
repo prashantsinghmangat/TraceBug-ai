@@ -14,8 +14,9 @@ import { generateBugTitle } from "./title-generator";
 import { captureEnvironment } from "./environment";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getAnnotationCount } from "./annotation-store";
-import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel } from "./compact-toolbar";
+import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, ToolbarPosition } from "./compact-toolbar";
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
+import { startOnboarding, addLogoPulse, cleanupOnboarding, injectOnboardingStyles } from "./onboarding";
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -39,19 +40,19 @@ export function updateRecordingState(isRecording: boolean): void {
   // Update the recording indicator if panel is open
   const indicator = document.getElementById("bt-rec-indicator");
   if (indicator) {
-    indicator.style.background = isRecording ? "#22c55e" : "#ef4444";
+    indicator.style.background = isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
     indicator.title = isRecording ? "Recording" : "Paused";
   }
   const recBtn = document.getElementById("bt-rec-toggle");
   if (recBtn) {
-    recBtn.textContent = isRecording ? "⏸ Pause" : "▶ Record";
-    recBtn.style.color = isRecording ? "#fbbf24" : "#22c55e";
-    recBtn.style.borderColor = isRecording ? "#fbbf2444" : "#22c55e44";
-    recBtn.style.background = isRecording ? "#fbbf2422" : "#22c55e22";
+    recBtn.textContent = isRecording ? "\u23F8 Pause" : "\u25B6 Record";
+    recBtn.style.color = isRecording ? "var(--tb-warning, #fbbf24)" : "var(--tb-success, #22c55e)";
+    recBtn.style.borderColor = isRecording ? "var(--tb-warning, #fbbf24)44" : "var(--tb-success, #22c55e)44";
+    recBtn.style.background = isRecording ? "var(--tb-warning-bg, #fbbf2422)" : "var(--tb-success-bg, #22c55e22)";
   }
 }
 
-export function mountDashboard(): () => void {
+export function mountDashboard(toolbarPosition?: ToolbarPosition): () => void {
   // Don't mount twice
   if (document.getElementById("tracebug-compact-toolbar")) return () => {};
 
@@ -79,16 +80,38 @@ export function mountDashboard(): () => void {
       width: 470px !important;
       height: 100vh !important;
       z-index: 2147483647 !important;
-      background: #0f0f1a !important;
-      border-left: 1px solid #2a2a3e !important;
-      color: #e0e0e0 !important;
-      font-family: 'SF Mono', Consolas, monospace, system-ui, sans-serif !important;
+      background: var(--tb-panel-bg, #0f0f1a) !important;
+      border-left: 1px solid var(--tb-border, #2a2a3e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      font-family: var(--tb-font-mono, 'SF Mono', Consolas, monospace), var(--tb-font-family, system-ui, sans-serif) !important;
       font-size: 13px !important;
       overflow: hidden !important;
-      transition: right 0.3s ease !important;
+      transition: right 0.3s ease, left 0.3s ease, bottom 0.3s ease !important;
       display: flex !important;
       flex-direction: column !important;
-      box-shadow: -4px 0 30px rgba(0,0,0,0.6) !important;
+      box-shadow: var(--tb-shadow-lg, -4px 0 30px rgba(0,0,0,0.6)) !important;
+    }
+    @media (max-width: 767px) {
+      #${PANEL_ID} {
+        width: 100vw !important;
+        height: 80vh !important;
+        top: auto !important;
+        border-radius: 16px 16px 0 0 !important;
+        border-left: none !important;
+        border-top: 1px solid var(--tb-border, #2a2a3e) !important;
+      }
+    }
+    /* Accessibility: visible focus rings */
+    #tracebug-root button:focus-visible,
+    #tracebug-root input:focus-visible,
+    #tracebug-root select:focus-visible,
+    #tracebug-root textarea:focus-visible,
+    #tracebug-root [tabindex]:focus-visible {
+      outline: 2px solid var(--tb-accent, #7B61FF) !important;
+      outline-offset: 2px !important;
+    }
+    #tracebug-root *:focus:not(:focus-visible) {
+      outline: none !important;
     }
   `;
   document.head.appendChild(style);
@@ -96,21 +119,39 @@ export function mountDashboard(): () => void {
   // ── Root container — appended to <html> to escape body stacking contexts
   const root = document.createElement("div");
   root.id = "tracebug-root";
+  root.setAttribute("role", "complementary");
+  root.setAttribute("aria-label", "TraceBug QA tools");
 
   // ── Panel container ─────────────────────────────────────────────────
   const panel = document.createElement("div");
   panel.id = PANEL_ID;
   panel.style.right = "-480px";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "false");
+  panel.setAttribute("aria-label", "TraceBug session panel");
+
+  // ── Aria-live region for announcements ────────────────────────────
+  const liveRegion = document.createElement("div");
+  liveRegion.id = "tracebug-live";
+  liveRegion.setAttribute("aria-live", "polite");
+  liveRegion.setAttribute("aria-atomic", "true");
+  liveRegion.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+  root.appendChild(liveRegion);
 
   root.appendChild(panel);
   document.documentElement.appendChild(root);
 
   // ── Wire compact toolbar ────────────────────────────────────────────
   setRenderPanel(renderPanel);
-  const cleanupToolbar = mountCompactToolbar(root, panel, showToast, renderAnnotationList);
+  const cleanupToolbar = mountCompactToolbar(root, panel, showToast, renderAnnotationList, toolbarPosition);
 
   // ── Show existing annotation badges on page ────────────────────────
   showAnnotationBadges(root);
+
+  // ── First-run onboarding ────────────────────────────────────────────
+  injectOnboardingStyles();
+  startOnboarding(root);
+  addLogoPulse();
 
   // ── Keyboard shortcut: Ctrl+Shift+S for screenshot ─────────────────
   const keyHandler = async (e: KeyboardEvent) => {
@@ -137,6 +178,7 @@ export function mountDashboard(): () => void {
     style.remove();
     cleanupToolbar();
     clearAnnotationBadges();
+    cleanupOnboarding();
     document.removeEventListener("keydown", keyHandler);
   };
 }
@@ -149,17 +191,17 @@ function renderPanel(panel: HTMLElement): void {
   const allSessions = sessions;
 
   panel.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid #2a2a3e;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-size:16px;font-weight:700;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="th-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#th-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#th-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#th-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="48" cy="41" r="5" fill="url(#th-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/></svg>TraceBug AI</div>
-          <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording ? "#22c55e" : "#ef4444"};animation:${_isRecording ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording ? "Recording" : "Paused"}"></div>
+          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="th-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#th-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#th-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#th-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="48" cy="41" r="5" fill="url(#th-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/></svg>TraceBug AI</div>
+          <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording ? "Recording" : "Paused"}"></div>
         </div>
-        <div style="font-size:11px;color:#666;margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} · ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} · ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button id="bt-rec-toggle" style="${smallBtnStyle(_isRecording ? "#fbbf24" : "#22c55e")}font-size:10px">${_isRecording ? "⏸ Pause" : "▶ Record"}</button>
-        <button id="bt-refresh" style="${smallBtnStyle("#3b82f6")}font-size:10px">↻</button>
+        <button id="bt-rec-toggle" style="${smallBtnStyle(_isRecording ? "#fbbf24" : "#22c55e")}font-size:10px">${_isRecording ? "\u23F8 Pause" : "\u25B6 Record"}</button>
+        <button id="bt-refresh" style="${smallBtnStyle("#3b82f6")}font-size:10px">\u21BB</button>
         <button id="bt-clear" style="${smallBtnStyle("#ef4444")}font-size:10px">Clear</button>
       </div>
     </div>
@@ -181,50 +223,131 @@ function renderPanel(panel: HTMLElement): void {
 
   if (allSessions.length === 0) {
     content.innerHTML = `
-      <div style="text-align:center;padding:60px 20px;color:#555">
-        <div style="font-size:36px;margin-bottom:12px">🔍</div>
-        <div style="font-family:system-ui,sans-serif">No sessions recorded yet.</div>
-        <div style="font-size:11px;margin-top:8px;color:#444">Interact with the app to start capturing events.</div>
+      <div style="text-align:center;padding:60px 20px;color:var(--tb-text-muted, #555)">
+        <div style="font-size:36px;margin-bottom:12px">\uD83D\uDD0D</div>
+        <div style="font-family:var(--tb-font-family, system-ui,sans-serif)">No sessions recorded yet.</div>
+        <div style="font-size:11px;margin-top:8px;color:var(--tb-text-muted, #444)">Interact with the app to start capturing events.</div>
       </div>
     `;
     return;
   }
 
-  // Render session list
+  // ── Search/filter bar ──
+  const filterBar = document.createElement("div");
+  filterBar.dataset.tracebug = "filter-bar";
+  filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
+  filterBar.innerHTML = `
+    <input id="bt-search" type="text" placeholder="Search sessions..." style="
+      flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
+      border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 10px;
+      font-size:11px;font-family:var(--tb-font-family, inherit);outline:none;
+    " />
+    <select id="bt-filter" style="
+      background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
+      border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 8px;
+      font-size:11px;font-family:var(--tb-font-family, inherit);cursor:pointer;
+    ">
+      <option value="all">All</option>
+      <option value="errors">Has errors</option>
+      <option value="healthy">Healthy</option>
+    </select>
+  `;
   content.innerHTML = "";
-  for (const session of allSessions) {
-    const card = document.createElement("div");
-    card.style.cssText =
-      "border:1px solid #2a2a3e;border-radius:8px;padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
-    card.onmouseenter = () => (card.style.borderColor = "#4a4a6e");
-    card.onmouseleave = () => (card.style.borderColor = "#2a2a3e");
+  content.appendChild(filterBar);
 
-    const hasError = !!session.errorMessage;
-    const dot = hasError
-      ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:6px"></span>'
-      : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:6px"></span>';
+  const sessionsContainer = document.createElement("div");
+  sessionsContainer.id = "bt-sessions-list";
+  content.appendChild(sessionsContainer);
 
-    const badge = session.reproSteps
-      ? '<span style="font-size:10px;background:#14532d;color:#4ade80;padding:2px 6px;border-radius:4px;margin-left:6px">Repro Ready</span>'
-      : "";
-
-    card.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center">
-          ${dot}
-          <span style="color:#888;font-size:11px">${session.sessionId.slice(0, 12)}…</span>
-          ${badge}
-        </div>
-        <span style="color:#555;font-size:10px">${timeAgo(session.updatedAt)}</span>
-      </div>
-      ${hasError ? `<div style="color:#f87171;font-size:12px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(session.errorMessage!)}</div>` : ""}
-      <div style="color:#555;font-size:11px;margin-top:4px">${session.events.length} events</div>
-    `;
-
-    card.onclick = () => renderSessionDetail(panel, session);
-    content.appendChild(card);
+  function renderFilteredSessions(filter: string, search: string) {
+    sessionsContainer.innerHTML = "";
+    let filtered = allSessions;
+    if (filter === "errors") filtered = filtered.filter(s => s.errorMessage);
+    if (filter === "healthy") filtered = filtered.filter(s => !s.errorMessage);
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(s =>
+        s.sessionId.toLowerCase().includes(q) ||
+        (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) ||
+        s.events.some(e => e.page.toLowerCase().includes(q))
+      );
+    }
+    if (filtered.length === 0) {
+      sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
+      return;
+    }
+    for (const session of filtered) {
+      sessionsContainer.appendChild(_createSessionCard(session, panel));
+    }
   }
+
+  renderFilteredSessions("all", "");
+
+  content.querySelector("#bt-search")!.addEventListener("input", (e) => {
+    const search = (e.target as HTMLInputElement).value;
+    const filter = (content.querySelector("#bt-filter") as HTMLSelectElement).value;
+    renderFilteredSessions(filter, search);
+  });
+  content.querySelector("#bt-filter")!.addEventListener("change", (e) => {
+    const filter = (e.target as HTMLSelectElement).value;
+    const search = (content.querySelector("#bt-search") as HTMLInputElement).value;
+    renderFilteredSessions(filter, search);
+  });
 }
+
+function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLElement {
+  const card = document.createElement("div");
+  card.style.cssText =
+    "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
+  card.onmouseenter = () => (card.style.borderColor = "var(--tb-border-hover, #4a4a6e)");
+  card.onmouseleave = () => (card.style.borderColor = "var(--tb-border, #2a2a3e)");
+
+  const hasError = !!session.errorMessage;
+  const dot = hasError
+    ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tb-error, #ef4444);margin-right:6px"></span>'
+    : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tb-success, #22c55e);margin-right:6px"></span>';
+
+  const badge = session.reproSteps
+    ? '<span style="font-size:10px;background:#14532d;color:#4ade80;padding:2px 6px;border-radius:var(--tb-radius-sm, 4px);margin-left:6px">Repro Ready</span>'
+    : "";
+
+  // Get a preview: last error or last action
+  const lastEvent = session.events[session.events.length - 1];
+  let preview = `${session.events.length} events`;
+  if (hasError) {
+    preview = session.errorMessage!.slice(0, 60) + (session.errorMessage!.length > 60 ? "..." : "");
+  } else if (lastEvent) {
+    preview = describeEvent(lastEvent).slice(0, 60);
+  }
+
+  // Auto-name based on primary page
+  const pages = [...new Set(session.events.map(e => e.page))];
+  const sessionName = pages.length > 0 ? _pageName(pages[0]) + " Session" : "Session";
+
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center">
+        ${dot}
+        <span style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-weight:600">${escapeHtml(sessionName)}</span>
+        ${badge}
+      </div>
+      <span style="color:var(--tb-text-muted, #555);font-size:10px">${timeAgo(session.updatedAt)}</span>
+    </div>
+    <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(preview)}</div>
+    <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events · ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
+  `;
+
+  card.onclick = () => renderSessionDetail(panel, session);
+  return card;
+}
+
+function _pageName(path: string): string {
+  if (!path || path === "/") return "Home";
+  const parts = path.split("/").filter(Boolean);
+  const last = parts[parts.length - 1] || "Home";
+  return last.charAt(0).toUpperCase() + last.slice(1).replace(/[-_]/g, " ");
+}
+
 
 // ── Session detail view ───────────────────────────────────────────────────
 
@@ -273,59 +396,73 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   const maxApiTime = apiEvents.length > 0 ? Math.max(...apiEvents.map(e => e.data.request?.durationMs || 0)) : 0;
   const pagesVisited = new Set(s.events.map(e => e.page)).size;
 
+  // ── Bug title for sticky header ──
+  const bugTitle = generateBugTitle(s) || "Session Details";
+  const severityBadge = problems.some(p => p.severity === "critical")
+    ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fca5a5">Critical</span>`
+    : problems.length > 0
+    ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#78350f;color:var(--tb-warning, #fbbf24)">Warning</span>`
+    : `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#14532d;color:#4ade80">Healthy</span>`;
+
+  const hasErrors = errorEvents.length > 0 || s.errorMessage;
   let html = "";
 
-  // ── Header with back button ──
-  html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <button id="bt-back" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:12px;padding:0;font-family:inherit">← Back to sessions</button>
-    <div style="display:flex;gap:6px">
-      <button id="bt-download-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Download as JSON">⬇ JSON</button>
-      <button id="bt-download-txt" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Download as text report">⬇ Report</button>
-      <button id="bt-download-html" style="${smallBtnStyle("#f472b6")}font-size:10px" title="Download visual HTML report">⬇ HTML</button>
+  // ── Sticky header with bug title + severity + back + tabs ──
+  html += `<div style="position:sticky;top:0;z-index:10;background:var(--tb-panel-bg, #0f0f1a);margin:-12px -16px 12px -16px;padding:12px 16px 0 16px;border-bottom:1px solid var(--tb-border, #2a2a3e)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <button id="bt-back" style="background:none;border:none;color:var(--tb-info, #3b82f6);cursor:pointer;font-size:12px;padding:0;font-family:var(--tb-font-family, inherit)">← Back</button>
+      ${severityBadge}
+    </div>
+    <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);line-height:1.3;margin-bottom:10px">${escapeHtml(bugTitle)}</div>
+    <div id="bt-tab-bar" style="display:flex;gap:0;overflow-x:auto">
+      <button class="bt-tab bt-tab-active" data-tab="overview" style="${_tabBtnStyle(true)}">Overview</button>
+      <button class="bt-tab" data-tab="timeline" style="${_tabBtnStyle(false)}">Timeline</button>
+      ${hasErrors ? `<button class="bt-tab" data-tab="errors" style="${_tabBtnStyle(false)}">Errors <span style="background:var(--tb-error, #ef4444);color:#fff;font-size:8px;padding:1px 5px;border-radius:6px;margin-left:2px">${errorEvents.length}</span></button>` : ""}
+      <button class="bt-tab" data-tab="export" style="${_tabBtnStyle(false)}">Export</button>
     </div>
   </div>`;
 
-  // ── QA Toolbar ──
+  // ── Tab content: Overview ──
+  html += `<div id="bt-tab-overview" class="bt-tab-content">`;
+
+  // ── QA Toolbar (moved into overview) ──
   html += `<div style="background:#0c1222;border:1px solid #1e3a5f;border-radius:10px;padding:10px;margin-bottom:14px">
-    <div style="font-size:10px;color:#60a5fa;font-weight:700;margin-bottom:8px;font-family:system-ui,sans-serif">QA TOOLS</div>
+    <div style="font-size:10px;color:#60a5fa;font-weight:700;margin-bottom:8px;font-family:var(--tb-font-family, system-ui,sans-serif)">QA TOOLS</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button id="bt-screenshot" style="${smallBtnStyle("#22d3ee")}font-size:10px">📸 Screenshot</button>
       <button id="bt-add-note" style="${smallBtnStyle("#a78bfa")}font-size:10px">📝 Add Note</button>
-      <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:10px">🐙 GitHub Issue</button>
-      <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:10px">🎫 Jira Ticket</button>
-      <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:10px">📄 PDF Report</button>
-      ${isVoiceSupported() ? `<button id="bt-voice-note" style="${smallBtnStyle("#f59e0b")}font-size:10px">🎤 Voice Note</button>` : ""}
+      <button id="bt-voice-note" style="${smallBtnStyle("#f59e0b")}font-size:10px;${isVoiceSupported() ? "" : "display:none"}">🎤 Voice</button>
     </div>
   </div>`;
 
   // ── Session overview card ──
-  html += `<div style="background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:14px;margin-bottom:14px">
+  html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:#fff;font-family:system-ui,sans-serif">Session Overview</div>
-      <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${problems.some(p=>p.severity==="critical") ? "#7f1d1d" : problems.length > 0 ? "#78350f" : "#14532d"};color:${problems.some(p=>p.severity==="critical") ? "#fca5a5" : problems.length > 0 ? "#fbbf24" : "#4ade80"};font-family:system-ui,sans-serif">${problems.some(p=>p.severity==="critical") ? "Has Errors" : problems.length > 0 ? "Has Warnings" : "Healthy"}</span>
+      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif)">Session Overview</div>
+      <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${problems.some(p=>p.severity==="critical") ? "#7f1d1d" : problems.length > 0 ? "#78350f" : "#14532d"};color:${problems.some(p=>p.severity==="critical") ? "#fca5a5" : problems.length > 0 ? "#fbbf24" : "#4ade80"};font-family:var(--tb-font-family, system-ui,sans-serif)">${problems.some(p=>p.severity==="critical") ? "Has Errors" : problems.length > 0 ? "Has Warnings" : "Healthy"}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:#0f0f1a;border-radius:6px;padding:8px 10px">
-        <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-family:system-ui,sans-serif">Duration</div>
-        <div style="font-size:14px;color:#e0e0e0;margin-top:2px">${formatDuration(sessionDur)}</div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Duration</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${formatDuration(sessionDur)}</div>
       </div>
-      <div style="background:#0f0f1a;border-radius:6px;padding:8px 10px">
-        <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-family:system-ui,sans-serif">Events</div>
-        <div style="font-size:14px;color:#e0e0e0;margin-top:2px">${s.events.length}</div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Events</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${s.events.length}</div>
       </div>
-      <div style="background:#0f0f1a;border-radius:6px;padding:8px 10px">
-        <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-family:system-ui,sans-serif">Pages Visited</div>
-        <div style="font-size:14px;color:#e0e0e0;margin-top:2px">${pagesVisited}</div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Pages Visited</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${pagesVisited}</div>
       </div>
-      <div style="background:#0f0f1a;border-radius:6px;padding:8px 10px">
-        <div style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-family:system-ui,sans-serif">API Calls</div>
-        <div style="font-size:14px;color:#e0e0e0;margin-top:2px">${apiEvents.length} <span style="font-size:10px;color:${failedApis.length > 0 ? "#ef4444" : "#22c55e"}">(${failedApis.length} failed)</span></div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">API Calls</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${apiEvents.length} <span style="font-size:10px;color:${failedApis.length > 0 ? "#ef4444" : "#22c55e"}">(${failedApis.length} failed)</span></div>
       </div>
     </div>
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-      <span style="font-size:10px;color:#555">ID: ${s.sessionId.slice(0,8)}…</span>
-      <span style="font-size:10px;color:#444">·</span>
-      <span style="font-size:10px;color:#555">${new Date(s.createdAt).toLocaleString()}</span>
+      <span style="font-size:10px;color:var(--tb-text-muted, #555)">ID: ${s.sessionId.slice(0,8)}…</span>
+      <span style="font-size:10px;color:var(--tb-text-muted, #444)">·</span>
+      <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(s.createdAt).toLocaleString()}</span>
     </div>
   </div>`;
 
@@ -337,10 +474,10 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
 
     html += `<div style="border:1px solid ${criticalCount > 0 ? "#7f1d1d" : "#78350f"};background:${criticalCount > 0 ? "#1a0505" : "#1a1005"};border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:${criticalCount > 0 ? "#fca5a5" : "#fbbf24"};font-family:system-ui,sans-serif">🔍 Problems Detected (${problems.length})</div>
+        <div style="font-size:13px;font-weight:700;color:${criticalCount > 0 ? "#fca5a5" : "#fbbf24"};font-family:var(--tb-font-family, system-ui,sans-serif)">🔍 Problems Detected (${problems.length})</div>
         <div style="display:flex;gap:6px">
           ${criticalCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#7f1d1d;color:#fca5a5">${criticalCount} Critical</span>` : ""}
-          ${warningCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#78350f;color:#fbbf24">${warningCount} Warning</span>` : ""}
+          ${warningCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#78350f;color:var(--tb-warning, #fbbf24)">${warningCount} Warning</span>` : ""}
           ${infoCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#1e1533;color:#c084fc">${infoCount} Info</span>` : ""}
         </div>
       </div>`;
@@ -348,12 +485,12 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     for (const p of problems) {
       const sevBorder = p.severity === "critical" ? "#7f1d1d" : p.severity === "warning" ? "#78350f" : "#2a2a3e";
       const sevBg = p.severity === "critical" ? "#0f0205" : p.severity === "warning" ? "#0f0a02" : "#12121f";
-      html += `<div style="border:1px solid ${sevBorder};background:${sevBg};border-radius:6px;padding:10px;margin-bottom:6px">
+      html += `<div style="border:1px solid ${sevBorder};background:${sevBg};border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <span style="font-size:13px">${p.icon}</span>
-          <span style="font-size:11px;font-weight:600;color:${p.color};font-family:system-ui,sans-serif">${escapeHtml(p.title)}</span>
+          <span style="font-size:11px;font-weight:600;color:${p.color};font-family:var(--tb-font-family, system-ui,sans-serif)">${escapeHtml(p.title)}</span>
         </div>
-        <div style="color:#888;font-size:11px;line-height:1.4;padding-left:22px;word-break:break-word">${escapeHtml(p.detail)}</div>
+        <div style="color:var(--tb-text-muted, #888);font-size:11px;line-height:1.4;padding-left:22px;word-break:break-word">${escapeHtml(p.detail)}</div>
       </div>`;
     }
     html += `</div>`;
@@ -364,28 +501,28 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     const errType = getErrorType(s.errorMessage);
     html += `<div style="border:1px solid #7f1d1d;background:#1a0505;border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:700;color:#fca5a5;font-family:system-ui,sans-serif">Error Details</span>
+        <span style="font-size:13px;font-weight:700;color:#fca5a5;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Details</span>
         <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}44">${errType.type}</span>
       </div>
-      <div style="background:#0f0205;border-radius:6px;padding:10px;margin-bottom:8px">
-        <div style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:system-ui,sans-serif">Error Message</div>
+      <div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Message</div>
         <div style="color:#fca5a5;font-size:12px;line-height:1.5;word-break:break-word">${escapeHtml(s.errorMessage)}</div>
       </div>`;
     if (s.errorStack) {
       const locationMatch = s.errorStack.match(/at\s+(\S+)\s+\(([^)]+)\)/);
       if (locationMatch) {
-        html += `<div style="background:#0f0205;border-radius:6px;padding:10px;margin-bottom:8px">
-          <div style="font-size:9px;color:#666;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:system-ui,sans-serif">Error Location</div>
+        html += `<div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
+          <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Location</div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:12px;color:#60a5fa">${escapeHtml(locationMatch[1])}</span>
-            <span style="font-size:10px;color:#555">at</span>
-            <span style="font-size:10px;color:#888;word-break:break-all">${escapeHtml(locationMatch[2])}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #555)">at</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);word-break:break-all">${escapeHtml(locationMatch[2])}</span>
           </div>
         </div>`;
       }
       html += `<details style="margin-top:4px">
-        <summary style="font-size:10px;color:#555;cursor:pointer;user-select:none;font-family:system-ui,sans-serif">View Full Stack Trace</summary>
-        <pre style="color:#dc262690;font-size:10px;margin-top:6px;white-space:pre-wrap;line-height:1.4;max-height:150px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px">${escapeHtml(s.errorStack)}</pre>
+        <summary style="font-size:10px;color:var(--tb-text-muted, #555);cursor:pointer;user-select:none;font-family:var(--tb-font-family, system-ui,sans-serif)">View Full Stack Trace</summary>
+        <pre style="color:#dc262690;font-size:10px;margin-top:6px;white-space:pre-wrap;line-height:1.4;max-height:150px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:var(--tb-radius-sm, 4px)">${escapeHtml(s.errorStack)}</pre>
       </details>`;
     }
     html += `</div>`;
@@ -393,19 +530,19 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
 
   // ── Performance insights (if API calls exist) ──
   if (apiEvents.length > 0) {
-    html += `<div style="background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px;font-family:system-ui,sans-serif">⚡ Performance</div>
+    html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">⚡ Performance</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
-        <div style="background:#0f0f1a;border-radius:6px;padding:8px;text-align:center">
-          <div style="font-size:9px;color:#555;text-transform:uppercase;font-family:system-ui,sans-serif">Avg</div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Avg</div>
           <div style="font-size:13px;color:${getSpeedLabel(avgApiTime).color};margin-top:2px">${formatDuration(avgApiTime)}</div>
         </div>
-        <div style="background:#0f0f1a;border-radius:6px;padding:8px;text-align:center">
-          <div style="font-size:9px;color:#555;text-transform:uppercase;font-family:system-ui,sans-serif">Slowest</div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Slowest</div>
           <div style="font-size:13px;color:${getSpeedLabel(maxApiTime).color};margin-top:2px">${formatDuration(maxApiTime)}</div>
         </div>
-        <div style="background:#0f0f1a;border-radius:6px;padding:8px;text-align:center">
-          <div style="font-size:9px;color:#555;text-transform:uppercase;font-family:system-ui,sans-serif">Success</div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Success</div>
           <div style="font-size:13px;color:${failedApis.length === 0 ? "#22c55e" : "#fbbf24"};margin-top:2px">${apiEvents.length > 0 ? Math.round(((apiEvents.length - failedApis.length) / apiEvents.length) * 100) : 0}%</div>
         </div>
       </div>`;
@@ -420,11 +557,11 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       const isFail = code >= 400 || code === 0;
       const urlPath = (r?.url || "").replace(/https?:\/\/[^/]+/, "").slice(0, 50);
 
-      html += `<div style="background:${isFail ? "#0f0205" : "#0f0f1a"};border:1px solid ${isFail ? "#7f1d1d44" : "#1e1e32"};border-radius:6px;padding:8px 10px;margin-bottom:4px">
+      html += `<div style="background:${isFail ? "#0f0205" : "#0f0f1a"};border:1px solid ${isFail ? "#7f1d1d44" : "#1e1e32"};border-radius:var(--tb-radius-md, 6px);padding:8px 10px;margin-bottom:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;font-weight:600;color:#e0e0e0;background:#1e293b;padding:1px 5px;border-radius:3px">${r?.method || "GET"}</span>
-            <span style="font-size:10px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml(urlPath)}</span>
+            <span style="font-size:10px;font-weight:600;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${r?.method || "GET"}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml(urlPath)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:10px;font-weight:700;color:${statusClr}">${code}</span>
@@ -447,11 +584,11 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   if (s.reproSteps) {
     html += `<div style="border:1px solid #14532d;background:#031a09;border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:700;color:#4ade80;font-family:system-ui,sans-serif">📋 Reproduction Steps</div>
+        <div style="font-size:13px;font-weight:700;color:#4ade80;font-family:var(--tb-font-family, system-ui,sans-serif)">📋 Reproduction Steps</div>
         <button id="bt-copy" style="${smallBtnStyle("#3b82f6")}font-size:10px">Copy</button>
       </div>
       <pre style="color:#bbf7d0;font-size:12px;white-space:pre-wrap;line-height:1.7;margin:0">${escapeHtml(s.reproSteps)}</pre>
-      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:system-ui,sans-serif">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml(s.errorSummary)}</pre></div>` : ""}
+      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml(s.errorSummary)}</pre></div>` : ""}
     </div>`;
   }
 
@@ -459,17 +596,17 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   const annotations = s.annotations || [];
   if (annotations.length > 0) {
     html += `<div style="border:1px solid #1e3a5f;background:#0c1222;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:10px;font-family:system-ui,sans-serif">📝 Tester Notes (${annotations.length})</div>`;
+      <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">📝 Tester Notes (${annotations.length})</div>`;
     for (const note of annotations) {
       const sevColor = note.severity === "critical" ? "#ef4444" : note.severity === "major" ? "#f97316" : note.severity === "minor" ? "#3b82f6" : "#888";
-      html += `<div style="border:1px solid #2a2a3e;background:#12121f;border-radius:6px;padding:10px;margin-bottom:6px">
+      html += `<div style="border:1px solid var(--tb-border, #2a2a3e);background:var(--tb-bg-primary, #12121f);border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;font-weight:600;text-transform:uppercase">${note.severity}</span>
-          <span style="font-size:10px;color:#555">${new Date(note.timestamp).toLocaleTimeString()}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(note.timestamp).toLocaleTimeString()}</span>
         </div>
-        <div style="color:#e0e0e0;font-size:12px;line-height:1.4">${escapeHtml(note.text)}</div>
-        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:#22c55e;font-weight:600">Expected:</span> <span style="color:#aaa">${escapeHtml(note.expected)}</span></div>` : ""}
-        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:#ef4444;font-weight:600">Actual:</span> <span style="color:#aaa">${escapeHtml(note.actual)}</span></div>` : ""}
+        <div style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;line-height:1.4">${escapeHtml(note.text)}</div>
+        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:var(--tb-success, #22c55e);font-weight:600">Expected:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml(note.expected)}</span></div>` : ""}
+        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:var(--tb-error, #ef4444);font-weight:600">Actual:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml(note.actual)}</span></div>` : ""}
       </div>`;
     }
     html += `</div>`;
@@ -478,12 +615,12 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   // ── Screenshots ──
   const screenshots = getScreenshots();
   if (screenshots.length > 0) {
-    html += `<div style="border:1px solid #2a2a3e;background:#12121f;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:10px;font-family:system-ui,sans-serif">📸 Screenshots (${screenshots.length})</div>`;
+    html += `<div style="border:1px solid var(--tb-border, #2a2a3e);background:var(--tb-bg-primary, #12121f);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">📸 Screenshots (${screenshots.length})</div>`;
     for (const ss of screenshots) {
       html += `<div style="margin-bottom:10px">
-        <div style="font-size:10px;color:#888;margin-bottom:4px">${escapeHtml(ss.filename)} — ${escapeHtml(ss.page)}</div>
-        <img src="${ss.dataUrl}" style="max-width:100%;border:1px solid #2a2a3e;border-radius:6px" />
+        <div style="font-size:10px;color:var(--tb-text-muted, #888);margin-bottom:4px">${escapeHtml(ss.filename)} — ${escapeHtml(ss.page)}</div>
+        <img src="${ss.dataUrl}" style="max-width:100%;border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px)" />
       </div>`;
     }
     html += `</div>`;
@@ -492,21 +629,27 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   // ── Environment Info ──
   const envInfo = s.environment;
   if (envInfo) {
-    html += `<div style="background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px;font-family:system-ui,sans-serif">🖥 Environment</div>
+    html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">🖥 Environment</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">Browser</span><div style="font-size:12px;color:#e0e0e0">${escapeHtml(envInfo.browser)} ${escapeHtml(envInfo.browserVersion)}</div></div>
-        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">OS</span><div style="font-size:12px;color:#e0e0e0">${escapeHtml(envInfo.os)}</div></div>
-        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">Viewport</span><div style="font-size:12px;color:#e0e0e0">${escapeHtml(envInfo.viewport)}</div></div>
-        <div style="background:#0f0f1a;border-radius:6px;padding:6px 8px"><span style="font-size:9px;color:#555">Device</span><div style="font-size:12px;color:#e0e0e0">${envInfo.deviceType}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Browser</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml(envInfo.browser)} ${escapeHtml(envInfo.browserVersion)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">OS</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml(envInfo.os)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Viewport</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml(envInfo.viewport)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Device</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${envInfo.deviceType}</div></div>
       </div>
     </div>`;
   }
 
+  // Close the Overview tab
+  html += `</div>`;
+
+  // ── Timeline tab content ──
+  html += `<div id="bt-tab-timeline" class="bt-tab-content" style="display:none">`;
+
   // ── Event Timeline (detailed) ──
   html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div style="font-size:13px;font-weight:700;color:#fff;font-family:system-ui,sans-serif">Event Timeline (${s.events.length})</div>
-    <span style="font-size:10px;color:#555">${new Date(firstTs).toLocaleTimeString()} — ${new Date(lastTs).toLocaleTimeString()}</span>
+    <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif)">Event Timeline (${s.events.length})</div>
+    <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(firstTs).toLocaleTimeString()} — ${new Date(lastTs).toLocaleTimeString()}</span>
   </div>
   <div style="position:relative;padding-left:24px">
     <div style="position:absolute;left:7px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom, #2a2a3e, #1e1e32)"></div>`;
@@ -525,18 +668,18 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     if (timeSincePrev > 2000 && i > 0) {
       html += `<div style="position:relative;margin-bottom:4px;margin-top:4px">
         <div style="position:absolute;left:-21px;top:4px;width:6px;height:6px;border-radius:50%;background:#2a2a3e;border:1px solid #333"></div>
-        <div style="font-size:9px;color:#444;font-style:italic;padding:2px 0">⏱ ${formatDuration(timeSincePrev)} later</div>
+        <div style="font-size:9px;color:var(--tb-text-muted, #444);font-style:italic;padding:2px 0">⏱ ${formatDuration(timeSincePrev)} later</div>
       </div>`;
     }
 
     html += `<div style="position:relative;margin-bottom:6px">
       <div style="position:absolute;left:-21px;top:6px;width:10px;height:10px;border-radius:50%;background:${dotColor};border:2px solid ${dotColor}44;box-shadow:0 0 ${hasProblem ? "6" : "0"}px ${dotColor}44"></div>
-      <div style="border:1px solid ${hasProblem ? "#7f1d1d" : isSlowApi ? "#78350f44" : "#1e1e32"};background:${hasProblem ? "#1a0505" : isSlowApi ? "#1a0f05" : "#12121f"};border-radius:8px;padding:10px 12px;transition:border-color 0.2s">
+      <div style="border:1px solid ${hasProblem ? "#7f1d1d" : isSlowApi ? "#78350f44" : "#1e1e32"};background:${hasProblem ? "#1a0505" : isSlowApi ? "#1a0f05" : "#12121f"};border-radius:var(--tb-radius-md, 8px);padding:10px 12px;transition:border-color 0.2s">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
           <span style="font-size:12px">${c.icon}</span>
           <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${c.bg};color:${c.color};font-weight:600">${c.label}</span>
-          <span style="font-size:10px;color:#555">${new Date(ev.timestamp).toLocaleTimeString()}</span>
-          <span style="font-size:9px;color:#333;margin-left:auto">${ev.page}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(ev.timestamp).toLocaleTimeString()}</span>
+          <span style="font-size:9px;color:var(--tb-text-muted, #333);margin-left:auto">${ev.page}</span>
         </div>`;
 
     // ── Rich event-specific content ──
@@ -548,15 +691,15 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       const urlPath = (r?.url || "").replace(/https?:\/\/[^/]+/, "");
       html += `<div style="margin-top:4px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <span style="font-size:10px;font-weight:700;color:#e0e0e0;background:#1e293b;padding:1px 5px;border-radius:3px">${r?.method || "GET"}</span>
-            <span style="font-size:11px;color:#aaa;word-break:break-all">${escapeHtml(urlPath?.slice(0, 80) || "")}</span>
+            <span style="font-size:10px;font-weight:700;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${r?.method || "GET"}</span>
+            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml(urlPath?.slice(0, 80) || "")}</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:11px;font-weight:700;color:${getStatusColor(code)}">${code}</span>
               <span style="font-size:10px;color:${getStatusColor(code)}88">${getStatusLabel(code)}</span>
             </div>
-            <span style="color:#333">·</span>
+            <span style="color:var(--tb-text-muted, #333)">·</span>
             <div style="display:flex;align-items:center;gap:4px">
               <span style="font-size:10px;color:${speed.color}">${formatDuration(dur)}</span>
               ${dur > 3000 ? `<span style="font-size:8px;padding:1px 4px;border-radius:2px;background:${speed.color}22;color:${speed.color};border:1px solid ${speed.color}33">${speed.label}</span>` : ""}
@@ -569,7 +712,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     } else if (ev.type === "click") {
       const el = ev.data.element;
       const target = el?.ariaLabel || el?.text?.trim() || el?.id || el?.tag || "element";
-      html += `<div style="color:#aaa;font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml(target.slice(0,60))}</span>"</div>`;
+      html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml(target.slice(0,60))}</span>"</div>`;
       const details: string[] = [];
       if (el?.tag) details.push(`&lt;${el.tag}&gt;`);
       if (el?.id) details.push(`#${el.id}`);
@@ -578,51 +721,51 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       if (el?.role) details.push(`role="${el.role}"`);
       if (el?.testId) details.push(`data-testid="${el.testId}"`);
       if (details.length > 0) {
-        html += `<div style="font-size:9px;color:#444;margin-top:3px">${details.join(" ")}</div>`;
+        html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">${details.join(" ")}</div>`;
       }
     } else if (ev.type === "input") {
       const inp = ev.data.element;
       const fieldName = inp?.name || inp?.id || "field";
       const inputType = inp?.type || "text";
       if (inputType === "checkbox" || inputType === "radio") {
-        html += `<div style="color:#aaa;font-size:11px;line-height:1.4">${inp?.checked ? "Checked" : "Unchecked"} "<span style="color:#c084fc">${escapeHtml(fieldName)}</span>" <span style="font-size:9px;color:#555">(${inputType})</span></div>`;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">${inp?.checked ? "Checked" : "Unchecked"} "<span style="color:#c084fc">${escapeHtml(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
       } else {
         const val = inp?.value;
         if (val && val !== "[REDACTED]") {
-          html += `<div style="color:#aaa;font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml(fieldName)}</span>" <span style="font-size:9px;color:#555">(${inputType})</span></div>`;
-          html += `<div style="font-size:10px;color:#a78bfa;margin-top:3px;background:#1e153344;padding:3px 8px;border-radius:4px;border:1px solid #1e1533;word-break:break-word">"${escapeHtml(val.slice(0,150))}"</div>`;
+          html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
+          html += `<div style="font-size:10px;color:#a78bfa;margin-top:3px;background:#1e153344;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;word-break:break-word">"${escapeHtml(val.slice(0,150))}"</div>`;
         } else {
-          html += `<div style="color:#aaa;font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml(fieldName)}</span>" <span style="font-size:9px;color:#555">(${inputType})</span></div>
-            <div style="font-size:9px;color:#444;margin-top:2px">${inp?.valueLength || 0} characters ${val === "[REDACTED]" ? '<span style="color:#f87171">🔒 redacted</span>' : ""}</div>`;
+          html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>
+            <div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${inp?.valueLength || 0} characters ${val === "[REDACTED]" ? '<span style="color:#f87171">🔒 redacted</span>' : ""}</div>`;
         }
       }
       if (inp?.placeholder) {
-        html += `<div style="font-size:9px;color:#333;margin-top:2px">placeholder: "${escapeHtml(inp.placeholder)}"</div>`;
+        html += `<div style="font-size:9px;color:var(--tb-text-muted, #333);margin-top:2px">placeholder: "${escapeHtml(inp.placeholder)}"</div>`;
       }
     } else if (ev.type === "select_change") {
       const sel = ev.data.element;
       const fieldName = sel?.name || sel?.id || "dropdown";
-      html += `<div style="color:#aaa;font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml(fieldName)}</span>" dropdown</div>`;
-      html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:4px;border:1px solid #14532d">Selected: "<strong>${escapeHtml(sel?.selectedText || sel?.value || "")}</strong>"</div>`;
+      html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml(fieldName)}</span>" dropdown</div>`;
+      html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml(sel?.selectedText || sel?.value || "")}</strong>"</div>`;
       if (sel?.allOptions && sel.allOptions.length > 0) {
-        html += `<div style="font-size:9px;color:#444;margin-top:3px">Options: ${sel.allOptions.map((o: string) => escapeHtml(o)).join(", ")}</div>`;
+        html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o: string) => escapeHtml(o)).join(", ")}</div>`;
       }
     } else if (ev.type === "form_submit") {
       const f = ev.data.form;
-      html += `<div style="color:#aaa;font-size:11px;line-height:1.4">Submitted form ${f?.id ? `"<span style="color:#fb923c">${escapeHtml(f.id)}</span>"` : ""}</div>`;
+      html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${f?.id ? `"<span style="color:#fb923c">${escapeHtml(f.id)}</span>"` : ""}</div>`;
       if (f?.fields && Object.keys(f.fields).length > 0) {
-        html += `<div style="margin-top:4px;background:#1a150544;padding:6px 8px;border-radius:4px;border:1px solid #2a2a3e">`;
+        html += `<div style="margin-top:4px;background:#1a150544;padding:6px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid var(--tb-border, #2a2a3e)">`;
         for (const [key, val] of Object.entries(f.fields)) {
-          html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:#888">${escapeHtml(key)}:</span> <span style="color:#fbbf24">${escapeHtml(String(val).slice(0,80))}</span></div>`;
+          html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml(key)}:</span> <span style="color:var(--tb-warning, #fbbf24)">${escapeHtml(String(val).slice(0,80))}</span></div>`;
         }
         html += `</div>`;
       }
       if (f?.method) {
-        html += `<div style="font-size:9px;color:#444;margin-top:2px">${f.method.toUpperCase()} ${f.action ? `→ ${escapeHtml(f.action.slice(0,60))}` : ""}</div>`;
+        html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${f.method.toUpperCase()} ${f.action ? `→ ${escapeHtml(f.action.slice(0,60))}` : ""}</div>`;
       }
     } else if (ev.type === "route_change") {
       html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px">
-          <span style="color:#888;background:#0f0f1a;padding:2px 6px;border-radius:3px">${escapeHtml(ev.data.from || "/")}</span>
+          <span style="color:var(--tb-text-muted, #888);background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px">${escapeHtml(ev.data.from || "/")}</span>
           <span style="color:#22d3ee">→</span>
           <span style="color:#22d3ee;background:#0c2e3344;padding:2px 6px;border-radius:3px;font-weight:600">${escapeHtml(ev.data.to || "/")}</span>
         </div>`;
@@ -633,12 +776,12 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
             <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}33">${errType.type}</span>
           </div>
           <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml(ev.data.error?.message || "Unknown error")}</div>
-          ${ev.data.error?.source ? `<div style="font-size:9px;color:#555;margin-top:3px">at ${escapeHtml(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
+          ${ev.data.error?.source ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
         </div>`;
     } else if (ev.type === "console_error") {
       html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml((ev.data.error?.message || "").slice(0,200))}</div>`;
     } else {
-      html += `<div style="color:#aaa;font-size:11px;line-height:1.3">${escapeHtml(describeEvent(ev))}</div>`;
+      html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.3">${escapeHtml(describeEvent(ev))}</div>`;
     }
 
     html += `</div></div>`;
@@ -646,13 +789,56 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
 
   html += `</div>`;
 
-  // ── Footer actions ──
-  html += `<div style="margin-top:16px;padding:12px 0;border-top:1px solid #1e1e32;display:flex;gap:8px">
-    <button id="bt-copy-report" style="${smallBtnStyle("#3b82f6")}font-size:11px;flex:1">📋 Copy Full Report</button>
-    <button id="bt-delete" style="${smallBtnStyle("#ef4444")}font-size:11px">🗑 Delete</button>
+  // Close the Timeline tab
+  html += `</div>`;
+
+  // ── Export tab content ──
+  html += `<div id="bt-tab-export" class="bt-tab-content" style="display:none">`;
+  html += `<div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:14px;font-family:var(--tb-font-family, system-ui,sans-serif)">Export & Share</div>`;
+
+  html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Issue Trackers</div>
+    <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:11px;text-align:left;padding:10px">🐙 Copy GitHub Issue (Markdown)</button>
+    <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:11px;text-align:left;padding:10px">🎫 Copy Jira Ticket</button>
   </div>`;
 
+  html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Downloads</div>
+    <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:11px;text-align:left;padding:10px">📄 PDF Report</button>
+    <button id="bt-download-json" style="${smallBtnStyle("#22d3ee")}font-size:11px;text-align:left;padding:10px">⬇ JSON Data</button>
+    <button id="bt-download-txt" style="${smallBtnStyle("#a78bfa")}font-size:11px;text-align:left;padding:10px">⬇ Text Report</button>
+    <button id="bt-download-html" style="${smallBtnStyle("#f472b6")}font-size:11px;text-align:left;padding:10px">⬇ HTML Report</button>
+  </div>`;
+
+  html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Clipboard</div>
+    <button id="bt-copy-report" style="${smallBtnStyle("#3b82f6")}font-size:11px;text-align:left;padding:10px">📋 Copy Full Report (Plain Text)</button>
+  </div>`;
+
+  html += `<div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:12px;margin-top:8px">
+    <button id="bt-delete" style="${smallBtnStyle("#ef4444")}font-size:11px;width:100%;padding:10px">🗑 Delete This Session</button>
+  </div>`;
+
+  // Close the Export tab
+  html += `</div>`;
+
   content.innerHTML = html;
+
+  // ── Wire tab switching ──
+  const tabs = content.querySelectorAll(".bt-tab");
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t => {
+        (t as HTMLElement).style.cssText = _tabBtnStyle(false);
+        t.classList.remove("bt-tab-active");
+      });
+      (tab as HTMLElement).style.cssText = _tabBtnStyle(true);
+      tab.classList.add("bt-tab-active");
+      content.querySelectorAll(".bt-tab-content").forEach(c => (c as HTMLElement).style.display = "none");
+      const target = content.querySelector(`#bt-tab-${(tab as HTMLElement).dataset.tab}`) as HTMLElement;
+      if (target) target.style.display = "block";
+    });
+  });
 
   // ── Wire up buttons ──
   content.querySelector("#bt-back")!.addEventListener("click", () => renderPanel(panel));
@@ -806,23 +992,23 @@ function showNoteDialog(sessionId: string, panel: HTMLElement, session: StoredSe
   overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
 
   overlay.innerHTML = `
-    <div style="background:#12121f;border:1px solid #2a2a3e;border-radius:12px;padding:20px;width:100%;max-width:420px">
-      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px;font-family:system-ui,sans-serif">📝 Add Tester Note</div>
+    <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:12px;font-family:var(--tb-font-family, system-ui,sans-serif)">📝 Add Tester Note</div>
       <div style="margin-bottom:10px">
-        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">What did you observe?</label>
-        <textarea id="bt-note-text" style="width:100%;height:60px;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit;resize:vertical" placeholder="Describe the issue..."></textarea>
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">What did you observe?</label>
+        <textarea id="bt-note-text" style="width:100%;height:60px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit);resize:vertical" placeholder="Describe the issue..."></textarea>
       </div>
       <div style="margin-bottom:10px">
-        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">Expected behavior</label>
-        <input id="bt-note-expected" style="width:100%;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit" placeholder="What should happen?" />
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Expected behavior</label>
+        <input id="bt-note-expected" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)" placeholder="What should happen?" />
       </div>
       <div style="margin-bottom:10px">
-        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">Actual behavior</label>
-        <input id="bt-note-actual" style="width:100%;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit" placeholder="What actually happened?" />
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Actual behavior</label>
+        <input id="bt-note-actual" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)" placeholder="What actually happened?" />
       </div>
       <div style="margin-bottom:14px">
-        <label style="font-size:10px;color:#888;display:block;margin-bottom:4px;font-family:system-ui,sans-serif">Severity</label>
-        <select id="bt-note-severity" style="width:100%;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit">
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Severity</label>
+        <select id="bt-note-severity" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)">
           <option value="critical">Critical — App broken/unusable</option>
           <option value="major">Major — Feature not working</option>
           <option value="minor" selected>Minor — Cosmetic/UX issue</option>
@@ -831,7 +1017,7 @@ function showNoteDialog(sessionId: string, panel: HTMLElement, session: StoredSe
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button id="bt-note-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
-        <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Save Note</button>
+        <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save Note</button>
       </div>
     </div>
   `;
@@ -875,22 +1061,22 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, session: StoredS
   overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
 
   overlay.innerHTML = `
-    <div style="background:#12121f;border:1px solid #2a2a3e;border-radius:12px;padding:20px;width:100%;max-width:420px">
-      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:4px;font-family:system-ui,sans-serif">🎤 Voice Bug Description</div>
-      <div style="font-size:11px;color:#666;margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
+    <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">🎤 Voice Bug Description</div>
+      <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
       <div id="bt-voice-status" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <div id="bt-voice-dot" style="width:10px;height:10px;border-radius:50%;background:#666"></div>
-        <span id="bt-voice-status-text" style="font-size:11px;color:#888">Click Start to begin recording</span>
+        <span id="bt-voice-status-text" style="font-size:11px;color:var(--tb-text-muted, #888)">Click Start to begin recording</span>
       </div>
-      <textarea id="bt-voice-transcript" style="width:100%;height:100px;background:#0f0f1a;border:1px solid #2a2a3e;border-radius:6px;color:#e0e0e0;padding:8px;font-size:12px;font-family:inherit;resize:vertical" placeholder="Your speech will appear here...&#10;&#10;You can also type or edit the text manually."></textarea>
+      <textarea id="bt-voice-transcript" style="width:100%;height:100px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit);resize:vertical" placeholder="Your speech will appear here...&#10;&#10;You can also type or edit the text manually."></textarea>
       <div id="bt-voice-interim" style="font-size:11px;color:#f59e0b88;min-height:20px;margin-top:4px;font-style:italic"></div>
       <div style="display:flex;gap:8px;margin-top:14px">
-        <button id="bt-voice-start" style="background:#22c55e;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit;flex:1">🎤 Start Recording</button>
-        <button id="bt-voice-stop" style="background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit;flex:1;display:none">⏹ Stop</button>
+        <button id="bt-voice-start" style="background:var(--tb-success, #22c55e);color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);flex:1">🎤 Start Recording</button>
+        <button id="bt-voice-stop" style="background:var(--tb-error, #ef4444)22;color:var(--tb-error, #ef4444);border:1px solid #ef444444;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);flex:1;display:none">⏹ Stop</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
         <button id="bt-voice-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
-        <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Save as Note</button>
+        <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save as Note</button>
       </div>
     </div>
   `;
@@ -1063,26 +1249,26 @@ function buildHtmlReport(
 <title>TraceBug Report — ${s.sessionId.slice(0,8)}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'SF Mono',Consolas,monospace,system-ui,sans-serif;background:#0f0f1a;color:#e0e0e0;padding:32px;max-width:800px;margin:0 auto}
-  h1{font-size:20px;color:#fff;margin-bottom:4px;font-family:system-ui,sans-serif}
-  h2{font-size:15px;color:#fff;margin:24px 0 12px;font-family:system-ui,sans-serif}
-  .meta{font-size:12px;color:#666;margin-bottom:24px}
-  .card{background:#12121f;border:1px solid #2a2a3e;border-radius:10px;padding:16px;margin-bottom:16px}
+  body{font-family:'SF Mono',Consolas,monospace,system-ui,sans-serif;background:var(--tb-bg-primary, #0f0f1a);color:var(--tb-text-primary, #e0e0e0);padding:32px;max-width:800px;margin:0 auto}
+  h1{font-size:20px;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)}
+  h2{font-size:15px;color:var(--tb-text-primary, #fff);margin:24px 0 12px;font-family:var(--tb-font-family, system-ui,sans-serif)}
+  .meta{font-size:12px;color:var(--tb-text-muted, #666);margin-bottom:24px}
+  .card{background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:16px;margin-bottom:16px}
   .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}
-  .stat{background:#0f0f1a;border-radius:6px;padding:10px;text-align:center}
-  .stat-label{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:0.5px;font-family:system-ui,sans-serif}
+  .stat{background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:10px;text-align:center}
+  .stat-label{font-size:10px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)}
   .stat-value{font-size:16px;margin-top:4px}
-  .problem{border:1px solid #7f1d1d;background:#1a0505;border-radius:6px;padding:10px;margin-bottom:8px}
+  .problem{border:1px solid #7f1d1d;background:#1a0505;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px}
   .problem.warning{border-color:#78350f;background:#1a1005}
-  .problem.info{border-color:#2a2a3e;background:#12121f}
-  .timeline-event{border:1px solid #1e1e32;background:#12121f;border-radius:8px;padding:12px;margin-bottom:8px;position:relative;margin-left:20px}
+  .problem.info{border-color:#2a2a3e;background:var(--tb-bg-primary, #12121f)}
+  .timeline-event{border:1px solid #1e1e32;background:var(--tb-bg-primary, #12121f);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:8px;position:relative;margin-left:20px}
   .timeline-event.error{border-color:#7f1d1d;background:#1a0505}
   .timeline-dot{position:absolute;left:-26px;top:14px;width:10px;height:10px;border-radius:50%;border:2px solid}
-  .badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
+  .badge{font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);font-weight:600}
   .tag{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600}
   pre{white-space:pre-wrap;font-size:12px;line-height:1.5}
-  .value-box{background:#1e153344;padding:4px 8px;border-radius:4px;border:1px solid #1e1533;margin-top:4px;font-size:11px;color:#a78bfa;word-break:break-word}
-  .select-box{background:#05201544;padding:4px 8px;border-radius:4px;border:1px solid #14532d;margin-top:4px;font-size:11px;color:#34d399}
+  .value-box{background:#1e153344;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;margin-top:4px;font-size:11px;color:#a78bfa;word-break:break-word}
+  .select-box{background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d;margin-top:4px;font-size:11px;color:#34d399}
 </style></head><body>
 <h1>🐛 TraceBug Session Report</h1>
 <div class="meta">Session: ${s.sessionId} · ${new Date(s.createdAt).toLocaleString()} · Duration: ${formatDuration(sessionDur)}</div>`;
@@ -1090,7 +1276,7 @@ function buildHtmlReport(
   // Status badge
   html += `<div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="font-size:14px;font-weight:700;font-family:system-ui,sans-serif">Session Overview</span>
+      <span style="font-size:14px;font-weight:700;font-family:var(--tb-font-family, system-ui,sans-serif)">Session Overview</span>
       <span class="badge" style="background:${hasError ? "#7f1d1d" : "#14532d"};color:${hasError ? "#fca5a5" : "#4ade80"}">${hasError ? "Has Errors" : "Healthy"}</span>
     </div>
     <div class="stat-grid">
@@ -1108,7 +1294,7 @@ function buildHtmlReport(
       const cls = p.severity === "critical" ? "" : p.severity === "warning" ? " warning" : " info";
       html += `<div class="problem${cls}">
         <div style="margin-bottom:4px"><span style="font-size:14px">${p.icon}</span> <strong style="color:${p.color}">${escapeHtml(p.title)}</strong></div>
-        <div style="color:#888;font-size:12px;padding-left:24px">${escapeHtml(p.detail)}</div>
+        <div style="color:var(--tb-text-muted, #888);font-size:12px;padding-left:24px">${escapeHtml(p.detail)}</div>
       </div>`;
     }
   }
@@ -1117,7 +1303,7 @@ function buildHtmlReport(
   if (s.errorMessage) {
     html += `<h2>💥 Error Details</h2><div class="card" style="border-color:#7f1d1d;background:#1a0505">
       <div style="color:#fca5a5;font-size:13px;line-height:1.5;margin-bottom:8px">${escapeHtml(s.errorMessage)}</div>
-      ${s.errorStack ? `<pre style="color:#dc262690;font-size:11px;background:#0a0a0a;padding:10px;border-radius:6px;max-height:200px;overflow:auto">${escapeHtml(s.errorStack)}</pre>` : ""}
+      ${s.errorStack ? `<pre style="color:#dc262690;font-size:11px;background:#0a0a0a;padding:10px;border-radius:var(--tb-radius-md, 6px);max-height:200px;overflow:auto">${escapeHtml(s.errorStack)}</pre>` : ""}
     </div>`;
   }
 
@@ -1146,15 +1332,15 @@ function buildHtmlReport(
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
         <span style="font-size:13px">${c.icon}</span>
         <span class="tag" style="background:${c.bg};color:${c.color}">${c.label}</span>
-        <span style="font-size:10px;color:#555">${new Date(ev.timestamp).toLocaleTimeString()}</span>
-        <span style="font-size:10px;color:#333;margin-left:auto">${ev.page}</span>
+        <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(ev.timestamp).toLocaleTimeString()}</span>
+        <span style="font-size:10px;color:var(--tb-text-muted, #333);margin-left:auto">${ev.page}</span>
       </div>
-      <div style="font-size:12px;color:#aaa">${describeEventHtml(ev)}</div>
+      <div style="font-size:12px;color:var(--tb-text-secondary, #aaa)">${describeEventHtml(ev)}</div>
     </div>`;
   }
 
   html += `</div>
-<div style="text-align:center;color:#333;font-size:11px;margin-top:32px;padding:16px;border-top:1px solid #1e1e32">Generated by TraceBug AI · ${new Date().toLocaleString()}</div>
+<div style="text-align:center;color:var(--tb-text-muted, #333);font-size:11px;margin-top:32px;padding:16px;border-top:1px solid #1e1e32">Generated by TraceBug AI · ${new Date().toLocaleString()}</div>
 </body></html>`;
 
   return html;
@@ -1166,7 +1352,7 @@ function describeEventHtml(ev: any): string {
       const el = ev.data.element;
       const target = el?.ariaLabel || el?.text?.trim() || el?.id || el?.tag || "element";
       let s = `Clicked "<span style="color:#60a5fa">${escapeHtml(target.slice(0,60))}</span>"`;
-      if (el?.href) s += ` <span style="font-size:10px;color:#444">→ ${escapeHtml(el.href.slice(0,60))}</span>`;
+      if (el?.href) s += ` <span style="font-size:10px;color:var(--tb-text-muted, #444)">→ ${escapeHtml(el.href.slice(0,60))}</span>`;
       return s;
     }
     case "input": {
@@ -1189,17 +1375,17 @@ function describeEventHtml(ev: any): string {
       if (f?.fields) {
         s += `<div style="margin-top:4px">`;
         for (const [key, val] of Object.entries(f.fields)) {
-          s += `<div style="font-size:10px"><span style="color:#888">${escapeHtml(key)}:</span> ${escapeHtml(String(val).slice(0,80))}</div>`;
+          s += `<div style="font-size:10px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml(key)}:</span> ${escapeHtml(String(val).slice(0,80))}</div>`;
         }
         s += `</div>`;
       }
       return s;
     }
     case "route_change":
-      return `<span style="color:#888">${escapeHtml(ev.data.from || "/")}</span> <span style="color:#22d3ee">→</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml(ev.data.to || "/")}</span>`;
+      return `<span style="color:var(--tb-text-muted, #888)">${escapeHtml(ev.data.from || "/")}</span> <span style="color:#22d3ee">→</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml(ev.data.to || "/")}</span>`;
     case "api_request": {
       const r = ev.data.request;
-      return `<span style="font-weight:600">${r?.method}</span> ${escapeHtml((r?.url || "").slice(0,80))} → <span style="color:${getStatusColor(r?.statusCode || 0)};font-weight:700">${r?.statusCode}</span> <span style="color:#555">(${r?.durationMs}ms)</span>`;
+      return `<span style="font-weight:600">${r?.method}</span> ${escapeHtml((r?.url || "").slice(0,80))} → <span style="color:${getStatusColor(r?.statusCode || 0)};font-weight:700">${r?.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r?.durationMs}ms)</span>`;
     }
     case "error":
     case "unhandled_rejection":
@@ -1370,7 +1556,13 @@ function escapeHtml(str: string): string {
 }
 
 function smallBtnStyle(color: string): string {
-  return `background:${color}22;color:${color};border:1px solid ${color}44;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;font-family:inherit;`;
+  return `background:${color}22;color:${color};border:1px solid ${color}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
+}
+
+function _tabBtnStyle(active: boolean): string {
+  return active
+    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7B61FF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
+    : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
 }
 
 // ── Annotation list view (onUI-style) ────────────────────────────────────
@@ -1381,10 +1573,10 @@ function renderAnnotationList(panel: HTMLElement): void {
   const total = elAnnotations.length + drawRegions.length;
 
   panel.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid #2a2a3e;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
-        <div style="font-size:16px;font-weight:700;color:#fff;font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
-        <div style="font-size:11px;color:#666;margin-top:3px">${elAnnotations.length} element annotation${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} draw region${drawRegions.length !== 1 ? "s" : ""}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:3px">${elAnnotations.length} element annotation${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} draw region${drawRegions.length !== 1 ? "s" : ""}</div>
       </div>
       <div style="display:flex;gap:6px">
         ${total > 0 ? `
@@ -1440,16 +1632,16 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   if (total === 0) {
     content.innerHTML = `
-      <div style="text-align:center;padding:48px 24px;color:#666">
+      <div style="text-align:center;padding:48px 24px;color:var(--tb-text-muted, #666)">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
           <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
           <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 3"/>
         </svg>
-        <div style="font-family:system-ui,sans-serif;font-size:14px;font-weight:600;color:#888;margin-bottom:6px">Ready to annotate</div>
-        <div style="font-size:12px;line-height:1.5;color:#555;max-width:260px;margin:0 auto">
+        <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
+        <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
           Use <strong style="color:#7B61FF">Annotate</strong> to click elements or <strong style="color:#7B61FF">Draw</strong> to mark regions on the page.
         </div>
-        <div style="font-size:11px;color:#444;margin-top:12px">
+        <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
           Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
           <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace;margin-left:4px">Ctrl+Shift+D</span>
         </div>
@@ -1462,45 +1654,45 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   // Element annotations
   if (elAnnotations.length > 0) {
-    html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
+    html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
     for (let i = 0; i < elAnnotations.length; i++) {
       const a = elAnnotations[i];
       const intentColor = _getIntentColor(a.intent);
       const sevColor = a.severity === "critical" ? "#ef4444" : a.severity === "major" ? "#f97316" : a.severity === "minor" ? "#3b82f6" : "#888";
       const ago = timeAgo(a.timestamp);
-      html += `<div style="border:1px solid #2a2a3e;border-radius:10px;padding:12px;margin-bottom:8px;background:#12121f;transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
+      html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <span style="width:22px;height:22px;border-radius:50%;background:${intentColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
-          <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a.intent}</span>
-          <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500">${a.severity}</span>
-          <span style="font-size:10px;color:#555;margin-left:auto">${ago}</span>
-          <button class="bt-ann-delete" data-id="${a.id}" style="background:#ef444415;border:1px solid #ef444433;color:#ef4444;cursor:pointer;font-size:11px;padding:3px 8px;border-radius:4px;font-family:inherit" title="Delete this annotation">Delete</button>
+          <span style="width:22px;height:22px;border-radius:50%;background:${intentColor};color:var(--tb-text-primary, #fff);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a.intent}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${sevColor}15;color:${sevColor};font-weight:500">${a.severity}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
+          <button class="bt-ann-delete" data-id="${a.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this annotation">Delete</button>
         </div>
         <div style="font-size:11px;color:#777;margin-bottom:6px">
           <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml(a.tagName)}&gt;</span>
           ${a.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml(a.innerText.slice(0, 40))}"</span>` : ""}
         </div>
-        <div style="font-size:12px;color:#e0e0e0;line-height:1.5">${escapeHtml(a.comment)}</div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml(a.comment)}</div>
       </div>`;
     }
   }
 
   // Draw regions
   if (drawRegions.length > 0) {
-    html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:system-ui,sans-serif;display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
+    html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
     for (let i = 0; i < drawRegions.length; i++) {
       const r = drawRegions[i];
       const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
       const ago = timeAgo(r.timestamp);
-      html += `<div style="border:1px solid #2a2a3e;border-radius:10px;padding:12px;margin-bottom:8px;background:#12121f;transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
+      html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <span style="width:22px;height:22px;border-radius:${r.shape === "ellipse" ? "50%" : "5px"};background:${r.color}33;border:2px solid ${r.color};display:flex;align-items:center;justify-content:center;flex-shrink:0"></span>
-          <span style="font-size:12px;color:#e0e0e0;font-weight:600">${shapeLabel}</span>
-          <span style="font-size:10px;color:#555">${Math.round(r.width)} x ${Math.round(r.height)}</span>
-          <span style="font-size:10px;color:#555;margin-left:auto">${ago}</span>
-          <button class="bt-ann-delete" data-id="${r.id}" style="background:#ef444415;border:1px solid #ef444433;color:#ef4444;cursor:pointer;font-size:11px;padding:3px 8px;border-radius:4px;font-family:inherit" title="Delete this region">Delete</button>
+          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${shapeLabel}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${Math.round(r.width)} x ${Math.round(r.height)}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
+          <button class="bt-ann-delete" data-id="${r.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this region">Delete</button>
         </div>
-        <div style="font-size:12px;color:#e0e0e0;line-height:1.5">${r.comment ? escapeHtml(r.comment) : '<span style="color:#555;font-style:italic">No comment added</span>'}</div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${r.comment ? escapeHtml(r.comment) : '<span style="color:var(--tb-text-muted, #555);font-style:italic">No comment added</span>'}</div>
       </div>`;
     }
   }
@@ -1541,7 +1733,7 @@ function showToast(message: string, root: HTMLElement): void {
   toast.dataset.tracebug = "toast";
   toast.style.cssText = `
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:#1a1a2eee;color:#e0e0e0;border:1px solid #3a3a5e;
+    background:var(--tb-bg-secondary, #1a1a2e)ee;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border-hover, #3a3a5e);
     border-radius:10px;padding:10px 20px;font-size:13px;
     font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
     box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
@@ -1560,14 +1752,19 @@ function showToast(message: string, root: HTMLElement): void {
   }
 
   toast.textContent = message;
+  toast.setAttribute("role", "status");
   root.appendChild(toast);
+
+  // Announce to screen readers
+  const liveRegion = document.getElementById("tracebug-live");
+  if (liveRegion) liveRegion.textContent = message;
 
   setTimeout(() => {
     toast.style.opacity = "0";
     toast.style.transform = "translateX(-50%) translateY(8px)";
     toast.style.transition = "all 0.3s ease";
     setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  }, 2000);
 }
 
 // ── Screenshot annotation editor ──────────────────────────────────────────
@@ -1582,7 +1779,7 @@ function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): vo
     background:rgba(0,0,0,0.85);z-index:2147483647;
     display:flex;flex-direction:column;align-items:center;
     justify-content:center;pointer-events:auto;
-    font-family:system-ui,sans-serif;
+    font-family:var(--tb-font-family, system-ui,sans-serif);
   `;
 
   // Calculate image dimensions to fit screen
@@ -1599,31 +1796,31 @@ function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): vo
   // Toolbar
   const toolbarHtml = `
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-      <span style="color:#888;font-size:11px;margin-right:8px">ANNOTATE:</span>
+      <span style="color:var(--tb-text-muted, #888);font-size:11px;margin-right:8px">ANNOTATE:</span>
       <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(true)}">▭ Highlight</button>
       <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">→ Arrow</button>
       <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">T Text</button>
-      <span style="color:#333;margin:0 4px">|</span>
-      <button class="bt-ann-tool" data-tool="color-red" style="background:#ef4444;border:2px solid #ef4444;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
+      <button class="bt-ann-tool" data-tool="color-red" style="background:var(--tb-error, #ef4444);border:2px solid #ef4444;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
       <button class="bt-ann-tool" data-tool="color-yellow" style="background:#eab308;border:2px solid #eab308;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-green" style="background:#22c55e;border:2px solid #22c55e;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-green" style="background:var(--tb-success, #22c55e);border:2px solid #22c55e;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
       <button class="bt-ann-tool" data-tool="color-blue" style="background:#3b82f6;border:2px solid #3b82f6;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <span style="color:#333;margin:0 4px">|</span>
+      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
       <button id="bt-ann-undo" style="${annActionBtnStyle()}">↩ Undo</button>
       <button id="bt-ann-clear" style="${annActionBtnStyle()}">✕ Clear</button>
       <div style="flex:1"></div>
-      <span style="color:#555;font-size:10px">Ctrl+Shift+S</span>
+      <span style="color:var(--tb-text-muted, #555);font-size:10px">Ctrl+Shift+S</span>
     </div>
   `;
 
   // Bottom actions
   const actionsHtml = `
     <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
-      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 20px;cursor:pointer;font-size:13px;font-family:inherit">✓ Save Annotated</button>
-      <button id="bt-ann-download" style="background:#22c55e22;color:#22c55e;border:1px solid #22c55e44;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">↓ Download</button>
-      <button id="bt-ann-cancel" style="background:#66666622;color:#888;border:1px solid #66666644;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
+      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 20px;cursor:pointer;font-size:13px;font-family:var(--tb-font-family, inherit)">✓ Save Annotated</button>
+      <button id="bt-ann-download" style="background:var(--tb-success, #22c55e)22;color:var(--tb-success, #22c55e);border:1px solid #22c55e44;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">↓ Download</button>
+      <button id="bt-ann-cancel" style="background:#66666622;color:var(--tb-text-muted, #888);border:1px solid #66666644;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Cancel</button>
       <div style="flex:1"></div>
-      <span style="color:#555;font-size:10px">${screenshot.filename}</span>
+      <span style="color:var(--tb-text-muted, #555);font-size:10px">${screenshot.filename}</span>
     </div>
   `;
 
@@ -1634,14 +1831,14 @@ function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): vo
   const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap") as HTMLElement;
   const img = new Image();
   img.onload = () => {
-    img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:6px;display:block;user-select:none;pointer-events:none`;
+    img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`;
     canvasWrap.appendChild(img);
 
     const canvas = document.createElement("canvas");
     canvas.width = displayW;
     canvas.height = displayH;
     canvas.dataset.tracebug = "annotation-canvas";
-    canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:6px;`;
+    canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`;
     canvasWrap.appendChild(canvas);
 
     initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root);
@@ -1865,11 +2062,11 @@ function mergeAnnotations(baseDataUrl: string, annotationCanvas: HTMLCanvasEleme
 
 function annToolBtnStyle(active: boolean): string {
   if (active) {
-    return "background:#3b82f633;color:#3b82f6;border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;";
+    return "background:#3b82f633;color:var(--tb-info, #3b82f6);border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
   }
-  return "background:#22222244;color:#888;border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;";
+  return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
 }
 
 function annActionBtnStyle(): string {
-  return "background:#22222244;color:#888;border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit;";
+  return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
 }

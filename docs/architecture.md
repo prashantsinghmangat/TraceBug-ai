@@ -58,14 +58,17 @@ export default defineConfig([
 src/
 ├── index.ts               # Entry — TraceBugSDK class, public API, exports
 ├── types.ts               # All TypeScript interfaces
-├── collectors.ts          # Event collectors with self-filtering
+├── collectors.ts          # Event collectors with self-filtering + console capture
 ├── storage.ts             # localStorage persistence with batched writes
 ├── repro-generator.ts     # Generates human-readable reproduction steps
-├── dashboard.ts           # In-browser panel UI (vanilla DOM)
-├── compact-toolbar.ts     # Vertical rail toolbar (replaces old floating button)
+├── dashboard.ts           # In-browser panel UI (vanilla DOM, tabbed layout)
+├── compact-toolbar.ts     # Configurable toolbar (position, drag, mobile FAB)
 ├── element-annotate.ts    # Element-level annotation mode
 ├── draw-mode.ts           # Rectangle/ellipse drawing on live page
 ├── annotation-store.ts    # In-memory annotation store with export
+├── theme.ts               # CSS custom property design tokens (dark/light/auto)
+├── onboarding.ts          # First-run tooltip tour + help button replay
+├── plugin-system.ts       # Plugin API + event hook system
 ├── environment.ts         # Browser/OS/viewport detection
 ├── screenshot.ts          # html2canvas capture + auto-naming
 ├── voice-recorder.ts      # Web Speech API speech-to-text
@@ -82,17 +85,21 @@ src/
 ```
 User interacts with page
   ↓
-Event collectors (collectors.ts) capture clicks, inputs, API calls, errors
+Event collectors (collectors.ts) capture clicks, inputs, API calls, errors, console
   ↓
 Self-filtering: isTraceBugElement() checks → skip our own UI events
   ↓
 Emit function creates TraceBugEvent objects
   ↓
+Plugin system: runEventPlugins() — plugins can filter/transform events
+  ↓
 Batched writes to localStorage (storage.ts, 1s flush interval)
+  ↓
+Hook system: emitHook("error:captured", event) notifies subscribers
   ↓
 On error: auto-generate reproduction steps (repro-generator.ts)
   ↓
-Dashboard reads from localStorage to render session list/detail
+Dashboard reads from localStorage to render session list/detail (tabbed view)
   ↓
 User exports: GitHub Issue / Jira Ticket / PDF / JSON / Text
 ```
@@ -116,23 +123,59 @@ Page Context (tracebug-init.js + tracebug-sdk.js) — MAIN world
 
 ## Dashboard UI Architecture
 
+### Theme System (theme.ts)
+
+CSS custom property design tokens injected into `#tracebug-root`:
+- 45+ design tokens (`--tb-bg-primary`, `--tb-accent`, `--tb-error`, etc.)
+- Two built-in themes: dark (navy tones) and light
+- Auto mode follows `prefers-color-scheme` with live `MediaQueryList` listener
+- All components use `var(--tb-token, fallback)` pattern for backward compatibility
+
 ### Compact Toolbar (compact-toolbar.ts)
 
-Vertical rail fixed to right edge with icon buttons:
+Configurable toolbar with 7 icon buttons:
 - Logo (open session panel)
 - Annotate mode toggle
 - Draw mode toggle
 - Screenshot capture
 - Annotation list
 - Settings pop-out card
+- Help (replay onboarding tour)
+
+**Position:** Configurable via `toolbarPosition` — right, left, bottom-right, bottom-left.
+
+**Drag:** Users can drag the toolbar anywhere. Position persisted in `tracebug_toolbar_pos` localStorage key.
+
+**Mobile (< 768px):** Collapses to a single FAB. Touch-drag supported.
+
+### Onboarding (onboarding.ts)
+
+4-step tooltip tour shown once on first use:
+1. Welcome — "TraceBug is recording"
+2. Screenshot — "Screenshot anything suspicious"
+3. Annotate — "Click elements to annotate"
+4. Panel — "Open here to see sessions"
+
+Completion stored in `tracebug_onboarding_complete` localStorage key. Replayed via "?" button.
 
 ### Session Panel (dashboard.ts)
 
-470px slide-out panel from the right edge:
-- Session list view with cards
-- Session detail view with QA toolbar, timeline, reports
+470px slide-out panel (full-width bottom sheet on mobile):
+- **Session list view** — search bar + filter dropdown, auto-named session cards with preview
+- **Session detail view** — tabbed layout:
+  - **Overview** tab: QA toolbar, session overview card, problems, performance, repro steps, notes, screenshots, environment
+  - **Timeline** tab: chronological events with time gaps, color-coded icons
+  - **Errors** tab: error details, stack traces (only shown if errors exist)
+  - **Export** tab: GitHub Issue, Jira Ticket, PDF, JSON, Text, Copy Report, Delete
+- **Sticky header** with auto-generated bug title + severity badge
 - Annotation list view
 - Note dialog / Voice dialog overlays
+
+### Plugin System (plugin-system.ts)
+
+- Plugin registration with `onEvent`, `onReport`, `onExport`, `onInit`, `onDestroy` hooks
+- Event hooks (`session:start`, `error:captured`, etc.) with subscribe/unsubscribe pattern
+- Plugins run in registration order; `onEvent` returning `null` drops the event
 
 ### Z-Index Strategy
 
@@ -156,8 +199,12 @@ Applied to all collectors: clicks, inputs, selects, form submits.
 
 ### localStorage (persistent)
 
-- **Key:** `tracebug_sessions`
-- **Structure:** JSON array of `StoredSession` objects
+| Key | Description |
+|-----|-------------|
+| `tracebug_sessions` | JSON array of `StoredSession` objects |
+| `tracebug_onboarding_complete` | `"true"` when onboarding tour completed |
+| `tracebug_toolbar_pos` | `{ x, y }` drag position (if user moved toolbar) |
+
 - **Batched writes:** Events buffer for 1 second before flushing to localStorage
 - **Quota handling:** If localStorage is full, oldest session is dropped and retry once
 - **Flush on unload:** `beforeunload` event triggers immediate flush

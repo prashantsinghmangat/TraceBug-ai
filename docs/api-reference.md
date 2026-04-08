@@ -25,6 +25,11 @@ TraceBug.init({
   maxSessions: 50,            // Default: 50
   enableDashboard: true,      // Default: true
   enabled: "auto",            // Default: "auto"
+  theme: "dark",              // Default: "dark"
+  toolbarPosition: "right",   // Default: "right"
+  minimized: false,           // Default: false
+  captureConsole: "errors",   // Default: "errors"
+  shortcuts: { ... },         // Custom keyboard shortcuts
 });
 ```
 
@@ -37,6 +42,11 @@ TraceBug.init({
 | `maxSessions` | `number` | `50` | Max sessions kept in localStorage |
 | `enableDashboard` | `boolean` | `true` | Show the compact toolbar on page |
 | `enabled` | `string \| string[]` | `"auto"` | Controls when SDK is active (see [Configuration](configuration.md)) |
+| `theme` | `"dark" \| "light" \| "auto"` | `"dark"` | Color theme (`"auto"` follows system preference) |
+| `toolbarPosition` | `"right" \| "left" \| "bottom-right" \| "bottom-left"` | `"right"` | Toolbar position on screen |
+| `minimized` | `boolean` | `false` | Start in minimized FAB mode |
+| `captureConsole` | `"errors" \| "warnings" \| "all" \| "none"` | `"errors"` | Console capture level |
+| `shortcuts` | `object` | `{}` | Custom keyboard shortcuts |
 
 ### `TraceBug.destroy()`
 
@@ -278,6 +288,100 @@ Get current environment info: browser, OS, viewport, device type, connection typ
 
 ---
 
+## Plugin System
+
+Register plugins to filter, transform, or enrich events and reports.
+
+### `TraceBug.use(plugin)`
+
+Register a plugin.
+
+```typescript
+TraceBug.use({
+  name: "my-plugin",
+  onEvent: (event) => {
+    // Return event to keep, null to filter out
+    if (event.type === "console_log") return null;
+    return event;
+  },
+  onReport: (report) => {
+    // Enrich the report
+    report.title = `[MyApp] ${report.title}`;
+    return report;
+  },
+  onExport: (format, data) => {
+    // Transform export output
+    return data;
+  },
+});
+```
+
+**Plugin interface:**
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `name` | `string` | Unique plugin name |
+| `onEvent` | `(event) => event \| null` | Filter/transform events before storage. Return `null` to drop. |
+| `onReport` | `(report) => report` | Enrich reports before export |
+| `onExport` | `(format, data) => data` | Transform export output |
+| `onInit` | `() => void` | Called when plugin is registered |
+| `onDestroy` | `() => void` | Called when plugin is removed |
+
+### `TraceBug.removePlugin(name)`
+
+Unregister a plugin by name.
+
+### `TraceBug.on(event, callback)`
+
+Subscribe to lifecycle hooks. Returns an unsubscribe function.
+
+```typescript
+const unsub = TraceBug.on("error:captured", (error) => {
+  console.log("Error caught:", error);
+});
+
+// Later: unsub() to stop listening
+```
+
+**Available hooks:**
+
+| Hook | Payload | Description |
+|------|---------|-------------|
+| `session:start` | `sessionId` | New session started |
+| `error:captured` | `TraceBugEvent` | Runtime error or unhandled rejection captured |
+| `screenshot:taken` | `ScreenshotData` | Screenshot captured |
+| `report:generated` | `BugReport` | Report generated |
+| `recording:paused` | — | Recording paused |
+| `recording:resumed` | — | Recording resumed |
+| `annotate:saved` | `ElementAnnotation` | Element annotation saved |
+| `draw:saved` | `DrawRegion` | Draw region saved |
+
+---
+
+## CI/CD Helpers
+
+Methods for integrating TraceBug into automated test pipelines.
+
+### `TraceBug.getErrorCount(): number`
+
+Get the number of errors in the current session. Useful for test assertions.
+
+```typescript
+// In a Playwright/Cypress test
+expect(TraceBug.getErrorCount()).toBe(0);
+```
+
+### `TraceBug.exportSessionJSON(): string | null`
+
+Export the current session as a formatted JSON string. Useful for CI artifact uploads.
+
+```typescript
+const json = TraceBug.exportSessionJSON();
+// Upload as test artifact on failure
+```
+
+---
+
 ## Standalone Exports
 
 These functions can be imported directly without the TraceBug instance:
@@ -331,5 +435,6 @@ import type {
   AnnotationIntent,
   VoiceTranscript,
   JiraTicket,
+  TraceBugPlugin,
 } from "tracebug-sdk";
 ```

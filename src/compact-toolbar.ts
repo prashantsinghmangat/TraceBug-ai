@@ -8,9 +8,13 @@ import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-m
 import { getAnnotationCount, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getElementAnnotations, getDrawRegions } from "./annotation-store";
 import { captureScreenshot, getScreenshots } from "./screenshot";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
+import { replayOnboarding } from "./onboarding";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
+const DRAG_POS_KEY = "tracebug_toolbar_pos";
+
+export type ToolbarPosition = "right" | "left" | "bottom-right" | "bottom-left";
 
 let _isRecording = true;
 let _onToggleRecording: (() => void) | null = null;
@@ -19,6 +23,9 @@ let _panelEl: HTMLElement | null = null;
 let _panelOpen = false;
 let _annotationViewOpen = false;
 let _toolbar: HTMLElement | null = null;
+let _position: ToolbarPosition = "right";
+let _isMobile = false;
+let _fabExpanded = false;
 
 // ── Wiring from SDK ───────────────────────────────────────────────────────
 
@@ -31,7 +38,7 @@ export function updateToolbarRecordingState(isRecording: boolean): void {
   _isRecording = isRecording;
   const dot = document.getElementById("tracebug-toolbar-rec-dot");
   if (dot) {
-    dot.style.background = isRecording ? "#22c55e" : "#ef4444";
+    dot.style.background = isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
     dot.style.animation = isRecording ? "bt-pulse 2s infinite" : "none";
   }
 }
@@ -46,23 +53,23 @@ export function mountCompactToolbar(
   root: HTMLElement,
   panel: HTMLElement,
   showToast: (msg: string, root: HTMLElement) => void,
-  renderAnnotationList: (panel: HTMLElement) => void
+  renderAnnotationList: (panel: HTMLElement) => void,
+  position: ToolbarPosition = "right"
 ): () => void {
   _panelEl = panel;
+  _position = position;
+  _isMobile = window.innerWidth < 768;
 
   const toolbar = document.createElement("div");
   toolbar.id = TOOLBAR_ID;
   toolbar.dataset.tracebug = "compact-toolbar";
   _toolbar = toolbar;
 
-  toolbar.style.cssText = `
-    position: fixed; right: 12px; top: 50%; transform: translateY(-50%);
-    z-index: 2147483647; display: flex; flex-direction: column;
-    align-items: center; gap: 3px; padding: 8px 6px;
-    background: #0f0f1aee; border: 1px solid #2a2a3e;
-    border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-    transition: right 0.3s ease;
-  `;
+  // Apply position-dependent styles
+  _applyToolbarPosition(toolbar, position);
+
+  // Drag handle support
+  _initDrag(toolbar);
 
   // TraceBug logo button (opens panel)
   toolbar.appendChild(_createToolbarBtn(
@@ -78,7 +85,7 @@ export function mountCompactToolbar(
   recDot.dataset.tracebug = "rec-dot";
   recDot.style.cssText = `
     width: 6px; height: 6px; border-radius: 50%; margin: -1px 0 2px 0;
-    background: ${_isRecording ? "#22c55e" : "#ef4444"};
+    background: ${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};
     animation: ${_isRecording ? "bt-pulse 2s infinite" : "none"};
   `;
   toolbar.appendChild(recDot);
@@ -176,8 +183,8 @@ export function mountCompactToolbar(
   badge.style.cssText = `
     position: absolute; top: -2px; right: -2px;
     min-width: 14px; height: 14px; border-radius: 7px;
-    background: #7B61FF; color: #fff; font-size: 9px; font-weight: 700;
-    font-family: system-ui, sans-serif;
+    background: var(--tb-accent, #7B61FF); color: #fff; font-size: 9px; font-weight: 700;
+    font-family: var(--tb-font-family, system-ui, sans-serif);
     display: flex; align-items: center; justify-content: center;
     padding: 0 3px; line-height: 1;
   `;
@@ -199,7 +206,34 @@ export function mountCompactToolbar(
     "tracebug-toolbar-settings-btn"
   ));
 
+  // Help button — replays onboarding tour
+  toolbar.appendChild(_createToolbarBtn(
+    "Help — replay tour",
+    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+    () => replayOnboarding(root),
+    "tracebug-toolbar-help-btn"
+  ));
+
   root.appendChild(toolbar);
+
+  // Mobile: wrap toolbar in FAB on small screens
+  if (_isMobile) {
+    _convertToFab(toolbar, root, panel, showToast);
+  }
+
+  // Responsive: watch for resize
+  const resizeHandler = () => {
+    const wasMobile = _isMobile;
+    _isMobile = window.innerWidth < 768;
+    if (wasMobile !== _isMobile) {
+      if (_isMobile) {
+        _convertToFab(toolbar, root, panel, showToast);
+      } else {
+        _restoreToolbar(toolbar);
+      }
+    }
+  };
+  window.addEventListener("resize", resizeHandler);
 
   // Keyboard shortcuts
   const keyHandler = (e: KeyboardEvent) => {
@@ -217,6 +251,7 @@ export function mountCompactToolbar(
   return () => {
     toolbar.remove();
     document.removeEventListener("keydown", keyHandler);
+    window.removeEventListener("resize", resizeHandler);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
     const settingsCard = document.getElementById(SETTINGS_ID);
@@ -237,23 +272,24 @@ function _createToolbarBtn(
   if (id) btn.id = id;
   btn.dataset.tracebug = "toolbar-btn";
   btn.title = title;
+  btn.setAttribute("aria-label", title);
   btn.innerHTML = iconHtml;
   btn.style.cssText = `
-    width: 34px; height: 34px; border-radius: 8px; border: none;
-    background: transparent; color: #aaa; cursor: pointer;
+    width: 34px; height: 34px; border-radius: var(--tb-radius-md, 8px); border: none;
+    background: transparent; color: var(--tb-btn-text, #aaa); cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     padding: 0; transition: all 0.15s;
   `;
   btn.addEventListener("mouseenter", () => {
     if (!btn.classList.contains("tb-active")) {
-      btn.style.background = "#ffffff15";
-      btn.style.color = "#fff";
+      btn.style.background = "var(--tb-btn-hover, #ffffff15)";
+      btn.style.color = "var(--tb-btn-text-hover, #fff)";
     }
   });
   btn.addEventListener("mouseleave", () => {
     if (!btn.classList.contains("tb-active")) {
       btn.style.background = "transparent";
-      btn.style.color = "#aaa";
+      btn.style.color = "var(--tb-btn-text, #aaa)";
     }
   });
   btn.addEventListener("click", onClick);
@@ -263,7 +299,7 @@ function _createToolbarBtn(
 function _divider(): HTMLElement {
   const d = document.createElement("div");
   d.dataset.tracebug = "toolbar-divider";
-  d.style.cssText = "width:20px;height:1px;background:#2a2a3e;margin:2px 0";
+  d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
   return d;
 }
 
@@ -273,8 +309,27 @@ function _togglePanel(
   showToast: (msg: string, root: HTMLElement) => void
 ): void {
   _panelOpen = !_panelOpen;
-  panel.style.right = _panelOpen ? "0" : "-480px";
-  toolbar.style.right = _panelOpen ? "482px" : "12px";
+
+  if (_isMobile) {
+    // Mobile: slide panel up from bottom
+    panel.style.bottom = _panelOpen ? "0" : "-85vh";
+  } else {
+    const isLeft = _position === "left" || _position === "bottom-left";
+    if (isLeft) {
+      panel.style.left = _panelOpen ? "0" : "-480px";
+      panel.style.right = "auto";
+      // Only move toolbar if no custom drag position
+      if (!localStorage.getItem(DRAG_POS_KEY)) {
+        toolbar.style.left = _panelOpen ? "482px" : "12px";
+      }
+    } else {
+      panel.style.right = _panelOpen ? "0" : "-480px";
+      // Only move toolbar if no custom drag position
+      if (!localStorage.getItem(DRAG_POS_KEY)) {
+        toolbar.style.right = _panelOpen ? "482px" : "12px";
+      }
+    }
+  }
 
   if (_panelOpen && _renderPanel) {
     _annotationViewOpen = false;
@@ -289,14 +344,14 @@ function _updateActiveStates(toolbar: HTMLElement): void {
   if (annotateBtn) {
     const active = isElementAnnotateActive();
     annotateBtn.classList.toggle("tb-active", active);
-    annotateBtn.style.background = active ? "#7B61FF33" : "transparent";
-    annotateBtn.style.color = active ? "#7B61FF" : "#888";
+    annotateBtn.style.background = active ? "var(--tb-accent-subtle, #7B61FF33)" : "transparent";
+    annotateBtn.style.color = active ? "var(--tb-accent, #7B61FF)" : "var(--tb-text-muted, #888)";
   }
   if (drawBtn) {
     const active = isDrawModeActive();
     drawBtn.classList.toggle("tb-active", active);
-    drawBtn.style.background = active ? "#7B61FF33" : "transparent";
-    drawBtn.style.color = active ? "#7B61FF" : "#888";
+    drawBtn.style.background = active ? "var(--tb-accent-subtle, #7B61FF33)" : "transparent";
+    drawBtn.style.color = active ? "var(--tb-accent, #7B61FF)" : "var(--tb-text-muted, #888)";
   }
 }
 
@@ -332,10 +387,10 @@ function _toggleSettingsCard(
     position: fixed; z-index: 2147483647;
     right: ${window.innerWidth - toolbarRect.left + 8}px;
     top: ${toolbarRect.top + toolbarRect.height - 220}px;
-    width: 220px; background: #1a1a2e; border: 1px solid #3a3a5e;
-    border-radius: 12px; padding: 16px;
-    font-family: system-ui, sans-serif; font-size: 13px; color: #e0e0e0;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    width: 220px; background: var(--tb-bg-secondary, #1a1a2e); border: 1px solid var(--tb-border-hover, #3a3a5e);
+    border-radius: var(--tb-radius-lg, 12px); padding: 16px;
+    font-family: var(--tb-font-family, system-ui, sans-serif); font-size: 13px; color: var(--tb-text-primary, #e0e0e0);
+    box-shadow: var(--tb-shadow-lg, 0 8px 32px rgba(0,0,0,0.5));
   `;
 
   const sessions = getAllSessions();
@@ -347,29 +402,29 @@ function _toggleSettingsCard(
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:#aaa">Recording</span>
+        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Recording</span>
         <button id="tracebug-settings-rec" style="
-          background:${_isRecording ? "#22c55e22" : "#ef444422"};
-          color:${_isRecording ? "#22c55e" : "#ef4444"};
-          border:1px solid ${_isRecording ? "#22c55e44" : "#ef444444"};
+          background:${_isRecording ? "var(--tb-success-bg, #22c55e22)" : "var(--tb-error-bg, #ef444422)"};
+          color:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};
+          border:1px solid ${_isRecording ? "var(--tb-success, #22c55e)44" : "var(--tb-error, #ef4444)44"};
           border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px;font-family:inherit
         ">${_isRecording ? "Pause" : "Resume"}</button>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:#aaa">Sessions</span>
-        <span style="font-size:12px;color:#888">${sessions.length} (${errorCount} errors)</span>
+        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Sessions</span>
+        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${sessions.length} (${errorCount} errors)</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:#aaa">Annotations</span>
-        <span style="font-size:12px;color:#888">${getAnnotationCount()}</span>
+        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Annotations</span>
+        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${getAnnotationCount()}</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:#aaa">Screenshots</span>
-        <span style="font-size:12px;color:#888">${getScreenshots().length}</span>
+        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Screenshots</span>
+        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${getScreenshots().length}</span>
       </div>
-      <div style="border-top:1px solid #2a2a3e;padding-top:10px;display:flex;gap:6px">
-        <button id="tracebug-settings-clear-ann" style="flex:1;background:#f9731622;color:#f97316;border:1px solid #f9731644;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear Annotations</button>
-        <button id="tracebug-settings-clear-all" style="flex:1;background:#ef444422;color:#ef4444;border:1px solid #ef444444;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear All Data</button>
+      <div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:10px;display:flex;gap:6px">
+        <button id="tracebug-settings-clear-ann" style="flex:1;background:var(--tb-warning-bg, #f9731622);color:var(--tb-warning, #f97316);border:1px solid var(--tb-warning, #f97316)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear Annotations</button>
+        <button id="tracebug-settings-clear-all" style="flex:1;background:var(--tb-error-bg, #ef444422);color:var(--tb-error, #ef4444);border:1px solid var(--tb-error, #ef4444)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear All Data</button>
       </div>
     </div>
   `;
@@ -406,6 +461,206 @@ function _toggleSettingsCard(
     }
   };
   setTimeout(() => document.addEventListener("click", closeHandler), 10);
+}
+
+// ── Position & Layout ────────────────────────────────────────────────────
+
+function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition): void {
+  // Check for saved drag position
+  let savedPos: { x: number; y: number } | null = null;
+  try {
+    const raw = localStorage.getItem(DRAG_POS_KEY);
+    if (raw) savedPos = JSON.parse(raw);
+  } catch {}
+
+  const isBottom = position === "bottom-right" || position === "bottom-left";
+  const isLeft = position === "left" || position === "bottom-left";
+
+  if (savedPos) {
+    toolbar.style.cssText = `
+      position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
+      z-index: 2147483647; display: flex; flex-direction: column;
+      align-items: center; gap: 3px; padding: 8px 6px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      transition: none; cursor: grab;
+    `;
+  } else if (isBottom) {
+    toolbar.style.cssText = `
+      position: fixed; ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
+      z-index: 2147483647; display: flex; flex-direction: row;
+      align-items: center; gap: 3px; padding: 6px 8px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      transition: all 0.3s ease;
+    `;
+  } else {
+    toolbar.style.cssText = `
+      position: fixed; ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
+      z-index: 2147483647; display: flex; flex-direction: column;
+      align-items: center; gap: 3px; padding: 8px 6px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      transition: ${isLeft ? "left" : "right"} 0.3s ease;
+    `;
+  }
+}
+
+function _initDrag(toolbar: HTMLElement): void {
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let startLeft = 0;
+  let startTop = 0;
+  let hasMoved = false;
+
+  const onMouseDown = (e: MouseEvent) => {
+    // Only drag from the toolbar itself (not buttons)
+    if ((e.target as HTMLElement).tagName === "BUTTON" || (e.target as HTMLElement).closest("button")) return;
+    isDragging = true;
+    hasMoved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    const rect = toolbar.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    toolbar.style.cursor = "grabbing";
+    toolbar.style.transition = "none";
+    e.preventDefault();
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+    if (!hasMoved) return;
+
+    const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+    const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+    toolbar.style.left = `${newLeft}px`;
+    toolbar.style.top = `${newTop}px`;
+    toolbar.style.right = "auto";
+    toolbar.style.bottom = "auto";
+    toolbar.style.transform = "none";
+  };
+
+  const onMouseUp = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    toolbar.style.cursor = "grab";
+
+    if (hasMoved) {
+      try {
+        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
+          x: parseInt(toolbar.style.left),
+          y: parseInt(toolbar.style.top),
+        }));
+      } catch {}
+    }
+  };
+
+  toolbar.addEventListener("mousedown", onMouseDown);
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+
+  // Touch support for mobile drag
+  toolbar.addEventListener("touchstart", (e) => {
+    if ((e.target as HTMLElement).tagName === "BUTTON" || (e.target as HTMLElement).closest("button")) return;
+    const touch = e.touches[0];
+    isDragging = true;
+    hasMoved = false;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    const rect = toolbar.getBoundingClientRect();
+    startLeft = rect.left;
+    startTop = rect.top;
+    toolbar.style.transition = "none";
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+    if (!hasMoved) return;
+
+    const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+    const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+    toolbar.style.left = `${newLeft}px`;
+    toolbar.style.top = `${newTop}px`;
+    toolbar.style.right = "auto";
+    toolbar.style.bottom = "auto";
+    toolbar.style.transform = "none";
+  }, { passive: true });
+
+  document.addEventListener("touchend", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    if (hasMoved) {
+      try {
+        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
+          x: parseInt(toolbar.style.left),
+          y: parseInt(toolbar.style.top),
+        }));
+      } catch {}
+    }
+  });
+}
+
+// ── Mobile FAB ──────────────────────────────────────────────────────────
+
+function _convertToFab(
+  toolbar: HTMLElement,
+  root: HTMLElement,
+  panel: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): void {
+  // Save all children except the logo button
+  const buttons = Array.from(toolbar.children);
+  buttons.forEach(b => {
+    const el = b as HTMLElement;
+    if (el.id !== "tracebug-toolbar-panel-btn" &&
+        el.id !== "tracebug-toolbar-rec-dot") {
+      el.style.display = _fabExpanded ? "" : "none";
+    }
+  });
+
+  toolbar.style.cssText = `
+    position: fixed; right: 12px; bottom: 12px;
+    z-index: 2147483647; display: flex; flex-direction: column;
+    align-items: center; gap: 3px; padding: ${_fabExpanded ? "8px 6px" : "6px"};
+    background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+    border-radius: ${_fabExpanded ? "14px" : "50%"};
+    box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    min-width: 44px; min-height: 44px;
+    transition: all 0.2s ease;
+  `;
+
+  // Override panel for mobile: full width slide-up
+  panel.style.width = "100vw";
+  panel.style.height = "80vh";
+  panel.style.bottom = _panelOpen ? "0" : "-85vh";
+  panel.style.right = "0";
+  panel.style.top = "auto";
+  panel.style.borderRadius = "16px 16px 0 0";
+}
+
+function _restoreToolbar(toolbar: HTMLElement): void {
+  const buttons = Array.from(toolbar.children);
+  buttons.forEach(b => (b as HTMLElement).style.display = "");
+  _applyToolbarPosition(toolbar, _position);
+
+  // Restore panel to desktop layout
+  if (_panelEl) {
+    _panelEl.style.width = "";
+    _panelEl.style.height = "";
+    _panelEl.style.bottom = "";
+    _panelEl.style.top = "";
+    _panelEl.style.borderRadius = "";
+    _panelEl.style.right = _panelOpen ? "0" : "-480px";
+  }
 }
 
 function _logoSvg(): string {
