@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <title>TraceBug</title>
+</head>
+<body>
+  <div class="popup">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <defs>
+              <linearGradient id="p-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#9B7DFF"/>
+                <stop offset="50%" stop-color="#7B61FF"/>
+                <stop offset="100%" stop-color="#00E5FF"/>
+              </linearGradient>
+              <linearGradient id="p-scan" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/>
+                <stop offset="30%" stop-color="#00E5FF" stop-opacity="0.9"/>
+                <stop offset="70%" stop-color="#7B61FF" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M12 3 L17 6 L17 13 L12 16 L7 13 L7 6 Z" stroke="url(#p-grad)" stroke-width="1.5" fill="rgba(123,97,255,0.1)"/>
+            <rect x="5" y="9.5" width="14" height="1.5" rx="0.75" fill="url(#p-scan)" opacity="0.8"/>
+            <line x1="9" y1="6" x2="5" y2="2" stroke="#9B7DFF" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="5" cy="2" r="1.3" fill="#9B7DFF"/>
+            <line x1="15" y1="6" x2="19" y2="2" stroke="#00E5FF" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="19" cy="2" r="1.3" fill="#00E5FF"/>
+            <line x1="7" y1="8" x2="3" y2="7" stroke="#7B61FF" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <line x1="7" y1="11" x2="2" y2="11" stroke="#7B61FF" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <line x1="7" y1="12.5" x2="3" y2="14" stroke="#7B61FF" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <line x1="17" y1="8" x2="21" y2="7" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <line x1="17" y1="11" x2="22" y2="11" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <line x1="17" y1="12.5" x2="21" y2="14" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>
+            <circle cx="12" cy="10" r="1.5" fill="url(#p-grad)"/>
+            <circle cx="12" cy="10" r="0.6" fill="#fff"/>
+            <circle cx="10" cy="7.5" r="1" fill="#00E5FF" opacity="0.8"/>
+            <circle cx="14" cy="7.5" r="1" fill="#9B7DFF" opacity="0.8"/>
+          </svg>
+        </div>
+        <span class="logo-text">TraceBug</span>
+      </div>
+      <span class="version">v1.1.1</span>
+    </div>
+
+    <!-- Unavailable state (chrome:// pages) -->
+    <div class="unavailable" id="unavailable" style="display:none;">
+      <div class="unavailable-icon">🚫</div>
+      <div class="unavailable-text">Cannot run on this page</div>
+      <div class="unavailable-sub">TraceBug works on websites only</div>
+    </div>
+
+    <!-- Main content -->
+    <div id="mainContent">
+      <!-- Site Info -->
+      <div class="site-info">
+        <div class="site-hostname" id="hostname">—</div>
+        <div class="site-url" id="fullUrl">Loading...</div>
+      </div>
+
+      <!-- Toggle -->
+      <div class="toggle-section">
+        <label class="toggle-label" id="toggleLabel">
+          <div class="toggle-left">
+            <div class="status-dot" id="statusDot"></div>
+            <span class="toggle-text" id="toggleText">Enable TraceBug</span>
+          </div>
+          <div class="toggle-switch">
+            <input type="checkbox" id="siteToggle">
+            <span class="toggle-slider"></span>
+          </div>
+        </label>
+      </div>
+
+      <!-- Recording indicator -->
+      <div class="recording-bar" id="recordingBar" style="display:none;">
+        <div class="recording-pulse"></div>
+        <span>Recording events on this page...</span>
+      </div>
+
+      <!-- Quick Actions (shown when enabled) -->
+      <div class="actions" id="actions" style="display:none;">
+        <button class="action-btn" id="btnAnnotate" title="Annotate page elements">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="3" stroke="#7B61FF" stroke-width="1.5"/>
+            <path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="9" stroke="#7B61FF" stroke-width="1" opacity="0.3" stroke-dasharray="3 3"/>
+          </svg>
+          <span>Annotate</span>
+        </button>
+        <button class="action-btn" id="btnDraw" title="Draw regions on page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="#7B61FF" stroke-width="1.5" fill="rgba(123,97,255,0.06)"/>
+            <path d="M3 9h18M9 3v18" stroke="#00E5FF" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+            <rect x="6" y="6" width="5" height="5" rx="1" fill="#7B61FF" opacity="0.3" stroke="#7B61FF" stroke-width="1"/>
+          </svg>
+          <span>Draw</span>
+        </button>
+        <button class="action-btn" id="btnScreenshot" title="Capture visible page">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="4" width="20" height="16" rx="2" stroke="#7B61FF" stroke-width="1.5" fill="rgba(123,97,255,0.06)"/>
+            <circle cx="12" cy="12" r="3.5" stroke="#00E5FF" stroke-width="1.3"/>
+            <circle cx="12" cy="12" r="1.5" fill="#00E5FF" opacity="0.7"/>
+            <path d="M2 8 L6 4" stroke="#7B61FF" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M22 8 L18 4" stroke="#7B61FF" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M2 16 L6 20" stroke="#7B61FF" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M22 16 L18 20" stroke="#7B61FF" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="18" cy="6" r="1.5" fill="#FF4D6D"/>
+          </svg>
+          <span>Screenshot</span>
+        </button>
+        <button class="action-btn" id="btnReport" title="Download PDF report">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="14" height="18" rx="2" stroke="#7B61FF" stroke-width="1.5" fill="rgba(123,97,255,0.06)"/>
+            <path d="M14 3 L21 10" stroke="#7B61FF" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M14 3 L14 10 L21 10" stroke="#7B61FF" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+            <line x1="7" y1="13" x2="13" y2="13" stroke="#00E5FF" stroke-width="1.3" stroke-linecap="round"/>
+            <line x1="7" y1="16" x2="11" y2="16" stroke="#6B6B80" stroke-width="1.3" stroke-linecap="round"/>
+            <circle cx="19" cy="18" r="4" fill="#00FFA3"/>
+            <path d="M17.5 18 L19 19.5 L21 16.5" stroke="#001A10" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span>PDF Report</span>
+        </button>
+        <button class="action-btn github" id="btnGithub" title="Copy GitHub issue markdown">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.164 6.839 9.49.5.09.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.532 1.032 1.532 1.032.892 1.528 2.341 1.087 2.912.831.092-.647.35-1.087.636-1.337-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.03-2.682-.103-.254-.448-1.27.098-2.645 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836a9.59 9.59 0 012.504.337c1.909-1.294 2.747-1.025 2.747-1.025.548 1.375.203 2.391.1 2.645.64.698 1.028 1.591 1.028 2.682 0 3.841-2.337 4.687-4.565 4.935.359.309.678.919.678 1.852 0 1.337-.012 2.415-.012 2.743 0 .267.18.577.688.48C19.137 20.16 22 16.416 22 12c0-5.523-4.477-10-10-10z" fill="#9B7DFF" opacity="0.9"/>
+            <circle cx="19" cy="5" r="3" fill="#0d0d12" stroke="#00FFA3" stroke-width="1.2"/>
+            <path d="M17.8 5.2 L19 6.2 L20.5 4" stroke="#00FFA3" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span>GitHub Issue</span>
+        </button>
+        <button class="action-btn jira" id="btnJira" title="Copy Jira ticket">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <rect x="2" y="2" width="20" height="20" rx="4" fill="rgba(0,83,204,0.15)" stroke="#0053CC" stroke-width="1.3"/>
+            <path d="M12 5 L19 12 L12 19" stroke="#0C66E4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <path d="M5 5 L12 12 L5 19" stroke="#579DFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <circle cx="19" cy="5" r="3" fill="#0d0d12" stroke="#00E5FF" stroke-width="1.2"/>
+            <path d="M18 5 L19.5 6 L21 4" stroke="#00E5FF" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span>Jira Ticket</span>
+        </button>
+      </div>
+
+      <!-- Toast area for feedback -->
+      <div class="toast-area" id="toastArea" style="display:none;">
+        <div class="toast-content" id="toastContent"></div>
+      </div>
+
+      <!-- Enabled Sites List -->
+      <div class="sites-section" id="sitesSection">
+        <div class="sites-header">
+          <span>Active Sites</span>
+          <span class="sites-count" id="sitesCount">0</span>
+        </div>
+        <div class="sites-list" id="sitesList">
+          <div class="no-sites">No sites enabled yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <a href="https://tracebug.netlify.app" target="_blank">Website</a>
+      <span class="sep">·</span>
+      <a href="https://www.npmjs.com/package/tracebug-sdk" target="_blank">npm</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/prashantsinghmangat/TraceBug-ai" target="_blank">GitHub</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
