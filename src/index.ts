@@ -21,6 +21,10 @@ import {
   Annotation,
   ScreenshotData,
   EnvironmentInfo,
+  ElementAnnotation,
+  DrawRegion,
+  UIAnnotationReport,
+  AnnotationIntent,
 } from "./types";
 import {
   getSessionId,
@@ -52,6 +56,13 @@ import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
 import { generateBugTitle, generateFlowSummary } from "./title-generator";
 import { buildTimeline, formatTimelineText } from "./timeline-builder";
 import { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
+import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
+import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
+import {
+  getAnnotationReport, getElementAnnotations, getDrawRegions,
+  exportAsJSON as exportAnnotationsJSON, exportAsMarkdown as exportAnnotationsMD,
+  copyToClipboard as copyAnnotationsToClipboard, clearAllAnnotations,
+} from "./annotation-store";
 
 // ── Public exports ────────────────────────────────────────────────────────
 
@@ -63,6 +74,10 @@ export {
   Annotation,
   ScreenshotData,
   EnvironmentInfo,
+  ElementAnnotation,
+  DrawRegion,
+  UIAnnotationReport,
+  AnnotationIntent,
 } from "./types";
 export { getAllSessions, clearAllSessions, deleteSession } from "./storage";
 export { generateReproSteps } from "./repro-generator";
@@ -332,6 +347,69 @@ class TraceBugSDK {
     return captureEnvironment();
   }
 
+  // ── Element Annotate Mode ────────────────────────────────────────────
+
+  /** Activate element annotate mode — click elements to attach feedback */
+  activateAnnotateMode(): void {
+    const root = document.getElementById("tracebug-root");
+    if (root) activateElementAnnotateMode(root);
+  }
+
+  /** Deactivate element annotate mode */
+  deactivateAnnotateMode(): void {
+    deactivateElementAnnotateMode();
+  }
+
+  /** Check if element annotate mode is active */
+  isAnnotateModeActive(): boolean {
+    return isElementAnnotateActive();
+  }
+
+  // ── Draw Mode ──────────────────────────────────────────────────────
+
+  /** Activate draw mode — draw rectangles/ellipses on the live page */
+  activateDrawMode(): void {
+    const root = document.getElementById("tracebug-root");
+    if (root) activateDrawMode(root);
+  }
+
+  /** Deactivate draw mode */
+  deactivateDrawMode(): void {
+    deactivateDrawMode();
+  }
+
+  /** Check if draw mode is active */
+  isDrawModeActive(): boolean {
+    return isDrawModeActive();
+  }
+
+  // ── UI Annotations ─────────────────────────────────────────────────
+
+  /** Get complete annotation report (element annotations + draw regions) */
+  getAnnotationReport(): UIAnnotationReport {
+    return getAnnotationReport();
+  }
+
+  /** Export annotations as JSON string */
+  exportAnnotationsJSON(): string {
+    return exportAnnotationsJSON();
+  }
+
+  /** Export annotations as Markdown string */
+  exportAnnotationsMarkdown(): string {
+    return exportAnnotationsMD();
+  }
+
+  /** Copy annotations to clipboard */
+  async copyAnnotationsToClipboard(format: "json" | "markdown"): Promise<boolean> {
+    return copyAnnotationsToClipboard(format);
+  }
+
+  /** Clear all UI annotations */
+  clearAnnotations(): void {
+    clearAllAnnotations();
+  }
+
   // ── Private methods ─────────────────────────────────────────────────
 
   /**
@@ -454,6 +532,9 @@ class TraceBugSDK {
     this.sessionId = null;
     clearScreenshots();
     clearVoiceTranscripts();
+    deactivateElementAnnotateMode();
+    deactivateDrawMode();
+    clearAllAnnotations();
   }
 }
 

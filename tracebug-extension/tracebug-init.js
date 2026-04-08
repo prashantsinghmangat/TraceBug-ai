@@ -74,6 +74,45 @@
           showToast("No session data yet — interact with the page first");
         }
         break;
+
+      case "annotate":
+        if (window.TraceBug.isAnnotateModeActive && window.TraceBug.isAnnotateModeActive()) {
+          window.TraceBug.deactivateAnnotateMode();
+          showToast("Annotate mode deactivated");
+        } else {
+          if (window.TraceBug.isDrawModeActive && window.TraceBug.isDrawModeActive()) {
+            window.TraceBug.deactivateDrawMode();
+          }
+          window.TraceBug.activateAnnotateMode();
+          showToast("Annotate mode: Click elements to annotate. Shift+click for multi-select.");
+        }
+        break;
+
+      case "draw":
+        if (window.TraceBug.isDrawModeActive && window.TraceBug.isDrawModeActive()) {
+          window.TraceBug.deactivateDrawMode();
+          showToast("Draw mode deactivated");
+        } else {
+          if (window.TraceBug.isAnnotateModeActive && window.TraceBug.isAnnotateModeActive()) {
+            window.TraceBug.deactivateAnnotateMode();
+          }
+          window.TraceBug.activateDrawMode();
+          showToast("Draw mode: Drag to draw rectangles or ellipses on the page.");
+        }
+        break;
+
+      case "export_annotations":
+        if (window.TraceBug.exportAnnotationsMarkdown) {
+          var md = window.TraceBug.exportAnnotationsMarkdown();
+          if (md) {
+            copyToClipboard(md).then(function () {
+              showToast("Annotations copied to clipboard as Markdown!");
+            });
+          } else {
+            showToast("No annotations yet");
+          }
+        }
+        break;
     }
   });
 

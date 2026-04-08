@@ -1,8 +1,9 @@
 // ── Screenshot manager ────────────────────────────────────────────────────
-// Captures page screenshots using html2canvas (lazy-loaded from CDN).
+// Captures page screenshots using html2canvas (bundled — no CDN fetch).
 // Falls back to a DOM snapshot if html2canvas is unavailable.
 // Screenshots stored in memory (not localStorage) to avoid quota issues.
 
+import html2canvasLib from "html2canvas";
 import { ScreenshotData, TraceBugEvent } from "./types";
 
 const PANEL_ID = "tracebug-dashboard-panel";
@@ -11,7 +12,6 @@ const BTN_ID = "tracebug-dashboard-btn";
 const MAX_SCREENSHOTS = 50;
 let screenshotCounter = 0;
 const screenshots: ScreenshotData[] = [];
-let html2canvasLoaded: ((element: HTMLElement, options?: any) => Promise<HTMLCanvasElement>) | null = null;
 
 export function getScreenshots(): ScreenshotData[] {
   return [...screenshots];
@@ -44,7 +44,7 @@ export async function captureScreenshot(
   let height = window.innerHeight;
 
   try {
-    const renderer = await getHtml2Canvas();
+    const renderer = html2canvasLib;
     if (renderer) {
       const canvas = await renderer(document.body, {
         useCORS: true,
@@ -89,38 +89,6 @@ export async function captureScreenshot(
   }
 
   return screenshot;
-}
-
-// Lazy-load html2canvas from CDN
-async function getHtml2Canvas(): Promise<((el: HTMLElement, opts?: any) => Promise<HTMLCanvasElement>) | null> {
-  if (html2canvasLoaded) return html2canvasLoaded;
-
-  // Check if already available globally
-  if (typeof (window as any).html2canvas === "function") {
-    html2canvasLoaded = (window as any).html2canvas;
-    return html2canvasLoaded;
-  }
-
-  try {
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
-    script.crossOrigin = "anonymous";
-
-    await new Promise<void>((resolve, reject) => {
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error("Failed to load html2canvas"));
-      document.head.appendChild(script);
-    });
-
-    if (typeof (window as any).html2canvas === "function") {
-      html2canvasLoaded = (window as any).html2canvas;
-      return html2canvasLoaded;
-    }
-  } catch {
-    // Silently fail — canvas fallback will be used (safe for CSP-strict sites)
-  }
-
-  return null;
 }
 
 // Simple canvas fallback — captures visible viewport info as text

@@ -13,6 +13,9 @@ import { generatePdfReport } from "./pdf-generator";
 import { generateBugTitle } from "./title-generator";
 import { captureEnvironment } from "./environment";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts } from "./voice-recorder";
+import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getAnnotationCount } from "./annotation-store";
+import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel } from "./compact-toolbar";
+import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -25,10 +28,14 @@ let _onToggleRecording: (() => void) | null = null;
 export function setRecordingState(isRecording: boolean, onToggle: () => void): void {
   _isRecording = isRecording;
   _onToggleRecording = onToggle;
+  // Also wire through to compact toolbar
+  setToolbarRecordingState(isRecording, onToggle);
 }
 
 export function updateRecordingState(isRecording: boolean): void {
   _isRecording = isRecording;
+  // Update compact toolbar recording indicator
+  updateToolbarRecordingState(isRecording);
   // Update the recording indicator if panel is open
   const indicator = document.getElementById("bt-rec-indicator");
   if (indicator) {
@@ -46,7 +53,7 @@ export function updateRecordingState(isRecording: boolean): void {
 
 export function mountDashboard(): () => void {
   // Don't mount twice
-  if (document.getElementById(BTN_ID)) return () => {};
+  if (document.getElementById("tracebug-compact-toolbar")) return () => {};
 
   // ── Inject !important CSS to guarantee we stay on top ───────────────
   const style = document.createElement("style");
@@ -65,35 +72,6 @@ export function mountDashboard(): () => void {
     }
     #tracebug-root * {
       pointer-events: auto;
-    }
-    #${BTN_ID} {
-      position: fixed !important;
-      bottom: 20px !important;
-      right: 20px !important;
-      z-index: 2147483647 !important;
-      width: 48px !important;
-      height: 48px !important;
-      border-radius: 50% !important;
-      border: 2px solid #ef4444 !important;
-      background: #1a1a2e !important;
-      color: #ef4444 !important;
-      font-size: 22px !important;
-      cursor: pointer !important;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5) !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      transition: right 0.3s ease, transform 0.2s !important;
-      font-family: system-ui, sans-serif !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      outline: none !important;
-    }
-    #${BTN_ID}:hover {
-      transform: scale(1.1) !important;
-    }
-    #${BTN_ID}.bt-panel-open {
-      right: 484px !important;
     }
     #${PANEL_ID} {
       position: fixed !important;
@@ -119,52 +97,36 @@ export function mountDashboard(): () => void {
   const root = document.createElement("div");
   root.id = "tracebug-root";
 
-  // ── Floating button ─────────────────────────────────────────────────
-  const btn = document.createElement("button");
-  btn.id = BTN_ID;
-  btn.innerHTML = `<svg width="22" height="22" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tb-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="tb-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#tb-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#tb-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#tb-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><circle cx="21" cy="16" r="1.4" fill="white"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="75" cy="16" r="1.4" fill="white"/><line x1="30" y1="36" x2="17" y2="32" stroke="#7B61FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/><line x1="30" y1="43" x2="15" y2="43" stroke="#7B61FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/><line x1="30" y1="50" x2="17" y2="54" stroke="#7B61FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/><line x1="66" y1="36" x2="79" y2="32" stroke="#00E5FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/><line x1="66" y1="43" x2="81" y2="43" stroke="#00E5FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/><line x1="66" y1="50" x2="79" y2="54" stroke="#00E5FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/><circle cx="48" cy="41" r="5" fill="url(#tb-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="41" cy="34" r="1" fill="white"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/><circle cx="55" cy="34" r="1" fill="white"/></svg>`;
-  btn.title = "TraceBug AI Dashboard";
-
   // ── Panel container ─────────────────────────────────────────────────
   const panel = document.createElement("div");
   panel.id = PANEL_ID;
   panel.style.right = "-480px";
 
-  let isOpen = false;
-
-  btn.onclick = () => {
-    isOpen = !isOpen;
-    panel.style.right = isOpen ? "0" : "-480px";
-    btn.innerHTML = isOpen ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>` : `<svg width="22" height="22" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="tb-p2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="tb-s2" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#tb-p2)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#tb-p2)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#tb-s2)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="48" cy="41" r="5" fill="url(#tb-p2)"/><circle cx="48" cy="41" r="2.2" fill="white"/></svg>`;
-    if (isOpen) {
-      btn.classList.add("bt-panel-open");
-      renderPanel(panel);
-    } else {
-      btn.classList.remove("bt-panel-open");
-    }
-  };
-
-  root.appendChild(btn);
   root.appendChild(panel);
   document.documentElement.appendChild(root);
+
+  // ── Wire compact toolbar ────────────────────────────────────────────
+  setRenderPanel(renderPanel);
+  const cleanupToolbar = mountCompactToolbar(root, panel, showToast, renderAnnotationList);
+
+  // ── Show existing annotation badges on page ────────────────────────
+  showAnnotationBadges(root);
 
   // ── Keyboard shortcut: Ctrl+Shift+S for screenshot ─────────────────
   const keyHandler = async (e: KeyboardEvent) => {
     if (e.ctrlKey && e.shiftKey && e.key === "S") {
       e.preventDefault();
-      // Get current session's last event for context
       const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
       const currentSession = sessions[0];
       const lastEvent = currentSession?.events[currentSession.events.length - 1] || null;
 
-      showToast("📸 Capturing screenshot...", root);
+      showToast("Capturing screenshot...", root);
       try {
         const ss = await captureScreenshot(lastEvent);
-        showToast(`✓ Screenshot: ${ss.filename}`, root);
-        // Open annotation editor
+        showToast(`Screenshot: ${ss.filename}`, root);
         showAnnotationEditor(ss, root);
       } catch {
-        showToast("✗ Screenshot failed", root);
+        showToast("Screenshot failed", root);
       }
     }
   };
@@ -173,6 +135,8 @@ export function mountDashboard(): () => void {
   return () => {
     root.remove();
     style.remove();
+    cleanupToolbar();
+    clearAnnotationBadges();
     document.removeEventListener("keydown", keyHandler);
   };
 }
@@ -1407,6 +1371,131 @@ function escapeHtml(str: string): string {
 
 function smallBtnStyle(color: string): string {
   return `background:${color}22;color:${color};border:1px solid ${color}44;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;font-family:inherit;`;
+}
+
+// ── Annotation list view (onUI-style) ────────────────────────────────────
+
+function renderAnnotationList(panel: HTMLElement): void {
+  const elAnnotations = getElementAnnotations();
+  const drawRegions = getDrawRegions();
+  const total = elAnnotations.length + drawRegions.length;
+
+  panel.innerHTML = `
+    <div style="padding:16px 20px;border-bottom:1px solid #2a2a3e;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#fff;font-family:system-ui,sans-serif">UI Annotations</div>
+        <div style="font-size:11px;color:#666;margin-top:2px">${elAnnotations.length} element${elAnnotations.length !== 1 ? "s" : ""} · ${drawRegions.length} region${drawRegions.length !== 1 ? "s" : ""}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button id="bt-ann-export-md" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Copy as Markdown">MD</button>
+        <button id="bt-ann-export-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Copy as JSON">JSON</button>
+        <button id="bt-ann-clear-all" style="${smallBtnStyle("#ef4444")}font-size:10px">Clear</button>
+      </div>
+    </div>
+    <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
+  `;
+
+  const content = panel.querySelector("#bt-ann-list-content") as HTMLElement;
+
+  // Export buttons
+  panel.querySelector("#bt-ann-export-md")!.addEventListener("click", async () => {
+    const ok = await copyToClipboard("markdown");
+    const btn = panel.querySelector("#bt-ann-export-md") as HTMLElement;
+    btn.textContent = ok ? "Copied!" : "Failed";
+    setTimeout(() => btn.textContent = "MD", 2000);
+  });
+
+  panel.querySelector("#bt-ann-export-json")!.addEventListener("click", async () => {
+    const ok = await copyToClipboard("json");
+    const btn = panel.querySelector("#bt-ann-export-json") as HTMLElement;
+    btn.textContent = ok ? "Copied!" : "Failed";
+    setTimeout(() => btn.textContent = "JSON", 2000);
+  });
+
+  panel.querySelector("#bt-ann-clear-all")!.addEventListener("click", () => {
+    if (confirm("Clear all UI annotations?")) {
+      clearAllAnnotations();
+      clearAnnotationBadges();
+      renderAnnotationList(panel);
+    }
+  });
+
+  if (total === 0) {
+    content.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:#555">
+        <div style="font-size:36px;margin-bottom:12px">+</div>
+        <div style="font-family:system-ui,sans-serif">No annotations yet.</div>
+        <div style="font-size:11px;margin-top:8px;color:#444">Use Annotate mode or Draw mode to add annotations.</div>
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+
+  // Element annotations
+  if (elAnnotations.length > 0) {
+    html += `<div style="font-size:10px;color:#7B61FF;font-weight:700;margin-bottom:8px;font-family:system-ui,sans-serif">ELEMENT ANNOTATIONS</div>`;
+    for (let i = 0; i < elAnnotations.length; i++) {
+      const a = elAnnotations[i];
+      const intentColor = _getIntentColor(a.intent);
+      const sevColor = a.severity === "critical" ? "#ef4444" : a.severity === "major" ? "#f97316" : a.severity === "minor" ? "#3b82f6" : "#888";
+      html += `<div style="border:1px solid #2a2a3e;border-radius:8px;padding:10px;margin-bottom:8px;background:#12121f">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="width:20px;height:20px;border-radius:50%;background:${intentColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a.intent}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;text-transform:uppercase">${a.severity}</span>
+          <button class="bt-ann-delete" data-id="${a.id}" style="margin-left:auto;background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:2px" title="Delete">x</button>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;font-family:monospace">&lt;${escapeHtml(a.tagName)}&gt; ${escapeHtml(a.innerText.slice(0, 50))}</div>
+        <div style="font-size:11px;color:#e0e0e0;line-height:1.4">${escapeHtml(a.comment)}</div>
+        <div style="font-size:9px;color:#444;margin-top:4px">${escapeHtml(a.page)} · ${escapeHtml(a.selector.slice(0, 50))}</div>
+      </div>`;
+    }
+  }
+
+  // Draw regions
+  if (drawRegions.length > 0) {
+    html += `<div style="font-size:10px;color:#00E5FF;font-weight:700;margin-top:12px;margin-bottom:8px;font-family:system-ui,sans-serif">DRAW REGIONS</div>`;
+    for (let i = 0; i < drawRegions.length; i++) {
+      const r = drawRegions[i];
+      const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
+      html += `<div style="border:1px solid #2a2a3e;border-radius:8px;padding:10px;margin-bottom:8px;background:#12121f">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="width:20px;height:20px;border-radius:${r.shape === "ellipse" ? "50%" : "4px"};background:${r.color}44;border:2px solid ${r.color};display:flex;align-items:center;justify-content:center;flex-shrink:0"></span>
+          <span style="font-size:11px;color:#e0e0e0;font-weight:600">${shapeLabel}</span>
+          <span style="font-size:10px;color:#555">${Math.round(r.width)}x${Math.round(r.height)} at (${Math.round(r.x)}, ${Math.round(r.y)})</span>
+          <button class="bt-ann-delete" data-id="${r.id}" style="margin-left:auto;background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:2px" title="Delete">x</button>
+        </div>
+        <div style="font-size:11px;color:#e0e0e0;line-height:1.4">${r.comment ? escapeHtml(r.comment) : '<span style="color:#444">No comment</span>'}</div>
+        <div style="font-size:9px;color:#444;margin-top:4px">${escapeHtml(r.page)}</div>
+      </div>`;
+    }
+  }
+
+  content.innerHTML = html;
+
+  // Wire delete buttons
+  content.querySelectorAll(".bt-ann-delete").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.id || "";
+      removeAnnotationById(id);
+      const root = document.getElementById("tracebug-root");
+      if (root) showAnnotationBadges(root);
+      renderAnnotationList(panel);
+    });
+  });
+}
+
+function _getIntentColor(intent: string): string {
+  switch (intent) {
+    case "fix": return "#ef4444";
+    case "redesign": return "#7B61FF";
+    case "remove": return "#f97316";
+    case "question": return "#3b82f6";
+    default: return "#888";
+  }
 }
 
 // ── Toast notification ────────────────────────────────────────────────────
