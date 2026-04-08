@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config:*)",
+      "Bash(npm view:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npm pack:*)",
+      "Bash(npx tsup:*)",
+      "Bash(ls -la d:/Project/TraceBug-ai/src/*.ts)",
+      "Read(//d/Project/TraceBug-ai/**)",
+      "Bash(node -e \":*)",
+      "Bash(npx next:*)",
+      "Bash(node_modules/.bin/next build:*)",
+      "Bash(npm version:*)",
+      "Bash(npm publish:*)",
+      "Bash(npm whoami:*)",
+      "Bash(ls -lah \"d:\\\\Project\\\\TraceBug-ai\\\\tracebug-extension\\\\icons\"\" 2>/dev/null || echo \"Extension icons dir checked \")",
+      "Bash(zip -r tracebug-extension.zip tracebug-extension/ -x \"tracebug-extension/generate-icons.html\" \"tracebug-extension/icons/*.svg\")",
+      "Bash(powershell -Command \"Get-Command magick -ErrorAction SilentlyContinue | Select-Object Source\")",
+      "Bash(rm -f tracebug-extension.zip)",
+      "Bash(powershell -Command \"Compress-Archive -Path tracebug-extension/background.js, tracebug-extension/content-script.js, tracebug-extension/icons, tracebug-extension/manifest.json, tracebug-extension/popup.html, tracebug-extension/popup.js, tracebug-extension/styles.css, tracebug-extension/tracebug-init.js, tracebug-extension/tracebug-sdk.js -DestinationPath tracebug-extension.zip -Force\")",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #111; color: #eee; }
+a { color: #60a5fa; text-decoration: none; }
+a:hover { text-decoration: underline; }
