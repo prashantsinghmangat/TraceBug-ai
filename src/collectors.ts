@@ -71,58 +71,40 @@ function isTraceBugElement(el: HTMLElement | null): boolean {
 
 export function collectClicks(emit: Emit): () => void {
   const handler = (e: MouseEvent) => {
-    const t = e.target as HTMLElement;
-    if (!t || isTraceBugElement(t)) return;
+    try {
+      const t = e.target as HTMLElement;
+      if (!t || isTraceBugElement(t)) return;
 
-    const tag = t.tagName.toLowerCase();
-    const data: Record<string, any> = {
-      element: {
-        tag,
-        text: (t.innerText || "").slice(0, 120),
-        id: t.id || "",
-        className: typeof t.className === "string" ? t.className : "",
-      },
-    };
+      const tag = t.tagName.toLowerCase();
+      const data: Record<string, any> = {
+        element: {
+          tag,
+          text: (t.innerText || "").slice(0, 120),
+          id: t.id || "",
+          className: typeof t.className === "string" ? t.className : "",
+        },
+      };
 
-    // Enrich with context depending on element type
-    const el = data.element;
+      const el = data.element;
+      if (tag === "a") el.href = (t as HTMLAnchorElement).href || "";
+      if (tag === "button" || (t as HTMLButtonElement).type === "submit") {
+        el.buttonType = (t as HTMLButtonElement).type || "button";
+        el.disabled = (t as HTMLButtonElement).disabled;
+      }
+      if (tag === "label") el.forField = (t as HTMLLabelElement).htmlFor || "";
+      const ariaLabel = t.getAttribute("aria-label");
+      if (ariaLabel) el.ariaLabel = ariaLabel;
+      const role = t.getAttribute("role");
+      if (role) el.role = role;
+      const testId = t.getAttribute("data-testid");
+      if (testId) el.testId = testId;
+      const form = t.closest("form");
+      if (form) { el.formId = form.id || ""; el.formAction = form.action || ""; }
 
-    // Links: capture href
-    if (tag === "a") {
-      el.href = (t as HTMLAnchorElement).href || "";
+      emit("click", data);
+    } catch (err) {
+      if (typeof console !== 'undefined') console.warn('[TraceBug] Click capture error:', err);
     }
-
-    // Buttons: capture type and disabled state
-    if (tag === "button" || (t as HTMLButtonElement).type === "submit") {
-      el.buttonType = (t as HTMLButtonElement).type || "button";
-      el.disabled = (t as HTMLButtonElement).disabled;
-    }
-
-    // If clicking on a label, capture the "for" attribute
-    if (tag === "label") {
-      el.forField = (t as HTMLLabelElement).htmlFor || "";
-    }
-
-    // Capture aria-label if present
-    const ariaLabel = t.getAttribute("aria-label");
-    if (ariaLabel) el.ariaLabel = ariaLabel;
-
-    // Capture role if present
-    const role = t.getAttribute("role");
-    if (role) el.role = role;
-
-    // Capture data-testid if present (common in React apps)
-    const testId = t.getAttribute("data-testid");
-    if (testId) el.testId = testId;
-
-    // Closest form context
-    const form = t.closest("form");
-    if (form) {
-      el.formId = form.id || "";
-      el.formAction = form.action || "";
-    }
-
-    emit("click", data);
   };
   document.addEventListener("click", handler, { capture: true });
   return () => document.removeEventListener("click", handler, { capture: true });
@@ -134,49 +116,46 @@ export function collectInputs(emit: Emit): () => void {
   const timers = new Map<EventTarget, ReturnType<typeof setTimeout>>();
 
   const handler = (e: Event) => {
-    const t = e.target as HTMLInputElement | HTMLTextAreaElement;
-    if (!t || !("value" in t) || isTraceBugElement(t)) return;
+    try {
+      const t = e.target as HTMLInputElement | HTMLTextAreaElement;
+      if (!t || !("value" in t) || isTraceBugElement(t)) return;
+      if (t.tagName.toLowerCase() === "select") return;
 
-    // Skip selects — handled by collectSelectChanges
-    if (t.tagName.toLowerCase() === "select") return;
+      const prev = timers.get(t);
+      if (prev) clearTimeout(prev);
 
-    const prev = timers.get(t);
-    if (prev) clearTimeout(prev);
+      timers.set(
+        t,
+        setTimeout(() => {
+          try {
+            const tag = t.tagName.toLowerCase();
+            const inputType = (t as HTMLInputElement).type || "";
+            const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) ||
+              /password|secret|token|ssn|credit/i.test(t.name || t.id || "");
 
-    timers.set(
-      t,
-      setTimeout(() => {
-        const tag = t.tagName.toLowerCase();
-        const inputType = (t as HTMLInputElement).type || "";
-        const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) ||
-          /password|secret|token|ssn|credit/i.test(t.name || t.id || "");
-
-        const data: Record<string, any> = {
-          element: {
-            tag,
-            name: t.name || t.id || "",
-            type: inputType,
-            valueLength: (t.value || "").length,
-            value: isSensitive ? "[REDACTED]" : (t.value || "").slice(0, 200),
-            placeholder: t.placeholder || "",
-          },
-        };
-
-        // Checkbox / radio: capture checked state
-        if (inputType === "checkbox" || inputType === "radio") {
-          data.element.checked = (t as HTMLInputElement).checked;
-          data.element.value = (t as HTMLInputElement).checked ? "checked" : "unchecked";
-        }
-
-        // Number inputs: capture as-is (not sensitive)
-        if (inputType === "number" || inputType === "range") {
-          data.element.value = t.value;
-        }
-
-        emit("input", data);
-        timers.delete(t);
-      }, 300)
-    );
+            const data: Record<string, any> = {
+              element: {
+                tag, name: t.name || t.id || "", type: inputType,
+                valueLength: (t.value || "").length,
+                value: isSensitive ? "[REDACTED]" : (t.value || "").slice(0, 200),
+                placeholder: t.placeholder || "",
+              },
+            };
+            if (inputType === "checkbox" || inputType === "radio") {
+              data.element.checked = (t as HTMLInputElement).checked;
+              data.element.value = (t as HTMLInputElement).checked ? "checked" : "unchecked";
+            }
+            if (inputType === "number" || inputType === "range") { data.element.value = t.value; }
+            emit("input", data);
+          } catch (err) {
+            if (typeof console !== 'undefined') console.warn('[TraceBug] Input capture error:', err);
+          }
+          timers.delete(t);
+        }, 300)
+      );
+    } catch (err) {
+      if (typeof console !== 'undefined') console.warn('[TraceBug] Input capture error:', err);
+    }
   };
 
   document.addEventListener("input", handler, { capture: true });
@@ -190,23 +169,22 @@ export function collectInputs(emit: Emit): () => void {
 
 export function collectSelectChanges(emit: Emit): () => void {
   const handler = (e: Event) => {
-    const t = e.target as HTMLSelectElement;
-    if (!t || t.tagName.toLowerCase() !== "select" || isTraceBugElement(t)) return;
-
-    const selectedOption = t.options[t.selectedIndex];
-    emit("select_change", {
-      element: {
-        tag: "select",
-        name: t.name || t.id || "",
-        value: t.value,
-        selectedText: selectedOption ? selectedOption.text : "",
-        selectedIndex: t.selectedIndex,
-        optionCount: t.options.length,
-        allOptions: Array.from(t.options).map(o => o.text).slice(0, 20),
-      },
-    });
+    try {
+      const t = e.target as HTMLSelectElement;
+      if (!t || t.tagName.toLowerCase() !== "select" || isTraceBugElement(t)) return;
+      const selectedOption = t.options[t.selectedIndex];
+      emit("select_change", {
+        element: {
+          tag: "select", name: t.name || t.id || "", value: t.value,
+          selectedText: selectedOption ? selectedOption.text : "",
+          selectedIndex: t.selectedIndex, optionCount: t.options.length,
+          allOptions: Array.from(t.options).map(o => o.text).slice(0, 20),
+        },
+      });
+    } catch (err) {
+      if (typeof console !== 'undefined') console.warn('[TraceBug] Select capture error:', err);
+    }
   };
-
   document.addEventListener("change", handler, { capture: true });
   return () => document.removeEventListener("change", handler, { capture: true });
 }
@@ -215,31 +193,25 @@ export function collectSelectChanges(emit: Emit): () => void {
 
 export function collectFormSubmits(emit: Emit): () => void {
   const handler = (e: Event) => {
-    const form = e.target as HTMLFormElement;
-    if (!form || form.tagName.toLowerCase() !== "form" || isTraceBugElement(form)) return;
-
-    const formData: Record<string, string> = {};
-    const elements = form.elements;
-    for (let i = 0; i < elements.length; i++) {
-      const el = elements[i] as HTMLInputElement;
-      if (!el.name) continue;
-      const isSensitive = ["password"].includes(el.type) ||
-        /password|secret|token|ssn|credit/i.test(el.name);
-      if (el.type === "submit" || el.type === "button") continue;
-      formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
+    try {
+      const form = e.target as HTMLFormElement;
+      if (!form || form.tagName.toLowerCase() !== "form" || isTraceBugElement(form)) return;
+      const formData: Record<string, string> = {};
+      const elements = form.elements;
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i] as HTMLInputElement;
+        if (!el.name) continue;
+        const isSensitive = ["password"].includes(el.type) || /password|secret|token|ssn|credit/i.test(el.name);
+        if (el.type === "submit" || el.type === "button") continue;
+        formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
+      }
+      emit("form_submit", {
+        form: { id: form.id || "", action: form.action || "", method: form.method || "GET", fieldCount: elements.length, fields: formData },
+      });
+    } catch (err) {
+      if (typeof console !== 'undefined') console.warn('[TraceBug] Form capture error:', err);
     }
-
-    emit("form_submit", {
-      form: {
-        id: form.id || "",
-        action: form.action || "",
-        method: form.method || "GET",
-        fieldCount: elements.length,
-        fields: formData,
-      },
-    });
   };
-
   document.addEventListener("submit", handler, { capture: true });
   return () => document.removeEventListener("submit", handler, { capture: true });
 }
