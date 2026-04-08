@@ -1,5 +1,17 @@
+import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+
+export const metadata: Metadata = {
+  title: "Documentation — TraceBug",
+  description:
+    "Complete guide to integrating TraceBug SDK and Chrome Extension. Setup in 2 lines of code. API reference, configuration, and framework examples.",
+  openGraph: {
+    title: "TraceBug Documentation",
+    description:
+      "Setup guide, API reference, and framework examples for TraceBug.",
+  },
+};
 
 export default function DocsPage() {
   return (
