@@ -106,9 +106,43 @@ AFTER TraceBug:
 - `console.warn` capture as warning events (when level is 'warnings' or 'all')
 - `console.log` capture as info events, capped at 50 (when level is 'all')
 
+### User Identification
+- `TraceBug.setUser({ id, email, name })` — identify users for session attribution
+- `TraceBug.getUser()` / `TraceBug.clearUser()` — query and clear
+- Persisted in `tracebug_user` localStorage key, auto-attached to sessions
+
+### Bug Flagging & Compact Reports
+- `TraceBug.markAsBug()` — flag current session as a bug (`isBug: true`)
+- `TraceBug.getCompactReport()` — 2-3 sentence Slack-friendly summary
+
 ### CI/CD Helpers
 - `TraceBug.getErrorCount()` — for test assertions
 - `TraceBug.exportSessionJSON()` — clean JSON for CI artifacts
+
+### CLI Tool
+- `npx tracebug init` — auto-detects framework, prints integration snippet
+- Supports: Next.js, React, Vue, Angular, Svelte, Nuxt, vanilla JS
+
+### Screenshot Auto-Download
+- Screenshots from toolbar camera button auto-download as PNG
+- "Save Annotated" in annotation editor also auto-downloads
+- `takeScreenshot({ includeAnnotations: true })` captures page with annotation badges visible
+- Chrome Extension uses `chrome.tabs.captureVisibleTab` instead of html2canvas (CORS-safe)
+
+### Clickable Annotation Badges
+- Numbered badges on annotated elements are clickable
+- Click opens a popover showing intent, severity, and comment
+- Annotation list panel shows screenshots alongside annotations/draw regions
+
+### Config Validation
+- Runtime checks on `init()`: projectId must be string, maxEvents/maxSessions must be positive
+- Invalid config warns and falls back to defaults (never crashes)
+
+### Error Boundary
+- Entire `init()` body wrapped in try/catch
+- All collector handlers wrapped individually
+- Fetch/XHR wrappers always call original function even on tracking error
+- Dashboard mount wrapped — page works even if UI fails
 
 ### Accessibility (A11y)
 - `aria-label` on all toolbar buttons (icon-only)
@@ -160,7 +194,13 @@ tracebug-ai/
 │   ├── report-builder.ts      # Assembles complete BugReport from all data sources
 │   ├── github-issue.ts        # GitHub issue markdown generator
 │   ├── jira-issue.ts          # Jira ticket template generator (Jira markup format)
-│   └── pdf-generator.ts       # Print-optimized HTML report (save as PDF from browser)
+│   ├── pdf-generator.ts       # Print-optimized HTML report (save as PDF from browser)
+│   └── ui/                    # Extracted dashboard UI modules
+│       ├── index.ts           # Barrel export
+│       ├── helpers.ts         # Shared utilities (formatDuration, escapeHtml, styles)
+│       └── toast.ts           # Toast notification system
+├── cli/                       # CLI tool (npx tracebug init)
+│   └── bin.ts                 # Framework detection + setup instructions
 ├── tracebug-extension/        # Chrome Extension (Manifest V3)
 │   ├── manifest.json          # Extension config — permissions, content scripts
 │   ├── background.js          # Service worker — site enable/disable, SDK injection via chrome.scripting API
@@ -279,9 +319,13 @@ cd example-app && npm install && npm run dev
 # Build + update example app in one command
 npm run build:example
 
-# Load Chrome Extension
-# 1. Open chrome://extensions/
-# 2. Enable Developer mode
+# Chrome Extension
+# Install from Chrome Web Store: https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj
+# Works in Chrome, Edge, Brave, Opera
+#
+# Developer install (from source):
+# 1. npm run build
+# 2. Open chrome://extensions/ → Enable Developer mode
 # 3. Click Load unpacked → select tracebug-extension/ folder
 # 4. After code changes: npm run build → refresh extension in chrome://extensions/
 ```
@@ -383,9 +427,22 @@ TraceBug.on('error:captured', (error) => {});
 TraceBug.on('screenshot:taken', (screenshot) => {});
 TraceBug.on('report:generated', (report) => {});
 
+// User Identification
+TraceBug.setUser({ id: "user_123", email: "dev@co.com", name: "Jane" });
+TraceBug.getUser();                    // { id, email, name } | null
+TraceBug.clearUser();
+
+// Bug Flagging
+TraceBug.markAsBug();                  // flag session as bug
+TraceBug.getCompactReport();           // Slack-friendly 2-sentence summary
+
 // CI/CD Helpers
 TraceBug.getErrorCount();              // for test assertions
 TraceBug.exportSessionJSON();          // JSON for CI artifacts
+
+// Screenshots
+await TraceBug.takeScreenshot();                              // clean page, auto-downloads
+await TraceBug.takeScreenshot({ includeAnnotations: true });  // with annotation badges visible
 
 // Tear down completely
 TraceBug.destroy();

@@ -15,6 +15,12 @@ export default function Reveal({ children, delay = 0, className = '' }: RevealPr
     const el = ref.current;
     if (!el) return;
 
+    // Respect prefers-reduced-motion — show immediately without animation
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.classList.add('reveal-visible');
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {

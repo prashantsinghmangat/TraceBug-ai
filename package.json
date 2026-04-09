@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Zero-backend, browser-only SDK that records user sessions and generates bug reproduction steps. Data stays in localStorage.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -17,6 +17,9 @@
         "default": "./dist/index.cjs"
       }
     }
+  },
+  "bin": {
+    "tracebug": "./dist/bin.mjs"
   },
   "files": [
     "dist"
@@ -53,6 +56,6 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "html2canvas": "^1.4.1"
+    "html2canvas": "1.4.1"
   }
 }

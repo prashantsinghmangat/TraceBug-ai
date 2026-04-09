@@ -15,6 +15,7 @@ npm run build
 | ESM | `dist/index.js` | npm package (import) | Modern bundlers (Vite, webpack 5+) |
 | CJS | `dist/index.cjs` | npm package (require) | Node.js, older bundlers |
 | IIFE | `tracebug-extension/tracebug-sdk.js` | Chrome Extension | `window.TraceBug` global |
+| CLI | `dist/bin.mjs` | `npx tracebug` | CLI tool for project setup |
 | DTS | `dist/index.d.ts` / `dist/index.d.cts` | TypeScript types | IDE autocompletion |
 
 The IIFE build includes a footer script that exposes `window.TraceBug` with a `__TRACEBUG_LOADED__` guard to prevent double loading.
@@ -42,6 +43,14 @@ export default defineConfig([
     dts: true,
     clean: true,
   },
+  // CLI tool: ESM with shebang
+  {
+    entry: { bin: "cli/bin.ts" },
+    format: ["esm"],
+    platform: "node",
+    target: "node18",
+    banner: { js: "#!/usr/bin/env node" },
+  },
   // Chrome Extension: IIFE bundle
   {
     entry: { "tracebug-sdk": "src/index.ts" },
@@ -57,27 +66,34 @@ export default defineConfig([
 ```
 src/
 ├── index.ts               # Entry — TraceBugSDK class, public API, exports
-├── types.ts               # All TypeScript interfaces
+├── types.ts               # All TypeScript interfaces (TraceBugConfig, TraceBugUser, etc.)
 ├── collectors.ts          # Event collectors with self-filtering + console capture
 ├── storage.ts             # localStorage persistence with batched writes
 ├── repro-generator.ts     # Generates human-readable reproduction steps
-├── dashboard.ts           # In-browser panel UI (vanilla DOM, tabbed layout)
+├── dashboard.ts           # In-browser panel UI orchestrator (imports from ui/)
 ├── compact-toolbar.ts     # Configurable toolbar (position, drag, mobile FAB)
-├── element-annotate.ts    # Element-level annotation mode
+├── element-annotate.ts    # Element-level annotation mode + clickable badge popovers
 ├── draw-mode.ts           # Rectangle/ellipse drawing on live page
 ├── annotation-store.ts    # In-memory annotation store with export
 ├── theme.ts               # CSS custom property design tokens (dark/light/auto)
 ├── onboarding.ts          # First-run tooltip tour + help button replay
 ├── plugin-system.ts       # Plugin API + event hook system
 ├── environment.ts         # Browser/OS/viewport detection
-├── screenshot.ts          # html2canvas capture + auto-naming
+├── screenshot.ts          # html2canvas + extension captureVisibleTab + auto-download
 ├── voice-recorder.ts      # Web Speech API speech-to-text
 ├── title-generator.ts     # Auto bug title + flow summary
 ├── timeline-builder.ts    # Event timeline with elapsed timestamps
 ├── report-builder.ts      # BugReport assembly from all data sources
 ├── github-issue.ts        # GitHub issue markdown generator
 ├── jira-issue.ts          # Jira ticket generator
-└── pdf-generator.ts       # Print-optimized HTML report
+├── pdf-generator.ts       # Print-optimized HTML report
+└── ui/                    # Extracted dashboard UI modules
+    ├── index.ts           # Barrel export
+    ├── helpers.ts         # Shared utilities (formatDuration, escapeHtml, etc.)
+    └── toast.ts           # Toast notification system
+
+cli/
+└── bin.ts                 # CLI tool source (compiled to dist/bin.mjs)
 ```
 
 ## Data Flow
@@ -195,6 +211,38 @@ TraceBug must never capture its own events. Three-tier detection:
 
 Applied to all collectors: clicks, inputs, selects, form submits.
 
+## Error Boundary
+
+TraceBug must never crash the host application. Every entry point is wrapped in try/catch:
+
+- **`init()` body** — wrapped entirely; on failure, logs warning and returns silently
+- **`emit()` function** — each event emission wrapped; failures never propagate to the collector
+- **All collector handlers** — clicks, inputs, selects, forms, route changes wrapped individually
+- **Fetch/XHR wrappers** — tracking code in inner try/catch; the original `fetch()` or `XMLHttpRequest.send()` is **always** called even if tracking throws
+- **Dashboard mount** — wrapped; if UI fails to render, the page still works
+- **Theme injection** — wrapped independently
+
+### Config Validation
+
+`init()` performs runtime checks before proceeding:
+- `projectId` must be a non-empty string
+- `maxEvents` and `maxSessions` must be positive numbers (fallback to defaults if invalid)
+- Missing config object or missing `projectId` triggers `console.warn` and early return
+
+## Extension Screenshot
+
+In the Chrome Extension context, `html2canvas` fails due to CORS restrictions on cross-origin resources. The SDK detects the extension context via `__TRACEBUG_INITIALIZED__` flag and uses a message bridge instead:
+
+```
+SDK toolbar click → detects extension context
+  → dispatches "tracebug-request-screenshot" (page event)
+  → content-script.js picks up the event
+  → sends "CAPTURE_SCREENSHOT" to background.js
+  → background calls chrome.tabs.captureVisibleTab()
+  → result sent back via "tracebug-ext-screenshot-result" event
+  → SDK receives real PNG dataUrl
+```
+
 ## Storage Design
 
 ### localStorage (persistent)
@@ -202,6 +250,7 @@ Applied to all collectors: clicks, inputs, selects, form submits.
 | Key | Description |
 |-----|-------------|
 | `tracebug_sessions` | JSON array of `StoredSession` objects |
+| `tracebug_user` | JSON object with user identification (`setUser()`) |
 | `tracebug_onboarding_complete` | `"true"` when onboarding tour completed |
 | `tracebug_toolbar_pos` | `{ x, y }` drag position (if user moved toolbar) |
 

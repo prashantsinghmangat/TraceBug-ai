@@ -1,5 +1,10 @@
 # TraceBug SDK
 
+[![npm version](https://img.shields.io/npm/v/tracebug-sdk?color=7B61FF)](https://www.npmjs.com/package/tracebug-sdk)
+[![npm downloads](https://img.shields.io/npm/dm/tracebug-sdk?color=00D4FF)](https://www.npmjs.com/package/tracebug-sdk)
+[![GitHub stars](https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?color=fbbf24)](https://github.com/prashantsinghmangat/tracebug-ai)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+
 One-stop bug reproduction tool for QA testers and developers. Records user sessions, captures screenshots, and auto-generates developer-ready bug reports — all in the browser.
 
 **Minimum effort from tester. Maximum debugging output for developer.**
@@ -51,12 +56,15 @@ TraceBug.init({ projectId: "my-app" });
 
 Install the browser extension — no code needed. QA testers, PMs, and clients can use it on **any website**.
 
-1. Download the `tracebug-extension/` folder
-2. Open `chrome://extensions/` → Enable **Developer mode**
-3. Click **Load unpacked** → select the `tracebug-extension` folder
-4. Click the TraceBug icon on any site → toggle **"Enable on this site"**
+**[Install from Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)** — one click, works immediately.
 
-Works on Chrome, Edge, Brave, and Opera.
+| Browser | Supported |
+|---------|-----------|
+| Chrome | Yes — install from Chrome Web Store |
+| Edge | Yes — Chrome Web Store extensions work natively |
+| Brave | Yes — Chrome Web Store extensions work natively |
+| Opera | Yes — install "Install Chrome Extensions" add-on first |
+| Firefox | Not yet — use the npm SDK instead |
 
 ## Features
 
@@ -328,11 +336,11 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 
 ### How to Install
 
-1. Open `chrome://extensions/`
-2. Enable **Developer mode** (toggle in top-right)
-3. Click **Load unpacked**
-4. Select the `tracebug-extension/` folder from this repo
-5. TraceBug icon appears in the toolbar
+**Recommended:** [Install from Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) — works in Chrome, Edge, Brave, and Opera.
+
+**From source** (for developers):
+1. `git clone` this repo, then `npm install && npm run build`
+2. Open `chrome://extensions/` → Enable Developer mode → Load unpacked → select `tracebug-extension/`
 
 ### How to Use
 
@@ -359,15 +367,14 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 | Google Chrome | Yes |
 | Microsoft Edge | Yes |
 | Brave | Yes |
-| Opera | Yes |
-| Firefox | Coming soon |
+| Opera | Yes (install "Install Chrome Extensions" add-on first) |
+| Firefox | Not yet — use the npm SDK |
 
-### Publishing to Chrome Web Store
+### Chrome Web Store
 
-1. Create a developer account at the Chrome Web Store Developer Console
-2. Pay the one-time $5 registration fee
-3. Zip the `tracebug-extension/` folder
-4. Upload → fill in listing details → submit for review
+TraceBug is published on the Chrome Web Store:
+
+**[Install TraceBug Extension](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)**
 
 ## Build from Source
 

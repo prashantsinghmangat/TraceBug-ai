@@ -8,19 +8,34 @@ import Installation from "@/components/Installation";
 import BugReportPreview from "@/components/BugReportPreview";
 import Comparison from "@/components/Comparison";
 import Footer from "@/components/Footer";
+import Reveal from "@/components/Reveal";
 
 export default function Home() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
       <Hero />
-      <Problem />
-      <Solution />
-      <Features />
-      <HowItWorks />
-      <Installation />
-      <BugReportPreview />
-      <Comparison />
+      <Reveal>
+        <Problem />
+      </Reveal>
+      <Reveal delay={100}>
+        <Solution />
+      </Reveal>
+      <Reveal>
+        <Features />
+      </Reveal>
+      <Reveal delay={100}>
+        <HowItWorks />
+      </Reveal>
+      <Reveal>
+        <Installation />
+      </Reveal>
+      <Reveal delay={100}>
+        <BugReportPreview />
+      </Reveal>
+      <Reveal>
+        <Comparison />
+      </Reveal>
       <Footer />
     </main>
   );

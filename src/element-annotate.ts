@@ -269,20 +269,27 @@ function _refreshPersistentBadges(root: HTMLElement): void {
     root.appendChild(outline);
     _persistentBadges.push(outline);
 
-    // Numbered badge with tooltip
+    // Numbered badge — clickable to show annotation details
     const badge = document.createElement("div");
     badge.dataset.tracebug = "annotation-badge";
-    badge.title = `${a.intent.toUpperCase()}: ${a.comment.slice(0, 60)}`;
+    badge.title = `Click to view: ${a.intent.toUpperCase()} — ${a.comment.slice(0, 60)}`;
     badge.style.cssText = `
-      position: fixed; z-index: 2147483645; pointer-events: auto; cursor: default;
+      position: fixed; z-index: 2147483645; pointer-events: auto; cursor: pointer;
       left: ${rect.right - 10}px; top: ${rect.top - 10}px;
       width: 20px; height: 20px; border-radius: 50%;
       background: ${_intentColor(a.intent)}; color: #fff;
       font-size: 10px; font-weight: 700; font-family: system-ui, sans-serif;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+      transition: transform 0.15s;
     `;
     badge.textContent = String(i + 1);
+    badge.addEventListener("mouseenter", () => { badge.style.transform = "scale(1.2)"; });
+    badge.addEventListener("mouseleave", () => { badge.style.transform = "scale(1)"; });
+    badge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _showBadgePopover(a, badge, root);
+    });
     root.appendChild(badge);
     _persistentBadges.push(badge);
   }
@@ -296,6 +303,94 @@ export function showAnnotationBadges(root: HTMLElement): void {
 export function clearAnnotationBadges(): void {
   _persistentBadges.forEach(b => b.remove());
   _persistentBadges = [];
+}
+
+// ── Badge popover (shows annotation details when badge clicked) ──────────
+
+function _showBadgePopover(a: ElementAnnotation, badge: HTMLElement, root: HTMLElement): void {
+  // Remove any existing popover
+  const existing = document.getElementById("tracebug-badge-popover");
+  if (existing) existing.remove();
+
+  const intentColor = _intentColor(a.intent);
+  const sevColor = a.severity === "critical" ? "#ef4444" : a.severity === "major" ? "#f97316" : a.severity === "minor" ? "#3b82f6" : "#888";
+  const badgeRect = badge.getBoundingClientRect();
+
+  const popover = document.createElement("div");
+  popover.id = "tracebug-badge-popover";
+  popover.dataset.tracebug = "badge-popover";
+
+  // Position below the badge, or above if near bottom
+  const posBelow = badgeRect.bottom + 8;
+  const posAbove = badgeRect.top - 8;
+  const fitsBelow = posBelow + 180 < window.innerHeight;
+
+  popover.style.cssText = `
+    position: fixed; z-index: 2147483647; pointer-events: auto;
+    left: ${Math.max(8, Math.min(badgeRect.left - 120, window.innerWidth - 280))}px;
+    ${fitsBelow ? `top: ${posBelow}px` : `bottom: ${window.innerHeight - posAbove}px`};
+    width: 270px;
+    background: var(--tb-bg-secondary, #1a1a2e);
+    border: 1px solid var(--tb-border-hover, #3a3a5e);
+    border-radius: var(--tb-radius-lg, 12px);
+    padding: 14px;
+    font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
+    font-size: 12px;
+    color: var(--tb-text-primary, #e0e0e0);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    animation: tracebug-tooltip-in 0.15s ease;
+  `;
+
+  // Build safe text content using DOM APIs instead of innerHTML for user data
+  const intentLabel = a.intent.charAt(0).toUpperCase() + a.intent.slice(1);
+  const sevLabel = a.severity.charAt(0).toUpperCase() + a.severity.slice(1);
+
+  // Header row
+  const header = document.createElement("div");
+  header.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:10px";
+
+  const intentBadge = document.createElement("span");
+  intentBadge.style.cssText = `font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase`;
+  intentBadge.textContent = intentLabel;
+
+  const sevBadge = document.createElement("span");
+  sevBadge.style.cssText = `font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500`;
+  sevBadge.textContent = sevLabel;
+
+  const closeBtn = document.createElement("button");
+  closeBtn.dataset.action = "close";
+  closeBtn.style.cssText = "margin-left:auto;background:none;border:none;color:var(--tb-text-muted, #666);cursor:pointer;font-size:14px;padding:0 4px";
+  closeBtn.textContent = "\u2715";
+  closeBtn.title = "Close";
+
+  header.append(intentBadge, sevBadge, closeBtn);
+
+  // Comment
+  const commentEl = document.createElement("div");
+  commentEl.style.cssText = "font-size:13px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5;word-break:break-word";
+  commentEl.textContent = a.comment;
+
+  popover.append(header, commentEl);
+
+  root.appendChild(popover);
+
+  // Close button
+  popover.querySelector('[data-action="close"]')!.addEventListener("click", () => popover.remove());
+
+  // Close on click outside
+  const closeHandler = (ev: MouseEvent) => {
+    if (!popover.contains(ev.target as Node) && ev.target !== badge) {
+      popover.remove();
+      document.removeEventListener("click", closeHandler);
+    }
+  };
+  setTimeout(() => document.addEventListener("click", closeHandler), 10);
+
+  // Close on Escape
+  const escHandler = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") { popover.remove(); document.removeEventListener("keydown", escHandler); }
+  };
+  document.addEventListener("keydown", escHandler);
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────

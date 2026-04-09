@@ -80,14 +80,25 @@ Returns the current session ID, or `null` if not initialized.
 
 ## Screenshots
 
-### `TraceBug.takeScreenshot(): Promise<ScreenshotData | null>`
+### `TraceBug.takeScreenshot(options?): Promise<ScreenshotData | null>`
 
-Capture a screenshot of the current page using html2canvas. Returns the screenshot data including base64 data URL, filename, and dimensions.
+Capture a screenshot of the current page. The file auto-downloads to the user's system. Returns the screenshot data including base64 data URL, filename, and dimensions.
 
 ```typescript
+// Standard screenshot (clean page, annotations hidden)
 const screenshot = await TraceBug.takeScreenshot();
-console.log(screenshot?.filename); // "01_click_button.png"
+
+// Screenshot with annotations visible (badges + outlines stay on screen)
+const annotated = await TraceBug.takeScreenshot({ includeAnnotations: true });
 ```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `includeAnnotations` | `boolean` | `false` | Keep annotation badges and outlines visible in the screenshot |
+
+In the Chrome Extension, screenshots use `chrome.tabs.captureVisibleTab` instead of html2canvas for reliable cross-origin capture.
 
 ### `TraceBug.getScreenshots(): ScreenshotData[]`
 
@@ -288,6 +299,61 @@ Get current environment info: browser, OS, viewport, device type, connection typ
 
 ---
 
+## User Identification
+
+### `TraceBug.setUser(user)`
+
+Identify the current user. The user is persisted in localStorage and attached to all sessions.
+
+```typescript
+TraceBug.setUser({
+  id: "user_123",
+  email: "dev@example.com",
+  name: "Jane Doe",
+});
+```
+
+**Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | Yes | Unique user identifier |
+| `email` | `string` | No | User email |
+| `name` | `string` | No | Display name |
+
+Custom fields are also supported: `TraceBug.setUser({ id: "123", plan: "pro", role: "admin" })`.
+
+### `TraceBug.getUser(): TraceBugUser | null`
+
+Get the identified user, or `null` if not set.
+
+### `TraceBug.clearUser()`
+
+Clear the identified user from localStorage.
+
+---
+
+## Bug Flagging
+
+### `TraceBug.markAsBug()`
+
+Flag the current session as a bug. Adds an `isBug: true` property to the session in localStorage.
+
+```typescript
+TraceBug.markAsBug();
+```
+
+### `TraceBug.getCompactReport(): string | null`
+
+Get a 2-3 sentence Slack-friendly summary of the current session.
+
+```typescript
+const summary = TraceBug.getCompactReport();
+// "Bug on /vendor — TypeError: Cannot read 'status' after clicking Edit → selecting Inactive → clicking Update. POST /api/vendor/update returned 500. Chrome 121, Windows 11."
+```
+
+---
+
 ## Plugin System
 
 Register plugins to filter, transform, or enrich events and reports.
@@ -424,6 +490,7 @@ All types are exported from the package:
 import type {
   TraceBugConfig,
   TraceBugEvent,
+  TraceBugUser,
   StoredSession,
   BugReport,
   Annotation,

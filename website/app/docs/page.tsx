@@ -43,9 +43,13 @@ export default function DocsPage() {
               {[
                 { href: "#getting-started", label: "Getting Started" },
                 { href: "#sdk-setup", label: "SDK Setup" },
+                { href: "#configuration", label: "Configuration" },
+                { href: "#user-identification", label: "User Identification" },
+                { href: "#screenshots", label: "Screenshots & Annotations" },
                 { href: "#chrome-extension", label: "Chrome Extension Usage" },
                 { href: "#bug-report-format", label: "Bug Report Format" },
                 { href: "#github-integration", label: "GitHub Integration" },
+                { href: "#plugins-hooks", label: "Plugins & Hooks" },
                 { href: "#api-reference", label: "API Reference" },
               ].map((item) => (
                 <li key={item.href}>
@@ -214,6 +218,68 @@ export default function DocsPage() {
             </div>
           </section>
 
+          {/* Configuration */}
+          <section id="configuration" className="mb-16">
+            <h2 className="text-2xl font-bold text-text-primary mb-6">Configuration</h2>
+            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 overflow-x-auto">
+              <pre className="text-sm font-mono text-text-primary leading-relaxed">
+{`TraceBug.init({
+  projectId: "my-app",        // Required
+  maxEvents: 200,             // Max events per session
+  maxSessions: 50,            // Max sessions in localStorage
+  enableDashboard: true,      // Show toolbar UI
+  enabled: "auto",            // auto | development | staging | all | off
+  theme: "dark",              // dark | light | auto
+  toolbarPosition: "right",   // right | left | bottom-right | bottom-left
+  captureConsole: "errors",   // errors | warnings | all | none
+});`}
+              </pre>
+            </div>
+            <p className="text-text-muted text-sm mt-4">
+              Config is validated at runtime — invalid values fall back to defaults and log a warning. TraceBug never crashes your app due to misconfiguration.
+            </p>
+          </section>
+
+          {/* User Identification */}
+          <section id="user-identification" className="mb-16">
+            <h2 className="text-2xl font-bold text-text-primary mb-6">User Identification</h2>
+            <p className="text-text-muted mb-4">
+              Identify users so sessions are attributed. Persisted in localStorage across page loads.
+            </p>
+            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 overflow-x-auto">
+              <pre className="text-sm font-mono text-text-primary leading-relaxed">
+{`// Identify the current user
+TraceBug.setUser({ id: "user_123", email: "dev@co.com", name: "Jane" });
+
+// Get identified user
+const user = TraceBug.getUser();  // { id, email, name } | null
+
+// Clear user
+TraceBug.clearUser();`}
+              </pre>
+            </div>
+          </section>
+
+          {/* Screenshots & Annotations */}
+          <section id="screenshots" className="mb-16">
+            <h2 className="text-2xl font-bold text-text-primary mb-6">Screenshots & Annotations</h2>
+            <div className="space-y-4 text-text-muted text-sm">
+              <p><strong className="text-text-primary">Auto-download:</strong> Screenshots from the toolbar camera button auto-download as PNG files to your system.</p>
+              <p><strong className="text-text-primary">Screenshot with annotations:</strong> Open the annotation list panel and click the green &quot;Save&quot; button to capture the page with annotation badges visible.</p>
+              <p><strong className="text-text-primary">Clickable badges:</strong> Numbered badges on annotated elements are clickable — opens a popover showing intent, severity, and comment.</p>
+              <p><strong className="text-text-primary">Chrome Extension:</strong> Uses <code className="text-primary bg-background px-1 rounded text-xs">chrome.tabs.captureVisibleTab</code> for reliable cross-origin screenshots.</p>
+            </div>
+            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 mt-4 overflow-x-auto">
+              <pre className="text-sm font-mono text-text-primary leading-relaxed">
+{`// Clean page screenshot (auto-downloads)
+await TraceBug.takeScreenshot();
+
+// Screenshot with annotation badges visible
+await TraceBug.takeScreenshot({ includeAnnotations: true });`}
+              </pre>
+            </div>
+          </section>
+
           {/* Chrome Extension */}
           <section id="chrome-extension" className="mb-16">
             <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
@@ -224,17 +290,22 @@ export default function DocsPage() {
             </h2>
             <p className="text-text-muted mb-6 leading-relaxed">
               The Chrome Extension lets QA testers and non-developers use
-              TraceBug on any website without touching code.
+              TraceBug on any website without touching code. Also works in Edge, Brave, and Opera.
             </p>
+            <div className="mb-4">
+              <a href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary/20 border border-primary/30 text-primary rounded-lg hover:bg-primary/30 transition-colors text-sm font-semibold">
+                Install from Chrome Web Store
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+              </a>
+            </div>
             <div className="space-y-4">
               {[
-                { step: "1", text: "Open chrome://extensions/ in Chrome" },
-                { step: "2", text: 'Enable "Developer mode" in the top right' },
-                { step: "3", text: 'Click "Load unpacked" and select the tracebug-extension/ folder' },
-                { step: "4", text: "Navigate to any website you want to test" },
-                { step: "5", text: "Click the TraceBug extension icon in your toolbar" },
-                { step: "6", text: 'Click "Enable on this site" to start recording' },
-                { step: "7", text: "Reproduce the bug, then click the 🐛 button that appears" },
+                { step: "1", text: "Install from the Chrome Web Store (link above) — works in Chrome, Edge, Brave, and Opera" },
+                { step: "2", text: "Navigate to any website you want to test" },
+                { step: "3", text: "Click the TraceBug extension icon in your toolbar" },
+                { step: "4", text: "Click \"Enable on this site\" to start recording" },
+                { step: "5", text: "Reproduce the bug — TraceBug captures everything automatically" },
+                { step: "6", text: "Click the TraceBug toolbar to view the session and export a report" },
               ].map((item) => (
                 <div
                   key={item.step}
@@ -339,6 +410,42 @@ export default function DocsPage() {
             </div>
           </section>
 
+          {/* Plugins & Hooks */}
+          <section id="plugins-hooks" className="mb-16">
+            <h2 className="text-2xl font-bold text-text-primary mb-6">Plugins & Hooks</h2>
+            <p className="text-text-muted mb-4">
+              Extend TraceBug without forking. Plugins can filter events, enrich reports, and transform exports.
+            </p>
+            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 overflow-x-auto">
+              <pre className="text-sm font-mono text-text-primary leading-relaxed">
+{`// Plugin: filter or transform events
+TraceBug.use({
+  name: "my-plugin",
+  onEvent: (event) => {
+    if (event.type === "console_log") return null; // drop
+    return event;
+  },
+  onReport: (report) => {
+    report.title = "[MyApp] " + report.title;
+    return report;
+  },
+});
+
+// Hooks: subscribe to lifecycle events
+TraceBug.on("error:captured", (error) => {
+  console.log("Bug found:", error.data.error.message);
+});
+
+TraceBug.on("session:start", (sessionId) => {
+  console.log("Session started:", sessionId);
+});`}
+              </pre>
+            </div>
+            <div className="mt-4 space-y-2 text-text-muted text-sm">
+              <p><strong className="text-text-primary">Other methods:</strong> <code className="text-primary bg-background px-1 rounded text-xs">markAsBug()</code> flags the session, <code className="text-primary bg-background px-1 rounded text-xs">getCompactReport()</code> returns a Slack-friendly 2-sentence summary.</p>
+            </div>
+          </section>
+
           {/* API Reference */}
           <section id="api-reference" className="mb-16">
             <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
@@ -383,6 +490,16 @@ export default function DocsPage() {
                     { sig: "TraceBug.getJiraTicket()", desc: "Get Jira ticket markup string" },
                     { sig: "TraceBug.getBugTitle()", desc: "Get auto-generated bug title" },
                     { sig: "TraceBug.downloadPdf()", desc: "Open print dialog for PDF export" },
+                  ],
+                },
+                {
+                  category: "User & Session",
+                  methods: [
+                    { sig: "TraceBug.setUser({ id, email, name })", desc: "Identify current user (persisted in localStorage)" },
+                    { sig: "TraceBug.getUser()", desc: "Get identified user or null" },
+                    { sig: "TraceBug.clearUser()", desc: "Clear identified user" },
+                    { sig: "TraceBug.markAsBug()", desc: "Flag current session as a bug" },
+                    { sig: "TraceBug.getCompactReport()", desc: "Get 2-sentence Slack-friendly summary" },
                   ],
                 },
                 {

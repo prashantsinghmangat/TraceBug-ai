@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TraceBug — QA Bug Reporter",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Record bugs, capture screenshots, and generate developer-ready bug reports. No coding required.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",

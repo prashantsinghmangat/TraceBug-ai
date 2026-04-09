@@ -2,20 +2,35 @@
 
 The TraceBug Chrome Extension lets **non-developers** (QA testers, PMs, clients) use TraceBug on **any website** — no code changes needed.
 
-## Install
+## Install from Chrome Web Store (Recommended)
 
-### From Source (Developer Mode)
+**[Install TraceBug from Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)**
 
-1. Clone or download the repository
-2. Build the SDK:
+One-click install. Works immediately on any website.
+
+## Browser Compatibility
+
+| Browser | Supported | How to Install |
+|---------|-----------|---------------|
+| **Google Chrome** | Yes | Install from Chrome Web Store (link above) |
+| **Microsoft Edge** | Yes | Install from Chrome Web Store — Edge supports Chrome extensions natively |
+| **Brave** | Yes | Install from Chrome Web Store — Brave supports Chrome extensions natively |
+| **Opera** | Yes | Install the "Install Chrome Extensions" add-on first, then install from Chrome Web Store |
+| **Firefox** | Not yet | Firefox uses a different extension format. Use the npm SDK instead: `npm install tracebug-sdk` |
+| **Safari** | No | Use the npm SDK instead |
+
+## Install from Source (Developers)
+
+For contributing or testing unreleased changes:
+
+1. Clone the repository and build:
    ```bash
+   git clone https://github.com/prashantsinghmangat/tracebug-ai
    cd tracebug-ai && npm install && npm run build
    ```
-3. Open `chrome://extensions/` in Chrome
-4. Enable **Developer mode** (top-right toggle)
-5. Click **Load unpacked**
-6. Select the `tracebug-extension/` folder
-7. The TraceBug icon appears in your toolbar
+2. Open `chrome://extensions/` in your browser
+3. Enable **Developer mode** (top-right toggle)
+4. Click **Load unpacked** → select the `tracebug-extension/` folder
 
 ### After Code Changes
 
@@ -43,7 +58,7 @@ When TraceBug is enabled on a site, the popup shows 6 action buttons:
 |--------|--------|-------------|
 | **Annotate** | Enter annotate mode | Popup closes, click elements on page to annotate |
 | **Draw** | Enter draw mode | Popup closes, drag shapes on page |
-| **Screenshot** | Capture visible page | Screenshot saved in session |
+| **Screenshot** | Capture visible page | Uses `chrome.tabs.captureVisibleTab` for reliable capture, auto-downloads PNG |
 | **PDF Report** | Download bug report | PDF opens in print dialog |
 | **GitHub Issue** | Copy GitHub markdown | Formatted issue copied to clipboard |
 | **Jira Ticket** | Copy Jira ticket | Summary + description copied to clipboard |

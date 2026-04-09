@@ -47,7 +47,16 @@ Each element annotation records:
 
 ### Persistent Badges
 
-After saving, **dashed outlines and numbered badges** appear on annotated elements. These persist until you clear annotations or leave the page. Hovering a badge shows the intent and comment preview.
+After saving, **dashed outlines and numbered badges** appear on annotated elements. These persist until you clear annotations or leave the page.
+
+### Viewing Annotation Details
+
+**Click any numbered badge** on the page to see a popover with:
+- Intent (Fix / Redesign / Remove / Question) with color
+- Severity (Critical / Major / Minor / Info)
+- The comment you wrote
+
+The popover closes on click outside, Escape key, or the X button.
 
 ## Draw Mode
 
@@ -110,10 +119,16 @@ Click the **list icon** in the compact toolbar to open the annotation panel. It 
 - Relative timestamp
 - Delete button per region
 
+### Screenshots Section
+- All captured screenshots shown with inline preview
+- Filename and dimensions
+- Download button per screenshot
+
 ### Actions
 
 | Button | Action |
 |--------|--------|
+| **Save** | Screenshot the page with annotations visible and auto-download |
 | **Copy MD** | Copy all annotations as Markdown |
 | **Copy JSON** | Copy all annotations as JSON |
 | **Clear All** | Remove all annotations (with confirmation) |

@@ -87,6 +87,13 @@ export interface TraceBugEvent {
 
 // ── Stored session ────────────────────────────────────────────────────────
 
+export interface TraceBugUser {
+  id: string;
+  email?: string;
+  name?: string;
+  [key: string]: string | undefined;
+}
+
 export interface StoredSession {
   sessionId: string;
   projectId: string;
@@ -100,6 +107,7 @@ export interface StoredSession {
   annotations: Annotation[];
   environment: EnvironmentInfo | null;
   isBug?: boolean;
+  user?: TraceBugUser | null;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────
