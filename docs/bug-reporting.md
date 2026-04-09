@@ -86,8 +86,19 @@ The detail view has a **sticky header** with the auto-generated bug title and se
 ### Capture
 
 - Click the **Camera** button in the toolbar or press `Ctrl+Shift+S`
-- TraceBug hides its own UI, captures the page via html2canvas, then restores the UI
+- The screenshot **auto-downloads** to your system as a PNG file
+- TraceBug hides its own UI, captures the page, then restores the UI
 - Screenshots are auto-named based on context: `01_click_button.png`, `02_enter_field.png`
+- In the Chrome Extension, screenshots use `chrome.tabs.captureVisibleTab` for reliable cross-origin capture
+
+### Screenshot with Annotations
+
+To capture a screenshot that includes annotation badges and outlines visible on the page:
+1. Open the **Annotation List** panel (list icon in toolbar)
+2. Click the green **"Save"** button
+3. The page is captured with all annotation markers visible, and the PNG auto-downloads
+
+Programmatically: `await TraceBug.takeScreenshot({ includeAnnotations: true })`
 
 ### Annotation Editor
 
@@ -102,7 +113,7 @@ After capturing, an annotation editor opens with:
 | **Undo** | Remove last drawn annotation |
 | **Clear** | Remove all drawn annotations |
 
-Click **Save Annotated** to merge annotations into the screenshot, or **Download** to save as PNG.
+Click **Save Annotated** to merge annotations into the screenshot — the annotated image auto-downloads to your system. Or click **Download** to save the annotated version without merging.
 
 ### Storage
 

@@ -11,6 +11,20 @@ export default defineConfig([
     sourcemap: false,
     outDir: "dist",
   },
+  // ── CLI build ─────────────────────────────────────────────────────────
+  {
+    entry: { bin: "cli/bin.ts" },
+    format: ["esm"],
+    dts: false,
+    clean: false,
+    splitting: false,
+    sourcemap: false,
+    outDir: "dist",
+    banner: { js: "#!/usr/bin/env node" },
+    platform: "node",
+    target: "node18",
+    outExtension: () => ({ js: ".mjs" }),
+  },
   // ── IIFE build for Chrome Extension ───────────────────────────────────
   {
     entry: { "tracebug-sdk": "src/index.ts" },

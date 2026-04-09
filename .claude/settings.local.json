@@ -20,7 +20,25 @@
       "Bash(powershell -Command \"Get-Command magick -ErrorAction SilentlyContinue | Select-Object Source\")",
       "Bash(rm -f tracebug-extension.zip)",
       "Bash(powershell -Command \"Compress-Archive -Path tracebug-extension/background.js, tracebug-extension/content-script.js, tracebug-extension/icons, tracebug-extension/manifest.json, tracebug-extension/popup.html, tracebug-extension/popup.js, tracebug-extension/styles.css, tracebug-extension/tracebug-init.js, tracebug-extension/tracebug-sdk.js -DestinationPath tracebug-extension.zip -Force\")",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(grep -n \"localStorage\\\\|sessionStorage\\\\|cookie\\\\|JSON.parse\\\\|innerHTML\\\\|eval\" src/*.ts)",
+      "Bash(find src:*)",
+      "Bash(grep -n \"XSS\\\\|sanitize\\\\|encode\\\\|escape\" src/*.ts)",
+      "Bash(wc -l /d/Project/TraceBug-ai/src/*.ts)",
+      "Bash(wc -l /d/Project/TraceBug-ai/website/components/*.tsx)",
+      "Bash(node -e \"const h = require\\('html2canvas'\\); console.log\\('type:', typeof h\\); console.log\\('default:', typeof h.default\\); console.log\\('keys:', Object.keys\\(h\\).slice\\(0,5\\)\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(echo \"---EXIT:$?\")",
+      "Bash(ls -la /d/Project/TraceBug-ai/.env*)",
+      "Bash(node -e \"console.log\\(require.resolve\\('tsup'\\)\\)\")",
+      "Bash(node dist/bin.cjs help)",
+      "Bash(node dist/bin.mjs help)",
+      "Bash(echo \"TSC:$?\")",
+      "Bash(npx kill-port:*)",
+      "Bash(taskkill /F /FI \"WINDOWTITLE eq *next*\")",
+      "Bash(powershell -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue\\).OwningProcess -ErrorAction SilentlyContinue | Stop-Process -Force\")",
+      "Bash(powershell -Command \"Stop-Process -Id \\(Get-NetTCPConnection -LocalPort 3001\\).OwningProcess -Force\")",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

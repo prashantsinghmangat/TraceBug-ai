@@ -4,6 +4,20 @@
 // SDK injection is handled by background.js via chrome.scripting.executeScript.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Listen for SDK requesting a screenshot (toolbar camera button) ──────────
+// The SDK dispatches this event when it detects it's in an extension context.
+// We route it to background.js which calls chrome.tabs.captureVisibleTab,
+// then send the result back to the page via another CustomEvent.
+window.addEventListener("tracebug-request-screenshot", () => {
+  chrome.runtime.sendMessage({ type: "CAPTURE_SCREENSHOT" }, (result) => {
+    window.dispatchEvent(
+      new CustomEvent("tracebug-ext-screenshot-result", {
+        detail: { dataUrl: result?.dataUrl || null },
+      })
+    );
+  });
+});
+
 // ── Listen for messages from popup/background ───────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {

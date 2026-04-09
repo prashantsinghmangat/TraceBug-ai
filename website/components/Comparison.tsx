@@ -80,8 +80,31 @@ export default function Comparison() {
           </p>
         </div>
 
-        {/* Comparison table */}
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xl">
+        {/* Mobile: card layout */}
+        <div className="md:hidden space-y-3">
+          {rows.map((row) => (
+            <div key={row.feature} className="bg-surface border border-border rounded-xl p-4">
+              <div className="font-semibold text-text-primary text-sm mb-3">{row.feature}</div>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-red-400 flex-shrink-0 mt-0.5">
+                    <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
+                  </svg>
+                  <span className="text-text-muted text-sm">{row.manual}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-400 flex-shrink-0 mt-0.5">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <span className="text-text-primary text-sm">{row.tracebug}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop: table layout */}
+        <div className="hidden md:block bg-surface border border-border rounded-2xl overflow-hidden shadow-xl">
           {/* Table header */}
           <div className="grid grid-cols-[2fr_3fr_3fr] border-b border-border">
             <div className="px-6 py-4 text-text-muted text-sm font-semibold uppercase tracking-wider">
@@ -167,7 +190,9 @@ export default function Comparison() {
         <div className="mt-12 text-center">
           <div className="inline-flex flex-col sm:flex-row items-center gap-4">
             <a
-              href="#install"
+              href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-8 py-4 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-all duration-200 shadow-glow-primary hover:shadow-glow-primary text-base"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

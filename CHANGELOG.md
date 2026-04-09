@@ -2,7 +2,7 @@
 
 All notable changes to TraceBug are documented here.
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2026-04-09
 
 ### Added
 - **Theme system** — dark/light/auto themes with CSS custom property design tokens

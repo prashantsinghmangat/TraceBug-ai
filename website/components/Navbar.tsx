@@ -112,7 +112,9 @@ export default function Navbar() {
             View on GitHub
           </a>
           <a
-            href="#install"
+            href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-200 font-medium shadow-glow-sm hover:shadow-glow-primary"
           >
             Install Extension
@@ -155,7 +157,9 @@ export default function Navbar() {
             ))}
             <div className="pt-3 pb-1 border-t border-border mt-3 flex flex-col gap-2">
               <a
-                href="#install"
+                href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="block w-full px-4 py-2.5 text-sm text-center text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors font-medium"
                 onClick={() => setIsMobileMenuOpen(false)}
               >

@@ -15,6 +15,7 @@
 import {
   TraceBugConfig,
   TraceBugEvent,
+  TraceBugUser,
   EventType,
   StoredSession,
   BugReport,
@@ -78,6 +79,7 @@ import {
 export {
   TraceBugConfig,
   TraceBugEvent,
+  TraceBugUser,
   StoredSession,
   BugReport,
   Annotation,
@@ -128,6 +130,24 @@ class TraceBugSDK {
       return;
     }
 
+    // ── Validate config ────────────────────────────────────────────
+    if (!config || typeof config !== "object") {
+      console.warn("[TraceBug] init() requires a config object.");
+      return;
+    }
+    if (!config.projectId || typeof config.projectId !== "string") {
+      console.warn("[TraceBug] init() requires a projectId string.");
+      return;
+    }
+    if (config.maxEvents !== undefined && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
+      console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
+      config.maxEvents = 200;
+    }
+    if (config.maxSessions !== undefined && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
+      console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
+      config.maxSessions = 50;
+    }
+
     // ── Check if SDK should be active in this environment ────────────
     if (!this.shouldEnable(config.enabled ?? "auto")) {
       console.info("[TraceBug] Disabled in this environment.");
@@ -158,6 +178,20 @@ class TraceBugSDK {
       try {
         const env = captureEnvironment();
         saveEnvironment(sessionId, env);
+      } catch {}
+
+      // ── Attach stored user to session ──────────────────────────────
+      try {
+        const storedUser = localStorage.getItem("tracebug_user");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          const sessions = getAllSessions();
+          const session = sessions.find(s => s.sessionId === sessionId);
+          if (session) {
+            session.user = user;
+            localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
+          }
+        }
       } catch {}
 
       // ── Emit function — collectors call this with raw event data ───────
@@ -541,6 +575,48 @@ class TraceBugSDK {
     const apiNote = failedApis.length > 0 ? ` ${failedApis[0]}.` : "";
 
     return `Bug on ${page} \u2014 ${error}${flow}.${apiNote} ${browser}, ${os}.`;
+  }
+
+  // ── User Identification ────────────────────────────────────────────
+
+  /**
+   * Identify the current user. Attached to the session for attribution.
+   * Stored in localStorage so it persists across page loads.
+   *
+   * TraceBug.setUser({ id: "user_123", email: "dev@example.com", name: "Jane" });
+   */
+  setUser(user: { id: string; email?: string; name?: string; [key: string]: string | undefined }): void {
+    if (!user.id) {
+      console.warn("[TraceBug] setUser() requires an id field.");
+      return;
+    }
+    try {
+      localStorage.setItem("tracebug_user", JSON.stringify(user));
+    } catch {}
+    // Also attach to current session in storage
+    if (this.sessionId) {
+      try {
+        const sessions = getAllSessions();
+        const session = sessions.find(s => s.sessionId === this.sessionId);
+        if (session) {
+          session.user = user;
+          localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
+        }
+      } catch {}
+    }
+  }
+
+  /** Get the identified user (or null) */
+  getUser(): { id: string; email?: string; name?: string } | null {
+    try {
+      const raw = localStorage.getItem("tracebug_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  /** Clear the identified user */
+  clearUser(): void {
+    try { localStorage.removeItem("tracebug_user"); } catch {}
   }
 
   // ── Private methods ─────────────────────────────────────────────────

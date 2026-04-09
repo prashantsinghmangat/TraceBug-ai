@@ -6,7 +6,7 @@
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import { getAnnotationCount, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getElementAnnotations, getDrawRegions } from "./annotation-store";
-import { captureScreenshot, getScreenshots } from "./screenshot";
+import { captureScreenshot, getScreenshots, downloadScreenshot } from "./screenshot";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
 
@@ -149,7 +149,8 @@ export function mountCompactToolbar(
         const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
         const lastEvent = sessions[0]?.events[sessions[0].events.length - 1] || null;
         const ss = await captureScreenshot(lastEvent);
-        showToast(`Screenshot: ${ss.filename}`, root);
+        downloadScreenshot(ss.dataUrl, ss.filename);
+        showToast(`Screenshot saved: ${ss.filename}`, root);
       } catch {
         showToast("Screenshot failed", root);
       }

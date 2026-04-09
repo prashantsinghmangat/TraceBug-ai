@@ -1,11 +1,10 @@
 // ── In-browser dashboard panel ────────────────────────────────────────────
-// Injects a floating button + slide-out panel into the page.
-// Zero dependencies — all vanilla DOM + inline styles.
+// Orchestrator module. UI helpers extracted to src/ui/.
 // Reads session data directly from localStorage.
 
 import { getAllSessions, deleteSession, clearAllSessions, addAnnotation } from "./storage";
 import { StoredSession, Annotation, ScreenshotData } from "./types";
-import { captureScreenshot, getScreenshots, downloadAllScreenshots } from "./screenshot";
+import { captureScreenshot, getScreenshots, downloadAllScreenshots, downloadScreenshot } from "./screenshot";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
@@ -17,6 +16,14 @@ import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAn
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, ToolbarPosition } from "./compact-toolbar";
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { startOnboarding, addLogoPulse, cleanupOnboarding, injectOnboardingStyles } from "./onboarding";
+import { showToast as _showToastModule } from "./ui/toast";
+// UI helpers extracted to src/ui/ — imported with prefix for gradual migration
+import {
+  eventConfig as _uiEventConfig, escapeHtml as _uiEscapeHtml, smallBtnStyle as _uiSmallBtnStyle,
+  tabBtnStyle as _uiTabBtnStyle, describeEvent as _uiDescribeEvent, timeAgo as _uiTimeAgo,
+  formatDuration as _uiFormatDuration, getStatusColor as _uiGetStatusColor, getStatusLabel as _uiGetStatusLabel,
+  getSpeedLabel as _uiGetSpeedLabel, getErrorType as _uiGetErrorType, downloadFile as _uiDownloadFile,
+} from "./ui/helpers";
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -1570,16 +1577,18 @@ function _tabBtnStyle(active: boolean): string {
 function renderAnnotationList(panel: HTMLElement): void {
   const elAnnotations = getElementAnnotations();
   const drawRegions = getDrawRegions();
-  const total = elAnnotations.length + drawRegions.length;
+  const screenshotsList = getScreenshots();
+  const total = elAnnotations.length + drawRegions.length + screenshotsList.length;
 
   panel.innerHTML = `
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
-        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:3px">${elAnnotations.length} element annotation${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} draw region${drawRegions.length !== 1 ? "s" : ""}</div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:3px">${elAnnotations.length} element${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} region${drawRegions.length !== 1 ? "s" : ""}, ${screenshotsList.length} screenshot${screenshotsList.length !== 1 ? "s" : ""}</div>
       </div>
       <div style="display:flex;gap:6px">
         ${total > 0 ? `
+          <button id="bt-ann-screenshot" style="${smallBtnStyle("#22c55e")}font-size:10px" title="Screenshot page with annotations visible">📸 Save</button>
           <button id="bt-ann-export-md" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Copy all annotations as Markdown">Copy MD</button>
           <button id="bt-ann-export-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Copy all annotations as JSON">Copy JSON</button>
           <button id="bt-ann-clear-all" style="${smallBtnStyle("#ef4444")}font-size:10px" title="Remove all annotations">Clear All</button>
@@ -1592,6 +1601,22 @@ function renderAnnotationList(panel: HTMLElement): void {
   const content = panel.querySelector("#bt-ann-list-content") as HTMLElement;
 
   if (total > 0) {
+    // Screenshot with annotations visible
+    panel.querySelector("#bt-ann-screenshot")?.addEventListener("click", async () => {
+      const btn = panel.querySelector("#bt-ann-screenshot") as HTMLElement;
+      btn.textContent = "Capturing...";
+      try {
+        const ss = await captureScreenshot(null, { includeAnnotations: true });
+        downloadScreenshot(ss.dataUrl, ss.filename);
+        const root = document.getElementById("tracebug-root");
+        if (root) showToast(`Saved: ${ss.filename}`, root);
+        btn.textContent = "📸 Save";
+      } catch {
+        btn.textContent = "Failed";
+        setTimeout(() => { btn.textContent = "📸 Save"; }, 2000);
+      }
+    });
+
     // Export buttons
     panel.querySelector("#bt-ann-export-md")?.addEventListener("click", async () => {
       const ok = await copyToClipboard("markdown");
@@ -1697,7 +1722,32 @@ function renderAnnotationList(panel: HTMLElement): void {
     }
   }
 
+  // Screenshots
+  if (screenshotsList.length > 0) {
+    html += `<div style="font-size:11px;color:#22d3ee;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #22d3ee;padding-left:8px">SCREENSHOTS (${screenshotsList.length})</div>`;
+    for (const ss of screenshotsList) {
+      html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f)">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${escapeHtml(ss.filename)}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ss.width}x${ss.height}</span>
+          <button class="bt-ss-download" data-id="${ss.id}" style="${smallBtnStyle("#22d3ee")}font-size:10px;padding:2px 8px" title="Download">Download</button>
+        </div>
+        <img src="${ss.dataUrl}" style="max-width:100%;border-radius:var(--tb-radius-md, 6px);border:1px solid var(--tb-border, #2a2a3e)" alt="${escapeHtml(ss.filename)}" />
+      </div>`;
+    }
+  }
+
   content.innerHTML = html;
+
+  // Wire screenshot download buttons
+  content.querySelectorAll(".bt-ss-download").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = (btn as HTMLElement).dataset.id || "";
+      const ss = screenshotsList.find(s => s.id === id);
+      if (ss) downloadScreenshot(ss.dataUrl, ss.filename);
+    });
+  });
 
   // Wire delete buttons
   content.querySelectorAll(".bt-ann-delete").forEach(btn => {
@@ -2022,11 +2072,12 @@ function initAnnotationCanvas(
     redraw();
   });
 
-  // Save annotated — merge annotations into the screenshot dataUrl
+  // Save annotated — merge annotations into screenshot + auto-download
   overlay.querySelector("#bt-ann-save")!.addEventListener("click", () => {
     const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
     screenshot.dataUrl = merged;
-    showToast("✓ Annotations saved to screenshot", root);
+    downloadScreenshot(merged, screenshot.filename);
+    showToast(`✓ Saved & downloaded: ${screenshot.filename}`, root);
     overlay.remove();
   });
 

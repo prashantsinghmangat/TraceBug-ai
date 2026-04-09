@@ -5,10 +5,10 @@ export default function HowItWorks() {
     {
       number: "01",
       icon: <IconExtension size={28} />,
-      title: "Install Chrome Extension",
+      title: "Install in 30 Seconds",
       description:
-        "Load the TraceBug extension in Chrome via Developer Mode, or install the SDK into your app with 2 lines of code.",
-      detail: "chrome://extensions → Load unpacked",
+        "Install from the Chrome Web Store with one click, or add the SDK to your app with 2 lines of code. Also works in Edge, Brave, and Opera.",
+      detail: "Chrome Web Store → Install · npm install tracebug-sdk",
       color: "text-cyan-400",
       bg: "bg-cyan-500/10",
       border: "border-cyan-500/30",

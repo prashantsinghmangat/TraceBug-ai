@@ -16,12 +16,18 @@ npm install tracebug-sdk
 npm install github:prashantsinghmangat/tracebug-ai
 ```
 
+### CLI (auto-detects your framework)
+
+```bash
+npx tracebug init
+```
+
 ### Offline (.tgz)
 
 ```bash
 cd tracebug-ai && npm pack
-# Share the file: tracebug-sdk-1.1.1.tgz
-npm install ./tracebug-sdk-1.1.1.tgz
+# Share the file: tracebug-sdk-1.2.0.tgz
+npm install ./tracebug-sdk-1.2.0.tgz
 ```
 
 ## Setup (2 lines of code)
@@ -73,9 +79,15 @@ TraceBug.init({ projectId: "my-app", theme: "auto" });
 
 1. Use the app normally — TraceBug records everything silently
 2. Find a bug
-3. Click **Camera** to take a screenshot (annotation editor opens)
+3. Click **Camera** to take a screenshot — it auto-downloads to your system and opens the annotation editor
 4. Open the **session panel** (logo button) to see the full timeline
 5. Click **GitHub Issue** or **Jira Ticket** to copy a complete bug report
+
+### Saving annotations as a screenshot
+
+1. Annotate elements or draw regions on the page
+2. Open the **Annotation List** (list icon in toolbar)
+3. Click the green **"Save"** button — captures a screenshot with all annotation badges visible and downloads it
 
 ### Annotating UI issues
 
@@ -103,6 +115,16 @@ TraceBug works with any frontend framework that runs in a browser:
 - Astro
 - Vite (any framework)
 - Plain HTML/JS
+
+## User Identification
+
+Track which user encountered a bug:
+
+```typescript
+TraceBug.setUser({ id: "user_123", email: "dev@example.com", name: "Jane" });
+```
+
+The user is persisted across page loads and attached to all sessions.
 
 ## Plugins
 
@@ -151,7 +173,7 @@ const json = TraceBug.exportSessionJSON();
 - [API Reference](api-reference.md) — Full programmatic API (plugins, hooks, CI helpers)
 - [Bug Reporting](bug-reporting.md) — Screenshots, notes, voice, export
 - [Annotate & Draw](annotate-and-draw.md) — UI annotation features
-- [Chrome Extension](chrome-extension.md) — Use on any website without code
+- [Chrome Extension](chrome-extension.md) — [Install from Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) or use on any website without code
 - [Architecture](architecture.md) — How TraceBug works internally
 
 ## Uninstall

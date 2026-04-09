@@ -179,12 +179,33 @@ TraceBug.init({
 });
 ```
 
+## Config Validation
+
+TraceBug validates your config at runtime:
+
+- `projectId` must be a non-empty string — if missing, `init()` logs a warning and returns silently
+- `maxEvents` must be a positive number — invalid values fall back to default (200)
+- `maxSessions` must be a positive number — invalid values fall back to default (50)
+- If the config object itself is missing or not an object, `init()` warns and does nothing
+
+This ensures TraceBug never breaks your app due to misconfiguration.
+
 ## Session Behavior
 
 - **New session per page load** — Each page load or refresh creates a new session ID
 - **No session persistence across tabs** — Each tab has its own session
 - **Sessions stored in localStorage** under the key `tracebug_sessions`
 - **Automatic pruning** — Oldest sessions are removed when `maxSessions` is exceeded
+
+## User Identification
+
+Optionally identify users so sessions are attributed:
+
+```typescript
+TraceBug.setUser({ id: "user_123", email: "dev@example.com", name: "Jane" });
+```
+
+The user object is stored in `localStorage` under `tracebug_user` and automatically attached to all sessions. It persists across page loads until cleared with `TraceBug.clearUser()`.
 
 ## Data Storage
 
