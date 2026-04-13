@@ -4,26 +4,35 @@
 
 import { getAllSessions, deleteSession, clearAllSessions, addAnnotation } from "./storage";
 import { StoredSession, Annotation, ScreenshotData } from "./types";
-import { captureScreenshot, getScreenshots, downloadAllScreenshots, downloadScreenshot } from "./screenshot";
+import { captureScreenshot, getScreenshots, downloadAllScreenshots, downloadScreenshot, clearScreenshots } from "./screenshot";
+import { clearNetworkFailures } from "./collectors";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
 import { generatePdfReport } from "./pdf-generator";
 import { generateBugTitle } from "./title-generator";
 import { captureEnvironment } from "./environment";
-import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts } from "./voice-recorder";
+import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getAnnotationCount } from "./annotation-store";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, ToolbarPosition } from "./compact-toolbar";
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { startOnboarding, addLogoPulse, cleanupOnboarding, injectOnboardingStyles } from "./onboarding";
 import { showToast as _showToastModule } from "./ui/toast";
+import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
 // UI helpers extracted to src/ui/ — imported with prefix for gradual migration
 import {
   eventConfig as _uiEventConfig, escapeHtml as _uiEscapeHtml, smallBtnStyle as _uiSmallBtnStyle,
   tabBtnStyle as _uiTabBtnStyle, describeEvent as _uiDescribeEvent, timeAgo as _uiTimeAgo,
   formatDuration as _uiFormatDuration, getStatusColor as _uiGetStatusColor, getStatusLabel as _uiGetStatusLabel,
   getSpeedLabel as _uiGetSpeedLabel, getErrorType as _uiGetErrorType, downloadFile as _uiDownloadFile,
+  matchesShortcut,
 } from "./ui/helpers";
+
+export interface ShortcutsConfig {
+  screenshot?: string;
+  annotate?: string;
+  draw?: string;
+}
 
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
@@ -59,7 +68,10 @@ export function updateRecordingState(isRecording: boolean): void {
   }
 }
 
-export function mountDashboard(toolbarPosition?: ToolbarPosition): () => void {
+export function mountDashboard(
+  toolbarPosition?: ToolbarPosition,
+  shortcuts?: ShortcutsConfig
+): () => void {
   // Don't mount twice
   if (document.getElementById("tracebug-compact-toolbar")) return () => {};
 
@@ -150,7 +162,7 @@ export function mountDashboard(toolbarPosition?: ToolbarPosition): () => void {
 
   // ── Wire compact toolbar ────────────────────────────────────────────
   setRenderPanel(renderPanel);
-  const cleanupToolbar = mountCompactToolbar(root, panel, showToast, renderAnnotationList, toolbarPosition);
+  const cleanupToolbar = mountCompactToolbar(root, panel, showToast, renderAnnotationList, toolbarPosition, shortcuts);
 
   // ── Show existing annotation badges on page ────────────────────────
   showAnnotationBadges(root);
@@ -160,9 +172,28 @@ export function mountDashboard(toolbarPosition?: ToolbarPosition): () => void {
   startOnboarding(root);
   addLogoPulse();
 
-  // ── Keyboard shortcut: Ctrl+Shift+S for screenshot ─────────────────
+  // ── Keyboard shortcuts ─────────────────────────────────────────────
+  // Cross-platform: Ctrl on Windows/Linux, Cmd on macOS (both match via
+  // matchesShortcut). Screenshot binding is user-configurable via
+  // config.shortcuts; Quick Bug (Ctrl/Cmd+Shift+B) is hardcoded because
+  // it's the headline daily-use shortcut.
+  const screenshotShortcut = shortcuts?.screenshot || "ctrl+shift+s";
+
   const keyHandler = async (e: KeyboardEvent) => {
-    if (e.ctrlKey && e.shiftKey && e.key === "S") {
+    // Ctrl/Cmd+Shift+B — Quick Bug Capture (never configurable)
+    if (matchesShortcut(e, "ctrl+shift+b")) {
+      e.preventDefault();
+      if (!isQuickBugOpen()) {
+        showQuickBugCapture(root).catch(err => {
+          console.warn("[TraceBug] Quick bug capture failed:", err);
+          showToast("Quick capture failed", root);
+        });
+      }
+      return;
+    }
+
+    // Screenshot — user-configurable, default Ctrl/Cmd+Shift+S
+    if (matchesShortcut(e, screenshotShortcut)) {
       e.preventDefault();
       const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
       const currentSession = sessions[0];
@@ -219,8 +250,14 @@ function renderPanel(panel: HTMLElement): void {
   const content = panel.querySelector("#bt-content") as HTMLElement;
   panel.querySelector("#bt-refresh")!.addEventListener("click", () => renderPanel(panel));
   panel.querySelector("#bt-clear")!.addEventListener("click", () => {
-    if (confirm("Delete all TraceBug sessions?")) {
-      clearAllSessions();
+    if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
+      // Wipe everything so no stale data leaks into future reports.
+      try { clearAllSessions(); } catch {}
+      try { clearScreenshots(); } catch {}
+      try { clearVoiceTranscripts(); } catch {}
+      try { clearAllAnnotations(); } catch {}
+      try { clearAnnotationBadges(); } catch {}
+      try { clearNetworkFailures(); } catch {}
       renderPanel(panel);
     }
   });
@@ -721,12 +758,12 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       const target = el?.ariaLabel || el?.text?.trim() || el?.id || el?.tag || "element";
       html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml(target.slice(0,60))}</span>"</div>`;
       const details: string[] = [];
-      if (el?.tag) details.push(`&lt;${el.tag}&gt;`);
-      if (el?.id) details.push(`#${el.id}`);
+      if (el?.tag) details.push(`&lt;${escapeHtml(el.tag)}&gt;`);
+      if (el?.id) details.push(`#${escapeHtml(el.id)}`);
       if (el?.className) details.push(`.${escapeHtml(el.className.split(" ")[0])}`);
       if (el?.href) details.push(`→ ${escapeHtml(el.href.slice(0,60))}`);
-      if (el?.role) details.push(`role="${el.role}"`);
-      if (el?.testId) details.push(`data-testid="${el.testId}"`);
+      if (el?.role) details.push(`role="${escapeHtml(el.role)}"`);
+      if (el?.testId) details.push(`data-testid="${escapeHtml(el.testId)}"`);
       if (details.length > 0) {
         html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">${details.join(" ")}</div>`;
       }
@@ -768,7 +805,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
         html += `</div>`;
       }
       if (f?.method) {
-        html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${f.method.toUpperCase()} ${f.action ? `→ ${escapeHtml(f.action.slice(0,60))}` : ""}</div>`;
+        html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml(String(f.method).toUpperCase())} ${f.action ? `→ ${escapeHtml(f.action.slice(0,60))}` : ""}</div>`;
       }
     } else if (ev.type === "route_change") {
       html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px">
@@ -1392,7 +1429,7 @@ function describeEventHtml(ev: any): string {
       return `<span style="color:var(--tb-text-muted, #888)">${escapeHtml(ev.data.from || "/")}</span> <span style="color:#22d3ee">→</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml(ev.data.to || "/")}</span>`;
     case "api_request": {
       const r = ev.data.request;
-      return `<span style="font-weight:600">${r?.method}</span> ${escapeHtml((r?.url || "").slice(0,80))} → <span style="color:${getStatusColor(r?.statusCode || 0)};font-weight:700">${r?.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r?.durationMs}ms)</span>`;
+      return `<span style="font-weight:600">${escapeHtml(r?.method || "")}</span> ${escapeHtml((r?.url || "").slice(0,80))} → <span style="color:${getStatusColor(r?.statusCode || 0)};font-weight:700">${r?.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r?.durationMs}ms)</span>`;
     }
     case "error":
     case "unhandled_rejection":

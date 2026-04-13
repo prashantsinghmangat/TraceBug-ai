@@ -4,6 +4,7 @@
 
 import { BugReport } from "./types";
 import { formatTimelineText } from "./timeline-builder";
+import { formatRootCauseLine } from "./report-builder";
 
 export interface JiraTicket {
   summary: string;
@@ -28,6 +29,35 @@ export function generateJiraTicket(report: BugReport): JiraTicket {
 
   // Description
   let desc = "";
+
+  // Root-cause hint — first thing a dev should see
+  const rc = formatRootCauseLine(report.rootCause);
+  if (rc) {
+    desc += `{panel:title=Possible Cause (${report.rootCause.confidence} confidence)|borderColor=#c1c7d0|titleBGColor=#deebff|bgColor=#f4f9ff}\n${report.rootCause.hint}\n{panel}\n\n`;
+  }
+
+  // Smart one-line summary at the top
+  if (report.summary) {
+    desc += `{panel:title=TL;DR|borderStyle=solid|borderColor=#ccc|titleBGColor=#f4f5f7|bgColor=#fafbfc}\n${report.summary}\n{panel}\n\n`;
+  }
+
+  // User clicked — derived from last click event
+  if (report.clickedElement) {
+    const ce = report.clickedElement;
+    const label = ce.text || ce.ariaLabel || ce.id || ce.tag;
+    desc += `*User clicked:* {{<${ce.tag}>}} "${label}"`;
+    if (ce.selector) desc += ` — {{${ce.selector}}}`;
+    desc += `\n\n`;
+  }
+
+  // Recent actions — plain-English flow
+  if (report.sessionSteps && report.sessionSteps.length > 0) {
+    desc += `h3. Recent Actions\n`;
+    for (const step of report.sessionSteps) {
+      desc += `# ${step}\n`;
+    }
+    desc += `\n`;
+  }
 
   // Steps
   desc += `h3. Steps to Reproduce\n`;
@@ -74,6 +104,18 @@ export function generateJiraTicket(report: BugReport): JiraTicket {
       desc += `|${req.method}|${req.url.slice(0, 80)}|${status}|${req.duration}ms|\n`;
     }
     desc += `\n`;
+
+    // Response snippets (first 200 chars of body per failure)
+    const withBody = report.networkErrors.filter(r => r.response && r.response.length > 0);
+    if (withBody.length > 0) {
+      desc += `h4. Response Snippets\n`;
+      for (const req of withBody) {
+        const status = req.status === 0 ? "Network Error" : String(req.status);
+        desc += `*${req.method} ${req.url.slice(0, 80)} → ${status}*\n`;
+        desc += `{code}${(req.response || "").replace(/\{code\}/g, "{ code }")}{code}\n`;
+      }
+      desc += `\n`;
+    }
   }
 
   // Voice Description

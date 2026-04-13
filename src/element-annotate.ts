@@ -4,10 +4,11 @@
 
 import { ElementAnnotation, AnnotationIntent } from "./types";
 import { addElementAnnotation, getElementAnnotations } from "./annotation-store";
+import { escapeHtml } from "./ui/helpers";
 
 let _active = false;
 let _cleanup: (() => void) | null = null;
-let _selectedElements: Map<string, { element: Element; rect: DOMRect; index: number }> = new Map();
+const _selectedElements: Map<string, { element: Element; rect: DOMRect; index: number }> = new Map();
 let _highlightOverlay: HTMLElement | null = null;
 let _selectionOverlays: HTMLElement[] = [];
 let _popover: HTMLElement | null = null;
@@ -498,7 +499,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
   // Smart positioning: below element, fallback above, then center
   let top = rect.bottom + 10;
-  let left = Math.max(12, Math.min(rect.left, window.innerWidth - 330));
+  const left = Math.max(12, Math.min(rect.left, window.innerWidth - 330));
   if (top + 360 > window.innerHeight) {
     top = Math.max(50, rect.top - 370);
   }
@@ -523,8 +524,8 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
       <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">
         ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
       </div>
-      <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${selectorText}">
-        &lt;${tagText}&gt;${previewText ? ` "${previewText}"` : ""}
+      <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(selectorText)}">
+        &lt;${escapeHtml(tagText)}&gt;${previewText ? ` "${escapeHtml(previewText)}"` : ""}
       </div>
     </div>
 

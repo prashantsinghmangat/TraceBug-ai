@@ -10,6 +10,131 @@ const ROOT_ID = "tracebug-root";
 const PANEL_ID = "tracebug-dashboard-panel";
 const BTN_ID = "tracebug-dashboard-btn";
 
+// ── Network failure buffer ────────────────────────────────────────────────
+// Ring buffer of the last 10 failed network requests with response snippets.
+// Populated asynchronously from fetch/XHR wrappers; never blocks a request.
+
+export interface NetworkFailure {
+  url: string;
+  method: string;
+  status: number;
+  response: string;
+  timestamp: number;
+}
+
+const NETWORK_FAILURE_LIMIT = 10;
+const RESPONSE_SNIPPET_CHARS = 200;
+const _networkFailures: NetworkFailure[] = [];
+
+function pushNetworkFailure(failure: NetworkFailure): void {
+  try {
+    _networkFailures.push(failure);
+    if (_networkFailures.length > NETWORK_FAILURE_LIMIT) {
+      _networkFailures.splice(0, _networkFailures.length - NETWORK_FAILURE_LIMIT);
+    }
+  } catch {}
+}
+
+/** Get the last 10 failed network requests (newest last). Returns a copy. */
+export function getNetworkFailures(): NetworkFailure[] {
+  return _networkFailures.slice();
+}
+
+/** Clear the network failure buffer. Called on SDK destroy. */
+export function clearNetworkFailures(): void {
+  _networkFailures.length = 0;
+}
+
+// ── URL redaction ─────────────────────────────────────────────────────────
+// Strip sensitive query params before URLs are captured into events/reports.
+// Matches param NAMES (case-insensitive) against this pattern — values are
+// replaced with [REDACTED]. Prevents tokens leaking into exported bug reports.
+
+const SENSITIVE_PARAM_RE = /token|key|secret|auth|password|sig|signature/i;
+
+/**
+ * Redact sensitive query-string values in a URL.
+ *
+ *   /api/users?api_key=abc123   → /api/users?api_key=[REDACTED]
+ *   /api/users?q=hi&token=xxx   → /api/users?q=hi&token=[REDACTED]
+ *
+ * Defensive: wrapped in try/catch, returns the original URL on any failure.
+ */
+function sanitizeUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const qIdx = url.indexOf("?");
+    if (qIdx === -1) return url;
+    const base = url.slice(0, qIdx);
+    const afterQ = url.slice(qIdx + 1);
+
+    const hashIdx = afterQ.indexOf("#");
+    const query = hashIdx === -1 ? afterQ : afterQ.slice(0, hashIdx);
+    const hash = hashIdx === -1 ? "" : afterQ.slice(hashIdx);
+
+    const redacted = query.split("&").map(part => {
+      const eqIdx = part.indexOf("=");
+      if (eqIdx === -1) return part;
+      const key = part.slice(0, eqIdx);
+      if (SENSITIVE_PARAM_RE.test(key)) return `${key}=[REDACTED]`;
+      return part;
+    }).join("&");
+
+    return `${base}?${redacted}${hash}`;
+  } catch {
+    return url;
+  }
+}
+
+// ── Safe response body reader ─────────────────────────────────────────────
+// Only invoked on failed responses. Caps memory by streaming and stopping
+// once we have enough bytes for a 200-char snippet. Skips binary content
+// types so we never decode PDFs, images, or octet-streams into strings.
+
+const MAX_BODY_BYTES = 10 * 1024; // 10KB hard cap — never more than this is read.
+const BINARY_CONTENT_TYPE_RE = /^(image|video|audio)\/|^application\/(octet-stream|pdf|zip|x-protobuf|x-msgpack|wasm|vnd\.)/i;
+
+/**
+ * Safely read up to ~RESPONSE_SNIPPET_CHARS of a response body.
+ * - Skips binary content types.
+ * - Reads via ReadableStream so we can stop early (memory-safe).
+ * - Never throws — returns "" on any failure.
+ */
+async function readResponseBodySafe(response: Response): Promise<string> {
+  try {
+    const ct = response.headers.get("content-type") || "";
+    if (BINARY_CONTENT_TYPE_RE.test(ct)) return "";
+
+    if (!response.body || typeof (response.body as any).getReader !== "function") {
+      // No streaming available — last-resort text() read.
+      // (Truncate after the fact; we can't do better without streams.)
+      try {
+        const text = await response.text();
+        return typeof text === "string" ? text.slice(0, RESPONSE_SNIPPET_CHARS) : "";
+      } catch { return ""; }
+    }
+
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+    let collected = "";
+    let bytesRead = 0;
+
+    while (bytesRead < MAX_BODY_BYTES && collected.length < RESPONSE_SNIPPET_CHARS) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) {
+        bytesRead += value.byteLength;
+        collected += decoder.decode(value, { stream: true });
+      }
+    }
+    try { await reader.cancel(); } catch {}
+
+    return collected.slice(0, RESPONSE_SNIPPET_CHARS);
+  } catch {
+    return "";
+  }
+}
+
 /** Internal/framework URLs that should not be tracked */
 const INTERNAL_URL_PATTERNS = [
   /__nextjs_original-stack-frame/,
@@ -101,6 +226,15 @@ export function collectClicks(emit: Emit): () => void {
       const form = t.closest("form");
       if (form) { el.formId = form.id || ""; el.formAction = form.action || ""; }
 
+      // CSS selector for precise reproduction
+      try { el.selector = buildSelector(t); } catch {}
+
+      // Bounding box for visual reproduction
+      try {
+        const r = t.getBoundingClientRect();
+        el.boundingBox = { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+      } catch {}
+
       emit("click", data);
     } catch (err) {
       if (typeof console !== 'undefined') console.warn('[TraceBug] Click capture error:', err);
@@ -108,6 +242,40 @@ export function collectClicks(emit: Emit): () => void {
   };
   document.addEventListener("click", handler, { capture: true });
   return () => document.removeEventListener("click", handler, { capture: true });
+}
+
+/**
+ * Build a stable CSS selector for an element. Prefers id, then data-testid,
+ * then walks up the tree using nth-of-type for uniqueness.
+ * Capped at 4 levels deep to keep selectors readable.
+ */
+function buildSelector(el: HTMLElement | null): string {
+  if (!el) return "";
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const testId = el.getAttribute("data-testid");
+  if (testId) return `[data-testid="${testId}"]`;
+
+  const parts: string[] = [];
+  let node: HTMLElement | null = el;
+  let depth = 0;
+  while (node && node !== document.body && depth < 4) {
+    let part = node.tagName.toLowerCase();
+    if (node.id) { parts.unshift(`#${CSS.escape(node.id)}`); break; }
+    const cls = typeof node.className === "string" ? node.className.trim().split(/\s+/).filter(Boolean)[0] : "";
+    if (cls) part += `.${CSS.escape(cls)}`;
+    // Add :nth-of-type if there are siblings with the same tag
+    const parent: HTMLElement | null = node.parentElement;
+    const currentTag = node.tagName;
+    const currentNode: HTMLElement = node;
+    if (parent) {
+      const sameTag = Array.from(parent.children).filter((c: Element) => c.tagName === currentTag);
+      if (sameTag.length > 1) part += `:nth-of-type(${sameTag.indexOf(currentNode) + 1})`;
+    }
+    parts.unshift(part);
+    node = parent;
+    depth++;
+  }
+  return parts.join(" > ");
 }
 
 // ── Inputs (debounced per element) ────────────────────────────────────────
@@ -275,21 +443,62 @@ export function collectApiRequests(emit: Emit): () => void {
     // Skip internal framework requests
     try { if (url && isInternalUrl(url)) return originalFetch.call(window, input, init); } catch {}
 
+    // Redact sensitive query params before the URL touches events/reports.
+    const safeUrl = sanitizeUrl(url).slice(0, 500);
+
     // ALWAYS call the original fetch — tracking failures must never break user requests
     try {
       const response = await originalFetch.call(window, input, init);
       try {
         emit("api_request", {
-          request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start },
+          request: { url: safeUrl, method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start },
         });
       } catch {} // tracking failure — swallow silently
+
+      // Async body capture for failed responses — never awaited on the hot path.
+      // readResponseBodySafe caps at 10KB and skips binary content types.
+      try {
+        if (response.status >= 400 || response.status === 0) {
+          const clone = response.clone();
+          // Fire-and-forget; body read runs after the caller already has the response
+          readResponseBodySafe(clone).then((snippet) => {
+            pushNetworkFailure({
+              url: safeUrl,
+              method: method.toUpperCase(),
+              status: response.status,
+              response: snippet,
+              timestamp: Date.now(),
+            });
+          }).catch(() => {
+            pushNetworkFailure({
+              url: safeUrl,
+              method: method.toUpperCase(),
+              status: response.status,
+              response: "",
+              timestamp: Date.now(),
+            });
+          });
+        }
+      } catch {} // clone unsupported (e.g. already consumed) — swallow silently
+
       return response;
     } catch (err) {
       try {
         emit("api_request", {
-          request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start },
+          request: { url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start },
         });
       } catch {} // tracking failure — swallow silently
+
+      try {
+        pushNetworkFailure({
+          url: safeUrl,
+          method: method.toUpperCase(),
+          status: 0,
+          response: (err as Error)?.message?.slice(0, RESPONSE_SNIPPET_CHARS) || "",
+          timestamp: Date.now(),
+        });
+      } catch {}
+
       throw err; // re-throw the original error to the caller
     }
   };
@@ -311,9 +520,10 @@ export function collectXhrRequests(emit: Emit): () => void {
     return origOpen.apply(this, [method, url, ...rest] as any);
   };
 
-  OrigXHR.prototype.send = function (body?: any) {
+  OrigXHR.prototype.send = function (this: XMLHttpRequest, body?: any) {
     try {
-      const xhr = this;
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const xhr: XMLHttpRequest = this;
       const start = Date.now();
       const meta = xhrMeta.get(xhr);
       const method = meta?.method || "GET";
@@ -321,11 +531,45 @@ export function collectXhrRequests(emit: Emit): () => void {
 
       if (isInternalUrl(url)) return origSend.call(this, body);
 
+      // Redact sensitive query params once, reuse for every handler below.
+      const safeUrl = sanitizeUrl(url).slice(0, 500);
+
       xhr.addEventListener("loadend", function () {
-        try { emit("api_request", { request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } }); } catch {}
+        try { emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } }); } catch {}
+        try {
+          if (xhr.status >= 400 || xhr.status === 0) {
+            // responseText throws for non-text responseTypes — guard it.
+            // Also skip binary content-type so we never stringify blobs/PDFs.
+            let body = "";
+            try {
+              const ct = (xhr.getResponseHeader && xhr.getResponseHeader("content-type")) || "";
+              if (!BINARY_CONTENT_TYPE_RE.test(ct)) {
+                body = typeof xhr.responseText === "string" ? xhr.responseText : "";
+              }
+            } catch {}
+            // Hard cap via slice — responseText is already in memory, but we
+            // never allocate more than RESPONSE_SNIPPET_CHARS for the buffer entry.
+            pushNetworkFailure({
+              url: safeUrl,
+              method: method.toUpperCase(),
+              status: xhr.status,
+              response: body.slice(0, RESPONSE_SNIPPET_CHARS),
+              timestamp: Date.now(),
+            });
+          }
+        } catch {}
       });
       xhr.addEventListener("error", function () {
-        try { emit("api_request", { request: { url: url.slice(0, 500), method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start } }); } catch {}
+        try { emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start } }); } catch {}
+        try {
+          pushNetworkFailure({
+            url: safeUrl,
+            method: method.toUpperCase(),
+            status: 0,
+            response: "",
+            timestamp: Date.now(),
+          });
+        } catch {}
       });
     } catch (err) {
       if (typeof console !== 'undefined') console.warn('[TraceBug] XHR capture error:', err);

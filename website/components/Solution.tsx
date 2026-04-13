@@ -76,6 +76,19 @@ export default function Solution() {
       bg: "bg-pink-500/10",
       border: "border-pink-500/20",
     },
+    {
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      ),
+      label: "User Identity",
+      desc: "setUser({ id, email, name }) attributes bugs to specific users — persisted across sessions",
+      color: "text-indigo-400",
+      bg: "bg-indigo-500/10",
+      border: "border-indigo-500/20",
+    },
   ];
 
   return (
@@ -94,12 +107,12 @@ export default function Solution() {
             The Solution
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-text-primary mb-4">
-            TraceBug Gives Developers{" "}
-            <span className="gradient-text">Everything They Need</span>
+            Meet your{" "}
+            <span className="gradient-text">debugging assistant</span>
           </h2>
           <p className="text-text-muted text-lg max-w-2xl mx-auto">
-            Every time a tester finds a bug, TraceBug has already captured all
-            the context needed to reproduce and fix it. Zero extra effort.
+            TraceBug captures everything automatically — logs, network errors,
+            user actions — and tells you what likely went wrong.
           </p>
         </div>
 

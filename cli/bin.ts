@@ -127,9 +127,6 @@ ${BOLD}Next steps:${RESET}
   3. Run your dev server and interact with your app
   4. Click the TraceBug toolbar to see captured sessions
 
-${BOLD}Cloud mode${RESET} (optional — team dashboards):
-  Add your API key:  ${CYAN}TraceBug.init({ projectId: "...", apiKey: "tb_live_..." })${RESET}
-
 ${GREEN}Done!${RESET} TraceBug is ready. Happy debugging.
 `)
 }

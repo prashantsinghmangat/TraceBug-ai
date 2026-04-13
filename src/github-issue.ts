@@ -4,15 +4,107 @@
 
 import { BugReport } from "./types";
 import { formatTimelineText } from "./timeline-builder";
+import { formatRootCauseLine } from "./report-builder";
+
+// GitHub URL prefill has a ~8KB practical limit (some browsers/proxies cap at 6-8KB)
+const GITHUB_URL_BODY_LIMIT = 6000;
+
+/**
+ * Generate a prefilled GitHub Issue URL that opens in a new tab with title +
+ * body already populated. No API key, no auth — uses GitHub's standard
+ * `/issues/new?title=...&body=...` query params.
+ *
+ * Body is auto-truncated if it exceeds GitHub's URL limit (~6KB safe).
+ *
+ * @param repo  - "owner/repo" (e.g., "facebook/react")
+ * @param report - BugReport from buildReport()
+ * @param labels - optional GitHub labels (comma-separated)
+ */
+export function generateGitHubIssueUrl(
+  repo: string,
+  report: BugReport,
+  labels?: string[]
+): string {
+  if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
+    throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
+  }
+
+  const title = report.title || "Bug report";
+  let body = generateGitHubIssue(report);
+
+  // Strip the leading "## title" since GitHub already shows the title separately
+  body = body.replace(/^##\s+[^\n]+\n+/, "");
+
+  // Truncate body if too long for URL
+  if (body.length > GITHUB_URL_BODY_LIMIT) {
+    body = body.slice(0, GITHUB_URL_BODY_LIMIT) + "\n\n_(Report truncated due to URL length limit. Use \"Copy as GitHub Issue\" for the full version.)_";
+  }
+
+  const params = new URLSearchParams();
+  params.set("title", title);
+  params.set("body", body);
+  if (labels && labels.length > 0) {
+    params.set("labels", labels.join(","));
+  }
+
+  return `https://github.com/${repo}/issues/new?${params.toString()}`;
+}
+
+/**
+ * Open the generated GitHub Issue URL in a new tab.
+ * Returns false if the URL exceeds GitHub's request limit (rare).
+ */
+export function openGitHubIssue(repo: string, report: BugReport, labels?: string[]): boolean {
+  try {
+    const url = generateGitHubIssueUrl(repo, report, labels);
+    if (url.length > 8000) {
+      console.warn("[TraceBug] GitHub URL exceeds 8KB — issue may not load. Use copy-to-clipboard instead.");
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+    return true;
+  } catch (err) {
+    console.warn("[TraceBug] openGitHubIssue failed:", err);
+    return false;
+  }
+}
 
 export function generateGitHubIssue(report: BugReport): string {
   const env = report.environment;
 
   let md = `## ${report.title}\n\n`;
 
+  // Root-cause hint — what a dev should check first
+  const rc = formatRootCauseLine(report.rootCause);
+  if (rc) {
+    md += `> ${rc}\n\n`;
+  }
+
+  // Smart one-line summary — tells a dev what went wrong at a glance
+  if (report.summary) {
+    md += `> **TL;DR:** ${report.summary}\n\n`;
+  }
+
   // Compact environment line
   md += `**Environment:** ${env.browser} ${env.browserVersion} · ${env.os} · ${env.viewport} · ${env.deviceType}\n`;
   md += `**URL:** ${env.url}\n\n`;
+
+  // What the user did — derived from last clicked element
+  if (report.clickedElement) {
+    const ce = report.clickedElement;
+    const label = ce.text || ce.ariaLabel || ce.id || ce.tag;
+    md += `**User clicked:** \`<${ce.tag}>\` "${label}"`;
+    if (ce.selector) md += ` — \`${ce.selector}\``;
+    md += `\n\n`;
+  }
+
+  // Recent user actions — plain-English, at-a-glance flow
+  if (report.sessionSteps && report.sessionSteps.length > 0) {
+    md += `### Recent Actions\n\n`;
+    for (const step of report.sessionSteps) {
+      md += `1. ${step}\n`;
+    }
+    md += `\n`;
+  }
 
   // Steps to Reproduce
   md += `### Steps to Reproduce\n\n`;
@@ -66,6 +158,18 @@ export function generateGitHubIssue(report: BugReport): string {
       md += `| ${req.method} | \`${url}\` | ${status} | ${req.duration}ms |\n`;
     }
     md += `\n`;
+
+    // Response snippets — first 200 chars of body for failed requests
+    const withBody = report.networkErrors.filter(r => r.response && r.response.length > 0);
+    if (withBody.length > 0) {
+      md += `<details>\n<summary>Response snippets</summary>\n\n`;
+      for (const req of withBody) {
+        const status = req.status === 0 ? "Network Error" : String(req.status);
+        md += `**${req.method} ${req.url.slice(0, 80)} → ${status}**\n\n`;
+        md += `\`\`\`\n${(req.response || "").replace(/```/g, "` ` `")}\n\`\`\`\n\n`;
+      }
+      md += `</details>\n\n`;
+    }
   }
 
   // Voice Description (if any)

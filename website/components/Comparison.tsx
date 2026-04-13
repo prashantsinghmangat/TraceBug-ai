@@ -57,6 +57,26 @@ export default function Comparison() {
     },
   ];
 
+  const competitorRows = [
+    { feature: "Instant bug capture", tracebug: true, sentry: false, logrocket: false },
+    { feature: "Root cause hint", tracebug: true, sentry: false, logrocket: false },
+    { feature: "2-click workflow", tracebug: true, sentry: false, logrocket: false },
+    { feature: "Setup required", tracebug: false, sentry: true, logrocket: true },
+    { feature: "Free, no account", tracebug: true, sentry: false, logrocket: false },
+    { feature: "Data stays in browser", tracebug: true, sentry: false, logrocket: false },
+  ];
+
+  const Check = () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-400 mx-auto">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  );
+  const X = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-red-400/60 mx-auto">
+      <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
+    </svg>
+  );
+
   return (
     <section className="py-24 bg-background relative overflow-hidden">
       <div className="absolute inset-0 grid-bg opacity-30" />
@@ -71,12 +91,73 @@ export default function Comparison() {
             Comparison
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-text-primary mb-4">
-            TraceBug vs.{" "}
-            <span className="text-text-muted">Manual Bug Reporting</span>
+            Why not just use{" "}
+            <span className="text-text-muted">existing tools?</span>
           </h2>
           <p className="text-text-muted text-lg max-w-2xl mx-auto">
-            See exactly what you get with TraceBug versus the traditional
-            tester-writes-a-Slack-message workflow.
+            Built for speed. Not dashboards. See how TraceBug compares to the
+            heavyweight monitoring platforms developers already use.
+          </p>
+        </div>
+
+        {/* Competitor table — TraceBug vs Sentry vs LogRocket */}
+        <div className="mb-16 bg-surface border border-border rounded-2xl overflow-hidden shadow-xl">
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr] border-b border-border text-sm">
+            <div className="px-5 py-4 text-text-muted font-semibold uppercase tracking-wider text-xs">
+              Feature
+            </div>
+            <div className="px-5 py-4 border-l border-border bg-primary/5 text-center">
+              <div className="text-primary font-bold">TraceBug</div>
+              <div className="text-[10px] text-text-muted font-normal mt-0.5">Recommended</div>
+            </div>
+            <div className="px-5 py-4 border-l border-border text-center">
+              <div className="text-text-primary font-semibold">Sentry</div>
+            </div>
+            <div className="px-5 py-4 border-l border-border text-center">
+              <div className="text-text-primary font-semibold">LogRocket</div>
+            </div>
+          </div>
+
+          {competitorRows.map((row, i) => (
+            <div
+              key={row.feature}
+              className={`grid grid-cols-[2fr_1fr_1fr_1fr] text-sm hover:bg-background/30 transition-colors ${i < competitorRows.length - 1 ? "border-b border-border/50" : ""}`}
+            >
+              <div className="px-5 py-3 text-text-primary font-medium">
+                {row.feature}
+              </div>
+              <div className="px-5 py-3 border-l border-border/50 bg-primary/[0.03] flex items-center justify-center">
+                {row.tracebug ? <Check /> : <X />}
+              </div>
+              <div className="px-5 py-3 border-l border-border/50 flex items-center justify-center">
+                {row.sentry ? <Check /> : <X />}
+              </div>
+              <div className="px-5 py-3 border-l border-border/50 flex items-center justify-center">
+                {row.logrocket ? <Check /> : <X />}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Punchline */}
+        <div className="text-center mb-16">
+          <p className="text-text-primary text-xl sm:text-2xl font-bold mb-1">
+            Built for speed.
+          </p>
+          <p className="gradient-text text-xl sm:text-2xl font-extrabold">
+            Not dashboards.
+          </p>
+        </div>
+
+        {/* Secondary comparison header */}
+        <div className="text-center mb-10">
+          <h3 className="text-2xl font-bold text-text-primary mb-3">
+            TraceBug vs.{" "}
+            <span className="text-text-muted">Manual Bug Reporting</span>
+          </h3>
+          <p className="text-text-muted text-base max-w-2xl mx-auto">
+            And here&apos;s how it compares to the tester-writes-a-Slack-message
+            workflow most teams still rely on.
           </p>
         </div>
 

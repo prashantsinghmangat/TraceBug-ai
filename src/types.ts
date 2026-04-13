@@ -51,6 +51,16 @@ export interface TraceBugConfig {
   };
 
   /**
+   * GitHub repo for one-click issue creation, format: "owner/repo".
+   * When set, the Quick Bug modal shows an "Open in GitHub" button that
+   * opens GitHub's new-issue page with title + body prefilled — no API key
+   * needed.
+   *
+   * Example: TraceBug.init({ projectId: "my-app", githubRepo: "myorg/myapp" })
+   */
+  githubRepo?: string;
+
+  /**
    * Console log capture level. Default: "errors"
    * - "errors"   → Only console.error (backward compatible)
    * - "warnings" → console.error + console.warn
@@ -199,12 +209,54 @@ export interface EnvironmentInfo {
 
 // ── Bug Report ────────────────────────────────────────────────────────────
 
+/** A failed network request with optional response body snippet. */
+export interface NetworkErrorEntry {
+  method: string;
+  url: string;
+  status: number;
+  duration: number;
+  timestamp: number;
+  /** First ~200 chars of the response body (failures only). May be omitted. */
+  response?: string;
+}
+
+/** Summary of the element the user interacted with right before the bug. */
+export interface ClickedElementSummary {
+  tag: string;
+  text: string;
+  selector?: string;
+  id?: string;
+  ariaLabel?: string;
+  testId?: string;
+  page: string;
+}
+
+/**
+ * Deterministic root-cause hint generated from report signals.
+ * Confidence reflects which signal drove the hint:
+ *   high   → network failure available
+ *   medium → runtime error message available
+ *   low    → only a click / no strong signal
+ */
+export interface RootCauseHint {
+  hint: string;
+  confidence: "high" | "medium" | "low";
+}
+
 export interface BugReport {
   title: string;
+  /** One-line smart summary of what went wrong — top of every report. */
+  summary: string;
   steps: string;
   environment: EnvironmentInfo;
   consoleErrors: { message: string; stack?: string; timestamp: number }[];
-  networkErrors: { method: string; url: string; status: number; duration: number; timestamp: number }[];
+  networkErrors: NetworkErrorEntry[];
+  /** Last ~10 readable user actions ("Clicked 'Login' button", etc.). */
+  sessionSteps: string[];
+  /** The element the user clicked just before the bug surfaced. */
+  clickedElement: ClickedElementSummary | null;
+  /** Best-guess cause, derived deterministically from report signals. */
+  rootCause: RootCauseHint;
   annotations: Annotation[];
   screenshots: ScreenshotData[];
   timeline: TimelineEntry[];

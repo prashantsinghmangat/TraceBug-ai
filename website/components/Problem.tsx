@@ -27,12 +27,13 @@ export default function Problem() {
             The Problem
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-text-primary mb-4">
-            Traditional Bug Reporting is{" "}
-            <span className="text-red-400">Broken</span>
+            Debugging bugs is still{" "}
+            <span className="text-red-400">painful</span>
           </h2>
           <p className="text-text-muted text-lg max-w-2xl mx-auto">
-            Testers find bugs but developers can&apos;t reproduce them. The result?
-            Days of back-and-forth that kills productivity.
+            You open DevTools, copy logs manually, try to reproduce the steps,
+            and write issues from scratch. Debugging a simple bug shouldn&apos;t
+            take 10 minutes.
           </p>
         </div>
 

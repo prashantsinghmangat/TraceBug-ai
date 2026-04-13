@@ -49,6 +49,8 @@ import {
   collectErrors,
   collectConsoleWarnings,
   collectConsoleLogs,
+  getNetworkFailures,
+  clearNetworkFailures,
 } from "./collectors";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots, downloadAllScreenshots } from "./screenshot";
@@ -94,8 +96,18 @@ export { getAllSessions, clearAllSessions, deleteSession } from "./storage";
 export { generateReproSteps } from "./repro-generator";
 export { captureEnvironment } from "./environment";
 export { captureScreenshot, getScreenshots, downloadAllScreenshots } from "./screenshot";
-export { buildReport } from "./report-builder";
-export { generateGitHubIssue } from "./github-issue";
+export {
+  buildReport,
+  generateSmartSummary,
+  generateSessionSteps,
+  extractClickedElement,
+  generateRootCauseHint,
+  formatRootCauseLine,
+} from "./report-builder";
+export { getNetworkFailures } from "./collectors";
+export type { NetworkFailure } from "./collectors";
+export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint } from "./types";
+export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
 export type { JiraTicket } from "./jira-issue";
 export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
@@ -111,6 +123,8 @@ class TraceBugSDK {
   private initialized = false;
   private recording = true;
   private sessionId: string | null = null;
+  private _lastErrorPromptAt = 0;
+  private _lastErrorMsgPrompted: string | null = null;
 
   /**
    * Initialize TraceBug. Call once on app startup.
@@ -174,6 +188,11 @@ class TraceBugSDK {
       // ── Inject theme CSS custom properties ────────────────────────
       try { injectTheme(this.config.theme!); } catch {}
 
+      // Wire githubRepo into Quick Bug modal (lazy-loaded on first capture)
+      if (this.config.githubRepo) {
+        import("./ui/quick-bug").then(m => m.setGithubRepo(this.config!.githubRepo!)).catch(() => {});
+      }
+
       // ── Capture environment info automatically ─────────────────────
       try {
         const env = captureEnvironment();
@@ -217,6 +236,8 @@ class TraceBugSDK {
           if (type === "error" || type === "unhandled_rejection") {
             this.processError(sessionId, data.error?.message, data.error?.stack);
             emitHook("error:captured", event);
+            // Auto-detect: prompt user to capture (throttled inside)
+            this.maybePromptErrorCapture(data.error?.message);
           }
         } catch (err) {
           if (typeof console !== 'undefined') console.warn('[TraceBug] Event emit error:', err);
@@ -253,7 +274,7 @@ class TraceBugSDK {
             if (this.recording) { this.pauseRecording(); } else { this.resumeRecording(); }
             updateRecordingState(this.recording);
           });
-          this.cleanups.push(mountDashboard(this.config.toolbarPosition));
+          this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
         } catch (err) {
           console.warn('[TraceBug] Dashboard mount failed:', err);
         }
@@ -312,6 +333,25 @@ class TraceBugSDK {
   /** Get all screenshots from current session */
   getScreenshots(): ScreenshotData[] {
     return getScreenshots();
+  }
+
+  // ── Quick Bug Capture ───────────────────────────────────────────────
+
+  /**
+   * One-shot bug capture: takes screenshot with annotations, opens a modal
+   * with auto-filled title + description + screenshot, and 1-click copy
+   * actions (GitHub / Jira / Plain Text). Keyboard: Ctrl+Shift+B.
+   *
+   *   TraceBug.quickCapture();
+   */
+  async quickCapture(): Promise<void> {
+    const root = document.getElementById("tracebug-root");
+    if (!root) {
+      console.warn("[TraceBug] quickCapture requires the dashboard to be mounted.");
+      return;
+    }
+    const { showQuickBugCapture } = await import("./ui/quick-bug");
+    return showQuickBugCapture(root);
   }
 
   // ── Annotations ─────────────────────────────────────────────────────
@@ -695,6 +735,46 @@ class TraceBugSDK {
    * When an error event is captured, pull the session timeline from
    * localStorage and generate reproduction steps.
    */
+  /**
+   * Show an interactive toast prompting the user to capture a bug when an
+   * error is detected. Throttled: same error message won't re-prompt within
+   * 30 seconds; any error won't re-prompt within 5 seconds.
+   */
+  private maybePromptErrorCapture(errorMessage?: string): void {
+    if (!this.config?.enableDashboard) return;
+    if (!errorMessage) return;
+
+    const now = Date.now();
+    // Throttle: 5s minimum between any error prompts
+    if (now - this._lastErrorPromptAt < 5000) return;
+    // 30s cooldown for the same error message
+    if (this._lastErrorMsgPrompted === errorMessage && now - this._lastErrorPromptAt < 30000) return;
+
+    this._lastErrorPromptAt = now;
+    this._lastErrorMsgPrompted = errorMessage;
+
+    // Defer to next tick so the error has time to settle in localStorage
+    setTimeout(() => {
+      try {
+        const root = document.getElementById("tracebug-root");
+        if (!root) return;
+        // Lazy-load to keep the hot path light
+        Promise.all([
+          import("./ui/toast"),
+          import("./ui/quick-bug"),
+        ]).then(([toastMod, qbMod]) => {
+          const truncated = errorMessage.length > 60 ? errorMessage.slice(0, 60) + "\u2026" : errorMessage;
+          toastMod.showActionToast(
+            `\u26A0\uFE0F Error detected: ${truncated}`,
+            "Capture bug",
+            () => { qbMod.showQuickBugCapture(root).catch(() => {}); },
+            root
+          );
+        }).catch(() => {});
+      } catch {}
+    }, 200);
+  }
+
   private processError(
     sessionId: string,
     errorMessage?: string,
@@ -741,11 +821,22 @@ class TraceBugSDK {
     this.sessionId = null;
     clearScreenshots();
     clearVoiceTranscripts();
+    clearNetworkFailures();
     deactivateElementAnnotateMode();
     deactivateDrawMode();
     clearAllAnnotations();
     clearAllPlugins();
     removeTheme();
+  }
+
+  // ── Network Failures ────────────────────────────────────────────────
+
+  /**
+   * Get the last 10 failed network requests with response body snippets.
+   * Returned from an in-memory ring buffer — snapshot at call time.
+   */
+  getNetworkFailures() {
+    return getNetworkFailures();
   }
 }
 

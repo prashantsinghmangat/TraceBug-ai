@@ -266,6 +266,53 @@ SDK toolbar click → detects extension context
 | Voice transcripts | voice-recorder.ts | Transient, included in reports when generated |
 | Element annotations | annotation-store.ts | Lightweight, fresh per session |
 | Draw regions | annotation-store.ts | Lightweight, fresh per session |
+| Network failure buffer (v1.3) | collectors.ts | Last 10 failed requests with response snippets (~2KB) |
+
+### Cache Invalidation Pattern (v1.3)
+
+`storage.ts` keeps a module-scoped cache `_cachedSessions` that absorbs high-frequency event writes and flushes to localStorage on a 1s timer. The cache creates a correctness hazard for destructive operations, so:
+
+- `clearAllSessions()` and `deleteSession()` call `invalidateCache()` **before** writing. This cancels any pending flush and drops the cache, so a scheduled flush cannot resurrect just-cleared data.
+- `updateSessionError()`, `addAnnotation()`, and `saveEnvironment()` now read through `getCachedSessions()` and call `scheduleFlush()` — the cache is authoritative for mutations so a pending flush can never overwrite a concurrent write.
+- `TraceBug.destroy()` and the "Clear All Data" button in both the dashboard panel and compact toolbar wipe every in-memory store: screenshots, voice, annotations, badges, and the network-failure buffer.
+
+## Debugging Assistant (v1.3)
+
+The v1.3 release adds a deterministic layer on top of captured data that turns "what happened" into "why it likely happened."
+
+### Root Cause Hint Engine
+
+`generateRootCauseHint(report)` runs in `report-builder.ts` after the smart summary, in O(1) on report fields already computed — no event scan, no async.
+
+Three-tier confidence ladder based on signal strength:
+
+```
+networkErrors[0]     → HIGH    "API POST /orders failed with 500 after clicking 'Place Order'"
+consoleErrors[0]     → MEDIUM  "TypeError suggests undefined/null data — …"
+clickedElement only  → LOW     "Click on 'Submit' did not trigger any observable effect"
+(no signal)          → LOW     "Not enough signal captured to suggest a likely cause"
+```
+
+`suggestCauseFromError()` is an ordered dictionary mapping error message shapes to plain-English causes (`cannot read prop`, `is not a function`, `is not defined`, `maximum call stack`, `unexpected token`, `failed to fetch`, `cors`, `timeout`, `quota`, etc.). No AI APIs.
+
+`formatRootCauseLine(rc)` renders the shared one-liner (`🔍 Possible Cause (X confidence): ...`) consumed by all four exporters so phrasing stays consistent.
+
+### Network Failure Buffer
+
+A FIFO ring buffer capped at 10 entries lives in `collectors.ts`. Exposed via `getNetworkFailures()`.
+
+- **Fetch**: on failed responses (`status >= 400 || status === 0`), the response is `clone()`'d and `clone.text()` runs on a microtask tick. The caller receives the unmodified response immediately; the body is read and buffered afterward. Never awaited on the hot path.
+- **XHR**: on `loadend`, `responseText` is read guarded (throws for binary `responseType`). On `error`, an entry with empty body is pushed.
+- Snippet is truncated to 200 chars.
+- `buildReport()` stitches buffer entries into `networkErrors` by `(method+url+status)` with a ±5s timestamp window, and only considers buffer entries with `timestamp >= session.createdAt` so a cleared session cannot inherit stale failures.
+
+### Smart Summary + Session Steps + Clicked Element
+
+All derived in `report-builder.ts` from existing event data — no extra capture overhead.
+
+- `generateSmartSummary(report)` — priority ladder: `network + click` → `error + click` → `network` → `error` → `click` → fallback
+- `generateSessionSteps(events)` — maps click/route/submit/select events to plain-English lines, FIFO capped at 10. Inputs skipped (too noisy).
+- `extractClickedElement(events)` — walks the events backwards for the most recent click and returns `{ tag, text, selector, id, ariaLabel, testId, page }`.
 
 ## Dependencies
 

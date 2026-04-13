@@ -4,7 +4,6 @@
 import { TraceBugEvent, StoredSession, Annotation, EnvironmentInfo } from "./types";
 
 const SESSIONS_KEY = "tracebug_sessions";
-const SESSION_ID_KEY = "tracebug_session_id";
 
 // ── Session ID (new session on every page load / refresh) ────────────────
 
@@ -106,6 +105,19 @@ export function flushPendingEvents(): void {
   }
 }
 
+/**
+ * Drop the in-memory cache + cancel any pending flush.
+ * Used after destructive ops (clear, delete) so the next read re-hydrates
+ * from localStorage and a stale pending flush can't overwrite the new state.
+ */
+function invalidateCache(): void {
+  if (_pendingFlush) {
+    clearTimeout(_pendingFlush);
+    _pendingFlush = null;
+  }
+  _cachedSessions = null;
+}
+
 // Flush on page unload so no events are lost
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flushPendingEvents);
@@ -157,6 +169,8 @@ export function appendEvent(
 }
 
 // ── Update session with error + repro steps ───────────────────────────────
+// Cache-aware: reads through the cache so pending in-memory events aren't lost,
+// and schedules a flush instead of a direct write to avoid race with pending flushes.
 
 export function updateSessionError(
   sessionId: string,
@@ -165,7 +179,7 @@ export function updateSessionError(
   reproSteps: string,
   errorSummary: string
 ): void {
-  const sessions = getAllSessions();
+  const sessions = getCachedSessions();
   const session = sessions.find((s) => s.sessionId === sessionId);
   if (!session) return;
 
@@ -175,42 +189,47 @@ export function updateSessionError(
   session.errorSummary = errorSummary;
   session.updatedAt = Date.now();
 
-  saveSessions(sessions);
+  scheduleFlush();
 }
 
 // ── Delete a single session ───────────────────────────────────────────────
 
 export function deleteSession(sessionId: string): void {
-  const sessions = getAllSessions().filter((s) => s.sessionId !== sessionId);
-  saveSessions(sessions);
+  // Drop any pending flush first so it can't resurrect the deleted session
+  const remaining = getAllSessions().filter((s) => s.sessionId !== sessionId);
+  invalidateCache();
+  saveSessions(remaining);
 }
 
 // ── Add annotation to session ────────────────────────────────────────────
 
 export function addAnnotation(sessionId: string, annotation: Annotation): void {
-  const sessions = getAllSessions();
+  const sessions = getCachedSessions();
   const session = sessions.find((s) => s.sessionId === sessionId);
   if (!session) return;
 
   if (!session.annotations) session.annotations = [];
   session.annotations.push(annotation);
   session.updatedAt = Date.now();
-  saveSessions(sessions);
+  scheduleFlush();
 }
 
 // ── Save environment info to session ─────────────────────────────────────
 
 export function saveEnvironment(sessionId: string, env: EnvironmentInfo): void {
-  const sessions = getAllSessions();
+  const sessions = getCachedSessions();
   const session = sessions.find((s) => s.sessionId === sessionId);
   if (!session) return;
 
   session.environment = env;
-  saveSessions(sessions);
+  scheduleFlush();
 }
 
 // ── Clear everything ──────────────────────────────────────────────────────
 
 export function clearAllSessions(): void {
-  localStorage.removeItem(SESSIONS_KEY);
+  // Cancel any pending flush AND drop the cache before wiping storage,
+  // otherwise a stale cache would be re-flushed and undo the clear.
+  invalidateCache();
+  try { localStorage.removeItem(SESSIONS_KEY); } catch {}
 }

@@ -1,15 +1,27 @@
 // ── Screenshot manager ────────────────────────────────────────────────────
-// Captures page screenshots using html2canvas (bundled — no CDN fetch).
-// Falls back to a DOM snapshot if html2canvas is unavailable.
+// Captures page screenshots using html2canvas, loaded lazily only when the
+// user actually takes a screenshot. Keeps the base bundle small for every
+// page load that never hits the screenshot path.
+// Falls back to a DOM snapshot if html2canvas cannot be loaded.
 // Screenshots stored in memory (not localStorage) to avoid quota issues.
 
-import html2canvasStatic from "html2canvas";
+import type html2canvasStatic from "html2canvas";
 import { ScreenshotData, TraceBugEvent } from "./types";
 
-// Use the statically imported html2canvas.
-// Falls back gracefully if the import somehow fails at runtime.
-function getHtml2Canvas(): typeof html2canvasStatic | null {
-  return typeof html2canvasStatic === "function" ? html2canvasStatic : null;
+// Lazy-loaded html2canvas. Cached after first load so subsequent screenshots
+// are instant. Never loaded in Chrome Extension context (uses chrome.tabs
+// capture instead). Never loaded at init — only on first captureScreenshot call.
+let _html2canvasPromise: Promise<typeof html2canvasStatic | null> | null = null;
+
+function loadHtml2Canvas(): Promise<typeof html2canvasStatic | null> {
+  if (_html2canvasPromise) return _html2canvasPromise;
+  _html2canvasPromise = import("html2canvas")
+    .then((mod) => {
+      const fn = (mod as any).default || (mod as any);
+      return typeof fn === "function" ? (fn as typeof html2canvasStatic) : null;
+    })
+    .catch(() => null);
+  return _html2canvasPromise;
 }
 
 /**
@@ -101,8 +113,9 @@ export async function captureScreenshot(
         dataUrl = await captureViaCanvas();
       }
     } else {
-      // Normal SDK context: use html2canvas
-      const renderer = getHtml2Canvas();
+      // Normal SDK context: lazy-load html2canvas on first use.
+      // The dynamic import keeps html2canvas out of the base bundle (~240KB win).
+      const renderer = await loadHtml2Canvas();
       if (renderer) {
         const canvas = await renderer(document.body, {
           useCORS: true,
