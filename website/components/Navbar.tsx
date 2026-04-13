@@ -16,6 +16,7 @@ export default function Navbar() {
   }, []);
 
   const navLinks = [
+    { href: "#demo", label: "Demo", highlight: true },
     { href: "#features", label: "Features" },
     { href: "#how-it-works", label: "How It Works" },
     { href: "/docs", label: "Docs" },
@@ -89,8 +90,18 @@ export default function Navbar() {
               href={link.href}
               target={link.external ? "_blank" : undefined}
               rel={link.external ? "noopener noreferrer" : undefined}
-              className="text-text-muted hover:text-text-primary text-sm font-medium transition-colors duration-150 flex items-center gap-1"
+              className={`text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 ${
+                link.highlight
+                  ? "text-primary hover:text-accent"
+                  : "text-text-muted hover:text-text-primary"
+              }`}
             >
+              {link.highlight && (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+                </span>
+              )}
               {link.label}
               {link.external && (
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="opacity-50">

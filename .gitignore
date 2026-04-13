@@ -4,3 +4,9 @@ dist/
 .env
 *.log
 *.tgz
+
+# Editor / tooling local state — not part of the project
+.claude/
+.cursor/
+.vscode/
+.idea/
