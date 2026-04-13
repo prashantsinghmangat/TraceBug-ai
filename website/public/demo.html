@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TraceBug — 11s Demo</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden}
+body{background:#050508;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',system-ui,sans-serif}
+
+.F{position:relative;width:100%;max-width:1080px;aspect-ratio:3/2;border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.04),0 50px 140px rgba(0,0,0,.9);background:#0B0B0F}
+
+/* Chrome */
+.chr{background:#13131A;height:38px;display:flex;align-items:center;padding:0 14px;gap:9px;border-bottom:1px solid #1E1E2E;position:relative;z-index:10}
+.dt{display:flex;gap:5px}
+.dt i{width:10px;height:10px;border-radius:50%;display:block}
+.dt i:nth-child(1){background:#ff5f57}.dt i:nth-child(2){background:#febc2e}.dt i:nth-child(3){background:#28c840}
+.ub{flex:1;background:#08080e;border-radius:6px;height:24px;display:flex;align-items:center;padding:0 10px;margin-left:10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#555;transition:all .3s}
+.ub .lk{color:#28c840;margin-right:5px;font-size:9px}
+
+.vp{position:relative;width:100%;height:calc(100% - 38px);overflow:hidden;background:#0B0B0F}
+
+/* Overlay Text */
+.otxt{
+  position:absolute;z-index:500;pointer-events:none;
+  left:40px;bottom:40px;
+  opacity:0;transform:translateY(12px);
+  transition:all .35s cubic-bezier(.16,1,.3,1);
+}
+.otxt.on{opacity:1;transform:translateY(0)}
+.otxt.out{opacity:0;transform:translateY(-8px);transition:all .25s ease}
+.otxt h1{
+  font-size:36px;font-weight:800;color:#fff;line-height:1.15;
+  text-shadow:0 4px 30px rgba(0,0,0,.9),0 2px 8px rgba(0,0,0,.6);
+}
+.otxt h1 .acc{color:#6C5CE7}
+.otxt h1 .strike{text-decoration:line-through;color:#ef4444;text-decoration-thickness:3px}
+.otxt h1 .cya{color:#00D4FF}
+.otxt h1 .grn{color:#22c55e}
+.otxt .sub{
+  font-size:14px;color:rgba(255,255,255,.5);margin-top:6px;font-weight:500;
+  text-shadow:0 2px 12px rgba(0,0,0,.8);
+}
+
+/* App */
+.app{position:absolute;inset:0;padding:52px 48px 52px;transition:all .3s ease}
+.app.dim{filter:blur(3px) brightness(.3)}
+.app.zoom{transform:scale(1.03);transform-origin:30% 60%}
+.app-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.app-logo{font-size:13.5px;font-weight:700;color:#fff;display:flex;align-items:center;gap:6px}
+.app-logo i{width:18px;height:18px;border-radius:4px;display:block;background:linear-gradient(135deg,#3b82f6,#8b5cf6)}
+.app-links{display:flex;gap:18px;font-size:11.5px}
+.app-links a{color:#444;text-decoration:none;font-weight:500}.app-links a.on{color:#fff}
+.app h2{font-size:18px;font-weight:700;color:#fff;margin-bottom:2px}
+.app .sub2{color:#444;font-size:11.5px;margin-bottom:20px}
+.crd{background:#13131A;border:1px solid #1E1E2E;border-radius:11px;padding:20px 24px;max-width:440px}
+.fr{display:flex;flex-direction:column;gap:3px;margin-bottom:14px}
+.fr label{font-size:10px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.5px}
+.fr input,.fr select{background:#0B0B0F;border:1px solid #1E1E2E;border-radius:6px;padding:7px 11px;font-size:12.5px;color:#bbb;font-family:inherit;outline:none;transition:all .2s}
+.fr select.chg{border-color:#f97316;color:#f97316}
+.bu{background:#3b82f6;color:#fff;border:none;padding:8px 22px;border-radius:7px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s}
+.bu.err{background:#ef4444!important;animation:shake .35s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+
+/* Error Toast */
+.et{
+  position:absolute;bottom:50px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#161622;border:1px solid #ef4444;border-left:4px solid #ef4444;
+  border-radius:9px;padding:8px 14px;font-size:11.5px;color:#fca5a5;white-space:nowrap;
+  opacity:0;transition:all .25s ease;z-index:50;font-family:'JetBrains Mono',monospace;
+  box-shadow:0 6px 24px rgba(239,68,68,.1);
+}
+.et.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Toolbar */
+.tb{
+  position:absolute;right:9px;top:50%;transform:translateY(-50%);
+  background:rgba(19,19,26,.95);border:1px solid #1E1E2E;
+  border-radius:12px;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  z-index:60;backdrop-filter:blur(16px);
+}
+.tb-b{width:30px;height:30px;border-radius:7px;border:none;background:transparent;color:#555;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.tb-b.hl{color:#6C5CE7;background:rgba(108,92,231,.15);animation:tbg .5s ease}
+@keyframes tbg{0%{box-shadow:0 0 0 0 rgba(108,92,231,.4)}50%{box-shadow:0 0 10px 3px rgba(108,92,231,.25)}100%{box-shadow:0 0 0 0 rgba(108,92,231,0)}}
+.rd{width:5px;height:5px;background:#22c55e;border-radius:50%;margin-bottom:2px;animation:pd 2s infinite}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Shortcut Popup */
+.scp{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.85);
+  z-index:90;display:flex;flex-direction:column;align-items:center;gap:10px;
+  opacity:0;transition:all .25s cubic-bezier(.16,1,.3,1);pointer-events:none;
+}
+.scp.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.sc-row{display:flex;gap:14px;align-items:center}
+.sc-os{display:flex;flex-direction:column;align-items:center;gap:5px}
+.sc-os-l{font-size:10px;color:#555;font-weight:600;letter-spacing:.3px}
+.sck{display:flex;gap:3px;align-items:center}
+.sk{
+  background:#1a1a2e;border:1px solid rgba(255,255,255,.14);border-radius:7px;
+  padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700;color:#fff;
+  box-shadow:0 3px 10px rgba(0,0,0,.5),0 0 18px rgba(108,92,231,.1);
+  transition:all .2s;
+}
+.sk.glow{box-shadow:0 3px 10px rgba(0,0,0,.5),0 0 24px rgba(108,92,231,.35);border-color:rgba(108,92,231,.5)}
+.sk.acc{color:#6C5CE7}
+.sp{background:transparent;border:none;box-shadow:none;color:#444;padding:6px 1px;font-size:11px}
+.sc-or{font-size:9px;color:#333;font-weight:600;padding:3px 8px;border-radius:4px;background:rgba(255,255,255,.03)}
+.sc-lbl{font-size:11px;color:#777;font-weight:500}
+
+/* Modal */
+.qbd{position:absolute;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(5px);z-index:100;opacity:0;pointer-events:none;transition:opacity .25s}
+.qbd.on{opacity:1;pointer-events:all}
+.qb{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);
+  width:560px;background:#0f0f1a;border:1px solid rgba(108,92,231,.25);border-radius:14px;
+  z-index:101;overflow:hidden;opacity:0;transition:all .3s cubic-bezier(.16,1,.3,1);
+  box-shadow:0 0 50px rgba(108,92,231,.1);
+}
+.qb.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.qb.zoom{transform:translate(-50%,-50%) scale(1.04);transition:all .5s ease}
+
+.qh{padding:14px 18px 0;display:flex;align-items:center;justify-content:space-between}
+.qh-t{font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;gap:5px}
+.qh-bg{font-size:9px;padding:2px 7px;border-radius:20px;background:rgba(239,68,68,.12);color:#f87171;font-weight:600}
+.qby{padding:10px 18px 14px}
+
+.rc{
+  background:rgba(239,68,68,.06);border-left:3px solid #ef4444;border-radius:0 7px 7px 0;
+  padding:8px 12px;margin-bottom:8px;font-size:11px;line-height:1.5;
+  opacity:0;transform:translateX(-6px);transition:all .35s ease;
+}
+.rc.on{opacity:1;transform:translateX(0)}
+.rc .rl{color:#ef4444;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:.3px}
+.rc .rt{color:#fca5a5;margin-top:1px}
+
+.tl{
+  background:rgba(99,102,241,.06);border-left:3px solid #6366f1;border-radius:0 7px 7px 0;
+  padding:8px 12px;margin-bottom:8px;font-size:11px;color:#a5b4fc;line-height:1.5;
+  opacity:0;transform:translateX(-6px);transition:all .35s ease .06s;
+}
+.tl.on{opacity:1;transform:translateX(0)}
+.tl b{color:#c7d2fe;font-weight:600}
+
+.qi{width:100%;background:#0B0B0F;border:1px solid #1E1E2E;border-radius:6px;padding:7px 11px;font-size:12px;font-weight:600;color:#fff;font-family:inherit;margin-bottom:7px;outline:none}
+.qs{width:100%;height:46px;background:#0B0B0F;border:1px solid #1E1E2E;border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center}
+.qs span{font-size:9px;color:#333;font-family:'JetBrains Mono',monospace}
+
+.qa{display:flex;gap:5px}
+.qab{
+  flex:1;padding:7px 10px;border-radius:6px;border:1px solid #1E1E2E;
+  background:#14141e;color:#999;font-size:10.5px;font-weight:600;font-family:inherit;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:3px;
+}
+.qab.pri{background:#18182a;border-color:rgba(108,92,231,.25);color:#c4b5fd}
+.qab.go{background:rgba(34,197,94,.08)!important;border-color:#22c55e!important;color:#4ade80!important;animation:gg .5s ease}
+@keyframes gg{0%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{box-shadow:0 0 14px 3px rgba(34,197,94,.2)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+
+/* Highlight Box */
+.hlb{position:absolute;border:2px solid rgba(239,68,68,.6);border-radius:8px;z-index:102;pointer-events:none;opacity:0;transition:all .3s ease;box-shadow:0 0 16px rgba(239,68,68,.15)}
+.hlb.on{opacity:1}
+
+/* Extension popup */
+.exp{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.88);
+  width:300px;background:#0B0B0F;border-radius:11px;border:1px solid #1E1E2E;
+  z-index:110;overflow:hidden;opacity:0;transition:all .3s cubic-bezier(.16,1,.3,1);
+  box-shadow:0 12px 40px rgba(0,0,0,.6);
+}
+.exp.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.exp-h{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1E1E2E}
+.exp-logo{display:flex;align-items:center;gap:6px}
+.exp-logo svg{width:18px;height:18px}
+.exp-logo span{font-size:14px;font-weight:700;color:#f8fafc}
+.exp-v{font-size:8.5px;color:#6C5CE7;background:rgba(108,92,231,.1);border:1px solid rgba(108,92,231,.2);padding:1.5px 6px;border-radius:10px;font-weight:500}
+.exp-s{padding:10px 14px;border-bottom:1px solid #1E1E2E}
+.exp-s strong{font-size:13px;color:#fff;display:block;margin-bottom:1px}
+.exp-s span{font-size:9.5px;color:#555;font-family:'JetBrains Mono',monospace}
+.exp-t{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1E1E2E}
+.exp-t-l{display:flex;align-items:center;gap:7px}
+.exp-dot{width:7px;height:7px;border-radius:50%;transition:all .3s}
+.exp-dot.off{background:#555}.exp-dot.on{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.4)}
+.exp-t-txt{font-size:12px;color:#ccc;font-weight:500}
+.exp-sw{width:36px;height:20px;border-radius:10px;position:relative;cursor:pointer;transition:background .3s;border:none}
+.exp-sw.off{background:#333}.exp-sw.on{background:#22c55e}
+.exp-sw::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:2px;transition:left .25s}
+.exp-sw.off::after{left:2px}.exp-sw.on::after{left:18px}
+.exp-r{padding:8px 14px;display:flex;align-items:center;gap:6px;font-size:10px;color:#22c55e;font-weight:500;opacity:0;max-height:0;overflow:hidden;transition:all .3s}
+.exp-r.on{opacity:1;max-height:40px;padding:8px 14px}
+.exp-rp{width:5px;height:5px;border-radius:50%;background:#22c55e;animation:pd 1.5s infinite}
+
+/* GitHub */
+.gh{position:absolute;inset:0;background:#0d1117;z-index:120;opacity:0;transform:translateY(12px);transition:all .35s cubic-bezier(.16,1,.3,1);pointer-events:none;overflow-y:auto}
+.gh.on{opacity:1;transform:translateY(0);pointer-events:all}
+.gh-b{background:#161b22;border-bottom:1px solid #30363d;padding:11px 22px;display:flex;align-items:center;gap:9px}
+.gh-logo{font-size:18px;color:#fff}
+.gh-repo{font-size:12px;color:#58a6ff;font-weight:500}.gh-repo span{color:#8b949e}
+.gh-at{font-size:8.5px;color:#8b949e;background:rgba(139,148,158,.08);border:1px solid rgba(139,148,158,.15);padding:2px 7px;border-radius:20px;font-weight:500;margin-left:5px}
+.gh-n{margin-left:auto;background:#238636;color:#fff;font-size:10.5px;padding:4px 11px;border-radius:5px;font-weight:600}
+.gh-bd{padding:18px 22px}
+.gh-tr{display:flex;align-items:center;gap:7px;margin-bottom:14px}
+.gh-ti{flex:1;background:#0d1117;border:1px solid #30363d;border-radius:5px;padding:5px 10px;font-size:13px;font-weight:600;color:#e6edf3;font-family:inherit}
+.gh-lb{display:flex;gap:3px}
+.gh-l{font-size:9px;padding:2px 7px;border-radius:20px;font-weight:600}
+.gh-l.bug{background:#da3633;color:#fff}.gh-l.err{background:#a371f7;color:#fff}.gh-l.api{background:#d29922;color:#fff}
+.gh-ib{background:#0d1117;border:1px solid #30363d;border-radius:5px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8b949e;line-height:1.8}
+.gh-ib .h3{color:#e6edf3;font-weight:700;font-size:11px}
+.gh-ib .grc{color:#f87171;background:rgba(239,68,68,.06);padding:3px 9px;border-radius:3px;margin:3px 0;display:inline-block;font-size:9.5px}
+.gh-ib .gtl{color:#a5b4fc;font-style:italic;margin:2px 0}
+.gh-ib .ge{color:#7d8590;font-size:9.5px}
+.gh-ib .gs{color:#c9d1d9;margin:4px 0;line-height:2}
+.gh-ib .ger{background:#161b22;border:1px solid #30363d;border-radius:3px;padding:7px 11px;margin:4px 0;color:#f87171;font-size:9.5px;line-height:1.5}
+.gh-ib .ger .stk{color:#555}
+.gh-hl{position:absolute;border:2px solid rgba(108,92,231,.5);border-radius:6px;pointer-events:none;opacity:0;transition:all .4s ease;box-shadow:0 0 12px rgba(108,92,231,.15);z-index:130}
+.gh-hl.on{opacity:1}
+
+/* Cursor */
+.cur{position:absolute;width:18px;height:18px;z-index:200;pointer-events:none;opacity:0;transition:opacity .2s;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
+.cur.on{opacity:1}
+.cur svg{width:18px;height:18px}
+.cg{position:absolute;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle,rgba(108,92,231,.3) 0%,transparent 70%);transform:translate(-8px,-8px);z-index:199;pointer-events:none;opacity:0;transition:opacity .2s}
+.cg.on{opacity:1}
+.rip{position:absolute;width:0;height:0;border-radius:50%;background:rgba(108,92,231,.3);z-index:198;pointer-events:none;animation:rpe .45s ease-out forwards}
+@keyframes rpe{0%{width:0;height:0;opacity:1}100%{width:44px;height:44px;margin-left:-22px;margin-top:-22px;opacity:0}}
+
+/* CTA Card */
+.cta{
+  position:absolute;inset:0;z-index:300;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 50% 45%,rgba(108,92,231,.08) 0%,#0B0B0F 65%);
+  opacity:0;pointer-events:none;transition:opacity .4s ease;
+}
+.cta.on{opacity:1;pointer-events:all}
+.cta h1{font-size:38px;font-weight:800;color:#fff;text-align:center;line-height:1.2;margin-bottom:6px}
+.cta h1 .acc{color:#6C5CE7}
+.cta .csub{font-size:15px;color:#555;font-weight:500;margin-bottom:24px}
+.cta-logo{
+  display:flex;align-items:center;gap:10px;
+  font-size:24px;font-weight:800;color:#fff;
+}
+.cta-logo svg{width:28px;height:28px}
+.cta .replay{
+  margin-top:20px;background:rgba(108,92,231,.1);border:1px solid rgba(108,92,231,.25);
+  color:#a78bfa;font-size:12px;font-weight:600;font-family:inherit;
+  padding:8px 20px;border-radius:8px;cursor:pointer;transition:all .2s;
+}
+.cta .replay:hover{background:rgba(108,92,231,.2);color:#fff;border-color:#6C5CE7}
+
+/* Progress Bar */
+.pbar{position:absolute;bottom:0;left:0;height:3px;z-index:400;width:0;background:linear-gradient(90deg,#6C5CE7,#00D4FF);transition:width linear}
+</style>
+</head>
+<body>
+
+<div class="F" id="F">
+<div class="chr">
+  <div class="dt"><i></i><i></i><i></i></div>
+  <div class="ub" id="ub"><span class="lk">&#x1f512;</span><span id="ut">localhost:3000/vendor</span></div>
+</div>
+<div class="vp" id="vp">
+
+<!-- Overlay Text -->
+<div class="otxt" id="ot"><h1 id="oth"></h1><div class="sub" id="ots"></div></div>
+
+<!-- App -->
+<div class="app" id="app">
+  <div class="app-nav">
+    <div class="app-logo"><i></i>VendorHub</div>
+    <div class="app-links"><a>Dashboard</a><a>Orders</a><a class="on">Vendors</a><a>Settings</a></div>
+  </div>
+  <h2>Edit Vendor</h2>
+  <div class="sub2">Modify vendor details and status</div>
+  <div class="crd">
+    <div class="fr"><label>Vendor Name</label><input value="Acme Corp" readonly></div>
+    <div class="fr"><label>Status</label><select id="sel"><option>Active</option><option>Inactive</option></select></div>
+    <div class="fr"><label>Contact</label><input value="billing@acme.com" readonly></div>
+    <button class="bu" id="ubtn">Update</button>
+  </div>
+</div>
+<div class="et" id="et">&#x26A0;&#xFE0F; TypeError: Cannot read properties of undefined (reading 'status')</div>
+
+<!-- Toolbar -->
+<div class="tb" id="toolbar">
+  <div class="rd"></div>
+  <button class="tb-b"><svg width="13" height="13" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="tc" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#6C5CE7"/><stop offset="100%" stop-color="#00D4FF"/></linearGradient></defs><path d="M48 20L66 30V52L48 62L30 52V30Z" fill="url(#tc)" opacity=".18"/><path d="M48 20L66 30V52L48 62L30 52V30Z" fill="none" stroke="url(#tc)" stroke-width="2.5"/><circle cx="48" cy="41" r="5" fill="url(#tc)"/><circle cx="48" cy="41" r="2.2" fill="white"/></svg></button>
+  <button class="tb-b" id="tbq"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
+  <button class="tb-b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg></button>
+  <button class="tb-b"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+</div>
+
+<!-- Shortcut -->
+<div class="scp" id="scp">
+  <div class="sc-row">
+    <div class="sc-os"><div class="sc-os-l">macOS</div><div class="sck"><span class="sk" id="sk1">&#x2318;</span><span class="sk sp">+</span><span class="sk" id="sk2">&#x21E7;</span><span class="sk sp">+</span><span class="sk acc" id="sk3">B</span></div></div>
+    <div class="sc-or">or</div>
+    <div class="sc-os"><div class="sc-os-l">Windows / Linux</div><div class="sck"><span class="sk" id="sk4">Ctrl</span><span class="sk sp">+</span><span class="sk" id="sk5">Shift</span><span class="sk sp">+</span><span class="sk acc" id="sk6">B</span></div></div>
+  </div>
+  <div class="sc-lbl">Quick Bug Capture</div>
+</div>
+
+<!-- Modal -->
+<div class="qbd" id="qbd"></div>
+<div class="qb" id="qb">
+  <div class="qh"><div class="qh-t">&#x26A1; Quick Bug Capture</div><div class="qh-bg">1 ERROR</div></div>
+  <div class="qby">
+    <div class="rc" id="rc"><div class="rl">&#x1F50D; Possible cause <span style="color:#555;font-size:9px">(high confidence)</span></div><div class="rt">API POST /api/vendors/update failed with 500 after clicking 'Update'</div></div>
+    <div class="tl" id="tl"><b>TL;DR:</b> TypeError on /vendor when clicking 'Update' &mdash; API returned 500 for status change</div>
+    <input class="qi" value='Vendor Page: "Update" Action Fails &mdash; TypeError' readonly>
+    <div class="qs"><span>&#x1F4F8; 01_click_update.png &middot; 1280&times;720</span></div>
+    <div class="qa">
+      <button class="qab">&#x1F4CB; Copy</button>
+      <button class="qab pri" id="bgh">&#x1F4E4; Open in GitHub</button>
+      <button class="qab">&#x1F3AB; Jira</button>
+    </div>
+  </div>
+</div>
+<div class="hlb" id="hlb"></div>
+
+<!-- Extension popup -->
+<div class="exp" id="exp">
+  <div class="exp-h">
+    <div class="exp-logo"><svg viewBox="0 0 96 96" fill="none"><defs><linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#6C5CE7"/><stop offset="100%" stop-color="#00D4FF"/></linearGradient></defs><path d="M48 20L66 30V52L48 62L30 52V30Z" fill="url(#pg)" opacity=".18"/><path d="M48 20L66 30V52L48 62L30 52V30Z" fill="none" stroke="url(#pg)" stroke-width="3"/><circle cx="48" cy="41" r="5" fill="url(#pg)"/><circle cx="48" cy="41" r="2.2" fill="white"/></svg><span>TraceBug</span></div>
+    <span class="exp-v">v1.3.0</span>
+  </div>
+  <div class="exp-s"><strong>app.example.com</strong><span>https://app.example.com/dashboard</span></div>
+  <div class="exp-t">
+    <div class="exp-t-l"><div class="exp-dot off" id="xdot"></div><span class="exp-t-txt" id="xtxt">Enable TraceBug</span></div>
+    <button class="exp-sw off" id="xsw"></button>
+  </div>
+  <div class="exp-r" id="xrec"><div class="exp-rp"></div>Recording events...</div>
+</div>
+
+<!-- GitHub -->
+<div class="gh" id="gh">
+  <div class="gh-b">
+    <div class="gh-logo">&#x1F4BB;</div>
+    <div class="gh-repo">myorg<span> / </span>vendorhub</div>
+    <div class="gh-at">auto-filled by TraceBug</div>
+    <div class="gh-n">New issue</div>
+  </div>
+  <div class="gh-bd">
+    <div class="gh-tr" id="ghtr">
+      <input class="gh-ti" value='Vendor Page: "Update" Action Fails &mdash; TypeError' readonly>
+      <div class="gh-lb"><span class="gh-l bug">bug</span><span class="gh-l err">has-errors</span><span class="gh-l api">api-failure</span></div>
+    </div>
+    <div class="gh-ib" id="ghib">
+      <div class="grc" id="ghrc">&#x1F50D; Possible Cause (high): API POST /api/vendors/update &rarr; 500 after clicking 'Update'</div><br>
+      <div class="gtl">"TypeError on /vendor when clicking 'Update' &mdash; API returned 500"</div><br>
+      <div class="ge"><b>Environment:</b> Chrome 125 &middot; macOS 14.5 &middot; 1280&times;720</div><br>
+      <div class="h3">### Recent Actions</div>
+      <div class="gs">1. Navigated to /vendor<br>2. Clicked 'Edit' button<br>3. Selected 'Inactive' in status<br>4. Clicked 'Update' button</div><br>
+      <div class="h3">### Console Errors</div>
+      <div class="ger">TypeError: Cannot read properties of undefined (reading 'status')<br><span class="stk">&nbsp;&nbsp;at handleUpdate (vendor.tsx:28)</span></div>
+    </div>
+  </div>
+  <div class="gh-hl" id="ghl1"></div>
+  <div class="gh-hl" id="ghl2"></div>
+</div>
+
+<!-- CTA -->
+<div class="cta" id="cta">
+  <h1>From bug &#x2192; GitHub <span class="acc">in seconds</span> &#x26A1;</h1>
+  <div class="csub">No servers. No API keys. Privacy-first.</div>
+  <div class="cta-logo">
+    <svg viewBox="0 0 96 96" fill="none"><defs><linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#6C5CE7"/><stop offset="100%" stop-color="#00D4FF"/></linearGradient></defs><path d="M48 20L66 30V52L48 62L30 52V30Z" fill="url(#cg)" opacity=".18"/><path d="M48 20L66 30V52L48 62L30 52V30Z" fill="none" stroke="url(#cg)" stroke-width="3"/><circle cx="48" cy="41" r="6" fill="url(#cg)"/><circle cx="48" cy="41" r="2.5" fill="white"/></svg>
+    TraceBug
+  </div>
+  <button class="replay" id="rep">&#x21BB; Watch again</button>
+</div>
+
+<!-- Cursor -->
+<div class="cur" id="cur"><svg viewBox="0 0 24 24" fill="none"><path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86h6.95c.45 0 .67-.54.35-.85L5.85 2.86c-.31-.32-.85-.1-.85.35z" fill="#fff" stroke="#000" stroke-width="1"/></svg></div>
+<div class="cg" id="cg"></div>
+
+<div class="pbar" id="pbar"></div>
+</div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id),cur=$('cur'),cg=$('cg');
+let T=[];
+function clr(){T.forEach(clearTimeout);T=[]}
+function w(ms){return new Promise(r=>{T.push(setTimeout(r,ms))})}
+function mv(x,y,ms=400){return new Promise(r=>{const s=`left ${ms}ms cubic-bezier(.25,.1,.25,1),top ${ms}ms cubic-bezier(.25,.1,.25,1)`;cur.style.transition=s;cg.style.transition=s;cur.style.left=x+'px';cur.style.top=y+'px';cg.style.left=x+'px';cg.style.top=y+'px';T.push(setTimeout(r,ms))})}
+function sC(){cur.classList.add('on');cg.classList.add('on')}
+function hC(){cur.classList.remove('on');cg.classList.remove('on')}
+function rip(x,y){const r=document.createElement('div');r.className='rip';r.style.left=x+'px';r.style.top=y+'px';$('vp').appendChild(r);T.push(setTimeout(()=>r.remove(),500))}
+function oTxt(h,s){$('oth').innerHTML=h;$('ots').textContent=s||'';$('ot').classList.remove('out');$('ot').classList.add('on')}
+function xTxt(){$('ot').classList.remove('on');$('ot').classList.add('out')}
+function hlEl(id,el,pad=6){const v=$('vp').getBoundingClientRect(),r=el.getBoundingClientRect(),b=$(id);b.style.left=(r.left-v.left-pad)+'px';b.style.top=(r.top-v.top-pad)+'px';b.style.width=(r.width+pad*2)+'px';b.style.height=(r.height+pad*2)+'px';b.classList.add('on')}
+
+function reset(){
+  clr();hC();xTxt();
+  ['et','qbd','scp','exp','gh','cta'].forEach(id=>$(id).classList.remove('on'));
+  $('qb').classList.remove('on','zoom');$('rc').classList.remove('on');$('tl').classList.remove('on');
+  $('app').classList.remove('dim','zoom');$('tbq').classList.remove('hl');
+  $('bgh').classList.remove('go');$('sel').selectedIndex=0;$('sel').classList.remove('chg');
+  $('ubtn').classList.remove('err');$('hlb').classList.remove('on');
+  ['ghl1','ghl2'].forEach(id=>$(id).classList.remove('on'));
+  ['sk1','sk2','sk3','sk4','sk5','sk6'].forEach(id=>$(id).classList.remove('glow'));
+  $('xdot').classList.remove('on');$('xdot').classList.add('off');
+  $('xsw').classList.remove('on');$('xsw').classList.add('off');
+  $('xtxt').textContent='Enable TraceBug';$('xrec').classList.remove('on');
+  $('ub').style.background='';$('ut').textContent='localhost:3000/vendor';
+  $('pbar').style.width='0';$('pbar').style.transition='none';
+  $('ot').classList.remove('on','out');
+  cur.style.transition='none';cg.style.transition='none';
+  cur.style.left='300px';cur.style.top='350px';cg.style.left='300px';cg.style.top='350px';
+  document.querySelectorAll('.rip').forEach(r=>r.remove());
+}
+
+async function run(){
+  reset();await w(50);
+  $('pbar').style.transition='width 11.5s linear';$('pbar').style.width='100%';
+
+  /* 0.00-0.80s HOOK */
+  oTxt('Stop opening <span class="strike">DevTools</span>');
+  $('app').classList.add('zoom');
+  sC();
+  await mv(210,338,300);rip(210,338);
+  await w(50);$('sel').selectedIndex=1;$('sel').classList.add('chg');
+  await mv(155,415,250);await w(50);rip(155,415);
+  $('ubtn').classList.add('err');
+  await w(150);$('et').classList.add('on');
+  $('app').classList.remove('zoom');
+
+  /* 0.80-2.20s SHORTCUT */
+  await w(100);hC();xTxt();$('et').classList.remove('on');
+  await w(100);
+  oTxt('Press one shortcut <span class="acc">(Mac / Windows)</span>');
+  $('tbq').classList.add('hl');
+  $('scp').classList.add('on');
+  await w(200);
+  ['sk1','sk2','sk3','sk4','sk5','sk6'].forEach(id=>$(id).classList.add('glow'));
+  await w(1000);
+  $('scp').classList.remove('on');$('tbq').classList.remove('hl');
+  ['sk1','sk2','sk3','sk4','sk5','sk6'].forEach(id=>$(id).classList.remove('glow'));
+
+  /* 2.20-4.00s MODAL + ROOT CAUSE */
+  await w(80);xTxt();
+  await w(80);
+  oTxt('See <span class="acc">root cause</span> instantly');
+  $('app').classList.add('dim');$('qbd').classList.add('on');$('qb').classList.add('on');
+  await w(250);$('rc').classList.add('on');
+  await w(150);
+  hlEl('hlb',$('rc').closest('.rc')||$('rc'),4);
+  await w(200);$('tl').classList.add('on');
+  $('qb').classList.add('zoom');
+  await w(800);$('hlb').classList.remove('on');$('qb').classList.remove('zoom');
+
+  /* 4.00-5.50s CHROME EXTENSION FLASH */
+  xTxt();
+  $('qbd').classList.remove('on');$('qb').classList.remove('on');$('app').classList.remove('dim');
+  await w(100);
+  oTxt('Works on <span class="cya">any site</span>','Chrome Extension — no code needed');
+  $('exp').classList.add('on');
+  await w(300);
+  $('xsw').classList.remove('off');$('xsw').classList.add('on');
+  $('xdot').classList.remove('off');$('xdot').classList.add('on');
+  $('xtxt').textContent='TraceBug Active';
+  await w(250);$('xrec').classList.add('on');
+  await w(700);
+  $('exp').classList.remove('on');
+
+  /* 5.50-7.50s CLICK GITHUB */
+  xTxt();await w(80);
+  oTxt('Create <span class="acc">GitHub issue</span>');
+  $('app').classList.add('dim');$('qbd').classList.add('on');$('qb').classList.add('on');
+  $('rc').classList.add('on');$('tl').classList.add('on');
+  await w(300);
+  sC();
+  const br=$('bgh').getBoundingClientRect(),vr=$('vp').getBoundingClientRect();
+  const bx=br.left-vr.left+br.width/2,by=br.top-vr.top+br.height/2;
+  await mv(bx,by,400);await w(80);rip(bx,by);
+  $('bgh').classList.add('go');
+  await w(300);hC();
+
+  /* 7.50-9.50s GITHUB AUTO-FILL */
+  xTxt();
+  $('qbd').classList.remove('on');$('qb').classList.remove('on');$('app').classList.remove('dim');
+  await w(60);
+  oTxt('<span class="grn">Auto-filled.</span> Done.');
+  $('ub').style.background='#161b22';$('ut').textContent='github.com/myorg/vendorhub/issues/new';
+  $('gh').classList.add('on');
+  await w(400);
+  hlEl('ghl1',$('ghtr'),4);
+  await w(500);
+  hlEl('ghl2',$('ghrc'),4);
+  await w(1000);
+  $('ghl1').classList.remove('on');$('ghl2').classList.remove('on');
+
+  /* 9.50-11.50s FINAL CTA */
+  xTxt();$('gh').classList.remove('on');
+  $('ub').style.background='';$('ut').textContent='localhost:3000/vendor';
+  await w(100);
+  $('cta').classList.add('on');
+}
+
+/* Auto-start */
+run();
+$('rep').addEventListener('click',()=>{$('cta').classList.remove('on');setTimeout(run,200)});
+</script>
+
+</body>
+</html>

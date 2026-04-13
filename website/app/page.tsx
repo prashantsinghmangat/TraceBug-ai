@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
+import DemoVideo from "@/components/DemoVideo";
 import Problem from "@/components/Problem";
 import Solution from "@/components/Solution";
 import RootCauseHighlight from "@/components/RootCauseHighlight";
@@ -18,6 +19,9 @@ export default function Home() {
     <main className="min-h-screen bg-background">
       <Navbar />
       <Hero />
+      <Reveal>
+        <DemoVideo />
+      </Reveal>
       <Reveal>
         <Problem />
       </Reveal>

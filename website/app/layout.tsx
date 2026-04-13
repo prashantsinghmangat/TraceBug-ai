@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://tracebug.netlify.app"),
   title: "TraceBug — Automatic Bug Reporting for Developers",
   description:
-    "TraceBug records user sessions and generates developer-ready bug reports with steps, screenshots, console errors, and network logs. Zero backend, browser only, free.",
+    "TraceBug — Stop opening DevTools for every bug. Capture bugs, see root causes, create GitHub issues in seconds. Zero backend, browser only, free. Try the interactive demo.",
   keywords: [
     "bug reporting",
     "QA testing",
@@ -87,7 +87,7 @@ export default function RootLayout({
               author: { "@type": "Person", name: "Prashant Singh Mangat", url: "https://github.com/prashantsinghmangat" },
               url: "https://tracebug.netlify.app",
               downloadUrl: "https://www.npmjs.com/package/tracebug-sdk",
-              softwareVersion: "1.2.0",
+              softwareVersion: "1.3.0",
               license: "https://opensource.org/licenses/MIT",
             }),
           }}

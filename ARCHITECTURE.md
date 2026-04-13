@@ -1,4 +1,4 @@
-# TraceBug AI - Project Context
+# TraceBug — Architecture & Project Context
 
 ## What is TraceBug?
 TraceBug is a **one-stop QA testing tool** that records user sessions and auto-generates developer-ready bug reports. It solves the #1 problem in software teams: **testers finding bugs but developers not being able to reproduce them**.
