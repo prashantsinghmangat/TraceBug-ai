@@ -148,6 +148,8 @@ function _showStep(root: HTMLElement): void {
   const stepNum = `<span style="color:var(--tb-text-muted, #666);font-size:11px">${_currentStep + 1}/${STEPS.length}</span>`;
   const isLast = _currentStep === STEPS.length - 1;
 
+  // Safe: the tooltip content is built from the static STEPS array defined in
+  // this file (no user data flows in). innerHTML usage has been reviewed.
   tooltip.innerHTML = `
     ${arrow}
     <div style="display:flex;align-items:flex-start;gap:10px">

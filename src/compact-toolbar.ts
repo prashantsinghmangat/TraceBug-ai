@@ -3,12 +3,17 @@
 // Replaces the old 48px floating bug button.
 // Primary actions as small icons, settings in a pop-out card.
 
-import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
+import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive, clearAnnotationBadges } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import { getAnnotationCount, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getElementAnnotations, getDrawRegions } from "./annotation-store";
+import { clearScreenshots } from "./screenshot";
+import { clearVoiceTranscripts } from "./voice-recorder";
+import { clearNetworkFailures } from "./collectors";
 import { captureScreenshot, getScreenshots, downloadScreenshot } from "./screenshot";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
+import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
+import { matchesShortcut } from "./ui/helpers";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
@@ -25,7 +30,7 @@ let _annotationViewOpen = false;
 let _toolbar: HTMLElement | null = null;
 let _position: ToolbarPosition = "right";
 let _isMobile = false;
-let _fabExpanded = false;
+const _fabExpanded = false;
 
 // ── Wiring from SDK ───────────────────────────────────────────────────────
 
@@ -54,7 +59,8 @@ export function mountCompactToolbar(
   panel: HTMLElement,
   showToast: (msg: string, root: HTMLElement) => void,
   renderAnnotationList: (panel: HTMLElement) => void,
-  position: ToolbarPosition = "right"
+  position: ToolbarPosition = "right",
+  shortcuts?: { annotate?: string; draw?: string; screenshot?: string }
 ): () => void {
   _panelEl = panel;
   _position = position;
@@ -89,6 +95,32 @@ export function mountCompactToolbar(
     animation: ${_isRecording ? "bt-pulse 2s infinite" : "none"};
   `;
   toolbar.appendChild(recDot);
+
+  // Divider
+  toolbar.appendChild(_divider());
+
+  // ⚡ Quick Bug Capture — the daily-use one-shot button
+  const quickBugBtn = _createToolbarBtn(
+    "Quick Bug Capture (Ctrl+Shift+B)",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+    () => {
+      if (!isQuickBugOpen()) {
+        showQuickBugCapture(root).catch(() => showToast("Quick capture failed", root));
+      }
+    },
+    "tracebug-toolbar-quickbug-btn"
+  );
+  // Make it stand out with accent color
+  quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
+  quickBugBtn.addEventListener("mouseenter", () => {
+    quickBugBtn.style.background = "var(--tb-accent-subtle, #7B61FF33)";
+    quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
+  });
+  quickBugBtn.addEventListener("mouseleave", () => {
+    quickBugBtn.style.background = "transparent";
+    quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
+  });
+  toolbar.appendChild(quickBugBtn);
 
   // Divider
   toolbar.appendChild(_divider());
@@ -236,13 +268,17 @@ export function mountCompactToolbar(
   };
   window.addEventListener("resize", resizeHandler);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — user-configurable via config.shortcuts.
+  // Cross-platform: Ctrl on Windows/Linux, Cmd on macOS (both match).
+  const annotateShortcut = shortcuts?.annotate || "ctrl+shift+a";
+  const drawShortcut = shortcuts?.draw || "ctrl+shift+d";
+
   const keyHandler = (e: KeyboardEvent) => {
-    if (e.ctrlKey && e.shiftKey && e.key === "A") {
+    if (matchesShortcut(e, annotateShortcut)) {
       e.preventDefault();
       (toolbar.querySelector("#tracebug-toolbar-annotate-btn") as HTMLElement)?.click();
     }
-    if (e.ctrlKey && e.shiftKey && e.key === "D") {
+    if (matchesShortcut(e, drawShortcut)) {
       e.preventDefault();
       (toolbar.querySelector("#tracebug-toolbar-draw-btn") as HTMLElement)?.click();
     }
@@ -445,9 +481,14 @@ function _toggleSettingsCard(
   });
 
   card.querySelector("#tracebug-settings-clear-all")!.addEventListener("click", () => {
-    if (confirm("Delete all TraceBug data?")) {
-      clearAllSessionsFn();
-      clearAllAnnotations();
+    if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
+      // Comprehensive wipe — nothing stale leaks into future reports.
+      try { clearAllSessionsFn(); } catch {}
+      try { clearScreenshots(); } catch {}
+      try { clearVoiceTranscripts(); } catch {}
+      try { clearAllAnnotations(); } catch {}
+      try { clearAnnotationBadges(); } catch {}
+      try { clearNetworkFailures(); } catch {}
       _updateAnnotationCount(toolbar);
       showToast("All data cleared", root);
       card.remove();

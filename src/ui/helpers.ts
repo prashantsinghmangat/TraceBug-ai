@@ -1,6 +1,43 @@
 // ── Dashboard UI Helpers ─────────────────────────────────────────────────
 // Shared utility functions used across all dashboard modules.
 
+// ── Keyboard shortcut parsing ────────────────────────────────────────────
+// Accepts strings like "ctrl+shift+s", "cmd+b", "alt+shift+a". Treats
+// "ctrl" and "cmd" as interchangeable — on macOS we match Cmd, on other
+// platforms we match Ctrl. Either one matches when the config says "ctrl".
+// Order of modifiers in the string does not matter; the final segment
+// (after the last "+") is the key.
+
+interface ParsedShortcut {
+  mod: boolean;  // ctrl OR cmd (cross-platform)
+  shift: boolean;
+  alt: boolean;
+  key: string;
+}
+
+export function parseShortcut(shortcut: string): ParsedShortcut {
+  const parts = (shortcut || "").toLowerCase().split("+").map(s => s.trim());
+  return {
+    mod: parts.includes("ctrl") || parts.includes("control") || parts.includes("cmd") || parts.includes("meta"),
+    shift: parts.includes("shift"),
+    alt: parts.includes("alt") || parts.includes("option"),
+    key: parts[parts.length - 1] || "",
+  };
+}
+
+export function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
+  if (!shortcut) return false;
+  const s = parseShortcut(shortcut);
+  const mod = e.ctrlKey || e.metaKey;
+  const key = (e.key || "").toLowerCase();
+  return (
+    mod === s.mod &&
+    e.shiftKey === s.shift &&
+    e.altKey === s.alt &&
+    key === s.key
+  );
+}
+
 export const eventConfig: Record<string, { label: string; icon: string; color: string; bg: string }> = {
   click:                { label: "Click",        icon: "\uD83D\uDC46", color: "#60a5fa", bg: "#1e293b" },
   input:                { label: "Input",        icon: "\u2328\uFE0F", color: "#c084fc", bg: "#1e1533" },

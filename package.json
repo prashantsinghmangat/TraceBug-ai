@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Zero-backend, browser-only SDK that records user sessions and generates bug reproduction steps. Data stays in localStorage.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -29,7 +29,12 @@
     "build:all": "tsup && echo [OK] npm package: dist/ && echo [OK] Chrome extension: tracebug-extension/tracebug-sdk.js",
     "build:example": "tsup && cd example-app && npm install && echo [OK] Example app updated",
     "dev": "tsup --watch",
-    "prepare": "tsup"
+    "prepare": "tsup",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/ cli/"
   },
   "keywords": [
     "bug",
@@ -52,8 +57,14 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
+    "@vitest/coverage-v8": "^4.1.4",
+    "eslint": "^8.57.1",
+    "jsdom": "^29.0.2",
     "tsup": "^8.5.1",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.4"
   },
   "dependencies": {
     "html2canvas": "1.4.1"

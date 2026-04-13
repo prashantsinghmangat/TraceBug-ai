@@ -5,13 +5,33 @@
 [![GitHub stars](https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?color=fbbf24)](https://github.com/prashantsinghmangat/tracebug-ai)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-One-stop bug reproduction tool for QA testers and developers. Records user sessions, captures screenshots, and auto-generates developer-ready bug reports — all in the browser.
+**Stop opening DevTools for every bug.**
 
-**Minimum effort from tester. Maximum debugging output for developer.**
+TraceBug is a browser-only debugging assistant that captures a bug, tells you the likely cause, and creates a GitHub issue in one click.
 
-No servers. No databases. No API keys. Just install and go.
+Every report now opens with:
+
+```
+🔍 Possible Cause (high confidence): API POST /orders failed with 500 after clicking 'Place Order'
+> TL;DR: TypeError thrown on /checkout when clicking 'Place Order' button
+```
+
+No servers. No databases. No API keys. Data stays in your browser.
 
 **Works with any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, SvelteKit, Remix, Astro, or plain HTML.
+
+## ⚡ Get Started in 30 Seconds
+
+```bash
+npx tracebug init
+```
+
+That's it. The CLI detects your framework and prints the exact 2-line snippet. Paste it into your app, run `npm run dev`, and you'll see the TraceBug toolbar on the right edge.
+
+**Report a bug in 2 clicks:**
+1. Press **`Ctrl+Shift+B`** (or click the ⚡ button on the toolbar)
+2. Review the auto-filled report, click **"Copy as GitHub Issue"**
+3. Paste into your repo. Done.
 
 ## What TraceBug Does
 
@@ -68,6 +88,25 @@ Install the browser extension — no code needed. QA testers, PMs, and clients c
 
 ## Features
 
+### 🧠 Debugging Assistant (v1.3)
+
+Every report opens with four derived signals that turn "what happened" into "why it likely happened":
+
+| Signal | What it looks like |
+|---|---|
+| **🔍 Root Cause Hint** | `"API POST /orders failed with 500 after clicking 'Place Order'"` with confidence tier (high/medium/low) |
+| **TL;DR** | One-sentence summary combining network + error + click + page signals |
+| **User clicked** | Tag, text, selector, id, aria-label, testId for the last click before the bug |
+| **Recent Actions** | Last ~10 user actions as plain-English steps (`"Clicked 'Edit' button"`, `"Navigated to /checkout"`) |
+
+Plus:
+
+- **Network response snippets** — first 200 chars of every failed `fetch`/`XHR` response body, captured asynchronously (never blocks the request)
+- **In-memory failure buffer** — last 10 failed requests accessible via `TraceBug.getNetworkFailures()`
+- **Deterministic** — pure functions, no AI APIs, O(1) on already-computed report fields
+
+All four signals ship inline in GitHub issues, Jira tickets, PDF reports, and the Quick Bug modal. See [docs/bug-reporting.md](docs/bug-reporting.md) for full output examples.
+
 ### Auto-Captured (Zero Effort)
 
 | What | Details |
@@ -89,7 +128,9 @@ Install the browser extension — no code needed. QA testers, PMs, and clients c
 |------|-------------|
 | **Annotate Mode** | Click any element to attach feedback (intent, severity, comment). Shift+click for multi-select. `Ctrl+Shift+A` |
 | **Draw Mode** | Drag rectangles or ellipses on the live page to mark layout/spacing issues. `Ctrl+Shift+D` |
-| **Annotation List** | View, export (Markdown/JSON), and manage all annotations in the panel |
+| **Clickable Badges** | Numbered badges on annotated elements — click any badge to see intent, severity, and comment in a popover |
+| **Annotation List** | View, export (Markdown/JSON), and manage all annotations in the panel — includes screenshots section |
+| **Save with Annotations** | Screenshot the page with annotation badges visible, auto-downloads as PNG |
 
 ### QA Tools (One Click)
 
@@ -116,6 +157,43 @@ Install the browser extension — no code needed. QA testers, PMs, and clients c
 - **SDK self-filtering**: TraceBug never records its own UI interactions (clicks on the dashboard, annotation canvas, buttons)
 - **Framework noise removal**: Internal dev-server requests (webpack HMR, Vite ping, Next.js stack frames) are automatically excluded from timeline and reports
 - **Duplicate error dedup**: Consecutive identical errors are collapsed
+
+### User Identification & Bug Workflow
+
+```typescript
+// Identify who's using the app (persisted in localStorage)
+TraceBug.setUser({ id: "user_123", email: "dev@co.com", name: "Jane" });
+
+// Flag current session as a bug (adds red BUG badge)
+TraceBug.markAsBug();
+
+// Get a 2-sentence Slack-friendly summary
+const summary = TraceBug.getCompactReport();
+// "Bug on /vendor — TypeError: Cannot read 'status' after clicking Edit → selecting Inactive..."
+```
+
+### Plugin & Hook System
+
+Extend TraceBug without forking — filter events, enrich reports, or trigger custom actions:
+
+```typescript
+TraceBug.use({
+  name: "slack-webhook",
+  onReport: (report) => { fetch("https://hooks.slack.com/...", { method: "POST", body: JSON.stringify(report) }); return report; },
+});
+
+TraceBug.on("error:captured", (error) => console.log("Bug found:", error.data.error.message));
+```
+
+### CI/CD Helpers
+
+```typescript
+// In Playwright/Cypress tests
+expect(TraceBug.getErrorCount()).toBe(0);
+
+// Upload full session as test artifact on failure
+const json = TraceBug.exportSessionJSON();
+```
 
 ## Installation
 

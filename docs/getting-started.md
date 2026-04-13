@@ -26,8 +26,8 @@ npx tracebug init
 
 ```bash
 cd tracebug-ai && npm pack
-# Share the file: tracebug-sdk-1.2.0.tgz
-npm install ./tracebug-sdk-1.2.0.tgz
+# Share the file: tracebug-sdk-1.3.0.tgz
+npm install ./tracebug-sdk-1.3.0.tgz
 ```
 
 ## Setup (2 lines of code)
@@ -48,6 +48,7 @@ After initialization, a **vertical toolbar rail** appears on the right edge of y
 | Icon | Action | Shortcut |
 |------|--------|----------|
 | Logo | Open session panel (bug reports, timeline, export) | — |
+| ⚡ | **Quick Bug Capture** — screenshot + auto-filled report + 1-click copy | `Ctrl+Shift+B` |
 | Crosshair | Annotate mode — click elements to attach feedback | `Ctrl+Shift+A` |
 | Grid | Draw mode — drag rectangles/ellipses on the page | `Ctrl+Shift+D` |
 | Camera | Take screenshot | `Ctrl+Shift+S` |
@@ -75,7 +76,33 @@ TraceBug.init({ projectId: "my-app", theme: "auto" });
 
 ## Quick Workflow
 
-### Finding and reporting a bug
+### ⚡ Quick Bug Capture (2 clicks, under 5 seconds)
+
+The fastest way to report a bug. Use it 10 times a day:
+
+1. **Press `Ctrl+Shift+B`** (or click the ⚡ button on the toolbar)
+2. A modal opens with:
+   - Auto-filled **title** (based on the session / error)
+   - Auto-filled **description** with steps to reproduce + environment
+   - **Screenshot preview** (with annotations if you have them)
+3. Edit the title/description inline if needed
+4. Click one of the four copy buttons:
+   - **🐙 Copy as GitHub Issue** — Markdown formatted
+   - **🎫 Copy as Jira Ticket** — Jira markup
+   - **📋 Copy as Plain Text** — for Slack/Teams
+   - **⬇ Download Screenshot** — just the PNG
+5. Paste into your tool. Screenshot auto-downloads alongside.
+
+The modal also auto-saves your draft as you type, so you never lose work if you accidentally close it.
+
+Programmatic API:
+```typescript
+await TraceBug.quickCapture();
+```
+
+### Full Workflow (manual)
+
+For more control:
 
 1. Use the app normally — TraceBug records everything silently
 2. Find a bug

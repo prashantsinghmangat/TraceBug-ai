@@ -4,6 +4,7 @@
 // Zero runtime dependencies — uses browser's built-in print-to-PDF.
 
 import { BugReport } from "./types";
+import { formatRootCauseLine } from "./report-builder";
 
 export function generatePdfReport(report: BugReport): void {
   const html = buildPdfHtml(report);
@@ -94,6 +95,32 @@ function buildPdfHtml(report: BugReport): string {
   html += `<h1>TraceBug Bug Report</h1>\n`;
   html += `<div class="meta">${escapeHtml(report.title)} · ${new Date(report.generatedAt).toLocaleString()}</div>\n`;
 
+  // Root-cause banner — sits above everything else for instant triage
+  const rcLine = formatRootCauseLine(report.rootCause);
+  if (rcLine) {
+    const conf = report.rootCause?.confidence || "low";
+    const palette = conf === "high"
+      ? { bg: "#fef2f2", border: "#ef4444", text: "#7f1d1d" }
+      : conf === "medium"
+        ? { bg: "#fff7ed", border: "#f97316", text: "#7c2d12" }
+        : { bg: "#f3f4f6", border: "#9ca3af", text: "#374151" };
+    html += `<div style="background:${palette.bg};border-left:4px solid ${palette.border};padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:${palette.text}"><strong>\uD83D\uDD0D Possible Cause</strong> <span style="opacity:0.7">(${conf} confidence)</span>: ${escapeHtml(report.rootCause.hint)}</div>\n`;
+  }
+
+  // Smart summary — one-line TL;DR at the top of every report
+  if (report.summary) {
+    html += `<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml(report.summary)}</div>\n`;
+  }
+
+  // Recent actions — plain-English user flow
+  if (report.sessionSteps && report.sessionSteps.length > 0) {
+    html += `<h2>Recent Actions</h2>\n<ol style="margin:6px 0 12px 22px;font-size:12px;line-height:1.7">\n`;
+    for (const step of report.sessionSteps) {
+      html += `<li>${escapeHtml(step)}</li>\n`;
+    }
+    html += `</ol>\n`;
+  }
+
   // Environment
   html += `<h2>Environment</h2>\n`;
   html += `<div class="env-grid">
@@ -159,6 +186,16 @@ function buildPdfHtml(report: BugReport): string {
       html += `<tr class="error"><td>${req.method}</td><td style="word-break:break-all">${escapeHtml(req.url.slice(0, 80))}</td><td>${status}</td><td>${req.duration}ms</td></tr>\n`;
     }
     html += `</tbody></table>\n`;
+
+    // Response body snippets (first 200 chars) — invaluable for debugging
+    const withBody = report.networkErrors.filter(r => r.response && r.response.length > 0);
+    if (withBody.length > 0) {
+      html += `<h2 style="font-size:13px;margin-top:10px">Response Snippets</h2>\n`;
+      for (const req of withBody) {
+        const status = req.status === 0 ? "Network Error" : String(req.status);
+        html += `<div style="margin:6px 0;font-family:monospace;font-size:10px"><div style="color:#666;margin-bottom:2px">${escapeHtml(req.method)} ${escapeHtml(req.url.slice(0, 80))} → ${status}</div><div class="stack" style="background:#fff5f5">${escapeHtml(req.response || "")}</div></div>\n`;
+      }
+    }
   }
 
   // Screenshots
