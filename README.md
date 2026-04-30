@@ -1,11 +1,28 @@
-# TraceBug SDK
+<h1 align="center">TraceBug</h1>
 
-[![npm version](https://img.shields.io/npm/v/tracebug-sdk?color=7B61FF)](https://www.npmjs.com/package/tracebug-sdk)
-[![npm downloads](https://img.shields.io/npm/dm/tracebug-sdk?color=00D4FF)](https://www.npmjs.com/package/tracebug-sdk)
-[![GitHub stars](https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?color=fbbf24)](https://github.com/prashantsinghmangat/tracebug-ai)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <strong>Stop wasting time debugging bugs.</strong><br>
+  Capture &rarr; Know the cause &rarr; Create GitHub issue &mdash; <em>in 5 seconds</em>.
+</p>
 
-**Stop opening DevTools for every bug.**
+<p align="center">
+  <img src="./docs/demo.gif" alt="TraceBug 11-second demo — capture a bug, see the root cause, open a GitHub issue" width="820">
+</p>
+
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/tracebug-%E2%80%94-qa-bug-reporte/fdemmibikigigkfjngclmdheeajhdgaj"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Install Chrome Extension"></a>
+  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/badge/npm_install-tracebug--sdk-CB3837?style=for-the-badge&logo=npm&logoColor=white" alt="npm install tracebug-sdk"></a>
+  <a href="https://tracebug.netlify.app"><img src="https://img.shields.io/badge/Live_Demo-tracebug.netlify.app-6C5CE7?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/v/tracebug-sdk?color=7B61FF" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/dm/tracebug-sdk?color=00D4FF" alt="npm downloads"></a>
+  <a href="https://github.com/prashantsinghmangat/tracebug-ai"><img src="https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?color=fbbf24" alt="GitHub stars"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
+</p>
+
+---
 
 TraceBug is a browser-only debugging assistant that captures a bug, tells you the likely cause, and creates a GitHub issue in one click.
 
@@ -516,6 +533,32 @@ npm uninstall tracebug-sdk
 ```
 
 Then remove the `TraceBug.init()` call from your app's entry file.
+
+---
+
+## ⭐ Star this repo if it saves you time
+
+If TraceBug helped you ship faster, a star is the best way to say thanks — it helps other developers find it too.
+
+<p align="center">
+  <a href="https://github.com/prashantsinghmangat/tracebug-ai/stargazers">
+    <img src="https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?style=social" alt="Star TraceBug on GitHub">
+  </a>
+</p>
+
+**Spread the word:**
+- [Share on Twitter/X](https://twitter.com/intent/tweet?text=Stop%20wasting%20time%20debugging%20bugs.%20Capture%20%E2%86%92%20know%20the%20cause%20%E2%86%92%20create%20GitHub%20issue%20in%205%20seconds.&url=https%3A%2F%2Ftracebug.netlify.app)
+- [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Ftracebug.netlify.app)
+- [Share on Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Ftracebug.netlify.app&t=TraceBug%20%E2%80%94%20capture%20a%20bug%20and%20know%20the%20root%20cause%20in%205%20seconds)
+
+**Found a bug or have a feature idea?** [Open an issue](https://github.com/prashantsinghmangat/tracebug-ai/issues/new) — TraceBug was built because bug reports sucked. We're here to make them suck less.
+
+---
+
+<p align="center">
+  Built with ❤ by <a href="https://github.com/prashantsinghmangat">Prashant Singh Mangat</a><br>
+  <sub>MIT Licensed · No tracking · No backend · Your data stays in your browser</sub>
+</p>
 
 ### Chrome Extension
 
