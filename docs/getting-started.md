@@ -199,6 +199,8 @@ const json = TraceBug.exportSessionJSON();
 - [Configuration](configuration.md) — All config options (theme, position, console capture)
 - [API Reference](api-reference.md) — Full programmatic API (plugins, hooks, CI helpers)
 - [Bug Reporting](bug-reporting.md) — Screenshots, notes, voice, export
+- [Ticket Flow](ticket-flow.md) — Start → capture → stop → review → export, with all options
+- [Freemium Plan](freemium.md) — What's free vs premium, gates, dev toggle
 - [Annotate & Draw](annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](chrome-extension.md) — [Install from Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) or use on any website without code
 - [Architecture](architecture.md) — How TraceBug works internally

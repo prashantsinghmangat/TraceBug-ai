@@ -262,6 +262,8 @@ import TraceBug from "tracebug-sdk";
 
 TraceBug.pauseRecording();
 TraceBug.resumeRecording();
+TraceBug.startRecording();   // alias for resumeRecording
+TraceBug.stopRecording();    // alias for pauseRecording
 TraceBug.isRecording();
 TraceBug.getSessionId();
 TraceBug.destroy();
@@ -270,9 +272,13 @@ TraceBug.destroy();
 ### Screenshots
 
 ```typescript
-// Capture screenshot (auto-named from last event context)
+// Capture full-viewport screenshot (auto-named from last event context)
 const screenshot = await TraceBug.takeScreenshot();
 // → { filename: "01_click_add_vendor.png", dataUrl: "data:image/png;...", ... }
+
+// Snipping-tool style: user drags a region, press Esc to cancel
+const region = await TraceBug.takeRegionScreenshot();
+// → { filename: "02_click_..._region.png", ... } | null
 
 const allScreenshots = TraceBug.getScreenshots();
 ```

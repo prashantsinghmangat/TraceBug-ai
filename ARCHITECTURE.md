@@ -151,11 +151,14 @@ Injected at the top of GitHub issues, Jira tickets, PDF reports, and the Quick B
 - `npx tracebug init` — auto-detects framework, prints integration snippet
 - Supports: Next.js, React, Vue, Angular, Svelte, Nuxt, vanilla JS
 
-### Screenshot Auto-Download
-- Screenshots from toolbar camera button auto-download as PNG
-- "Save Annotated" in annotation editor also auto-downloads
+### Screenshot & Ticket Flow
+- Toolbar camera and region buttons add screenshots to the active **bug ticket** — they no longer auto-download
+- `stopRecording()` opens the ticket-review modal; downloads happen only on export (Open in GitHub, Copy as GitHub/Jira/Plain Text, Download Screenshots) and bundle every screenshot in the ticket
 - `takeScreenshot({ includeAnnotations: true })` captures page with annotation badges visible
+- `takeRegionScreenshot()` shows a fullscreen overlay; user drags a rectangle; cropped PNG (with `_region.png` suffix) is added to the ticket. Reuses the `captureScreenshot()` pipeline and crops via canvas with DPR-aware scaling. Press `Esc` to cancel.
+- "Save Annotated" in the annotation editor still auto-downloads (manual one-shot export, separate flow)
 - Chrome Extension uses `chrome.tabs.captureVisibleTab` instead of html2canvas (CORS-safe)
+- See [docs/ticket-flow.md](docs/ticket-flow.md) for the full step-by-step flow
 
 ### Clickable Annotation Badges
 - Numbered badges on annotated elements are clickable
@@ -398,11 +401,14 @@ import TraceBug, { getAllSessions, clearAllSessions, deleteSession } from "trace
 // Pause/resume recording
 TraceBug.pauseRecording();
 TraceBug.resumeRecording();
+TraceBug.startRecording();   // alias for resumeRecording
+TraceBug.stopRecording();    // alias for pauseRecording
 TraceBug.isRecording(); // boolean
 TraceBug.getSessionId(); // current session ID
 
 // Screenshots
 const screenshot = await TraceBug.takeScreenshot();
+const region = await TraceBug.takeRegionScreenshot(); // snipping-tool style — null if cancelled
 const allScreenshots = TraceBug.getScreenshots();
 
 // Tester notes
@@ -476,9 +482,10 @@ TraceBug.getCompactReport();           // Slack-friendly 2-sentence summary
 TraceBug.getErrorCount();              // for test assertions
 TraceBug.exportSessionJSON();          // JSON for CI artifacts
 
-// Screenshots
-await TraceBug.takeScreenshot();                              // clean page, auto-downloads
+// Screenshots — added to the active ticket; downloads happen on export
+await TraceBug.takeScreenshot();
 await TraceBug.takeScreenshot({ includeAnnotations: true });  // with annotation badges visible
+await TraceBug.takeRegionScreenshot();                        // drag-to-select region, Esc to cancel
 
 // Tear down completely
 TraceBug.destroy();
