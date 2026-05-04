@@ -9045,6 +9045,187 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/video-recorder.ts
+  function isVideoSupported() {
+    return !!(typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function" && typeof window.MediaRecorder === "function");
+  }
+  function isVideoRecording() {
+    return _recorder !== null && _recorder.state === "recording";
+  }
+  function getVideoElapsedMs() {
+    return isVideoRecording() ? Date.now() - _startedAt : 0;
+  }
+  function pickMimeType() {
+    const candidates = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm"
+    ];
+    const MR = window.MediaRecorder;
+    if (!MR || typeof MR.isTypeSupported !== "function") return "";
+    for (const t of candidates) {
+      if (MR.isTypeSupported(t)) return t;
+    }
+    return "";
+  }
+  async function startVideoRecording(options) {
+    var _a;
+    if (isVideoRecording()) return false;
+    if (!isVideoSupported()) {
+      (_a = options == null ? void 0 : options.onStatus) == null ? void 0 : _a.call(options, "error", "Screen recording is not supported in this browser.");
+      return false;
+    }
+    _onStatus = (options == null ? void 0 : options.onStatus) || null;
+    let displayStream;
+    try {
+      displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30, max: 60 } },
+        audio: true
+      });
+    } catch (err) {
+      if ((err == null ? void 0 : err.name) === "NotAllowedError" || (err == null ? void 0 : err.name) === "AbortError") {
+        _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
+        return false;
+      }
+      _onStatus == null ? void 0 : _onStatus("error", (err == null ? void 0 : err.message) || "Could not start screen capture.");
+      return false;
+    }
+    if (options == null ? void 0 : options.withMicrophone) {
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        micStream.getAudioTracks().forEach((t) => displayStream.addTrack(t));
+      } catch (e2) {
+      }
+    }
+    _stream = displayStream;
+    _chunks = [];
+    _comments = [];
+    _startedAt = Date.now();
+    _mimeType = pickMimeType();
+    try {
+      _recorder = _mimeType ? new MediaRecorder(displayStream, { mimeType: _mimeType }) : new MediaRecorder(displayStream);
+    } catch (err) {
+      _stream.getTracks().forEach((t) => t.stop());
+      _stream = null;
+      _onStatus == null ? void 0 : _onStatus("error", (err == null ? void 0 : err.message) || "MediaRecorder could not be created.");
+      return false;
+    }
+    _recorder.ondataavailable = (e2) => {
+      if (e2.data && e2.data.size > 0) _chunks.push(e2.data);
+    };
+    displayStream.getVideoTracks().forEach((track) => {
+      track.addEventListener("ended", () => {
+        if (isVideoRecording()) stopVideoRecording().catch(() => {
+        });
+      });
+    });
+    _recorder.start(1e3);
+    _onStatus == null ? void 0 : _onStatus("recording");
+    return true;
+  }
+  function stopVideoRecording() {
+    return new Promise((resolve) => {
+      if (!_recorder || _recorder.state === "inactive") {
+        resolve(null);
+        return;
+      }
+      const recorder = _recorder;
+      const stream = _stream;
+      const startedAt = _startedAt;
+      const mimeType = _mimeType || "video/webm";
+      const comments = _comments.slice();
+      recorder.onstop = () => {
+        const blob = new Blob(_chunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const recording = {
+          url,
+          blob,
+          durationMs: Date.now() - startedAt,
+          mimeType,
+          sizeBytes: blob.size,
+          comments,
+          startedAt
+        };
+        if (_lastRecording && _lastRecording.url !== url) {
+          try {
+            URL.revokeObjectURL(_lastRecording.url);
+          } catch (e2) {
+          }
+        }
+        _lastRecording = recording;
+        stream == null ? void 0 : stream.getTracks().forEach((t) => t.stop());
+        _recorder = null;
+        _stream = null;
+        _chunks = [];
+        _comments = [];
+        _onStatus == null ? void 0 : _onStatus("stopped");
+        resolve(recording);
+      };
+      try {
+        recorder.stop();
+      } catch (e2) {
+        resolve(null);
+      }
+    });
+  }
+  function addVideoComment(text) {
+    if (!isVideoRecording()) return null;
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    const c = { offsetMs: Date.now() - _startedAt, text: trimmed };
+    _comments.push(c);
+    return c;
+  }
+  function getLastVideoRecording() {
+    return _lastRecording;
+  }
+  function clearVideoRecording() {
+    if (_lastRecording) {
+      try {
+        URL.revokeObjectURL(_lastRecording.url);
+      } catch (e2) {
+      }
+      _lastRecording = null;
+    }
+  }
+  function abortVideoRecording() {
+    if (_recorder && _recorder.state !== "inactive") {
+      try {
+        _recorder.stop();
+      } catch (e2) {
+      }
+    }
+    _stream == null ? void 0 : _stream.getTracks().forEach((t) => t.stop());
+    _recorder = null;
+    _stream = null;
+    _chunks = [];
+    _comments = [];
+  }
+  function downloadVideoRecording(recording, filename = "tracebug-recording.webm") {
+    const a2 = document.createElement("a");
+    a2.href = recording.url;
+    a2.download = filename;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+  }
+  var _recorder, _stream, _chunks, _startedAt, _mimeType, _comments, _lastRecording, _onStatus;
+  var init_video_recorder = __esm({
+    "src/video-recorder.ts"() {
+      "use strict";
+      _recorder = null;
+      _stream = null;
+      _chunks = [];
+      _startedAt = 0;
+      _mimeType = "";
+      _comments = [];
+      _lastRecording = null;
+      _onStatus = null;
+    }
+  });
+
   // src/title-generator.ts
   function generateBugTitle(session) {
     var _a;
@@ -9356,6 +9537,15 @@ var TraceBugModule = (() => {
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
     const timeline = buildTimeline(session.events);
     const voiceTranscripts = getVoiceTranscripts();
+    const lastVideo = getLastVideoRecording();
+    const video = lastVideo ? {
+      url: lastVideo.url,
+      durationMs: lastVideo.durationMs,
+      mimeType: lastVideo.mimeType,
+      sizeBytes: lastVideo.sizeBytes,
+      comments: lastVideo.comments.slice(),
+      startedAt: lastVideo.startedAt
+    } : void 0;
     const title = generateBugTitle(session);
     const sessionSteps = generateSessionSteps(session.events);
     const clickedElement = extractClickedElement(session.events);
@@ -9373,6 +9563,7 @@ var TraceBugModule = (() => {
       screenshots: screenshots2,
       timeline,
       voiceTranscripts,
+      video,
       session,
       generatedAt: Date.now()
     };
@@ -9586,6 +9777,7 @@ var TraceBugModule = (() => {
       init_environment();
       init_screenshot();
       init_voice_recorder();
+      init_video_recorder();
       init_title_generator();
       init_timeline_builder();
       init_repro_generator();
@@ -9771,6 +9963,29 @@ ${(req.response || "").replace(/```/g, "` ` `")}
 `;
       }
     }
+    if (report.video) {
+      const v = report.video;
+      const ext = v.mimeType.includes("mp4") ? "mp4" : "webm";
+      const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `tracebug-recording-${stamp}.${ext}`;
+      md += `### Screen Recording
+
+`;
+      md += `> Drag and drop the downloaded recording: \`${filename}\` (${formatVideoMeta(v)})
+
+`;
+      if (v.comments.length > 0) {
+        md += `**Timestamped comments:**
+
+`;
+        for (const c of v.comments) {
+          md += `- \`${formatOffset(c.offsetMs)}\` \u2014 ${c.text}
+`;
+        }
+        md += `
+`;
+      }
+    }
     if (report.screenshots.length > 0) {
       md += `### Screenshots
 
@@ -9809,6 +10024,19 @@ ${(req.response || "").replace(/```/g, "` ` `")}
     md += `_[TraceBug SDK](https://www.npmjs.com/package/tracebug-sdk) \xB7 Session: \`${report.session.sessionId.slice(0, 8)}\`_
 `;
     return md;
+  }
+  function formatVideoMeta(v) {
+    const sec = Math.max(0, Math.floor(v.durationMs / 1e3));
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    const sizeMb = (v.sizeBytes / (1024 * 1024)).toFixed(1);
+    return `${m}:${s} \xB7 ${sizeMb} MB`;
+  }
+  function formatOffset(ms) {
+    const sec = Math.max(0, Math.floor(ms / 1e3));
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
   }
   var GITHUB_URL_BODY_LIMIT;
   var init_github_issue = __esm({
@@ -9951,6 +10179,26 @@ Application throws error:
 
 `;
     }
+    if (report.video) {
+      const v = report.video;
+      const ext = v.mimeType.includes("mp4") ? "mp4" : "webm";
+      const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `tracebug-recording-${stamp}.${ext}`;
+      desc += `h3. Screen Recording
+`;
+      desc += `_Attach the downloaded recording: {{${filename}}} (${formatJiraVideoMeta(v)})_
+`;
+      if (v.comments.length > 0) {
+        desc += `*Timestamped comments:*
+`;
+        for (const c of v.comments) {
+          desc += `* {{${formatJiraOffset(c.offsetMs)}}} \u2014 ${c.text}
+`;
+        }
+      }
+      desc += `
+`;
+    }
     if (report.screenshots.length > 0) {
       desc += `h3. Screenshots
 `;
@@ -10000,6 +10248,19 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       priority,
       labels
     };
+  }
+  function formatJiraVideoMeta(v) {
+    const sec = Math.max(0, Math.floor(v.durationMs / 1e3));
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    const sizeMb = (v.sizeBytes / (1024 * 1024)).toFixed(1);
+    return `${m}:${s} \xB7 ${sizeMb} MB`;
+  }
+  function formatJiraOffset(ms) {
+    const sec = Math.max(0, Math.floor(ms / 1e3));
+    const m = Math.floor(sec / 60).toString().padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
   }
   function determinePriority(report) {
     const hasCriticalError = report.consoleErrors.some(
@@ -10338,6 +10599,11 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       setTimeout(() => downloadScreenshot(ss.dataUrl, ss.filename), i * 120);
     });
   }
+  function _downloadVideoIfPresent() {
+    const v = getLastVideoRecording();
+    if (!v) return;
+    downloadVideoRecording(v, _videoFilename(v));
+  }
   function _buildDescription(session) {
     const env = (session == null ? void 0 : session.environment) || captureEnvironment();
     const flow = session ? generateFlowSummary(session.events) : "";
@@ -10424,6 +10690,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   `;
     const ssCount = screenshots2.length;
     const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
+    const video = getLastVideoRecording();
+    const videoBlock = video ? _buildVideoBlock(video) : "";
     modal.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <span style="font-size:22px">\u26A1</span>
@@ -10465,6 +10733,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         </div>
       ` : ""}
     ` : `<div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:16px;padding:10px;background:var(--tb-bg-primary, #0f0f1a);border:1px dashed var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);text-align:center">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>`}
+
+    ${videoBlock}
 
     ${_githubRepo ? `
       <button data-action="open-github" style="width:100%;background:#24292e;color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;margin-bottom:8px;transition:opacity 0.15s;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -10546,6 +10816,7 @@ ${report.steps}` });
           const tail = screenshots2.length ? ` \xB7 ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"} downloading` : "";
           showToast(`\u2713 GitHub issue page opened${tail}`, root);
           if (screenshots2.length) _downloadAllScreenshots(screenshots2);
+          _downloadVideoIfPresent();
           _clearDraft();
           setTimeout(close, 300);
         } else {
@@ -10560,6 +10831,7 @@ ${report.steps}` });
       const tail = ok && screenshots2.length ? ` \xB7 downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}` : "";
       showToast(ok ? `\u2713 Copied as GitHub Issue${tail}` : "Copy failed", root);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
+      if (ok) _downloadVideoIfPresent();
       _clearDraft();
       setTimeout(close, 300);
     });
@@ -10595,6 +10867,7 @@ ${description}`;
       const jiraTail = ok && screenshots2.length ? ` \xB7 downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}` : "";
       showToast(ok ? `\u2713 Copied as Jira Ticket${jiraTail}` : "Copy failed", root);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
+      if (ok) _downloadVideoIfPresent();
       _clearDraft();
       setTimeout(close, 300);
     });
@@ -10607,6 +10880,7 @@ ${description}`;
       const textTail = ok && screenshots2.length ? ` \xB7 downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}` : "";
       showToast(ok ? `\u2713 Copied as plain text${textTail}` : "Copy failed", root);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
+      if (ok) _downloadVideoIfPresent();
       _clearDraft();
       setTimeout(close, 300);
     });
@@ -10628,6 +10902,68 @@ ${description}`;
         if (meta) meta.textContent = `${target.filename} \xB7 ${target.width}x${target.height}`;
       });
     });
+    const videoEl = modal.querySelector("#tb-qb-video");
+    const videoDownloadBtn = modal.querySelector('[data-action="download-video"]');
+    if (videoDownloadBtn && video) {
+      videoDownloadBtn.addEventListener("click", () => {
+        downloadVideoRecording(video, _videoFilename(video));
+        showToast("\u2713 Downloading recording", root);
+      });
+    }
+    if (videoEl) {
+      modal.querySelectorAll("[data-video-seek]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const seconds = Number(btn.dataset.videoSeek);
+          if (!Number.isFinite(seconds)) return;
+          videoEl.currentTime = seconds;
+          videoEl.play().catch(() => {
+          });
+        });
+      });
+    }
+  }
+  function _formatVideoTime(ms) {
+    const total = Math.max(0, Math.floor(ms / 1e3));
+    const m = Math.floor(total / 60).toString().padStart(2, "0");
+    const s = (total % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  }
+  function _formatBytes(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  function _videoFilename(video) {
+    const ext = video.mimeType.includes("mp4") ? "mp4" : "webm";
+    const stamp = new Date(video.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    return `tracebug-recording-${stamp}.${ext}`;
+  }
+  function _buildVideoBlock(video) {
+    const duration2 = _formatVideoTime(video.durationMs);
+    const size = _formatBytes(video.sizeBytes);
+    const commentCount = video.comments.length;
+    const commentLabel = commentCount === 0 ? "No timestamped comments" : `${commentCount} timestamped comment${commentCount === 1 ? "" : "s"}`;
+    const commentsList = commentCount > 0 ? `<div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:120px;overflow-y:auto;padding-right:4px">
+        ${video.comments.map((c) => {
+      const seconds = Math.floor(c.offsetMs / 1e3);
+      return `<button data-video-seek="${seconds}" style="display:flex;align-items:flex-start;gap:8px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:6px 8px;color:var(--tb-text-primary, #e0e0e0);font-family:inherit;font-size:11px;text-align:left;cursor:pointer;line-height:1.4">
+            <span style="font-variant-numeric:tabular-nums;font-weight:600;color:var(--tb-accent, #7B61FF);min-width:38px">${_formatVideoTime(c.offsetMs)}</span>
+            <span style="flex:1">${escapeHtml2(c.text)}</span>
+          </button>`;
+    }).join("")}
+      </div>` : "";
+    return `
+    <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Screen Recording</label>
+    <div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);overflow:hidden;margin-bottom:6px;background:var(--tb-bg-primary, #0f0f1a)">
+      <video id="tb-qb-video" controls preload="metadata" src="${video.url}" style="display:block;width:100%;max-height:280px;background:#000"></video>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--tb-text-muted, #555);margin-bottom:8px">
+      <span>${duration2} \xB7 ${size} \xB7 ${commentLabel}</span>
+      <button data-action="download-video" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit">\u2B07 Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}</button>
+    </div>
+    ${commentsList}
+    <div style="height:14px"></div>
+  `;
   }
   function _buildGitHubMarkdown(title, description, screenshot) {
     const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
@@ -10724,6 +11060,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_plan();
       init_upgrade_modal();
       init_storage();
+      init_video_recorder();
       init_report_builder();
       init_github_issue();
       init_jira_issue();
@@ -10748,11 +11085,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     captureRegionScreenshot: () => captureRegionScreenshot,
     captureScreenshot: () => captureScreenshot,
     clearAllSessions: () => clearAllSessions,
+    clearVideoRecording: () => clearVideoRecording,
     clearVoiceTranscripts: () => clearVoiceTranscripts,
     default: () => src_default,
     deleteSession: () => deleteSession,
     downloadAllScreenshots: () => downloadAllScreenshots,
     downloadPdfAsHtml: () => downloadPdfAsHtml,
+    downloadVideoRecording: () => downloadVideoRecording,
     extractClickedElement: () => extractClickedElement,
     formatRootCauseLine: () => formatRootCauseLine,
     formatTimelineText: () => formatTimelineText,
@@ -10767,17 +11106,22 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     generateSessionSteps: () => generateSessionSteps,
     generateSmartSummary: () => generateSmartSummary,
     getAllSessions: () => getAllSessions,
+    getLastVideoRecording: () => getLastVideoRecording,
     getNetworkFailures: () => getNetworkFailures,
     getPlan: () => getPlan,
     getScreenshots: () => getScreenshots,
     getVoiceTranscripts: () => getVoiceTranscripts,
     hydratePlan: () => hydratePlan,
     isPremium: () => isPremium,
+    isVideoRecording: () => isVideoRecording,
+    isVideoSupportedFn: () => isVideoSupported,
     isVoiceRecording: () => isVoiceRecording,
     isVoiceSupported: () => isVoiceSupported,
     openGitHubIssue: () => openGitHubIssue,
     setPlan: () => setPlan,
+    startVideoRecording: () => startVideoRecording,
     startVoiceRecording: () => startVoiceRecording,
+    stopVideoRecording: () => stopVideoRecording,
     stopVoiceRecording: () => stopVoiceRecording
   });
   init_storage();
@@ -10972,6 +11316,38 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           html += `<div style="margin:6px 0;font-family:monospace;font-size:10px"><div style="color:#666;margin-bottom:2px">${escapeHtml(req.method)} ${escapeHtml(req.url.slice(0, 80))} \u2192 ${status}</div><div class="stack" style="background:#fff5f5">${escapeHtml(req.response || "")}</div></div>
 `;
         }
+      }
+    }
+    if (report.video) {
+      const v = report.video;
+      const ext = v.mimeType.includes("mp4") ? "mp4" : "webm";
+      const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const filename = `tracebug-recording-${stamp}.${ext}`;
+      const sec = Math.max(0, Math.floor(v.durationMs / 1e3));
+      const dur = `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
+      const sizeMb = (v.sizeBytes / (1024 * 1024)).toFixed(1);
+      html += `<h2>Screen Recording</h2>
+`;
+      html += `<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px;margin:8px 0">
+      <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px">\u{1F4F9} ${escapeHtml(filename)}</div>
+      <div style="font-size:11px;color:#475569">Duration ${dur} \xB7 ${sizeMb} MB \xB7 attached as separate file</div>
+    </div>
+`;
+      if (v.comments.length > 0) {
+        html += `<h2 style="font-size:13px;margin-top:10px">Timestamped Comments</h2>
+<div class="timeline">
+`;
+        for (const c of v.comments) {
+          const cs = Math.max(0, Math.floor(c.offsetMs / 1e3));
+          const off = `${Math.floor(cs / 60).toString().padStart(2, "0")}:${(cs % 60).toString().padStart(2, "0")}`;
+          html += `<div class="timeline-item">
+          <span class="timeline-time">${off}</span>
+          <span class="timeline-desc">${escapeHtml(c.text)}</span>
+        </div>
+`;
+        }
+        html += `</div>
+`;
       }
     }
     if (report.screenshots.length > 0) {
@@ -12394,6 +12770,135 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   // src/compact-toolbar.ts
   init_quick_bug();
   init_helpers();
+  init_video_recorder();
+
+  // src/ui/recording-hud.ts
+  init_video_recorder();
+  var HUD_ID = "tracebug-recording-hud";
+  var _root = null;
+  var _hud = null;
+  var _timerInterval = null;
+  var _onStopRequested = null;
+  var _onCommentSaved = null;
+  function _formatElapsed(ms) {
+    const total = Math.max(0, Math.floor(ms / 1e3));
+    const m = Math.floor(total / 60).toString().padStart(2, "0");
+    const s = (total % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  }
+  function showRecordingHUD(root, options) {
+    if (_hud) return;
+    if (!isVideoRecording()) return;
+    _root = root;
+    _onStopRequested = options.onStop;
+    _onCommentSaved = options.onCommentSaved || null;
+    const hud = document.createElement("div");
+    hud.id = HUD_ID;
+    hud.dataset.tracebug = "recording-hud";
+    hud.setAttribute("role", "status");
+    hud.setAttribute("aria-live", "polite");
+    hud.style.cssText = `
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    background: var(--tb-bg-secondary, #1a1a2e);
+    border: 1px solid var(--tb-error, #ef4444);
+    border-radius: 999px;
+    padding: 8px 8px 8px 14px;
+    display: flex; align-items: center; gap: 10px;
+    color: var(--tb-text-primary, #e0e0e0);
+    font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
+    font-size: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 2147483647;
+    pointer-events: auto;
+    animation: tracebug-hud-in 0.2s ease;
+  `;
+    if (!document.getElementById("tracebug-hud-anim")) {
+      const style = document.createElement("style");
+      style.id = "tracebug-hud-anim";
+      style.textContent = `
+      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, -8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      @keyframes tracebug-hud-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+    `;
+      document.head.appendChild(style);
+    }
+    hud.innerHTML = `
+    <span data-tb-hud="dot" style="width:8px;height:8px;border-radius:50%;background:var(--tb-error, #ef4444);animation:tracebug-hud-pulse 1.2s infinite;flex-shrink:0"></span>
+    <span data-tb-hud="timer" style="font-variant-numeric:tabular-nums;font-weight:600;min-width:38px">00:00</span>
+    <span style="width:1px;height:14px;background:var(--tb-border, #2a2a3e);margin:0 2px"></span>
+    <input
+      data-tb-hud="comment"
+      type="text"
+      placeholder="Add comment at this moment..."
+      maxlength="240"
+      aria-label="Add a timestamped comment"
+      style="background:transparent;border:none;outline:none;color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-family:inherit;width:220px;padding:4px 6px"
+    />
+    <button
+      data-tb-hud="add"
+      title="Save comment (Enter)"
+      aria-label="Save comment"
+      style="background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:999px;width:26px;height:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </button>
+    <button
+      data-tb-hud="stop"
+      title="Stop recording"
+      aria-label="Stop recording"
+      style="background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:999px;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
+    >
+      <span style="width:8px;height:8px;background:#fff;border-radius:1px;display:inline-block"></span>
+      Stop
+    </button>
+  `;
+    root.appendChild(hud);
+    _hud = hud;
+    const timerEl = hud.querySelector('[data-tb-hud="timer"]');
+    const commentInput = hud.querySelector('[data-tb-hud="comment"]');
+    const addBtn = hud.querySelector('[data-tb-hud="add"]');
+    const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
+    _timerInterval = setInterval(() => {
+      if (!isVideoRecording()) return;
+      timerEl.textContent = _formatElapsed(getVideoElapsedMs());
+    }, 500);
+    const saveComment = () => {
+      const text = commentInput.value.trim();
+      if (!text) return;
+      const c = addVideoComment(text);
+      if (c) {
+        _onCommentSaved == null ? void 0 : _onCommentSaved(c.text, c.offsetMs);
+        commentInput.value = "";
+        commentInput.style.transition = "background 0.3s";
+        commentInput.style.background = "var(--tb-success, #22c55e)33";
+        setTimeout(() => {
+          commentInput.style.background = "transparent";
+        }, 400);
+      }
+    };
+    addBtn.addEventListener("click", saveComment);
+    commentInput.addEventListener("keydown", (e2) => {
+      if (e2.key === "Enter") {
+        e2.preventDefault();
+        saveComment();
+      }
+    });
+    stopBtn.addEventListener("click", () => {
+      _onStopRequested == null ? void 0 : _onStopRequested();
+    });
+  }
+  function hideRecordingHUD() {
+    if (_timerInterval) {
+      clearInterval(_timerInterval);
+      _timerInterval = null;
+    }
+    _hud == null ? void 0 : _hud.remove();
+    _hud = null;
+    _root = null;
+    _onStopRequested = null;
+    _onCommentSaved = null;
+  }
+
+  // src/compact-toolbar.ts
   var TOOLBAR_ID = "tracebug-compact-toolbar";
   var SETTINGS_ID = "tracebug-settings-card";
   var DRAG_POS_KEY = "tracebug_toolbar_pos";
@@ -12560,6 +13065,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       },
       "tracebug-toolbar-region-btn"
     ));
+    const recordBtn = _createToolbarBtn(
+      "Record screen + steps",
+      _recordIconSvg(false),
+      () => _toggleVideoRecording(root, recordBtn, showToast3),
+      "tracebug-toolbar-record-btn"
+    );
+    if (!isVideoSupported()) {
+      recordBtn.style.opacity = "0.4";
+      recordBtn.style.cursor = "not-allowed";
+      recordBtn.title = "Screen recording not supported in this browser";
+    }
+    toolbar.appendChild(recordBtn);
     toolbar.appendChild(_divider());
     const listBtn = _createToolbarBtn(
       "Annotation List",
@@ -12680,6 +13197,50 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     d.dataset.tracebug = "toolbar-divider";
     d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
     return d;
+  }
+  function _recordIconSvg(active) {
+    const fill = active ? "var(--tb-error, #ef4444)" : "currentColor";
+    return active ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="${fill}" stroke="${fill}" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>` : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`;
+  }
+  async function _toggleVideoRecording(root, btn, showToast3) {
+    if (!isVideoSupported()) {
+      showToast3("Screen recording not supported in this browser", root);
+      return;
+    }
+    if (isVideoRecording()) {
+      showToast3("Stopping recording...", root);
+      await stopVideoRecording();
+      hideRecordingHUD();
+      btn.innerHTML = _recordIconSvg(false);
+      btn.classList.remove("tb-active");
+      btn.style.color = "var(--tb-btn-text, #aaa)";
+      try {
+        if (!isQuickBugOpen()) await showQuickBugCapture(root);
+      } catch (err) {
+        console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+      }
+      return;
+    }
+    showToast3("Pick a screen, window, or tab to record", root);
+    const ok = await startVideoRecording({
+      onStatus: (status, message) => {
+        if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
+      }
+    });
+    if (!ok) {
+      showToast3("Recording cancelled", root);
+      return;
+    }
+    btn.innerHTML = _recordIconSvg(true);
+    btn.classList.add("tb-active");
+    btn.style.color = "var(--tb-error, #ef4444)";
+    showRecordingHUD(root, {
+      onStop: () => {
+        _toggleVideoRecording(root, btn, showToast3).catch(() => {
+        });
+      }
+    });
+    showToast3("Recording started \u2014 comments are timestamped", root);
   }
   function _togglePanel(panel, toolbar, showToast3) {
     _panelOpen = !_panelOpen;
@@ -14918,6 +15479,7 @@ ${"-".repeat(40)}
   init_jira_issue();
   init_title_generator();
   init_voice_recorder();
+  init_video_recorder();
 
   // src/theme.ts
   var DARK_THEME = {
@@ -15131,6 +15693,7 @@ ${vars}
   init_title_generator();
   init_timeline_builder();
   init_voice_recorder();
+  init_video_recorder();
   var import_meta = {};
   var TraceBugSDK = class {
     constructor() {
@@ -15424,6 +15987,67 @@ ${vars}
     /** Get all voice transcripts */
     getVoiceTranscripts() {
       return getVoiceTranscripts();
+    }
+    // ── Video Recording ────────────────────────────────────────────────
+    /** Check if screen recording is supported (getDisplayMedia + MediaRecorder). */
+    isVideoSupported() {
+      return isVideoSupported();
+    }
+    /** True while a screen recording is in progress. */
+    isVideoRecording() {
+      return isVideoRecording();
+    }
+    /**
+     * Start a screen recording. Opens the browser's screen-picker dialog so the
+     * user can choose a screen, window, or tab. Resolves to true if recording
+     * started; false if the user cancelled or the browser refused.
+     *
+     * While recording, a floating HUD lets the QA tester add timestamped
+     * comments without breaking flow. Comments are synced to video time and
+     * attached to the bug report.
+     */
+    async startVideoRecording(options) {
+      const ok = await startVideoRecording({
+        withMicrophone: options == null ? void 0 : options.withMicrophone,
+        onStatus: options == null ? void 0 : options.onStatus
+      });
+      if (!ok) return false;
+      const root = document.getElementById("tracebug-root");
+      if (root) {
+        showRecordingHUD(root, {
+          onStop: () => {
+            this.stopVideoRecording().catch(() => {
+            });
+          }
+        });
+      }
+      return true;
+    }
+    /**
+     * Stop the screen recording, hide the HUD, and open the Quick Bug ticket
+     * modal so the user can review + export immediately. Resolves to the
+     * recording metadata, or null if no recording was active.
+     */
+    async stopVideoRecording() {
+      var _a;
+      const recording = await stopVideoRecording();
+      hideRecordingHUD();
+      if (recording && ((_a = this.config) == null ? void 0 : _a.enableDashboard)) {
+        const root = document.getElementById("tracebug-root");
+        if (root) {
+          try {
+            const m = await Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports));
+            await m.showQuickBugCapture(root);
+          } catch (err) {
+            console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+          }
+        }
+      }
+      return recording;
+    }
+    /** Get the most recently captured screen recording (or null). */
+    getLastVideoRecording() {
+      return getLastVideoRecording();
     }
     // ── Report Generation ───────────────────────────────────────────────
     /**
@@ -15836,6 +16460,9 @@ ${vars}
       this.sessionId = null;
       clearScreenshots();
       clearVoiceTranscripts();
+      abortVideoRecording();
+      clearVideoRecording();
+      hideRecordingHUD();
       clearNetworkFailures();
       deactivateElementAnnotateMode();
       deactivateDrawMode();

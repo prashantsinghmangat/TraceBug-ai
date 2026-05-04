@@ -65,6 +65,18 @@ import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
 import { generateBugTitle, generateFlowSummary } from "./title-generator";
 import { buildTimeline, formatTimelineText } from "./timeline-builder";
 import { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
+import {
+  startVideoRecording as _startVideoRecording,
+  stopVideoRecording as _stopVideoRecording,
+  isVideoRecording as _isVideoRecording,
+  isVideoSupported as _isVideoSupported,
+  getLastVideoRecording,
+  clearVideoRecording,
+  abortVideoRecording,
+  downloadVideoRecording,
+  type VideoRecording,
+} from "./video-recorder";
+import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import {
@@ -122,6 +134,16 @@ export { generateBugTitle, generateFlowSummary } from "./title-generator";
 export { buildTimeline, formatTimelineText } from "./timeline-builder";
 export { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 export type { VoiceTranscript } from "./voice-recorder";
+export {
+  startVideoRecording,
+  stopVideoRecording,
+  isVideoRecording,
+  isVideoSupported as isVideoSupportedFn,
+  getLastVideoRecording,
+  clearVideoRecording,
+  downloadVideoRecording,
+} from "./video-recorder";
+export type { VideoRecording, VideoComment } from "./video-recorder";
 export type { TraceBugPlugin } from "./plugin-system";
 
 class TraceBugSDK {
@@ -472,6 +494,72 @@ class TraceBugSDK {
   /** Get all voice transcripts */
   getVoiceTranscripts() {
     return getVoiceTranscripts();
+  }
+
+  // ── Video Recording ────────────────────────────────────────────────
+
+  /** Check if screen recording is supported (getDisplayMedia + MediaRecorder). */
+  isVideoSupported(): boolean {
+    return _isVideoSupported();
+  }
+
+  /** True while a screen recording is in progress. */
+  isVideoRecording(): boolean {
+    return _isVideoRecording();
+  }
+
+  /**
+   * Start a screen recording. Opens the browser's screen-picker dialog so the
+   * user can choose a screen, window, or tab. Resolves to true if recording
+   * started; false if the user cancelled or the browser refused.
+   *
+   * While recording, a floating HUD lets the QA tester add timestamped
+   * comments without breaking flow. Comments are synced to video time and
+   * attached to the bug report.
+   */
+  async startVideoRecording(options?: {
+    withMicrophone?: boolean;
+    onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
+  }): Promise<boolean> {
+    const ok = await _startVideoRecording({
+      withMicrophone: options?.withMicrophone,
+      onStatus: options?.onStatus,
+    });
+    if (!ok) return false;
+    const root = document.getElementById("tracebug-root");
+    if (root) {
+      showRecordingHUD(root, {
+        onStop: () => { this.stopVideoRecording().catch(() => {}); },
+      });
+    }
+    return true;
+  }
+
+  /**
+   * Stop the screen recording, hide the HUD, and open the Quick Bug ticket
+   * modal so the user can review + export immediately. Resolves to the
+   * recording metadata, or null if no recording was active.
+   */
+  async stopVideoRecording(): Promise<VideoRecording | null> {
+    const recording = await _stopVideoRecording();
+    hideRecordingHUD();
+    if (recording && this.config?.enableDashboard) {
+      const root = document.getElementById("tracebug-root");
+      if (root) {
+        try {
+          const m = await import("./ui/quick-bug");
+          await m.showQuickBugCapture(root);
+        } catch (err) {
+          console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+        }
+      }
+    }
+    return recording;
+  }
+
+  /** Get the most recently captured screen recording (or null). */
+  getLastVideoRecording(): VideoRecording | null {
+    return getLastVideoRecording();
   }
 
   // ── Report Generation ───────────────────────────────────────────────
@@ -952,6 +1040,9 @@ class TraceBugSDK {
     this.sessionId = null;
     clearScreenshots();
     clearVoiceTranscripts();
+    abortVideoRecording();
+    clearVideoRecording();
+    hideRecordingHUD();
     clearNetworkFailures();
     deactivateElementAnnotateMode();
     deactivateDrawMode();

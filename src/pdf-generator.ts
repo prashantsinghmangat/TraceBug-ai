@@ -198,6 +198,34 @@ function buildPdfHtml(report: BugReport): string {
     }
   }
 
+  // Screen recording — PDF can't embed video, so we surface metadata + timestamped comments
+  if (report.video) {
+    const v = report.video;
+    const ext = v.mimeType.includes("mp4") ? "mp4" : "webm";
+    const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `tracebug-recording-${stamp}.${ext}`;
+    const sec = Math.max(0, Math.floor(v.durationMs / 1000));
+    const dur = `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
+    const sizeMb = (v.sizeBytes / (1024 * 1024)).toFixed(1);
+    html += `<h2>Screen Recording</h2>\n`;
+    html += `<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px;margin:8px 0">
+      <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px">📹 ${escapeHtml(filename)}</div>
+      <div style="font-size:11px;color:#475569">Duration ${dur} · ${sizeMb} MB · attached as separate file</div>
+    </div>\n`;
+    if (v.comments.length > 0) {
+      html += `<h2 style="font-size:13px;margin-top:10px">Timestamped Comments</h2>\n<div class="timeline">\n`;
+      for (const c of v.comments) {
+        const cs = Math.max(0, Math.floor(c.offsetMs / 1000));
+        const off = `${Math.floor(cs / 60).toString().padStart(2, "0")}:${(cs % 60).toString().padStart(2, "0")}`;
+        html += `<div class="timeline-item">
+          <span class="timeline-time">${off}</span>
+          <span class="timeline-desc">${escapeHtml(c.text)}</span>
+        </div>\n`;
+      }
+      html += `</div>\n`;
+    }
+  }
+
   // Screenshots
   if (report.screenshots.length > 0) {
     html += `<h2>Screenshots</h2>\n<div class="screenshot-list">\n`;

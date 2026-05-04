@@ -269,6 +269,8 @@ export interface BugReport {
   screenshots: ScreenshotData[];
   timeline: TimelineEntry[];
   voiceTranscripts: VoiceTranscriptData[];
+  /** Optional screen recording — present only when QA hit Record before exporting. */
+  video?: VideoRecordingData;
   session: StoredSession;
   generatedAt: number;
 }
@@ -280,6 +282,28 @@ export interface VoiceTranscriptData {
   timestamp: number;
   text: string;
   duration: number;
+}
+
+// ── Video Recording ──────────────────────────────────────────────────────
+
+/** A single comment timestamped against video playback time. */
+export interface VideoCommentData {
+  offsetMs: number;
+  text: string;
+}
+
+/**
+ * Metadata for a screen recording attached to a bug report. The blob lives
+ * in memory only — `url` is a Blob URL valid until clearVideoRecording() or
+ * page reload.
+ */
+export interface VideoRecordingData {
+  url: string;
+  durationMs: number;
+  mimeType: string;
+  sizeBytes: number;
+  comments: VideoCommentData[];
+  startedAt: number;
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────

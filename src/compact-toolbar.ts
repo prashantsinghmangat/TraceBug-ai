@@ -17,6 +17,8 @@ import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storag
 import { replayOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
 import { matchesShortcut } from "./ui/helpers";
+import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported } from "./video-recorder";
+import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
@@ -225,6 +227,20 @@ export function mountCompactToolbar(
     "tracebug-toolbar-region-btn"
   ));
 
+  // Video recording button — toggles screen recording + HUD with timestamped comments.
+  const recordBtn = _createToolbarBtn(
+    "Record screen + steps",
+    _recordIconSvg(false),
+    () => _toggleVideoRecording(root, recordBtn, showToast),
+    "tracebug-toolbar-record-btn"
+  );
+  if (!isVideoSupported()) {
+    recordBtn.style.opacity = "0.4";
+    recordBtn.style.cursor = "not-allowed";
+    recordBtn.title = "Screen recording not supported in this browser";
+  }
+  toolbar.appendChild(recordBtn);
+
   // Divider
   toolbar.appendChild(_divider());
 
@@ -373,6 +389,61 @@ function _divider(): HTMLElement {
   d.dataset.tracebug = "toolbar-divider";
   d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
   return d;
+}
+
+// ── Video recording icon + toggle ────────────────────────────────────────
+
+function _recordIconSvg(active: boolean): string {
+  const fill = active ? "var(--tb-error, #ef4444)" : "currentColor";
+  return active
+    ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="${fill}" stroke="${fill}" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`
+    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`;
+}
+
+async function _toggleVideoRecording(
+  root: HTMLElement,
+  btn: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  if (!isVideoSupported()) {
+    showToast("Screen recording not supported in this browser", root);
+    return;
+  }
+
+  if (isVideoRecording()) {
+    showToast("Stopping recording...", root);
+    await stopVideoRecording();
+    hideRecordingHUD();
+    btn.innerHTML = _recordIconSvg(false);
+    btn.classList.remove("tb-active");
+    btn.style.color = "var(--tb-btn-text, #aaa)";
+    // Open the ticket modal so the user can review + export immediately.
+    try {
+      if (!isQuickBugOpen()) await showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+    }
+    return;
+  }
+
+  showToast("Pick a screen, window, or tab to record", root);
+  const ok = await startVideoRecording({
+    onStatus: (status, message) => {
+      if (status === "error" && message) showToast(`Recording error: ${message}`, root);
+    },
+  });
+  if (!ok) {
+    showToast("Recording cancelled", root);
+    return;
+  }
+
+  btn.innerHTML = _recordIconSvg(true);
+  btn.classList.add("tb-active");
+  btn.style.color = "var(--tb-error, #ef4444)";
+  showRecordingHUD(root, {
+    onStop: () => { _toggleVideoRecording(root, btn, showToast).catch(() => {}); },
+  });
+  showToast("Recording started — comments are timestamped", root);
 }
 
 function _togglePanel(
