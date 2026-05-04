@@ -58,6 +58,37 @@ TraceBug.destroy();
 
 ---
 
+## Plan (Freemium)
+
+> Full details: [docs/freemium.md](freemium.md)
+
+### `TraceBug.getPlan(): "free" | "premium"`
+Returns the current plan. Hydrated from `chrome.storage.local` (extension) or `localStorage` (web SDK) at init.
+
+### `TraceBug.isPremium(): boolean`
+Convenience for `getPlan() === "premium"`.
+
+### `TraceBug.setPlan(plan): Promise<void>`
+Persist the plan. Used by the in-modal dev toggle and (future) upgrade flow.
+
+### `TraceBug.hydratePlan(): Promise<Plan>`
+Read storage and cache. Called automatically at `init()`; rarely needed directly.
+
+### `TraceBug.FREE_LIMITS`
+`{ screenshots: 2 }` — the free-tier caps.
+
+**Free vs premium gates summary** (see [docs/freemium.md](freemium.md) for the full table):
+
+| Method | Free behavior |
+|---|---|
+| `takeScreenshot()` / `takeRegionScreenshot()` | Returns `null` and shows upgrade modal at the 2-screenshot cap |
+| `downloadPdf()` | Shows upgrade modal; no PDF generated |
+| `getJiraTicket()` | Shows upgrade modal; returns `null` |
+| `generateReport()` | Returns the report with `consoleErrors: []` and `networkErrors: []` |
+| `companyName` config | Ignored (no branding line prepended) |
+
+---
+
 ## Recording Control
 
 ### `TraceBug.pauseRecording()`
@@ -67,6 +98,22 @@ Pause event capture. Events will not be recorded until resumed.
 ### `TraceBug.resumeRecording()`
 
 Resume recording after a pause.
+
+### `TraceBug.startRecording()`
+
+Alias for `resumeRecording()`. Use `start` / `stop` when you want a clear "begin a bug ticket" semantic.
+
+### `TraceBug.stopRecording()`
+
+Pauses recording **and** opens the ticket-review modal so the user can see every captured step + screenshot before exporting. Equivalent to `pauseRecording()` followed by `quickCapture()`.
+
+```typescript
+TraceBug.startRecording();          // begin recording a ticket
+// ...user clicks around, takes screenshots via toolbar...
+TraceBug.stopRecording();           // pauses + opens the ticket-review modal
+```
+
+The modal uses any screenshots already stashed in the ticket; downloads happen only when the user clicks an export action.
 
 ### `TraceBug.isRecording(): boolean`
 
@@ -78,11 +125,23 @@ Returns the current session ID, or `null` if not initialized.
 
 ---
 
-## Quick Bug Capture
+## Bug Ticket Flow
+
+> Full step-by-step flow with all options: see [docs/ticket-flow.md](ticket-flow.md).
+
+TraceBug treats a recording cycle as a **bug ticket**:
+
+1. `startRecording()` (or just leave recording on by default)
+2. User reproduces the bug. Toolbar buttons (camera / region) **add screenshots to the ticket** — no instant downloads.
+3. `stopRecording()` (or click the recording toggle) → ticket-review modal opens automatically.
+4. User reviews title + description + numbered screenshot gallery.
+5. Click any export action — **all** screenshots in the ticket download alongside the markdown/clipboard payload.
+
+The ticket-review modal is the same modal opened by `quickCapture()` / `Ctrl+Shift+B`; calling either path is equivalent.
 
 ### `TraceBug.quickCapture(): Promise<void>`
 
-The fastest way to file a bug. Takes a screenshot (with annotations visible), opens a modal with auto-filled title + description + screenshot preview, and provides 1-click copy to GitHub Issue, Jira Ticket, plain text, or screenshot download.
+Open the ticket-review modal. If the active ticket already has screenshots (added via the toolbar during recording), the modal renders all of them as a numbered gallery; otherwise it captures one fresh so the modal isn't empty.
 
 ```typescript
 await TraceBug.quickCapture();
@@ -93,11 +152,22 @@ await TraceBug.quickCapture();
 **Toolbar button:** Click the ⚡ icon (first button after the recording dot).
 
 The modal:
+- Header: "Bug Ticket — Review & Export" with a count line ("3 screenshots attached · download/copy includes all screenshots")
 - Auto-fills title from session context (`generateBugTitle`)
 - Auto-fills description with steps + environment + error details
-- Captures screenshot with all annotation badges visible
+- Renders the **primary preview** (first screenshot) and a **numbered thumbnail strip** for the rest; click a thumbnail to swap it into the primary preview
 - Auto-saves draft to `tracebug_last_bug_draft` (recovered if you accidentally close)
-- Closes on Escape, click-outside, or after a successful copy
+- Closes on Escape, click-outside, or after a successful export
+
+**Export actions (all download every screenshot in the ticket):**
+
+| Button | Action | Screenshots |
+|--------|--------|-------------|
+| Open in GitHub | Opens prefilled GitHub issue page in a new tab | All downloaded, staggered 120ms |
+| Copy as GitHub Issue | Copies markdown to clipboard | All downloaded, staggered 120ms |
+| Copy as Jira Ticket | Copies Jira-formatted text to clipboard | All downloaded, staggered 120ms |
+| Copy as Plain Text | Copies title + description | All downloaded, staggered 120ms |
+| Download Screenshots | Downloads only — no clipboard | All, staggered 120ms |
 
 ## Screenshots
 
@@ -120,6 +190,25 @@ const annotated = await TraceBug.takeScreenshot({ includeAnnotations: true });
 | `includeAnnotations` | `boolean` | `false` | Keep annotation badges and outlines visible in the screenshot |
 
 In the Chrome Extension, screenshots use `chrome.tabs.captureVisibleTab` instead of html2canvas for reliable cross-origin capture.
+
+### `TraceBug.takeRegionScreenshot(): Promise<ScreenshotData | null>`
+
+Snipping-tool style screenshot. Shows a fullscreen overlay; the user drags a rectangle; the cropped PNG is **added to the active ticket** (`getScreenshots()`). It is **not** auto-downloaded — downloads happen only when the user exports the ticket from the review modal.
+
+```typescript
+const region = await TraceBug.takeRegionScreenshot();
+if (region) {
+  console.log("Added to ticket:", region.filename, region.width, region.height);
+}
+```
+
+**Behavior:**
+- Press `Esc` while the overlay is open to cancel — resolves to `null`
+- Drag smaller than 5×5 px — resolves to `null`
+- Cropping handles devicePixelRatio (scales source by `naturalWidth / window.innerWidth`)
+- Filename pattern: `XX_..._region.png` (the `_region` suffix differentiates from full-viewport captures)
+
+**Toolbar button:** corner-square icon next to the camera (tooltip: "Region Screenshot — drag to select, added to ticket").
 
 ### `TraceBug.getScreenshots(): ScreenshotData[]`
 
@@ -589,6 +678,7 @@ import {
   buildTimeline,
   formatTimelineText,
   captureScreenshot,
+  captureRegionScreenshot,
   getScreenshots,
   downloadAllScreenshots,
   startVoiceRecording,

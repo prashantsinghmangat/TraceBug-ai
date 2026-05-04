@@ -85,11 +85,36 @@ The detail view has a **sticky header** with the auto-generated bug title and se
 
 ### Capture
 
-- Click the **Camera** button in the toolbar or press `Ctrl+Shift+S`
-- The screenshot **auto-downloads** to your system as a PNG file
+Screenshots are no longer instant downloads. They accumulate in the **active ticket** while you record; downloads happen only when you export the ticket.
+
+- Click the **Camera** button in the toolbar (or press `Ctrl+Shift+S`) — the screenshot is added to the ticket
+- Toast confirms: "Added to ticket · N screenshots"
 - TraceBug hides its own UI, captures the page, then restores the UI
 - Screenshots are auto-named based on context: `01_click_button.png`, `02_enter_field.png`
 - In the Chrome Extension, screenshots use `chrome.tabs.captureVisibleTab` for reliable cross-origin capture
+
+### Region Screenshot (Snipping Tool)
+
+For when you only want part of the page:
+
+- Click the **corner-square** button in the toolbar (next to the camera) — tooltip "Region Screenshot — drag to select, added to ticket"
+- A translucent overlay covers the page; **drag a rectangle** over the area you want
+- On release, the cropped PNG is added to the active ticket with a `_region.png` filename suffix
+- Press `Esc` to cancel without capturing
+- Programmatically: `await TraceBug.takeRegionScreenshot()` (resolves to `null` if cancelled)
+
+### Reviewing the Ticket
+
+> Full step-by-step flow with all options: see [docs/ticket-flow.md](ticket-flow.md).
+
+When you're done reproducing the bug, click the **recording toggle** to stop, or call `TraceBug.stopRecording()`. This opens the **ticket-review modal**:
+
+- Header: "Bug Ticket — Review & Export"
+- Auto-filled title and description (root cause, steps, environment, errors, failed requests)
+- **Primary preview** of the first screenshot
+- **Numbered thumbnail strip** of every other screenshot; click any thumbnail to swap it into the primary preview
+- Five export actions (Open in GitHub, Copy as GitHub Issue, Copy as Jira Ticket, Copy as Plain Text, Download Screenshots) — **all** of them download every screenshot in the ticket alongside the markdown/clipboard payload
+- Press `Ctrl+Shift+B` (or call `TraceBug.quickCapture()`) to open the same modal at any time
 
 ### Screenshot with Annotations
 

@@ -9,7 +9,10 @@ import { getAnnotationCount, clearAllAnnotations, exportAsJSON, exportAsMarkdown
 import { clearScreenshots } from "./screenshot";
 import { clearVoiceTranscripts } from "./voice-recorder";
 import { clearNetworkFailures } from "./collectors";
-import { captureScreenshot, getScreenshots, downloadScreenshot } from "./screenshot";
+import { captureScreenshot, getScreenshots } from "./screenshot";
+import { captureRegionScreenshot } from "./region-screenshot";
+import { isPremium, FREE_LIMITS } from "./plan";
+import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
@@ -171,23 +174,55 @@ export function mountCompactToolbar(
   );
   toolbar.appendChild(drawBtn);
 
-  // Screenshot button
+  // Free-plan gate: enforce the screenshot limit at capture time.
+  const _checkLimit = (): boolean => {
+    if (isPremium()) return true;
+    if (getScreenshots().length < FREE_LIMITS.screenshots) return true;
+    showUpgradeModal({
+      feature: "Unlimited screenshots",
+      message: `Free plan is capped at ${FREE_LIMITS.screenshots} screenshots per ticket. Upgrade for unlimited captures.`,
+    }, root);
+    return false;
+  };
+
+  // Screenshot button — adds to the active ticket; downloads happen on export.
   toolbar.appendChild(_createToolbarBtn(
-    "Screenshot (Ctrl+Shift+S)",
+    "Screenshot (Ctrl+Shift+S) — added to ticket",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`,
     async () => {
+      if (!_checkLimit()) return;
       showToast("Capturing...", root);
       try {
         const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
         const lastEvent = sessions[0]?.events[sessions[0].events.length - 1] || null;
-        const ss = await captureScreenshot(lastEvent);
-        downloadScreenshot(ss.dataUrl, ss.filename);
-        showToast(`Screenshot saved: ${ss.filename}`, root);
+        await captureScreenshot(lastEvent);
+        const n = getScreenshots().length;
+        const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
+        showToast(`Added to ticket · ${n}${cap} screenshot${n === 1 ? "" : "s"}`, root);
       } catch {
         showToast("Screenshot failed", root);
       }
     },
     "tracebug-toolbar-screenshot-btn"
+  ));
+
+  // Region (snipping-tool) screenshot button — adds to the active ticket.
+  toolbar.appendChild(_createToolbarBtn(
+    "Region Screenshot — drag to select, added to ticket",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M9 9h6v6H9z"/></svg>`,
+    async () => {
+      if (!_checkLimit()) return;
+      try {
+        const ss = await captureRegionScreenshot();
+        if (!ss) { showToast("Cancelled", root); return; }
+        const n = getScreenshots().length;
+        const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
+        showToast(`Region added to ticket · ${n}${cap} screenshot${n === 1 ? "" : "s"}`, root);
+      } catch {
+        showToast("Region screenshot failed", root);
+      }
+    },
+    "tracebug-toolbar-region-btn"
   ));
 
   // Divider
@@ -457,7 +492,11 @@ function _toggleSettingsCard(
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Screenshots</span>
-        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${getScreenshots().length}</span>
+        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${getScreenshots().length}${isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Plan</span>
+        <span id="tracebug-settings-plan-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;${isPremium() ? "background:var(--tb-accent, #7B61FF);color:#fff" : "background:var(--tb-border, #2a2a3e);color:var(--tb-text-secondary, #aaa)"}">${isPremium() ? "✨ Premium" : "Free Plan"}</span>
       </div>
       <div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:10px;display:flex;gap:6px">
         <button id="tracebug-settings-clear-ann" style="flex:1;background:var(--tb-warning-bg, #f9731622);color:var(--tb-warning, #f97316);border:1px solid var(--tb-warning, #f97316)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear Annotations</button>
@@ -472,6 +511,22 @@ function _toggleSettingsCard(
     if (_onToggleRecording) _onToggleRecording();
     card.remove();
   });
+
+  // Plan badge — opens the upgrade modal (which exposes the dev toggle).
+  const planBadge = card.querySelector("#tracebug-settings-plan-badge") as HTMLElement | null;
+  if (planBadge) {
+    planBadge.style.cursor = "pointer";
+    planBadge.title = "View plan / upgrade";
+    planBadge.addEventListener("click", () => {
+      card.remove();
+      showUpgradeModal({
+        feature: isPremium() ? "Premium plan" : "Premium plan",
+        message: isPremium()
+          ? "You're on Premium. Use the dev toggle below to switch back to Free for testing."
+          : "Unlock unlimited screenshots, PDF export, Jira tickets, advanced metadata, and custom branding.",
+      }, root);
+    });
+  }
 
   card.querySelector("#tracebug-settings-clear-ann")!.addEventListener("click", () => {
     clearAllAnnotations();

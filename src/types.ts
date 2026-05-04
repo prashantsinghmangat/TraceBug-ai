@@ -68,6 +68,14 @@ export interface TraceBugConfig {
    * - "none"     → No console interception
    */
   captureConsole?: "errors" | "warnings" | "all" | "none";
+
+  /**
+   * Optional team/company name for custom branding in exported reports
+   * (premium feature). When set and the user is on the premium plan, a
+   * "Reported via TraceBug — {companyName}" header is prepended to GitHub
+   * issues, Jira tickets, and plain-text exports. Ignored on the free plan.
+   */
+  companyName?: string;
 }
 
 // ── Event types ───────────────────────────────────────────────────────────

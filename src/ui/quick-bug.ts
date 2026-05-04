@@ -2,7 +2,9 @@
 // Zero-friction bug reporting: 1 keystroke → screenshot → auto-filled modal → 1-click copy.
 // Total flow under 5 seconds. Replaces the 6-7 click manual workflow.
 
-import { captureScreenshot, downloadScreenshot } from "../screenshot";
+import { captureScreenshot, downloadScreenshot, getScreenshots } from "../screenshot";
+import { isPremium } from "../plan";
+import { showUpgradeModal } from "./upgrade-modal";
 import { getAllSessions } from "../storage";
 import { buildReport, formatRootCauseLine } from "../report-builder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
@@ -34,8 +36,11 @@ export function isQuickBugOpen(): boolean {
 }
 
 /**
- * Main entry: Capture screenshot + open quick bug modal.
- * Called from keyboard shortcut, toolbar button, or programmatic API.
+ * Main entry: open the ticket-review modal.
+ * - If the session already has screenshots (taken via toolbar during recording),
+ *   show them all as a gallery — no fresh capture.
+ * - Otherwise capture one screenshot fresh (preserves the Ctrl+Shift+B one-shot flow).
+ * Downloads happen on export, never on capture.
  */
 export async function showQuickBugCapture(root: HTMLElement): Promise<void> {
   if (_isOpen) return;
@@ -45,12 +50,16 @@ export async function showQuickBugCapture(root: HTMLElement): Promise<void> {
   const currentSession = sessions[0] || null;
   const lastEvent = currentSession?.events[currentSession.events.length - 1] || null;
 
-  // Capture screenshot with annotations visible (if any)
-  let screenshot: ScreenshotData | null = null;
-  try {
-    screenshot = await captureScreenshot(lastEvent, { includeAnnotations: true });
-  } catch (err) {
-    console.warn("[TraceBug] Quick capture screenshot failed:", err);
+  // Use the screenshots already collected for the active ticket; fall back to
+  // capturing one fresh if the user opened the modal without having taken any.
+  let screenshots: ScreenshotData[] = getScreenshots();
+  if (screenshots.length === 0) {
+    try {
+      await captureScreenshot(lastEvent, { includeAnnotations: true });
+      screenshots = getScreenshots();
+    } catch (err) {
+      console.warn("[TraceBug] Quick capture screenshot failed:", err);
+    }
   }
 
   // Auto-fill title + description from session context
@@ -61,7 +70,15 @@ export async function showQuickBugCapture(root: HTMLElement): Promise<void> {
   _openModal(root, {
     title: draft?.title || autoTitle,
     description: draft?.description || autoDesc,
-    screenshot,
+    screenshots,
+  });
+}
+
+/** Download every screenshot in the ticket, one PNG per file. */
+function _downloadAllScreenshots(screenshots: ScreenshotData[]): void {
+  // Stagger slightly so the browser doesn't drop concurrent downloads.
+  screenshots.forEach((ss, i) => {
+    setTimeout(() => downloadScreenshot(ss.dataUrl, ss.filename), i * 120);
   });
 }
 
@@ -126,9 +143,12 @@ function _buildDescription(session: StoredSession | null): string {
 
 function _openModal(
   root: HTMLElement,
-  data: { title: string; description: string; screenshot: ScreenshotData | null }
+  data: { title: string; description: string; screenshots: ScreenshotData[] }
 ): void {
   _isOpen = true;
+  // Primary screenshot used for inline preview / fallback markdown reference.
+  const primary: ScreenshotData | null = data.screenshots[0] || null;
+  const screenshots = data.screenshots;
 
   // Remove any existing modal
   const existing = document.getElementById(MODAL_ID);
@@ -162,12 +182,15 @@ function _openModal(
     animation: tracebug-qb-slide-up 0.2s ease;
   `;
 
+  const ssCount = screenshots.length;
+  const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
+
   modal.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <span style="font-size:22px">\u26A1</span>
       <div style="flex:1">
-        <div style="font-size:18px;font-weight:700;color:var(--tb-text-primary, #fff)">Quick Bug Capture</div>
-        <div style="font-size:12px;color:var(--tb-text-muted, #888);margin-top:2px">Review \u2192 Copy \u2192 Paste into Jira/GitHub</div>
+        <div style="font-size:18px;font-weight:700;color:var(--tb-text-primary, #fff)">Bug Ticket \u2014 Review &amp; Export</div>
+        <div style="font-size:12px;color:var(--tb-text-muted, #888);margin-top:2px">${ssCountLabel} \u00B7 download/copy includes all screenshots</div>
       </div>
       <button data-action="close" aria-label="Close" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:20px;padding:4px 8px;border-radius:6px">\u2715</button>
     </div>
@@ -186,13 +209,23 @@ function _openModal(
       style="width:100%;height:160px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:10px 12px;font-size:12px;font-family:var(--tb-font-mono, monospace);margin-bottom:14px;resize:vertical;outline:none;line-height:1.5"
     >${escapeHtml(data.description)}</textarea>
 
-    ${data.screenshot ? `
-      <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Screenshot</label>
+    ${primary ? `
+      <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Screenshots (${ssCount})</label>
       <div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);overflow:hidden;margin-bottom:6px;background:var(--tb-bg-primary, #0f0f1a)">
-        <img src="${data.screenshot.dataUrl}" alt="Bug screenshot" style="display:block;max-width:100%;max-height:240px;width:auto;margin:0 auto" />
+        <img id="tb-qb-primary-img" src="${primary.dataUrl}" alt="Bug screenshot" style="display:block;max-width:100%;max-height:240px;width:auto;margin:0 auto" />
       </div>
-      <div style="font-size:10px;color:var(--tb-text-muted, #555);margin-bottom:16px">${escapeHtml(data.screenshot.filename)} \u00B7 ${data.screenshot.width}x${data.screenshot.height}</div>
-    ` : `<div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:16px;padding:10px;background:var(--tb-bg-primary, #0f0f1a);border:1px dashed var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);text-align:center">Screenshot unavailable</div>`}
+      <div id="tb-qb-primary-meta" style="font-size:10px;color:var(--tb-text-muted, #555);margin-bottom:${ssCount > 1 ? "6" : "16"}px">${escapeHtml(primary.filename)} \u00B7 ${primary.width}x${primary.height}</div>
+      ${ssCount > 1 ? `
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+          ${screenshots.map((ss, i) => `
+            <button data-thumb-index="${i}" title="${escapeHtml(ss.filename)}" style="position:relative;padding:0;border:1px solid var(--tb-border, #2a2a3e);border-radius:4px;overflow:hidden;cursor:pointer;background:var(--tb-bg-primary, #0f0f1a);width:64px;height:48px">
+              <img src="${ss.dataUrl}" alt="Step ${i + 1}" style="width:100%;height:100%;object-fit:cover;display:block" />
+              <span style="position:absolute;top:1px;left:2px;font-size:9px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);border-radius:3px;padding:0 4px">${i + 1}</span>
+            </button>
+          `).join("")}
+        </div>
+      ` : ""}
+    ` : `<div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:16px;padding:10px;background:var(--tb-bg-primary, #0f0f1a);border:1px dashed var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);text-align:center">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>`}
 
     ${_githubRepo ? `
       <button data-action="open-github" style="width:100%;background:#24292e;color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;margin-bottom:8px;transition:opacity 0.15s;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -202,16 +235,16 @@ function _openModal(
     ` : ""}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
       <button data-action="github" style="background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">\uD83D\uDC19 Copy as GitHub Issue</button>
-      <button data-action="jira" style="background:#2684FF;color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">\uD83C\uDFAB Copy as Jira Ticket</button>
+      <button data-action="jira" style="background:${isPremium() ? "#2684FF" : "var(--tb-bg-primary, #0f0f1a)"};color:${isPremium() ? "#fff" : "var(--tb-text-muted, #888)"};border:${isPremium() ? "none" : "1px solid var(--tb-border, #2a2a3e)"};border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">${isPremium() ? "\uD83C\uDFAB Copy as Jira Ticket" : "\uD83D\uDD12 Jira Ticket (Premium)"}</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <button data-action="text" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s">\uD83D\uDCCB Copy as Plain Text</button>
-      <button data-action="download" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s" ${data.screenshot ? "" : "disabled"}>\u2B07 Download Screenshot</button>
+      <button data-action="download" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s" ${ssCount > 0 ? "" : "disabled"}>\u2B07 Download ${ssCount > 1 ? `All ${ssCount} Screenshots` : "Screenshot"}</button>
     </div>
 
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--tb-text-muted, #555)">
       <span>Tip: <kbd style="background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px;border:1px solid var(--tb-border, #2a2a3e);font-family:monospace">Ctrl+Shift+B</kbd> to quick-capture anytime</span>
-      <span>Draft auto-saved</span>
+      <span style="display:flex;align-items:center;gap:8px"><span>Draft auto-saved</span><span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;${isPremium() ? "background:var(--tb-accent, #7B61FF);color:#fff" : "background:var(--tb-border, #2a2a3e);color:var(--tb-text-secondary, #aaa)"}">${isPremium() ? "✨ Premium" : "Free"}</span></span>
     </div>
   `;
 
@@ -277,8 +310,9 @@ function _openModal(
       const repo = _githubRepo!; // checked in outer if
       const ok = openGitHubIssue(repo, { ...report, steps: `${description}\n\n---\n\n${report.steps}` });
       if (ok) {
-        showToast("\u2713 GitHub issue page opened", root);
-        if (data.screenshot) downloadScreenshot(data.screenshot.dataUrl, data.screenshot.filename);
+        const tail = screenshots.length ? ` \u00b7 ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"} downloading` : "";
+        showToast(`\u2713 GitHub issue page opened${tail}`, root);
+        if (screenshots.length) _downloadAllScreenshots(screenshots);
         _clearDraft();
         setTimeout(close, 300);
       } else {
@@ -290,15 +324,23 @@ function _openModal(
   // Copy actions
   modal.querySelector('[data-action="github"]')!.addEventListener("click", async () => {
     const { title, description } = getDraft();
-    const markdown = _buildGitHubMarkdown(title, description, data.screenshot);
+    const markdown = _buildGitHubMarkdown(title, description, primary);
     const ok = await _copyToClipboard(markdown);
-    showToast(ok ? "\u2713 Copied as GitHub Issue \u2014 paste into your repo" : "Copy failed", root);
-    if (ok && data.screenshot) downloadScreenshot(data.screenshot.dataUrl, data.screenshot.filename);
+    const tail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
+    showToast(ok ? `\u2713 Copied as GitHub Issue${tail}` : "Copy failed", root);
+    if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
     _clearDraft();
     setTimeout(close, 300);
   });
 
   modal.querySelector('[data-action="jira"]')!.addEventListener("click", async () => {
+    if (!isPremium()) {
+      showUpgradeModal({
+        feature: "Jira ticket export",
+        message: "Generate Jira-formatted tickets with priority + labels in one click. Upgrade to unlock.",
+      }, root);
+      return;
+    }
     const { title, description } = getDraft();
     const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0];
@@ -310,8 +352,9 @@ function _openModal(
       text = `Summary: ${ticket.summary}\nPriority: ${ticket.priority}\nLabels: ${ticket.labels.join(", ")}\n\n${ticket.description}\n\n---\n${description}`;
     }
     const ok = await _copyToClipboard(text);
-    showToast(ok ? "\u2713 Copied as Jira Ticket \u2014 paste into your board" : "Copy failed", root);
-    if (ok && data.screenshot) downloadScreenshot(data.screenshot.dataUrl, data.screenshot.filename);
+    const jiraTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
+    showToast(ok ? `\u2713 Copied as Jira Ticket${jiraTail}` : "Copy failed", root);
+    if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
     _clearDraft();
     setTimeout(close, 300);
   });
@@ -320,19 +363,33 @@ function _openModal(
     const { title, description } = getDraft();
     const plain = `${title}\n\n${description}`;
     const ok = await _copyToClipboard(plain);
-    showToast(ok ? "\u2713 Copied as plain text" : "Copy failed", root);
-    if (ok && data.screenshot) downloadScreenshot(data.screenshot.dataUrl, data.screenshot.filename);
+    const textTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
+    showToast(ok ? `\u2713 Copied as plain text${textTail}` : "Copy failed", root);
+    if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
     _clearDraft();
     setTimeout(close, 300);
   });
 
   const downloadBtn = modal.querySelector('[data-action="download"]') as HTMLButtonElement;
-  if (downloadBtn && data.screenshot) {
+  if (downloadBtn && screenshots.length) {
     downloadBtn.addEventListener("click", () => {
-      downloadScreenshot(data.screenshot!.dataUrl, data.screenshot!.filename);
-      showToast(`\u2713 Downloaded: ${data.screenshot!.filename}`, root);
+      _downloadAllScreenshots(screenshots);
+      showToast(`\u2713 Downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}`, root);
     });
   }
+
+  // Thumbnail strip: clicking a thumbnail swaps the primary preview.
+  modal.querySelectorAll<HTMLButtonElement>("[data-thumb-index]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.thumbIndex);
+      const target = screenshots[idx];
+      if (!target) return;
+      const img = modal.querySelector<HTMLImageElement>("#tb-qb-primary-img");
+      const meta = modal.querySelector<HTMLDivElement>("#tb-qb-primary-meta");
+      if (img) img.src = target.dataUrl;
+      if (meta) meta.textContent = `${target.filename} \u00b7 ${target.width}x${target.height}`;
+    });
+  });
 }
 
 function _buildGitHubMarkdown(title: string, description: string, screenshot: ScreenshotData | null): string {
