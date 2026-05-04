@@ -14,6 +14,7 @@ import {
 import { captureEnvironment } from "./environment";
 import { getScreenshots } from "./screenshot";
 import { getVoiceTranscripts } from "./voice-recorder";
+import { getLastVideoRecording } from "./video-recorder";
 import { generateBugTitle } from "./title-generator";
 import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
@@ -103,6 +104,17 @@ export function buildReport(
   // Voice transcripts from memory
   const voiceTranscripts = getVoiceTranscripts();
 
+  // Most recent screen recording, if QA captured one this session.
+  const lastVideo = getLastVideoRecording();
+  const video = lastVideo ? {
+    url: lastVideo.url,
+    durationMs: lastVideo.durationMs,
+    mimeType: lastVideo.mimeType,
+    sizeBytes: lastVideo.sizeBytes,
+    comments: lastVideo.comments.slice(),
+    startedAt: lastVideo.startedAt,
+  } : undefined;
+
   // Auto-generate title
   const title = generateBugTitle(session);
 
@@ -127,6 +139,7 @@ export function buildReport(
     screenshots,
     timeline,
     voiceTranscripts,
+    video,
     session,
     generatedAt: Date.now(),
   };
