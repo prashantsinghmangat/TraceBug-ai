@@ -6,6 +6,8 @@ import { captureScreenshot, downloadScreenshot, getScreenshots } from "../screen
 import { isPremium } from "../plan";
 import { showUpgradeModal } from "./upgrade-modal";
 import { getAllSessions } from "../storage";
+import { getLastVideoRecording, downloadVideoRecording } from "../video-recorder";
+import type { VideoRecording } from "../video-recorder";
 import { buildReport, formatRootCauseLine } from "../report-builder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
@@ -80,6 +82,13 @@ function _downloadAllScreenshots(screenshots: ScreenshotData[]): void {
   screenshots.forEach((ss, i) => {
     setTimeout(() => downloadScreenshot(ss.dataUrl, ss.filename), i * 120);
   });
+}
+
+/** Download the active screen recording (if any) so the dev can attach it. */
+function _downloadVideoIfPresent(): void {
+  const v = getLastVideoRecording();
+  if (!v) return;
+  downloadVideoRecording(v, _videoFilename(v));
 }
 
 function _buildDescription(session: StoredSession | null): string {
@@ -185,6 +194,10 @@ function _openModal(
   const ssCount = screenshots.length;
   const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
 
+  // Optional screen recording from this session (in-memory blob URL).
+  const video = getLastVideoRecording();
+  const videoBlock = video ? _buildVideoBlock(video) : "";
+
   modal.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <span style="font-size:22px">\u26A1</span>
@@ -226,6 +239,8 @@ function _openModal(
         </div>
       ` : ""}
     ` : `<div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:16px;padding:10px;background:var(--tb-bg-primary, #0f0f1a);border:1px dashed var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);text-align:center">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>`}
+
+    ${videoBlock}
 
     ${_githubRepo ? `
       <button data-action="open-github" style="width:100%;background:#24292e;color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;margin-bottom:8px;transition:opacity 0.15s;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -313,6 +328,7 @@ function _openModal(
         const tail = screenshots.length ? ` \u00b7 ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"} downloading` : "";
         showToast(`\u2713 GitHub issue page opened${tail}`, root);
         if (screenshots.length) _downloadAllScreenshots(screenshots);
+        _downloadVideoIfPresent();
         _clearDraft();
         setTimeout(close, 300);
       } else {
@@ -329,6 +345,7 @@ function _openModal(
     const tail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
     showToast(ok ? `\u2713 Copied as GitHub Issue${tail}` : "Copy failed", root);
     if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
+    if (ok) _downloadVideoIfPresent();
     _clearDraft();
     setTimeout(close, 300);
   });
@@ -355,6 +372,7 @@ function _openModal(
     const jiraTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
     showToast(ok ? `\u2713 Copied as Jira Ticket${jiraTail}` : "Copy failed", root);
     if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
+    if (ok) _downloadVideoIfPresent();
     _clearDraft();
     setTimeout(close, 300);
   });
@@ -366,6 +384,7 @@ function _openModal(
     const textTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
     showToast(ok ? `\u2713 Copied as plain text${textTail}` : "Copy failed", root);
     if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
+    if (ok) _downloadVideoIfPresent();
     _clearDraft();
     setTimeout(close, 300);
   });
@@ -390,6 +409,81 @@ function _openModal(
       if (meta) meta.textContent = `${target.filename} \u00b7 ${target.width}x${target.height}`;
     });
   });
+
+  // Video controls: download button + jump-to-comment chips.
+  const videoEl = modal.querySelector<HTMLVideoElement>("#tb-qb-video");
+  const videoDownloadBtn = modal.querySelector<HTMLButtonElement>('[data-action="download-video"]');
+  if (videoDownloadBtn && video) {
+    videoDownloadBtn.addEventListener("click", () => {
+      downloadVideoRecording(video, _videoFilename(video));
+      showToast("\u2713 Downloading recording", root);
+    });
+  }
+  if (videoEl) {
+    modal.querySelectorAll<HTMLButtonElement>("[data-video-seek]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const seconds = Number(btn.dataset.videoSeek);
+        if (!Number.isFinite(seconds)) return;
+        videoEl.currentTime = seconds;
+        videoEl.play().catch(() => {});
+      });
+    });
+  }
+}
+
+// \u2500\u2500 Video block \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function _formatVideoTime(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60).toString().padStart(2, "0");
+  const s = (total % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function _formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function _videoFilename(video: VideoRecording): string {
+  const ext = video.mimeType.includes("mp4") ? "mp4" : "webm";
+  const stamp = new Date(video.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return `tracebug-recording-${stamp}.${ext}`;
+}
+
+function _buildVideoBlock(video: VideoRecording): string {
+  const duration = _formatVideoTime(video.durationMs);
+  const size = _formatBytes(video.sizeBytes);
+  const commentCount = video.comments.length;
+  const commentLabel = commentCount === 0
+    ? "No timestamped comments"
+    : `${commentCount} timestamped comment${commentCount === 1 ? "" : "s"}`;
+
+  const commentsList = commentCount > 0
+    ? `<div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:120px;overflow-y:auto;padding-right:4px">
+        ${video.comments.map((c) => {
+          const seconds = Math.floor(c.offsetMs / 1000);
+          return `<button data-video-seek="${seconds}" style="display:flex;align-items:flex-start;gap:8px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:6px 8px;color:var(--tb-text-primary, #e0e0e0);font-family:inherit;font-size:11px;text-align:left;cursor:pointer;line-height:1.4">
+            <span style="font-variant-numeric:tabular-nums;font-weight:600;color:var(--tb-accent, #7B61FF);min-width:38px">${_formatVideoTime(c.offsetMs)}</span>
+            <span style="flex:1">${escapeHtml(c.text)}</span>
+          </button>`;
+        }).join("")}
+      </div>`
+    : "";
+
+  return `
+    <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Screen Recording</label>
+    <div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);overflow:hidden;margin-bottom:6px;background:var(--tb-bg-primary, #0f0f1a)">
+      <video id="tb-qb-video" controls preload="metadata" src="${video.url}" style="display:block;width:100%;max-height:280px;background:#000"></video>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--tb-text-muted, #555);margin-bottom:8px">
+      <span>${duration} \u00b7 ${size} \u00b7 ${commentLabel}</span>
+      <button data-action="download-video" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit">\u2b07 Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}</button>
+    </div>
+    ${commentsList}
+    <div style="height:14px"></div>
+  `;
 }
 
 function _buildGitHubMarkdown(title: string, description: string, screenshot: ScreenshotData | null): string {

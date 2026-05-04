@@ -128,6 +128,23 @@ export function generateJiraTicket(report: BugReport): JiraTicket {
     desc += `{quote}\n\n`;
   }
 
+  // Screen recording — file is auto-downloaded on export so the dev can attach it.
+  if (report.video) {
+    const v = report.video;
+    const ext = v.mimeType.includes("mp4") ? "mp4" : "webm";
+    const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `tracebug-recording-${stamp}.${ext}`;
+    desc += `h3. Screen Recording\n`;
+    desc += `_Attach the downloaded recording: {{${filename}}} (${formatJiraVideoMeta(v)})_\n`;
+    if (v.comments.length > 0) {
+      desc += `*Timestamped comments:*\n`;
+      for (const c of v.comments) {
+        desc += `* {{${formatJiraOffset(c.offsetMs)}}} — ${c.text}\n`;
+      }
+    }
+    desc += `\n`;
+  }
+
   // Screenshots — filenames listed, auto-downloaded for attachment
   if (report.screenshots.length > 0) {
     desc += `h3. Screenshots\n`;
@@ -166,6 +183,21 @@ export function generateJiraTicket(report: BugReport): JiraTicket {
     priority,
     labels,
   };
+}
+
+function formatJiraVideoMeta(v: { durationMs: number; sizeBytes: number }): string {
+  const sec = Math.max(0, Math.floor(v.durationMs / 1000));
+  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const s = (sec % 60).toString().padStart(2, "0");
+  const sizeMb = (v.sizeBytes / (1024 * 1024)).toFixed(1);
+  return `${m}:${s} · ${sizeMb} MB`;
+}
+
+function formatJiraOffset(ms: number): string {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const s = (sec % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
 }
 
 function determinePriority(report: BugReport): JiraTicket["priority"] {
