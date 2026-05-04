@@ -54,6 +54,10 @@ import {
 } from "./collectors";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots, downloadAllScreenshots } from "./screenshot";
+import { captureRegionScreenshot } from "./region-screenshot";
+import { hydratePlan, getPlan, isPremium, setPlan, FREE_LIMITS } from "./plan";
+import type { Plan } from "./plan";
+import { showUpgradeModal } from "./ui/upgrade-modal";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
@@ -96,6 +100,9 @@ export { getAllSessions, clearAllSessions, deleteSession } from "./storage";
 export { generateReproSteps } from "./repro-generator";
 export { captureEnvironment } from "./environment";
 export { captureScreenshot, getScreenshots, downloadAllScreenshots } from "./screenshot";
+export { captureRegionScreenshot } from "./region-screenshot";
+export { getPlan, isPremium, setPlan, hydratePlan, FREE_LIMITS } from "./plan";
+export type { Plan } from "./plan";
 export {
   buildReport,
   generateSmartSummary,
@@ -187,6 +194,12 @@ class TraceBugSDK {
 
       // ── Inject theme CSS custom properties ────────────────────────
       try { injectTheme(this.config.theme!); } catch {}
+
+      // ── Hydrate freemium plan flag (non-blocking) ─────────────────
+      // Defaults to "free" until storage read resolves. The first user
+      // interaction is unlikely to land within that window, but if it
+      // does, the free behavior applies — acceptable for a local flag.
+      hydratePlan().catch(() => {});
 
       // Wire githubRepo into Quick Bug modal (lazy-loaded on first capture)
       if (this.config.githubRepo) {
@@ -304,6 +317,26 @@ class TraceBugSDK {
     console.info("[TraceBug] Recording resumed.");
   }
 
+  /** Alias for resumeRecording — matches the start/stop mental model */
+  startRecording(): void {
+    this.resumeRecording();
+  }
+
+  /**
+   * Stop recording and open the ticket-review modal so the user can review
+   * captured steps + screenshots and then export. Same underlying behavior
+   * as pauseRecording(); the only difference is the auto-open of the modal.
+   */
+  stopRecording(): void {
+    this.pauseRecording();
+    if (!this.config?.enableDashboard) return;
+    const root = document.getElementById("tracebug-root");
+    if (!root) return;
+    import("./ui/quick-bug")
+      .then((m) => m.showQuickBugCapture(root))
+      .catch((err) => console.warn("[TraceBug] Failed to open ticket review:", err));
+  }
+
   /** Check if currently recording */
   isRecording(): boolean {
     return this.recording;
@@ -316,9 +349,25 @@ class TraceBugSDK {
 
   // ── Screenshot ──────────────────────────────────────────────────────
 
+  /**
+   * Free-plan check: returns true if another screenshot can be added. When
+   * the limit is reached, fires the upgrade modal and returns false. Premium
+   * always returns true.
+   */
+  private _checkScreenshotLimit(): boolean {
+    if (isPremium()) return true;
+    if (getScreenshots().length < FREE_LIMITS.screenshots) return true;
+    showUpgradeModal({
+      feature: "Unlimited screenshots",
+      message: `Free plan is capped at ${FREE_LIMITS.screenshots} screenshots per ticket. Upgrade for unlimited captures.`,
+    }, document.getElementById("tracebug-root"));
+    return false;
+  }
+
   /** Capture a screenshot of the current page */
   async takeScreenshot(): Promise<ScreenshotData | null> {
     if (!this.sessionId) return null;
+    if (!this._checkScreenshotLimit()) return null;
 
     // Get the last event for context-aware naming
     const sessions = getAllSessions();
@@ -327,6 +376,21 @@ class TraceBugSDK {
 
     const screenshot = await captureScreenshot(lastEvent);
     console.info(`[TraceBug] Screenshot captured: ${screenshot.filename}`);
+    return screenshot;
+  }
+
+  /**
+   * Snipping-tool style screenshot: shows a fullscreen overlay, user drags
+   * to select a region, returns the cropped image. Resolves to null if the
+   * user presses Esc or selects a region smaller than 5x5 pixels.
+   */
+  async takeRegionScreenshot(): Promise<ScreenshotData | null> {
+    if (!this.sessionId) return null;
+    if (!this._checkScreenshotLimit()) return null;
+    const screenshot = await captureRegionScreenshot();
+    if (screenshot) {
+      console.info(`[TraceBug] Region screenshot captured: ${screenshot.filename}`);
+    }
     return screenshot;
   }
 
@@ -412,6 +476,49 @@ class TraceBugSDK {
 
   // ── Report Generation ───────────────────────────────────────────────
 
+  /**
+   * Strip premium-only data (network errors, console errors) from a report
+   * so free-plan exports include only basic metadata. Mutates and returns
+   * the report. No-op for premium.
+   */
+  private _redactForFreePlan(report: BugReport): BugReport {
+    if (isPremium()) return report;
+    report.networkErrors = [];
+    report.consoleErrors = [];
+    return report;
+  }
+
+  /**
+   * Branding prefix for export markdown. Premium + companyName configured →
+   * a one-line attribution header. Free or no companyName → empty string.
+   */
+  private _brandingPrefix(): string {
+    if (!isPremium()) return "";
+    const name = this.config?.companyName?.trim();
+    if (!name) return "";
+    return `> _Reported via TraceBug — ${name}_\n\n`;
+  }
+
+  // ── Plan (Freemium) ─────────────────────────────────────────────────
+
+  /** Get the current plan: "free" or "premium". */
+  getPlan(): Plan {
+    return getPlan();
+  }
+
+  /** Convenience: returns true if the user is on the premium plan. */
+  isPremium(): boolean {
+    return isPremium();
+  }
+
+  /**
+   * Set the plan. Used by the in-modal dev toggle and (future) upgrade
+   * flow. Persists to chrome.storage.local + localStorage.
+   */
+  setPlan(plan: Plan): Promise<void> {
+    return setPlan(plan);
+  }
+
   /** Generate a complete bug report for the current session */
   generateReport(): BugReport | null {
     if (!this.sessionId) return null;
@@ -420,25 +527,49 @@ class TraceBugSDK {
     const session = sessions.find(s => s.sessionId === this.sessionId);
     if (!session) return null;
 
-    return buildReport(session);
+    return this._redactForFreePlan(buildReport(session));
   }
 
-  /** Generate GitHub issue markdown */
+  /** Generate GitHub issue markdown (free + premium). */
   getGitHubIssue(): string | null {
     const report = this.generateReport();
     if (!report) return null;
-    return generateGitHubIssue(report);
+    return this._brandingPrefix() + generateGitHubIssue(report);
   }
 
-  /** Generate Jira ticket payload */
+  /**
+   * Generate Jira ticket payload (premium). Free users see the upgrade
+   * modal and receive null. Premium users get the full Jira-formatted
+   * ticket including network/console metadata + optional company branding.
+   */
   getJiraTicket() {
+    if (!isPremium()) {
+      showUpgradeModal({
+        feature: "Jira ticket export",
+        message: "Generate Jira-formatted tickets with priority + labels in one click. Upgrade to unlock.",
+      }, document.getElementById("tracebug-root"));
+      return null;
+    }
     const report = this.generateReport();
     if (!report) return null;
-    return generateJiraTicket(report);
+    const ticket = generateJiraTicket(report);
+    const prefix = this._brandingPrefix();
+    if (prefix) ticket.description = prefix + ticket.description;
+    return ticket;
   }
 
-  /** Download a PDF bug report */
+  /**
+   * Download a PDF bug report (premium). Free users see the upgrade modal
+   * and the download is skipped.
+   */
   downloadPdf(): void {
+    if (!isPremium()) {
+      showUpgradeModal({
+        feature: "PDF export",
+        message: "Get a polished, formatted PDF with screenshots and timeline embedded. Upgrade to unlock.",
+      }, document.getElementById("tracebug-root"));
+      return;
+    }
     const report = this.generateReport();
     if (!report) {
       console.warn("[TraceBug] No session data to generate PDF.");
