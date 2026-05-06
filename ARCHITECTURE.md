@@ -43,6 +43,33 @@ AFTER TraceBug:
 
 ## Feature Overview
 
+### Sentry Mode — Rolling Video Buffer (latest)
+
+The marquee feature: arm a screen-share once and snapshot multiple bug tickets from the same recording.
+
+- **One Record click** opens the OS screen-picker; from then on, MediaRecorder runs in the background.
+- **HUD pill** at the top of the page shows a pulsing red dot, elapsed timer, capture count, comment input (timestamped to recording time, Enter to save), 📸 Capture button, and ⏹ Stop.
+- **📸 Capture** snapshots the in-progress recording into a finished `VideoRecording` and opens the Quick Bug modal — the screen-share keeps running, so QA can file the next bug from the same arm session. Comments reset between captures so each ticket gets its own.
+- **Auto-capture on error** — when an unhandled error fires while a rolling session is armed, the existing error toast offers "Capture with video" instead of "Capture bug." One click captures the buffer + opens the ticket.
+- **Smart Stop** — if captures were taken, Stop ends silently with a toast. Otherwise Stop opens the modal with the full recording (preserves the simple one-shot flow).
+- **Exports include the video.** GitHub issue / Jira ticket / PDF report all add a "Screen Recording" section with the auto-downloaded `.webm` filename, duration, file size, and timestamped comments. The blob auto-downloads on every export action.
+- **In-memory only** — Blob URL dies on reload, like screenshots. ~50 MB per minute at 30 fps webm.
+- Implementation: [src/video-recorder.ts](src/video-recorder.ts), [src/ui/recording-hud.ts](src/ui/recording-hud.ts).
+
+### Auto-Scanner (latest)
+
+A magnifying-glass toolbar button that runs six in-browser detectors in parallel and surfaces findings as severity-bucketed issues. Solves the "I didn't even know to look there" case — bugs the QA wouldn't have noticed manually.
+
+- **Detectors** (each in `src/scanner/detectors/`):
+  - **a11y.ts** — axe-core, lazy-loaded (~1.4 MB). Restricted to WCAG 2.0/2.1 A+AA. Multi-element violations roll into one issue with `(+ N more)` suffix.
+  - **broken-images.ts** — `<img>` where `naturalWidth === 0 && complete === true`.
+  - **mixed-content.ts** — `http://` resources on HTTPS pages, across all fetchable element types.
+  - **session-data.ts** — three classifiers over already-collected events: `console-error` (deduped), `failed-request` (with response snippets), `slow-api` (>2 s).
+- **Orchestrator** ([src/scanner/index.ts](src/scanner/index.ts)) runs detectors in parallel via `Promise.all` + per-detector catch wrapper — one failure doesn't break the others. Concurrent `scan()` calls are coalesced. Issues live in memory only; reload = fresh scan.
+- **Issues Panel** ([src/ui/issues-panel.ts](src/ui/issues-panel.ts)) — severity-grouped modal with three actions per row: 📍 Locate (scrolls + flashes the element with a 2.4 s purple outline), File Ticket (pre-fills the Quick Bug modal via new `prefilledTitle`/`prefilledDescription` options on `showQuickBugCapture()`), Dismiss.
+- **Public API:** `TraceBug.scanPage()`, `TraceBug.showIssuesPanel()`, `TraceBug.getIssues()`, `dismissIssue/undismissIssue/clearIssues`, `getIssueCounts()`.
+- New types: `Issue`, `IssueDetector`, `IssueSeverity`.
+
 ### Debugging Assistant (v1.3 — the hero feature)
 
 TraceBug's positioning is "debugging assistant," not "bug reporter." Every report opens with four derived signals that eliminate DevTools round-trips:
@@ -82,21 +109,42 @@ Injected at the top of GitHub issues, Jira tickets, PDF reports, and the Quick B
 - **Console error tracking** — console.error() arguments
 - **Unhandled rejection tracking** — promise rejection reason + stack
 
-### QA Tools (Dashboard Toolbar)
-- **Screenshots** — capture via html2canvas with smart auto-naming from event context
-- **Screenshot Annotation** — draw rectangles, arrows, text overlays on screenshots with color picker
-- **Add Note** — tester annotations with Expected/Actual/Severity fields
-- **Voice Note** — speech-to-text bug description using Web Speech API (free, no API keys)
-- **GitHub Issue** — one-click generates markdown, copies to clipboard, auto-downloads screenshots
-- **Jira Ticket** — one-click generates Jira markup, copies to clipboard
-- **PDF Report** — print-optimized HTML report, opens browser print dialog
+### Compact Toolbar (v1.0 — 6 elements)
 
-### UI Annotation Tools
-- **Element Annotate Mode** — click any element to select it, attach structured feedback (intent, severity, comment). Shift+click for multi-select. Page scroll freezes during annotation. Persistent numbered badges on annotated elements. `Ctrl+Shift+A`
-- **Draw Mode** — drag rectangles or ellipses directly on the live page to mark layout/spacing/alignment regions. Each region gets a comment. Full toolbar with shape/color pickers. `Ctrl+Shift+D`
-- **Compact Toolbar** — minimal vertical rail on the right edge of the screen (replaced old floating bug button). Contains: logo (session panel), annotate, draw, screenshot, annotation list, settings (pop-out card).
-- **Annotation List Panel** — view all element annotations and draw regions in the slide-out panel. Export as Markdown or JSON. Copy to clipboard. Delete individual annotations.
-- **Annotation Export** — JSON and Markdown export formats for all annotations
+After the v1.0 polish pass, the toolbar is just **capture, scan, record, screenshot, region**:
+
+| # | Button | Purpose |
+|---|---|---|
+| 1 | **Logo** | Toggles the slide-out session panel |
+| 2 | **⚡ Quick Bug** (`Ctrl+Shift+B`) | Opens the ticket-review modal with auto-filled title + description + screenshots |
+| 3 | **🔍 Scan** | Runs the auto-scanner, opens the issues panel |
+| 4 | **📷 Screenshot** | Adds a viewport screenshot to the active ticket |
+| 5 | **⬚ Region** | Drag-to-select region screenshot; added to ticket |
+| 6 | **🔴 Record** | Arms Sentry mode (rolling video buffer + HUD) |
+
+### QA Tools (in the Quick Bug modal)
+- **Screenshots** — capture via html2canvas with smart auto-naming from event context (toolbar button + auto on modal open)
+- **Region screenshot** — drag-to-select snipping-tool style (toolbar button)
+- **Screenshot annotation editor** — rectangles, arrows, text overlays on a captured screenshot with color picker (modal action)
+- **Voice Note** — speech-to-text bug description using Web Speech API (free, no API keys)
+- **GitHub Issue** — one-click generates markdown, copies to clipboard, auto-downloads screenshots + video
+- **Jira Ticket** — one-click generates Jira markup, copies to clipboard, auto-downloads screenshots + video
+- **Open in GitHub** — prefilled `/issues/new?title=...&body=...` URL when `githubRepo` is configured
+
+### Cut from default UI (still available programmatically)
+
+These features were cut from the default toolbar in v1.0 but ship in the bundle and remain accessible via the public API for power users / custom integrations:
+
+| Feature | API access |
+|---|---|
+| Element Annotate Mode | `TraceBug.activateAnnotateMode()`, `deactivateAnnotateMode()`, `isAnnotateModeActive()` |
+| Draw Mode (live-page rectangles/ellipses) | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
+| Annotation list / export (JSON, Markdown) | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"/"markdown")`, `clearAnnotations()` |
+| PDF report export | `TraceBug.downloadPdf()` |
+| First-run onboarding tour | `replayOnboarding()` (named export from `./onboarding`) |
+| Plain text export | Build manually from `TraceBug.generateReport()` and `JSON.stringify` if needed |
+
+The `shortcuts.annotate` and `shortcuts.draw` config keys are retained in `TraceBugConfig` for backwards compatibility but are no-ops since the corresponding toolbar buttons aren't mounted.
 
 ### Theme System
 - **Dark/Light/Auto themes** — `TraceBug.init({ theme: 'dark' | 'light' | 'auto' })`
@@ -225,11 +273,26 @@ tracebug-ai/
 │   ├── report-builder.ts      # Assembles complete BugReport from all data sources
 │   ├── github-issue.ts        # GitHub issue markdown generator
 │   ├── jira-issue.ts          # Jira ticket template generator (Jira markup format)
-│   ├── pdf-generator.ts       # Print-optimized HTML report (save as PDF from browser)
+│   ├── pdf-generator.ts       # Print-optimized HTML report (save as PDF from browser) — programmatic only in v1.0
+│   ├── video-recorder.ts      # Sentry mode: getDisplayMedia + MediaRecorder + rolling-buffer captures
+│   ├── region-screenshot.ts   # Drag-to-select snipping-tool screenshot
+│   ├── plan.ts                # Free/Premium plan flag (chrome.storage.local + localStorage)
+│   ├── scanner/               # Auto-scanner — runs detectors in parallel, surfaces issues
+│   │   ├── index.ts           # Orchestrator: scan(), getIssues, dismiss, severity sort
+│   │   ├── helpers.ts         # Selector builder, severity coercion, ID generator
+│   │   └── detectors/
+│   │       ├── a11y.ts        # axe-core (lazy-loaded), WCAG 2.0/2.1 A+AA only
+│   │       ├── broken-images.ts   # naturalWidth === 0 check
+│   │       ├── mixed-content.ts   # http:// resources on https:// pages
+│   │       └── session-data.ts    # console-error / failed-request / slow-api classifiers
 │   └── ui/                    # Extracted dashboard UI modules
 │       ├── index.ts           # Barrel export
 │       ├── helpers.ts         # Shared utilities (formatDuration, escapeHtml, styles)
-│       └── toast.ts           # Toast notification system
+│       ├── toast.ts           # Toast notification system
+│       ├── quick-bug.ts       # Ticket-review modal — auto-fills, exports to GitHub/Jira
+│       ├── recording-hud.ts   # Floating pill shown during Sentry-mode recording
+│       ├── issues-panel.ts    # Auto-scanner findings — Locate / File ticket / Dismiss
+│       └── upgrade-modal.ts   # Free → Premium upsell modal
 ├── cli/                       # CLI tool (npx tracebug init)
 │   └── bin.ts                 # Framework detection + setup instructions
 ├── tracebug-extension/        # Chrome Extension (Manifest V3)
@@ -487,6 +550,26 @@ await TraceBug.takeScreenshot();
 await TraceBug.takeScreenshot({ includeAnnotations: true });  // with annotation badges visible
 await TraceBug.takeRegionScreenshot();                        // drag-to-select region, Esc to cancel
 
+// Sentry mode (rolling video buffer)
+const ok = await TraceBug.startVideoRecording({ mode: "rolling" });  // default
+const armed = TraceBug.isRollingMode();
+const elapsed = TraceBug.getCaptureCount();
+const recording = await TraceBug.captureRollingBuffer();   // snapshot, recording continues
+const final = await TraceBug.stopVideoRecording();         // ends screen-share
+TraceBug.isVideoRecording();
+TraceBug.isVideoSupported?.();   // exported as isVideoSupportedFn
+TraceBug.getLastVideoRecording();
+
+// Auto-scanner
+const result = await TraceBug.scanPage();                  // { issues, durationMs, scannedAt }
+await TraceBug.showIssuesPanel({ rescan: true });
+TraceBug.getIssues({ includeDismissed: false });
+TraceBug.dismissIssue("issue_id");
+TraceBug.undismissIssue("issue_id");
+TraceBug.clearIssues();
+TraceBug.getIssue("issue_id");
+TraceBug.getIssueCounts();        // { critical, serious, moderate, minor }
+
 // Tear down completely
 TraceBug.destroy();
 ```
@@ -513,7 +596,7 @@ TraceBug.init({
 
 ## Key Patterns & Rules
 - **example-app/tracebug-init.tsx**: Uses dynamic `import("tracebug-sdk")` — NOT an inlined SDK copy. Requires the built SDK to be installed.
-- **No runtime deps**: SDK has one runtime dep (html2canvas). DevDeps are `typescript` and `tsup`.
+- **Runtime deps**: `html2canvas` (screenshot capture, lazy-loaded) and `axe-core` (a11y detector, lazy-loaded — only fetched when `scanPage()` is called the first time). Both are dynamic-imported so the base bundle stays light for users who never trigger them. Extension IIFE bundles everything.
 - **Privacy**: Sensitive fields (password, credit card, SSN, tokens) are auto-redacted as `[REDACTED]`.
 - **Build tool**: `tsup` (not raw `tsc`) — configured in `tsup.config.ts` with two build targets.
 - **Prepare script**: `npm pack` and `npm install` from GitHub both trigger `tsup` build automatically.
