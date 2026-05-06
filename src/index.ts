@@ -70,13 +70,26 @@ import {
   stopVideoRecording as _stopVideoRecording,
   isVideoRecording as _isVideoRecording,
   isVideoSupported as _isVideoSupported,
+  isRollingMode as _isRollingMode,
+  captureRollingBuffer as _captureRollingBuffer,
+  getCaptureCount as _getCaptureCount,
   getLastVideoRecording,
   clearVideoRecording,
   abortVideoRecording,
   downloadVideoRecording,
   type VideoRecording,
 } from "./video-recorder";
-import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
+import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
+import {
+  scan as _scan,
+  getIssues as _getIssues,
+  dismissIssue as _dismissIssue,
+  undismissIssue as _undismissIssue,
+  clearIssues as _clearIssues,
+  getIssueCountsBySeverity,
+  getIssueById,
+  type ScanResult,
+} from "./scanner";
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import {
@@ -139,11 +152,26 @@ export {
   stopVideoRecording,
   isVideoRecording,
   isVideoSupported as isVideoSupportedFn,
+  isRollingMode,
+  captureRollingBuffer,
+  getCaptureCount,
   getLastVideoRecording,
   clearVideoRecording,
   downloadVideoRecording,
 } from "./video-recorder";
 export type { VideoRecording, VideoComment } from "./video-recorder";
+export {
+  scan,
+  getIssues,
+  dismissIssue,
+  undismissIssue,
+  clearIssues,
+  getIssueCountsBySeverity,
+  getIssueCountsByDetector,
+  getIssueById,
+} from "./scanner";
+export type { ScanResult } from "./scanner";
+export type { Issue, IssueDetector, IssueSeverity } from "./types";
 export type { TraceBugPlugin } from "./plugin-system";
 
 class TraceBugSDK {
@@ -513,15 +541,21 @@ class TraceBugSDK {
    * user can choose a screen, window, or tab. Resolves to true if recording
    * started; false if the user cancelled or the browser refused.
    *
+   * Default mode is "rolling" (Sentry mode): the same arm session can be
+   * snapshotted into multiple bug tickets via captureRollingBuffer() — the
+   * recorder keeps running between captures.
+   *
    * While recording, a floating HUD lets the QA tester add timestamped
    * comments without breaking flow. Comments are synced to video time and
    * attached to the bug report.
    */
   async startVideoRecording(options?: {
+    mode?: "rolling" | "standard";
     withMicrophone?: boolean;
     onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
   }): Promise<boolean> {
     const ok = await _startVideoRecording({
+      mode: options?.mode ?? "rolling",
       withMicrophone: options?.withMicrophone,
       onStatus: options?.onStatus,
     });
@@ -530,6 +564,7 @@ class TraceBugSDK {
     if (root) {
       showRecordingHUD(root, {
         onStop: () => { this.stopVideoRecording().catch(() => {}); },
+        onCapture: () => { this.captureRollingBuffer().catch(() => {}); },
       });
     }
     return true;
@@ -539,11 +574,17 @@ class TraceBugSDK {
    * Stop the screen recording, hide the HUD, and open the Quick Bug ticket
    * modal so the user can review + export immediately. Resolves to the
    * recording metadata, or null if no recording was active.
+   *
+   * In rolling mode: if the user already captured one or more bugs, no modal
+   * opens (those tickets are already filed) — the screen share simply ends.
    */
   async stopVideoRecording(): Promise<VideoRecording | null> {
+    const captureCount = _getCaptureCount();
     const recording = await _stopVideoRecording();
     hideRecordingHUD();
-    if (recording && this.config?.enableDashboard) {
+    // Skip modal when the user already filed tickets via Capture during this
+    // armed session — those bugs are already saved.
+    if (recording && captureCount === 0 && this.config?.enableDashboard) {
       const root = document.getElementById("tracebug-root");
       if (root) {
         try {
@@ -555,6 +596,40 @@ class TraceBugSDK {
       }
     }
     return recording;
+  }
+
+  /**
+   * Snapshot the in-flight rolling recording into a finished VideoRecording
+   * and open the ticket modal — the screen share keeps running so the same
+   * armed session can produce more tickets. Resolves to null if no rolling
+   * recording is active.
+   */
+  async captureRollingBuffer(): Promise<VideoRecording | null> {
+    const recording = await _captureRollingBuffer();
+    if (!recording) return null;
+    flashRecordingHUD();
+    if (this.config?.enableDashboard) {
+      const root = document.getElementById("tracebug-root");
+      if (root) {
+        try {
+          const m = await import("./ui/quick-bug");
+          await m.showQuickBugCapture(root);
+        } catch (err) {
+          console.warn("[TraceBug] Failed to open ticket modal after capture:", err);
+        }
+      }
+    }
+    return recording;
+  }
+
+  /** True if the active recording is in rolling/Sentry mode. */
+  isRollingMode(): boolean {
+    return _isRollingMode();
+  }
+
+  /** Number of captures taken from the current rolling session. */
+  getCaptureCount(): number {
+    return _getCaptureCount();
   }
 
   /** Get the most recently captured screen recording (or null). */
@@ -983,10 +1058,17 @@ class TraceBugSDK {
           import("./ui/quick-bug"),
         ]).then(([toastMod, qbMod]) => {
           const truncated = errorMessage.length > 60 ? errorMessage.slice(0, 60) + "\u2026" : errorMessage;
+          // If a rolling/Sentry recording is armed, the action snapshots the
+          // in-progress video into a ticket \u2014 no extra clicks, no second picker.
+          const armed = _isRollingMode();
+          const actionLabel = armed ? "Capture with video" : "Capture bug";
+          const onAction = armed
+            ? () => { this.captureRollingBuffer().catch(() => {}); }
+            : () => { qbMod.showQuickBugCapture(root).catch(() => {}); };
           toastMod.showActionToast(
             `\u26A0\uFE0F Error detected: ${truncated}`,
-            "Capture bug",
-            () => { qbMod.showQuickBugCapture(root).catch(() => {}); },
+            actionLabel,
+            onAction,
             root
           );
         }).catch(() => {});
@@ -1048,6 +1130,7 @@ class TraceBugSDK {
     deactivateDrawMode();
     clearAllAnnotations();
     clearAllPlugins();
+    _clearIssues();
     removeTheme();
   }
 
@@ -1059,6 +1142,61 @@ class TraceBugSDK {
    */
   getNetworkFailures() {
     return getNetworkFailures();
+  }
+
+  // ── Auto-Scanner ────────────────────────────────────────────────────
+
+  /**
+   * Run all detectors (a11y via axe-core, broken images, mixed content,
+   * failed/slow APIs, JS errors) and return the findings. Detectors run in
+   * parallel; one failure doesn't break the others. Concurrent calls are
+   * coalesced — a second scan() while one is in-flight returns the same
+   * promise.
+   */
+  async scanPage(): Promise<ScanResult> {
+    return _scan();
+  }
+
+  /**
+   * Snapshot of the most recent scan's issues. Pass `{ includeDismissed: true }`
+   * to also return issues the user dismissed during this session.
+   */
+  getIssues(options?: { includeDismissed?: boolean }) {
+    return _getIssues(options);
+  }
+
+  /** Open the issues panel — runs a fresh scan first by default. */
+  async showIssuesPanel(options?: { rescan?: boolean }): Promise<void> {
+    if (!this.config?.enableDashboard) return;
+    const root = document.getElementById("tracebug-root");
+    if (!root) return;
+    const m = await import("./ui/issues-panel");
+    return m.showIssuesPanel(root, options);
+  }
+
+  /** Mark an issue dismissed for this session. Returns true if found. */
+  dismissIssue(id: string): boolean {
+    return _dismissIssue(id);
+  }
+
+  /** Restore a previously dismissed issue. */
+  undismissIssue(id: string): boolean {
+    return _undismissIssue(id);
+  }
+
+  /** Clear all scan results from memory. */
+  clearIssues(): void {
+    _clearIssues();
+  }
+
+  /** Look up a single issue by id (e.g. for plugin integrations). */
+  getIssue(id: string) {
+    return getIssueById(id);
+  }
+
+  /** Severity-bucketed counts of non-dismissed issues — useful for badges. */
+  getIssueCounts() {
+    return getIssueCountsBySeverity();
   }
 }
 

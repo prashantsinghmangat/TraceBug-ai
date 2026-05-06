@@ -167,9 +167,9 @@ export function mountDashboard(
   // ── Show existing annotation badges on page ────────────────────────
   showAnnotationBadges(root);
 
-  // ── First-run onboarding ────────────────────────────────────────────
-  injectOnboardingStyles();
-  startOnboarding(root);
+  // First-run onboarding tour was cut from v1 — most users skip it. The
+  // tooltip on each toolbar button + the highlighted Quick Bug button are
+  // enough discovery aids. Logo pulse retained as a subtle "we're here" hint.
   addLogoPulse();
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────

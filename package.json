@@ -94,6 +94,7 @@
     "vitest": "^4.1.4"
   },
   "dependencies": {
+    "axe-core": "^4.11.4",
     "html2canvas": "1.4.1"
   }
 }

@@ -284,6 +284,49 @@ export interface VoiceTranscriptData {
   duration: number;
 }
 
+// ── Scanner / Issues ─────────────────────────────────────────────────────
+
+/**
+ * Detector identifiers. Stable strings — used in the UI for grouping and in
+ * the report builder when filing an issue as a bug ticket.
+ */
+export type IssueDetector =
+  | "axe-a11y"
+  | "broken-image"
+  | "mixed-content"
+  | "console-error"
+  | "slow-api"
+  | "failed-request";
+
+/** Severity buckets, lifted from axe-core's impact ladder for consistency. */
+export type IssueSeverity = "critical" | "serious" | "moderate" | "minor";
+
+/**
+ * One finding from the scanner. Detectors emit Issue[] which the orchestrator
+ * collates into an in-memory store. Issues are not persisted to localStorage —
+ * each scan is a fresh run, results clear on reload.
+ */
+export interface Issue {
+  id: string;
+  detector: IssueDetector;
+  severity: IssueSeverity;
+  /** Short human-readable headline (< 80 chars). */
+  title: string;
+  /** Longer plain-English explanation, including the value/cause. */
+  description: string;
+  /** CSS selector if the issue is anchored to a DOM element. */
+  selector?: string;
+  /** URL if the issue is anchored to a request/resource. */
+  url?: string;
+  /** Link to detector docs (e.g. axe-core deque-page). */
+  helpUrl?: string;
+  /** Page path where the issue was detected. */
+  page: string;
+  detectedAt: number;
+  /** Set true when the user dismisses — kept in memory only this session. */
+  dismissed?: boolean;
+}
+
 // ── Video Recording ──────────────────────────────────────────────────────
 
 /** A single comment timestamped against video playback time. */

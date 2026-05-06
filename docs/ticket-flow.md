@@ -1,12 +1,14 @@
 # Bug Ticket Flow
 
-TraceBug treats a recording cycle as a single **bug ticket**. Screenshots, voice notes, and captured events accumulate in the ticket; nothing is downloaded until the user explicitly exports.
+TraceBug treats a recording cycle as a single **bug ticket**. Screenshots, voice notes, screen recording, and captured events accumulate in the ticket; nothing is downloaded until the user explicitly exports.
 
 This document explains the full step-by-step flow, what each surface does, and the options available at each step.
 
+> **v1.0 update — Sentry Mode is the recommended flow.** The traditional one-shot `startRecording → stopRecording` flow still works, but for QA who need to file multiple bugs in one session, **arm Sentry mode once at the start and use 📸 Capture instead of stopping between bugs.** See [Sentry Mode](#sentry-mode-rolling-video-buffer) below.
+
 ---
 
-## The flow at a glance
+## The classic flow (one bug per session)
 
 ```
 startRecording()
@@ -21,10 +23,84 @@ stopRecording()  ──auto-opens──>  Ticket-Review Modal
                             review title + description
                             review numbered screenshot gallery
                                      ↓
-                            click an export action
+                            click an export action (GitHub / Jira)
                                      ↓
               clipboard payload  +  every screenshot downloads (PNG, staggered 120ms)
 ```
+
+---
+
+## Sentry Mode (rolling video buffer)
+
+The new default for video recording. Click **🔴 Record** once, file as many bug tickets as you want from the same screen-share. Inspired by NVIDIA Shadowplay / OBS replay buffer.
+
+```
+TraceBug.startVideoRecording()  →  OS screen-picker  →  HUD pill appears
+   ↓
+user reproduces bug A
+  • types comments in HUD          → timestamped to recording time
+  • toolbar Camera / Region        → screenshots added to ticket
+   ↓
+clicks 📸 Capture in HUD  ──or──  JS error fires + toast → "Capture with video"
+   ↓
+captureRollingBuffer()  ──opens──>  Ticket-Review Modal (with embedded video)
+   ↓
+export → screenshots + .webm download, ticket markdown copied
+   ↓
+recording is STILL RUNNING — comments reset for the next bug
+   ↓
+[ user finds bug B → 📸 Capture again → another ticket ]
+   ↓
+clicks ⏹ Stop  →  if any captures were taken, ends silently
+                 if none, opens the modal with the full recording
+```
+
+### What's in the HUD
+
+| Element | Behavior |
+|---|---|
+| Pulsing red dot + timer | Visual proof recording is active |
+| `N captured` chip | Increments on each `📸 Capture`. Hidden in `mode: "standard"` |
+| Comment input | Type → press Enter → saved with current `offsetMs` to the active recording |
+| 📸 Capture button | Snapshots into a `VideoRecording`, opens ticket modal, recording continues |
+| ⏹ Stop button | Ends the screen-share. Smart modal-open behavior (see above) |
+
+### Auto-capture on error
+
+When an unhandled JS error fires *and* a rolling session is armed, the existing error-detected toast switches its action label from `Capture bug` → `Capture with video`. Clicking calls `captureRollingBuffer()` automatically — no need to spot the bug yourself.
+
+### What gets attached to the ticket
+
+- The captured `.webm` (Blob URL, in-memory)
+- Comments (each: `{ offsetMs, text }`) cleared after each capture so each ticket gets its own
+- All screenshots taken since the modal was last closed
+- Auto-generated title, smart summary, root-cause hint, environment, console errors, network failures — same as classic flow
+
+The exporters (GitHub markdown / Jira / PDF) all gained a "Screen Recording" section listing the auto-downloaded `.webm` filename, duration, file size, and timestamped comments. The blob auto-downloads alongside screenshots on every export action.
+
+> **API:** `TraceBug.startVideoRecording({ mode: "rolling" })`, `TraceBug.captureRollingBuffer()`, `TraceBug.stopVideoRecording()`. Full reference: [api-reference.md → Sentry Mode](api-reference.md#sentry-mode-rolling-video-buffer).
+
+---
+
+## Auto-Scanner (parallel detector path)
+
+Independent of the recording flow. Click **🔍 Scan** to run six detectors and surface issues you might not have noticed:
+
+```
+TraceBug.scanPage()
+   ↓
+runs in parallel: a11y (axe-core), broken images, mixed content,
+                  console errors, failed requests, slow APIs
+   ↓
+issues panel opens with severity buckets (critical / serious / moderate / minor)
+   ↓
+per-issue actions:
+  📍 Locate     →  scroll into view + 2.4s purple flash on the element
+  File ticket   →  pre-fills Quick Bug modal with issue title + description
+  Dismiss       →  hide for this session (in-memory only)
+```
+
+> **API:** [api-reference.md → Auto-Scanner](api-reference.md#auto-scanner). Issues live in memory only; reload = fresh scan.
 
 ---
 

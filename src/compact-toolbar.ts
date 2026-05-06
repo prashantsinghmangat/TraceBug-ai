@@ -16,9 +16,10 @@ import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
+import { showIssuesPanel, isIssuesPanelOpen } from "./ui/issues-panel";
 import { matchesShortcut } from "./ui/helpers";
-import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported } from "./video-recorder";
-import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
+import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, captureRollingBuffer, getCaptureCount } from "./video-recorder";
+import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
@@ -90,18 +91,7 @@ export function mountCompactToolbar(
     "tracebug-toolbar-panel-btn"
   ));
 
-  // Recording indicator dot
-  const recDot = document.createElement("div");
-  recDot.id = "tracebug-toolbar-rec-dot";
-  recDot.dataset.tracebug = "rec-dot";
-  recDot.style.cssText = `
-    width: 6px; height: 6px; border-radius: 50%; margin: -1px 0 2px 0;
-    background: ${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};
-    animation: ${_isRecording ? "bt-pulse 2s infinite" : "none"};
-  `;
-  toolbar.appendChild(recDot);
-
-  // Divider
+  // Divider after logo — separates panel-toggle from action buttons.
   toolbar.appendChild(_divider());
 
   // ⚡ Quick Bug Capture — the daily-use one-shot button
@@ -127,54 +117,29 @@ export function mountCompactToolbar(
   });
   toolbar.appendChild(quickBugBtn);
 
+  // Scan Page — runs auto-detectors (a11y, broken images, mixed content,
+  // failed/slow APIs, JS errors) and opens the issues panel.
+  const scanBtn = _createToolbarBtn(
+    "Scan page for issues",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+    () => {
+      if (!isIssuesPanelOpen()) {
+        showIssuesPanel(root).catch((err) => {
+          console.warn("[TraceBug] Scan failed:", err);
+          showToast("Scan failed", root);
+        });
+      }
+    },
+    "tracebug-toolbar-scan-btn"
+  );
+  toolbar.appendChild(scanBtn);
+
   // Divider
   toolbar.appendChild(_divider());
 
-  // Element Annotate button
-  const annotateBtn = _createToolbarBtn(
-    "Annotate Elements (Ctrl+Shift+A)",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>`,
-    () => {
-      if (isElementAnnotateActive()) {
-        deactivateElementAnnotateMode();
-        _updateActiveStates(toolbar);
-      } else {
-        if (isDrawModeActive()) deactivateDrawMode();
-        activateElementAnnotateMode(root, () => {
-          _updateAnnotationCount(toolbar);
-          showToast("Annotation saved", root);
-        }, () => {
-          _updateActiveStates(toolbar);
-        });
-        _updateActiveStates(toolbar);
-      }
-    },
-    "tracebug-toolbar-annotate-btn"
-  );
-  toolbar.appendChild(annotateBtn);
-
-  // Draw Mode button
-  const drawBtn = _createToolbarBtn(
-    "Draw Regions (Ctrl+Shift+D)",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>`,
-    () => {
-      if (isDrawModeActive()) {
-        deactivateDrawMode();
-        _updateActiveStates(toolbar);
-      } else {
-        if (isElementAnnotateActive()) deactivateElementAnnotateMode();
-        activateDrawMode(root, () => {
-          _updateAnnotationCount(toolbar);
-          showToast("Region saved", root);
-        }, () => {
-          _updateActiveStates(toolbar);
-        });
-        _updateActiveStates(toolbar);
-      }
-    },
-    "tracebug-toolbar-draw-btn"
-  );
-  toolbar.appendChild(drawBtn);
+  // Annotate + Draw modes were cut from the v1 toolbar — they overlap with
+  // the screenshot annotation editor and confused users with two paradigms.
+  // The underlying APIs still exist (TraceBug.activateAnnotateMode / activateDrawMode).
 
   // Free-plan gate: enforce the screenshot limit at capture time.
   const _checkLimit = (): boolean => {
@@ -241,62 +206,8 @@ export function mountCompactToolbar(
   }
   toolbar.appendChild(recordBtn);
 
-  // Divider
-  toolbar.appendChild(_divider());
-
-  // Annotation list button (with count badge)
-  const listBtn = _createToolbarBtn(
-    "Annotation List",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`,
-    () => {
-      if (_annotationViewOpen && _panelOpen) {
-        _togglePanel(panel, toolbar, showToast);
-        _annotationViewOpen = false;
-      } else {
-        if (!_panelOpen) _togglePanel(panel, toolbar, showToast);
-        renderAnnotationList(panel);
-        _annotationViewOpen = true;
-      }
-    },
-    "tracebug-toolbar-list-btn"
-  );
-  // Badge
-  const badge = document.createElement("div");
-  badge.id = "tracebug-toolbar-badge";
-  badge.dataset.tracebug = "toolbar-badge";
-  badge.style.cssText = `
-    position: absolute; top: -2px; right: -2px;
-    min-width: 14px; height: 14px; border-radius: 7px;
-    background: var(--tb-accent, #7B61FF); color: #fff; font-size: 9px; font-weight: 700;
-    font-family: var(--tb-font-family, system-ui, sans-serif);
-    display: flex; align-items: center; justify-content: center;
-    padding: 0 3px; line-height: 1;
-  `;
-  const count = getAnnotationCount();
-  badge.textContent = String(count);
-  badge.style.display = count > 0 ? "flex" : "none";
-  listBtn.style.position = "relative";
-  listBtn.appendChild(badge);
-  toolbar.appendChild(listBtn);
-
-  // Divider
-  toolbar.appendChild(_divider());
-
-  // Settings button
-  toolbar.appendChild(_createToolbarBtn(
-    "Settings",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
-    (e) => _toggleSettingsCard(e, root, toolbar, showToast),
-    "tracebug-toolbar-settings-btn"
-  ));
-
-  // Help button — replays onboarding tour
-  toolbar.appendChild(_createToolbarBtn(
-    "Help — replay tour",
-    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-    () => replayOnboarding(root),
-    "tracebug-toolbar-help-btn"
-  ));
+  // Annotation list, Settings card, and Help button were cut from the v1
+  // toolbar — they're configurable via init() and accessible via plugins.
 
   root.appendChild(toolbar);
 
@@ -411,13 +322,20 @@ async function _toggleVideoRecording(
   }
 
   if (isVideoRecording()) {
+    const captures = getCaptureCount();
     showToast("Stopping recording...", root);
     await stopVideoRecording();
     hideRecordingHUD();
     btn.innerHTML = _recordIconSvg(false);
     btn.classList.remove("tb-active");
     btn.style.color = "var(--tb-btn-text, #aaa)";
-    // Open the ticket modal so the user can review + export immediately.
+    // If the user already captured one or more bugs from this session, the
+    // tickets are already saved — just stop silently. Otherwise open the
+    // modal with the full recording so a one-click flow still works.
+    if (captures > 0) {
+      showToast(`Recording stopped · ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
+      return;
+    }
     try {
       if (!isQuickBugOpen()) await showQuickBugCapture(root);
     } catch (err) {
@@ -428,6 +346,7 @@ async function _toggleVideoRecording(
 
   showToast("Pick a screen, window, or tab to record", root);
   const ok = await startVideoRecording({
+    mode: "rolling",
     onStatus: (status, message) => {
       if (status === "error" && message) showToast(`Recording error: ${message}`, root);
     },
@@ -442,8 +361,36 @@ async function _toggleVideoRecording(
   btn.style.color = "var(--tb-error, #ef4444)";
   showRecordingHUD(root, {
     onStop: () => { _toggleVideoRecording(root, btn, showToast).catch(() => {}); },
+    onCapture: () => { _captureRollingFromHUD(root, showToast).catch(() => {}); },
   });
-  showToast("Recording started — comments are timestamped", root);
+  showToast("Sentry mode armed — hit Capture when a bug appears", root);
+}
+
+/**
+ * Snapshot the in-flight rolling recording, open the ticket modal so the
+ * user can edit + export, and let the recorder keep rolling so the same
+ * arm session can produce more tickets.
+ */
+async function _captureRollingFromHUD(
+  root: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  if (isQuickBugOpen()) {
+    showToast("A ticket is already open — close it first", root);
+    return;
+  }
+  const recording = await captureRollingBuffer();
+  if (!recording) {
+    showToast("Capture failed — recording may have ended", root);
+    return;
+  }
+  flashRecordingHUD();
+  showToast("Captured — review the ticket", root);
+  try {
+    await showQuickBugCapture(root);
+  } catch (err) {
+    console.warn("[TraceBug] Failed to open ticket modal after rolling capture:", err);
+  }
 }
 
 function _togglePanel(

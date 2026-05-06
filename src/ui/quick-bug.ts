@@ -43,8 +43,15 @@ export function isQuickBugOpen(): boolean {
  *   show them all as a gallery — no fresh capture.
  * - Otherwise capture one screenshot fresh (preserves the Ctrl+Shift+B one-shot flow).
  * Downloads happen on export, never on capture.
+ *
+ * `prefilledTitle` / `prefilledDescription` override the auto-fill. Used by
+ * the auto-scanner's "File ticket" action so the modal lands on the issue's
+ * details instead of generic session data.
  */
-export async function showQuickBugCapture(root: HTMLElement): Promise<void> {
+export async function showQuickBugCapture(
+  root: HTMLElement,
+  options?: { prefilledTitle?: string; prefilledDescription?: string }
+): Promise<void> {
   if (_isOpen) return;
 
   // Grab current session for auto-fill
@@ -69,11 +76,13 @@ export async function showQuickBugCapture(root: HTMLElement): Promise<void> {
   const autoTitle = currentSession ? generateBugTitle(currentSession) : `Bug on ${window.location.pathname}`;
   const autoDesc = _buildDescription(currentSession);
 
-  _openModal(root, {
-    title: draft?.title || autoTitle,
-    description: draft?.description || autoDesc,
-    screenshots,
-  });
+  // Caller-provided values (e.g. from the auto-scanner) override the draft.
+  // If the caller prefilled, ignore the saved draft so a stale draft doesn't
+  // overwrite the issue context.
+  const title = options?.prefilledTitle ?? (draft?.title || autoTitle);
+  const description = options?.prefilledDescription ?? (draft?.description || autoDesc);
+
+  _openModal(root, { title, description, screenshots });
 }
 
 /** Download every screenshot in the ticket, one PNG per file. */
@@ -252,11 +261,6 @@ function _openModal(
       <button data-action="github" style="background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">\uD83D\uDC19 Copy as GitHub Issue</button>
       <button data-action="jira" style="background:${isPremium() ? "#2684FF" : "var(--tb-bg-primary, #0f0f1a)"};color:${isPremium() ? "#fff" : "var(--tb-text-muted, #888)"};border:${isPremium() ? "none" : "1px solid var(--tb-border, #2a2a3e)"};border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">${isPremium() ? "\uD83C\uDFAB Copy as Jira Ticket" : "\uD83D\uDD12 Jira Ticket (Premium)"}</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <button data-action="text" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s">\uD83D\uDCCB Copy as Plain Text</button>
-      <button data-action="download" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:12px;font-family:inherit;transition:all 0.15s" ${ssCount > 0 ? "" : "disabled"}>\u2B07 Download ${ssCount > 1 ? `All ${ssCount} Screenshots` : "Screenshot"}</button>
-    </div>
-
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--tb-text-muted, #555)">
       <span>Tip: <kbd style="background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px;border:1px solid var(--tb-border, #2a2a3e);font-family:monospace">Ctrl+Shift+B</kbd> to quick-capture anytime</span>
       <span style="display:flex;align-items:center;gap:8px"><span>Draft auto-saved</span><span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;${isPremium() ? "background:var(--tb-accent, #7B61FF);color:#fff" : "background:var(--tb-border, #2a2a3e);color:var(--tb-text-secondary, #aaa)"}">${isPremium() ? "✨ Premium" : "Free"}</span></span>
@@ -377,25 +381,9 @@ function _openModal(
     setTimeout(close, 300);
   });
 
-  modal.querySelector('[data-action="text"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
-    const plain = `${title}\n\n${description}`;
-    const ok = await _copyToClipboard(plain);
-    const textTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
-    showToast(ok ? `\u2713 Copied as plain text${textTail}` : "Copy failed", root);
-    if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
-    if (ok) _downloadVideoIfPresent();
-    _clearDraft();
-    setTimeout(close, 300);
-  });
-
-  const downloadBtn = modal.querySelector('[data-action="download"]') as HTMLButtonElement;
-  if (downloadBtn && screenshots.length) {
-    downloadBtn.addEventListener("click", () => {
-      _downloadAllScreenshots(screenshots);
-      showToast(`\u2713 Downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}`, root);
-    });
-  }
+  // Plain Text + Download Screenshots buttons were cut from v1 \u2014 devs paste
+  // GitHub markdown anywhere; explicit screenshot downloads happen as part
+  // of the GitHub/Jira export flow.
 
   // Thumbnail strip: clicking a thumbnail swaps the primary preview.
   modal.querySelectorAll<HTMLButtonElement>("[data-thumb-index]").forEach((btn) => {
