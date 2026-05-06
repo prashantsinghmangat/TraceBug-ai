@@ -38,6 +38,12 @@ let _comments: VideoComment[] = [];
 let _lastRecording: VideoRecording | null = null;
 let _onStatus: ((status: "recording" | "stopped" | "error", message?: string) => void) | null = null;
 
+// Rolling-buffer ("Sentry mode") state. When true, captureRollingBuffer()
+// can snapshot the in-progress recording without stopping the stream — so
+// the same arm session can produce multiple bug tickets.
+let _rollingMode = false;
+let _capturesTaken = 0;
+
 /** True if the browser supports getDisplayMedia + MediaRecorder. */
 export function isVideoSupported(): boolean {
   return !!(
@@ -56,6 +62,16 @@ export function isVideoRecording(): boolean {
 /** Milliseconds since recording started, or 0 if not recording. */
 export function getVideoElapsedMs(): number {
   return isVideoRecording() ? Date.now() - _startedAt : 0;
+}
+
+/** True if the active recording is in rolling/Sentry mode. */
+export function isRollingMode(): boolean {
+  return _rollingMode && isVideoRecording();
+}
+
+/** Number of captures taken from the current rolling session. */
+export function getCaptureCount(): number {
+  return _capturesTaken;
 }
 
 /** Pick the best supported mime type for MediaRecorder, or "" if none work. */
@@ -79,10 +95,17 @@ function pickMimeType(): string {
  * Start screen recording. Opens the browser's native picker; if the user
  * cancels, resolves to false silently.
  *
- * Set `withMicrophone: true` to mux a microphone track for narration. System
+ * `mode: "rolling"` (default) arms a session that can be snapshotted
+ * multiple times via captureRollingBuffer() — the recorder keeps running
+ * after each capture, so QA can file several bugs from one screen-share.
+ *
+ * `mode: "standard"` is the classic record-then-stop flow.
+ *
+ * `withMicrophone: true` muxes a microphone track for narration. System
  * audio capture is opt-in via the picker UI on supported browsers.
  */
 export async function startVideoRecording(options?: {
+  mode?: "rolling" | "standard";
   withMicrophone?: boolean;
   onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
 }): Promise<boolean> {
@@ -125,6 +148,8 @@ export async function startVideoRecording(options?: {
   _comments = [];
   _startedAt = Date.now();
   _mimeType = pickMimeType();
+  _rollingMode = options?.mode !== "standard";
+  _capturesTaken = 0;
 
   try {
     _recorder = _mimeType
@@ -196,6 +221,8 @@ export function stopVideoRecording(): Promise<VideoRecording | null> {
       _stream = null;
       _chunks = [];
       _comments = [];
+      _rollingMode = false;
+      _capturesTaken = 0;
 
       _onStatus?.("stopped");
       resolve(recording);
@@ -204,6 +231,73 @@ export function stopVideoRecording(): Promise<VideoRecording | null> {
     try {
       recorder.stop();
     } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Snapshot the in-progress recording into a finished VideoRecording without
+ * stopping the screen capture. Buffer continues to grow; QA can call this
+ * multiple times to file several bug tickets from one armed session.
+ *
+ * Forces a `requestData()` on the recorder first so the freshest frame
+ * lands in `_chunks` before we copy. Resolves to null if no recording is
+ * active.
+ *
+ * Comments are cleared after each capture — each ticket gets its own set
+ * of timestamped comments going forward.
+ */
+export function captureRollingBuffer(): Promise<VideoRecording | null> {
+  return new Promise((resolve) => {
+    if (!_recorder || _recorder.state !== "recording") {
+      resolve(null);
+      return;
+    }
+
+    const recorder = _recorder;
+    const startedAt = _startedAt;
+    const mimeType = _mimeType || "video/webm";
+    const commentsCopy = _comments.slice();
+
+    // Wrap the recorder's existing data handler so we can resolve once the
+    // requested chunk has been pushed onto _chunks.
+    const originalOnData = recorder.ondataavailable;
+    const flushOnce = (e: BlobEvent) => {
+      // Let the regular handler (set up in startVideoRecording) push the chunk.
+      if (originalOnData) originalOnData.call(recorder, e);
+      recorder.ondataavailable = originalOnData;
+
+      const blob = new Blob(_chunks.slice(), { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const recording: VideoRecording = {
+        url,
+        blob,
+        durationMs: Date.now() - startedAt,
+        mimeType,
+        sizeBytes: blob.size,
+        comments: commentsCopy,
+        startedAt,
+      };
+
+      // Revoke any prior recording's blob URL so we don't leak.
+      if (_lastRecording && _lastRecording.url !== url) {
+        try { URL.revokeObjectURL(_lastRecording.url); } catch {}
+      }
+      _lastRecording = recording;
+      _capturesTaken += 1;
+      // Reset comments — next capture from this session starts fresh.
+      _comments = [];
+
+      resolve(recording);
+    };
+    recorder.ondataavailable = flushOnce;
+
+    try {
+      recorder.requestData();
+    } catch {
+      // Restore the original handler and bail.
+      recorder.ondataavailable = originalOnData;
       resolve(null);
     }
   });
@@ -245,6 +339,8 @@ export function abortVideoRecording(): void {
   _stream = null;
   _chunks = [];
   _comments = [];
+  _rollingMode = false;
+  _capturesTaken = 0;
 }
 
 /** Trigger a browser download of the video blob. */
