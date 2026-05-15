@@ -4,7 +4,7 @@
 
 import { BugReport } from "./types";
 import { formatTimelineText } from "./timeline-builder";
-import { formatRootCauseLine } from "./report-builder";
+import { formatRootCauseLine, severityTitlePrefix } from "./report-builder";
 
 // GitHub URL prefill has a ~8KB practical limit (some browsers/proxies cap at 6-8KB)
 const GITHUB_URL_BODY_LIMIT = 6000;
@@ -29,7 +29,12 @@ export function generateGitHubIssueUrl(
     throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
   }
 
-  const title = report.title || "Bug report";
+  // Carry the severity emoji into the URL-prefill title so the issue lands
+  // pre-triaged. Skip if the caller already added a leading emoji.
+  const rawTitle = report.title || "Bug report";
+  const title = rawTitle.match(/^[🔴🟠🟡🟢]/)
+    ? rawTitle
+    : `${severityTitlePrefix(report.severity)}${rawTitle}`;
   let body = generateGitHubIssue(report);
 
   // Strip the leading "## title" since GitHub already shows the title separately
@@ -71,7 +76,12 @@ export function openGitHubIssue(repo: string, report: BugReport, labels?: string
 export function generateGitHubIssue(report: BugReport): string {
   const env = report.environment;
 
-  let md = `## ${report.title}\n\n`;
+  // Title carries the severity emoji prefix (🔴 Critical · …) so triagers see
+  // priority at a glance in the issue list.
+  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/)
+    ? report.title
+    : `${severityTitlePrefix(report.severity)}${report.title}`;
+  let md = `## ${titleWithSeverity}\n\n`;
 
   // Root-cause hint — what a dev should check first
   const rc = formatRootCauseLine(report.rootCause);
@@ -102,6 +112,16 @@ export function generateGitHubIssue(report: BugReport): string {
     md += `### Recent Actions\n\n`;
     for (const step of report.sessionSteps) {
       md += `1. ${step}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Custom context (TraceBug.context({...})) — only when non-empty.
+  const ctxKeys = report.context ? Object.keys(report.context) : [];
+  if (ctxKeys.length > 0) {
+    md += `### Context\n\n`;
+    for (const k of ctxKeys) {
+      md += `- **${k}**: \`${String(report.context[k])}\`\n`;
     }
     md += `\n`;
   }

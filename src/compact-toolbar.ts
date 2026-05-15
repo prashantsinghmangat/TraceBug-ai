@@ -29,6 +29,8 @@ export type ToolbarPosition = "right" | "left" | "bottom-right" | "bottom-left";
 
 let _isRecording = true;
 let _onToggleRecording: (() => void) | null = null;
+let _onSessionStart: (() => void) | null = null;
+let _onSessionEnd: (() => void) | null = null;
 let _renderPanel: ((panel: HTMLElement) => void) | null = null;
 let _panelEl: HTMLElement | null = null;
 let _panelOpen = false;
@@ -43,6 +45,22 @@ const _fabExpanded = false;
 export function setToolbarRecordingState(isRecording: boolean, onToggle: () => void): void {
   _isRecording = isRecording;
   _onToggleRecording = onToggle;
+}
+
+/**
+ * Wire the SDK's session-lifecycle hooks. Called once at SDK init so the
+ * Record button on the toolbar can arm a TraceBug session (events, env,
+ * screenshots) when video recording starts and finalize it when video stops.
+ * Without this, video recording and session capture would be independent —
+ * which is what caused page reloads to look like "new sessions" (the video
+ * survived but no session was ever active).
+ */
+export function setSessionLifecycleHandlers(
+  onStart: () => void,
+  onEnd: () => void
+): void {
+  _onSessionStart = onStart;
+  _onSessionEnd = onEnd;
 }
 
 export function updateToolbarRecordingState(isRecording: boolean): void {
@@ -192,9 +210,22 @@ export function mountCompactToolbar(
     "tracebug-toolbar-region-btn"
   ));
 
-  // Video recording button — toggles screen recording + HUD with timestamped comments.
+  // Events-only Record button — clipboard icon makes it visually obvious this
+  // is the "no-video" capture mode. Arms a TraceBug session (events +
+  // screenshots) WITHOUT a screen-share prompt. Stop opens the ticket modal.
+  const eventsRecordBtn = _createToolbarBtn(
+    "Start session (events + screenshots) — no video, no screen prompt",
+    _eventsRecordIconSvg(false),
+    () => _toggleEventsRecording(root, eventsRecordBtn, showToast),
+    "tracebug-toolbar-events-record-btn"
+  );
+  toolbar.appendChild(eventsRecordBtn);
+
+  // Video recording button — film/camera icon. Triggers the screen-share
+  // picker, then captures events + screenshots + video into one ticket. Stop
+  // opens the ticket modal with everything embedded.
   const recordBtn = _createToolbarBtn(
-    "Record screen + steps",
+    "Record session WITH video (asks to share screen)",
     _recordIconSvg(false),
     () => _toggleVideoRecording(root, recordBtn, showToast),
     "tracebug-toolbar-record-btn"
@@ -302,13 +333,69 @@ function _divider(): HTMLElement {
   return d;
 }
 
+// ── Events-only recording icon + toggle ─────────────────────────────────
+
+function _eventsRecordIconSvg(active: boolean): string {
+  if (active) {
+    // Solid red square — universal "stop" affordance. Clearly different from
+    // the video button's stop state (round filled circle).
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+  }
+  // Clipboard icon — "capture a session of steps". Pairs with the camera icon
+  // on the video button so the two affordances are immediately distinguishable.
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>`;
+}
+
+/**
+ * Toggle events-only session recording. Arms the same session lifecycle as
+ * the video button (so events + screenshots accumulate under one session id)
+ * but skips getDisplayMedia and the HUD entirely.
+ */
+async function _toggleEventsRecording(
+  root: HTMLElement,
+  btn: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  // The button's active state mirrors the SDK's `recording` flag, which the
+  // session-lifecycle hook keeps in sync. We treat the toolbar class as the
+  // source of truth for the toggle since the SDK doesn't expose recording
+  // state directly to this module.
+  const isActive = btn.classList.contains("tb-active");
+
+  if (isActive) {
+    // Stop: end the session and open the ticket modal.
+    showToast("Stopping recording...", root);
+    btn.innerHTML = _eventsRecordIconSvg(false);
+    btn.classList.remove("tb-active");
+    btn.style.color = "var(--tb-btn-text, #aaa)";
+    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
+    try {
+      if (!isQuickBugOpen()) await showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+    }
+    return;
+  }
+
+  // Start: arm the session. No screen picker, no video.
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+  btn.innerHTML = _eventsRecordIconSvg(true);
+  btn.classList.add("tb-active");
+  btn.style.color = "var(--tb-error, #ef4444)";
+  showToast("Recording — events + screenshots will be captured", root);
+}
+
 // ── Video recording icon + toggle ────────────────────────────────────────
 
 function _recordIconSvg(active: boolean): string {
-  const fill = active ? "var(--tb-error, #ef4444)" : "currentColor";
-  return active
-    ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="${fill}" stroke="${fill}" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`
-    : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`;
+  if (active) {
+    // Solid red CIRCLE for stop — distinct from the events-only stop state
+    // which uses a square. This way the active states also stay distinguishable.
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
+  }
+  // Video camera icon — instantly readable as "screen recording" and clearly
+  // different from the events-only clipboard.
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
 }
 
 async function _toggleVideoRecording(
@@ -329,13 +416,17 @@ async function _toggleVideoRecording(
     btn.innerHTML = _recordIconSvg(false);
     btn.classList.remove("tb-active");
     btn.style.color = "var(--tb-btn-text, #aaa)";
-    // If the user already captured one or more bugs from this session, the
-    // tickets are already saved — just stop silently. Otherwise open the
-    // modal with the full recording so a one-click flow still works.
+    // Finalize the TraceBug session: clears the active-session flag so the
+    // next Record click starts fresh and stops the event collectors.
+    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
     if (captures > 0) {
       showToast(`Recording stopped · ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
-      return;
     }
+    // Always open the ticket modal on stop. Earlier we skipped this when
+    // rolling captures had already been filed, but users were left without a
+    // visible "result" of stopping — they expect a ticket every time. Open the
+    // ticket for the most recent session so the recording, replay, and
+    // screenshots are immediately reviewable.
     try {
       if (!isQuickBugOpen()) await showQuickBugCapture(root);
     } catch (err) {
@@ -355,6 +446,12 @@ async function _toggleVideoRecording(
     showToast("Recording cancelled", root);
     return;
   }
+
+  // Arm the TraceBug session in the same gesture as starting the video so
+  // events, screenshots, and the recording all land under one session id.
+  // Fires before the HUD mounts so the active-session flag is already
+  // persisted when the first event arrives.
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
 
   btn.innerHTML = _recordIconSvg(true);
   btn.classList.add("tb-active");

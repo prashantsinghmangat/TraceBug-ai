@@ -4,16 +4,40 @@
 import { TraceBugEvent, StoredSession, Annotation, EnvironmentInfo } from "./types";
 
 const SESSIONS_KEY = "tracebug_sessions";
+const ACTIVE_SESSION_KEY = "tracebug_active_session";
 
-// ── Session ID (new session on every page load / refresh) ────────────────
+// ── Session ID — record-driven lifecycle ────────────────────────────────
+// A session ID is persisted when the user clicks Record, kept across page
+// reloads, and cleared when the user clicks Stop. Page loads no longer
+// auto-create a session — the dashboard list stays clean until recording.
 
-export function getSessionId(): string {
-  // Always generate a fresh session ID — each page load = new session
-  const id =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : "bt_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-  return id;
+/** Generate a fresh, unique session ID. */
+export function generateSessionId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : "bt_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+/** Read the persisted active session ID, or null if recording isn't armed. */
+export function getActiveSessionId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveSessionId(id: string): void {
+  try { localStorage.setItem(ACTIVE_SESSION_KEY, id); } catch {}
+}
+
+export function clearActiveSessionId(): void {
+  try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch {}
+}
+
+/** Back-compat: returns the active session ID or null. */
+export function getSessionId(): string | null {
+  return getActiveSessionId();
 }
 
 // ── Read / write all sessions ─────────────────────────────────────────────

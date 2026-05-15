@@ -113,6 +113,37 @@
           }
         }
         break;
+
+      // ── New popup flow ────────────────────────────────────────────────
+      // capture-now: open the Quick Bug modal with a fresh screenshot of the
+      // current page. SDK auto-captures one if no screenshots exist yet.
+      case "capture-now":
+        if (window.TraceBug.quickCapture) {
+          window.TraceBug.quickCapture();
+        }
+        break;
+
+      // record: start tab-capture recording (silent — no screen-share picker).
+      // Triggers the same code path as clicking the 🎥 toolbar button.
+      // `withMic` flows from the popup's mic toggle through background +
+      // content-script; offscreen.js calls getUserMedia({audio: true}) when
+      // it's truthy, adding a mic track to the recording.
+      case "record":
+        if (window.TraceBug.startVideoRecording) {
+          window.TraceBug.startVideoRecording({ withMicrophone: !!(e.detail && e.detail.withMic) });
+        } else {
+          showToast("Recording requires the latest extension build");
+        }
+        break;
+
+      // view-tickets: open the dashboard panel by clicking its toolbar button.
+      // No public SDK method for this — the panel toggle lives inside the
+      // compact toolbar so we trigger it the same way the user would.
+      case "view-tickets":
+        var panelBtn = document.getElementById("tracebug-toolbar-panel-btn");
+        if (panelBtn) panelBtn.click();
+        else showToast("Open the toolbar to view tickets");
+        break;
     }
   });
 

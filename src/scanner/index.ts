@@ -11,6 +11,7 @@ import { detectBrokenImages } from "./detectors/broken-images";
 import { detectMixedContent } from "./detectors/mixed-content";
 import { detectConsoleErrors, detectFailedRequests, detectSlowApis } from "./detectors/session-data";
 import { detectA11yViolations } from "./detectors/a11y";
+import { detectFrustration } from "./detectors/frustration";
 
 let _issues: Issue[] = [];
 let _scanInFlight: Promise<Issue[]> | null = null;
@@ -58,6 +59,7 @@ export async function scan(): Promise<ScanResult> {
     safeRun(detectFailedRequests(session)),
     safeRun(detectSlowApis(session)),
     safeRun(detectA11yViolations()),
+    safeRun(detectFrustration(session)),
   ]).then((results) => {
     const all: Issue[] = ([] as Issue[]).concat(...results);
     // Stable sort: severity first, then detection time.
@@ -116,6 +118,10 @@ export function getIssueCountsByDetector(): Record<IssueDetector, number> {
     "console-error": 0,
     "slow-api": 0,
     "failed-request": 0,
+    "frustration-rage": 0,
+    "frustration-dead": 0,
+    "frustration-abandon": 0,
+    "frustration-error-correlated": 0,
   };
   for (const i of _issues) {
     if (i.dismissed) continue;

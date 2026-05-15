@@ -28,7 +28,10 @@ import {
   AnnotationIntent,
 } from "./types";
 import {
-  getSessionId,
+  getActiveSessionId,
+  setActiveSessionId,
+  clearActiveSessionId,
+  generateSessionId,
   appendEvent,
   updateSessionError,
   getAllSessions,
@@ -37,7 +40,7 @@ import {
   flushPendingEvents,
 } from "./storage";
 import { generateReproSteps } from "./repro-generator";
-import { mountDashboard, setRecordingState, updateRecordingState } from "./dashboard";
+import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers } from "./dashboard";
 import {
   collectClicks,
   collectInputs,
@@ -45,8 +48,11 @@ import {
   collectFormSubmits,
   collectRouteChanges,
   collectApiRequests,
+  collectPerformanceNetwork,
+  drainPerformanceNetwork,
   collectXhrRequests,
   collectErrors,
+  collectConsoleErrors,
   collectConsoleWarnings,
   collectConsoleLogs,
   getNetworkFailures,
@@ -77,9 +83,22 @@ import {
   clearVideoRecording,
   abortVideoRecording,
   downloadVideoRecording,
+  restoreFromOffscreenIfActive as _restoreVideoState,
+  restoreLastRecordingFromOffscreen as _restoreLastRecording,
+  wireAutoStopListener as _wireAutoStop,
+  setAutoStopHandler as _setAutoStopHandler,
   type VideoRecording,
 } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
+import {
+  mark as _mark,
+  assertCondition as _assertCondition,
+  context as _setContext,
+  getCurrentContext as _getContext,
+  clearDevApiState,
+  setDevApiHooks,
+} from "./dev-api";
+import type { ContextData } from "./types";
 import {
   scan as _scan,
   getIssues as _getIssues,
@@ -178,9 +197,23 @@ class TraceBugSDK {
   private config: TraceBugConfig | null = null;
   private cleanups: (() => void)[] = [];
   private initialized = false;
-  private recording = true;
+  /**
+   * True only while a record-driven session is armed — set to true by
+   * _startActiveSession() (Record click) and false by _endActiveSession()
+   * (Stop). Page reloads inherit the previous value via the persisted
+   * active-session-ID flag.
+   */
+  private recording = false;
   private sessionId: string | null = null;
   private _lastErrorPromptAt = 0;
+  // Session-scoped console.* hook cleanups. Empty when no session is active —
+  // the console wrappers (which would pollute every stack trace) are not
+  // installed until _startActiveSession() arms them, and removed on stop.
+  private _consoleCleanups: (() => void)[] = [];
+  // The emit fn is created in init(); cached here so the lazy console
+  // collectors attached later can share it without re-wiring.
+  private _emit: ((type: EventType, data: Record<string, any>) => void) | null = null;
+  private _consoleLevel: "errors" | "warnings" | "all" | "none" = "errors";
   private _lastErrorMsgPrompted: string | null = null;
 
   /**
@@ -230,20 +263,32 @@ class TraceBugSDK {
         maxEvents: 200,
         maxSessions: 50,
         enableDashboard: true,
-        theme: "dark",
+        theme: "light",
         toolbarPosition: "right",
         minimized: false,
-        captureConsole: "errors",
+        captureConsole: "all",
         ...config,
       };
 
       this.initialized = true;
-      this.recording = true;
-      this.sessionId = getSessionId();
-      const sessionId = this.sessionId;
+      // Restore the active session ID if a recording survived a reload.
+      // Otherwise we stay dormant — no session is created until the user
+      // clicks Record. This prevents the dashboard's session list from
+      // accruing one entry per page load.
+      this.sessionId = getActiveSessionId();
+      this.recording = !!this.sessionId;
 
       // ── Inject theme CSS custom properties ────────────────────────
-      try { injectTheme(this.config.theme!); } catch {}
+      // Honor a per-origin user preference saved by the modal's theme
+      // toggle. Falls back to the config default (typically "auto").
+      let themeMode = this.config.theme!;
+      try {
+        const saved = localStorage.getItem("tracebug_theme_pref");
+        if (saved === "light" || saved === "dark" || saved === "auto") {
+          themeMode = saved;
+        }
+      } catch {}
+      try { injectTheme(themeMode); } catch {}
 
       // ── Hydrate freemium plan flag (non-blocking) ─────────────────
       // Defaults to "free" until storage read resolves. The first user
@@ -256,34 +301,18 @@ class TraceBugSDK {
         import("./ui/quick-bug").then(m => m.setGithubRepo(this.config!.githubRepo!)).catch(() => {});
       }
 
-      // ── Capture environment info automatically ─────────────────────
-      try {
-        const env = captureEnvironment();
-        saveEnvironment(sessionId, env);
-      } catch {}
-
-      // ── Attach stored user to session ──────────────────────────────
-      try {
-        const storedUser = localStorage.getItem("tracebug_user");
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          const sessions = getAllSessions();
-          const session = sessions.find(s => s.sessionId === sessionId);
-          if (session) {
-            session.user = user;
-            localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
-          }
-        }
-      } catch {}
-
       // ── Emit function — collectors call this with raw event data ───────
+      // Reads sessionId / recording dynamically from `this` so toggling
+      // record state mid-session takes effect without re-wiring collectors.
       const emit = (type: EventType, data: Record<string, any>) => {
         try {
           if (!this.recording) return;
+          const sid = this.sessionId;
+          if (!sid) return;
 
           let event: TraceBugEvent | null = {
             id: Math.random().toString(36).slice(2, 10),
-            sessionId,
+            sessionId: sid,
             projectId: this.config!.projectId,
             type,
             page: window.location.pathname,
@@ -294,18 +323,26 @@ class TraceBugSDK {
           event = runEventPlugins(event);
           if (!event) return;
 
-          appendEvent(sessionId, event, this.config!.maxEvents!, this.config!.maxSessions!);
+          appendEvent(sid, event, this.config!.maxEvents!, this.config!.maxSessions!);
 
           if (type === "error" || type === "unhandled_rejection") {
-            this.processError(sessionId, data.error?.message, data.error?.stack);
+            this.processError(sid, data.error?.message, data.error?.stack);
             emitHook("error:captured", event);
-            // Auto-detect: prompt user to capture (throttled inside)
-            this.maybePromptErrorCapture(data.error?.message);
+            // Auto-detect: surface the Live Bug Card (throttled inside)
+            this.maybePromptErrorCapture(data.error?.message, data.error?.stack);
           }
         } catch (err) {
           if (typeof console !== 'undefined') console.warn('[TraceBug] Event emit error:', err);
         }
       };
+
+      // ── Wire dev-api so TraceBug.mark/assert/context route through emit ──
+      setDevApiHooks({
+        emit,
+        processError: (msg, stack) => {
+          if (this.sessionId) this.processError(this.sessionId, msg, stack);
+        },
+      });
 
       // ── Start all collectors ──────────────────────────────────────────
       this.cleanups.push(collectClicks(emit));
@@ -315,20 +352,22 @@ class TraceBugSDK {
       this.cleanups.push(collectRouteChanges(emit));
       this.cleanups.push(collectApiRequests(emit));
       this.cleanups.push(collectXhrRequests(emit));
+      // Backfill: catches requests fired BEFORE our fetch/XHR wraps were
+      // installed, plus anything that bypassed them (axios with cached XHR
+      // reference, service workers, polyfills). Reads from the browser's
+      // resource timing buffer so we never miss a network call again.
+      this.cleanups.push(collectPerformanceNetwork(emit));
 
-      // Console capture — configurable level
-      const consoleLevel = this.config.captureConsole ?? "errors";
-      if (consoleLevel !== "none") {
-        this.cleanups.push(collectErrors(emit));
-        if (consoleLevel === "warnings" || consoleLevel === "all") {
-          this.cleanups.push(collectConsoleWarnings(emit));
-        }
-        if (consoleLevel === "all") {
-          this.cleanups.push(collectConsoleLogs(emit));
-        }
-      } else {
-        this.cleanups.push(collectErrors(emit));
-      }
+      // Eager error capture: window.onerror + unhandledrejection only.
+      // These don't pollute call stacks of unrelated code, so they stay
+      // attached for the full SDK lifetime. The console.* wrappers (which
+      // DO add a frame to every console call's stack trace) attach lazily
+      // when a recording session starts — see _attachConsoleCollectors().
+      this.cleanups.push(collectErrors(emit));
+
+      // Save references for the lazy attach/detach during session lifecycle.
+      this._emit = emit;
+      this._consoleLevel = this.config.captureConsole ?? "errors";
 
       // ── Mount in-browser dashboard ────────────────────────────────────
       if (this.config.enableDashboard) {
@@ -337,16 +376,65 @@ class TraceBugSDK {
             if (this.recording) { this.pauseRecording(); } else { this.resumeRecording(); }
             updateRecordingState(this.recording);
           });
+          // Tie the toolbar's video-record button to the SDK session
+          // lifecycle so a single Record click arms event capture + video,
+          // and a single Stop ends both. Without this, the video could be
+          // running while no session was active — events would be dropped
+          // and reloads looked like new sessions because there was never a
+          // persisted active-session id to restore.
+          setSessionLifecycleHandlers(
+            () => this._startActiveSession(),
+            () => this._endActiveSession(),
+          );
           this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
         } catch (err) {
           console.warn('[TraceBug] Dashboard mount failed:', err);
         }
       }
 
-      emitHook("session:start", sessionId);
+      // ── Reconnect to a live screen recording if one survived a reload ──
+      // Extension transport keeps the recording in an offscreen document, so
+      // a page reload doesn't kill it. On every init we ping the offscreen
+      // for status and re-mount the HUD if a session is still armed. If the
+      // offscreen is gone (browser restart, native Stop) but we still hold a
+      // stale active-session-ID, clear it so the next Record click starts
+      // fresh.
+      _wireAutoStop();
+      _setAutoStopHandler((recording) => this._handleAutoStop(recording));
+      if (this.config.enableDashboard) {
+        _restoreVideoState().then((wasActive) => {
+          if (wasActive) {
+            // Real recording is in progress in the offscreen — re-mount the
+            // HUD and attach the console.* wrappers so all the data flowing
+            // for the rest of this session lands in the ticket.
+            this._remountRecordingHud();
+            this._attachConsoleCollectors();
+          } else if (this.sessionId) {
+            // Active-session flag survived but the recording didn't —
+            // common when the captured tab navigated and Chrome ended the
+            // share. Try to recover whatever the offscreen managed to
+            // finalize and open the ticket modal so the user doesn't lose
+            // the recording.
+            clearActiveSessionId();
+            this.sessionId = null;
+            this.recording = false;
+            updateRecordingState(false);
+            _restoreLastRecording().then((rec) => {
+              if (rec) this._handleAutoStop(rec);
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+
+      // Re-emit session:start only when restoring an in-flight session
+      // (i.e., a recording survived a reload). Fresh starts emit from
+      // _startActiveSession() instead.
+      if (this.sessionId) {
+        emitHook("session:start", this.sessionId);
+      }
 
       console.info(
-        `[TraceBug] Initialized — project: ${config.projectId}, session: ${sessionId}`
+        `[TraceBug] Initialized — project: ${config.projectId}${this.sessionId ? `, restored session: ${this.sessionId}` : " (idle — click Record to start a session)"}`
       );
     } catch (err) {
       console.warn('[TraceBug] Failed to initialize:', err);
@@ -355,15 +443,126 @@ class TraceBugSDK {
     }
   }
 
+  /**
+   * Begin a fresh record-driven session: mints a session ID, persists it so
+   * it survives page reloads, and writes the initial environment + user
+   * snapshot. Idempotent — a no-op if a session is already active.
+   */
+  private _startActiveSession(): void {
+    if (this.sessionId) {
+      // Already armed — just make sure we're capturing.
+      this.recording = true;
+      updateRecordingState(true);
+      this._attachConsoleCollectors();
+      if (this._emit) drainPerformanceNetwork(this._emit);
+      return;
+    }
+    const id = generateSessionId();
+    this.sessionId = id;
+    this.recording = true;
+    setActiveSessionId(id);
+
+    // Install console.* wrappers now that the user has explicitly armed a
+    // session. These add a frame to every console call's stack trace, so we
+    // keep them lazy — gone the moment the session ends.
+    this._attachConsoleCollectors();
+
+    // Backfill: pull every resource the browser has recorded so far into
+    // the fresh session. Catches API calls, fonts, images, scripts that
+    // happened before the user clicked Capture Bug — including ones our
+    // fetch/XHR wraps missed because libs cached references to the
+    // originals. Without this, lazy-injected SDKs miss the entire page
+    // load.
+    if (this._emit) drainPerformanceNetwork(this._emit);
+
+    // Capture environment + user once at session start so the report has
+    // them even if the user reloads several times before stopping.
+    try {
+      const env = captureEnvironment();
+      saveEnvironment(id, env);
+    } catch {}
+    try {
+      const storedUser = localStorage.getItem("tracebug_user");
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        const sessions = getAllSessions();
+        const session = sessions.find(s => s.sessionId === id);
+        if (session) {
+          session.user = user;
+          localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
+        }
+      }
+    } catch {}
+
+    updateRecordingState(true);
+    emitHook("session:start", id);
+    console.info(`[TraceBug] Session started: ${id}`);
+  }
+
+  /**
+   * Finalize the active session: flush pending events, drop the persisted
+   * active-session flag, and stop capture. Returns the ID that was active
+   * (or null if nothing was running) so callers can reference it.
+   */
+  private _endActiveSession(): string | null {
+    if (!this.sessionId) {
+      this.recording = false;
+      this._detachConsoleCollectors();
+      return null;
+    }
+    const id = this.sessionId;
+    flushPendingEvents();
+    clearActiveSessionId();
+    this.sessionId = null;
+    this.recording = false;
+    updateRecordingState(false);
+    // Restore console.* to its original — eliminates stack-trace pollution
+    // for any app code that calls console.error/warn/log after this point.
+    this._detachConsoleCollectors();
+    emitHook("session:end", id);
+    console.info(`[TraceBug] Session ended: ${id}`);
+    return id;
+  }
+
+  /** Install the console.* wrappers for the active session. Idempotent. */
+  private _attachConsoleCollectors(): void {
+    if (this._consoleCleanups.length > 0) return; // already attached
+    if (!this._emit) return;
+    if (this._consoleLevel === "none") return;
+    this._consoleCleanups.push(collectConsoleErrors(this._emit));
+    if (this._consoleLevel === "warnings" || this._consoleLevel === "all") {
+      this._consoleCleanups.push(collectConsoleWarnings(this._emit));
+    }
+    if (this._consoleLevel === "all") {
+      this._consoleCleanups.push(collectConsoleLogs(this._emit));
+    }
+  }
+
+  /** Remove console.* wrappers, restoring the originals. */
+  private _detachConsoleCollectors(): void {
+    while (this._consoleCleanups.length > 0) {
+      const fn = this._consoleCleanups.pop();
+      try { fn && fn(); } catch {}
+    }
+  }
+
   /** Pause recording — events will not be captured until resumed */
   pauseRecording(): void {
     this.recording = false;
+    updateRecordingState(false);
     console.info("[TraceBug] Recording paused.");
   }
 
   /** Resume recording after a pause */
   resumeRecording(): void {
+    if (!this.sessionId) {
+      // No active session — start one so the user has somewhere for events
+      // to land (Resume from a fully-stopped state behaves like Start).
+      this._startActiveSession();
+      return;
+    }
     this.recording = true;
+    updateRecordingState(true);
     console.info("[TraceBug] Recording resumed.");
   }
 
@@ -373,12 +572,11 @@ class TraceBugSDK {
   }
 
   /**
-   * Stop recording and open the ticket-review modal so the user can review
-   * captured steps + screenshots and then export. Same underlying behavior
-   * as pauseRecording(); the only difference is the auto-open of the modal.
+   * Stop the active session and open the ticket-review modal so the user
+   * can review captured steps + screenshots and then export.
    */
   stopRecording(): void {
-    this.pauseRecording();
+    this._endActiveSession();
     if (!this.config?.enableDashboard) return;
     const root = document.getElementById("tracebug-root");
     if (!root) return;
@@ -554,12 +752,26 @@ class TraceBugSDK {
     withMicrophone?: boolean;
     onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
   }): Promise<boolean> {
+    // End any stale active session before starting a fresh one. Without this
+    // a session id from a previous (abandoned) recording would be restored
+    // by init() and new events would be appended to hours-old data —
+    // exactly the "old session, no console, no network" bug we saw.
+    try { this._endActiveSession(); } catch {}
+
     const ok = await _startVideoRecording({
       mode: options?.mode ?? "rolling",
       withMicrophone: options?.withMicrophone,
       onStatus: options?.onStatus,
     });
     if (!ok) return false;
+
+    // Arm a fresh event session so clicks, network, console errors, action
+    // chips ALL flow into the same bug ticket as the video. Without this
+    // the recording captures pixels but emit() short-circuits, the lazy
+    // console.error hook never attaches, and the ticket modal shows an
+    // empty Info/Console/Network/Actions panel.
+    try { this._startActiveSession(); } catch {}
+
     const root = document.getElementById("tracebug-root");
     if (root) {
       showRecordingHUD(root, {
@@ -575,21 +787,29 @@ class TraceBugSDK {
    * modal so the user can review + export immediately. Resolves to the
    * recording metadata, or null if no recording was active.
    *
-   * In rolling mode: if the user already captured one or more bugs, no modal
-   * opens (those tickets are already filed) — the screen share simply ends.
+   * The ticket modal opens on every stop — even when rolling captures were
+   * already filed during the session, and even when `_stopVideoRecording`
+   * returns null (RPC hiccup, bfcache, offscreen torn down early). The user
+   * always sees their capture context.
    */
   async stopVideoRecording(): Promise<VideoRecording | null> {
-    const captureCount = _getCaptureCount();
-    const recording = await _stopVideoRecording();
+    let recording: VideoRecording | null = null;
+    try { recording = await _stopVideoRecording(); } catch (err) {
+      console.warn("[TraceBug] stop RPC failed, opening ticket modal anyway:", err);
+    }
     hideRecordingHUD();
-    // Skip modal when the user already filed tickets via Capture during this
-    // armed session — those bugs are already saved.
-    if (recording && captureCount === 0 && this.config?.enableDashboard) {
+    // End the event session if one is active so events stop flowing.
+    try { this._endActiveSession(); } catch {}
+    // Always open the ticket modal — user clicked Stop, user expects to see
+    // a ticket. Even if the recording payload is null, the modal still shows
+    // screenshots, console errors, network requests, and action chips from
+    // the session.
+    if (this.config?.enableDashboard) {
       const root = document.getElementById("tracebug-root");
       if (root) {
         try {
           const m = await import("./ui/quick-bug");
-          await m.showQuickBugCapture(root);
+          if (!m.isQuickBugOpen()) await m.showQuickBugCapture(root);
         } catch (err) {
           console.warn("[TraceBug] Failed to open ticket review after recording:", err);
         }
@@ -911,6 +1131,43 @@ class TraceBugSDK {
     return `Bug on ${page} \u2014 ${error}${flow}.${apiNote} ${browser}, ${os}.`;
   }
 
+  // ── Developer Breadcrumbs API ───────────────────────────────────────
+
+  /**
+   * Drop a labeled marker into the session timeline. Renders as a diamond
+   * on the replay scrubber. Optional payload (must be JSON-serializable).
+   *
+   *   TraceBug.mark("Started checkout flow", { cartTotal: 49.99 });
+   */
+  mark(label: string, payload?: Record<string, unknown>): void {
+    _mark(label, payload);
+  }
+
+  /**
+   * Assert a runtime invariant. On `false`, captures a synthetic Error and
+   * surfaces the Live Bug Card with the assertion message + call stack.
+   *
+   *   TraceBug.assert(user != null, "User must be logged in here");
+   */
+  assert(condition: unknown, message: string): void {
+    _assertCondition(condition, message);
+  }
+
+  /**
+   * Set or merge custom context attached to every subsequent report.
+   * Keys are merged shallow — call multiple times to accumulate fields.
+   *
+   *   TraceBug.context({ buildId: "abc123", featureFlag: "new-checkout" });
+   */
+  context(values: ContextData): void {
+    _setContext(values);
+  }
+
+  /** Snapshot of current context. */
+  getContext(): ContextData {
+    return _getContext();
+  }
+
   // ── User Identification ────────────────────────────────────────────
 
   /**
@@ -1034,7 +1291,60 @@ class TraceBugSDK {
    * error is detected. Throttled: same error message won't re-prompt within
    * 30 seconds; any error won't re-prompt within 5 seconds.
    */
-  private maybePromptErrorCapture(errorMessage?: string): void {
+  /**
+   * Re-mount the floating recording HUD after a page reload when an
+   * offscreen recording is still active. Safe to call repeatedly — the HUD
+   * itself guards against double mounts.
+   */
+  private _remountRecordingHud(): void {
+    const root = document.getElementById("tracebug-root");
+    if (!root) return;
+    showRecordingHUD(root, {
+      onStop: () => { this.stopVideoRecording().catch(() => {}); },
+      onCapture: () => { this.captureRollingBuffer().catch(() => {}); },
+    });
+    // Also flip the toolbar Record button to its active state so the user
+    // sees that recording is on.
+    const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
+    if (recordBtn) {
+      recordBtn.classList.add("tb-active");
+      recordBtn.style.color = "var(--tb-error, #ef4444)";
+    }
+  }
+
+  /**
+   * Called when the offscreen document auto-finalizes the recording because
+   * the user clicked the browser's native "Stop sharing" button. We hide
+   * the HUD and open the ticket modal with the captured video.
+   */
+  private async _handleAutoStop(recording: VideoRecording | null): Promise<void> {
+    hideRecordingHUD();
+    const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
+    if (recordBtn) {
+      recordBtn.classList.remove("tb-active");
+      recordBtn.style.color = "var(--tb-btn-text, #aaa)";
+    }
+    // Native "Stop sharing" is a stop too — finalize the session so the
+    // active-session flag clears and the next Record starts fresh.
+    this._endActiveSession();
+    if (!this.config?.enableDashboard) return;
+    // Always surface the ticket modal on any stop path — manual, auto, or
+    // tab-close. Even when the broadcast didn't deliver a recording payload
+    // (the offscreen failed to finalize, or the tab was in bfcache), we
+    // still open the modal so the user sees the screenshots, console errors,
+    // network calls, and action chips that WERE captured.
+    void recording; // not used directly — getLastVideoRecording() pulls it
+    const root = document.getElementById("tracebug-root");
+    if (!root) return;
+    try {
+      const m = await import("./ui/quick-bug");
+      if (!m.isQuickBugOpen()) await m.showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket modal after auto-stop:", err);
+    }
+  }
+
+  private maybePromptErrorCapture(errorMessage?: string, errorStack?: string): void {
     if (!this.config?.enableDashboard) return;
     if (!errorMessage) return;
 
@@ -1052,25 +1362,50 @@ class TraceBugSDK {
       try {
         const root = document.getElementById("tracebug-root");
         if (!root) return;
-        // Lazy-load to keep the hot path light
+        // Compute "last user action" from the latest session events so the
+        // card can show what the user just did before the error.
+        const lastAction = (() => {
+          try {
+            const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
+            const events = sessions[0]?.events || [];
+            for (let i = events.length - 1; i >= 0; i--) {
+              const e = events[i];
+              if (e.type === "click") {
+                const t = e.data?.element?.text || e.data?.element?.ariaLabel || e.data?.element?.tag || "element";
+                return `clicked "${String(t).slice(0, 40)}"`;
+              }
+              if (e.type === "input") {
+                const n = e.data?.element?.name || e.data?.element?.id || "field";
+                return `typed in ${n}`;
+              }
+              if (e.type === "select_change") return `selected an option`;
+              if (e.type === "form_submit") return `submitted a form`;
+              if (e.type === "route_change") return `navigated to ${e.data?.to || "page"}`;
+            }
+          } catch {}
+          return undefined;
+        })();
+
+        // Lazy-load the card module + the bug-capture modal so the hot path
+        // stays cheap on pages that never throw.
         Promise.all([
-          import("./ui/toast"),
+          import("./ui/live-bug-card"),
           import("./ui/quick-bug"),
-        ]).then(([toastMod, qbMod]) => {
-          const truncated = errorMessage.length > 60 ? errorMessage.slice(0, 60) + "\u2026" : errorMessage;
-          // If a rolling/Sentry recording is armed, the action snapshots the
-          // in-progress video into a ticket \u2014 no extra clicks, no second picker.
+        ]).then(([cardMod, qbMod]) => {
+          // If a rolling/Sentry recording is armed, the Capture button
+          // snapshots the in-progress video into a ticket \u2014 no extra clicks,
+          // no second picker. Otherwise it opens the standard capture modal.
           const armed = _isRollingMode();
-          const actionLabel = armed ? "Capture with video" : "Capture bug";
-          const onAction = armed
+          const onCapture = armed
             ? () => { this.captureRollingBuffer().catch(() => {}); }
             : () => { qbMod.showQuickBugCapture(root).catch(() => {}); };
-          toastMod.showActionToast(
-            `\u26A0\uFE0F Error detected: ${truncated}`,
-            actionLabel,
-            onAction,
-            root
-          );
+
+          cardMod.showLiveBugCard(root, {
+            message: errorMessage,
+            stack: errorStack,
+            lastAction,
+            onCapture,
+          });
         }).catch(() => {});
       } catch {}
     }, 200);
@@ -1114,6 +1449,7 @@ class TraceBugSDK {
    */
   destroy(): void {
     flushPendingEvents(); // Write any buffered events before teardown
+    this._detachConsoleCollectors();
     this.cleanups.forEach((fn) => fn());
     this.cleanups = [];
     this.initialized = false;
@@ -1131,6 +1467,7 @@ class TraceBugSDK {
     clearAllAnnotations();
     clearAllPlugins();
     _clearIssues();
+    clearDevApiState();
     removeTheme();
   }
 
