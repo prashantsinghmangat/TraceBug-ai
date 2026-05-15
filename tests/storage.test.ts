@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   getSessionId,
+  getActiveSessionId,
+  setActiveSessionId,
+  clearActiveSessionId,
+  generateSessionId,
   getAllSessions,
   appendEvent,
   updateSessionError,
@@ -32,15 +36,30 @@ beforeEach(() => {
 });
 
 describe('getSessionId', () => {
-  it('returns a non-empty string', () => {
-    const id = getSessionId();
-    expect(typeof id).toBe('string');
-    expect(id.length).toBeGreaterThan(0);
+  it('returns null when no session is armed', () => {
+    expect(getSessionId()).toBeNull();
+    expect(getActiveSessionId()).toBeNull();
   });
 
-  it('returns a different id on each call', () => {
-    const a = getSessionId();
-    const b = getSessionId();
+  it('returns the armed session id after setActiveSessionId', () => {
+    const id = generateSessionId();
+    setActiveSessionId(id);
+    expect(getSessionId()).toBe(id);
+    expect(getActiveSessionId()).toBe(id);
+  });
+
+  it('returns null after clearActiveSessionId', () => {
+    const id = generateSessionId();
+    setActiveSessionId(id);
+    clearActiveSessionId();
+    expect(getSessionId()).toBeNull();
+  });
+
+  it('generateSessionId produces unique values', () => {
+    const a = generateSessionId();
+    const b = generateSessionId();
+    expect(typeof a).toBe('string');
+    expect(a.length).toBeGreaterThan(0);
     expect(a).not.toBe(b);
   });
 });

@@ -30,6 +30,10 @@ const DETECTOR_LABELS: Record<Issue["detector"], string> = {
   "console-error": "JS error",
   "slow-api": "Slow API",
   "failed-request": "Failed request",
+  "frustration-rage": "Rage clicks",
+  "frustration-dead": "Dead click",
+  "frustration-abandon": "Form abandoned",
+  "frustration-error-correlated": "Click → error",
 };
 
 export function isIssuesPanelOpen(): boolean {
@@ -281,6 +285,22 @@ function _issueRowHtml(issue: Issue): string {
     ? issue.description.slice(0, 237) + "…"
     : issue.description;
 
+  // Fingerprint dedup: when occurrences > 1 show a collapsible <details>
+  // listing each occurrence with its preceding action.
+  const repeats = (issue.occurrences || 1) > 1;
+  const samplesHtml = repeats && issue.contextSamples && issue.contextSamples.length > 0
+    ? `<details style="margin-top:6px;font-size:11px">
+         <summary style="cursor:pointer;color:var(--tb-text-muted, #888)">
+           View all ${issue.occurrences} contexts
+         </summary>
+         <ol style="margin:6px 0 0 20px;padding:0;color:var(--tb-text-secondary, #aaa);line-height:1.5">
+           ${issue.contextSamples.map(s => `
+             <li>${new Date(s.timestamp).toLocaleTimeString()}${s.precedingAction ? ` · ${escapeHtml(s.precedingAction)}` : ""}</li>
+           `).join("")}
+         </ol>
+       </details>`
+    : "";
+
   return `
     <div class="tb-issue-row" data-tb-issue-id="${issue.id}">
       <span class="tb-sev-badge" style="background:${colors.bg};color:${colors.fg};border-color:${colors.border}">${issue.severity}</span>
@@ -291,6 +311,7 @@ function _issueRowHtml(issue: Issue): string {
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml(desc)}</div>
         ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7B61FF);margin-top:4px;display:inline-block">Learn more →</a>` : ""}
+        ${samplesHtml}
       </div>
       <div class="tb-issue-actions">
         ${issue.selector ? `<button data-action="locate" title="Highlight on page">📍 Locate</button>` : ""}

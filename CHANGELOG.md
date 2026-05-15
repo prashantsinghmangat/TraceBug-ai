@@ -4,6 +4,63 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+### Phase 4 — Video recording stabilization
+
+#### Fixed
+
+- **Empty `video` field in exports.** Multi-MB recording dataUrls were silently truncated by `chrome.runtime.sendMessage` (it drops responses >10 MB or so). The exported HTML had everything except the video bytes. Now the offscreen writes the recording into `chrome.storage.local` via the background service worker (which always has storage access), the content-script reads it back, and re-attaches the dataUrl to the page-side response. IPC carries metadata only. (`tracebug-extension/offscreen.js`, `background.js`, `content-script.js`)
+- **`dataUrlToBlob` rejected valid base64.** Splitting on the first `,` was wrong because mime types can contain commas (e.g. `video/webm;codecs=vp9,opus`). Switched to splitting on the literal `;base64,` marker. The `atob` failure was the actual root cause of every previous empty-video export and the `NotSupportedError` on play. (`src/video-recorder.ts`)
+- **`tb:rec:auto-stopped` broadcast dead-coded.** The generic `tb:rec:*` handler in `background.js` was registered before the dedicated auto-stop handler, so the latter never ran. Reordered so `tb:rec:auto-stopped` matches first. (`tracebug-extension/background.js`)
+- **`content-script.js` re-injection crashed** with `SyntaxError: Identifier 'REC_DATA_KEY' has already been declared`. Wrapped the whole script in a `window.__TRACEBUG_CS_LOADED__` guard so re-injection is a no-op. (`tracebug-extension/content-script.js`)
+- **Double share-picker.** Two concurrent `startVideoRecording` calls both passed the `isActive()` check (recorder doesn't exist yet — `getDisplayMedia` is in flight) and showed the picker twice. Added `_startInFlight` coalescing on both SDK and offscreen sides. (`src/video-recorder.ts`, `tracebug-extension/offscreen.js`)
+- **Recording lost on page reload.** When the recording tab navigated and Chrome ended the share, the SDK's reinit cleared the stale `sessionId` flag but didn't recover the finalized recording. Added a recovery path that pulls `_lastBuiltRecording` from the offscreen on init. (`src/index.ts`)
+- **Auto-stop finalize race.** The video track's `ended` event and the `MediaRecorder`'s `stop` event raced; the early bail on `isActive()` could miss the broadcast. Removed the bail and added `_autoStopBroadcast` dedup so finalize fires exactly once regardless of which signal arrives first. (`tracebug-extension/offscreen.js`)
+- **In-modal play threw `NotSupportedError`.** `v.play()` returns a Promise that rejects on no-supported-sources, and the surrounding sync `try/catch` couldn't catch it. Added a `.catch()` that falls back to event-only timeline playback. (`src/ui/replay-scrubber.ts`)
+
+#### Changed
+
+- **Switched from silent `chrome.tabCapture` to `getDisplayMedia` picker.** Tab capture's silent-record path failed on many sites (cross-origin, sandboxed iframes, `chrome://` URLs) and produced recordings the modal couldn't play back. The picker is more reliable, lets the user record any tab / window / screen, and the `surfaceSwitching: "include"` option keeps the recording alive through tab navigation. (`tracebug-extension/offscreen.js`)
+- **Recording HUD now has a "Draw" button** that toggles the existing draw-mode (rect / ellipse / redact, 5 colors) while recording continues. HUD slides down to `top: 64px` so it doesn't collide with the draw toolbar. (`src/ui/recording-hud.ts`)
+- **`hydrateRecording` is non-throwing.** Even if `atob` fails for any reason, the recording is still returned with the dataUrl preserved, so the export still embeds the video. (`src/video-recorder.ts`)
+- **`isUsableRecording` gate.** `revokeAndStash` no longer overwrites a real recording with an empty stub. The auto-stop broadcast and manual stop both go through this check before storing. (`src/video-recorder.ts`)
+- **Manifest:** added `unlimitedStorage` permission for large recordings. (`tracebug-extension/manifest.json`)
+
+### Phase 3 — UI overhaul + parity work
+
+#### Added
+
+- **Minimal popup** with one hero CTA ("Capture Bug Now") plus secondary "Record session" / "View tickets" buttons. The old toggle + 6 quick-action grid + active-sites list are gone. Three actions, three clicks max from "I see a bug" to "report filed".
+- **Lazy SDK injection** — the SDK no longer loads until the user clicks a popup action. No persistent allowlist, no auto-inject on page load. Tracking is fully opt-in per session. (`tracebug-extension/background.js`, `popup.js`)
+- **Silent tab capture (later replaced — see Phase 4)** — initial implementation used `chrome.tabCapture.getMediaStreamId` to avoid the share picker. Phase 4 reverted this to `getDisplayMedia` for reliability.
+- **Quick Bug modal tabbed layout** — two-pane (replay left, tab strip right) with `Info | Console | Network | Actions | AI | Notes` tabs. Each renders real data from the BugReport. Theme toggle (🌗) in header. (`src/ui/quick-bug.ts`)
+- **Action chips** — Actions tab renders chips with verb + HTML element preview (`<button class="play-btn" type="button"> +1 more`) and theme-aware syntax coloring. New module `src/action-chips.ts`, new `BugReport.actionChips` field. Text exports (GitHub/Jira/markdown) still use plain `sessionSteps[]`.
+- **Full network capture** — Network tab shows ALL requests, not just failures. New `NetworkRequestEntry` type + `BugReport.networkRequests` field. Color-coded 2xx/3xx/4xx/5xx/err status badges. (`src/types.ts`, `src/report-builder.ts`)
+- **Linear integration** — `src/linear-issue.ts` opens `https://linear.app/new?title=...&description=...` with prefilled markdown.
+- **Slack export** — `src/slack-export.ts` returns Slack-flavored text (`*bold*`, code blocks, `>` quotes) for clipboard paste.
+- **Redact (blur) tool** — third shape type in draw mode, solid hatched block, no comment prompt. (`src/draw-mode.ts`, `src/types.ts`)
+- **HTML export tabbed layout + dual-theme** — standalone replay file mirrors the modal layout with `Info | Console | Network | Actions | AI | Notes | Events | Description` tabs. Both palettes embedded as CSS variables; auto-switches via `prefers-color-scheme`, manual override via in-header 🌗 toggle saved per file in `localStorage`. (`src/exporters/html-template.ts`, `src/exporters/html-replay.ts`)
+- **Theme toggle in modal header** — cycles ☀ light → 🌙 dark → 🌗 auto. Per-origin preference saved in `localStorage.tracebug_theme_pref`, picked up on next SDK init. (`src/ui/quick-bug.ts`, `src/index.ts`)
+- **Smarter dashboard search** — `renderFilteredSessions()` now also matches click text, input values, aria-labels, repro steps, request URLs — not just sessionId + errorMessage. (`src/dashboard.ts`)
+
+#### Changed
+
+- **Theme palette refresh** — softer zinc + violet ramps replacing navy + cyan. New syntax-highlighting tokens (`--tb-code-tag`, `--tb-code-attr-name`, `--tb-code-attr-val`, `--tb-code-text`, `--tb-code-bg`) so HTML element previews adapt to light/dark. Default mode changed from `"dark"` to `"auto"`. (`src/theme.ts`, `src/index.ts:254`)
+- **Modal CSS polish** — more generous padding, real hover backgrounds (button lifts instead of dimming opacity), pill badges (border-radius 999px), refined focus rings, custom theme-aware scrollbar, larger radii, `-0.01em` letter-spacing on titles. (`src/ui/quick-bug.ts` — `_injectStyles()`)
+- **Popup enable flow no longer reloads** the tab. SDK injects in-place via `chrome.scripting.executeScript`. User keeps current page state. (`tracebug-extension/popup.js`, `background.js` — `INJECT_SDK_NOW` handler)
+- **Badge now reflects "SDK loaded on tab"** rather than "site enabled". Clears automatically on tab reload (since `injectedTabs` is wiped). (`tracebug-extension/background.js`)
+- **"Jam" references removed** from all source comments. 17 mentions replaced with neutral wording.
+
+#### Removed
+
+- Persistent enabled-sites allowlist (`getEnabledSites` / `saveEnabledSites` / `isSiteEnabled` / `toggleSite` and the `TOGGLE_SITE` / `CHECK_SITE` message handlers).
+- Auto-injection on page navigation.
+- Popup's 6 quick-action buttons (Annotate / Draw / Screenshot / PDF Report / GitHub Issue / Jira Ticket) — they duplicated the on-page toolbar.
+- Popup's Enable / Disable toggle row — replaced with informational hint.
+
+#### Known issues
+
+- `console.error` wrapper (in `src/collectors.ts:collectErrors()`) adds a frame at the top of every console.error stack trace once the SDK is loaded. Trace shows `tracebug-sdk.js` as the topmost frame; the actual caller is the line below. Fix candidates: install the wrapper only during active recording, add `//# sourceURL=` magic comment, or default `captureConsole` to `"none"`.
+
 ### Added — Sentry Mode (Rolling Video Buffer)
 
 A "Capture this moment" recording flow inspired by NVIDIA Shadowplay / OBS replay buffer. The user arms a session once, then files multiple bug tickets from a single screen-share — no need to re-pick the screen.

@@ -35,9 +35,27 @@ var TraceBugModule = (() => {
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
   // src/storage.ts
-  function getSessionId() {
-    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "bt_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-    return id;
+  function generateSessionId() {
+    return typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "bt_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+  function getActiveSessionId() {
+    try {
+      return localStorage.getItem(ACTIVE_SESSION_KEY);
+    } catch (e2) {
+      return null;
+    }
+  }
+  function setActiveSessionId(id) {
+    try {
+      localStorage.setItem(ACTIVE_SESSION_KEY, id);
+    } catch (e2) {
+    }
+  }
+  function clearActiveSessionId() {
+    try {
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+    } catch (e2) {
+    }
   }
   function getAllSessions() {
     try {
@@ -160,11 +178,12 @@ var TraceBugModule = (() => {
     } catch (e2) {
     }
   }
-  var SESSIONS_KEY, _cachedSessions, _pendingFlush, FLUSH_INTERVAL_MS;
+  var SESSIONS_KEY, ACTIVE_SESSION_KEY, _cachedSessions, _pendingFlush, FLUSH_INTERVAL_MS;
   var init_storage = __esm({
     "src/storage.ts"() {
       "use strict";
       SESSIONS_KEY = "tracebug_sessions";
+      ACTIVE_SESSION_KEY = "tracebug_active_session";
       _cachedSessions = null;
       _pendingFlush = null;
       FLUSH_INTERVAL_MS = 1e3;
@@ -275,21 +294,19 @@ var TraceBugModule = (() => {
   }
   function describeElement(el) {
     if (!el) return "an element";
-    const tag = el.tag || "";
+    const tag = (el.tag || "").toLowerCase();
     const rawText = (el.text || "").trim();
     const text = rawText.includes("\n") ? rawText.split("\n")[0].trim() : rawText;
     const id = el.id || "";
     const ariaLabel = el.ariaLabel || "";
-    if (ariaLabel && ariaLabel.length < 50) {
-      return `"${ariaLabel}" ${tag}`;
+    const kind = tag === "button" || el.buttonType ? "button" : tag === "a" ? "link" : tag === "input" ? "input" : tag === "select" ? "dropdown" : tag === "textarea" ? "text area" : tag === "img" || tag === "svg" || tag === "picture" ? "image" : tag === "li" ? "list item" : tag === "nav" ? "navigation" : "element";
+    const label = ariaLabel || text || (id ? `#${id}` : "");
+    if (label) {
+      const trimmed = label.length > 60 ? label.slice(0, 60).trimEnd() + "\u2026" : label;
+      return `the "${trimmed}" ${kind}`;
     }
-    if (text && text.length < 50) {
-      return `"${text}" ${tag}`;
-    }
-    if (id) {
-      return `#${id} ${tag}`;
-    }
-    return `a ${tag} element`;
+    const article = /^[aeiou]/i.test(kind) ? "an" : "a";
+    return `${article} ${kind}`;
   }
   function friendlyPageName(path) {
     if (path === "/") return "Home page";
@@ -522,20 +539,20 @@ var TraceBugModule = (() => {
         Bounds2.prototype.add = function(x, y, w, h) {
           return new Bounds2(this.left + x, this.top + y, this.width + w, this.height + h);
         };
-        Bounds2.fromClientRect = function(context, clientRect) {
-          return new Bounds2(clientRect.left + context.windowBounds.left, clientRect.top + context.windowBounds.top, clientRect.width, clientRect.height);
+        Bounds2.fromClientRect = function(context2, clientRect) {
+          return new Bounds2(clientRect.left + context2.windowBounds.left, clientRect.top + context2.windowBounds.top, clientRect.width, clientRect.height);
         };
-        Bounds2.fromDOMRectList = function(context, domRectList) {
+        Bounds2.fromDOMRectList = function(context2, domRectList) {
           var domRect = Array.from(domRectList).find(function(rect) {
             return rect.width !== 0;
           });
-          return domRect ? new Bounds2(domRect.left + context.windowBounds.left, domRect.top + context.windowBounds.top, domRect.width, domRect.height) : Bounds2.EMPTY;
+          return domRect ? new Bounds2(domRect.left + context2.windowBounds.left, domRect.top + context2.windowBounds.top, domRect.width, domRect.height) : Bounds2.EMPTY;
         };
         Bounds2.EMPTY = new Bounds2(0, 0, 0, 0);
         return Bounds2;
       })();
-      parseBounds = function(context, node) {
-        return Bounds.fromClientRect(context, node.getBoundingClientRect());
+      parseBounds = function(context2, node) {
+        return Bounds.fromClientRect(context2, node.getBoundingClientRect());
       };
       parseDocumentSize = function(document2) {
         var body = document2.body;
@@ -1962,7 +1979,7 @@ var TraceBugModule = (() => {
       TURN = "turn";
       angle = {
         name: "angle",
-        parse: function(_context, value) {
+        parse: function(_context2, value) {
           if (value.type === 15) {
             switch (value.unit) {
               case DEG:
@@ -2031,13 +2048,13 @@ var TraceBugModule = (() => {
       };
       color$1 = {
         name: "color",
-        parse: function(context, value) {
+        parse: function(context2, value) {
           if (value.type === 18) {
             var colorFunction = SUPPORTED_COLOR_FUNCTIONS[value.name];
             if (typeof colorFunction === "undefined") {
               throw new Error('Attempting to parse an unsupported color function "' + value.name + '"');
             }
-            return colorFunction(context, value.values);
+            return colorFunction(context2, value.values);
           }
           if (value.type === 5) {
             if (value.value.length === 3) {
@@ -2099,7 +2116,7 @@ var TraceBugModule = (() => {
         }
         return 0;
       };
-      rgb = function(_context, args) {
+      rgb = function(_context2, args) {
         var tokens = args.filter(nonFunctionArgSeparator);
         if (tokens.length === 3) {
           var _a = tokens.map(getTokenColorValue), r = _a[0], g = _a[1], b = _a[2];
@@ -2111,10 +2128,10 @@ var TraceBugModule = (() => {
         }
         return 0;
       };
-      hsl = function(context, args) {
+      hsl = function(context2, args) {
         var tokens = args.filter(nonFunctionArgSeparator);
         var hue = tokens[0], saturation = tokens[1], lightness = tokens[2], alpha = tokens[3];
-        var h = (hue.type === 17 ? deg(hue.number) : angle.parse(context, hue)) / (Math.PI * 2);
+        var h = (hue.type === 17 ? deg(hue.number) : angle.parse(context2, hue)) / (Math.PI * 2);
         var s = isLengthPercentage(saturation) ? saturation.number / 100 : 0;
         var l = isLengthPercentage(lightness) ? lightness.number / 100 : 0;
         var a2 = typeof alpha !== "undefined" && isLengthPercentage(alpha) ? getAbsoluteValue(alpha, 1) : 1;
@@ -2134,8 +2151,8 @@ var TraceBugModule = (() => {
         rgb,
         rgba: rgb
       };
-      parseColor = function(context, value) {
-        return color$1.parse(context, Parser.create(value).parseComponentValue());
+      parseColor = function(context2, value) {
+        return color$1.parse(context2, Parser.create(value).parseComponentValue());
       };
       COLORS = {
         ALICEBLUE: 4042850303,
@@ -2293,7 +2310,7 @@ var TraceBugModule = (() => {
         initialValue: "border-box",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return tokens.map(function(token) {
             if (isIdentToken(token)) {
               switch (token.value) {
@@ -2314,8 +2331,8 @@ var TraceBugModule = (() => {
         type: 3,
         format: "color"
       };
-      parseColorStop = function(context, args) {
-        var color2 = color$1.parse(context, args[0]);
+      parseColorStop = function(context2, args) {
+        var color2 = color$1.parse(context2, args[0]);
         var stop = args[1];
         return stop && isLengthPercentage(stop) ? { color: color2, stop } : { color: color2, stop: null };
       };
@@ -2455,7 +2472,7 @@ var TraceBugModule = (() => {
         }
         return [rx, ry];
       };
-      linearGradient = function(context, tokens) {
+      linearGradient = function(context2, tokens) {
         var angle$1 = deg(180);
         var stops = [];
         parseFunctionArgs(tokens).forEach(function(arg, i) {
@@ -2465,11 +2482,11 @@ var TraceBugModule = (() => {
               angle$1 = parseNamedSide(arg);
               return;
             } else if (isAngle(firstToken)) {
-              angle$1 = angle.parse(context, firstToken);
+              angle$1 = angle.parse(context2, firstToken);
               return;
             }
           }
-          var colorStop = parseColorStop(context, arg);
+          var colorStop = parseColorStop(context2, arg);
           stops.push(colorStop);
         });
         return {
@@ -2479,7 +2496,7 @@ var TraceBugModule = (() => {
           /* LINEAR_GRADIENT */
         };
       };
-      prefixLinearGradient = function(context, tokens) {
+      prefixLinearGradient = function(context2, tokens) {
         var angle$1 = deg(180);
         var stops = [];
         parseFunctionArgs(tokens).forEach(function(arg, i) {
@@ -2489,11 +2506,11 @@ var TraceBugModule = (() => {
               angle$1 = parseNamedSide(arg);
               return;
             } else if (isAngle(firstToken)) {
-              angle$1 = (angle.parse(context, firstToken) + deg(270)) % deg(360);
+              angle$1 = (angle.parse(context2, firstToken) + deg(270)) % deg(360);
               return;
             }
           }
-          var colorStop = parseColorStop(context, arg);
+          var colorStop = parseColorStop(context2, arg);
           stops.push(colorStop);
         });
         return {
@@ -2503,7 +2520,7 @@ var TraceBugModule = (() => {
           /* LINEAR_GRADIENT */
         };
       };
-      webkitGradient = function(context, tokens) {
+      webkitGradient = function(context2, tokens) {
         var angle2 = deg(180);
         var stops = [];
         var type = 1;
@@ -2523,15 +2540,15 @@ var TraceBugModule = (() => {
           }
           if (firstToken.type === 18) {
             if (firstToken.name === "from") {
-              var color2 = color$1.parse(context, firstToken.values[0]);
+              var color2 = color$1.parse(context2, firstToken.values[0]);
               stops.push({ stop: ZERO_LENGTH, color: color2 });
             } else if (firstToken.name === "to") {
-              var color2 = color$1.parse(context, firstToken.values[0]);
+              var color2 = color$1.parse(context2, firstToken.values[0]);
               stops.push({ stop: HUNDRED_PERCENT, color: color2 });
             } else if (firstToken.name === "color-stop") {
               var values = firstToken.values.filter(nonFunctionArgSeparator);
               if (values.length === 2) {
-                var color2 = color$1.parse(context, values[1]);
+                var color2 = color$1.parse(context2, values[1]);
                 var stop_1 = values[0];
                 if (isNumberToken(stop_1)) {
                   stops.push({
@@ -2557,7 +2574,7 @@ var TraceBugModule = (() => {
       ELLIPSE = "ellipse";
       COVER = "cover";
       CONTAIN = "contain";
-      radialGradient = function(context, tokens) {
+      radialGradient = function(context2, tokens) {
         var shape = 0;
         var size = 3;
         var stops = [];
@@ -2622,7 +2639,7 @@ var TraceBugModule = (() => {
             }, isColorStop);
           }
           if (isColorStop) {
-            var colorStop = parseColorStop(context, arg);
+            var colorStop = parseColorStop(context2, arg);
             stops.push(colorStop);
           }
         });
@@ -2635,7 +2652,7 @@ var TraceBugModule = (() => {
           /* RADIAL_GRADIENT */
         };
       };
-      prefixRadialGradient = function(context, tokens) {
+      prefixRadialGradient = function(context2, tokens) {
         var shape = 0;
         var size = 3;
         var stops = [];
@@ -2700,7 +2717,7 @@ var TraceBugModule = (() => {
             }, isColorStop);
           }
           if (isColorStop) {
-            var colorStop = parseColorStop(context, arg);
+            var colorStop = parseColorStop(context2, arg);
             stops.push(colorStop);
           }
         });
@@ -2721,14 +2738,14 @@ var TraceBugModule = (() => {
       };
       image = {
         name: "image",
-        parse: function(context, value) {
+        parse: function(context2, value) {
           if (value.type === 22) {
             var image_1 = {
               url: value.value,
               type: 0
               /* URL */
             };
-            context.cache.addImage(value.value);
+            context2.cache.addImage(value.value);
             return image_1;
           }
           if (value.type === 18) {
@@ -2736,7 +2753,7 @@ var TraceBugModule = (() => {
             if (typeof imageFunction === "undefined") {
               throw new Error('Attempting to parse an unsupported image function "' + value.name + '"');
             }
-            return imageFunction(context, value.values);
+            return imageFunction(context2, value.values);
           }
           throw new Error("Unsupported image type " + value.type);
         }
@@ -2759,7 +2776,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         type: 1,
         prefix: false,
-        parse: function(context, tokens) {
+        parse: function(context2, tokens) {
           if (tokens.length === 0) {
             return [];
           }
@@ -2770,7 +2787,7 @@ var TraceBugModule = (() => {
           return tokens.filter(function(value) {
             return nonFunctionArgSeparator(value) && isSupportedImage(value);
           }).map(function(value) {
-            return image.parse(context, value);
+            return image.parse(context2, value);
           });
         }
       };
@@ -2779,7 +2796,7 @@ var TraceBugModule = (() => {
         initialValue: "border-box",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return tokens.map(function(token) {
             if (isIdentToken(token)) {
               switch (token.value) {
@@ -2798,7 +2815,7 @@ var TraceBugModule = (() => {
         initialValue: "0% 0%",
         type: 1,
         prefix: false,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return parseFunctionArgs(tokens).map(function(values) {
             return values.filter(isLengthPercentage);
           }).map(parseLengthPercentageTuple);
@@ -2809,7 +2826,7 @@ var TraceBugModule = (() => {
         initialValue: "repeat",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return parseFunctionArgs(tokens).map(function(values) {
             return values.filter(isIdentToken).map(function(token) {
               return token.value;
@@ -2842,7 +2859,7 @@ var TraceBugModule = (() => {
         initialValue: "0",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return parseFunctionArgs(tokens).map(function(values) {
             return values.filter(isBackgroundSizeInfoToken);
           });
@@ -2870,7 +2887,7 @@ var TraceBugModule = (() => {
           initialValue: "0 0",
           prefix: false,
           type: 1,
-          parse: function(_context, tokens) {
+          parse: function(_context2, tokens) {
             return parseLengthPercentageTuple(tokens.filter(isLengthPercentage));
           }
         };
@@ -2885,7 +2902,7 @@ var TraceBugModule = (() => {
           initialValue: "solid",
           prefix: false,
           type: 2,
-          parse: function(_context, style) {
+          parse: function(_context2, style) {
             switch (style) {
               case "none":
                 return 0;
@@ -2910,7 +2927,7 @@ var TraceBugModule = (() => {
           initialValue: "0",
           type: 0,
           prefix: false,
-          parse: function(_context, token) {
+          parse: function(_context2, token) {
             if (isDimensionToken(token)) {
               return token.number;
             }
@@ -2934,7 +2951,7 @@ var TraceBugModule = (() => {
         initialValue: "ltr",
         prefix: false,
         type: 2,
-        parse: function(_context, direction2) {
+        parse: function(_context2, direction2) {
           switch (direction2) {
             case "rtl":
               return 1;
@@ -2949,7 +2966,7 @@ var TraceBugModule = (() => {
         initialValue: "inline-block",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return tokens.filter(isIdentToken).reduce(
             function(bit, token) {
               return bit | parseDisplayValue(token.value);
@@ -3030,7 +3047,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: false,
         type: 2,
-        parse: function(_context, float2) {
+        parse: function(_context2, float2) {
           switch (float2) {
             case "left":
               return 1;
@@ -3049,7 +3066,7 @@ var TraceBugModule = (() => {
         initialValue: "0",
         prefix: false,
         type: 0,
-        parse: function(_context, token) {
+        parse: function(_context2, token) {
           if (token.type === 20 && token.value === "normal") {
             return 0;
           }
@@ -3071,7 +3088,7 @@ var TraceBugModule = (() => {
         initialValue: "normal",
         prefix: false,
         type: 2,
-        parse: function(_context, lineBreak2) {
+        parse: function(_context2, lineBreak2) {
           switch (lineBreak2) {
             case "strict":
               return LINE_BREAK.STRICT;
@@ -3103,11 +3120,11 @@ var TraceBugModule = (() => {
         initialValue: "none",
         type: 0,
         prefix: false,
-        parse: function(context, token) {
+        parse: function(context2, token) {
           if (token.type === 20 && token.value === "none") {
             return null;
           }
-          return image.parse(context, token);
+          return image.parse(context2, token);
         }
       };
       listStylePosition = {
@@ -3115,7 +3132,7 @@ var TraceBugModule = (() => {
         initialValue: "outside",
         prefix: false,
         type: 2,
-        parse: function(_context, position2) {
+        parse: function(_context2, position2) {
           switch (position2) {
             case "inside":
               return 0;
@@ -3130,7 +3147,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: false,
         type: 2,
-        parse: function(_context, type) {
+        parse: function(_context2, type) {
           switch (type) {
             case "disc":
               return 0;
@@ -3262,7 +3279,7 @@ var TraceBugModule = (() => {
         initialValue: "visible",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return tokens.filter(isIdentToken).map(function(overflow2) {
             switch (overflow2.value) {
               case "hidden":
@@ -3285,7 +3302,7 @@ var TraceBugModule = (() => {
         initialValue: "normal",
         prefix: false,
         type: 2,
-        parse: function(_context, overflow2) {
+        parse: function(_context2, overflow2) {
           switch (overflow2) {
             case "break-word":
               return "break-word";
@@ -3313,7 +3330,7 @@ var TraceBugModule = (() => {
         initialValue: "left",
         prefix: false,
         type: 2,
-        parse: function(_context, textAlign2) {
+        parse: function(_context2, textAlign2) {
           switch (textAlign2) {
             case "right":
               return 2;
@@ -3331,7 +3348,7 @@ var TraceBugModule = (() => {
         initialValue: "static",
         prefix: false,
         type: 2,
-        parse: function(_context, position2) {
+        parse: function(_context2, position2) {
           switch (position2) {
             case "relative":
               return 1;
@@ -3350,7 +3367,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         type: 1,
         prefix: false,
-        parse: function(context, tokens) {
+        parse: function(context2, tokens) {
           if (tokens.length === 1 && isIdentWithValue(tokens[0], "none")) {
             return [];
           }
@@ -3374,7 +3391,7 @@ var TraceBugModule = (() => {
                 }
                 c++;
               } else {
-                shadow.color = color$1.parse(context, token);
+                shadow.color = color$1.parse(context2, token);
               }
             }
             return shadow;
@@ -3386,7 +3403,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: false,
         type: 2,
-        parse: function(_context, textTransform2) {
+        parse: function(_context2, textTransform2) {
           switch (textTransform2) {
             case "uppercase":
               return 2;
@@ -3403,7 +3420,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: true,
         type: 0,
-        parse: function(_context, token) {
+        parse: function(_context2, token) {
           if (token.type === 20 && token.value === "none") {
             return null;
           }
@@ -3461,7 +3478,7 @@ var TraceBugModule = (() => {
         initialValue: "50% 50%",
         prefix: true,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           var origins = tokens.filter(isLengthPercentage);
           if (origins.length !== 2) {
             return DEFAULT;
@@ -3474,7 +3491,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: false,
         type: 2,
-        parse: function(_context, visibility2) {
+        parse: function(_context2, visibility2) {
           switch (visibility2) {
             case "hidden":
               return 1;
@@ -3496,7 +3513,7 @@ var TraceBugModule = (() => {
         initialValue: "normal",
         prefix: false,
         type: 2,
-        parse: function(_context, wordBreak2) {
+        parse: function(_context2, wordBreak2) {
           switch (wordBreak2) {
             case "break-all":
               return WORD_BREAK.BREAK_ALL;
@@ -3513,7 +3530,7 @@ var TraceBugModule = (() => {
         initialValue: "auto",
         prefix: false,
         type: 0,
-        parse: function(_context, token) {
+        parse: function(_context2, token) {
           if (token.type === 20) {
             return { auto: true, order: 0 };
           }
@@ -3525,7 +3542,7 @@ var TraceBugModule = (() => {
       };
       time = {
         name: "time",
-        parse: function(_context, value) {
+        parse: function(_context2, value) {
           if (value.type === 15) {
             switch (value.unit.toLowerCase()) {
               case "s":
@@ -3542,7 +3559,7 @@ var TraceBugModule = (() => {
         initialValue: "1",
         type: 0,
         prefix: false,
-        parse: function(_context, token) {
+        parse: function(_context2, token) {
           if (isNumberToken(token)) {
             return token.number;
           }
@@ -3561,7 +3578,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return tokens.filter(isIdentToken).map(function(token) {
             switch (token.value) {
               case "underline":
@@ -3584,7 +3601,7 @@ var TraceBugModule = (() => {
         initialValue: "",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           var accumulator = [];
           var results = [];
           tokens.forEach(function(token) {
@@ -3622,7 +3639,7 @@ var TraceBugModule = (() => {
         initialValue: "normal",
         type: 0,
         prefix: false,
-        parse: function(_context, token) {
+        parse: function(_context2, token) {
           if (isNumberToken(token)) {
             return token.number;
           }
@@ -3643,7 +3660,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         type: 1,
         prefix: false,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           return tokens.filter(isIdentToken).map(function(token) {
             return token.value;
           });
@@ -3654,7 +3671,7 @@ var TraceBugModule = (() => {
         initialValue: "normal",
         prefix: false,
         type: 2,
-        parse: function(_context, overflow2) {
+        parse: function(_context2, overflow2) {
           switch (overflow2) {
             case "oblique":
               return "oblique";
@@ -3674,7 +3691,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         type: 1,
         prefix: false,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           if (tokens.length === 0) {
             return [];
           }
@@ -3690,7 +3707,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: true,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           if (tokens.length === 0) {
             return null;
           }
@@ -3716,7 +3733,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: true,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           if (tokens.length === 0) {
             return [];
           }
@@ -3738,9 +3755,9 @@ var TraceBugModule = (() => {
         initialValue: "0s",
         prefix: false,
         type: 1,
-        parse: function(context, tokens) {
+        parse: function(context2, tokens) {
           return tokens.filter(isDimensionToken).map(function(token) {
-            return time.parse(context, token);
+            return time.parse(context2, token);
           });
         }
       };
@@ -3749,7 +3766,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         prefix: true,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           if (tokens.length === 0) {
             return null;
           }
@@ -3785,7 +3802,7 @@ var TraceBugModule = (() => {
         initialValue: "none",
         type: 1,
         prefix: false,
-        parse: function(context, tokens) {
+        parse: function(context2, tokens) {
           if (tokens.length === 1 && isIdentWithValue(tokens[0], "none")) {
             return [];
           }
@@ -3815,7 +3832,7 @@ var TraceBugModule = (() => {
                 }
                 c++;
               } else {
-                shadow.color = color$1.parse(context, token);
+                shadow.color = color$1.parse(context2, token);
               }
             }
             return shadow;
@@ -3827,7 +3844,7 @@ var TraceBugModule = (() => {
         initialValue: "normal",
         prefix: false,
         type: 1,
-        parse: function(_context, tokens) {
+        parse: function(_context2, tokens) {
           var DEFAULT_VALUE2 = [
             0,
             1,
@@ -3877,7 +3894,7 @@ var TraceBugModule = (() => {
         initialValue: "0",
         type: 0,
         prefix: false,
-        parse: function(_context, token) {
+        parse: function(_context2, token) {
           if (isDimensionToken(token)) {
             return token.number;
           }
@@ -3886,75 +3903,75 @@ var TraceBugModule = (() => {
       };
       CSSParsedDeclaration = /** @class */
       (function() {
-        function CSSParsedDeclaration2(context, declaration) {
+        function CSSParsedDeclaration2(context2, declaration) {
           var _a, _b;
-          this.animationDuration = parse(context, duration, declaration.animationDuration);
-          this.backgroundClip = parse(context, backgroundClip, declaration.backgroundClip);
-          this.backgroundColor = parse(context, backgroundColor, declaration.backgroundColor);
-          this.backgroundImage = parse(context, backgroundImage, declaration.backgroundImage);
-          this.backgroundOrigin = parse(context, backgroundOrigin, declaration.backgroundOrigin);
-          this.backgroundPosition = parse(context, backgroundPosition, declaration.backgroundPosition);
-          this.backgroundRepeat = parse(context, backgroundRepeat, declaration.backgroundRepeat);
-          this.backgroundSize = parse(context, backgroundSize, declaration.backgroundSize);
-          this.borderTopColor = parse(context, borderTopColor, declaration.borderTopColor);
-          this.borderRightColor = parse(context, borderRightColor, declaration.borderRightColor);
-          this.borderBottomColor = parse(context, borderBottomColor, declaration.borderBottomColor);
-          this.borderLeftColor = parse(context, borderLeftColor, declaration.borderLeftColor);
-          this.borderTopLeftRadius = parse(context, borderTopLeftRadius, declaration.borderTopLeftRadius);
-          this.borderTopRightRadius = parse(context, borderTopRightRadius, declaration.borderTopRightRadius);
-          this.borderBottomRightRadius = parse(context, borderBottomRightRadius, declaration.borderBottomRightRadius);
-          this.borderBottomLeftRadius = parse(context, borderBottomLeftRadius, declaration.borderBottomLeftRadius);
-          this.borderTopStyle = parse(context, borderTopStyle, declaration.borderTopStyle);
-          this.borderRightStyle = parse(context, borderRightStyle, declaration.borderRightStyle);
-          this.borderBottomStyle = parse(context, borderBottomStyle, declaration.borderBottomStyle);
-          this.borderLeftStyle = parse(context, borderLeftStyle, declaration.borderLeftStyle);
-          this.borderTopWidth = parse(context, borderTopWidth, declaration.borderTopWidth);
-          this.borderRightWidth = parse(context, borderRightWidth, declaration.borderRightWidth);
-          this.borderBottomWidth = parse(context, borderBottomWidth, declaration.borderBottomWidth);
-          this.borderLeftWidth = parse(context, borderLeftWidth, declaration.borderLeftWidth);
-          this.boxShadow = parse(context, boxShadow, declaration.boxShadow);
-          this.color = parse(context, color, declaration.color);
-          this.direction = parse(context, direction, declaration.direction);
-          this.display = parse(context, display, declaration.display);
-          this.float = parse(context, float, declaration.cssFloat);
-          this.fontFamily = parse(context, fontFamily, declaration.fontFamily);
-          this.fontSize = parse(context, fontSize, declaration.fontSize);
-          this.fontStyle = parse(context, fontStyle, declaration.fontStyle);
-          this.fontVariant = parse(context, fontVariant, declaration.fontVariant);
-          this.fontWeight = parse(context, fontWeight, declaration.fontWeight);
-          this.letterSpacing = parse(context, letterSpacing, declaration.letterSpacing);
-          this.lineBreak = parse(context, lineBreak, declaration.lineBreak);
-          this.lineHeight = parse(context, lineHeight, declaration.lineHeight);
-          this.listStyleImage = parse(context, listStyleImage, declaration.listStyleImage);
-          this.listStylePosition = parse(context, listStylePosition, declaration.listStylePosition);
-          this.listStyleType = parse(context, listStyleType, declaration.listStyleType);
-          this.marginTop = parse(context, marginTop, declaration.marginTop);
-          this.marginRight = parse(context, marginRight, declaration.marginRight);
-          this.marginBottom = parse(context, marginBottom, declaration.marginBottom);
-          this.marginLeft = parse(context, marginLeft, declaration.marginLeft);
-          this.opacity = parse(context, opacity, declaration.opacity);
-          var overflowTuple = parse(context, overflow, declaration.overflow);
+          this.animationDuration = parse(context2, duration, declaration.animationDuration);
+          this.backgroundClip = parse(context2, backgroundClip, declaration.backgroundClip);
+          this.backgroundColor = parse(context2, backgroundColor, declaration.backgroundColor);
+          this.backgroundImage = parse(context2, backgroundImage, declaration.backgroundImage);
+          this.backgroundOrigin = parse(context2, backgroundOrigin, declaration.backgroundOrigin);
+          this.backgroundPosition = parse(context2, backgroundPosition, declaration.backgroundPosition);
+          this.backgroundRepeat = parse(context2, backgroundRepeat, declaration.backgroundRepeat);
+          this.backgroundSize = parse(context2, backgroundSize, declaration.backgroundSize);
+          this.borderTopColor = parse(context2, borderTopColor, declaration.borderTopColor);
+          this.borderRightColor = parse(context2, borderRightColor, declaration.borderRightColor);
+          this.borderBottomColor = parse(context2, borderBottomColor, declaration.borderBottomColor);
+          this.borderLeftColor = parse(context2, borderLeftColor, declaration.borderLeftColor);
+          this.borderTopLeftRadius = parse(context2, borderTopLeftRadius, declaration.borderTopLeftRadius);
+          this.borderTopRightRadius = parse(context2, borderTopRightRadius, declaration.borderTopRightRadius);
+          this.borderBottomRightRadius = parse(context2, borderBottomRightRadius, declaration.borderBottomRightRadius);
+          this.borderBottomLeftRadius = parse(context2, borderBottomLeftRadius, declaration.borderBottomLeftRadius);
+          this.borderTopStyle = parse(context2, borderTopStyle, declaration.borderTopStyle);
+          this.borderRightStyle = parse(context2, borderRightStyle, declaration.borderRightStyle);
+          this.borderBottomStyle = parse(context2, borderBottomStyle, declaration.borderBottomStyle);
+          this.borderLeftStyle = parse(context2, borderLeftStyle, declaration.borderLeftStyle);
+          this.borderTopWidth = parse(context2, borderTopWidth, declaration.borderTopWidth);
+          this.borderRightWidth = parse(context2, borderRightWidth, declaration.borderRightWidth);
+          this.borderBottomWidth = parse(context2, borderBottomWidth, declaration.borderBottomWidth);
+          this.borderLeftWidth = parse(context2, borderLeftWidth, declaration.borderLeftWidth);
+          this.boxShadow = parse(context2, boxShadow, declaration.boxShadow);
+          this.color = parse(context2, color, declaration.color);
+          this.direction = parse(context2, direction, declaration.direction);
+          this.display = parse(context2, display, declaration.display);
+          this.float = parse(context2, float, declaration.cssFloat);
+          this.fontFamily = parse(context2, fontFamily, declaration.fontFamily);
+          this.fontSize = parse(context2, fontSize, declaration.fontSize);
+          this.fontStyle = parse(context2, fontStyle, declaration.fontStyle);
+          this.fontVariant = parse(context2, fontVariant, declaration.fontVariant);
+          this.fontWeight = parse(context2, fontWeight, declaration.fontWeight);
+          this.letterSpacing = parse(context2, letterSpacing, declaration.letterSpacing);
+          this.lineBreak = parse(context2, lineBreak, declaration.lineBreak);
+          this.lineHeight = parse(context2, lineHeight, declaration.lineHeight);
+          this.listStyleImage = parse(context2, listStyleImage, declaration.listStyleImage);
+          this.listStylePosition = parse(context2, listStylePosition, declaration.listStylePosition);
+          this.listStyleType = parse(context2, listStyleType, declaration.listStyleType);
+          this.marginTop = parse(context2, marginTop, declaration.marginTop);
+          this.marginRight = parse(context2, marginRight, declaration.marginRight);
+          this.marginBottom = parse(context2, marginBottom, declaration.marginBottom);
+          this.marginLeft = parse(context2, marginLeft, declaration.marginLeft);
+          this.opacity = parse(context2, opacity, declaration.opacity);
+          var overflowTuple = parse(context2, overflow, declaration.overflow);
           this.overflowX = overflowTuple[0];
           this.overflowY = overflowTuple[overflowTuple.length > 1 ? 1 : 0];
-          this.overflowWrap = parse(context, overflowWrap, declaration.overflowWrap);
-          this.paddingTop = parse(context, paddingTop, declaration.paddingTop);
-          this.paddingRight = parse(context, paddingRight, declaration.paddingRight);
-          this.paddingBottom = parse(context, paddingBottom, declaration.paddingBottom);
-          this.paddingLeft = parse(context, paddingLeft, declaration.paddingLeft);
-          this.paintOrder = parse(context, paintOrder, declaration.paintOrder);
-          this.position = parse(context, position, declaration.position);
-          this.textAlign = parse(context, textAlign, declaration.textAlign);
-          this.textDecorationColor = parse(context, textDecorationColor, (_a = declaration.textDecorationColor) !== null && _a !== void 0 ? _a : declaration.color);
-          this.textDecorationLine = parse(context, textDecorationLine, (_b = declaration.textDecorationLine) !== null && _b !== void 0 ? _b : declaration.textDecoration);
-          this.textShadow = parse(context, textShadow, declaration.textShadow);
-          this.textTransform = parse(context, textTransform, declaration.textTransform);
-          this.transform = parse(context, transform$1, declaration.transform);
-          this.transformOrigin = parse(context, transformOrigin, declaration.transformOrigin);
-          this.visibility = parse(context, visibility, declaration.visibility);
-          this.webkitTextStrokeColor = parse(context, webkitTextStrokeColor, declaration.webkitTextStrokeColor);
-          this.webkitTextStrokeWidth = parse(context, webkitTextStrokeWidth, declaration.webkitTextStrokeWidth);
-          this.wordBreak = parse(context, wordBreak, declaration.wordBreak);
-          this.zIndex = parse(context, zIndex, declaration.zIndex);
+          this.overflowWrap = parse(context2, overflowWrap, declaration.overflowWrap);
+          this.paddingTop = parse(context2, paddingTop, declaration.paddingTop);
+          this.paddingRight = parse(context2, paddingRight, declaration.paddingRight);
+          this.paddingBottom = parse(context2, paddingBottom, declaration.paddingBottom);
+          this.paddingLeft = parse(context2, paddingLeft, declaration.paddingLeft);
+          this.paintOrder = parse(context2, paintOrder, declaration.paintOrder);
+          this.position = parse(context2, position, declaration.position);
+          this.textAlign = parse(context2, textAlign, declaration.textAlign);
+          this.textDecorationColor = parse(context2, textDecorationColor, (_a = declaration.textDecorationColor) !== null && _a !== void 0 ? _a : declaration.color);
+          this.textDecorationLine = parse(context2, textDecorationLine, (_b = declaration.textDecorationLine) !== null && _b !== void 0 ? _b : declaration.textDecoration);
+          this.textShadow = parse(context2, textShadow, declaration.textShadow);
+          this.textTransform = parse(context2, textTransform, declaration.textTransform);
+          this.transform = parse(context2, transform$1, declaration.transform);
+          this.transformOrigin = parse(context2, transformOrigin, declaration.transformOrigin);
+          this.visibility = parse(context2, visibility, declaration.visibility);
+          this.webkitTextStrokeColor = parse(context2, webkitTextStrokeColor, declaration.webkitTextStrokeColor);
+          this.webkitTextStrokeWidth = parse(context2, webkitTextStrokeWidth, declaration.webkitTextStrokeWidth);
+          this.wordBreak = parse(context2, wordBreak, declaration.wordBreak);
+          this.zIndex = parse(context2, zIndex, declaration.zIndex);
         }
         CSSParsedDeclaration2.prototype.isVisible = function() {
           return this.display > 0 && this.opacity > 0 && this.visibility === 0;
@@ -4005,21 +4022,21 @@ var TraceBugModule = (() => {
       })();
       CSSParsedPseudoDeclaration = /** @class */
       /* @__PURE__ */ (function() {
-        function CSSParsedPseudoDeclaration2(context, declaration) {
-          this.content = parse(context, content, declaration.content);
-          this.quotes = parse(context, quotes, declaration.quotes);
+        function CSSParsedPseudoDeclaration2(context2, declaration) {
+          this.content = parse(context2, content, declaration.content);
+          this.quotes = parse(context2, quotes, declaration.quotes);
         }
         return CSSParsedPseudoDeclaration2;
       })();
       CSSParsedCounterDeclaration = /** @class */
       /* @__PURE__ */ (function() {
-        function CSSParsedCounterDeclaration2(context, declaration) {
-          this.counterIncrement = parse(context, counterIncrement, declaration.counterIncrement);
-          this.counterReset = parse(context, counterReset, declaration.counterReset);
+        function CSSParsedCounterDeclaration2(context2, declaration) {
+          this.counterIncrement = parse(context2, counterIncrement, declaration.counterIncrement);
+          this.counterReset = parse(context2, counterReset, declaration.counterReset);
         }
         return CSSParsedCounterDeclaration2;
       })();
-      parse = function(context, descriptor, style) {
+      parse = function(context2, descriptor, style) {
         var tokenizer = new Tokenizer();
         var value = style !== null && typeof style !== "undefined" ? style.toString() : descriptor.initialValue;
         tokenizer.write(value);
@@ -4027,21 +4044,21 @@ var TraceBugModule = (() => {
         switch (descriptor.type) {
           case 2:
             var token = parser.parseComponentValue();
-            return descriptor.parse(context, isIdentToken(token) ? token.value : descriptor.initialValue);
+            return descriptor.parse(context2, isIdentToken(token) ? token.value : descriptor.initialValue);
           case 0:
-            return descriptor.parse(context, parser.parseComponentValue());
+            return descriptor.parse(context2, parser.parseComponentValue());
           case 1:
-            return descriptor.parse(context, parser.parseComponentValues());
+            return descriptor.parse(context2, parser.parseComponentValues());
           case 4:
             return parser.parseComponentValue();
           case 3:
             switch (descriptor.format) {
               case "angle":
-                return angle.parse(context, parser.parseComponentValue());
+                return angle.parse(context2, parser.parseComponentValue());
               case "color":
-                return color$1.parse(context, parser.parseComponentValue());
+                return color$1.parse(context2, parser.parseComponentValue());
               case "image":
-                return image.parse(context, parser.parseComponentValue());
+                return image.parse(context2, parser.parseComponentValue());
               case "length":
                 var length_1 = parser.parseComponentValue();
                 return isLength(length_1) ? length_1 : ZERO_LENGTH;
@@ -4049,7 +4066,7 @@ var TraceBugModule = (() => {
                 var value_1 = parser.parseComponentValue();
                 return isLengthPercentage(value_1) ? value_1 : ZERO_LENGTH;
               case "time":
-                return time.parse(context, parser.parseComponentValue());
+                return time.parse(context2, parser.parseComponentValue());
             }
             break;
         }
@@ -4076,8 +4093,8 @@ var TraceBugModule = (() => {
       };
       ElementContainer = /** @class */
       /* @__PURE__ */ (function() {
-        function ElementContainer2(context, element) {
-          this.context = context;
+        function ElementContainer2(context2, element) {
+          this.context = context2;
           this.textNodes = [];
           this.elements = [];
           this.flags = 0;
@@ -4088,7 +4105,7 @@ var TraceBugModule = (() => {
           )) {
             debugger;
           }
-          this.styles = new CSSParsedDeclaration(context, window.getComputedStyle(element, null));
+          this.styles = new CSSParsedDeclaration(context2, window.getComputedStyle(element, null));
           if (isHTMLElementNode(element)) {
             if (this.styles.animationDuration.some(function(duration2) {
               return duration2 > 0;
@@ -4573,7 +4590,7 @@ var TraceBugModule = (() => {
         }
         return TextBounds2;
       })();
-      parseTextBounds = function(context, value, styles, node) {
+      parseTextBounds = function(context2, value, styles, node) {
         var textList = breakText(value, styles);
         var textBounds = [];
         var offset = 0;
@@ -4585,15 +4602,15 @@ var TraceBugModule = (() => {
                 var subSegments = segmentGraphemes(text);
                 var subOffset_1 = 0;
                 subSegments.forEach(function(subSegment) {
-                  textBounds.push(new TextBounds(subSegment, Bounds.fromDOMRectList(context, createRange(node, subOffset_1 + offset, subSegment.length).getClientRects())));
+                  textBounds.push(new TextBounds(subSegment, Bounds.fromDOMRectList(context2, createRange(node, subOffset_1 + offset, subSegment.length).getClientRects())));
                   subOffset_1 += subSegment.length;
                 });
               } else {
-                textBounds.push(new TextBounds(text, Bounds.fromDOMRectList(context, clientRects)));
+                textBounds.push(new TextBounds(text, Bounds.fromDOMRectList(context2, clientRects)));
               }
             } else {
               var replacementNode = node.splitText(text.length);
-              textBounds.push(new TextBounds(text, getWrapperBounds(context, node)));
+              textBounds.push(new TextBounds(text, getWrapperBounds(context2, node)));
               node = replacementNode;
             }
           } else if (!FEATURES.SUPPORT_RANGE_BOUNDS) {
@@ -4603,7 +4620,7 @@ var TraceBugModule = (() => {
         });
         return textBounds;
       };
-      getWrapperBounds = function(context, node) {
+      getWrapperBounds = function(context2, node) {
         var ownerDocument = node.ownerDocument;
         if (ownerDocument) {
           var wrapper = ownerDocument.createElement("html2canvaswrapper");
@@ -4611,7 +4628,7 @@ var TraceBugModule = (() => {
           var parentNode = node.parentNode;
           if (parentNode) {
             parentNode.replaceChild(wrapper, node);
-            var bounds = parseBounds(context, wrapper);
+            var bounds = parseBounds(context2, wrapper);
             if (wrapper.firstChild) {
               parentNode.replaceChild(wrapper.firstChild, wrapper);
             }
@@ -4689,9 +4706,9 @@ var TraceBugModule = (() => {
       };
       TextContainer = /** @class */
       /* @__PURE__ */ (function() {
-        function TextContainer2(context, node, styles) {
+        function TextContainer2(context2, node, styles) {
           this.text = transform(node.data, styles.textTransform);
-          this.textBounds = parseTextBounds(context, this.text, styles, node);
+          this.textBounds = parseTextBounds(context2, this.text, styles, node);
         }
         return TextContainer2;
       })();
@@ -4717,8 +4734,8 @@ var TraceBugModule = (() => {
       ImageElementContainer = /** @class */
       (function(_super) {
         __extends(ImageElementContainer2, _super);
-        function ImageElementContainer2(context, img) {
-          var _this = _super.call(this, context, img) || this;
+        function ImageElementContainer2(context2, img) {
+          var _this = _super.call(this, context2, img) || this;
           _this.src = img.currentSrc || img.src;
           _this.intrinsicWidth = img.naturalWidth;
           _this.intrinsicHeight = img.naturalHeight;
@@ -4730,8 +4747,8 @@ var TraceBugModule = (() => {
       CanvasElementContainer = /** @class */
       (function(_super) {
         __extends(CanvasElementContainer2, _super);
-        function CanvasElementContainer2(context, canvas) {
-          var _this = _super.call(this, context, canvas) || this;
+        function CanvasElementContainer2(context2, canvas) {
+          var _this = _super.call(this, context2, canvas) || this;
           _this.canvas = canvas;
           _this.intrinsicWidth = canvas.width;
           _this.intrinsicHeight = canvas.height;
@@ -4742,10 +4759,10 @@ var TraceBugModule = (() => {
       SVGElementContainer = /** @class */
       (function(_super) {
         __extends(SVGElementContainer2, _super);
-        function SVGElementContainer2(context, img) {
-          var _this = _super.call(this, context, img) || this;
+        function SVGElementContainer2(context2, img) {
+          var _this = _super.call(this, context2, img) || this;
           var s = new XMLSerializer();
-          var bounds = parseBounds(context, img);
+          var bounds = parseBounds(context2, img);
           img.setAttribute("width", bounds.width + "px");
           img.setAttribute("height", bounds.height + "px");
           _this.svg = "data:image/svg+xml," + encodeURIComponent(s.serializeToString(img));
@@ -4759,8 +4776,8 @@ var TraceBugModule = (() => {
       LIElementContainer = /** @class */
       (function(_super) {
         __extends(LIElementContainer2, _super);
-        function LIElementContainer2(context, element) {
-          var _this = _super.call(this, context, element) || this;
+        function LIElementContainer2(context2, element) {
+          var _this = _super.call(this, context2, element) || this;
           _this.value = element.value;
           return _this;
         }
@@ -4769,8 +4786,8 @@ var TraceBugModule = (() => {
       OLElementContainer = /** @class */
       (function(_super) {
         __extends(OLElementContainer2, _super);
-        function OLElementContainer2(context, element) {
-          var _this = _super.call(this, context, element) || this;
+        function OLElementContainer2(context2, element) {
+          var _this = _super.call(this, context2, element) || this;
           _this.start = element.start;
           _this.reversed = typeof element.reversed === "boolean" && element.reversed === true;
           return _this;
@@ -4811,8 +4828,8 @@ var TraceBugModule = (() => {
       InputElementContainer = /** @class */
       (function(_super) {
         __extends(InputElementContainer2, _super);
-        function InputElementContainer2(context, input) {
-          var _this = _super.call(this, context, input) || this;
+        function InputElementContainer2(context2, input) {
+          var _this = _super.call(this, context2, input) || this;
           _this.type = input.type.toLowerCase();
           _this.checked = input.checked;
           _this.value = getInputValue(input);
@@ -4846,8 +4863,8 @@ var TraceBugModule = (() => {
       SelectElementContainer = /** @class */
       (function(_super) {
         __extends(SelectElementContainer2, _super);
-        function SelectElementContainer2(context, element) {
-          var _this = _super.call(this, context, element) || this;
+        function SelectElementContainer2(context2, element) {
+          var _this = _super.call(this, context2, element) || this;
           var option = element.options[element.selectedIndex || 0];
           _this.value = option ? option.text || "" : "";
           return _this;
@@ -4857,8 +4874,8 @@ var TraceBugModule = (() => {
       TextareaElementContainer = /** @class */
       (function(_super) {
         __extends(TextareaElementContainer2, _super);
-        function TextareaElementContainer2(context, element) {
-          var _this = _super.call(this, context, element) || this;
+        function TextareaElementContainer2(context2, element) {
+          var _this = _super.call(this, context2, element) || this;
           _this.value = element.value;
           return _this;
         }
@@ -4867,17 +4884,17 @@ var TraceBugModule = (() => {
       IFrameElementContainer = /** @class */
       (function(_super) {
         __extends(IFrameElementContainer2, _super);
-        function IFrameElementContainer2(context, iframe) {
-          var _this = _super.call(this, context, iframe) || this;
+        function IFrameElementContainer2(context2, iframe) {
+          var _this = _super.call(this, context2, iframe) || this;
           _this.src = iframe.src;
           _this.width = parseInt(iframe.width, 10) || 0;
           _this.height = parseInt(iframe.height, 10) || 0;
           _this.backgroundColor = _this.styles.backgroundColor;
           try {
             if (iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.documentElement) {
-              _this.tree = parseTree(context, iframe.contentWindow.document.documentElement);
-              var documentBackgroundColor = iframe.contentWindow.document.documentElement ? parseColor(context, getComputedStyle(iframe.contentWindow.document.documentElement).backgroundColor) : COLORS.TRANSPARENT;
-              var bodyBackgroundColor = iframe.contentWindow.document.body ? parseColor(context, getComputedStyle(iframe.contentWindow.document.body).backgroundColor) : COLORS.TRANSPARENT;
+              _this.tree = parseTree(context2, iframe.contentWindow.document.documentElement);
+              var documentBackgroundColor = iframe.contentWindow.document.documentElement ? parseColor(context2, getComputedStyle(iframe.contentWindow.document.documentElement).backgroundColor) : COLORS.TRANSPARENT;
+              var bodyBackgroundColor = iframe.contentWindow.document.body ? parseColor(context2, getComputedStyle(iframe.contentWindow.document.body).backgroundColor) : COLORS.TRANSPARENT;
               _this.backgroundColor = isTransparent(documentBackgroundColor) ? isTransparent(bodyBackgroundColor) ? _this.styles.backgroundColor : bodyBackgroundColor : documentBackgroundColor;
             }
           } catch (e2) {
@@ -4887,18 +4904,18 @@ var TraceBugModule = (() => {
         return IFrameElementContainer2;
       })(ElementContainer);
       LIST_OWNERS = ["OL", "UL", "MENU"];
-      parseNodeTree = function(context, node, parent, root) {
+      parseNodeTree = function(context2, node, parent, root) {
         for (var childNode = node.firstChild, nextNode = void 0; childNode; childNode = nextNode) {
           nextNode = childNode.nextSibling;
           if (isTextNode(childNode) && childNode.data.trim().length > 0) {
-            parent.textNodes.push(new TextContainer(context, childNode, parent.styles));
+            parent.textNodes.push(new TextContainer(context2, childNode, parent.styles));
           } else if (isElementNode(childNode)) {
             if (isSlotElement(childNode) && childNode.assignedNodes) {
               childNode.assignedNodes().forEach(function(childNode2) {
-                return parseNodeTree(context, childNode2, parent, root);
+                return parseNodeTree(context2, childNode2, parent, root);
               });
             } else {
-              var container = createContainer(context, childNode);
+              var container = createContainer(context2, childNode);
               if (container.styles.isVisible()) {
                 if (createsRealStackingContext(childNode, container, root)) {
                   container.flags |= 4;
@@ -4911,49 +4928,49 @@ var TraceBugModule = (() => {
                 parent.elements.push(container);
                 childNode.slot;
                 if (childNode.shadowRoot) {
-                  parseNodeTree(context, childNode.shadowRoot, container, root);
+                  parseNodeTree(context2, childNode.shadowRoot, container, root);
                 } else if (!isTextareaElement(childNode) && !isSVGElement(childNode) && !isSelectElement(childNode)) {
-                  parseNodeTree(context, childNode, container, root);
+                  parseNodeTree(context2, childNode, container, root);
                 }
               }
             }
           }
         }
       };
-      createContainer = function(context, element) {
+      createContainer = function(context2, element) {
         if (isImageElement(element)) {
-          return new ImageElementContainer(context, element);
+          return new ImageElementContainer(context2, element);
         }
         if (isCanvasElement(element)) {
-          return new CanvasElementContainer(context, element);
+          return new CanvasElementContainer(context2, element);
         }
         if (isSVGElement(element)) {
-          return new SVGElementContainer(context, element);
+          return new SVGElementContainer(context2, element);
         }
         if (isLIElement(element)) {
-          return new LIElementContainer(context, element);
+          return new LIElementContainer(context2, element);
         }
         if (isOLElement(element)) {
-          return new OLElementContainer(context, element);
+          return new OLElementContainer(context2, element);
         }
         if (isInputElement(element)) {
-          return new InputElementContainer(context, element);
+          return new InputElementContainer(context2, element);
         }
         if (isSelectElement(element)) {
-          return new SelectElementContainer(context, element);
+          return new SelectElementContainer(context2, element);
         }
         if (isTextareaElement(element)) {
-          return new TextareaElementContainer(context, element);
+          return new TextareaElementContainer(context2, element);
         }
         if (isIFrameElement(element)) {
-          return new IFrameElementContainer(context, element);
+          return new IFrameElementContainer(context2, element);
         }
-        return new ElementContainer(context, element);
+        return new ElementContainer(context2, element);
       };
-      parseTree = function(context, element) {
-        var container = createContainer(context, element);
+      parseTree = function(context2, element) {
+        var container = createContainer(context2, element);
         container.flags |= 4;
-        parseNodeTree(context, element, container, container);
+        parseNodeTree(context2, element, container, container);
         return container;
       };
       createsRealStackingContext = function(node, container, root) {
@@ -5494,8 +5511,8 @@ var TraceBugModule = (() => {
       IGNORE_ATTRIBUTE = "data-html2canvas-ignore";
       DocumentCloner = /** @class */
       (function() {
-        function DocumentCloner2(context, element, options) {
-          this.context = context;
+        function DocumentCloner2(context2, element, options) {
+          this.context = context2;
           this.options = options;
           this.scrolledElements = [];
           this.referenceElement = element;
@@ -5972,8 +5989,8 @@ var TraceBugModule = (() => {
       })();
       Cache = /** @class */
       (function() {
-        function Cache2(context, _options) {
-          this.context = context;
+        function Cache2(context2, _options) {
+          this.context = context2;
           this._options = _options;
           this._cache = {};
         }
@@ -6823,8 +6840,8 @@ var TraceBugModule = (() => {
       })();
       Renderer = /** @class */
       /* @__PURE__ */ (function() {
-        function Renderer2(context, options) {
-          this.context = context;
+        function Renderer2(context2, options) {
+          this.context = context2;
           this.options = options;
         }
         return Renderer2;
@@ -6833,8 +6850,8 @@ var TraceBugModule = (() => {
       CanvasRenderer = /** @class */
       (function(_super) {
         __extends(CanvasRenderer2, _super);
-        function CanvasRenderer2(context, options) {
-          var _this = _super.call(this, context, options) || this;
+        function CanvasRenderer2(context2, options) {
+          var _this = _super.call(this, context2, options) || this;
           _this._activeEffects = [];
           _this.canvas = options.canvas ? options.canvas : document.createElement("canvas");
           _this.ctx = _this.canvas.getContext("2d");
@@ -7818,8 +7835,8 @@ var TraceBugModule = (() => {
       ForeignObjectRenderer = /** @class */
       (function(_super) {
         __extends(ForeignObjectRenderer2, _super);
-        function ForeignObjectRenderer2(context, options) {
-          var _this = _super.call(this, context, options) || this;
+        function ForeignObjectRenderer2(context2, options) {
+          var _this = _super.call(this, context2, options) || this;
           _this.canvas = options.canvas ? options.canvas : document.createElement("canvas");
           _this.ctx = _this.canvas.getContext("2d");
           _this.options = options;
@@ -7951,7 +7968,7 @@ var TraceBugModule = (() => {
       }
       renderElement = function(element, opts) {
         return __awaiter(void 0, void 0, void 0, function() {
-          var ownerDocument, defaultView, resourceOptions, contextOptions, windowOptions, windowBounds, context, foreignObjectRendering, cloneOptions, documentCloner, clonedElement, container, _a, width, height, left, top, backgroundColor2, renderOptions, canvas, renderer, root, renderer;
+          var ownerDocument, defaultView, resourceOptions, contextOptions, windowOptions, windowBounds, context2, foreignObjectRendering, cloneOptions, documentCloner, clonedElement, container, _a, width, height, left, top, backgroundColor2, renderOptions, canvas, renderer, root, renderer;
           var _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
           return __generator(this, function(_u) {
             switch (_u.label) {
@@ -7981,7 +7998,7 @@ var TraceBugModule = (() => {
                   scrollY: (_j = opts.scrollY) !== null && _j !== void 0 ? _j : defaultView.pageYOffset
                 };
                 windowBounds = new Bounds(windowOptions.scrollX, windowOptions.scrollY, windowOptions.windowWidth, windowOptions.windowHeight);
-                context = new Context(contextOptions, windowBounds);
+                context2 = new Context(contextOptions, windowBounds);
                 foreignObjectRendering = (_k = opts.foreignObjectRendering) !== null && _k !== void 0 ? _k : false;
                 cloneOptions = {
                   allowTaint: (_l = opts.allowTaint) !== null && _l !== void 0 ? _l : false,
@@ -7990,8 +8007,8 @@ var TraceBugModule = (() => {
                   inlineImages: foreignObjectRendering,
                   copyStyles: foreignObjectRendering
                 };
-                context.logger.debug("Starting document clone with size " + windowBounds.width + "x" + windowBounds.height + " scrolled to " + -windowBounds.left + "," + -windowBounds.top);
-                documentCloner = new DocumentCloner(context, element, cloneOptions);
+                context2.logger.debug("Starting document clone with size " + windowBounds.width + "x" + windowBounds.height + " scrolled to " + -windowBounds.left + "," + -windowBounds.top);
+                documentCloner = new DocumentCloner(context2, element, cloneOptions);
                 clonedElement = documentCloner.clonedReferenceElement;
                 if (!clonedElement) {
                   return [2, Promise.reject("Unable to find element in cloned iframe")];
@@ -7999,8 +8016,8 @@ var TraceBugModule = (() => {
                 return [4, documentCloner.toIFrame(ownerDocument, windowBounds)];
               case 1:
                 container = _u.sent();
-                _a = isBodyElement(clonedElement) || isHTMLElement(clonedElement) ? parseDocumentSize(clonedElement.ownerDocument) : parseBounds(context, clonedElement), width = _a.width, height = _a.height, left = _a.left, top = _a.top;
-                backgroundColor2 = parseBackgroundColor(context, clonedElement, opts.backgroundColor);
+                _a = isBodyElement(clonedElement) || isHTMLElement(clonedElement) ? parseDocumentSize(clonedElement.ownerDocument) : parseBounds(context2, clonedElement), width = _a.width, height = _a.height, left = _a.left, top = _a.top;
+                backgroundColor2 = parseBackgroundColor(context2, clonedElement, opts.backgroundColor);
                 renderOptions = {
                   canvas: opts.canvas,
                   backgroundColor: backgroundColor2,
@@ -8011,21 +8028,21 @@ var TraceBugModule = (() => {
                   height: (_s = opts.height) !== null && _s !== void 0 ? _s : Math.ceil(height)
                 };
                 if (!foreignObjectRendering) return [3, 3];
-                context.logger.debug("Document cloned, using foreign object rendering");
-                renderer = new ForeignObjectRenderer(context, renderOptions);
+                context2.logger.debug("Document cloned, using foreign object rendering");
+                renderer = new ForeignObjectRenderer(context2, renderOptions);
                 return [4, renderer.render(clonedElement)];
               case 2:
                 canvas = _u.sent();
                 return [3, 5];
               case 3:
-                context.logger.debug("Document cloned, element located at " + left + "," + top + " with size " + width + "x" + height + " using computed rendering");
-                context.logger.debug("Starting DOM parsing");
-                root = parseTree(context, clonedElement);
+                context2.logger.debug("Document cloned, element located at " + left + "," + top + " with size " + width + "x" + height + " using computed rendering");
+                context2.logger.debug("Starting DOM parsing");
+                root = parseTree(context2, clonedElement);
                 if (backgroundColor2 === root.styles.backgroundColor) {
                   root.styles.backgroundColor = COLORS.TRANSPARENT;
                 }
-                context.logger.debug("Starting renderer for element at " + renderOptions.x + "," + renderOptions.y + " with size " + renderOptions.width + "x" + renderOptions.height);
-                renderer = new CanvasRenderer(context, renderOptions);
+                context2.logger.debug("Starting renderer for element at " + renderOptions.x + "," + renderOptions.y + " with size " + renderOptions.width + "x" + renderOptions.height);
+                renderer = new CanvasRenderer(context2, renderOptions);
                 return [4, renderer.render(root)];
               case 4:
                 canvas = _u.sent();
@@ -8033,20 +8050,20 @@ var TraceBugModule = (() => {
               case 5:
                 if ((_t = opts.removeContainer) !== null && _t !== void 0 ? _t : true) {
                   if (!DocumentCloner.destroy(container)) {
-                    context.logger.error("Cannot detach cloned iframe as it is not in the DOM anymore");
+                    context2.logger.error("Cannot detach cloned iframe as it is not in the DOM anymore");
                   }
                 }
-                context.logger.debug("Finished rendering");
+                context2.logger.debug("Finished rendering");
                 return [2, canvas];
             }
           });
         });
       };
-      parseBackgroundColor = function(context, element, backgroundColorOverride) {
+      parseBackgroundColor = function(context2, element, backgroundColorOverride) {
         var ownerDocument = element.ownerDocument;
-        var documentBackgroundColor = ownerDocument.documentElement ? parseColor(context, getComputedStyle(ownerDocument.documentElement).backgroundColor) : COLORS.TRANSPARENT;
-        var bodyBackgroundColor = ownerDocument.body ? parseColor(context, getComputedStyle(ownerDocument.body).backgroundColor) : COLORS.TRANSPARENT;
-        var defaultBackgroundColor = typeof backgroundColorOverride === "string" ? parseColor(context, backgroundColorOverride) : backgroundColorOverride === null ? COLORS.TRANSPARENT : 4294967295;
+        var documentBackgroundColor = ownerDocument.documentElement ? parseColor(context2, getComputedStyle(ownerDocument.documentElement).backgroundColor) : COLORS.TRANSPARENT;
+        var bodyBackgroundColor = ownerDocument.body ? parseColor(context2, getComputedStyle(ownerDocument.body).backgroundColor) : COLORS.TRANSPARENT;
+        var defaultBackgroundColor = typeof backgroundColorOverride === "string" ? parseColor(context2, backgroundColorOverride) : backgroundColorOverride === null ? COLORS.TRANSPARENT : 4294967295;
         return element === ownerDocument.documentElement ? isTransparent(documentBackgroundColor) ? isTransparent(bodyBackgroundColor) ? defaultBackgroundColor : bodyBackgroundColor : documentBackgroundColor : defaultBackgroundColor;
       };
       html2canvas_esm_default = html2canvas;
@@ -8089,9 +8106,10 @@ var TraceBugModule = (() => {
     screenshotCounter = 0;
   }
   async function captureScreenshot(lastEvent, options) {
-    var _a, _b;
+    var _a, _b, _c, _d, _e;
     screenshotCounter++;
     const includeAnnotations = (_a = options == null ? void 0 : options.includeAnnotations) != null ? _a : false;
+    const highlightClicked = (_b = options == null ? void 0 : options.highlightClicked) != null ? _b : false;
     const eventContext = lastEvent ? buildEventLabel(lastEvent) : includeAnnotations ? "annotated_capture" : "manual_capture";
     const filename = `${String(screenshotCounter).padStart(2, "0")}_${sanitizeFilename(eventContext)}.png`;
     const root = document.getElementById("tracebug-root");
@@ -8099,7 +8117,7 @@ var TraceBugModule = (() => {
     if (root) {
       if (includeAnnotations) {
         for (const child of Array.from(root.children)) {
-          const tag = ((_b = child.dataset) == null ? void 0 : _b.tracebug) || child.id || "";
+          const tag = ((_c = child.dataset) == null ? void 0 : _c.tracebug) || child.id || "";
           const isAnnotation = tag === "annotation-badge" || tag === "annotation-outline";
           if (!isAnnotation) {
             child.style.display = "none";
@@ -8164,10 +8182,26 @@ var TraceBugModule = (() => {
     } else {
       if (root) root.style.display = "";
     }
+    let originalDataUrl;
+    if (highlightClicked && (lastEvent == null ? void 0 : lastEvent.type) === "click") {
+      const bbox = (_e = (_d = lastEvent == null ? void 0 : lastEvent.data) == null ? void 0 : _d.element) == null ? void 0 : _e.boundingBox;
+      if (bbox && isBoundingBoxInViewport(bbox)) {
+        try {
+          const highlighted = await drawClickHighlight(dataUrl, bbox);
+          if (highlighted) {
+            originalDataUrl = dataUrl;
+            dataUrl = highlighted;
+          }
+        } catch (err) {
+          if (typeof console !== "undefined") console.warn("[TraceBug] Click highlight failed:", err);
+        }
+      }
+    }
     const screenshot = {
       id: `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
       dataUrl,
+      originalDataUrl,
       filename,
       eventContext,
       page: window.location.pathname,
@@ -8245,6 +8279,136 @@ var TraceBugModule = (() => {
   }
   function sanitizeFilename(str) {
     return str.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 50);
+  }
+  function isBoundingBoxInViewport(bbox) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (bbox.width <= 0 || bbox.height <= 0) return false;
+    if (bbox.x + bbox.width < 0 || bbox.y + bbox.height < 0) return false;
+    if (bbox.x > vw || bbox.y > vh) return false;
+    return true;
+  }
+  async function drawClickHighlight(dataUrl, bbox) {
+    const img = await loadImage(dataUrl);
+    if (!img) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    if (typeof ctx.roundRect !== "function") {
+      ctx.roundRect = function(x2, y2, w2, h2, r) {
+        const rad = Math.min(r, w2 / 2, h2 / 2);
+        this.moveTo(x2 + rad, y2);
+        this.lineTo(x2 + w2 - rad, y2);
+        this.quadraticCurveTo(x2 + w2, y2, x2 + w2, y2 + rad);
+        this.lineTo(x2 + w2, y2 + h2 - rad);
+        this.quadraticCurveTo(x2 + w2, y2 + h2, x2 + w2 - rad, y2 + h2);
+        this.lineTo(x2 + rad, y2 + h2);
+        this.quadraticCurveTo(x2, y2 + h2, x2, y2 + h2 - rad);
+        this.lineTo(x2, y2 + rad);
+        this.quadraticCurveTo(x2, y2, x2 + rad, y2);
+        this.closePath();
+      };
+    }
+    ctx.drawImage(img, 0, 0);
+    const scaleX = canvas.width / window.innerWidth;
+    const scaleY = canvas.height / window.innerHeight;
+    const x = bbox.x * scaleX;
+    const y = bbox.y * scaleY;
+    const w = bbox.width * scaleX;
+    const h = bbox.height * scaleY;
+    const padding = 8 * Math.max(scaleX, 1);
+    const maxW = canvas.width * 0.8;
+    const maxH = canvas.height * 0.8;
+    const ringW = Math.min(w + padding * 2, maxW);
+    const ringH = Math.min(h + padding * 2, maxH);
+    const ringX = x - padding;
+    const ringY = y - padding;
+    const ringR = Math.min(ringW, ringH) / 2 + 4;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
+    ctx.clip();
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+    ctx.strokeStyle = "rgba(123, 97, 255, 0.85)";
+    ctx.lineWidth = Math.max(4 * scaleX, 3);
+    ctx.beginPath();
+    ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
+    ctx.stroke();
+    drawArrowToBox(ctx, canvas.width, canvas.height, ringX, ringY, ringW, ringH, scaleX);
+    try {
+      return canvas.toDataURL("image/png", 0.85);
+    } catch (e2) {
+      return null;
+    }
+  }
+  function drawArrowToBox(ctx, cw, ch, rx, ry, rw, rh, scale) {
+    const cx = rx + rw / 2;
+    const cy = ry + rh / 2;
+    const distLeft = rx;
+    const distRight = cw - (rx + rw);
+    const distTop = ry;
+    const distBottom = ch - (ry + rh);
+    const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+    let startX, startY, endX, endY;
+    const margin = 24 * scale;
+    if (minDist === distLeft) {
+      startX = Math.max(8 * scale, rx - margin - 60 * scale);
+      startY = cy;
+      endX = rx - 6 * scale;
+      endY = cy;
+    } else if (minDist === distRight) {
+      startX = Math.min(cw - 8 * scale, rx + rw + margin + 60 * scale);
+      startY = cy;
+      endX = rx + rw + 6 * scale;
+      endY = cy;
+    } else if (minDist === distTop) {
+      startX = cx;
+      startY = Math.max(8 * scale, ry - margin - 60 * scale);
+      endX = cx;
+      endY = ry - 6 * scale;
+    } else {
+      startX = cx;
+      startY = Math.min(ch - 8 * scale, ry + rh + margin + 60 * scale);
+      endX = cx;
+      endY = ry + rh + 6 * scale;
+    }
+    ctx.save();
+    ctx.strokeStyle = "rgba(123, 97, 255, 0.95)";
+    ctx.fillStyle = "rgba(123, 97, 255, 0.95)";
+    ctx.lineWidth = Math.max(3 * scale, 2);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    const angle2 = Math.atan2(endY - startY, endX - startX);
+    const head = 14 * scale;
+    ctx.beginPath();
+    ctx.moveTo(endX, endY);
+    ctx.lineTo(endX - head * Math.cos(angle2 - Math.PI / 6), endY - head * Math.sin(angle2 - Math.PI / 6));
+    ctx.lineTo(endX - head * Math.cos(angle2 + Math.PI / 6), endY - head * Math.sin(angle2 + Math.PI / 6));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  function loadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
   }
   var _html2canvasPromise, MAX_SCREENSHOTS, screenshotCounter, screenshots;
   var init_screenshot = __esm({
@@ -8713,6 +8877,62 @@ var TraceBugModule = (() => {
       OrigXHR.prototype.send = origSend;
     };
   }
+  function _emitPerfEntry(emit, e2) {
+    if (!e2 || !e2.name) return;
+    try {
+      if (isInternalUrl(e2.name)) return;
+    } catch (e3) {
+    }
+    if (typeof e2.name === "string" && e2.name.indexOf("tracebug") !== -1) return;
+    const key = `${e2.name}|${Math.round(e2.startTime)}`;
+    if (_perfSeen.has(key)) return;
+    _perfSeen.add(key);
+    const navStart = typeof performance.timeOrigin === "number" ? performance.timeOrigin : Date.now();
+    const initiator = e2.initiatorType || "";
+    const method = (e2.method || "GET").toUpperCase();
+    const status = e2.responseStatus || 0;
+    const url = sanitizeUrl(e2.name).slice(0, 500);
+    const timestamp = Math.round(navStart + e2.startTime);
+    const durationMs = Math.round(e2.duration || 0);
+    try {
+      emit("api_request", {
+        request: { url, method, statusCode: status, durationMs, initiatorType: initiator },
+        _ts: timestamp
+      });
+    } catch (e3) {
+    }
+  }
+  function drainPerformanceNetwork(emit) {
+    if (typeof performance === "undefined") return;
+    try {
+      const entries = performance.getEntriesByType("resource");
+      for (const e2 of entries) _emitPerfEntry(emit, e2);
+    } catch (e2) {
+    }
+  }
+  function collectPerformanceNetwork(emit) {
+    if (typeof performance === "undefined" || typeof PerformanceObserver === "undefined") {
+      return () => {
+      };
+    }
+    drainPerformanceNetwork(emit);
+    let observer = null;
+    try {
+      observer = new PerformanceObserver((list) => {
+        for (const e2 of list.getEntries()) {
+          _emitPerfEntry(emit, e2);
+        }
+      });
+      observer.observe({ type: "resource", buffered: false });
+    } catch (e2) {
+    }
+    return () => {
+      try {
+        observer == null ? void 0 : observer.disconnect();
+      } catch (e2) {
+      }
+    };
+  }
   function collectErrors(emit) {
     const prevOnError = window.onerror;
     window.onerror = (msg, source, line, col, error) => {
@@ -8745,6 +8965,12 @@ var TraceBugModule = (() => {
       }
     };
     window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.onerror = prevOnError;
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }
+  function collectConsoleErrors(emit) {
     const origConsoleError = console.error;
     let _insideEmit = false;
     console.error = function(...args) {
@@ -8764,8 +8990,6 @@ var TraceBugModule = (() => {
       origConsoleError.apply(console, args);
     };
     return () => {
-      window.onerror = prevOnError;
-      window.removeEventListener("unhandledrejection", onRejection);
       console.error = origConsoleError;
     };
   }
@@ -8817,7 +9041,7 @@ var TraceBugModule = (() => {
       console.log = origLog;
     };
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, SENSITIVE_PARAM_RE, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, SENSITIVE_PARAM_RE, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -8843,6 +9067,7 @@ var TraceBugModule = (() => {
         /\/@vite\/client/,
         /\/@react-refresh/
       ];
+      _perfSeen = /* @__PURE__ */ new Set();
     }
   });
 
@@ -9059,20 +9284,190 @@ var TraceBugModule = (() => {
   });
 
   // src/video-recorder.ts
+  function setAutoStopHandler(cb) {
+    _onAutoStop = cb;
+  }
+  function isExtensionContext2() {
+    return !!window.__TRACEBUG_INITIALIZED__;
+  }
   function isVideoSupported() {
+    if (isExtensionContext2()) return true;
     return !!(typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function" && typeof window.MediaRecorder === "function");
   }
   function isVideoRecording() {
-    return _recorder !== null && _recorder.state === "recording";
-  }
-  function getVideoElapsedMs() {
-    return isVideoRecording() ? Date.now() - _startedAt : 0;
+    return _active;
   }
   function isRollingMode() {
-    return _rollingMode && isVideoRecording();
+    return _active && _mode === "rolling";
   }
   function getCaptureCount() {
     return _capturesTaken;
+  }
+  function getVideoElapsedMs() {
+    return _active ? Date.now() - _startedAt : 0;
+  }
+  function getLastVideoRecording() {
+    return _lastRecording;
+  }
+  async function startVideoRecording(options) {
+    if (_active) return false;
+    if (_startInFlight) return _startInFlight;
+    _startInFlight = _startVideoRecordingInner(options).finally(() => {
+      _startInFlight = null;
+    });
+    return _startInFlight;
+  }
+  async function _startVideoRecordingInner(options) {
+    _onStatus = (options == null ? void 0 : options.onStatus) || null;
+    const requestedMode = (options == null ? void 0 : options.mode) === "standard" ? "standard" : "rolling";
+    if (isExtensionContext2()) {
+      const result = await rpcCall("tb:rec:start", {
+        mode: requestedMode,
+        withMicrophone: !!(options == null ? void 0 : options.withMicrophone)
+      }).catch((err) => ({ ok: false, error: err && err.message || String(err) }));
+      if (!result || !result.ok) {
+        if ((result == null ? void 0 : result.error) === "cancelled") _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
+        else _onStatus == null ? void 0 : _onStatus("error", (result == null ? void 0 : result.error) || "Could not start screen capture.");
+        return false;
+      }
+      _active = true;
+      _startedAt = Date.now();
+      _mode = requestedMode;
+      _capturesTaken = 0;
+      _comments = [];
+      _mimeType = "video/webm";
+      _onStatus == null ? void 0 : _onStatus("recording");
+      return true;
+    }
+    return startVideoRecordingInPage(requestedMode, options);
+  }
+  function stopVideoRecording() {
+    if (!_active) return Promise.resolve(null);
+    if (isExtensionContext2()) {
+      return rpcCall("tb:rec:stop").then((rec) => {
+        const recording = rec && !rec.error ? hydrateRecording(rec) : null;
+        if (recording) revokeAndStash(recording);
+        finalizeStop(recording);
+        return recording;
+      }).catch(() => {
+        finalizeStop(null);
+        return null;
+      });
+    }
+    return stopVideoRecordingInPage();
+  }
+  function captureRollingBuffer() {
+    if (!_active) return Promise.resolve(null);
+    if (isExtensionContext2()) {
+      return rpcCall("tb:rec:capture").then((rec) => {
+        if (!rec || rec.error) return null;
+        const recording = hydrateRecording(rec);
+        revokeAndStash(recording);
+        _capturesTaken += 1;
+        _comments = [];
+        return recording;
+      }).catch(() => null);
+    }
+    return captureRollingBufferInPage();
+  }
+  function addVideoComment(text) {
+    if (!_active) return null;
+    const trimmed = String(text || "").trim();
+    if (!trimmed) return null;
+    const c = { offsetMs: Date.now() - _startedAt, text: trimmed };
+    _comments.push(c);
+    if (isExtensionContext2()) {
+      rpcCall("tb:rec:comment", { text: trimmed }).catch(() => {
+      });
+    }
+    return c;
+  }
+  function clearVideoRecording() {
+    if (_lastRecording) {
+      try {
+        URL.revokeObjectURL(_lastRecording.url);
+      } catch (e2) {
+      }
+      _lastRecording = null;
+    }
+  }
+  function abortVideoRecording() {
+    if (isExtensionContext2()) {
+      if (_active) rpcCall("tb:rec:stop").catch(() => {
+      });
+    } else {
+      if (_recorder && _recorder.state !== "inactive") {
+        try {
+          _recorder.stop();
+        } catch (e2) {
+        }
+      }
+      _stream == null ? void 0 : _stream.getTracks().forEach((t) => t.stop());
+      _recorder = null;
+      _stream = null;
+      _chunks = [];
+    }
+    _active = false;
+    _comments = [];
+    _capturesTaken = 0;
+    _startedAt = 0;
+    _mode = "rolling";
+  }
+  function downloadVideoRecording(recording, filename = "tracebug-recording.webm") {
+    const a2 = document.createElement("a");
+    a2.href = recording.url;
+    a2.download = filename;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+  }
+  async function restoreFromOffscreenIfActive() {
+    if (!isExtensionContext2()) return false;
+    const status = await rpcCall("tb:rec:status").catch(() => null);
+    if (!status || !status.active) return false;
+    _active = true;
+    _mode = status.mode === "standard" ? "standard" : "rolling";
+    _capturesTaken = status.capturesTaken || 0;
+    _comments = Array.isArray(status.comments) ? status.comments.slice() : [];
+    _mimeType = status.mimeType || "video/webm";
+    _startedAt = status.startedAt || Date.now() - (status.elapsedMs || 0);
+    return true;
+  }
+  async function restoreLastRecordingFromOffscreen() {
+    if (!isExtensionContext2()) return null;
+    if (isUsableRecording(_lastRecording)) return _lastRecording;
+    try {
+      const raw = await rpcCall("tb:rec:last-recording").catch(() => null);
+      if (!raw) return null;
+      const recording = hydrateRecording(raw);
+      if (isUsableRecording(recording)) {
+        revokeAndStash(recording);
+        return recording;
+      }
+      return null;
+    } catch (e2) {
+      return null;
+    }
+  }
+  function wireAutoStopListener() {
+    if (_autoStopWired || typeof window === "undefined") return;
+    _autoStopWired = true;
+    window.addEventListener("tracebug-rec-auto-stopped", async (e2) => {
+      const detail = e2.detail;
+      const recRaw = detail == null ? void 0 : detail.recording;
+      let recording = recRaw ? hydrateRecording(recRaw) : null;
+      if (!isUsableRecording(recording)) {
+        try {
+          const raw = await rpcCall("tb:rec:last-recording").catch(() => null);
+          const pulled = raw ? hydrateRecording(raw) : null;
+          if (isUsableRecording(pulled)) recording = pulled;
+        } catch (e3) {
+        }
+      }
+      if (recording && isUsableRecording(recording)) revokeAndStash(recording);
+      finalizeStop(recording);
+      _onAutoStop == null ? void 0 : _onAutoStop(recording);
+    });
   }
   function pickMimeType() {
     const candidates = [
@@ -9089,14 +9484,11 @@ var TraceBugModule = (() => {
     }
     return "";
   }
-  async function startVideoRecording(options) {
-    var _a;
-    if (isVideoRecording()) return false;
+  async function startVideoRecordingInPage(requestedMode, options) {
     if (!isVideoSupported()) {
-      (_a = options == null ? void 0 : options.onStatus) == null ? void 0 : _a.call(options, "error", "Screen recording is not supported in this browser.");
+      _onStatus == null ? void 0 : _onStatus("error", "Screen recording is not supported in this browser.");
       return false;
     }
-    _onStatus = (options == null ? void 0 : options.onStatus) || null;
     let displayStream;
     try {
       displayStream = await navigator.mediaDevices.getDisplayMedia({
@@ -9123,7 +9515,7 @@ var TraceBugModule = (() => {
     _comments = [];
     _startedAt = Date.now();
     _mimeType = pickMimeType();
-    _rollingMode = (options == null ? void 0 : options.mode) !== "standard";
+    _mode = requestedMode;
     _capturesTaken = 0;
     try {
       _recorder = _mimeType ? new MediaRecorder(displayStream, { mimeType: _mimeType }) : new MediaRecorder(displayStream);
@@ -9138,17 +9530,20 @@ var TraceBugModule = (() => {
     };
     displayStream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", () => {
-        if (isVideoRecording()) stopVideoRecording().catch(() => {
+        if (_active) stopVideoRecording().catch(() => {
         });
       });
     });
     _recorder.start(1e3);
+    _active = true;
+    installInPageReloadGuards();
     _onStatus == null ? void 0 : _onStatus("recording");
     return true;
   }
-  function stopVideoRecording() {
+  function stopVideoRecordingInPage() {
     return new Promise((resolve) => {
       if (!_recorder || _recorder.state === "inactive") {
+        finalizeStop(null);
         resolve(null);
         return;
       }
@@ -9169,20 +9564,12 @@ var TraceBugModule = (() => {
           comments,
           startedAt
         };
-        if (_lastRecording && _lastRecording.url !== url) {
-          try {
-            URL.revokeObjectURL(_lastRecording.url);
-          } catch (e2) {
-          }
-        }
-        _lastRecording = recording;
+        revokeAndStash(recording);
         stream == null ? void 0 : stream.getTracks().forEach((t) => t.stop());
         _recorder = null;
         _stream = null;
         _chunks = [];
-        _comments = [];
-        _rollingMode = false;
-        _capturesTaken = 0;
+        finalizeStop(recording);
         _onStatus == null ? void 0 : _onStatus("stopped");
         resolve(recording);
       };
@@ -9193,7 +9580,7 @@ var TraceBugModule = (() => {
       }
     });
   }
-  function captureRollingBuffer() {
+  function captureRollingBufferInPage() {
     return new Promise((resolve) => {
       if (!_recorder || _recorder.state !== "recording") {
         resolve(null);
@@ -9218,13 +9605,7 @@ var TraceBugModule = (() => {
           comments: commentsCopy,
           startedAt
         };
-        if (_lastRecording && _lastRecording.url !== url) {
-          try {
-            URL.revokeObjectURL(_lastRecording.url);
-          } catch (e3) {
-          }
-        }
-        _lastRecording = recording;
+        revokeAndStash(recording);
         _capturesTaken += 1;
         _comments = [];
         resolve(recording);
@@ -9238,63 +9619,658 @@ var TraceBugModule = (() => {
       }
     });
   }
-  function addVideoComment(text) {
-    if (!isVideoRecording()) return null;
-    const trimmed = text.trim();
-    if (!trimmed) return null;
-    const c = { offsetMs: Date.now() - _startedAt, text: trimmed };
-    _comments.push(c);
-    return c;
+  function installInPageReloadGuards() {
+    if (_reloadGuardsInstalled) return;
+    _reloadGuardsInstalled = true;
+    window.addEventListener("beforeunload", (e2) => {
+      if (!_active || isExtensionContext2()) return;
+      e2.preventDefault();
+      e2.returnValue = "Recording in progress. Reload anyway? (Your video will be auto-saved.)";
+    });
+    window.addEventListener("pagehide", () => {
+      if (!_active || isExtensionContext2()) return;
+      if (!_recorder || _recorder.state === "inactive") return;
+      try {
+        _recorder.requestData();
+      } catch (e2) {
+      }
+      try {
+        const blob = new Blob(_chunks.slice(), { type: _mimeType || "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        const a2 = document.createElement("a");
+        a2.href = url;
+        a2.download = `tracebug-recording-interrupted-${stamp}.webm`;
+        document.body.appendChild(a2);
+        a2.click();
+        document.body.removeChild(a2);
+      } catch (e2) {
+      }
+    });
   }
-  function getLastVideoRecording() {
-    return _lastRecording;
+  function finalizeStop(_recording) {
+    _active = false;
+    _comments = [];
+    _capturesTaken = 0;
+    _startedAt = 0;
+    _mode = "rolling";
   }
-  function clearVideoRecording() {
-    if (_lastRecording) {
+  function isUsableRecording(rec) {
+    if (!rec) return false;
+    if (typeof rec.dataUrl !== "string" || !rec.dataUrl.startsWith("data:")) return false;
+    const comma = rec.dataUrl.indexOf(",");
+    if (comma < 0 || rec.dataUrl.length - comma - 1 < 100) return false;
+    return true;
+  }
+  function revokeAndStash(recording) {
+    if (!isUsableRecording(recording)) return;
+    if (_lastRecording && _lastRecording.url !== recording.url) {
       try {
         URL.revokeObjectURL(_lastRecording.url);
       } catch (e2) {
       }
-      _lastRecording = null;
+    }
+    _lastRecording = recording;
+  }
+  function hydrateRecording(raw) {
+    const dataUrl = (raw == null ? void 0 : raw.dataUrl) || "";
+    const mimeType = (raw == null ? void 0 : raw.mimeType) || "video/webm";
+    const blob = dataUrlToBlob(dataUrl, mimeType);
+    const url = blob.size > 0 ? URL.createObjectURL(blob) : dataUrl && dataUrl.startsWith("data:") ? dataUrl : URL.createObjectURL(blob);
+    return {
+      url,
+      blob,
+      dataUrl,
+      durationMs: Number(raw == null ? void 0 : raw.durationMs) || 0,
+      mimeType,
+      sizeBytes: typeof (raw == null ? void 0 : raw.sizeBytes) === "number" ? raw.sizeBytes : blob.size,
+      comments: Array.isArray(raw == null ? void 0 : raw.comments) ? raw.comments.slice() : [],
+      startedAt: Number(raw == null ? void 0 : raw.startedAt) || Date.now()
+    };
+  }
+  function dataUrlToBlob(dataUrl, fallbackMime) {
+    var _a;
+    if (!dataUrl) return new Blob([], { type: fallbackMime });
+    const marker = ";base64,";
+    const markerIdx = dataUrl.indexOf(marker);
+    let meta;
+    let body;
+    if (markerIdx >= 0) {
+      meta = dataUrl.slice(0, markerIdx);
+      body = dataUrl.slice(markerIdx + marker.length).replace(/\s+/g, "");
+    } else {
+      const comma = dataUrl.lastIndexOf(",");
+      if (comma < 0) return new Blob([], { type: fallbackMime });
+      meta = dataUrl.slice(0, comma);
+      body = dataUrl.slice(comma + 1).replace(/\s+/g, "");
+    }
+    const mime = ((_a = meta.match(/^data:([^;,]+)/)) == null ? void 0 : _a[1]) || fallbackMime;
+    try {
+      const binary = atob(body);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    } catch (err) {
+      console.warn("[TraceBug] dataUrlToBlob: atob failed, falling back to empty blob. body len =", body.length, "err =", err == null ? void 0 : err.message);
+      return new Blob([], { type: mime });
     }
   }
-  function abortVideoRecording() {
-    if (_recorder && _recorder.state !== "inactive") {
-      try {
-        _recorder.stop();
-      } catch (e2) {
-      }
-    }
-    _stream == null ? void 0 : _stream.getTracks().forEach((t) => t.stop());
-    _recorder = null;
-    _stream = null;
-    _chunks = [];
-    _comments = [];
-    _rollingMode = false;
-    _capturesTaken = 0;
+  function rpcCall(type, data, timeoutMs = 6e4) {
+    return new Promise((resolve, reject) => {
+      const id = `tb_rpc_${++_rpcCounter}_${Date.now().toString(36)}`;
+      const handler = (e2) => {
+        const detail = e2.detail;
+        if (!detail || detail.id !== id) return;
+        window.removeEventListener("tracebug-rec-response", handler);
+        clearTimeout(timer);
+        if (detail.error) reject(new Error(detail.error));
+        else resolve(detail.result);
+      };
+      window.addEventListener("tracebug-rec-response", handler);
+      const timer = setTimeout(() => {
+        window.removeEventListener("tracebug-rec-response", handler);
+        reject(new Error(`RPC timeout: ${type}`));
+      }, timeoutMs);
+      window.dispatchEvent(new CustomEvent("tracebug-rec-request", {
+        detail: { id, type, data }
+      }));
+    });
   }
-  function downloadVideoRecording(recording, filename = "tracebug-recording.webm") {
-    const a2 = document.createElement("a");
-    a2.href = recording.url;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
-  }
-  var _recorder, _stream, _chunks, _startedAt, _mimeType, _comments, _lastRecording, _onStatus, _rollingMode, _capturesTaken;
+  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, _recorder, _stream, _chunks, _onAutoStop, _startInFlight, _autoStopWired, _reloadGuardsInstalled, _rpcCounter;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
+      _active = false;
+      _startedAt = 0;
+      _mimeType = "";
+      _mode = "rolling";
+      _comments = [];
+      _capturesTaken = 0;
+      _lastRecording = null;
+      _onStatus = null;
       _recorder = null;
       _stream = null;
       _chunks = [];
-      _startedAt = 0;
-      _mimeType = "";
-      _comments = [];
-      _lastRecording = null;
-      _onStatus = null;
-      _rollingMode = false;
-      _capturesTaken = 0;
+      _onAutoStop = null;
+      _startInFlight = null;
+      _autoStopWired = false;
+      _reloadGuardsInstalled = false;
+      _rpcCounter = 0;
+    }
+  });
+
+  // src/dev-api.ts
+  function setDevApiHooks(hooks) {
+    _emit = hooks.emit;
+    _processError = hooks.processError;
+  }
+  function clearDevApiState() {
+    _emit = null;
+    _processError = null;
+    _context = {};
+  }
+  function mark(label, payload) {
+    if (!_emit) {
+      if (typeof console !== "undefined") console.warn("[TraceBug] mark() called before init() \u2014 ignored.");
+      return;
+    }
+    if (typeof label !== "string" || !label.trim()) return;
+    try {
+      _emit("mark", { label: label.slice(0, 200), payload: sanitizePayload(payload) });
+    } catch (e2) {
+    }
+  }
+  function assertCondition(condition, message) {
+    if (condition) return;
+    const msg = `Assertion failed: ${typeof message === "string" ? message : "condition was falsy"}`;
+    let stack = "";
+    try {
+      stack = new Error(msg).stack || "";
+    } catch (e2) {
+    }
+    try {
+      _emit == null ? void 0 : _emit("console_error", { error: { message: msg, stack } });
+    } catch (e2) {
+    }
+    try {
+      _processError == null ? void 0 : _processError(msg, stack);
+    } catch (e2) {
+    }
+  }
+  function context(values) {
+    if (!values || typeof values !== "object") return;
+    for (const key of Object.keys(values)) {
+      const v = values[key];
+      if (v === void 0) {
+        delete _context[key];
+        continue;
+      }
+      if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        _context[key] = v;
+      }
+    }
+  }
+  function getCurrentContext() {
+    return { ..._context };
+  }
+  function sanitizePayload(payload) {
+    if (payload == null || typeof payload !== "object") return void 0;
+    try {
+      JSON.stringify(payload);
+      return payload;
+    } catch (e2) {
+      return void 0;
+    }
+  }
+  var _emit, _processError, _context;
+  var init_dev_api = __esm({
+    "src/dev-api.ts"() {
+      "use strict";
+      _emit = null;
+      _processError = null;
+      _context = {};
+    }
+  });
+
+  // src/patterns/react.ts
+  var reactPatterns;
+  var init_react = __esm({
+    "src/patterns/react.ts"() {
+      "use strict";
+      reactPatterns = [
+        {
+          id: "react-hydration-mismatch",
+          pattern: /(hydration|hydrating|did not match|server html)/,
+          hint: "looks like an SSR hydration mismatch \u2014 server HTML doesn't match what the client wants to render",
+          fix: "remove non-deterministic values during render (Date.now, random, window) or wrap them in useEffect/Client-only",
+          category: "React SSR"
+        },
+        {
+          id: "react-hook-rules",
+          pattern: /(invalid hook call|hook called outside|hooks can only be called)/,
+          hint: "violates Rules of Hooks \u2014 a hook is being called conditionally or outside a React function component",
+          fix: "move the hook call to the top level of a component or custom hook; never inside a conditional or loop",
+          category: "React hooks"
+        },
+        {
+          id: "react-stale-closure",
+          pattern: /(state.*not.*update|setstate.*unmount|warning.*update.*unmounted)/,
+          hint: "looks like a setState on an unmounted component \u2014 usually a stale closure or missing cleanup",
+          fix: "return a cleanup function from useEffect, or guard with `if (mounted)` before calling setState",
+          category: "React lifecycle"
+        },
+        {
+          id: "react-key-collision",
+          pattern: /each child.*should have a unique.*key|encountered two children with the same key/,
+          hint: "duplicate or missing `key` prop on a list \u2014 React can't reconcile children correctly",
+          fix: "use a stable unique id (not array index) for each list item's `key`",
+          category: "React keys"
+        },
+        {
+          id: "react-too-many-rerenders",
+          pattern: /(too many re-renders|maximum update depth)/,
+          hint: "infinite render loop \u2014 usually setState called unconditionally inside the render body",
+          fix: "wrap the setState in a useEffect with proper deps, or check the condition before calling it",
+          category: "React render loop"
+        },
+        {
+          id: "react-controlled-uncontrolled",
+          pattern: /changing an? (controlled|uncontrolled) input/,
+          hint: "input switched between controlled and uncontrolled \u2014 `value` was undefined initially",
+          fix: 'initialize the value to "" or null instead of undefined; never let it become undefined later',
+          category: "React forms"
+        },
+        {
+          id: "react-context-default",
+          pattern: /(usecontext.*returned undefined|context value is undefined)/,
+          hint: "useContext returned undefined \u2014 the component isn't wrapped in the matching Provider",
+          fix: "wrap the tree with `<MyContext.Provider value={...}>` or initialize the context with a non-undefined default",
+          category: "React context"
+        },
+        {
+          id: "react-suspense-boundary",
+          pattern: /(suspense.*not allowed|render.*suspended.*outside.*suspense)/,
+          hint: "a component suspended outside a <Suspense> boundary",
+          fix: "wrap the suspending component (lazy, useTransition, etc.) in `<Suspense fallback={...}>`",
+          category: "React Suspense"
+        },
+        {
+          id: "react-dev-build",
+          pattern: /(react is in development mode|react dev tools)/,
+          hint: "running React in development mode in production \u2014 performance and bundle-size penalty",
+          fix: "rebuild with `NODE_ENV=production` and use the production React build",
+          category: "React build"
+        },
+        {
+          id: "react-data-loading",
+          pattern: /cannot read prop.*of undefined.*\.map|undefined is not iterable.*\.map/,
+          hint: "looks like a render before async data arrived \u2014 calling `.map` on undefined",
+          fix: "add `if (!data) return null` guard, or initialize state to `[]` so .map is safe",
+          category: "React data-loading"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/vue.ts
+  var vuePatterns;
+  var init_vue = __esm({
+    "src/patterns/vue.ts"() {
+      "use strict";
+      vuePatterns = [
+        {
+          id: "vue-missing-key",
+          pattern: /v-for.*should have.*key|elements with.*v-for.*key/,
+          hint: "list rendering without `:key` \u2014 Vue can't track items efficiently",
+          fix: 'add `:key="item.id"` to the v-for element using a stable unique identifier',
+          category: "Vue keys"
+        },
+        {
+          id: "vue-mutate-prop",
+          pattern: /avoid mutating a prop directly|mutating a prop directly/,
+          hint: "mutating a prop directly \u2014 Vue will overwrite your changes on the next parent render",
+          fix: "emit an event to the parent or use a local data/ref initialized from the prop",
+          category: "Vue props"
+        },
+        {
+          id: "vue-non-reactive",
+          pattern: /(reactive.*lost|reactivity.*lost|destructur.*reactivity)/,
+          hint: "reactivity lost \u2014 likely from destructuring a reactive object",
+          fix: "use `toRefs()` when destructuring, or access properties on the proxy (state.x) directly",
+          category: "Vue reactivity"
+        },
+        {
+          id: "vue-unknown-component",
+          pattern: /unknown custom element|failed to resolve component/,
+          hint: "Vue couldn't resolve a component \u2014 missing import or registration",
+          fix: "import and register the component in the parent's `components` option, or use a global registration",
+          category: "Vue components"
+        },
+        {
+          id: "vue-template-render",
+          pattern: /(template compilation error|failed to compile template)/,
+          hint: "Vue template failed to compile \u2014 usually a syntax error or unknown directive",
+          fix: "check the failing line for typos, unclosed tags, or directives that need a plugin",
+          category: "Vue templates"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/angular.ts
+  var angularPatterns;
+  var init_angular = __esm({
+    "src/patterns/angular.ts"() {
+      "use strict";
+      angularPatterns = [
+        {
+          id: "angular-ng0100-expression-changed",
+          pattern: /ng0100|expressionchangedafterithasbeenchecked|expression has changed after it was checked/,
+          hint: "Angular ExpressionChangedAfterItHasBeenCheckedError \u2014 a binding changed during change detection",
+          fix: "wrap the side-effect in `setTimeout(...)`, `Promise.resolve().then(...)`, or `ChangeDetectorRef.detectChanges()` after the lifecycle",
+          category: "Angular change-detection"
+        },
+        {
+          id: "angular-ng0200-circular-di",
+          pattern: /ng0200|circular dependency in di/,
+          hint: "circular DI dependency \u2014 two providers depend on each other",
+          fix: "break the cycle by moving one dependency to a setter, using `forwardRef`, or refactoring shared logic into a third service",
+          category: "Angular DI"
+        },
+        {
+          id: "angular-ng0300-multiple-comp",
+          pattern: /ng0300|multiple components matched on the same element/,
+          hint: "two components have the same selector and matched the same element",
+          fix: "rename one component's selector, or restrict it with attribute matching",
+          category: "Angular components"
+        },
+        {
+          id: "angular-zone-leak",
+          pattern: /zone\.js.*scheduletask|ngzone.*outside/,
+          hint: "an async task is running outside Angular's zone \u2014 UI may not update",
+          fix: "wrap the callback with `ngZone.run(() => ...)` or use `runInsideAngular`",
+          category: "Angular zones"
+        },
+        {
+          id: "angular-template-binding",
+          pattern: /can't bind to .*since it isn't a known property/,
+          hint: "template binds to an unknown property \u2014 module/import missing or selector typo",
+          fix: "import the FormsModule/CommonModule the directive belongs to, or check the selector spelling",
+          category: "Angular templates"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/network.ts
+  var networkPatterns;
+  var init_network = __esm({
+    "src/patterns/network.ts"() {
+      "use strict";
+      networkPatterns = [
+        {
+          id: "network-cors-preflight",
+          pattern: /cors.*preflight|preflight.*cors|preflight response is not successful/,
+          hint: "CORS preflight (OPTIONS) failed \u2014 server rejected the cross-origin probe",
+          fix: "add the `Access-Control-Allow-Origin`, `-Methods`, `-Headers` response headers on OPTIONS requests",
+          category: "Network CORS"
+        },
+        {
+          id: "network-cors",
+          pattern: /(access-control-allow-origin|cross-origin.*blocked|cors policy|has been blocked by cors)/,
+          hint: "blocked by CORS policy \u2014 server didn't return the expected access-control headers",
+          fix: "set `Access-Control-Allow-Origin` on the API response, or proxy the request through your own origin",
+          category: "Network CORS"
+        },
+        {
+          id: "network-mixed-content",
+          pattern: /(mixed content|insecure request.*has been blocked|blocked.*loading.*http)/,
+          hint: "mixed content \u2014 HTTPS page tried to load an HTTP resource",
+          fix: "switch the resource URL to https://, or proxy it through your origin",
+          category: "Network security"
+        },
+        {
+          id: "network-timeout",
+          pattern: /(timeout|timed out|request timeout|deadline exceeded)/,
+          hint: "request timed out \u2014 upstream service is slow, unreachable, or hanging",
+          fix: "raise the client timeout, add a retry, or investigate slow downstream queries",
+          category: "Network latency"
+        },
+        {
+          id: "network-dns",
+          pattern: /(dns_probe|name not resolved|err_name_not_resolved)/,
+          hint: "DNS lookup failed \u2014 host doesn't resolve",
+          fix: "check the URL spelling, DNS records, or VPN/network connectivity",
+          category: "Network DNS"
+        },
+        {
+          id: "network-offline",
+          pattern: /(network.*offline|navigator.*offline|err_internet_disconnected|networkerror.*request)/,
+          hint: "no network \u2014 the device is offline or the request was disconnected",
+          fix: "show an offline UI; queue retries with `navigator.onLine` + `online` event listener",
+          category: "Network offline"
+        },
+        {
+          id: "network-aborted",
+          pattern: /(aborterror|aborted|signal.*aborted|the user aborted|request was aborted)/,
+          hint: "request was cancelled \u2014 usually a navigation away or AbortController.abort()",
+          fix: "this is expected when the user navigates; ignore unless you didn't intend to cancel",
+          category: "Network abort"
+        },
+        {
+          id: "network-failed-fetch",
+          pattern: /(failed to fetch|networkerror when attempting to fetch|load failed)/,
+          hint: "fetch failed \u2014 typically CORS, blocked by client, offline, or server unreachable",
+          fix: "check Network tab for the underlying status; verify the URL and CORS headers",
+          category: "Network fetch"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/auth.ts
+  var authPatterns;
+  var init_auth = __esm({
+    "src/patterns/auth.ts"() {
+      "use strict";
+      authPatterns = [
+        {
+          id: "auth-jwt-expired",
+          pattern: /(jwt expired|token expired|expired token|tokenexpired)/,
+          hint: "JWT or session token expired \u2014 the user needs to refresh or re-authenticate",
+          fix: "trigger a silent token refresh on 401; if refresh fails, redirect to login",
+          category: "Auth tokens"
+        },
+        {
+          id: "auth-jwt-invalid",
+          pattern: /(invalid token|invalid signature|jwt malformed|jsonwebtokenerror)/,
+          hint: "JWT signature/format invalid \u2014 wrong secret, wrong algorithm, or corrupted token",
+          fix: "verify the signing secret matches between client and server; re-issue the token",
+          category: "Auth tokens"
+        },
+        {
+          id: "auth-401",
+          pattern: /(401|unauthorized)/,
+          hint: "401 Unauthorized \u2014 auth header missing, malformed, or rejected",
+          fix: "ensure the request includes a valid `Authorization: Bearer <token>` header; check token in DevTools",
+          category: "Auth 401"
+        },
+        {
+          id: "auth-403",
+          pattern: /(403|forbidden|insufficient permission|access denied|not authorized)/,
+          hint: "403 Forbidden \u2014 user is authenticated but lacks permission for this resource",
+          fix: "check the user's role/scope on the backend; verify the route's permission requirements",
+          category: "Auth 403"
+        },
+        {
+          id: "auth-csrf",
+          pattern: /(csrf|cross.?site.?request.?forgery|x-xsrf-token|xsrf)/,
+          hint: "CSRF token missing or mismatched",
+          fix: "include the CSRF cookie/header in the request, or fetch a fresh token before submitting",
+          category: "Auth CSRF"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/storage.ts
+  var storagePatterns;
+  var init_storage2 = __esm({
+    "src/patterns/storage.ts"() {
+      "use strict";
+      storagePatterns = [
+        {
+          id: "storage-quota",
+          pattern: /(quotaexceedederror|quota.*exceeded|storage.*full)/,
+          hint: "browser storage quota exceeded \u2014 localStorage, IndexedDB, or cache filled up",
+          fix: "prune older entries, switch to IndexedDB for larger payloads, or compress before storing",
+          category: "Storage quota"
+        },
+        {
+          id: "storage-json-parse",
+          pattern: /(unexpected token.*in json|unexpected end of json input|json\.parse|invalid json)/,
+          hint: "JSON.parse failed \u2014 the response or stored value isn't valid JSON",
+          fix: "log the raw text first; check if the API is returning HTML/error pages instead of JSON",
+          category: "Storage JSON"
+        },
+        {
+          id: "storage-localstorage-disabled",
+          pattern: /(localstorage.*not available|localstorage is null|access.*localstorage.*disabled)/,
+          hint: "localStorage isn't available \u2014 incognito, Safari ITP, or storage disabled",
+          fix: "feature-detect with try/catch; fall back to in-memory storage when missing",
+          category: "Storage availability"
+        },
+        {
+          id: "storage-indexeddb-version",
+          pattern: /(versionerror|indexeddb.*version|requested version.*less than)/,
+          hint: "IndexedDB version mismatch \u2014 schema changed but DB wasn't upgraded",
+          fix: "bump the DB version and handle the upgradeneeded event; or delete and recreate during dev",
+          category: "Storage IndexedDB"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/general.ts
+  var generalPatterns;
+  var init_general = __esm({
+    "src/patterns/general.ts"() {
+      "use strict";
+      generalPatterns = [
+        {
+          id: "general-undefined-access",
+          pattern: /(cannot read prop|cannot read properties|of undefined|of null)/,
+          hint: "reading a property of undefined/null \u2014 usually missing data, async race, or destructuring a missing return",
+          fix: "add a null-check, use optional chaining (`obj?.prop`), or initialize state with a safe default",
+          category: "JS undefined access"
+        },
+        {
+          id: "general-not-a-function",
+          pattern: /is not a function|is not callable/,
+          hint: "called something that isn't callable \u2014 wrong import shape or a typo on the value",
+          fix: "verify the import statement (default vs named), and confirm the value's type matches",
+          category: "JS type"
+        },
+        {
+          id: "general-not-defined",
+          pattern: /(is not defined|reference.*not.*defined|is not a constructor)/,
+          hint: "missing variable/import, or a stale build referencing a removed export",
+          fix: "check imports + spelling; clear the build cache (`rm -rf .next`, `dist`, etc.) and rebuild",
+          category: "JS reference"
+        },
+        {
+          id: "general-readonly-assign",
+          pattern: /(cannot assign to read only|cannot set prop|getter only|read.?only property)/,
+          hint: "writing to a frozen, sealed, or getter-only object",
+          fix: "clone the object before mutating, or check whether you should be calling a setter instead",
+          category: "JS object"
+        },
+        {
+          id: "general-stack-overflow",
+          pattern: /maximum call stack|stack size exceeded|stack overflow/,
+          hint: "infinite recursion or a render loop",
+          fix: "check the function for a missing base case; in React, look for setState during render",
+          category: "JS recursion"
+        },
+        {
+          id: "general-syntax-parse",
+          pattern: /(unexpected token|unexpected end of|syntaxerror)/,
+          hint: "syntax error or malformed JSON in the response",
+          fix: "log the raw response text; common causes are HTML error pages returned where JSON was expected",
+          category: "JS syntax"
+        },
+        {
+          id: "general-quota-exceeded",
+          pattern: /(quota.*exceeded|exceeded.*limit)/,
+          hint: "a rate or storage limit was hit",
+          fix: "check the request rate; throttle or backoff; verify storage size before writing",
+          category: "JS quota"
+        },
+        {
+          id: "general-permission",
+          pattern: /(permission denied|notallowederror|not allowed|denied by user)/,
+          hint: "an API was denied \u2014 usually camera/mic/clipboard/notifications permission",
+          fix: "request the permission via a user gesture and provide a fallback if denied",
+          category: "JS permissions"
+        },
+        {
+          id: "general-circular-json",
+          pattern: /(converting circular structure|circular.*json)/,
+          hint: "JSON.stringify hit a circular reference",
+          fix: "use a replacer that breaks cycles, or extract just the fields you need before stringifying",
+          category: "JS serialization"
+        },
+        {
+          id: "general-dom-not-found",
+          pattern: /(cannot read.*null.*\.querySelector|null is not an object.*querySelector|no element.*found)/,
+          hint: "DOM query returned null \u2014 element not in the tree yet, or selector is wrong",
+          fix: "wait for the DOM to mount (useEffect / DOMContentLoaded), or fix the selector",
+          category: "DOM lookup"
+        }
+      ];
+    }
+  });
+
+  // src/patterns/index.ts
+  function matchErrorPattern(message) {
+    if (!message) return null;
+    const lower = message.toLowerCase();
+    for (const category of CATEGORIES) {
+      for (const p of category) {
+        if (p.pattern.test(lower)) {
+          return { hint: p.hint, fix: p.fix, category: p.category };
+        }
+      }
+    }
+    return null;
+  }
+  function formatPatternMatch(match) {
+    const parts = [match.hint];
+    if (match.fix) parts.push(`Try: ${match.fix}`);
+    parts.push(`*(${match.category})*`);
+    return parts.join(" \u2014 ");
+  }
+  var CATEGORIES;
+  var init_patterns = __esm({
+    "src/patterns/index.ts"() {
+      "use strict";
+      init_react();
+      init_vue();
+      init_angular();
+      init_network();
+      init_auth();
+      init_storage2();
+      init_general();
+      CATEGORIES = [
+        reactPatterns,
+        vuePatterns,
+        angularPatterns,
+        networkPatterns,
+        authPatterns,
+        storagePatterns,
+        generalPatterns
+      ];
     }
   });
 
@@ -9313,13 +10289,13 @@ var TraceBugModule = (() => {
     const errorType = classifyError(errorMsg);
     const lastAction = userActions.length > 0 ? userActions[userActions.length - 1] : null;
     const page = errorEvents[0].page || "";
-    const context = getActionContext(lastAction);
+    const context2 = getActionContext(lastAction);
     const pageName = friendlyPage(page);
-    if (context && pageName) {
-      return `${pageName}: ${context} Fails \u2014 ${errorType}`;
+    if (context2 && pageName) {
+      return `${pageName}: ${context2} Fails \u2014 ${errorType}`;
     }
-    if (context) {
-      return `${context} Fails Due to ${errorType}`;
+    if (context2) {
+      return `${context2} Fails Due to ${errorType}`;
     }
     if (pageName) {
       return `${errorType} on ${pageName}`;
@@ -9347,8 +10323,8 @@ var TraceBugModule = (() => {
     if (failedApis.length > 0) {
       const api = failedApis[0].data.request;
       const lastAction = userActions.length > 0 ? userActions[userActions.length - 1] : null;
-      const context = getActionContext(lastAction);
-      return context ? `${context} \u2014 API ${api == null ? void 0 : api.method} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}` : `API Failure: ${api == null ? void 0 : api.method} ${shortenUrl2(api == null ? void 0 : api.url)} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}`;
+      const context2 = getActionContext(lastAction);
+      return context2 ? `${context2} \u2014 API ${api == null ? void 0 : api.method} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}` : `API Failure: ${api == null ? void 0 : api.method} ${shortenUrl2(api == null ? void 0 : api.url)} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}`;
     }
     if (userActions.length === 0) return "Empty Session \u2014 No User Interactions";
     const lastActions = userActions.slice(-3);
@@ -9387,16 +10363,17 @@ var TraceBugModule = (() => {
     }
   }
   function describeAction(ev) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     switch (ev.type) {
       case "click": {
-        const text = ((_b = (_a = ev.data.element) == null ? void 0 : _a.text) == null ? void 0 : _b.trim()) || ((_c = ev.data.element) == null ? void 0 : _c.id) || "element";
-        return `Click "${truncate(text, 20)}"`;
+        const rawText = ((_b = (_a = ev.data.element) == null ? void 0 : _a.text) == null ? void 0 : _b.trim()) || ((_c = ev.data.element) == null ? void 0 : _c.ariaLabel) || ((_d = ev.data.element) == null ? void 0 : _d.id) || "element";
+        const text = rawText.includes("\n") ? rawText.split("\n")[0].trim() : rawText;
+        return `Click "${truncate(text, 40)}"`;
       }
       case "input":
-        return `Type in "${((_d = ev.data.element) == null ? void 0 : _d.name) || "field"}"`;
+        return `Type in "${((_e = ev.data.element) == null ? void 0 : _e.name) || "field"}"`;
       case "select_change":
-        return `Select "${((_e = ev.data.element) == null ? void 0 : _e.selectedText) || "option"}"`;
+        return `Select "${((_f = ev.data.element) == null ? void 0 : _f.selectedText) || "option"}"`;
       case "form_submit":
         return "Submit Form";
       case "route_change":
@@ -9488,13 +10465,14 @@ var TraceBugModule = (() => {
     return lines.join("\n");
   }
   function describeTimelineEvent(ev) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     switch (ev.type) {
       case "click": {
         const el = ev.data.element;
         let target = ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.ariaLabel) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
         if (target.includes("\n")) target = target.split("\n")[0].trim();
-        return `click "${target.slice(0, 50)}"`;
+        const trimmed = target.length > 80 ? target.slice(0, 80).trimEnd() + "\u2026" : target;
+        return `click "${trimmed}"`;
       }
       case "input": {
         const name = ((_b = ev.data.element) == null ? void 0 : _b.name) || ((_c = ev.data.element) == null ? void 0 : _c.id) || "field";
@@ -9522,6 +10500,17 @@ var TraceBugModule = (() => {
         return ((_i = ev.data.error) == null ? void 0 : _i.message) || "Unknown error";
       case "console_error":
         return (((_j = ev.data.error) == null ? void 0 : _j.message) || "").slice(0, 80);
+      case "mark": {
+        const label = ((_k = ev.data) == null ? void 0 : _k.label) || "mark";
+        const payload = (_l = ev.data) == null ? void 0 : _l.payload;
+        if (payload && Object.keys(payload).length > 0) {
+          try {
+            return `\u{1F4CC} ${label} ${JSON.stringify(payload).slice(0, 60)}`;
+          } catch (e2) {
+          }
+        }
+        return `\u{1F4CC} ${label}`;
+      }
       default:
         return JSON.stringify(ev.data).slice(0, 60);
     }
@@ -9544,6 +10533,353 @@ var TraceBugModule = (() => {
   var init_timeline_builder = __esm({
     "src/timeline-builder.ts"() {
       "use strict";
+    }
+  });
+
+  // src/action-chips.ts
+  function pickAttrs(el) {
+    if (!el || typeof el !== "object") return { attrs: [], moreCount: 0 };
+    const picked = [];
+    let total = 0;
+    for (const spec of ATTR_PRIORITY) {
+      const raw = el[spec.key];
+      if (raw === void 0 || raw === null || raw === "") continue;
+      if (typeof raw === "boolean") {
+        if (!raw) continue;
+        total += 1;
+        if (picked.length < MAX_INLINE_ATTRS) picked.push({ name: spec.label || spec.key, value: "" });
+        continue;
+      }
+      const str = String(raw);
+      if (!str) continue;
+      total += 1;
+      if (picked.length < MAX_INLINE_ATTRS) {
+        const value = str.length > MAX_VALUE_LEN ? str.slice(0, MAX_VALUE_LEN) + "\u2026" : str;
+        picked.push({ name: spec.label || spec.key, value });
+      }
+    }
+    return { attrs: picked, moreCount: Math.max(0, total - picked.length) };
+  }
+  function truncate2(s, n) {
+    if (!s) return "";
+    return s.length > n ? s.slice(0, n) + "\u2026" : s;
+  }
+  function friendlyPagePath(url) {
+    try {
+      if (!url) return "";
+      if (url.startsWith("/")) return url;
+      return new URL(url).pathname || url;
+    } catch (e2) {
+      return url;
+    }
+  }
+  function humanizeIdentifier(s) {
+    if (!s) return "";
+    const stripped = s.replace(/^(input|field|form|btn|button|ipt)[-_]?/i, "");
+    return stripped.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[-_]+/g, " ").trim().split(/\s+/).map((w) => w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)).join(" ");
+  }
+  function nounForTag(tag) {
+    switch ((tag || "").toLowerCase()) {
+      case "a":
+        return "link";
+      case "button":
+        return "button";
+      case "input":
+        return "field";
+      case "select":
+        return "dropdown";
+      case "textarea":
+        return "text area";
+      case "img":
+      case "picture":
+      case "svg":
+        return "image";
+      case "li":
+        return "list item";
+      case "nav":
+        return "menu";
+      case "label":
+        return "label";
+      case "form":
+        return "form";
+      default:
+        return "element";
+    }
+  }
+  function cleanText(s, max = MAX_TARGET_LEN) {
+    return truncate2(String(s || "").trim().replace(/\s+/g, " "), max);
+  }
+  function extractClickTarget(el) {
+    if (el.text && String(el.text).trim()) return cleanText(el.text);
+    if (el.ariaLabel) return cleanText(el.ariaLabel);
+    if (typeof el.value === "string" && el.value && el.value !== "[REDACTED]") return cleanText(el.value);
+    if (el.title) return cleanText(el.title);
+    if (el.testId) return cleanText(humanizeIdentifier(el.testId));
+    if (el.id) return cleanText(humanizeIdentifier(el.id));
+    if (el.name) return cleanText(humanizeIdentifier(el.name));
+    return "";
+  }
+  function extractFieldTarget(el) {
+    if (el.ariaLabel) return cleanText(el.ariaLabel);
+    if (el.placeholder) return cleanText(el.placeholder);
+    if (el.name) return cleanText(humanizeIdentifier(el.name));
+    if (el.id) return cleanText(humanizeIdentifier(el.id));
+    return "";
+  }
+  function extractFormTarget(f2) {
+    const action = String(f2.action || "");
+    const id = String(f2.id || "");
+    const hay = `${id} ${action}`.toLowerCase();
+    if (/login|signin|sign-in/.test(hay)) return "Login";
+    if (/signup|register|sign-up/.test(hay)) return "Signup";
+    if (/checkout|payment|purchase/.test(hay)) return "Checkout";
+    if (/search/.test(hay)) return "Search";
+    if (/contact/.test(hay)) return "Contact";
+    if (/subscribe|newsletter/.test(hay)) return "Subscribe";
+    if (/password|reset/.test(hay)) return "Password";
+    if (id) return cleanText(humanizeIdentifier(id));
+    return "";
+  }
+  function countFilledFields(f2) {
+    const fields = f2.fields && typeof f2.fields === "object" ? f2.fields : {};
+    const total = typeof f2.fieldCount === "number" ? f2.fieldCount : Object.keys(fields).length;
+    let filled = 0;
+    for (const v of Object.values(fields)) {
+      if (v && String(v).trim() && v !== "[REDACTED]") filled += 1;
+      else if (v === "[REDACTED]") filled += 1;
+    }
+    return { filled, total };
+  }
+  function looksInvalid(type, name, value) {
+    if (!value || value === "[REDACTED]") return false;
+    const isEmail = type === "email" || /email/i.test(name);
+    if (isEmail) {
+      return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+    const isUrl = type === "url" || /url|website|homepage/i.test(name);
+    if (isUrl) {
+      return !/^https?:\/\/.+\..+/.test(value);
+    }
+    const isPhone = type === "tel" || /phone|mobile|tel/i.test(name);
+    if (isPhone) {
+      const digits = value.replace(/\D/g, "");
+      return digits.length < 7;
+    }
+    return false;
+  }
+  function detectFrustration(events) {
+    var _a, _b, _c, _d;
+    const map = /* @__PURE__ */ new Map();
+    for (let i = 0; i < events.length; i++) {
+      const e2 = events[i];
+      if (e2.type !== "click") continue;
+      const sel = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || "";
+      if (!sel) continue;
+      let count = 1;
+      for (let j = i - 1; j >= 0 && events[i].timestamp - events[j].timestamp <= RAGE_WINDOW_MS; j--) {
+        if (events[j].type === "click" && (((_d = (_c = events[j].data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || "") === sel) count += 1;
+      }
+      if (count >= RAGE_MIN_CLICKS) map.set(i, "rage");
+    }
+    for (let i = 0; i < events.length; i++) {
+      if (events[i].type !== "click") continue;
+      if (map.get(i) === "rage") continue;
+      if (i === events.length - 1) continue;
+      const next = events[i + 1];
+      if (next.timestamp - events[i].timestamp > DEAD_RESPONSE_WINDOW_MS) {
+        map.set(i, "dead");
+      }
+    }
+    let lastInputIdx = -1;
+    for (let i = 0; i < events.length; i++) {
+      const e2 = events[i];
+      if (e2.type === "input") lastInputIdx = i;
+      else if (e2.type === "form_submit") lastInputIdx = -1;
+      else if (e2.type === "route_change" && lastInputIdx !== -1) {
+        if (!map.has(lastInputIdx)) map.set(lastInputIdx, "abandon");
+        lastInputIdx = -1;
+      }
+    }
+    return map;
+  }
+  function buildActionChips(events) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    if (!events || events.length === 0) return [];
+    const frustration = detectFrustration(events);
+    const offset = events.length > MAX_CHIPS ? events.length - MAX_CHIPS : 0;
+    const sliced = events.slice(offset);
+    const chips = [];
+    for (let i = 0; i < sliced.length; i++) {
+      const e2 = sliced[i];
+      const origIdx = offset + i;
+      const frust = frustration.get(origIdx);
+      switch (e2.type) {
+        case "click": {
+          const el = ((_a = e2.data) == null ? void 0 : _a.element) || {};
+          const picked = pickAttrs(el);
+          chips.push({
+            verb: "Clicked",
+            kind: "click",
+            target: extractClickTarget(el) || void 0,
+            nounLabel: nounForTag(String(el.tag || "")),
+            element: { tag: String(el.tag || "element"), attrs: picked.attrs, moreCount: picked.moreCount },
+            frustration: frust,
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        case "input": {
+          const el = ((_b = e2.data) == null ? void 0 : _b.element) || {};
+          const inputType = String(el.type || "text");
+          const fieldName = extractFieldTarget(el);
+          const picked = pickAttrs(el);
+          if (inputType === "checkbox" || inputType === "radio") {
+            chips.push({
+              verb: el.checked ? "Checked" : "Unchecked",
+              kind: "input",
+              target: fieldName || void 0,
+              element: { tag: "input", attrs: picked.attrs, moreCount: picked.moreCount },
+              frustration: frust,
+              timestamp: e2.timestamp
+            });
+            break;
+          }
+          const val = typeof el.value === "string" ? el.value : "";
+          const invalid = looksInvalid(inputType, String(el.name || el.id || ""), val);
+          const detail = val ? invalid ? `invalid: "${truncate2(val, MAX_DETAIL_LEN - 12)}"` : `"${truncate2(val, MAX_DETAIL_LEN - 2)}"` : void 0;
+          chips.push({
+            verb: invalid ? "Typed (invalid)" : "Typed",
+            kind: "input",
+            target: fieldName || void 0,
+            element: { tag: "input", attrs: picked.attrs, moreCount: picked.moreCount },
+            detail,
+            frustration: frust,
+            isError: invalid || void 0,
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        case "select_change": {
+          const el = ((_c = e2.data) == null ? void 0 : _c.element) || {};
+          const picked = pickAttrs(el);
+          chips.push({
+            verb: "Selected",
+            kind: "select",
+            target: extractFieldTarget(el) || void 0,
+            element: { tag: "select", attrs: picked.attrs, moreCount: picked.moreCount },
+            detail: el.selectedText ? `"${truncate2(String(el.selectedText), MAX_DETAIL_LEN - 2)}"` : void 0,
+            frustration: frust,
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        case "form_submit": {
+          const f2 = ((_d = e2.data) == null ? void 0 : _d.form) || {};
+          const target = extractFormTarget(f2);
+          const { filled, total } = countFilledFields(f2);
+          const attrs = [];
+          if (f2.id) attrs.push({ name: "id", value: String(f2.id) });
+          if (f2.method) attrs.push({ name: "method", value: String(f2.method).toUpperCase() });
+          if (f2.action) attrs.push({ name: "action", value: truncate2(String(f2.action), MAX_VALUE_LEN) });
+          chips.push({
+            verb: "Submitted",
+            kind: "submit",
+            target: target || void 0,
+            nounLabel: "form",
+            element: { tag: "form", attrs, moreCount: 0 },
+            detail: total > 0 ? `${filled} of ${total} field${total === 1 ? "" : "s"} filled` : void 0,
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        case "route_change": {
+          const from = friendlyPagePath(String(((_e = e2.data) == null ? void 0 : _e.from) || ""));
+          const to = friendlyPagePath(String(((_f = e2.data) == null ? void 0 : _f.to) || ""));
+          chips.push({
+            verb: "Navigated",
+            kind: "navigate",
+            detail: from ? `${from} \u2192 ${to}` : to,
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        case "api_request": {
+          const r = ((_g = e2.data) == null ? void 0 : _g.request) || {};
+          const status = Number(r.statusCode || 0);
+          const isError = status === 0 || status >= 400;
+          chips.push({
+            verb: isError ? "Request failed" : "Request",
+            kind: "api",
+            detail: `${String(r.method || "GET").toUpperCase()} ${truncate2(String(r.url || ""), MAX_DETAIL_LEN)} \u2192 ${status === 0 ? "ERR" : status}`,
+            timestamp: e2.timestamp,
+            isError
+          });
+          break;
+        }
+        case "error":
+        case "console_error":
+        case "unhandled_rejection": {
+          const msg = String(((_h = e2.data) == null ? void 0 : _h.message) || ((_i = e2.data) == null ? void 0 : _i.error) || "Runtime error");
+          chips.push({
+            verb: "Error",
+            kind: "error",
+            detail: truncate2(msg, MAX_DETAIL_LEN),
+            timestamp: e2.timestamp,
+            isError: true
+          });
+          break;
+        }
+        case "console_warn": {
+          const msg = String(((_j = e2.data) == null ? void 0 : _j.message) || "Warning");
+          chips.push({
+            verb: "Warning",
+            kind: "error",
+            detail: truncate2(msg, MAX_DETAIL_LEN),
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        case "mark": {
+          const label = String(((_k = e2.data) == null ? void 0 : _k.label) || "Mark");
+          chips.push({
+            verb: "Mark",
+            kind: "mark",
+            detail: truncate2(label, MAX_DETAIL_LEN),
+            timestamp: e2.timestamp
+          });
+          break;
+        }
+        // console_log intentionally skipped — too noisy for the Actions tab.
+        default:
+          break;
+      }
+    }
+    return chips;
+  }
+  var MAX_CHIPS, MAX_INLINE_ATTRS, MAX_VALUE_LEN, MAX_DETAIL_LEN, MAX_TARGET_LEN, RAGE_WINDOW_MS, RAGE_MIN_CLICKS, DEAD_RESPONSE_WINDOW_MS, ATTR_PRIORITY;
+  var init_action_chips = __esm({
+    "src/action-chips.ts"() {
+      "use strict";
+      MAX_CHIPS = 60;
+      MAX_INLINE_ATTRS = 4;
+      MAX_VALUE_LEN = 60;
+      MAX_DETAIL_LEN = 80;
+      MAX_TARGET_LEN = 40;
+      RAGE_WINDOW_MS = 1500;
+      RAGE_MIN_CLICKS = 3;
+      DEAD_RESPONSE_WINDOW_MS = 1500;
+      ATTR_PRIORITY = [
+        { key: "id" },
+        { key: "class", label: "class" },
+        { key: "type" },
+        { key: "name" },
+        { key: "href" },
+        { key: "ariaLabel", label: "aria-label" },
+        { key: "role" },
+        { key: "testId", label: "data-testid" },
+        { key: "placeholder" },
+        { key: "value" }
+      ];
     }
   });
 
@@ -9570,10 +10906,23 @@ var TraceBugModule = (() => {
       seenErrors.add(e2.message);
       return true;
     });
-    const networkErrors = session.events.filter((e2) => {
+    const levelMap = {
+      "error": "error",
+      "unhandled_rejection": "error",
+      "console_error": "error",
+      "console_warn": "warn",
+      "console_log": "log"
+    };
+    const consoleLogs = session.events.filter((e2) => e2.type in levelMap).map((e2) => {
       var _a2, _b2;
-      return e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b2 = e2.data.request) == null ? void 0 : _b2.statusCode) === 0);
-    }).map((e2) => {
+      return {
+        level: levelMap[e2.type],
+        message: ((_a2 = e2.data.error) == null ? void 0 : _a2.message) || "",
+        stack: (_b2 = e2.data.error) == null ? void 0 : _b2.stack,
+        timestamp: e2.timestamp
+      };
+    }).filter((e2) => !!e2.message);
+    const networkRequests = session.events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
       var _a2, _b2, _c, _d;
       return {
         method: ((_a2 = e2.data.request) == null ? void 0 : _a2.method) || "GET",
@@ -9585,18 +10934,19 @@ var TraceBugModule = (() => {
     });
     const sessionStart = session.createdAt || ((_b = (_a = session.events[0]) == null ? void 0 : _a.timestamp) != null ? _b : 0);
     const buffer = getNetworkFailures().filter((b) => b.timestamp >= sessionStart);
-    for (const entry of networkErrors) {
+    for (const entry of networkRequests) {
+      if (entry.status < 400 && entry.status !== 0) continue;
       const match = buffer.find(
         (b) => b.url === entry.url && b.method === entry.method && b.status === entry.status && Math.abs(b.timestamp - entry.timestamp) < 5e3
       );
       if (match && match.response) entry.response = match.response;
     }
     for (const buf of buffer) {
-      const already = networkErrors.some(
+      const already = networkRequests.some(
         (n) => n.url === buf.url && n.method === buf.method && n.status === buf.status && Math.abs(n.timestamp - buf.timestamp) < 5e3
       );
       if (!already) {
-        networkErrors.push({
+        networkRequests.push({
           method: buf.method,
           url: buf.url,
           status: buf.status,
@@ -9606,12 +10956,15 @@ var TraceBugModule = (() => {
         });
       }
     }
+    const networkErrors = networkRequests.filter((r) => r.status >= 400 || r.status === 0).map((r) => ({ ...r }));
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
     const timeline = buildTimeline(session.events);
     const voiceTranscripts = getVoiceTranscripts();
     const lastVideo = getLastVideoRecording();
     const video = lastVideo ? {
       url: lastVideo.url,
+      dataUrl: lastVideo.dataUrl,
+      // raw base64 — exports use this directly
       durationMs: lastVideo.durationMs,
       mimeType: lastVideo.mimeType,
       sizeBytes: lastVideo.sizeBytes,
@@ -9620,6 +10973,7 @@ var TraceBugModule = (() => {
     } : void 0;
     const title = generateBugTitle(session);
     const sessionSteps = generateSessionSteps(session.events);
+    const actionChips = buildActionChips(session.events);
     const clickedElement = extractClickedElement(session.events);
     const report = {
       title,
@@ -9627,20 +10981,26 @@ var TraceBugModule = (() => {
       steps,
       environment,
       consoleErrors,
+      consoleLogs,
       networkErrors,
+      networkRequests,
       sessionSteps,
+      actionChips,
       clickedElement,
       rootCause: { hint: "", confidence: "low" },
+      severity: "low",
       annotations: session.annotations || [],
       screenshots: screenshots2,
       timeline,
       voiceTranscripts,
       video,
+      context: getCurrentContext(),
       session,
       generatedAt: Date.now()
     };
     report.summary = generateSmartSummary(report);
     report.rootCause = generateRootCauseHint(report);
+    report.severity = determineSeverity(report);
     return report;
   }
   function generateSmartSummary(report) {
@@ -9798,11 +11158,31 @@ var TraceBugModule = (() => {
     if (!rc || !rc.hint) return "";
     return `\u{1F50D} Possible Cause (${rc.confidence} confidence): ${rc.hint}`;
   }
+  function determineSeverity(report) {
+    const hasCriticalError = report.consoleErrors.some(
+      (e2) => /TypeError|ReferenceError|SyntaxError/i.test(e2.message)
+    );
+    if (hasCriticalError) return "critical";
+    const hasServerError = report.networkErrors.some((r) => r.status >= 500);
+    if (hasServerError) return "high";
+    if (report.networkErrors.length > 0) return "medium";
+    if (report.annotations.some((a2) => a2.severity === "critical" || a2.severity === "major")) return "medium";
+    if (report.consoleErrors.length > 0) return "low";
+    return "low";
+  }
+  function severityBadge(sev) {
+    return `${SEVERITY_EMOJI[sev]} ${SEVERITY_LABEL[sev]}`;
+  }
+  function severityTitlePrefix(sev) {
+    return `${SEVERITY_EMOJI[sev]} ${SEVERITY_LABEL[sev]} \xB7 `;
+  }
   function clickLabel(click) {
     const raw = click.text || click.ariaLabel || click.testId || click.id || click.tag || "element";
     return truncateMsg(raw, RC_LABEL_MAX);
   }
   function suggestCauseFromError(msg) {
+    const match = matchErrorPattern(msg);
+    if (match) return formatPatternMatch(match);
     const m = msg.toLowerCase();
     if (m.includes("cannot read prop") || m.includes("cannot read properties") || m.includes("of undefined") || m.includes("of null")) {
       return "suggests undefined/null data \u2014 the response or upstream value was likely missing";
@@ -9842,7 +11222,7 @@ var TraceBugModule = (() => {
     }
     return "suggests an unexpected runtime value \u2014 inspect inputs and data sources";
   }
-  var SESSION_STEPS_LIMIT, RC_LABEL_MAX;
+  var SESSION_STEPS_LIMIT, RC_LABEL_MAX, SEVERITY_EMOJI, SEVERITY_LABEL;
   var init_report_builder = __esm({
     "src/report-builder.ts"() {
       "use strict";
@@ -9850,12 +11230,31 @@ var TraceBugModule = (() => {
       init_screenshot();
       init_voice_recorder();
       init_video_recorder();
+      init_dev_api();
+      init_patterns();
       init_title_generator();
       init_timeline_builder();
       init_repro_generator();
       init_collectors();
+      init_action_chips();
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
+      SEVERITY_EMOJI = {
+        critical: "\u{1F534}",
+        // \uD83D\uDD34
+        high: "\u{1F7E0}",
+        // \uD83D\uDFE0
+        medium: "\u{1F7E1}",
+        // \uD83D\uDFE1
+        low: "\u{1F7E2}"
+        // \uD83D\uDFE2
+      };
+      SEVERITY_LABEL = {
+        critical: "Critical",
+        high: "High",
+        medium: "Medium",
+        low: "Low"
+      };
     }
   });
 
@@ -9864,7 +11263,8 @@ var TraceBugModule = (() => {
     if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) {
       throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
     }
-    const title = report.title || "Bug report";
+    const rawTitle = report.title || "Bug report";
+    const title = rawTitle.match(/^[🔴🟠🟡🟢]/) ? rawTitle : `${severityTitlePrefix(report.severity)}${rawTitle}`;
     let body = generateGitHubIssue(report);
     body = body.replace(/^##\s+[^\n]+\n+/, "");
     if (body.length > GITHUB_URL_BODY_LIMIT) {
@@ -9893,7 +11293,8 @@ var TraceBugModule = (() => {
   }
   function generateGitHubIssue(report) {
     const env = report.environment;
-    let md = `## ${report.title}
+    const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/) ? report.title : `${severityTitlePrefix(report.severity)}${report.title}`;
+    let md = `## ${titleWithSeverity}
 
 `;
     const rc = formatRootCauseLine(report.rootCause);
@@ -9927,6 +11328,18 @@ var TraceBugModule = (() => {
 `;
       for (const step of report.sessionSteps) {
         md += `1. ${step}
+`;
+      }
+      md += `
+`;
+    }
+    const ctxKeys = report.context ? Object.keys(report.context) : [];
+    if (ctxKeys.length > 0) {
+      md += `### Context
+
+`;
+      for (const k of ctxKeys) {
+        md += `- **${k}**: \`${String(report.context[k])}\`
 `;
       }
       md += `
@@ -10335,22 +11748,121 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     return `${m}:${s}`;
   }
   function determinePriority(report) {
-    const hasCriticalError = report.consoleErrors.some(
-      (e2) => /TypeError|ReferenceError|SyntaxError/i.test(e2.message)
-    );
-    if (hasCriticalError) return "Highest";
-    const hasServerError = report.networkErrors.some((r) => r.status >= 500);
-    if (hasServerError) return "High";
-    if (report.networkErrors.length > 0) return "Medium";
-    if (report.consoleErrors.length > 0) return "Low";
-    if (report.annotations.some((a2) => a2.severity === "critical" || a2.severity === "major")) return "Medium";
-    return "Low";
+    switch (report.severity) {
+      case "critical":
+        return "Highest";
+      case "high":
+        return "High";
+      case "medium":
+        return "Medium";
+      case "low":
+        return "Low";
+      default:
+        return "Low";
+    }
   }
   var init_jira_issue = __esm({
     "src/jira-issue.ts"() {
       "use strict";
       init_timeline_builder();
       init_report_builder();
+    }
+  });
+
+  // src/annotation-store.ts
+  function addElementAnnotation(ann) {
+    _elementAnnotations.push(ann);
+  }
+  function addDrawRegion(region) {
+    _drawRegions.push(region);
+  }
+  function removeAnnotationById(id) {
+    _elementAnnotations = _elementAnnotations.filter((a2) => a2.id !== id);
+    _drawRegions = _drawRegions.filter((r) => r.id !== id);
+  }
+  function getElementAnnotations() {
+    return _elementAnnotations;
+  }
+  function getDrawRegions() {
+    return _drawRegions;
+  }
+  function getAnnotationReport() {
+    return {
+      elementAnnotations: [..._elementAnnotations],
+      drawRegions: [..._drawRegions],
+      page: typeof window !== "undefined" ? window.location.pathname : "",
+      timestamp: Date.now()
+    };
+  }
+  function clearAllAnnotations() {
+    _elementAnnotations = [];
+    _drawRegions = [];
+  }
+  function exportAsJSON() {
+    return JSON.stringify(getAnnotationReport(), null, 2);
+  }
+  function exportAsMarkdown() {
+    const lines = [];
+    lines.push("# UI Annotations Report");
+    lines.push(`**Page:** ${window.location.href}`);
+    lines.push(`**Date:** ${(/* @__PURE__ */ new Date()).toISOString()}`);
+    lines.push(`**Total:** ${_elementAnnotations.length} element annotations, ${_drawRegions.length} draw regions`);
+    lines.push("");
+    if (_elementAnnotations.length > 0) {
+      lines.push("## Element Annotations");
+      lines.push("");
+      for (let i = 0; i < _elementAnnotations.length; i++) {
+        const a2 = _elementAnnotations[i];
+        const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
+        const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
+        lines.push(`### ${i + 1}. [${intentLabel.toUpperCase()}] \`${a2.selector.slice(0, 60)}\` (${sevLabel})`);
+        lines.push(`- **Element:** \`<${a2.tagName}>\` "${a2.innerText.slice(0, 80)}"`);
+        lines.push(`- **Comment:** ${a2.comment}`);
+        lines.push(`- **Page:** ${a2.page}`);
+        lines.push("");
+      }
+    }
+    if (_drawRegions.length > 0) {
+      lines.push("## Draw Regions");
+      lines.push("");
+      for (let i = 0; i < _drawRegions.length; i++) {
+        const r = _drawRegions[i];
+        const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
+        lines.push(`### ${i + 1}. ${shapeLabel} at (${Math.round(r.x)}, ${Math.round(r.y)}) ${Math.round(r.width)}x${Math.round(r.height)}`);
+        lines.push(`- **Comment:** ${r.comment || "(no comment)"}`);
+        lines.push(`- **Page:** ${r.page}`);
+        lines.push("");
+      }
+    }
+    return lines.join("\n");
+  }
+  async function copyToClipboard(format) {
+    const text = format === "json" ? exportAsJSON() : exportAsMarkdown();
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e2) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        return true;
+      } catch (e3) {
+        return false;
+      } finally {
+        ta.remove();
+      }
+    }
+  }
+  var _elementAnnotations, _drawRegions;
+  var init_annotation_store = __esm({
+    "src/annotation-store.ts"() {
+      "use strict";
+      _elementAnnotations = [];
+      _drawRegions = [];
     }
   });
 
@@ -10541,56 +12053,6 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   });
 
   // src/ui/toast.ts
-  var toast_exports = {};
-  __export(toast_exports, {
-    showActionToast: () => showActionToast,
-    showToast: () => showToast
-  });
-  function showActionToast(message, actionLabel, onAction, root) {
-    const existing = root.querySelector(".bt-toast");
-    if (existing) existing.remove();
-    const toast = document.createElement("div");
-    toast.className = "bt-toast bt-toast-action";
-    toast.dataset.tracebug = "toast";
-    toast.setAttribute("role", "alert");
-    toast.style.cssText = `
-    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:var(--tb-bg-secondary, #1a1a2e);color:var(--tb-text-primary, #e0e0e0);
-    border:1px solid var(--tb-error, #ef4444);border-left:4px solid var(--tb-error, #ef4444);
-    border-radius:10px;padding:12px 14px 12px 16px;font-size:13px;
-    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
-    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
-    max-width:480px;line-height:1.4;
-    display:flex;align-items:center;gap:12px;
-    animation:tracebug-toast-in 0.2s ease;
-  `;
-    if (!document.getElementById("tracebug-toast-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-toast-anim";
-      style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
-      document.head.appendChild(style);
-    }
-    toast.innerHTML = `
-    <span style="flex:1">${message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
-    <button data-tb-action="capture" style="background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</button>
-    <button data-tb-action="dismiss" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px">\u2715</button>
-  `;
-    root.appendChild(toast);
-    const liveRegion = document.getElementById("tracebug-live");
-    if (liveRegion) liveRegion.textContent = message;
-    const dismiss = () => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateX(-50%) translateY(8px)";
-      toast.style.transition = "all 0.3s ease";
-      setTimeout(() => toast.remove(), 300);
-    };
-    toast.querySelector('[data-tb-action="capture"]').addEventListener("click", () => {
-      dismiss();
-      onAction();
-    });
-    toast.querySelector('[data-tb-action="dismiss"]').addEventListener("click", dismiss);
-    setTimeout(dismiss, 8e3);
-  }
   function showToast(message, root) {
     const existing = root.querySelector(".bt-toast");
     if (existing) existing.remove();
@@ -10630,6 +12092,2242 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     }
   });
 
+  // src/ui/replay-scrubber.ts
+  function mountReplayScrubber(container, options) {
+    var _a, _b, _c;
+    _injectStyles();
+    container.innerHTML = "";
+    const timeline = options.timeline.slice().sort((a2, b) => a2.timestamp - b.timestamp);
+    if (timeline.length === 0) {
+      container.innerHTML = `<div class="tb-rs-empty">No events recorded yet.</div>`;
+      return { seek: () => {
+      }, destroy: () => {
+        container.innerHTML = "";
+      } };
+    }
+    const screenshots2 = (options.screenshots || []).slice().sort((a2, b) => a2.timestamp - b.timestamp);
+    const allTs = [];
+    for (const t of timeline) allTs.push(t.timestamp);
+    for (const s of screenshots2) allTs.push(s.timestamp);
+    if ((_a = options.videoEl) == null ? void 0 : _a.dataset.tbStartTs) {
+      const v = Number(options.videoEl.dataset.tbStartTs);
+      if (!isNaN(v)) allTs.push(v);
+    }
+    const minTs = allTs.length ? Math.min(...allTs) : timeline[0].timestamp;
+    const maxTs = allTs.length ? Math.max(...allTs) : timeline[timeline.length - 1].timestamp;
+    const startedAt = (_b = options.startedAt) != null ? _b : minTs;
+    const endedAt = (_c = options.endedAt) != null ? _c : Math.max(maxTs, startedAt + 1e3);
+    const span = Math.max(1e3, endedAt - startedAt);
+    const errorMarkers = timeline.filter((t) => t.isError);
+    const root = document.createElement("div");
+    root.className = "tb-rs-root";
+    root.dataset.tracebug = "replay-scrubber";
+    root.tabIndex = 0;
+    root.setAttribute("role", "slider");
+    root.setAttribute("aria-label", "Session replay scrubber");
+    const header = document.createElement("div");
+    header.className = "tb-rs-header";
+    const playBtn = document.createElement("button");
+    playBtn.className = "tb-rs-play";
+    playBtn.type = "button";
+    playBtn.setAttribute("aria-label", "Play / pause (Space)");
+    playBtn.title = "Play (Space)";
+    playBtn.textContent = "\u25B6";
+    const time2 = document.createElement("span");
+    time2.className = "tb-rs-time";
+    time2.textContent = `00:00 / ${formatElapsed2(span)}`;
+    const speedSel = document.createElement("select");
+    speedSel.className = "tb-rs-speed";
+    speedSel.setAttribute("aria-label", "Playback speed");
+    speedSel.title = "Playback speed";
+    ["0.5", "1", "1.5", "2"].forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v + "\xD7";
+      if (v === "1") opt.selected = true;
+      speedSel.appendChild(opt);
+    });
+    const jumpBtn = document.createElement("button");
+    jumpBtn.className = "tb-rs-jump";
+    jumpBtn.type = "button";
+    jumpBtn.textContent = "Jump to error";
+    jumpBtn.style.display = errorMarkers.length > 0 ? "inline-block" : "none";
+    jumpBtn.title = errorMarkers.length === 1 ? "Seek to the error" : `Seek to first of ${errorMarkers.length} errors`;
+    header.appendChild(playBtn);
+    header.appendChild(time2);
+    header.appendChild(speedSel);
+    header.appendChild(jumpBtn);
+    const track = document.createElement("div");
+    track.className = "tb-rs-track";
+    const fill = document.createElement("div");
+    fill.className = "tb-rs-fill";
+    track.appendChild(fill);
+    const markersLayer = document.createElement("div");
+    markersLayer.className = "tb-rs-markers";
+    track.appendChild(markersLayer);
+    const handle = document.createElement("div");
+    handle.className = "tb-rs-handle";
+    handle.setAttribute("aria-hidden", "true");
+    track.appendChild(handle);
+    const tooltip = document.createElement("div");
+    tooltip.className = "tb-rs-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    track.appendChild(tooltip);
+    root.appendChild(header);
+    root.appendChild(track);
+    const MAX_MARKERS = 200;
+    const visible = timeline.length <= MAX_MARKERS ? timeline : evenSample(timeline, MAX_MARKERS);
+    for (const entry of visible) {
+      const m = document.createElement("div");
+      const isError = entry.isError;
+      const isMark = entry.type === "mark";
+      m.className = isError ? "tb-rs-marker tb-rs-error" : isMark ? "tb-rs-marker tb-rs-mark" : "tb-rs-marker";
+      m.style.left = `${pct(entry.timestamp, startedAt, span)}%`;
+      m.style.background = isError ? MARKER_COLORS.error : MARKER_COLORS[entry.type] || "#7B61FF";
+      m.dataset.ts = String(entry.timestamp);
+      m.dataset.desc = `${entry.elapsed} \xB7 ${entry.description}`;
+      if (isError) m.textContent = "!";
+      markersLayer.appendChild(m);
+    }
+    container.appendChild(root);
+    let currentTs = startedAt;
+    const fmtTime = (ts) => `${formatElapsed2(ts - startedAt)} / ${formatElapsed2(span)}`;
+    const findClosestScreenshot = (ts) => {
+      if (screenshots2.length === 0) return null;
+      let best = screenshots2[0];
+      let bestDelta = Math.abs(best.timestamp - ts);
+      for (const s of screenshots2) {
+        const d = Math.abs(s.timestamp - ts);
+        if (d < bestDelta) {
+          best = s;
+          bestDelta = d;
+        }
+      }
+      return best;
+    };
+    const findClosestMarker = (ts) => {
+      if (timeline.length === 0) return void 0;
+      let best = timeline[0];
+      let bestDelta = Math.abs(best.timestamp - ts);
+      for (const e2 of timeline) {
+        const d = Math.abs(e2.timestamp - ts);
+        if (d < bestDelta) {
+          best = e2;
+          bestDelta = d;
+        }
+      }
+      return { timestamp: best.timestamp, entry: best };
+    };
+    const renderHandle = () => {
+      const p = pct(currentTs, startedAt, span);
+      handle.style.left = `${p}%`;
+      fill.style.width = `${p}%`;
+      time2.textContent = fmtTime(currentTs);
+    };
+    const seek = (ts, opts) => {
+      var _a2;
+      let next = Math.max(startedAt, Math.min(endedAt, ts));
+      let marker;
+      if ((opts == null ? void 0 : opts.snap) !== false) {
+        marker = findClosestMarker(next);
+        if (marker) next = marker.timestamp;
+      }
+      currentTs = next;
+      renderHandle();
+      if (options.videoEl) {
+        try {
+          const vidStart = options.videoEl.dataset.tbStartTs ? Number(options.videoEl.dataset.tbStartTs) : startedAt;
+          options.videoEl.currentTime = Math.max(0, (currentTs - vidStart) / 1e3);
+        } catch (e2) {
+        }
+      }
+      (_a2 = options.onSeek) == null ? void 0 : _a2.call(options, currentTs, marker);
+    };
+    seek(timeline[0].timestamp);
+    let dragging = false;
+    const trackToTs = (clientX) => {
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return startedAt + ratio * span;
+    };
+    const onPointerDown = (e2) => {
+      dragging = true;
+      track.setPointerCapture(e2.pointerId);
+      seek(trackToTs(e2.clientX), { snap: false });
+    };
+    const onPointerMove = (e2) => {
+      var _a2;
+      if (dragging) seek(trackToTs(e2.clientX), { snap: false });
+      const target = e2.target;
+      if (!dragging && ((_a2 = target == null ? void 0 : target.classList) == null ? void 0 : _a2.contains("tb-rs-marker"))) {
+        tooltip.textContent = target.dataset.desc || "";
+        tooltip.style.left = target.style.left;
+        tooltip.style.opacity = "1";
+      } else if (!dragging) {
+        tooltip.style.opacity = "0";
+      }
+    };
+    const onPointerUp = (e2) => {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        track.releasePointerCapture(e2.pointerId);
+      } catch (e3) {
+      }
+      seek(currentTs, { snap: true });
+    };
+    track.addEventListener("pointerdown", onPointerDown);
+    track.addEventListener("pointermove", onPointerMove);
+    track.addEventListener("pointerup", onPointerUp);
+    track.addEventListener("pointerleave", () => {
+      tooltip.style.opacity = "0";
+    });
+    markersLayer.addEventListener("click", (e2) => {
+      const target = e2.target;
+      if (!target.classList.contains("tb-rs-marker")) return;
+      const ts = Number(target.dataset.ts);
+      if (!Number.isNaN(ts)) seek(ts, { snap: true });
+    });
+    let isPlaying = false;
+    let playTimer = null;
+    let videoTickHandler = null;
+    let speed = 1;
+    const setPlayIcon = (playing) => {
+      playBtn.textContent = playing ? "\u23F8" : "\u25B6";
+      playBtn.title = playing ? "Pause (Space)" : "Play (Space)";
+      isPlaying = playing;
+    };
+    const stopPlay = () => {
+      if (playTimer) {
+        clearTimeout(playTimer);
+        playTimer = null;
+      }
+      if (options.videoEl && videoTickHandler) {
+        options.videoEl.removeEventListener("timeupdate", videoTickHandler);
+        options.videoEl.removeEventListener("pause", stopPlay);
+        videoTickHandler = null;
+      }
+      setPlayIcon(false);
+    };
+    const playEvents = () => {
+      const startIdx = timeline.findIndex((t) => t.timestamp > currentTs);
+      if (startIdx < 0 || startIdx >= timeline.length) {
+        stopPlay();
+        return;
+      }
+      const tick = (i) => {
+        if (!isPlaying || i >= timeline.length) {
+          stopPlay();
+          return;
+        }
+        seek(timeline[i].timestamp, { snap: false });
+        if (i + 1 >= timeline.length) {
+          stopPlay();
+          return;
+        }
+        const wait = Math.max(60, (timeline[i + 1].timestamp - timeline[i].timestamp) / speed);
+        playTimer = setTimeout(() => tick(i + 1), wait);
+      };
+      tick(startIdx);
+    };
+    const playFromVideo = () => {
+      const v = options.videoEl;
+      const vidStart = v.dataset.tbStartTs ? Number(v.dataset.tbStartTs) : startedAt;
+      v.playbackRate = speed;
+      videoTickHandler = () => {
+        var _a2;
+        const ts = vidStart + v.currentTime * 1e3;
+        currentTs = Math.max(startedAt, Math.min(endedAt, ts));
+        renderHandle();
+        const marker = findClosestMarker(currentTs);
+        (_a2 = options.onSeek) == null ? void 0 : _a2.call(options, currentTs, marker);
+      };
+      v.addEventListener("timeupdate", videoTickHandler);
+      v.addEventListener("pause", stopPlay);
+      const p = v.play();
+      if (p && typeof p.then === "function") {
+        p.catch(() => {
+          try {
+            v.removeEventListener("timeupdate", videoTickHandler);
+            v.removeEventListener("pause", stopPlay);
+          } catch (e2) {
+          }
+          videoTickHandler = null;
+          playEvents();
+        });
+      }
+    };
+    const togglePlay = () => {
+      if (isPlaying) {
+        stopPlay();
+        if (options.videoEl) try {
+          options.videoEl.pause();
+        } catch (e2) {
+        }
+        ;
+        return;
+      }
+      setPlayIcon(true);
+      if (currentTs >= endedAt - 50) seek(startedAt, { snap: false });
+      if (options.videoEl) playFromVideo();
+      else playEvents();
+    };
+    playBtn.addEventListener("click", togglePlay);
+    speedSel.addEventListener("change", () => {
+      speed = Number(speedSel.value) || 1;
+      if (isPlaying) {
+        if (options.videoEl) options.videoEl.playbackRate = speed;
+        else {
+          stopPlay();
+          setPlayIcon(true);
+          playEvents();
+        }
+      }
+    });
+    let hoverEl = null;
+    if (screenshots2.length > 0) {
+      hoverEl = document.createElement("div");
+      hoverEl.className = "tb-rs-hover-thumb";
+      hoverEl.innerHTML = `<img alt="" /><div class="tb-rs-hover-time"></div>`;
+      hoverEl.style.display = "none";
+      root.appendChild(hoverEl);
+    }
+    const showHoverThumb = (clientX) => {
+      if (!hoverEl) return;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const ts = startedAt + ratio * span;
+      const ss = findClosestScreenshot(ts);
+      if (!ss) {
+        hoverEl.style.display = "none";
+        return;
+      }
+      const img = hoverEl.querySelector("img");
+      const tEl = hoverEl.querySelector(".tb-rs-hover-time");
+      img.src = ss.dataUrl;
+      tEl.textContent = formatElapsed2(ts - startedAt);
+      hoverEl.style.display = "block";
+      const rootRect = root.getBoundingClientRect();
+      const thumbRect = hoverEl.getBoundingClientRect();
+      let left = clientX - rootRect.left - thumbRect.width / 2;
+      left = Math.max(4, Math.min(rootRect.width - thumbRect.width - 4, left));
+      hoverEl.style.left = left + "px";
+      hoverEl.style.bottom = rootRect.bottom - rect.top + 6 + "px";
+    };
+    track.addEventListener("mousemove", (e2) => showHoverThumb(e2.clientX));
+    track.addEventListener("mouseleave", () => {
+      if (hoverEl) hoverEl.style.display = "none";
+    });
+    const onKey = (e2) => {
+      if (e2.key === " " || e2.code === "Space") {
+        e2.preventDefault();
+        togglePlay();
+        return;
+      }
+      if (e2.key === "ArrowLeft" || e2.key === "ArrowRight") {
+        e2.preventDefault();
+        const idx = timeline.findIndex((t) => t.timestamp >= currentTs);
+        let nextIdx = idx;
+        if (e2.key === "ArrowRight") nextIdx = Math.min(timeline.length - 1, idx + 1 < 0 ? 0 : idx + 1);
+        else nextIdx = Math.max(0, (idx > 0 ? idx : timeline.length) - 1);
+        seek(timeline[nextIdx].timestamp, { snap: false });
+        return;
+      }
+      if (e2.key === "ArrowUp" || e2.key === "ArrowDown") {
+        if (errorMarkers.length === 0) return;
+        e2.preventDefault();
+        const errIdx = errorMarkers.findIndex((m) => m.timestamp >= currentTs);
+        let nextErr;
+        if (e2.key === "ArrowDown") nextErr = Math.min(errorMarkers.length - 1, (errIdx < 0 ? errorMarkers.length : errIdx) + (errIdx === -1 ? -1 : 1));
+        else nextErr = Math.max(0, (errIdx > 0 ? errIdx : errorMarkers.length) - 1);
+        seek(errorMarkers[nextErr].timestamp, { snap: false });
+      }
+    };
+    root.addEventListener("keydown", onKey);
+    jumpBtn.addEventListener("click", () => {
+      if (errorMarkers.length === 0) return;
+      seek(errorMarkers[0].timestamp, { snap: true });
+    });
+    return {
+      seek: (ts) => seek(ts, { snap: true }),
+      destroy: () => {
+        stopPlay();
+        track.removeEventListener("pointerdown", onPointerDown);
+        track.removeEventListener("pointermove", onPointerMove);
+        track.removeEventListener("pointerup", onPointerUp);
+        root.removeEventListener("keydown", onKey);
+        container.innerHTML = "";
+      }
+    };
+    function pct(ts, start, range) {
+      return Math.max(0, Math.min(100, (ts - start) / range * 100));
+    }
+    function formatElapsed2(ms) {
+      const total = Math.max(0, Math.floor(ms / 1e3));
+      const m = Math.floor(total / 60).toString().padStart(2, "0");
+      const s = (total % 60).toString().padStart(2, "0");
+      return `${m}:${s}`;
+    }
+    function evenSample(arr, n) {
+      if (arr.length <= n) return arr;
+      const out = [];
+      const step = arr.length / n;
+      for (let i = 0; i < n; i++) out.push(arr[Math.floor(i * step)]);
+      return out;
+    }
+    void findClosestScreenshot;
+  }
+  function _injectStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+    .tb-rs-root {
+      box-sizing: border-box !important;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      padding: 10px 12px !important;
+      background: var(--tb-bg-primary, #0f0f1a) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: var(--tb-radius-md, 6px) !important;
+      outline: none !important;
+    }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #7B61FF) !important; }
+    .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
+    .tb-rs-empty {
+      font-size: 11px; color: var(--tb-text-muted, #888);
+      padding: 12px; text-align: center;
+    }
+    .tb-rs-header {
+      display: flex !important; align-items: center !important; gap: 10px !important;
+      margin-bottom: 8px !important;
+    }
+    .tb-rs-label { font-size: 11px !important; font-weight: 600 !important; color: var(--tb-text-muted, #888) !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
+    .tb-rs-time { font-size: 11px !important; font-variant-numeric: tabular-nums !important; color: var(--tb-text-secondary, #aaa) !important; flex: 1 !important; }
+    .tb-rs-jump {
+      background: transparent !important; color: var(--tb-error, #ef4444) !important;
+      border: 1px solid var(--tb-error, #ef4444) !important; border-radius: 4px !important;
+      padding: 3px 9px !important; font-size: 10px !important; font-weight: 600 !important;
+      font-family: inherit !important; cursor: pointer !important;
+    }
+    .tb-rs-jump:hover { background: rgba(239, 68, 68, 0.12) !important; }
+    .tb-rs-track {
+      position: relative !important;
+      height: 28px !important;
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: 999px !important;
+      cursor: pointer !important;
+      touch-action: none !important;
+      user-select: none !important;
+    }
+    .tb-rs-fill {
+      position: absolute !important; top: 0 !important; left: 0 !important;
+      height: 100% !important; width: 0% !important;
+      background: linear-gradient(90deg, rgba(123,97,255,0.18), rgba(123,97,255,0.08)) !important;
+      border-radius: 999px !important;
+      pointer-events: none !important;
+    }
+    .tb-rs-markers { position: absolute !important; inset: 0 !important; pointer-events: none !important; }
+    .tb-rs-marker {
+      position: absolute !important;
+      top: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      width: 10px !important; height: 10px !important;
+      border-radius: 50% !important;
+      background: #7B61FF !important;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
+      pointer-events: auto !important;
+      cursor: pointer !important;
+      transition: transform 0.12s !important;
+    }
+    .tb-rs-marker:hover { transform: translate(-50%, -50%) scale(1.4) !important; }
+    .tb-rs-error {
+      width: 14px !important; height: 14px !important;
+      border-radius: 3px !important;
+      color: #fff !important;
+      font-size: 10px !important; font-weight: 800 !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      animation: tb-rs-pulse 1.6s infinite !important;
+    }
+    .tb-rs-mark {
+      width: 12px !important; height: 12px !important;
+      border-radius: 2px !important;
+      transform: translate(-50%, -50%) rotate(45deg) !important;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 0 2px rgba(168, 85, 247, 0.25) !important;
+    }
+    .tb-rs-mark:hover { transform: translate(-50%, -50%) rotate(45deg) scale(1.4) !important; }
+    .tb-rs-handle {
+      position: absolute !important;
+      top: 50% !important;
+      width: 16px !important; height: 16px !important;
+      transform: translate(-50%, -50%) !important;
+      background: #fff !important;
+      border: 3px solid var(--tb-accent, #7B61FF) !important;
+      border-radius: 50% !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+      pointer-events: none !important;
+    }
+    .tb-rs-tooltip {
+      position: absolute !important;
+      bottom: calc(100% + 6px) !important;
+      transform: translateX(-50%) !important;
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: 4px !important;
+      padding: 4px 8px !important;
+      font-size: 11px !important;
+      white-space: nowrap !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      transition: opacity 0.12s !important;
+      z-index: 2 !important;
+    }
+    @keyframes tb-rs-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 0 0 rgba(239,68,68,0.5); }
+      50% { box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 0 6px rgba(239,68,68,0); }
+    }
+    /* Play button + speed selector */
+    .tb-rs-play {
+      width: 28px !important; height: 28px !important;
+      background: var(--tb-accent, #7B61FF) !important;
+      color: #fff !important;
+      border: none !important;
+      border-radius: 50% !important;
+      cursor: pointer !important;
+      font-size: 12px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 !important;
+      font-family: inherit !important;
+      transition: transform 0.12s !important;
+    }
+    .tb-rs-play:hover { transform: scale(1.08) !important; }
+    .tb-rs-speed {
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: var(--tb-radius-sm, 6px) !important;
+      padding: 3px 6px !important;
+      font-size: 10px !important;
+      font-family: inherit !important;
+      cursor: pointer !important;
+      outline: none !important;
+    }
+    .tb-rs-speed:hover { border-color: var(--tb-border-hover, #3f3f46) !important; }
+    /* Hover thumbnail */
+    .tb-rs-hover-thumb {
+      position: absolute !important;
+      z-index: 10 !important;
+      background: var(--tb-bg-primary, #0a0a0c) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: var(--tb-radius-sm, 6px) !important;
+      padding: 4px !important;
+      pointer-events: none !important;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4) !important;
+    }
+    .tb-rs-hover-thumb img {
+      display: block !important;
+      max-width: 200px !important;
+      max-height: 130px !important;
+      border-radius: 3px !important;
+    }
+    .tb-rs-hover-time {
+      font-size: 10px !important;
+      color: var(--tb-text-muted, #71717a) !important;
+      margin-top: 3px !important;
+      text-align: center !important;
+      font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
+    }
+  `;
+    document.head.appendChild(style);
+  }
+  var STYLE_ID, MARKER_COLORS;
+  var init_replay_scrubber = __esm({
+    "src/ui/replay-scrubber.ts"() {
+      "use strict";
+      STYLE_ID = "tracebug-replay-scrubber-styles";
+      MARKER_COLORS = {
+        click: "#7B61FF",
+        input: "#7B61FF",
+        select_change: "#7B61FF",
+        form_submit: "#7B61FF",
+        route_change: "#22d3ee",
+        api_request: "#facc15",
+        error: "#ef4444",
+        unhandled_rejection: "#ef4444",
+        console_error: "#ef4444",
+        mark: "#a855f7"
+      };
+    }
+  });
+
+  // src/exporters/html-template.ts
+  function buildReplayHtml(payload) {
+    const dataJson = JSON.stringify(payload).replace(/<\/script>/gi, "<\\/script>");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TraceBug Replay \u2014 ${escapeHtml3(payload.meta.title)}</title>
+<style>${REPLAY_CSS}</style>
+</head>
+<body>
+<header class="tb-vh">
+  <div class="tb-vh-row">
+    <span class="tb-vh-logo">\u{1F41E}</span>
+    <span class="tb-vh-title" id="title"></span>
+    <span class="tb-vh-sev" id="sev"></span>
+    <button class="tb-vh-toggle" id="compact-toggle" title="Toggle compact mode (F)" aria-label="Toggle compact mode">\u26F6</button>
+    <button class="tb-vh-toggle" id="theme-toggle" title="Toggle theme (auto / light / dark)" aria-label="Toggle theme">\u{1F317}</button>
+    <button class="tb-vh-toggle" id="help-toggle" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
+  </div>
+  <div class="tb-vh-meta" id="meta"></div>
+</header>
+<main class="tb-vmain">
+  <section class="tb-vleft">
+    <h2 class="tb-vh2">Replay</h2>
+    <div class="tb-vpreview" id="preview-wrap">
+      <video id="video" controls playsinline style="display:none"></video>
+      <img id="ssimg" alt="Session screenshot" />
+      <div id="empty" class="tb-vempty" style="display:none">No screenshots captured.</div>
+      <button id="play-overlay" class="tb-vplay-overlay" style="display:none" aria-label="Play recording (Space)">
+        <span class="tb-vplay-icon">\u25B6</span>
+        <span class="tb-vplay-label">Play recording</span>
+        <span class="tb-vplay-sub" id="play-overlay-sub"></span>
+      </button>
+    </div>
+    <div id="scrubber"></div>
+    <div class="tb-vss-meta" id="ssmeta"></div>
+    <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
+      <img id="hover-thumb-img" alt="" />
+      <div id="hover-thumb-time"></div>
+    </div>
+  </section>
+  <section class="tb-vright">
+    <div class="tb-vsummary-box">
+      <div class="tb-vsummary" id="summary"></div>
+    </div>
+    <div class="tb-vtabstrip" role="tablist">
+      <button data-tab="info" class="tb-vtab tb-vtab-active" role="tab">Info</button>
+      <button data-tab="console" class="tb-vtab" role="tab">Console <span class="tb-vtab-badge" id="badge-console"></span></button>
+      <button data-tab="network" class="tb-vtab" role="tab">Network <span class="tb-vtab-badge" id="badge-network"></span></button>
+      <button data-tab="actions" class="tb-vtab" role="tab">Actions <span class="tb-vtab-badge" id="badge-actions"></span></button>
+      <button data-tab="ai" class="tb-vtab" role="tab">AI</button>
+      <button data-tab="notes" class="tb-vtab" role="tab">Notes <span class="tb-vtab-badge" id="badge-notes"></span></button>
+      <button data-tab="events" class="tb-vtab" role="tab">Events <span class="tb-vtab-badge" id="badge-events"></span></button>
+      <button data-tab="desc" class="tb-vtab" role="tab">Description</button>
+    </div>
+    <div class="tb-vtabpanels">
+      <div data-panel="info" class="tb-vpanel tb-vpanel-active" id="panel-info"></div>
+      <div data-panel="console" class="tb-vpanel" id="panel-console" hidden></div>
+      <div data-panel="network" class="tb-vpanel" id="panel-network" hidden></div>
+      <div data-panel="actions" class="tb-vpanel" id="panel-actions" hidden></div>
+      <div data-panel="ai" class="tb-vpanel" id="panel-ai" hidden></div>
+      <div data-panel="notes" class="tb-vpanel" id="panel-notes" hidden></div>
+      <div data-panel="events" class="tb-vpanel" id="panel-events"><ol class="tb-vevents" id="events"></ol></div>
+      <div data-panel="desc" class="tb-vpanel" id="panel-desc" hidden><pre class="tb-vdesc" id="desc"></pre></div>
+    </div>
+  </section>
+</main>
+<footer class="tb-vf">
+  Generated by <a href="https://github.com/prashantsinghmangat/tracebug-ai" target="_blank" rel="noopener">TraceBug</a> \xB7 works offline \xB7 no network requests
+</footer>
+<!-- Help overlay: keyboard shortcut cheat sheet -->
+<div id="help-overlay" class="tb-vhelp" style="display:none">
+  <div class="tb-vhelp-card">
+    <div class="tb-vhelp-title">Keyboard shortcuts</div>
+    <div class="tb-vhelp-row"><kbd>Space</kbd><span>Play / pause recording</span></div>
+    <div class="tb-vhelp-row"><kbd>\u2190</kbd> <kbd>\u2192</kbd><span>Step previous / next event</span></div>
+    <div class="tb-vhelp-row"><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd><span>Rewind 5s / pause / fast-forward 5s</span></div>
+    <div class="tb-vhelp-row"><kbd>E</kbd><span>Jump to first error</span></div>
+    <div class="tb-vhelp-row"><kbd>F</kbd><span>Toggle compact mode</span></div>
+    <div class="tb-vhelp-row"><kbd>1</kbd>\u2013<kbd>8</kbd><span>Switch tabs</span></div>
+    <div class="tb-vhelp-row"><kbd>T</kbd><span>Cycle theme (light / dark / auto)</span></div>
+    <div class="tb-vhelp-row"><kbd>?</kbd> <kbd>Esc</kbd><span>Toggle / close this overlay</span></div>
+    <button class="tb-vhelp-close" id="help-close" aria-label="Close">Close</button>
+  </div>
+</div>
+<script id="tb-data" type="application/json">${dataJson}</script>
+<script>
+${REPLAY_RUNTIME}
+</script>
+</body>
+</html>`;
+  }
+  function escapeHtml3(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  var REPLAY_CSS, REPLAY_RUNTIME;
+  var init_html_template = __esm({
+    "src/exporters/html-template.ts"() {
+      "use strict";
+      REPLAY_CSS = `
+/* \u2500\u2500 Theme tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+/* Light is the unconditional default. Dark requires an explicit
+ * data-theme="dark" attribute, set by the in-header toggle. The previous
+ * prefers-color-scheme auto-switch was removed in favor of this. */
+:root {
+  --tb-bg: #ffffff;
+  --tb-bg-2: #fafafa;
+  --tb-bg-3: #ffffff;
+  --tb-text: #09090b;
+  --tb-text-2: #52525b;
+  --tb-text-3: #a1a1aa;
+  --tb-accent: #7c3aed;
+  --tb-accent-2: #6d28d9;
+  --tb-accent-soft: #7c3aed14;
+  --tb-border: #e4e4e7;
+  --tb-border-sub: #f4f4f5;
+  --tb-border-hover: #d4d4d8;
+  --tb-error: #dc2626;
+  --tb-error-bg: #fef2f2;
+  --tb-warning: #d97706;
+  --tb-warning-bg: #fffbeb;
+  --tb-success: #059669;
+  --tb-success-bg: #ecfdf5;
+  --tb-info: #2563eb;
+  --tb-info-bg: #eff6ff;
+  --tb-code-bg: #f4f4f5;
+  --tb-code-text: #27272a;
+  --tb-code-tag: #be185d;
+  --tb-code-attr-name: #a16207;
+  --tb-code-attr-val: #15803d;
+  --tb-radius-sm: 6px;
+  --tb-radius-md: 10px;
+  --tb-shadow-md: 0 4px 16px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
+  --tb-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --tb-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+}
+:root[data-theme="dark"], html[data-theme="dark"] body {
+  --tb-bg: #0a0a0c;
+  --tb-bg-2: #18181b;
+  --tb-bg-3: #27272a;
+  --tb-text: #fafafa;
+  --tb-text-2: #a1a1aa;
+  --tb-text-3: #71717a;
+  --tb-accent: #8b5cf6;
+  --tb-accent-2: #a78bfa;
+  --tb-accent-soft: #8b5cf61f;
+  --tb-border: #27272a;
+  --tb-border-sub: #1f1f23;
+  --tb-border-hover: #3f3f46;
+  --tb-error: #ef4444;
+  --tb-error-bg: #ef44441a;
+  --tb-warning: #f59e0b;
+  --tb-warning-bg: #f59e0b1a;
+  --tb-success: #10b981;
+  --tb-success-bg: #10b9811a;
+  --tb-info: #3b82f6;
+  --tb-info-bg: #3b82f61a;
+  --tb-code-bg: #09090b;
+  --tb-code-text: #d4d4d8;
+  --tb-code-tag: #f472b6;
+  --tb-code-attr-name: #fcd34d;
+  --tb-code-attr-val: #86efac;
+  --tb-shadow-md: 0 4px 16px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.25);
+}
+
+/* \u2500\u2500 Base \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--tb-bg); color: var(--tb-text); font-family: var(--tb-font); -webkit-font-smoothing: antialiased; }
+body { min-height: 100vh; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--tb-border); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--tb-border-hover); }
+
+/* \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vh { padding: 18px 24px; background: var(--tb-bg-2); border-bottom: 1px solid var(--tb-border); position: sticky; top: 0; z-index: 10; }
+.tb-vh-row { display: flex; align-items: center; gap: 12px; max-width: 1400px; margin: 0 auto; }
+.tb-vh-logo { font-size: 20px; }
+.tb-vh-title { font-size: 15px; font-weight: 600; flex: 1; word-break: break-word; letter-spacing: -0.01em; }
+.tb-vh-sev { font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
+.tb-vh-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 6px; max-width: 1400px; margin-left: auto; margin-right: auto; font-weight: 500; }
+.tb-vh-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font-size: 14px; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
+.tb-vh-toggle:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
+
+/* \u2500\u2500 Layout \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vmain { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 22px; padding: 22px 24px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 900px) { .tb-vmain { grid-template-columns: 1fr; } }
+.tb-vh2 { font-size: 10px; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: .6px; margin: 14px 0 10px; font-weight: 700; }
+.tb-vh2:first-child { margin-top: 0; }
+.tb-vleft { min-width: 0; }
+
+/* \u2500\u2500 Replay preview \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vpreview { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); padding: 10px; min-height: 260px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.tb-vpreview img, .tb-vpreview video { max-width: 100%; max-height: 60vh; border-radius: var(--tb-radius-sm); display: block; margin: 0 auto; }
+.tb-vss-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 8px; font-family: var(--tb-mono); }
+.tb-vempty { color: var(--tb-text-3); font-size: 12px; }
+
+/* \u2500\u2500 Right pane: summary + tabs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vsummary-box { margin-bottom: 14px; }
+.tb-vsummary { font-size: 13px; line-height: 1.55; padding: 12px 14px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); color: var(--tb-text); }
+.tb-vdesc { font-size: 12px; line-height: 1.6; padding: 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); max-height: 360px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font-family: var(--tb-mono); margin: 0; color: var(--tb-text); }
+.tb-vtabstrip { display: flex; gap: 0; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md) var(--tb-radius-md) 0 0; padding: 0 8px; overflow-x: auto; }
+.tb-vtab { background: transparent; border: none; color: var(--tb-text-3); padding: 11px 13px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; transition: color .15s, border-color .15s; margin-bottom: -1px; letter-spacing: -0.01em; }
+.tb-vtab:hover { color: var(--tb-text); }
+.tb-vtab-active { color: var(--tb-text); border-bottom-color: var(--tb-accent); }
+.tb-vtab-badge { font-size: 10px; font-weight: 700; background: var(--tb-accent-soft); color: var(--tb-accent); padding: 1px 7px; border-radius: 999px; line-height: 1.4; min-width: 18px; text-align: center; }
+.tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: #fff; }
+.tb-vtab-badge:empty { display: none; }
+.tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
+.tb-vpanel { display: none; }
+.tb-vpanel-active { display: block; }
+.tb-vempty-tab { font-size: 13px; color: var(--tb-text-3); padding: 32px 16px; text-align: center; border: 1px dashed var(--tb-border); border-radius: var(--tb-radius-md); }
+
+/* \u2500\u2500 Tab content \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vsec-head { font-size: 10px; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; margin: 14px 0 8px; }
+.tb-vsec-head:first-child { margin-top: 0; }
+.tb-vkv { display: flex; gap: 12px; padding: 8px 12px; background: var(--tb-bg); border: 1px solid var(--tb-border-sub); border-radius: var(--tb-radius-sm); margin-bottom: 4px; transition: border-color .15s; }
+.tb-vkv:hover { border-color: var(--tb-border); }
+.tb-vkv-k { font-size: 11px; color: var(--tb-text-3); min-width: 100px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; flex-shrink: 0; }
+.tb-vkv-v { font-size: 12px; color: var(--tb-text); word-break: break-word; flex: 1; font-family: var(--tb-mono); display: flex; align-items: center; gap: 6px; }
+.tb-vkv-icon { font-size: 13px; line-height: 1; flex-shrink: 0; }
+.tb-vlog { padding: 10px 12px; margin-bottom: 8px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-left: 3px solid var(--tb-border-hover); border-radius: var(--tb-radius-sm); }
+.tb-vlog-error { border-left-color: var(--tb-error); }
+.tb-vlog-warn { border-left-color: var(--tb-warning); }
+.tb-vlog-log, .tb-vlog-info { border-left-color: var(--tb-info); }
+.tb-vlog-head { display: flex; align-items: flex-start; gap: 8px; }
+.tb-vlog-lvl { font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: var(--tb-radius-sm); text-transform: uppercase; letter-spacing: 0.4px; flex-shrink: 0; line-height: 1.35; }
+.tb-vlog-lvl-error { background: var(--tb-error-bg); color: var(--tb-error); }
+.tb-vlog-lvl-warn { background: var(--tb-warning-bg); color: var(--tb-warning); }
+.tb-vlog-lvl-log, .tb-vlog-lvl-info { background: var(--tb-info-bg); color: var(--tb-info); }
+.tb-vlog-msg { font-size: 12px; color: var(--tb-text); font-family: var(--tb-mono); word-break: break-word; line-height: 1.5; flex: 1; min-width: 0; }
+.tb-vlog-error .tb-vlog-msg { color: var(--tb-error); }
+.tb-vlog-stack { font-size: 10px; color: var(--tb-text-3); font-family: var(--tb-mono); margin: 8px 0 0; padding: 8px 10px; background: var(--tb-code-bg); border-radius: var(--tb-radius-sm); max-height: 120px; overflow: auto; white-space: pre-wrap; }
+.tb-vlog-ts { font-size: 10px; color: var(--tb-text-3); margin-top: 6px; font-family: var(--tb-mono); }
+.tb-vnet { padding: 10px 12px; margin-bottom: 6px; background: var(--tb-bg); border-radius: var(--tb-radius-sm); border: 1px solid var(--tb-border); transition: border-color .15s; }
+.tb-vnet:hover { border-color: var(--tb-border-hover); }
+.tb-vnet-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.tb-vnet-method { font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: var(--tb-radius-sm); background: var(--tb-bg-3); color: var(--tb-text); font-family: var(--tb-mono); letter-spacing: 0.5px; }
+.tb-vnet-status { font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: var(--tb-radius-sm); color: #fff; font-family: var(--tb-mono); background: #16a34a; }
+.tb-vnet-status.s2 { background: #16a34a; }
+.tb-vnet-status.s3 { background: #0891b2; }
+.tb-vnet-status.s4 { background: #d97706; }
+.tb-vnet-status.s5 { background: #dc2626; }
+.tb-vnet-status.serr { background: #7f1d1d; }
+.tb-vnet-time { font-size: 11px; color: var(--tb-text-3); margin-left: auto; font-family: var(--tb-mono); }
+/* \u2500\u2500 DevTools-style Network refactor \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vnet-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.tb-vnet-search { flex: 1; min-width: 0; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); color: var(--tb-text); padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; transition: border-color .15s; }
+.tb-vnet-search:focus { border-color: var(--tb-accent); box-shadow: 0 0 0 3px var(--tb-accent-soft); }
+.tb-vnet-err-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tb-text-2); cursor: pointer; white-space: nowrap; }
+.tb-vnet-err-toggle input { accent-color: var(--tb-accent); cursor: pointer; }
+.tb-vcon-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tb-vcon-count { font-size: 10px; color: var(--tb-text-3); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600; }
+.tb-vnet-pills { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+.tb-vnet-pill { background: var(--tb-bg); border: 1px solid var(--tb-border); color: var(--tb-text-2); padding: 4px 11px; font-size: 11px; font-weight: 600; border-radius: 999px; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; }
+.tb-vnet-pill:hover { border-color: var(--tb-border-hover); color: var(--tb-text); }
+.tb-vnet-pill-active { background: var(--tb-text); color: var(--tb-bg); border-color: var(--tb-text); }
+.tb-vnet-pill-n { background: rgba(0,0,0,0.15); padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; }
+.tb-vnet-pill-active .tb-vnet-pill-n { background: rgba(255,255,255,0.2); }
+.tb-vnet-table { font-family: var(--tb-mono); font-size: 11px; }
+.tb-vnet-row { display: grid; grid-template-columns: 28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items: center; gap: 8px; padding: 0; background: transparent; border: none; }
+.tb-vnet-row.tb-vnet-head { padding: 6px 8px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--tb-text-3); border-bottom: 1px solid var(--tb-border); }
+details.tb-vnet-row { display: block; border-bottom: 1px solid var(--tb-border-sub); }
+details.tb-vnet-row:hover { background: var(--tb-bg-2); }
+.tb-vnet-summary { display: grid; grid-template-columns: 28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; list-style: none; min-height: 24px; }
+.tb-vnet-summary::-webkit-details-marker { display: none; }
+.tb-vnet-c-n { color: var(--tb-text-3); text-align: right; }
+.tb-vnet-c-name { color: var(--tb-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-vnet-c-meth { color: var(--tb-text-2); font-weight: 600; font-size: 10px; letter-spacing: 0.4px; }
+.tb-vnet-c-stat { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: var(--tb-radius-sm); color: #fff; text-align: center; }
+.tb-vnet-c-stat.s2 { background: #16a34a; }
+.tb-vnet-c-stat.s3 { background: #0891b2; }
+.tb-vnet-c-stat.s4 { background: #d97706; }
+.tb-vnet-c-stat.s5 { background: #dc2626; }
+.tb-vnet-c-stat.serr { background: #7f1d1d; }
+.tb-vnet-c-dom { color: var(--tb-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tb-vnet-c-type { color: var(--tb-text-3); font-size: 10px; }
+.tb-vnet-c-time { color: var(--tb-text-2); text-align: right; font-size: 10px; }
+.tb-vnet-c-wf { position: relative; height: 14px; background: var(--tb-bg-2); border-radius: 3px; overflow: hidden; }
+.tb-vnet-wf-bar { position: absolute; top: 3px; height: 8px; border-radius: 2px; background: var(--tb-accent); }
+.tb-vnet-wf-bar.s4 { background: #d97706; }
+.tb-vnet-wf-bar.s5 { background: #dc2626; }
+.tb-vnet-wf-bar.serr { background: #7f1d1d; }
+.tb-vnet-detail { padding: 0 8px 10px 36px; }
+.tb-vnet-detail-url { font-size: 11px; color: var(--tb-text-2); word-break: break-all; padding-bottom: 6px; }
+.tb-vnet-snippet pre { margin: 0; padding: 8px; background: var(--tb-code-bg); border-radius: var(--tb-radius-sm); font-size: 10px; color: var(--tb-code-text); max-height: 120px; overflow: auto; white-space: pre-wrap; }
+/* Tab notification dots */
+.tb-vtab-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--tb-accent); margin-left: 4px; vertical-align: middle; }
+.tb-vnet-url { font-size: 12px; color: var(--tb-text-2); font-family: var(--tb-mono); word-break: break-all; line-height: 1.5; }
+.tb-vnet-snippet { font-size: 10px; color: var(--tb-text-3); font-family: var(--tb-mono); margin: 8px 0 0; padding: 8px 10px; background: var(--tb-code-bg); border-radius: var(--tb-radius-sm); max-height: 96px; overflow: auto; white-space: pre-wrap; }
+.tb-vsteps { margin: 0; padding-left: 24px; font-size: 13px; color: var(--tb-text); line-height: 1.7; }
+.tb-vsteps li { margin-bottom: 5px; }
+.tb-vnote { padding: 10px 12px; margin-bottom: 8px; background: var(--tb-bg); border-radius: var(--tb-radius-sm); border: 1px solid var(--tb-border-sub); border-left: 3px solid var(--tb-border); }
+.tb-vnote-critical { border-left-color: var(--tb-error); }
+.tb-vnote-major { border-left-color: var(--tb-warning); }
+.tb-vnote-minor { border-left-color: #ca8a04; }
+.tb-vnote-info { border-left-color: var(--tb-info); }
+.tb-vnote-sev { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--tb-text-3); margin-bottom: 5px; }
+.tb-vnote-text { font-size: 13px; color: var(--tb-text); line-height: 1.5; }
+.tb-vnote-line { font-size: 11px; color: var(--tb-text-2); margin-top: 5px; }
+.tb-vai-card { padding: 14px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); margin-bottom: 10px; }
+.tb-vai-head { font-size: 11px; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.tb-vai-conf { font-size: 9px; padding: 2px 8px; border-radius: 999px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.tb-vai-conf-high { background: var(--tb-success-bg); color: var(--tb-success); }
+.tb-vai-conf-medium { background: var(--tb-warning-bg); color: var(--tb-warning); }
+.tb-vai-conf-low { background: var(--tb-info-bg); color: var(--tb-info); }
+.tb-vai-body { font-size: 13px; color: var(--tb-text); line-height: 1.6; }
+.tb-vai-empty .tb-vai-body { color: var(--tb-text-2); }
+
+/* Actions tab \u2014 chips */
+.tb-vchips { display: flex; flex-direction: column; gap: 5px; }
+.tb-vchip { display: flex; align-items: flex-start; gap: 12px; padding: 9px 12px; background: var(--tb-bg); border: 1px solid var(--tb-border-sub); border-radius: var(--tb-radius-sm); border-left: 3px solid transparent; font-size: 12px; line-height: 1.5; transition: border-color .15s; }
+.tb-vchip:hover { border-color: var(--tb-border); }
+.tb-vchip-err { border-left-color: var(--tb-error); }
+.tb-vchip-verb { font-size: 10px; font-weight: 700; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: 0.5px; min-width: 66px; flex-shrink: 0; padding-top: 2px; }
+.tb-vchip-verb-click { color: var(--tb-accent); }
+.tb-vchip-verb-input { color: var(--tb-success); }
+.tb-vchip-verb-select { color: #0891b2; }
+.tb-vchip-verb-submit { color: var(--tb-info); }
+.tb-vchip-verb-navigate { color: #a855f7; }
+.tb-vchip-verb-api { color: var(--tb-warning); }
+.tb-vchip-verb-error { color: var(--tb-error); }
+.tb-vchip-verb-mark { color: #ea580c; }
+.tb-vchip-body { flex: 1; min-width: 0; word-break: break-word; }
+.tb-vchip-det { display: inline-block; margin-left: 6px; color: var(--tb-text); font-family: var(--tb-mono); }
+.tb-vchip-det-err { color: var(--tb-error); }
+.tb-vel { font-family: var(--tb-mono); font-size: 12px; color: var(--tb-code-text); }
+.tb-vel-tag { color: var(--tb-code-tag); }
+.tb-vel-an { color: var(--tb-code-attr-name); }
+.tb-vel-av { color: var(--tb-code-attr-val); }
+.tb-vel-more { color: var(--tb-text-3); font-style: italic; font-size: 10px; }
+/* Human-readable target + frustration glyph */
+.tb-vchip-tgt { display: inline-block; margin-right: 8px; font-size: 12px; color: var(--tb-text); }
+.tb-vchip-tgt-name { font-weight: 600; }
+.tb-vchip-tgt-noun { color: var(--tb-text-2); font-weight: 500; }
+.tb-vchip-frust { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.tb-vchip-frust-rage { background: rgba(239,68,68,0.18); color: #ef4444; }
+.tb-vchip-frust-dead { background: rgba(245,158,11,0.18); color: #f59e0b; }
+.tb-vchip-frust-abandon { background: rgba(59,130,246,0.18); color: #3b82f6; }
+
+/* Events list */
+.tb-vevents { font-size: 12px; line-height: 1.6; padding-left: 24px; margin: 0; max-height: 380px; overflow: auto; color: var(--tb-text); }
+.tb-vevents li { margin-bottom: 3px; color: var(--tb-text-2); cursor: pointer; transition: color .15s; }
+.tb-vevents li:hover { color: var(--tb-text); }
+.tb-vevents li.tb-ve-error { color: var(--tb-error); }
+.tb-vevents .tb-ve-time { display: inline-block; min-width: 60px; color: var(--tb-text-3); font-family: var(--tb-mono); font-size: 11px; }
+
+/* \u2500\u2500 Footer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vf { padding: 18px 24px; text-align: center; font-size: 11px; color: var(--tb-text-3); border-top: 1px solid var(--tb-border); background: var(--tb-bg-2); }
+.tb-vf a { color: var(--tb-accent); text-decoration: none; font-weight: 500; }
+.tb-vf a:hover { color: var(--tb-accent-2); }
+
+/* \u2500\u2500 Severity pills \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-sev-critical { background: var(--tb-error-bg); color: var(--tb-error); border: 1px solid var(--tb-error); }
+.tb-sev-high { background: var(--tb-warning-bg); color: var(--tb-warning); border: 1px solid var(--tb-warning); }
+.tb-sev-medium { background: var(--tb-warning-bg); color: #ca8a04; border: 1px solid #ca8a04; }
+.tb-sev-low { background: var(--tb-success-bg); color: var(--tb-success); border: 1px solid var(--tb-success); }
+
+/* \u2500\u2500 Inline scrubber \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-rs-root { padding: 12px 14px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); outline: none; }
+.tb-rs-root:focus-visible { box-shadow: 0 0 0 3px var(--tb-accent-soft); border-color: var(--tb-accent); }
+.tb-rs-empty { font-size: 12px; color: var(--tb-text-3); padding: 14px; text-align: center; }
+.tb-rs-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.tb-rs-label { font-size: 10px; font-weight: 700; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: 0.6px; }
+.tb-rs-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-2); flex: 1; font-family: var(--tb-mono); }
+.tb-rs-jump { background: transparent; color: var(--tb-error); border: 1px solid var(--tb-error); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; }
+.tb-rs-jump:hover { background: var(--tb-error-bg); }
+.tb-rs-track { position: relative; height: 30px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: 999px; cursor: pointer; touch-action: none; user-select: none; }
+.tb-rs-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--tb-accent-soft), transparent); border-radius: 999px; pointer-events: none; }
+.tb-rs-markers { position: absolute; inset: 0; pointer-events: none; }
+.tb-rs-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 50%; background: var(--tb-accent); box-shadow: 0 0 0 1px var(--tb-bg-2); pointer-events: auto; cursor: pointer; transition: transform .12s; }
+.tb-rs-marker:hover { transform: translate(-50%, -50%) scale(1.4); }
+.tb-rs-error { width: 14px; height: 14px; border-radius: 3px; color: #fff; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.tb-rs-handle { position: absolute; top: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); background: var(--tb-bg); border: 3px solid var(--tb-accent); border-radius: 50%; box-shadow: var(--tb-shadow-md); pointer-events: none; }
+
+/* \u2500\u2500 Play overlay (lazy video load) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vpreview { position: relative; }
+.tb-vplay-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: rgba(0,0,0,0.55); color: #fff; border: none; cursor: pointer; font-family: inherit; transition: background .15s; border-radius: var(--tb-radius-md); }
+.tb-vplay-overlay:hover { background: rgba(0,0,0,0.7); }
+.tb-vplay-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--tb-accent); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: transform .15s; }
+.tb-vplay-overlay:hover .tb-vplay-icon { transform: scale(1.06); }
+.tb-vplay-label { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.tb-vplay-sub { font-size: 11px; color: rgba(255,255,255,0.7); }
+
+/* \u2500\u2500 Compact mode (collapses the right pane) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+:root[data-compact="1"] .tb-vmain { grid-template-columns: 1fr !important; }
+:root[data-compact="1"] .tb-vright { display: none !important; }
+:root[data-compact="1"] .tb-vpreview img,
+:root[data-compact="1"] .tb-vpreview video { max-height: 75vh; }
+
+/* \u2500\u2500 Hover thumbnail on scrubber \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vhover-thumb { position: fixed; pointer-events: none; z-index: 50; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 4px; box-shadow: var(--tb-shadow-md); }
+.tb-vhover-thumb img { display: block; max-width: 220px; max-height: 140px; border-radius: 3px; }
+.tb-vhover-thumb > div { font-size: 10px; color: var(--tb-text-3); margin-top: 4px; text-align: center; font-family: var(--tb-mono); }
+
+/* \u2500\u2500 Help overlay \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vhelp { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+.tb-vhelp-card { background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); box-shadow: var(--tb-shadow-md); padding: 24px 28px; max-width: 460px; width: 100%; }
+.tb-vhelp-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: var(--tb-text); letter-spacing: -0.01em; }
+.tb-vhelp-row { display: flex; align-items: center; gap: 12px; padding: 7px 0; font-size: 13px; color: var(--tb-text); border-bottom: 1px solid var(--tb-border-sub); }
+.tb-vhelp-row:last-of-type { border-bottom: none; }
+.tb-vhelp-row span { color: var(--tb-text-2); flex: 1; }
+.tb-vhelp-row kbd { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 2px 8px; font-family: var(--tb-mono); font-size: 11px; color: var(--tb-text); margin-right: 4px; }
+.tb-vhelp-close { margin-top: 14px; width: 100%; padding: 9px; background: var(--tb-accent); color: #fff; border: none; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: background .15s; }
+.tb-vhelp-close:hover { background: var(--tb-accent-2); }
+
+/* \u2500\u2500 Marker types \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-rs-marker-frust { background: var(--tb-warning); }
+.tb-rs-marker-mark { background: #ea580c; border-radius: 2px; transform: translate(-50%, -50%) rotate(45deg); }
+.tb-rs-marker-net-err { background: var(--tb-error); }
+`;
+      REPLAY_RUNTIME = `(function(){
+  var data;
+  try { data = JSON.parse(document.getElementById("tb-data").textContent); }
+  catch (e) { document.body.innerHTML = "<p style=padding:20px;color:#ef4444>Failed to parse embedded session data.</p>"; return; }
+
+  // \u2500\u2500 Theme toggle (auto \u2192 light \u2192 dark \u2192 auto) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Persists per-file in localStorage. Without a saved pref the CSS uses
+  // prefers-color-scheme to auto-pick. Recipients can override either way.
+  var THEME_KEY = "tracebug_replay_theme";
+  function loadPref() {
+    try { var v = localStorage.getItem(THEME_KEY); return v === "light" || v === "dark" || v === "auto" ? v : "auto"; } catch (e) { return "auto"; }
+  }
+  function savePref(v) { try { localStorage.setItem(THEME_KEY, v); } catch (e) {} }
+  function applyTheme(pref) {
+    if (pref === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", pref);
+  }
+  function themeIcon(pref) { return pref === "auto" ? "\u{1F317}" : pref === "dark" ? "\u{1F319}" : "\u2600"; }
+  var currentPref = loadPref();
+  applyTheme(currentPref);
+  var toggleBtn = document.getElementById("theme-toggle");
+  if (toggleBtn) {
+    toggleBtn.textContent = themeIcon(currentPref);
+    toggleBtn.addEventListener("click", function(){
+      currentPref = currentPref === "auto" ? "light" : currentPref === "light" ? "dark" : "auto";
+      savePref(currentPref);
+      applyTheme(currentPref);
+      toggleBtn.textContent = themeIcon(currentPref);
+    });
+  }
+
+  // \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  var titleEl = document.getElementById("title");
+  var sevEl = document.getElementById("sev");
+  var metaEl = document.getElementById("meta");
+  var SEV = { critical: "\u{1F534} Critical", high: "\u{1F7E0} High", medium: "\u{1F7E1} Medium", low: "\u{1F7E2} Low" };
+  titleEl.textContent = data.meta.title || "Untitled bug";
+  if (data.meta.severity) {
+    sevEl.textContent = SEV[data.meta.severity] || data.meta.severity;
+    sevEl.className = "tb-vh-sev tb-sev-" + data.meta.severity;
+  }
+  var metaParts = [
+    "Session " + (data.meta.sessionId || "").slice(0, 8),
+    "Page " + (data.meta.page || ""),
+    "Generated " + new Date(data.meta.generatedAt || Date.now()).toLocaleString(),
+    data.meta.environment || ""
+  ].filter(Boolean);
+  metaEl.textContent = metaParts.join(" \xB7 ");
+
+  // \u2500\u2500 Summary box + Description tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  document.getElementById("summary").textContent = data.meta.summary || "(no summary)";
+  document.getElementById("desc").textContent = data.description || "(no description)";
+
+  // \u2500\u2500 Tabs: populate counts + content \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function setBadge(id, n) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = n > 0 ? String(n) : "";
+    // Mirror the count as a small notification dot on the parent tab \u2014 like
+    // Jam's green-dot indicator. Removed when the user clicks the tab.
+    var btn = el && el.closest && el.closest("[data-tab]");
+    if (btn) {
+      var existing = btn.querySelector(".tb-vtab-dot");
+      if (n > 0 && !existing) {
+        var dot = document.createElement("span");
+        dot.className = "tb-vtab-dot";
+        btn.appendChild(dot);
+      } else if (n === 0 && existing) {
+        existing.remove();
+      }
+    }
+  }
+
+  // Info tab \u2014 render kv pairs from data.info (server-side built)
+  var info = data.info || [];
+  var infoHtml = info.length === 0
+    ? '<div class="tb-vempty-tab">No info captured</div>'
+    : info.map(function(r){
+        var iconHtml = r.i ? '<span class="tb-vkv-icon">' + esc(r.i) + '</span>' : '';
+        return '<div class="tb-vkv"><span class="tb-vkv-k">' + esc(r.k) + '</span><span class="tb-vkv-v">' + iconHtml + esc(r.v) + '</span></div>';
+      }).join("");
+  document.getElementById("panel-info").innerHTML = infoHtml;
+
+  // Console tab \u2014 full DevTools-like log list with level filter
+  var consoleLogs = data.consoleLogs || [];
+  // Backward compat: older bundles only have consoleErrors. Promote them to
+  // the level-aware shape so the rendering pipeline doesn't need two paths.
+  if (consoleLogs.length === 0) {
+    consoleLogs = (data.consoleErrors || []).map(function(e){
+      return { level: "error", message: e.message, stack: e.stack, timestamp: e.timestamp };
+    });
+  }
+  setBadge("badge-console", consoleLogs.length);
+  if (consoleLogs.length === 0) {
+    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No console output recorded</div>';
+  } else {
+    var conRows = consoleLogs.map(function(e){
+      var stackStr = e.stack ? e.stack.split("\\n").slice(0, 5).join("\\n") : "";
+      var hay = ((e.message || "") + " " + stackStr + " " + (e.level || "")).toLowerCase();
+      var stackHtml = stackStr ? '<pre class="tb-vlog-stack">' + esc(stackStr) + '</pre>' : '';
+      var lvl = e.level || "log";
+      return '<div class="tb-vlog tb-vlog-' + esc(lvl) + '" data-con-row data-level="' + esc(lvl) + '" data-search="' + esc(hay) + '">' +
+        '<div class="tb-vlog-head">' +
+          '<span class="tb-vlog-lvl tb-vlog-lvl-' + esc(lvl) + '">' + esc(lvl) + '</span>' +
+          '<span class="tb-vlog-msg">' + esc(e.message || "") + '</span>' +
+        '</div>' +
+        stackHtml +
+        '<div class="tb-vlog-ts">' + new Date(e.timestamp).toLocaleTimeString() + '</div>' +
+      '</div>';
+    }).join("");
+    document.getElementById("panel-console").innerHTML =
+      '<div class="tb-vcon-toolbar">' +
+        '<input id="vcon-search" type="search" placeholder="Filter messages" class="tb-vnet-search" />' +
+        '<label class="tb-vnet-err-toggle"><input id="vcon-errors-only" type="checkbox" /> Errors only</label>' +
+        '<span class="tb-vcon-count">' + consoleLogs.length + '</span>' +
+      '</div>' +
+      conRows;
+    (function(){
+      var panel = document.getElementById("panel-console");
+      var searchEl = panel.querySelector("#vcon-search");
+      var errOnly = panel.querySelector("#vcon-errors-only");
+      function apply(){
+        var q = (searchEl.value || "").trim().toLowerCase();
+        var eo = errOnly.checked;
+        panel.querySelectorAll("[data-con-row]").forEach(function(row){
+          var hay = row.getAttribute("data-search") || "";
+          var lvl = row.getAttribute("data-level") || "";
+          var qMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          var lvlMatch = !eo || lvl === "error";
+          row.style.display = (qMatch && lvlMatch) ? "" : "none";
+        });
+      }
+      searchEl.addEventListener("input", apply);
+      errOnly.addEventListener("change", apply);
+    })();
+  }
+
+  // Network tab \u2014 DevTools-style table with type pills, filter search,
+  // Errors-only toggle, waterfall column.
+  var netReqs = data.networkRequests || data.networkErrors || [];
+  setBadge("badge-network", netReqs.length);
+
+  function classifyRequest(url) {
+    if (!url) return "other";
+    if (url.indexOf("ws://") === 0 || url.indexOf("wss://") === 0) return "ws";
+    var pathname = url;
+    try { pathname = new URL(url, "http://_").pathname; } catch (e) {}
+    var ext = (pathname.toLowerCase().split(".").pop() || "").split("?")[0];
+    if (["js","mjs","cjs"].indexOf(ext) !== -1) return "js";
+    if (["css","scss"].indexOf(ext) !== -1) return "css";
+    if (["png","jpg","jpeg","gif","webp","avif","ico","svg","mp4","webm","mp3","wav","ogg","m4a","mov"].indexOf(ext) !== -1) return "media";
+    if (["woff","woff2","ttf","otf","eot"].indexOf(ext) !== -1) return "font";
+    if (["html","htm"].indexOf(ext) !== -1) return "doc";
+    return "fetch";
+  }
+  function extractDomain(url) {
+    try { return new URL(url, "http://_").hostname; } catch (e) {}
+    return "";
+  }
+  function shortName(url) {
+    try {
+      var u = new URL(url, "http://_");
+      var parts = u.pathname.split("/").filter(Boolean);
+      return parts[parts.length - 1] || u.hostname;
+    } catch (e) {
+      return (url.split("/").filter(Boolean).pop() || url);
+    }
+  }
+
+  if (netReqs.length === 0) {
+    document.getElementById("panel-network").innerHTML = '<div class="tb-vempty-tab">No network requests recorded</div>';
+  } else {
+    var minTs = Math.min.apply(null, netReqs.map(function(r){ return r.timestamp; }));
+    var maxEnd = Math.max.apply(null, netReqs.map(function(r){ return r.timestamp + (r.duration || 0); }));
+    var span = Math.max(1, maxEnd - minTs);
+
+    var typeCounts = { all: netReqs.length, fetch:0, ws:0, js:0, css:0, media:0, font:0, doc:0, other:0 };
+    var classified = netReqs.map(function(n){
+      var t = classifyRequest(n.url);
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+      return { n: n, t: t, dom: extractDomain(n.url), name: shortName(n.url) };
+    });
+
+    function pillHtml(key, label) {
+      var c = typeCounts[key] || 0;
+      if (key !== "all" && c === 0) return "";
+      return '<button class="tb-vnet-pill' + (key === "all" ? " tb-vnet-pill-active" : "") + '" data-type="' + key + '">' + label + (c > 0 ? '<span class="tb-vnet-pill-n">' + c + '</span>' : '') + '</button>';
+    }
+
+    var rowsHtml = classified.map(function(item, i){
+      var n = item.n;
+      var statusTxt = n.status === 0 ? "ERR" : String(n.status);
+      var statusCls =
+        n.status === 0 ? "serr" :
+        n.status >= 500 ? "s5" :
+        n.status >= 400 ? "s4" :
+        n.status >= 300 ? "s3" :
+        n.status >= 200 ? "s2" : "";
+      var isErr = n.status === 0 || n.status >= 400;
+      var leftPct = ((n.timestamp - minTs) / span) * 100;
+      var widthPct = Math.max(0.5, ((n.duration || 0) / span) * 100);
+      var hay = (n.method + ' ' + n.url + ' ' + statusTxt + ' ' + item.dom).toLowerCase();
+      var snippet = n.response ? '<div class="tb-vnet-snippet"><pre>' + esc(n.response.slice(0, 240)) + '</pre></div>' : '';
+      return '<details class="tb-vnet-row" data-type="' + item.t + '" data-err="' + (isErr ? '1' : '0') + '" data-search="' + esc(hay) + '">' +
+        '<summary class="tb-vnet-summary">' +
+          '<span class="tb-vnet-c-n">' + (i + 1) + '</span>' +
+          '<span class="tb-vnet-c-name" title="' + esc(n.url) + '">' + esc(item.name) + '</span>' +
+          '<span class="tb-vnet-c-meth">' + esc(n.method) + '</span>' +
+          '<span class="tb-vnet-c-stat ' + statusCls + '">' + statusTxt + '</span>' +
+          '<span class="tb-vnet-c-dom" title="' + esc(item.dom) + '">' + esc(item.dom) + '</span>' +
+          '<span class="tb-vnet-c-type">' + item.t + '</span>' +
+          '<span class="tb-vnet-c-time">' + (n.duration || 0) + ' ms</span>' +
+          '<span class="tb-vnet-c-wf"><span class="tb-vnet-wf-bar ' + statusCls + '" style="left:' + leftPct.toFixed(1) + '%;width:' + widthPct.toFixed(1) + '%"></span></span>' +
+        '</summary>' +
+        '<div class="tb-vnet-detail"><div class="tb-vnet-detail-url">' + esc(n.url) + '</div>' + snippet + '</div>' +
+      '</details>';
+    }).join("");
+
+    document.getElementById("panel-network").innerHTML =
+      '<div class="tb-vnet-toolbar">' +
+        '<input id="vnet-search" type="search" placeholder="Filter requests" class="tb-vnet-search" />' +
+        '<label class="tb-vnet-err-toggle"><input id="vnet-errors-only" type="checkbox" /> Errors only</label>' +
+      '</div>' +
+      '<div class="tb-vnet-pills">' +
+        pillHtml("all","All") + pillHtml("fetch","Fetch/XHR") + pillHtml("ws","WS") +
+        pillHtml("js","JS") + pillHtml("css","CSS") + pillHtml("media","Media") +
+        pillHtml("font","Font") + pillHtml("doc","Doc") + pillHtml("other","Other") +
+      '</div>' +
+      '<div class="tb-vnet-table">' +
+        '<div class="tb-vnet-row tb-vnet-head">' +
+          '<span class="tb-vnet-c-n">#</span>' +
+          '<span class="tb-vnet-c-name">Name</span>' +
+          '<span class="tb-vnet-c-meth">Method</span>' +
+          '<span class="tb-vnet-c-stat">Status</span>' +
+          '<span class="tb-vnet-c-dom">Domain</span>' +
+          '<span class="tb-vnet-c-type">Type</span>' +
+          '<span class="tb-vnet-c-time">Time</span>' +
+          '<span class="tb-vnet-c-wf">Waterfall</span>' +
+        '</div>' +
+        rowsHtml +
+      '</div>';
+
+    // Wire filter interactivity
+    (function(){
+      var panel = document.getElementById("panel-network");
+      var searchEl = panel.querySelector("#vnet-search");
+      var errOnlyEl = panel.querySelector("#vnet-errors-only");
+      var pills = panel.querySelectorAll(".tb-vnet-pill");
+      var activeType = "all";
+      function apply() {
+        var q = (searchEl.value || "").trim().toLowerCase();
+        var errOnly = errOnlyEl.checked;
+        panel.querySelectorAll(".tb-vnet-row").forEach(function(row){
+          if (row.classList.contains("tb-vnet-head")) return;
+          var t = row.getAttribute("data-type") || "";
+          var isErr = row.getAttribute("data-err") === "1";
+          var hay = row.getAttribute("data-search") || "";
+          var typeMatch = activeType === "all" || t === activeType;
+          var errMatch = !errOnly || isErr;
+          var searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          row.style.display = (typeMatch && errMatch && searchMatch) ? "" : "none";
+        });
+      }
+      searchEl.addEventListener("input", apply);
+      errOnlyEl.addEventListener("change", apply);
+      pills.forEach(function(p){
+        p.addEventListener("click", function(){
+          activeType = p.getAttribute("data-type") || "all";
+          pills.forEach(function(q){ q.classList.toggle("tb-vnet-pill-active", q === p); });
+          apply();
+        });
+      });
+    })();
+  }
+
+  // Actions tab \u2014 prefer action chips, fall back to plain text steps
+  var chips = data.actionChips || [];
+  var actions = data.actions || [];
+  setBadge("badge-actions", chips.length || actions.length);
+  var actionsHtml;
+  if (chips.length > 0) {
+    actionsHtml = '<div class="tb-vchips">' + chips.map(function(c){
+      var elHtml = "";
+      if (c.element) {
+        var attrsHtml = (c.element.attrs || []).map(function(a){
+          if (a.value === "") return '<span class="tb-vel-an">' + esc(a.name) + '</span>';
+          return '<span class="tb-vel-an">' + esc(a.name) + '</span>=<span class="tb-vel-av">"' + esc(a.value) + '"</span>';
+        }).join(" ");
+        var more = c.element.moreCount > 0 ? ' <span class="tb-vel-more">+' + c.element.moreCount + ' more</span>' : "";
+        elHtml = '<span class="tb-vel">&lt;<span class="tb-vel-tag">' + esc(c.element.tag) + '</span>' + (attrsHtml ? ' ' : '') + attrsHtml + more + '&gt;</span>';
+      }
+      // Human-readable target + noun ("Checkout" button)
+      var tgt = "";
+      if (c.target) {
+        var nounHtml = c.nounLabel ? ' <span class="tb-vchip-tgt-noun">' + esc(c.nounLabel) + '</span>' : '';
+        tgt = '<span class="tb-vchip-tgt"><span class="tb-vchip-tgt-name">\u201C' + esc(c.target) + '\u201D</span>' + nounHtml + '</span>';
+      }
+      // Frustration glyph prefix
+      var frust = "";
+      if (c.frustration) {
+        var sym = c.frustration === "rage" ? "\u26A1" : c.frustration === "dead" ? "\u2715" : "\u21A9";
+        var title = c.frustration === "rage" ? "Rage click \u2014 multiple rapid clicks on the same element" :
+                    c.frustration === "dead" ? "Dead click \u2014 no visible response within 1.5s" :
+                    "Form abandoned \u2014 filled but never submitted";
+        frust = '<span class="tb-vchip-frust tb-vchip-frust-' + esc(c.frustration) + '" title="' + esc(title) + '">' + sym + '</span>';
+      }
+      var det = c.detail ? '<span class="tb-vchip-det' + (c.isError ? ' tb-vchip-det-err' : '') + '">' + esc(c.detail) + '</span>' : "";
+      var errCls = (c.isError || c.frustration) ? ' tb-vchip-err' : '';
+      return '<div class="tb-vchip' + errCls + '">' +
+        frust +
+        '<span class="tb-vchip-verb tb-vchip-verb-' + esc(c.kind || 'click') + '">' + esc(c.verb || '') + '</span>' +
+        '<span class="tb-vchip-body">' + tgt + elHtml + det + '</span>' +
+      '</div>';
+    }).join("");
+    actionsHtml += '</div>';
+  } else if (actions.length === 0) {
+    actionsHtml = '<div class="tb-vempty-tab">No actions recorded</div>';
+  } else {
+    actionsHtml = '<ol class="tb-vsteps">' + actions.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join("") + '</ol>';
+  }
+  document.getElementById("panel-actions").innerHTML = actionsHtml;
+
+  // AI tab \u2014 show deterministic root-cause hint, with a note about LLM
+  var rc = data.rootCauseHint;
+  var aiHtml = '';
+  if (rc && rc.hint) {
+    aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Pattern-based hint <span class="tb-vai-conf tb-vai-conf-' + esc(rc.confidence || "low") + '">' + esc(rc.confidence || "low") + '</span></div><div class="tb-vai-body">' + esc(rc.hint) + '</div></div>';
+  }
+  aiHtml += '<div class="tb-vai-card tb-vai-empty"><div class="tb-vai-head">LLM analysis</div><div class="tb-vai-body">Open this report in the TraceBug UI to run LLM-based root-cause analysis (BYO API key).</div></div>';
+  document.getElementById("panel-ai").innerHTML = aiHtml;
+
+  // Notes tab
+  var notes = data.annotations || [];
+  setBadge("badge-notes", notes.length);
+  var notesHtml = notes.length === 0
+    ? '<div class="tb-vempty-tab">No tester notes</div>'
+    : notes.map(function(a){
+        var exp = a.expected ? '<div class="tb-vnote-line"><strong>Expected:</strong> ' + esc(a.expected) + '</div>' : '';
+        var act = a.actual ? '<div class="tb-vnote-line"><strong>Actual:</strong> ' + esc(a.actual) + '</div>' : '';
+        return '<div class="tb-vnote tb-vnote-' + esc(a.severity || "info") + '"><div class="tb-vnote-sev">' + esc(a.severity || "info") + '</div><div class="tb-vnote-text">' + esc(a.text || "") + '</div>' + exp + act + '</div>';
+      }).join("");
+  document.getElementById("panel-notes").innerHTML = notesHtml;
+
+  setBadge("badge-events", (data.events || []).length);
+
+  // Tab switching
+  var tabButtons = document.querySelectorAll(".tb-vtab");
+  var tabPanels = document.querySelectorAll(".tb-vpanel");
+  tabButtons.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var which = btn.getAttribute("data-tab");
+      tabButtons.forEach(function(b){ b.classList.toggle("tb-vtab-active", b === btn); });
+      tabPanels.forEach(function(p){
+        var active = p.getAttribute("data-panel") === which;
+        p.classList.toggle("tb-vpanel-active", active);
+        if (active) p.removeAttribute("hidden"); else p.setAttribute("hidden", "");
+      });
+      // Clear the "new content" dot once the user opens the tab.
+      var d = btn.querySelector(".tb-vtab-dot");
+      if (d) d.remove();
+    });
+  });
+
+  // \u2500\u2500 Preview wiring \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  var img = document.getElementById("ssimg");
+  var video = document.getElementById("video");
+  var ssMeta = document.getElementById("ssmeta");
+  var emptyMsg = document.getElementById("empty");
+  var screenshots = (data.screenshots || []).slice().sort(function(a, b){ return a.timestamp - b.timestamp; });
+
+  // \u2500\u2500 Preview wiring + lazy video load \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // For files with embedded video we DON'T decode the data URL upfront \u2014
+  // a 50MB recording would force the browser to parse base64 + allocate a
+  // huge blob just to show a Play button. Instead we paint a poster image
+  // (latest screenshot, or first if no error) and a "Play recording"
+  // overlay. The first overlay click decodes base64 -> Blob ->
+  // ObjectURL, sets it as the video src, then plays. Opens-in-100ms feel
+  // even for fat recordings.
+  var playOverlay = document.getElementById("play-overlay");
+  var playOverlaySub = document.getElementById("play-overlay-sub");
+  var hasVideo = !!(data.video && data.video.dataUrl);
+
+  function formatBytes(b) {
+    if (!b) return "";
+    if (b < 1024) return b + " B";
+    if (b < 1024 * 1024) return (b / 1024).toFixed(0) + " KB";
+    return (b / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  if (hasVideo) {
+    // Show poster (best screenshot) + Play overlay; defer base64 decode.
+    if (screenshots.length > 0) {
+      img.src = screenshots[0].dataUrl;
+      img.style.display = "block";
+    } else {
+      img.style.display = "none";
+    }
+    if (playOverlay) {
+      playOverlay.style.display = "flex";
+      if (playOverlaySub) {
+        var sz = formatBytes(data.video.sizeBytes || 0);
+        var dur = data.video.durationMs ? fmtElapsed(data.video.durationMs) : "";
+        playOverlaySub.textContent = [dur, sz].filter(Boolean).join(" \xB7 ");
+      }
+    }
+  } else if (screenshots.length > 0) {
+    img.src = screenshots[0].dataUrl;
+    ssMeta.textContent = screenshots[0].filename + " \xB7 " + new Date(screenshots[0].timestamp).toLocaleTimeString();
+  } else {
+    img.style.display = "none";
+    emptyMsg.style.display = "block";
+  }
+
+  // Decode the base64 data URL into a Blob URL only when the user actually
+  // wants to play. Keeps initial load fast.
+  var videoLoaded = false;
+  function loadVideo(autoplay) {
+    if (videoLoaded || !hasVideo) { if (autoplay) try { video.play(); } catch(e) {} return; }
+    videoLoaded = true;
+    try {
+      var match = /^data:([^;]+);base64,(.*)$/.exec(data.video.dataUrl);
+      if (!match) { video.src = data.video.dataUrl; }
+      else {
+        var mime = match[1];
+        var bin = atob(match[2]);
+        var len = bin.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+        var blob = new Blob([bytes], { type: mime });
+        video.src = URL.createObjectURL(blob);
+      }
+      video.style.display = "block";
+      img.style.display = "none";
+      if (playOverlay) playOverlay.style.display = "none";
+      if (autoplay) try { video.play(); } catch(e) {}
+    } catch (err) {
+      // Fallback to direct data URL if decoding fails.
+      video.src = data.video.dataUrl;
+      video.style.display = "block";
+      img.style.display = "none";
+      if (playOverlay) playOverlay.style.display = "none";
+      if (autoplay) try { video.play(); } catch(e) {}
+    }
+  }
+  if (playOverlay) {
+    playOverlay.addEventListener("click", function(){ loadVideo(true); });
+  }
+
+  function findClosest(list, ts) {
+    if (!list || !list.length) return null;
+    var best = list[0], bestD = Math.abs(best.timestamp - ts);
+    for (var i = 1; i < list.length; i++) {
+      var d = Math.abs(list[i].timestamp - ts);
+      if (d < bestD) { best = list[i]; bestD = d; }
+    }
+    return best;
+  }
+
+  // \u2500\u2500 Events list \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  var events = (data.events || []).slice().sort(function(a, b){ return a.timestamp - b.timestamp; });
+  var eventsEl = document.getElementById("events");
+  events.forEach(function(ev, i) {
+    var li = document.createElement("li");
+    if (ev.isError) li.className = "tb-ve-error";
+    li.innerHTML = '<span class="tb-ve-time">' + (ev.elapsed || "") + '</span>' + escapeHtml(ev.description || ev.type);
+    li.dataset.ts = String(ev.timestamp);
+    li.addEventListener("click", function(){ scrubberSeek(ev.timestamp); });
+    eventsEl.appendChild(li);
+  });
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // \u2500\u2500 Scrubber (slim, self-contained) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Span computed from events + screenshots + video so single-event
+  // sessions still get a meaningful timeline (otherwise span = 1ms and
+  // the readout shows "00:00 / 00:00").
+  var allTs = [];
+  for (var ti = 0; ti < events.length; ti++) allTs.push(events[ti].timestamp);
+  for (var si = 0; si < screenshots.length; si++) allTs.push(screenshots[si].timestamp);
+  if (data.video && data.video.startedAt) {
+    allTs.push(data.video.startedAt);
+    if (data.video.durationMs) allTs.push(data.video.startedAt + data.video.durationMs);
+  }
+  var minTs = allTs.length ? Math.min.apply(null, allTs) : 0;
+  var maxTs = allTs.length ? Math.max.apply(null, allTs) : minTs + 1;
+  var startedAt = minTs;
+  var endedAt = Math.max(maxTs, startedAt + 1000);
+  var span = Math.max(1000, endedAt - startedAt); // floor 1s so scrubber is usable
+  var errorMarkers = events.filter(function(e){ return e.isError; });
+  var scrubberHost = document.getElementById("scrubber");
+  scrubberHost.innerHTML = '<div class="tb-rs-root" tabindex="0"><div class="tb-rs-header"><span class="tb-rs-label">Replay</span><span class="tb-rs-time" id="tb-rs-time">00:00 / ' + fmtElapsed(span) + '</span><button class="tb-rs-jump" id="tb-rs-jump" type="button" style="display:' + (errorMarkers.length ? "inline-block" : "none") + '">Jump to error</button></div><div class="tb-rs-track" id="tb-rs-track"><div class="tb-rs-fill" id="tb-rs-fill"></div><div class="tb-rs-markers" id="tb-rs-markers"></div><div class="tb-rs-handle" id="tb-rs-handle"></div></div></div>';
+
+  var trackEl = document.getElementById("tb-rs-track");
+  var fillEl = document.getElementById("tb-rs-fill");
+  var handleEl = document.getElementById("tb-rs-handle");
+  var timeEl = document.getElementById("tb-rs-time");
+  var markersEl = document.getElementById("tb-rs-markers");
+  var jumpEl = document.getElementById("tb-rs-jump");
+
+  var COLORS = { click: "#7B61FF", input: "#7B61FF", select_change: "#7B61FF", form_submit: "#7B61FF", route_change: "#22d3ee", api_request: "#facc15" };
+  // Cap markers
+  var MAX = 200;
+  var visible = events.length <= MAX ? events : sample(events, MAX);
+  visible.forEach(function(ev) {
+    var m = document.createElement("div");
+    m.className = ev.isError ? "tb-rs-marker tb-rs-error" : "tb-rs-marker";
+    var leftPct = ((ev.timestamp - startedAt) / span) * 100;
+    m.style.left = Math.max(0, Math.min(100, leftPct)) + "%";
+    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#7B61FF");
+    m.dataset.ts = String(ev.timestamp);
+    if (ev.isError) m.textContent = "!";
+    m.title = (ev.elapsed || "") + " \xB7 " + (ev.description || ev.type);
+    markersEl.appendChild(m);
+  });
+
+  var current = startedAt;
+  function renderHandle() {
+    var p = ((current - startedAt) / span) * 100;
+    var clamped = Math.max(0, Math.min(100, p));
+    handleEl.style.left = clamped + "%";
+    fillEl.style.width = clamped + "%";
+    timeEl.textContent = fmtElapsed(current - startedAt) + " / " + fmtElapsed(span);
+  }
+  function scrubberSeek(ts) {
+    current = Math.max(startedAt, Math.min(endedAt, ts));
+    renderHandle();
+    // Swap screenshot preview
+    var ss = findClosest(screenshots, current);
+    if (ss && img.style.display !== "none") {
+      img.src = ss.dataUrl;
+      ssMeta.textContent = ss.filename + " \xB7 " + new Date(ss.timestamp).toLocaleTimeString();
+    }
+    // Sync video
+    if (data.video && data.video.startedAt) {
+      try { video.currentTime = Math.max(0, (current - data.video.startedAt) / 1000); } catch(e) {}
+    }
+  }
+
+  // Init
+  if (events.length) scrubberSeek(events[0].timestamp);
+
+  // Drag
+  var dragging = false;
+  function tsFromEvent(clientX) {
+    var rect = trackEl.getBoundingClientRect();
+    var ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return startedAt + ratio * span;
+  }
+  trackEl.addEventListener("pointerdown", function(e) {
+    dragging = true;
+    trackEl.setPointerCapture(e.pointerId);
+    scrubberSeek(tsFromEvent(e.clientX));
+  });
+  trackEl.addEventListener("pointermove", function(e) {
+    if (dragging) scrubberSeek(tsFromEvent(e.clientX));
+  });
+  trackEl.addEventListener("pointerup", function(e) {
+    dragging = false;
+    try { trackEl.releasePointerCapture(e.pointerId); } catch(err) {}
+  });
+  markersEl.addEventListener("click", function(e) {
+    var t = e.target;
+    if (!t || !t.classList.contains("tb-rs-marker")) return;
+    var ts = Number(t.dataset.ts);
+    if (!isNaN(ts)) scrubberSeek(ts);
+  });
+  if (jumpEl) jumpEl.addEventListener("click", function() {
+    if (errorMarkers.length) scrubberSeek(errorMarkers[0].timestamp);
+  });
+  // \u2500\u2500 Keyboard shortcuts \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Bound at document level, but skipped when the user is typing in an
+  // input/textarea/contenteditable so we don't hijack search boxes.
+  function isTyping(t) {
+    if (!t) return false;
+    var tag = (t.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || t.isContentEditable;
+  }
+  function jumpEvent(dir) {
+    var idx = -1;
+    for (var i = 0; i < events.length; i++) {
+      if (events[i].timestamp >= current) { idx = i; break; }
+    }
+    var nextIdx;
+    if (dir === 1) nextIdx = Math.min(events.length - 1, (idx < 0 ? events.length - 1 : idx + 1));
+    else nextIdx = Math.max(0, (idx > 0 ? idx : events.length) - 1);
+    if (events[nextIdx]) scrubberSeek(events[nextIdx].timestamp);
+  }
+  function jumpToFirstError() {
+    if (errorMarkers.length) scrubberSeek(errorMarkers[0].timestamp);
+  }
+  function togglePlayback() {
+    if (!hasVideo) {
+      // No video \u2014 fall back to "advance one event"
+      jumpEvent(1);
+      return;
+    }
+    if (!videoLoaded) { loadVideo(true); return; }
+    if (video.paused) try { video.play(); } catch(e) {} else video.pause();
+  }
+  function nudgeVideo(deltaSec) {
+    if (!hasVideo) return;
+    if (!videoLoaded) loadVideo(false);
+    try { video.currentTime = Math.max(0, video.currentTime + deltaSec); } catch(e) {}
+  }
+  function setTab(which) {
+    var btn = document.querySelector('[data-tab="' + which + '"]');
+    if (btn) btn.click();
+  }
+  var TAB_KEYS = ["info","console","network","actions","ai","notes","events","desc"];
+
+  document.addEventListener("keydown", function(e) {
+    if (isTyping(e.target)) return;
+    // Help overlay open: only Escape / ? closes it.
+    var helpOpen = document.getElementById("help-overlay").style.display !== "none";
+    if (helpOpen) {
+      if (e.key === "Escape" || e.key === "?") { e.preventDefault(); toggleHelp(false); }
+      return;
+    }
+    if (e.key === " " || e.code === "Space") { e.preventDefault(); togglePlayback(); return; }
+    if (e.key === "ArrowLeft") { e.preventDefault(); jumpEvent(-1); return; }
+    if (e.key === "ArrowRight") { e.preventDefault(); jumpEvent(1); return; }
+    if (e.key === "j" || e.key === "J") { e.preventDefault(); nudgeVideo(-5); return; }
+    if (e.key === "l" || e.key === "L") { e.preventDefault(); nudgeVideo(5); return; }
+    if (e.key === "k" || e.key === "K") { e.preventDefault(); togglePlayback(); return; }
+    if (e.key === "e" || e.key === "E") { e.preventDefault(); jumpToFirstError(); return; }
+    if (e.key === "f" || e.key === "F") { e.preventDefault(); toggleCompact(); return; }
+    if (e.key === "t" || e.key === "T") { e.preventDefault(); cycleTheme(); return; }
+    if (e.key === "?" || (e.shiftKey && e.key === "/")) { e.preventDefault(); toggleHelp(); return; }
+    // Number keys 1-8 switch tabs
+    var n = parseInt(e.key, 10);
+    if (!isNaN(n) && n >= 1 && n <= TAB_KEYS.length) {
+      e.preventDefault();
+      setTab(TAB_KEYS[n - 1]);
+      return;
+    }
+  });
+
+  // \u2500\u2500 Compact mode toggle \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function toggleCompact() {
+    var cur = document.documentElement.getAttribute("data-compact") === "1";
+    if (cur) document.documentElement.removeAttribute("data-compact");
+    else document.documentElement.setAttribute("data-compact", "1");
+  }
+  var compactBtn = document.getElementById("compact-toggle");
+  if (compactBtn) compactBtn.addEventListener("click", toggleCompact);
+
+  // \u2500\u2500 Cycle theme via T key + button \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function cycleTheme() {
+    var current = loadPref();
+    var next = current === "auto" ? "light" : current === "light" ? "dark" : "auto";
+    savePref(next);
+    applyTheme(next);
+    if (toggleBtn) toggleBtn.textContent = themeIcon(next);
+  }
+
+  // \u2500\u2500 Help overlay \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function toggleHelp(force) {
+    var el = document.getElementById("help-overlay");
+    var open = force !== undefined ? force : el.style.display === "none";
+    el.style.display = open ? "flex" : "none";
+  }
+  var helpBtn = document.getElementById("help-toggle");
+  var helpClose = document.getElementById("help-close");
+  if (helpBtn) helpBtn.addEventListener("click", function(){ toggleHelp(true); });
+  if (helpClose) helpClose.addEventListener("click", function(){ toggleHelp(false); });
+  // Click-out closes
+  var helpEl = document.getElementById("help-overlay");
+  if (helpEl) helpEl.addEventListener("click", function(e){
+    if (e.target === helpEl) toggleHelp(false);
+  });
+
+  // \u2500\u2500 Hover thumbnail on scrubber \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  var hoverEl = document.getElementById("hover-thumb");
+  var hoverImg = document.getElementById("hover-thumb-img");
+  var hoverTime = document.getElementById("hover-thumb-time");
+  if (trackEl && hoverEl && screenshots.length > 0) {
+    trackEl.addEventListener("mousemove", function(e) {
+      var rect = trackEl.getBoundingClientRect();
+      var ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      var ts = startedAt + ratio * span;
+      var ss = findClosest(screenshots, ts);
+      if (!ss) { hoverEl.style.display = "none"; return; }
+      hoverImg.src = ss.dataUrl;
+      hoverTime.textContent = fmtElapsed(ts - startedAt);
+      hoverEl.style.display = "block";
+      // Position above the track, centered on the cursor.
+      var thumbRect = hoverEl.getBoundingClientRect();
+      var left = e.clientX - thumbRect.width / 2;
+      left = Math.max(8, Math.min(window.innerWidth - thumbRect.width - 8, left));
+      hoverEl.style.left = left + "px";
+      hoverEl.style.top = (rect.top - thumbRect.height - 8) + "px";
+    });
+    trackEl.addEventListener("mouseleave", function() {
+      hoverEl.style.display = "none";
+    });
+  }
+
+  function sample(arr, n) {
+    if (arr.length <= n) return arr;
+    var out = [], step = arr.length / n;
+    for (var i = 0; i < n; i++) out.push(arr[Math.floor(i * step)]);
+    return out;
+  }
+  function fmtElapsed(ms) {
+    var total = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(total / 60).toString().padStart(2, "0");
+    var s = (total % 60).toString().padStart(2, "0");
+    return m + ":" + s;
+  }
+})();`;
+    }
+  });
+
+  // src/exporters/html-replay.ts
+  async function exportSessionAsHtml(session, report, options) {
+    var _a, _b, _c, _d, _e, _f;
+    const includeVideo = (_a = options == null ? void 0 : options.includeVideo) != null ? _a : !!report.video;
+    const timeline = buildTimeline(session.events).map((t) => ({
+      timestamp: t.timestamp,
+      type: t.type,
+      description: t.description,
+      elapsed: t.elapsed,
+      isError: t.isError
+    }));
+    let videoPayload;
+    if (includeVideo && report.video) {
+      try {
+        const v = report.video;
+        let dataUrl = v.dataUrl && typeof v.dataUrl === "string" && v.dataUrl.startsWith("data:") ? v.dataUrl : null;
+        if (!dataUrl && v.url) {
+          dataUrl = await blobUrlToDataUrl(v.url, v.mimeType);
+        }
+        if (dataUrl) {
+          videoPayload = {
+            dataUrl,
+            mimeType: v.mimeType,
+            durationMs: v.durationMs,
+            sizeBytes: v.sizeBytes,
+            startedAt: v.startedAt,
+            comments: v.comments.slice()
+          };
+        } else {
+          console.warn("[TraceBug] Video data URL unavailable at export time \u2014 recording will be missing from the .html");
+        }
+      } catch (err) {
+        console.warn("[TraceBug] Failed to encode video for export:", err);
+      }
+    }
+    const env = report.environment;
+    function browserIcon(n) {
+      n = (n || "").toLowerCase();
+      if (n.includes("chrome")) return "\u{1F535}";
+      if (n.includes("edge")) return "\u{1F537}";
+      if (n.includes("firefox")) return "\u{1F98A}";
+      if (n.includes("safari")) return "\u{1F9ED}";
+      if (n.includes("opera")) return "\u{1F3AD}";
+      if (n.includes("brave")) return "\u{1F981}";
+      return "\u{1F310}";
+    }
+    function osIcon(n) {
+      n = (n || "").toLowerCase();
+      if (n.includes("mac") || n.includes("darwin")) return "\u{1F34E}";
+      if (n.includes("windows") || n.includes("win")) return "\u{1FA9F}";
+      if (n.includes("linux")) return "\u{1F427}";
+      if (n.includes("ios") || n.includes("iphone") || n.includes("ipad")) return "\u{1F4F1}";
+      if (n.includes("android")) return "\u{1F916}";
+      return "\u{1F4BB}";
+    }
+    function deviceIcon(n) {
+      n = (n || "").toLowerCase();
+      if (n === "tablet" || n === "mobile") return "\u{1F4F1}";
+      return "\u{1F5A5}";
+    }
+    function connectionIcon(n) {
+      n = (n || "").toLowerCase();
+      if (n.includes("wifi")) return "\u{1F4F6}";
+      if (n.includes("ethernet")) return "\u{1F50C}";
+      if (n.includes("5g") || n.includes("4g") || n.includes("3g") || n.includes("cellular")) return "\u{1F4E1}";
+      return "\u{1F310}";
+    }
+    const info = [
+      { k: "URL", v: env.url, i: "\u{1F517}" },
+      { k: "Timestamp", v: new Date(env.timestamp || report.generatedAt).toLocaleString(), i: "\u{1F552}" },
+      { k: "OS", v: env.os, i: osIcon(env.os) },
+      { k: "Browser", v: `${env.browser} ${env.browserVersion}`.trim(), i: browserIcon(env.browser) },
+      { k: "Viewport", v: env.viewport, i: "\u{1F4D0}" },
+      { k: "Screen", v: env.screenResolution, i: "\u{1F5BC}" },
+      { k: "Device", v: env.deviceType, i: deviceIcon(env.deviceType) },
+      { k: "Language", v: env.language, i: "\u{1F5E3}" },
+      { k: "Timezone", v: env.timezone, i: "\u{1F30D}" },
+      { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
+      { k: "Session", v: session.sessionId.slice(0, 12), i: "\u{1F194}" },
+      { k: "Severity", v: report.severity }
+    ];
+    if (report.context) {
+      for (const k of Object.keys(report.context)) {
+        info.push({ k, v: String(report.context[k]) });
+      }
+    }
+    const payload = {
+      meta: {
+        title: report.title,
+        severity: report.severity,
+        summary: report.summary || "",
+        rootCause: ((_b = report.rootCause) == null ? void 0 : _b.hint) || "",
+        page: ((_c = report.environment) == null ? void 0 : _c.url) || ((_d = session.events[0]) == null ? void 0 : _d.page) || "",
+        generatedAt: report.generatedAt,
+        sessionId: session.sessionId,
+        environment: formatEnv(report),
+        durationMs: estimateDuration(session, report)
+      },
+      description: (_f = (_e = options == null ? void 0 : options.descriptionOverride) != null ? _e : report.steps) != null ? _f : "",
+      events: timeline,
+      screenshots: report.screenshots.map((s) => ({
+        timestamp: s.timestamp,
+        // Prefer the un-highlighted version when available so the replay shows
+        // the actual page state, not the smart-screenshot annotation.
+        dataUrl: s.originalDataUrl || s.dataUrl,
+        filename: s.filename
+      })),
+      video: videoPayload,
+      info,
+      consoleErrors: report.consoleErrors.map((e2) => ({
+        message: e2.message,
+        stack: e2.stack,
+        timestamp: e2.timestamp
+      })),
+      consoleLogs: report.consoleLogs ? report.consoleLogs.slice() : void 0,
+      networkErrors: report.networkErrors.slice(),
+      networkRequests: (report.networkRequests || report.networkErrors).slice(),
+      actions: report.sessionSteps.slice(),
+      actionChips: (report.actionChips || []).slice(),
+      annotations: (report.annotations || []).map((a2) => ({
+        severity: a2.severity,
+        text: a2.text,
+        expected: a2.expected,
+        actual: a2.actual
+      })),
+      rootCauseHint: report.rootCause ? {
+        hint: report.rootCause.hint,
+        confidence: report.rootCause.confidence
+      } : void 0
+    };
+    const html = buildReplayHtml(payload);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const filename = (options == null ? void 0 : options.filename) || defaultFilename(session.sessionId);
+    triggerDownload(url, filename);
+    return { filename, blob, url, sizeBytes: blob.size };
+  }
+  function defaultFilename(sessionId) {
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    return `tracebug-replay-${sessionId.slice(0, 8)}-${stamp}.html`;
+  }
+  function triggerDownload(url, filename) {
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = filename;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (e2) {
+      }
+    }, 3e4);
+  }
+  function formatEnv(report) {
+    const e2 = report.environment;
+    if (!e2) return "";
+    return `${e2.browser} ${e2.browserVersion} \xB7 ${e2.os} \xB7 ${e2.viewport}`;
+  }
+  function estimateDuration(session, report) {
+    const tss = [];
+    for (const e2 of session.events) tss.push(e2.timestamp);
+    for (const s of report.screenshots) tss.push(s.timestamp);
+    if (report.video) {
+      tss.push(report.video.startedAt);
+      tss.push(report.video.startedAt + report.video.durationMs);
+    }
+    if (tss.length === 0) return 0;
+    return Math.max(...tss) - Math.min(...tss);
+  }
+  async function blobUrlToDataUrl(blobUrl, fallbackMime) {
+    try {
+      const res = await fetch(blobUrl);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+        reader.onerror = reject;
+        const restore = (s) => s.startsWith("data:;") ? s.replace("data:;", `data:${fallbackMime};`) : s;
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => resolve(restore(typeof reader.result === "string" ? reader.result : ""));
+      });
+    } catch (e2) {
+      return null;
+    }
+  }
+  var init_html_replay = __esm({
+    "src/exporters/html-replay.ts"() {
+      "use strict";
+      init_timeline_builder();
+      init_html_template();
+    }
+  });
+
+  // src/theme.ts
+  function getResolvedTheme() {
+    if (_currentMode === "auto") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    return _currentMode === "dark" ? "dark" : "light";
+  }
+  function getThemeTokens() {
+    return getResolvedTheme() === "dark" ? DARK_THEME : LIGHT_THEME;
+  }
+  function injectTheme(mode) {
+    _currentMode = mode;
+    _applyThemeVars();
+    if (mode === "auto") {
+      _mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      _mediaListener = () => _applyThemeVars();
+      _mediaQuery.addEventListener("change", _mediaListener);
+    }
+  }
+  function removeTheme() {
+    const el = document.getElementById(THEME_STYLE_ID);
+    if (el) el.remove();
+    if (_mediaQuery && _mediaListener) {
+      _mediaQuery.removeEventListener("change", _mediaListener);
+      _mediaQuery = null;
+      _mediaListener = null;
+    }
+  }
+  function _applyThemeVars() {
+    const tokens = getThemeTokens();
+    let existing = document.getElementById(THEME_STYLE_ID);
+    if (!existing) {
+      existing = document.createElement("style");
+      existing.id = THEME_STYLE_ID;
+      document.head.appendChild(existing);
+    }
+    const vars = Object.entries(tokens).map(([k, v]) => `  ${k}: ${v};`).join("\n");
+    existing.textContent = `
+    #tracebug-root {
+${vars}
+    }
+  `;
+  }
+  var DARK_THEME, LIGHT_THEME, THEME_STYLE_ID, _currentMode, _mediaQuery, _mediaListener;
+  var init_theme = __esm({
+    "src/theme.ts"() {
+      "use strict";
+      DARK_THEME = {
+        "--tb-bg-primary": "#0a0a0c",
+        "--tb-bg-secondary": "#18181b",
+        "--tb-bg-elevated": "#27272a",
+        "--tb-bg-overlay": "#0a0a0cf2",
+        "--tb-text-primary": "#fafafa",
+        "--tb-text-secondary": "#a1a1aa",
+        "--tb-text-muted": "#71717a",
+        "--tb-accent": "#8b5cf6",
+        "--tb-accent-hover": "#a78bfa",
+        "--tb-accent-subtle": "#8b5cf61f",
+        "--tb-error": "#ef4444",
+        "--tb-error-bg": "#ef44441a",
+        "--tb-warning": "#f59e0b",
+        "--tb-warning-bg": "#f59e0b1a",
+        "--tb-success": "#10b981",
+        "--tb-success-bg": "#10b9811a",
+        "--tb-info": "#3b82f6",
+        "--tb-info-bg": "#3b82f61a",
+        "--tb-border": "#27272a",
+        "--tb-border-subtle": "#1f1f23",
+        "--tb-border-hover": "#3f3f46",
+        "--tb-radius-sm": "6px",
+        "--tb-radius-md": "10px",
+        "--tb-radius-lg": "14px",
+        "--tb-shadow-sm": "0 1px 2px rgba(0,0,0,0.4), 0 1px 1px rgba(0,0,0,0.3)",
+        "--tb-shadow-md": "0 4px 16px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.25)",
+        "--tb-shadow-lg": "0 16px 48px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.3)",
+        "--tb-font-family": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+        "--tb-font-mono": "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace",
+        "--tb-toolbar-bg": "#18181bee",
+        "--tb-panel-bg": "#0a0a0c",
+        "--tb-btn-hover": "#ffffff0d",
+        "--tb-btn-text": "#a1a1aa",
+        "--tb-btn-text-hover": "#fafafa",
+        "--tb-severity-critical": "#ef4444",
+        "--tb-severity-major": "#f59e0b",
+        "--tb-severity-minor": "#eab308",
+        "--tb-severity-info": "#3b82f6",
+        "--tb-intent-fix": "#ef4444",
+        "--tb-intent-redesign": "#8b5cf6",
+        "--tb-intent-remove": "#f97316",
+        "--tb-intent-question": "#3b82f6",
+        "--tb-highlight": "#8b5cf6",
+        "--tb-selection": "#06b6d4",
+        "--tb-gradient-start": "#8b5cf6",
+        "--tb-gradient-end": "#6d28d9",
+        "--tb-code-tag": "#f472b6",
+        "--tb-code-attr-name": "#fcd34d",
+        "--tb-code-attr-val": "#86efac",
+        "--tb-code-text": "#d4d4d8",
+        "--tb-code-bg": "#09090b"
+      };
+      LIGHT_THEME = {
+        "--tb-bg-primary": "#ffffff",
+        "--tb-bg-secondary": "#fafafa",
+        "--tb-bg-elevated": "#ffffff",
+        "--tb-bg-overlay": "#ffffffee",
+        "--tb-text-primary": "#09090b",
+        "--tb-text-secondary": "#52525b",
+        "--tb-text-muted": "#a1a1aa",
+        "--tb-accent": "#7c3aed",
+        "--tb-accent-hover": "#6d28d9",
+        "--tb-accent-subtle": "#7c3aed14",
+        "--tb-error": "#dc2626",
+        "--tb-error-bg": "#fef2f2",
+        "--tb-warning": "#d97706",
+        "--tb-warning-bg": "#fffbeb",
+        "--tb-success": "#059669",
+        "--tb-success-bg": "#ecfdf5",
+        "--tb-info": "#2563eb",
+        "--tb-info-bg": "#eff6ff",
+        "--tb-border": "#e4e4e7",
+        "--tb-border-subtle": "#f4f4f5",
+        "--tb-border-hover": "#d4d4d8",
+        "--tb-radius-sm": "6px",
+        "--tb-radius-md": "10px",
+        "--tb-radius-lg": "14px",
+        "--tb-shadow-sm": "0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.03)",
+        "--tb-shadow-md": "0 4px 16px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04)",
+        "--tb-shadow-lg": "0 16px 48px rgba(15,23,42,0.12), 0 4px 12px rgba(15,23,42,0.06)",
+        "--tb-font-family": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+        "--tb-font-mono": "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace",
+        "--tb-toolbar-bg": "#ffffffee",
+        "--tb-panel-bg": "#ffffff",
+        "--tb-btn-hover": "#00000008",
+        "--tb-btn-text": "#52525b",
+        "--tb-btn-text-hover": "#09090b",
+        "--tb-severity-critical": "#dc2626",
+        "--tb-severity-major": "#d97706",
+        "--tb-severity-minor": "#ca8a04",
+        "--tb-severity-info": "#2563eb",
+        "--tb-intent-fix": "#dc2626",
+        "--tb-intent-redesign": "#7c3aed",
+        "--tb-intent-remove": "#ea580c",
+        "--tb-intent-question": "#2563eb",
+        "--tb-highlight": "#7c3aed",
+        "--tb-selection": "#0891b2",
+        "--tb-gradient-start": "#7c3aed",
+        "--tb-gradient-end": "#5b21b6",
+        "--tb-code-tag": "#be185d",
+        "--tb-code-attr-name": "#a16207",
+        "--tb-code-attr-val": "#15803d",
+        "--tb-code-text": "#27272a",
+        "--tb-code-bg": "#f4f4f5"
+      };
+      THEME_STYLE_ID = "tracebug-theme-vars";
+      _currentMode = "light";
+      _mediaQuery = null;
+      _mediaListener = null;
+    }
+  });
+
+  // src/linear-issue.ts
+  function generateLinearIssueUrl(report) {
+    const rawTitle = report.title || "Bug report";
+    const title = rawTitle.match(/^[🔴🟠🟡🟢]/) ? rawTitle : `${severityTitlePrefix(report.severity)}${rawTitle}`;
+    let body = generateLinearIssue(report);
+    body = body.replace(/^##\s+[^\n]+\n+/, "");
+    if (body.length > LINEAR_URL_BODY_LIMIT) {
+      body = body.slice(0, LINEAR_URL_BODY_LIMIT) + '\n\n_(Truncated due to URL length limit. Use "Copy as Markdown" for the full version.)_';
+    }
+    const params = new URLSearchParams();
+    params.set("title", title);
+    params.set("description", body);
+    return `https://linear.app/new?${params.toString()}`;
+  }
+  function openLinearIssue(report) {
+    try {
+      const url = generateLinearIssueUrl(report);
+      if (url.length > 8e3) {
+        console.warn("[TraceBug] Linear URL exceeds 8KB \u2014 prefill may not load. Use copy instead.");
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+      return true;
+    } catch (err) {
+      console.warn("[TraceBug] openLinearIssue failed:", err);
+      return false;
+    }
+  }
+  function generateLinearIssue(report) {
+    const env = report.environment;
+    const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/) ? report.title : `${severityTitlePrefix(report.severity)}${report.title}`;
+    let md = `## ${titleWithSeverity}
+
+`;
+    const rc = formatRootCauseLine(report.rootCause);
+    if (rc) md += `> ${rc}
+
+`;
+    if (report.summary) md += `> **TL;DR:** ${report.summary}
+
+`;
+    md += `**Environment:** ${env.browser} ${env.browserVersion} \xB7 ${env.os} \xB7 ${env.viewport} \xB7 ${env.deviceType}
+`;
+    md += `**URL:** ${env.url}
+
+`;
+    if (report.clickedElement) {
+      const ce = report.clickedElement;
+      const label = ce.text || ce.ariaLabel || ce.id || ce.tag;
+      md += `**User clicked:** \`<${ce.tag}>\` "${label}"`;
+      if (ce.selector) md += ` \u2014 \`${ce.selector}\``;
+      md += `
+
+`;
+    }
+    if (report.sessionSteps && report.sessionSteps.length > 0) {
+      md += `### Recent Actions
+
+`;
+      for (const step of report.sessionSteps) md += `1. ${step}
+`;
+      md += `
+`;
+    }
+    const ctxKeys = report.context ? Object.keys(report.context) : [];
+    if (ctxKeys.length > 0) {
+      md += `### Context
+
+`;
+      for (const k of ctxKeys) md += `- **${k}**: \`${String(report.context[k])}\`
+`;
+      md += `
+`;
+    }
+    md += `### Steps to Reproduce
+
+`;
+    md += report.steps ? `${report.steps}
+
+` : `_No steps recorded_
+
+`;
+    if (report.consoleErrors.length > 0) {
+      md += `### Console Errors
+
+\`\`\`
+`;
+      for (const err of report.consoleErrors.slice(0, 3)) {
+        md += `${err.message}
+`;
+        if (err.stack) {
+          const lines = err.stack.split("\n").filter((l) => l.trim().startsWith("at ")).slice(0, 3);
+          if (lines.length > 0) md += `${lines.join("\n")}
+`;
+        }
+      }
+      md += `\`\`\`
+
+`;
+    }
+    if (report.networkErrors.length > 0) {
+      md += `### Failed Requests
+
+| Method | URL | Status | Duration |
+|--------|-----|--------|----------|
+`;
+      for (const req of report.networkErrors) {
+        const status = req.status === 0 ? "Network Error" : `${req.status}`;
+        const url = req.url.length > 60 ? req.url.slice(0, 57) + "..." : req.url;
+        md += `| ${req.method} | \`${url}\` | ${status} | ${req.duration}ms |
+`;
+      }
+      md += `
+`;
+    }
+    md += `
+---
+_Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
+    return md;
+  }
+  var LINEAR_URL_BODY_LIMIT;
+  var init_linear_issue = __esm({
+    "src/linear-issue.ts"() {
+      "use strict";
+      init_report_builder();
+      LINEAR_URL_BODY_LIMIT = 6e3;
+    }
+  });
+
+  // src/slack-export.ts
+  function generateSlackPost(report, userDescription) {
+    const env = report.environment;
+    const sev = severityBadge(report.severity);
+    const rc = formatRootCauseLine(report.rootCause);
+    const lines = [];
+    lines.push(`${sev} *${report.title}*`);
+    lines.push("");
+    if (rc) lines.push(`> ${rc}`);
+    if (report.summary) lines.push(`> *TL;DR:* ${report.summary}`);
+    if (rc || report.summary) lines.push("");
+    if (userDescription && userDescription.trim().length > 0) {
+      lines.push(userDescription.trim());
+      lines.push("");
+    }
+    lines.push(`*Where:* \`${env.url}\``);
+    lines.push(`*Env:* ${env.browser} ${env.browserVersion} \xB7 ${env.os} \xB7 ${env.viewport}`);
+    lines.push("");
+    if (report.sessionSteps && report.sessionSteps.length > 0) {
+      lines.push(`*Recent actions:*`);
+      for (const step of report.sessionSteps.slice(0, 5)) {
+        lines.push(`\u2022 ${step}`);
+      }
+      lines.push("");
+    }
+    if (report.consoleErrors.length > 0) {
+      const first = report.consoleErrors[0];
+      lines.push(`*Error:*`);
+      lines.push("```");
+      lines.push(first.message);
+      if (first.stack) {
+        const top = first.stack.split("\n").filter((l) => l.trim().startsWith("at ")).slice(0, 2).join("\n");
+        if (top) lines.push(top);
+      }
+      lines.push("```");
+    }
+    if (report.networkErrors.length > 0) {
+      const n = report.networkErrors[0];
+      const status = n.status === 0 ? "Network Error" : String(n.status);
+      lines.push(`*Failed request:* \`${n.method} ${n.url.slice(0, 80)}\` \u2192 ${status}`);
+    }
+    lines.push("");
+    lines.push("_Reported via TraceBug_");
+    return lines.join("\n");
+  }
+  var init_slack_export = __esm({
+    "src/slack-export.ts"() {
+      "use strict";
+      init_report_builder();
+    }
+  });
+
   // src/ui/quick-bug.ts
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
@@ -10640,19 +14338,51 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   function setGithubRepo(repo) {
     _githubRepo = repo;
   }
+  function _loadThemePref() {
+    try {
+      const v = localStorage.getItem(THEME_PREF_KEY);
+      if (v === "light" || v === "dark" || v === "auto") return v;
+    } catch (e2) {
+    }
+    return "auto";
+  }
+  function _saveThemePref(mode) {
+    try {
+      localStorage.setItem(THEME_PREF_KEY, mode);
+    } catch (e2) {
+    }
+  }
+  function _themeIcon() {
+    const pref = _loadThemePref();
+    if (pref === "auto") return "\u{1F317}";
+    return pref === "dark" ? "\u{1F319}" : "\u2600";
+  }
+  function _cycleTheme() {
+    const current = _loadThemePref();
+    const next = current === "auto" ? "light" : current === "light" ? "dark" : "auto";
+    _saveThemePref(next);
+    injectTheme(next);
+    return next;
+  }
   function isQuickBugOpen() {
     return _isOpen;
   }
   async function showQuickBugCapture(root, options) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     if (_isOpen) return;
+    try {
+      if (!getLastVideoRecording()) {
+        await restoreLastRecordingFromOffscreen();
+      }
+    } catch (e2) {
+    }
     const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-    const currentSession = sessions[0] || null;
+    const currentSession = (options == null ? void 0 : options.sessionId) ? sessions.find((s) => s.sessionId === options.sessionId) || sessions[0] || null : sessions[0] || null;
     const lastEvent = (currentSession == null ? void 0 : currentSession.events[currentSession.events.length - 1]) || null;
     let screenshots2 = getScreenshots();
     if (screenshots2.length === 0) {
       try {
-        await captureScreenshot(lastEvent, { includeAnnotations: true });
+        await captureScreenshot(lastEvent, { includeAnnotations: true, highlightClicked: true });
         screenshots2 = getScreenshots();
       } catch (err) {
         console.warn("[TraceBug] Quick capture screenshot failed:", err);
@@ -10663,7 +14393,16 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     const autoDesc = _buildDescription(currentSession);
     const title = (_a = options == null ? void 0 : options.prefilledTitle) != null ? _a : (draft == null ? void 0 : draft.title) || autoTitle;
     const description = (_b = options == null ? void 0 : options.prefilledDescription) != null ? _b : (draft == null ? void 0 : draft.description) || autoDesc;
-    _openModal(root, { title, description, screenshots: screenshots2 });
+    let report = null;
+    if (currentSession) {
+      try {
+        report = buildReport(currentSession);
+      } catch (e2) {
+      }
+    }
+    const severity = (_c = report == null ? void 0 : report.severity) != null ? _c : "low";
+    const timeline = (_d = report == null ? void 0 : report.timeline) != null ? _d : [];
+    _openModal(root, { title, description, screenshots: screenshots2, severity, timeline, currentSession, report });
   }
   function _downloadAllScreenshots(screenshots2) {
     screenshots2.forEach((ss, i) => {
@@ -10728,6 +14467,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     return lines.join("\n");
   }
   function _openModal(root, data) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -10752,83 +14492,196 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     background: var(--tb-bg-secondary, #1a1a2e);
     border: 1px solid var(--tb-border-hover, #3a3a5e);
     border-radius: var(--tb-radius-lg, 12px);
-    width: 100%; max-width: 640px; max-height: 90vh;
-    overflow-y: auto; padding: 24px;
+    width: 100%; max-width: 1180px; max-height: 92vh;
+    display: flex; flex-direction: column;
     font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     color: var(--tb-text-primary, #e0e0e0);
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     animation: tracebug-qb-slide-up 0.2s ease;
+    overflow: hidden;
   `;
     const ssCount = screenshots2.length;
     const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
     const video = getLastVideoRecording();
-    const videoBlock = video ? _buildVideoBlock(video) : "";
+    const sevColors = {
+      critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
+      high: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
+      medium: { bg: "#713f12", fg: "#fde68a", border: "#ca8a04" },
+      low: { bg: "#14532d", fg: "#bbf7d0", border: "#16a34a" }
+    };
+    const sevC = sevColors[data.severity] || sevColors.low;
+    const sevLabel = severityBadge(data.severity);
+    const consoleCount = (_c = (_b = (_a = data.report) == null ? void 0 : _a.consoleErrors) == null ? void 0 : _b.length) != null ? _c : 0;
+    const networkCount = (_i = (_h = (_e = (_d = data.report) == null ? void 0 : _d.networkRequests) == null ? void 0 : _e.length) != null ? _h : (_g = (_f = data.report) == null ? void 0 : _f.networkErrors) == null ? void 0 : _g.length) != null ? _i : 0;
+    const actionsCount = (_l = (_k = (_j = data.report) == null ? void 0 : _j.sessionSteps) == null ? void 0 : _k.length) != null ? _l : 0;
+    const annotationsCount = ((_o = (_n = (_m = data.currentSession) == null ? void 0 : _m.annotations) == null ? void 0 : _n.length) != null ? _o : 0) + _getElementAnnotationCount();
     modal.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <span style="font-size:22px">\u26A1</span>
-      <div style="flex:1">
-        <div style="font-size:18px;font-weight:700;color:var(--tb-text-primary, #fff)">Bug Ticket \u2014 Review &amp; Export</div>
-        <div style="font-size:12px;color:var(--tb-text-muted, #888);margin-top:2px">${ssCountLabel} \xB7 download/copy includes all screenshots</div>
+    <!-- Header -->
+    <div class="tb-qb-header">
+      <span class="tb-qb-logo">\u26A1</span>
+      <div class="tb-qb-titleblock">
+        <div class="tb-qb-titletext">Bug Ticket \u2014 Review &amp; Export</div>
+        <div class="tb-qb-sub">${ssCountLabel} \xB7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
-      <button data-action="close" aria-label="Close" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:20px;padding:4px 8px;border-radius:6px">\u2715</button>
+      <span class="tb-qb-sev" style="background:${sevC.bg};color:${sevC.fg};border:1px solid ${sevC.border}">${sevLabel}</span>
+      <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
+      <button data-action="help-toggle" class="tb-qb-theme-toggle" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
+      <button data-action="close" class="tb-qb-close" aria-label="Close">\u2715</button>
     </div>
 
-    <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Title</label>
-    <input
-      id="tb-qb-title"
-      type="text"
-      value="${escapeHtml2(data.title)}"
-      style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:10px 12px;font-size:13px;font-family:inherit;margin-bottom:14px;outline:none"
-    />
+    <!-- Two-pane body -->
+    <div class="tb-qb-body">
 
-    <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Description</label>
-    <textarea
-      id="tb-qb-desc"
-      style="width:100%;height:160px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:10px 12px;font-size:12px;font-family:var(--tb-font-mono, monospace);margin-bottom:14px;resize:vertical;outline:none;line-height:1.5"
-    >${escapeHtml2(data.description)}</textarea>
+      <!-- LEFT: title + replay preview + scrubber + thumbs + description -->
+      <div class="tb-qb-left">
 
-    ${primary ? `
-      <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Screenshots (${ssCount})</label>
-      <div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);overflow:hidden;margin-bottom:6px;background:var(--tb-bg-primary, #0f0f1a)">
-        <img id="tb-qb-primary-img" src="${primary.dataUrl}" alt="Bug screenshot" style="display:block;max-width:100%;max-height:240px;width:auto;margin:0 auto" />
+        <label class="tb-qb-lbl">Title</label>
+        <input id="tb-qb-title" type="text" value="${escapeHtml2(data.title)}" class="tb-qb-input" />
+
+        ${video ? `
+          <div class="tb-qb-preview">
+            <video id="tb-qb-video" controls preload="metadata" src="${video.url}" class="tb-qb-video"></video>
+          </div>
+          <div class="tb-qb-vidmeta">
+            <span>${_formatVideoTime(video.durationMs)} \xB7 ${_formatBytes(video.sizeBytes)} \xB7 ${video.comments.length} timestamped comment${video.comments.length === 1 ? "" : "s"}</span>
+            <button data-action="download-video" class="tb-qb-btn-sm">\u2B07 Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}</button>
+          </div>
+        ` : ""}
+
+        ${!video && primary ? `
+          <div class="tb-qb-preview">
+            <img id="tb-qb-primary-img" src="${primary.dataUrl}" alt="Bug screenshot" class="tb-qb-img" />
+          </div>
+          <div id="tb-qb-primary-meta" class="tb-qb-imgmeta">${escapeHtml2(primary.filename)} \xB7 ${primary.width}x${primary.height}</div>
+        ` : !video && !primary ? `
+          <div class="tb-qb-preview tb-qb-preview-empty">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>
+        ` : ""}
+
+        ${data.timeline.length > 0 ? `
+          <div id="tb-qb-scrubber" class="tb-qb-scrubber-wrap"></div>
+        ` : ""}
+
+        ${ssCount > 1 ? `
+          <div class="tb-qb-thumbs">
+            ${screenshots2.map((ss, i) => `
+              <button data-thumb-index="${i}" title="${escapeHtml2(ss.filename)}" class="tb-qb-thumb">
+                <img src="${ss.dataUrl}" alt="Step ${i + 1}" />
+                <span class="tb-qb-thumb-num">${i + 1}</span>
+              </button>
+            `).join("")}
+          </div>
+        ` : ""}
+
+        ${video && video.comments.length > 0 ? `
+          <div class="tb-qb-comments">
+            ${video.comments.map((c) => {
+      const seconds = Math.floor(c.offsetMs / 1e3);
+      return `<button data-video-seek="${seconds}" class="tb-qb-comment">
+                <span class="tb-qb-comment-ts">${_formatVideoTime(c.offsetMs)}</span>
+                <span class="tb-qb-comment-tx">${escapeHtml2(c.text)}</span>
+              </button>`;
+    }).join("")}
+          </div>
+        ` : ""}
+
+        <details class="tb-qb-desc-wrap">
+          <summary class="tb-qb-desc-summary">Description \u2014 editable, included in exports</summary>
+          <textarea id="tb-qb-desc" class="tb-qb-textarea">${escapeHtml2(data.description)}</textarea>
+        </details>
       </div>
-      <div id="tb-qb-primary-meta" style="font-size:10px;color:var(--tb-text-muted, #555);margin-bottom:${ssCount > 1 ? "6" : "16"}px">${escapeHtml2(primary.filename)} \xB7 ${primary.width}x${primary.height}</div>
-      ${ssCount > 1 ? `
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
-          ${screenshots2.map((ss, i) => `
-            <button data-thumb-index="${i}" title="${escapeHtml2(ss.filename)}" style="position:relative;padding:0;border:1px solid var(--tb-border, #2a2a3e);border-radius:4px;overflow:hidden;cursor:pointer;background:var(--tb-bg-primary, #0f0f1a);width:64px;height:48px">
-              <img src="${ss.dataUrl}" alt="Step ${i + 1}" style="width:100%;height:100%;object-fit:cover;display:block" />
-              <span style="position:absolute;top:1px;left:2px;font-size:9px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);background:rgba(0,0,0,0.5);border-radius:3px;padding:0 4px">${i + 1}</span>
-            </button>
-          `).join("")}
+
+      <!-- RIGHT: tab strip + tab panels -->
+      <div class="tb-qb-right">
+        <div class="tb-qb-tabstrip" role="tablist">
+          <button data-tab="info" class="tb-qb-tab tb-qb-tab-active" role="tab">Info</button>
+          <button data-tab="console" class="tb-qb-tab" role="tab">Console${consoleCount ? `<span class="tb-qb-tab-badge">${consoleCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
+          <button data-tab="network" class="tb-qb-tab" role="tab">Network${networkCount ? `<span class="tb-qb-tab-badge">${networkCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
+          <button data-tab="actions" class="tb-qb-tab" role="tab">Actions${actionsCount ? `<span class="tb-qb-tab-badge">${actionsCount}</span>` : ""}</button>
+          <button data-tab="ai" class="tb-qb-tab" role="tab">AI</button>
+          <button data-tab="annotations" class="tb-qb-tab" role="tab">Notes${annotationsCount ? `<span class="tb-qb-tab-badge">${annotationsCount}</span>` : ""}</button>
         </div>
-      ` : ""}
-    ` : `<div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:16px;padding:10px;background:var(--tb-bg-primary, #0f0f1a);border:1px dashed var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);text-align:center">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>`}
-
-    ${videoBlock}
-
-    ${_githubRepo ? `
-      <button data-action="open-github" style="width:100%;background:#24292e;color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:14px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;margin-bottom:8px;transition:opacity 0.15s;display:flex;align-items:center;justify-content:center;gap:8px">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        Open in GitHub (${escapeHtml2(_githubRepo)})
-      </button>
-    ` : ""}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <button data-action="github" style="background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">\u{1F419} Copy as GitHub Issue</button>
-      <button data-action="jira" style="background:${isPremium() ? "#2684FF" : "var(--tb-bg-primary, #0f0f1a)"};color:${isPremium() ? "#fff" : "var(--tb-text-muted, #888)"};border:${isPremium() ? "none" : "1px solid var(--tb-border, #2a2a3e)"};border-radius:var(--tb-radius-md, 6px);padding:12px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity 0.15s">${isPremium() ? "\u{1F3AB} Copy as Jira Ticket" : "\u{1F512} Jira Ticket (Premium)"}</button>
+        <div class="tb-qb-tabpanels">
+          <div data-panel="info" class="tb-qb-panel tb-qb-panel-active">${_buildInfoTab(data.report, data.currentSession)}</div>
+          <div data-panel="console" class="tb-qb-panel" hidden>${_buildConsoleTab(data.report)}</div>
+          <div data-panel="network" class="tb-qb-panel" hidden>${_buildNetworkTab(data.report)}</div>
+          <div data-panel="actions" class="tb-qb-panel" hidden>${_buildActionsTab(data.report)}</div>
+          <div data-panel="ai" class="tb-qb-panel" hidden>${_buildAITab(data.report)}</div>
+          <div data-panel="annotations" class="tb-qb-panel" hidden>${_buildAnnotationsTab(data.currentSession)}</div>
+        </div>
+      </div>
     </div>
-    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--tb-text-muted, #555)">
-      <span>Tip: <kbd style="background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px;border:1px solid var(--tb-border, #2a2a3e);font-family:monospace">Ctrl+Shift+B</kbd> to quick-capture anytime</span>
-      <span style="display:flex;align-items:center;gap:8px"><span>Draft auto-saved</span><span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;${isPremium() ? "background:var(--tb-accent, #7B61FF);color:#fff" : "background:var(--tb-border, #2a2a3e);color:var(--tb-text-secondary, #aaa)"}">${isPremium() ? "\u2728 Premium" : "Free"}</span></span>
+
+    <!-- Footer: export actions -->
+    <div class="tb-qb-footer">
+      <div class="tb-qb-actions">
+        ${_githubRepo ? `
+          <button data-action="open-github" class="tb-qb-btn tb-qb-btn-gh-primary" title="Open GitHub new-issue page with title + body prefilled">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            Open in GitHub (${escapeHtml2(_githubRepo)})
+          </button>
+        ` : ""}
+        <button data-action="github" class="tb-qb-btn tb-qb-btn-accent">\u{1F419} GitHub</button>
+        <button data-action="linear" class="tb-qb-btn tb-qb-btn-linear" title="Open Linear new-issue page with prefilled title + description">\u25B3 Linear</button>
+        <button data-action="slack" class="tb-qb-btn tb-qb-btn-slack" title="Copy a Slack-formatted bug summary to the clipboard">\u{1F4AC} Slack</button>
+        <button data-action="jira" class="tb-qb-btn ${isPremium() ? "tb-qb-btn-jira" : "tb-qb-btn-locked"}">${isPremium() ? "\u{1F3AB} Jira" : "\u{1F512} Jira (Premium)"}</button>
+        <button data-action="export-replay" class="tb-qb-btn tb-qb-btn-ghost" title="Bundle the entire session into a single .html file you can share or open offline">\u{1F4E6} Export .html</button>
+      </div>
+      <div class="tb-qb-tip">
+        <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
+        <span class="tb-qb-tip-right"><span>Draft auto-saved</span><span class="${isPremium() ? "tb-qb-plan-premium" : "tb-qb-plan-free"}">${isPremium() ? "\u2728 Premium" : "Free"}</span></span>
+      </div>
+    </div>
+
+    <!-- Help overlay (keyboard cheat sheet) -->
+    <div class="tb-qb-help" id="tb-qb-help" style="display:none">
+      <div class="tb-qb-help-card">
+        <div class="tb-qb-help-title">Keyboard shortcuts</div>
+        <div class="tb-qb-help-row"><kbd>Space</kbd><span>Play / pause replay</span></div>
+        <div class="tb-qb-help-row"><kbd>\u2190</kbd> <kbd>\u2192</kbd><span>Step previous / next event</span></div>
+        <div class="tb-qb-help-row"><kbd>\u2191</kbd> <kbd>\u2193</kbd><span>Jump previous / next error</span></div>
+        <div class="tb-qb-help-row"><kbd>1</kbd>\u2013<kbd>6</kbd><span>Switch tabs</span></div>
+        <div class="tb-qb-help-row"><kbd>T</kbd><span>Cycle theme</span></div>
+        <div class="tb-qb-help-row"><kbd>?</kbd> <kbd>Esc</kbd><span>Toggle / close help</span></div>
+        <button class="tb-qb-help-close" data-action="help-close">Close</button>
+      </div>
     </div>
   `;
     overlay.appendChild(modal);
     root.appendChild(overlay);
-    _injectStyles();
+    _injectStyles2();
     setTimeout(() => {
       const titleInput = modal.querySelector("#tb-qb-title");
       if (titleInput) titleInput.focus();
     }, 50);
+    const scrubberHost = modal.querySelector("#tb-qb-scrubber");
+    if (scrubberHost && data.timeline.length > 0) {
+      const ssForScrub = data.screenshots.map((s) => ({ timestamp: s.timestamp, dataUrl: s.dataUrl }));
+      const videoEl2 = modal.querySelector("video");
+      if (videoEl2 && video) {
+        videoEl2.dataset.tbStartTs = String(video.startedAt);
+      }
+      mountReplayScrubber(scrubberHost, {
+        timeline: data.timeline,
+        screenshots: ssForScrub,
+        videoEl: videoEl2,
+        onSeek: (ts) => {
+          const img = modal.querySelector("#tb-qb-primary-img");
+          const meta = modal.querySelector("#tb-qb-primary-meta");
+          if (!img || data.screenshots.length === 0) return;
+          let best = data.screenshots[0];
+          let bestDelta = Math.abs(best.timestamp - ts);
+          for (const s of data.screenshots) {
+            const d = Math.abs(s.timestamp - ts);
+            if (d < bestDelta) {
+              best = s;
+              bestDelta = d;
+            }
+          }
+          img.src = best.dataUrl;
+          if (meta) meta.textContent = `${best.filename} \xB7 ${best.width}x${best.height}`;
+        }
+      });
+    }
     const getDraft = () => {
       const titleEl = modal.querySelector("#tb-qb-title");
       const descEl = modal.querySelector("#tb-qb-desc");
@@ -10851,11 +14704,78 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _isOpen = false;
       overlay.remove();
       document.removeEventListener("keydown", escHandler);
+      const k = overlay.__tbModalKey;
+      if (k) document.removeEventListener("keydown", k);
     };
     modal.querySelector('[data-action="close"]').addEventListener("click", close);
     overlay.addEventListener("click", (e2) => {
       if (e2.target === overlay) close();
     });
+    (_p = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _p.addEventListener("click", () => {
+      _cycleTheme();
+      const btn = modal.querySelector('[data-action="theme-toggle"]');
+      if (btn) btn.innerHTML = _themeIcon();
+    });
+    const helpEl = modal.querySelector("#tb-qb-help");
+    const toggleHelp = (force) => {
+      if (!helpEl) return;
+      const open = force !== void 0 ? force : helpEl.style.display === "none";
+      helpEl.style.display = open ? "flex" : "none";
+    };
+    (_q = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _q.addEventListener("click", () => toggleHelp());
+    (_r = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _r.addEventListener("click", () => toggleHelp(false));
+    helpEl == null ? void 0 : helpEl.addEventListener("click", (e2) => {
+      if (e2.target === helpEl) toggleHelp(false);
+    });
+    const isTypingTarget = (t) => {
+      if (!t || !t.tagName) return false;
+      const tag = t.tagName.toLowerCase();
+      return tag === "input" || tag === "textarea" || t.isContentEditable;
+    };
+    const switchTab = (which) => {
+      const btn = modal.querySelector(`[data-tab="${which}"]`);
+      if (btn) btn.click();
+    };
+    const TAB_ORDER = ["info", "console", "network", "actions", "ai", "annotations"];
+    const modalKeyHandler = (e2) => {
+      if (helpEl && helpEl.style.display !== "none") {
+        if (e2.key === "Escape" || e2.key === "?") {
+          e2.preventDefault();
+          toggleHelp(false);
+        }
+        return;
+      }
+      if (isTypingTarget(e2.target)) return;
+      if (e2.key === "?" || e2.shiftKey && e2.key === "/") {
+        e2.preventDefault();
+        toggleHelp(true);
+        return;
+      }
+      if (e2.key === "t" || e2.key === "T") {
+        e2.preventDefault();
+        _cycleTheme();
+        const btn = modal.querySelector('[data-action="theme-toggle"]');
+        if (btn) btn.innerHTML = _themeIcon();
+        return;
+      }
+      const n = parseInt(e2.key, 10);
+      if (!isNaN(n) && n >= 1 && n <= TAB_ORDER.length) {
+        e2.preventDefault();
+        switchTab(TAB_ORDER[n - 1]);
+        return;
+      }
+      if (e2.key === " " || e2.code === "Space" || e2.key === "ArrowLeft" || e2.key === "ArrowRight" || e2.key === "ArrowUp" || e2.key === "ArrowDown") {
+        const scrubberRoot = modal.querySelector(".tb-rs-root");
+        if (scrubberRoot && document.activeElement !== scrubberRoot) {
+          scrubberRoot.focus();
+          const cloned = new KeyboardEvent("keydown", { key: e2.key, code: e2.code, bubbles: true });
+          scrubberRoot.dispatchEvent(cloned);
+          e2.preventDefault();
+        }
+      }
+    };
+    document.addEventListener("keydown", modalKeyHandler);
+    overlay.__tbModalKey = modalKeyHandler;
     const escHandler = (e2) => {
       if (e2.key === "Escape") close();
     };
@@ -10937,6 +14857,137 @@ ${description}`;
       _clearDraft();
       setTimeout(close, 300);
     });
+    (_s = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _s.addEventListener("click", async () => {
+      if (!data.currentSession) {
+        showToast("No session to export yet", root);
+        return;
+      }
+      showToast("Bundling replay\u2026", root);
+      try {
+        try {
+          await restoreLastRecordingFromOffscreen();
+        } catch (e2) {
+        }
+        const report = buildReport(data.currentSession);
+        const result = await exportSessionAsHtml(data.currentSession, report);
+        const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+        showToast(`\u2713 Replay exported \xB7 ${sizeMb} MB`, root);
+      } catch (err) {
+        console.warn("[TraceBug] HTML replay export failed:", err);
+        showToast("Replay export failed", root);
+      }
+    });
+    const tabButtons = modal.querySelectorAll("[data-tab]");
+    const tabPanels = modal.querySelectorAll("[data-panel]");
+    tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        var _a2;
+        const which = btn.dataset.tab;
+        tabButtons.forEach((b) => b.classList.toggle("tb-qb-tab-active", b === btn));
+        tabPanels.forEach((p) => {
+          const active = p.dataset.panel === which;
+          p.classList.toggle("tb-qb-panel-active", active);
+          if (active) p.removeAttribute("hidden");
+          else p.setAttribute("hidden", "");
+        });
+        (_a2 = btn.querySelector(".tb-qb-tab-dot")) == null ? void 0 : _a2.remove();
+      });
+    });
+    const netPanel = modal.querySelector('[data-panel="network"]');
+    if (netPanel) {
+      const searchEl = netPanel.querySelector("#tb-qb-net-search");
+      const errorsOnlyEl = netPanel.querySelector("#tb-qb-net-errors-only");
+      const pills = netPanel.querySelectorAll(".tb-qb-net-pill");
+      let activeType = "all";
+      const applyNetFilter = () => {
+        const q = ((searchEl == null ? void 0 : searchEl.value) || "").trim().toLowerCase();
+        const errOnly = !!(errorsOnlyEl == null ? void 0 : errorsOnlyEl.checked);
+        netPanel.querySelectorAll(".tb-qb-net-row").forEach((row) => {
+          if (row.classList.contains("tb-qb-net-head")) return;
+          const t = row.dataset.type || "";
+          const isErr = row.dataset.err === "1";
+          const hay = row.dataset.search || "";
+          const typeMatch = activeType === "all" || t === activeType;
+          const errMatch = !errOnly || isErr;
+          const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          const show = typeMatch && errMatch && searchMatch;
+          row.style.display = show ? "" : "none";
+        });
+      };
+      searchEl == null ? void 0 : searchEl.addEventListener("input", applyNetFilter);
+      errorsOnlyEl == null ? void 0 : errorsOnlyEl.addEventListener("change", applyNetFilter);
+      pills.forEach((p) => {
+        p.addEventListener("click", () => {
+          activeType = p.dataset.type || "all";
+          pills.forEach((q) => q.classList.toggle("tb-qb-net-pill-active", q === p));
+          applyNetFilter();
+        });
+      });
+    }
+    const conPanel = modal.querySelector('[data-panel="console"]');
+    if (conPanel) {
+      const conSearch = conPanel.querySelector("#tb-qb-con-search");
+      const conErrOnly = conPanel.querySelector("#tb-qb-con-errors-only");
+      const applyConFilter = () => {
+        const q = ((conSearch == null ? void 0 : conSearch.value) || "").trim().toLowerCase();
+        const errOnly = !!(conErrOnly == null ? void 0 : conErrOnly.checked);
+        conPanel.querySelectorAll("[data-con-row]").forEach((row) => {
+          const hay = (row.dataset.search || "").toLowerCase();
+          const level = row.dataset.level || "";
+          const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          const levelMatch = !errOnly || level === "error";
+          row.style.display = searchMatch && levelMatch ? "" : "none";
+        });
+      };
+      conSearch == null ? void 0 : conSearch.addEventListener("input", applyConFilter);
+      conErrOnly == null ? void 0 : conErrOnly.addEventListener("change", applyConFilter);
+    }
+    modal.querySelector('[data-action="linear"]').addEventListener("click", () => {
+      const { title, description } = getDraft();
+      const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+      const session = sessions[0];
+      const r = session ? buildReport(session) : null;
+      if (!r) {
+        showToast("No session data yet", root);
+        return;
+      }
+      r.title = title;
+      const ok = openLinearIssue({ ...r, steps: `${description}
+
+---
+
+${r.steps}` });
+      if (ok) {
+        const tail = screenshots2.length ? ` \xB7 ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"} downloading` : "";
+        showToast(`\u2713 Linear new-issue page opened${tail}`, root);
+        if (screenshots2.length) _downloadAllScreenshots(screenshots2);
+        _downloadVideoIfPresent();
+        _clearDraft();
+        setTimeout(close, 300);
+      } else {
+        showToast("Failed to open Linear", root);
+      }
+    });
+    modal.querySelector('[data-action="slack"]').addEventListener("click", async () => {
+      const { title, description } = getDraft();
+      const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+      const session = sessions[0];
+      const r = session ? buildReport(session) : null;
+      if (!r) {
+        showToast("No session data yet", root);
+        return;
+      }
+      r.title = title;
+      const text = generateSlackPost(r, description);
+      const ok = await _copyToClipboard(text);
+      showToast(ok ? "\u2713 Slack-formatted summary copied" : "Copy failed", root);
+      if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
+      _clearDraft();
+      setTimeout(close, 300);
+    });
+    (_t = modal.querySelector('[data-action="ai-configure"]')) == null ? void 0 : _t.addEventListener("click", () => {
+      showToast("AI configuration UI coming soon \u2014 set tracebug_ai_key in localStorage to enable", root);
+    });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = Number(btn.dataset.thumbIndex);
@@ -10983,33 +15034,6 @@ ${description}`;
     const ext = video.mimeType.includes("mp4") ? "mp4" : "webm";
     const stamp = new Date(video.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
     return `tracebug-recording-${stamp}.${ext}`;
-  }
-  function _buildVideoBlock(video) {
-    const duration2 = _formatVideoTime(video.durationMs);
-    const size = _formatBytes(video.sizeBytes);
-    const commentCount = video.comments.length;
-    const commentLabel = commentCount === 0 ? "No timestamped comments" : `${commentCount} timestamped comment${commentCount === 1 ? "" : "s"}`;
-    const commentsList = commentCount > 0 ? `<div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:120px;overflow-y:auto;padding-right:4px">
-        ${video.comments.map((c) => {
-      const seconds = Math.floor(c.offsetMs / 1e3);
-      return `<button data-video-seek="${seconds}" style="display:flex;align-items:flex-start;gap:8px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:6px 8px;color:var(--tb-text-primary, #e0e0e0);font-family:inherit;font-size:11px;text-align:left;cursor:pointer;line-height:1.4">
-            <span style="font-variant-numeric:tabular-nums;font-weight:600;color:var(--tb-accent, #7B61FF);min-width:38px">${_formatVideoTime(c.offsetMs)}</span>
-            <span style="flex:1">${escapeHtml2(c.text)}</span>
-          </button>`;
-    }).join("")}
-      </div>` : "";
-    return `
-    <label style="font-size:11px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Screen Recording</label>
-    <div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);overflow:hidden;margin-bottom:6px;background:var(--tb-bg-primary, #0f0f1a)">
-      <video id="tb-qb-video" controls preload="metadata" src="${video.url}" style="display:block;width:100%;max-height:280px;background:#000"></video>
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:var(--tb-text-muted, #555);margin-bottom:8px">
-      <span>${duration2} \xB7 ${size} \xB7 ${commentLabel}</span>
-      <button data-action="download-video" style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:inherit">\u2B07 Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}</button>
-    </div>
-    ${commentsList}
-    <div style="height:14px"></div>
-  `;
   }
   function _buildGitHubMarkdown(title, description, screenshot) {
     const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
@@ -11077,28 +15101,575 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     } catch (e2) {
     }
   }
-  function _injectStyles() {
+  function _getElementAnnotationCount() {
+    try {
+      return getElementAnnotations().length + getDrawRegions().length;
+    } catch (e2) {
+      return 0;
+    }
+  }
+  function _kvRow(label, value, icon) {
+    const iconHtml = icon ? `<span class="tb-qb-kv-icon">${icon}</span>` : "";
+    return `<div class="tb-qb-kv"><span class="tb-qb-kv-k">${escapeHtml2(label)}</span><span class="tb-qb-kv-v">${iconHtml}${escapeHtml2(value)}</span></div>`;
+  }
+  function _browserIcon(name) {
+    const n = (name || "").toLowerCase();
+    if (n.includes("chrome")) return "\u{1F535}";
+    if (n.includes("edge")) return "\u{1F537}";
+    if (n.includes("firefox")) return "\u{1F98A}";
+    if (n.includes("safari")) return "\u{1F9ED}";
+    if (n.includes("opera")) return "\u{1F3AD}";
+    if (n.includes("brave")) return "\u{1F981}";
+    return "\u{1F310}";
+  }
+  function _osIcon(name) {
+    const n = (name || "").toLowerCase();
+    if (n.includes("mac") || n.includes("darwin")) return "\u{1F34E}";
+    if (n.includes("windows") || n.includes("win")) return "\u{1FA9F}";
+    if (n.includes("linux")) return "\u{1F427}";
+    if (n.includes("ios") || n.includes("iphone") || n.includes("ipad")) return "\u{1F4F1}";
+    if (n.includes("android")) return "\u{1F916}";
+    if (n.includes("chrome os")) return "\u{1F535}";
+    return "\u{1F4BB}";
+  }
+  function _deviceIcon(name) {
+    const n = (name || "").toLowerCase();
+    if (n === "tablet") return "\u{1F4F1}";
+    if (n === "mobile") return "\u{1F4F1}";
+    return "\u{1F5A5}";
+  }
+  function _connectionIcon(name) {
+    const n = (name || "").toLowerCase();
+    if (n.includes("wifi")) return "\u{1F4F6}";
+    if (n.includes("ethernet")) return "\u{1F50C}";
+    if (n.includes("5g") || n.includes("4g") || n.includes("3g") || n.includes("cellular")) return "\u{1F4E1}";
+    return "\u{1F310}";
+  }
+  function _buildInfoTab(report, session) {
+    const env = (report == null ? void 0 : report.environment) || (session == null ? void 0 : session.environment) || captureEnvironment();
+    const ctx = (report == null ? void 0 : report.context) || {};
+    const sevLabel = severityBadge((report == null ? void 0 : report.severity) || "low");
+    const rows = [];
+    rows.push(_kvRow("URL", env.url || window.location.href, "\u{1F517}"));
+    rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), "\u{1F552}"));
+    rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
+    rows.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
+    rows.push(_kvRow("Viewport", env.viewport || "", "\u{1F4D0}"));
+    rows.push(_kvRow("Screen", env.screenResolution || "", "\u{1F5BC}"));
+    rows.push(_kvRow("Device", env.deviceType || "", _deviceIcon(env.deviceType)));
+    rows.push(_kvRow("Language", env.language || "", "\u{1F5E3}"));
+    rows.push(_kvRow("Timezone", env.timezone || "", "\u{1F30D}"));
+    rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
+    rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), "\u{1F194}"));
+    rows.push(_kvRow("Severity", sevLabel));
+    const ctxKeys = Object.keys(ctx);
+    if (ctxKeys.length > 0) {
+      rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
+      for (const k of ctxKeys) {
+        rows.push(_kvRow(k, String(ctx[k])));
+      }
+    }
+    return `<div class="tb-qb-info">${rows.join("")}</div>`;
+  }
+  function _buildConsoleTab(report) {
+    const fullLogs = report == null ? void 0 : report.consoleLogs;
+    const entries = fullLogs && fullLogs.length ? fullLogs : ((report == null ? void 0 : report.consoleErrors) || []).map((e2) => ({ level: "error", message: e2.message, stack: e2.stack, timestamp: e2.timestamp }));
+    if (entries.length === 0) {
+      return `<div class="tb-qb-empty">No console output recorded this session</div>`;
+    }
+    const rows = entries.map((e2) => {
+      const stack = e2.stack ? e2.stack.split("\n").slice(0, 5).join("\n") : "";
+      const hay = `${e2.message || ""} ${stack} ${e2.level}`.toLowerCase();
+      const lvl = e2.level || "log";
+      return `<div class="tb-qb-log tb-qb-log-${lvl}" data-con-row data-search="${escapeHtml2(hay)}" data-level="${lvl}">
+      <div class="tb-qb-log-head">
+        <span class="tb-qb-log-lvl tb-qb-log-lvl-${lvl}">${lvl}</span>
+        <span class="tb-qb-log-msg">${escapeHtml2(e2.message || "")}</span>
+      </div>
+      ${stack ? `<pre class="tb-qb-log-stack">${escapeHtml2(stack)}</pre>` : ""}
+      <div class="tb-qb-log-ts">${new Date(e2.timestamp).toLocaleTimeString()}</div>
+    </div>`;
+    }).join("");
+    return `
+    <div class="tb-qb-con-toolbar">
+      <input id="tb-qb-con-search" type="search" placeholder="Filter messages" class="tb-qb-net-search" />
+      <label class="tb-qb-net-err-toggle"><input id="tb-qb-con-errors-only" type="checkbox" /> Errors only</label>
+      <span class="tb-qb-con-count">${entries.length}</span>
+    </div>
+    ${rows}
+  `;
+  }
+  function _classifyRequest(url) {
+    if (!url) return "other";
+    if (url.startsWith("ws://") || url.startsWith("wss://")) return "ws";
+    let pathname = url;
+    try {
+      pathname = new URL(url, "http://_").pathname;
+    } catch (e2) {
+    }
+    const ext = (pathname.toLowerCase().split(".").pop() || "").split("?")[0];
+    if (["js", "mjs", "cjs"].includes(ext)) return "js";
+    if (["css", "scss"].includes(ext)) return "css";
+    if (["png", "jpg", "jpeg", "gif", "webp", "avif", "ico", "svg", "mp4", "webm", "mp3", "wav", "ogg", "m4a", "mov"].includes(ext)) return "media";
+    if (["woff", "woff2", "ttf", "otf", "eot"].includes(ext)) return "font";
+    if (["html", "htm"].includes(ext)) return "doc";
+    return "fetch";
+  }
+  function _extractDomain(url) {
+    try {
+      return new URL(url, "http://_").hostname;
+    } catch (e2) {
+    }
+    return "";
+  }
+  function _shortName(url) {
+    try {
+      const u2 = new URL(url, "http://_");
+      const parts = u2.pathname.split("/").filter(Boolean);
+      return parts[parts.length - 1] || u2.hostname;
+    } catch (e2) {
+      return url.split("/").filter(Boolean).pop() || url;
+    }
+  }
+  function _buildNetworkTab(report) {
+    const reqs = (report == null ? void 0 : report.networkRequests) || (report == null ? void 0 : report.networkErrors) || [];
+    if (reqs.length === 0) {
+      return `<div class="tb-qb-empty">No network requests recorded this session</div>`;
+    }
+    const minTs = Math.min(...reqs.map((r) => r.timestamp));
+    const maxEnd = Math.max(...reqs.map((r) => r.timestamp + (r.duration || 0)));
+    const span = Math.max(1, maxEnd - minTs);
+    const typeCounts = { all: reqs.length, fetch: 0, ws: 0, js: 0, css: 0, media: 0, font: 0, doc: 0, other: 0 };
+    const classified = reqs.map((n) => {
+      const t = _classifyRequest(n.url);
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+      return { ...n, _t: t, _dom: _extractDomain(n.url), _name: _shortName(n.url) };
+    });
+    const pill = (key, label) => {
+      const c = typeCounts[key] || 0;
+      if (key !== "all" && c === 0) return "";
+      return `<button class="tb-qb-net-pill${key === "all" ? " tb-qb-net-pill-active" : ""}" data-type="${key}">${label}${c > 0 ? `<span class="tb-qb-net-pill-n">${c}</span>` : ""}</button>`;
+    };
+    const rows = classified.map((n, i) => {
+      const status = n.status === 0 ? "ERR" : String(n.status);
+      const statusClass = n.status === 0 ? "tb-qb-net-err" : n.status >= 500 ? "tb-qb-net-5xx" : n.status >= 400 ? "tb-qb-net-4xx" : n.status >= 300 ? "tb-qb-net-3xx" : n.status >= 200 ? "tb-qb-net-2xx" : "";
+      const isErr = n.status === 0 || n.status >= 400;
+      const leftPct = (n.timestamp - minTs) / span * 100;
+      const widthPct = Math.max(0.5, (n.duration || 0) / span * 100);
+      const haystack = `${n.method} ${n.url} ${status} ${n._dom}`.toLowerCase();
+      const snippet = n.response ? `<div class="tb-qb-net-snippet"><pre>${escapeHtml2(n.response.slice(0, 240))}</pre></div>` : "";
+      return `<details class="tb-qb-net-row" data-type="${n._t}" data-err="${isErr ? "1" : "0"}" data-search="${escapeHtml2(haystack)}">
+      <summary class="tb-qb-net-summary">
+        <span class="tb-qb-net-c-n">${i + 1}</span>
+        <span class="tb-qb-net-c-name" title="${escapeHtml2(n.url)}">${escapeHtml2(n._name)}</span>
+        <span class="tb-qb-net-c-meth">${escapeHtml2(n.method)}</span>
+        <span class="tb-qb-net-c-stat ${statusClass}">${status}</span>
+        <span class="tb-qb-net-c-dom" title="${escapeHtml2(n._dom)}">${escapeHtml2(n._dom)}</span>
+        <span class="tb-qb-net-c-type">${n._t}</span>
+        <span class="tb-qb-net-c-time">${n.duration || 0} ms</span>
+        <span class="tb-qb-net-c-wf"><span class="tb-qb-net-wf-bar ${statusClass}" style="left:${leftPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%"></span></span>
+      </summary>
+      <div class="tb-qb-net-detail">
+        <div class="tb-qb-net-detail-url">${escapeHtml2(n.url)}</div>
+        ${snippet}
+      </div>
+    </details>`;
+    }).join("");
+    return `
+    <div class="tb-qb-net-toolbar">
+      <input id="tb-qb-net-search" type="search" placeholder="Filter requests" class="tb-qb-net-search" />
+      <label class="tb-qb-net-err-toggle"><input id="tb-qb-net-errors-only" type="checkbox" /> Errors only</label>
+    </div>
+    <div class="tb-qb-net-pills">
+      ${pill("all", "All")}
+      ${pill("fetch", "Fetch/XHR")}
+      ${pill("ws", "WS")}
+      ${pill("js", "JS")}
+      ${pill("css", "CSS")}
+      ${pill("media", "Media")}
+      ${pill("font", "Font")}
+      ${pill("doc", "Doc")}
+      ${pill("other", "Other")}
+    </div>
+    <div class="tb-qb-net-table">
+      <div class="tb-qb-net-row tb-qb-net-head">
+        <span class="tb-qb-net-c-n">#</span>
+        <span class="tb-qb-net-c-name">Name</span>
+        <span class="tb-qb-net-c-meth">Method</span>
+        <span class="tb-qb-net-c-stat">Status</span>
+        <span class="tb-qb-net-c-dom">Domain</span>
+        <span class="tb-qb-net-c-type">Type</span>
+        <span class="tb-qb-net-c-time">Time</span>
+        <span class="tb-qb-net-c-wf">Waterfall</span>
+      </div>
+      ${rows}
+    </div>
+  `;
+  }
+  function _buildActionsTab(report) {
+    const chips = (report == null ? void 0 : report.actionChips) || [];
+    if (chips.length === 0) {
+      const steps = (report == null ? void 0 : report.sessionSteps) || [];
+      if (steps.length === 0) {
+        return `<div class="tb-qb-empty">No actions recorded yet \u2014 click around the app to populate this</div>`;
+      }
+      return `<ol class="tb-qb-steps">${steps.map((s) => `<li>${escapeHtml2(s)}</li>`).join("")}</ol>`;
+    }
+    return `<div class="tb-qb-chips">${chips.map(_renderActionChip).join("")}</div>`;
+  }
+  function _renderActionChip(chip) {
+    const elPreview = chip.element ? _renderElementPreview(chip.element) : "";
+    const detail = chip.detail ? `<span class="tb-qb-chip-detail${chip.isError ? " tb-qb-chip-detail-err" : ""}">${escapeHtml2(chip.detail)}</span>` : "";
+    const target = chip.target ? `<span class="tb-qb-chip-target"><span class="tb-qb-chip-target-name">${escapeHtml2(`\u201C${chip.target}\u201D`)}</span>${chip.nounLabel ? ` <span class="tb-qb-chip-target-noun">${escapeHtml2(chip.nounLabel)}</span>` : ""}</span>` : "";
+    const frust = chip.frustration ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click \u2014 multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click \u2014 no visible response within 1.5s" : "Form abandoned \u2014 filled but never submitted"}">${chip.frustration === "rage" ? "\u26A1" : chip.frustration === "dead" ? "\u2715" : "\u21A9"}</span>` : "";
+    const errClass = chip.isError || chip.frustration ? "tb-qb-chip-err" : "";
+    return `<div class="tb-qb-chip ${errClass}">
+    ${frust}
+    <span class="tb-qb-chip-verb tb-qb-chip-verb-${chip.kind}">${escapeHtml2(chip.verb)}</span>
+    <span class="tb-qb-chip-body">${target}${elPreview}${detail}</span>
+  </div>`;
+  }
+  function _renderElementPreview(el) {
+    const attrsHtml = el.attrs.map((a2) => {
+      if (a2.value === "") return `<span class="tb-qb-el-attr-name">${escapeHtml2(a2.name)}</span>`;
+      return `<span class="tb-qb-el-attr-name">${escapeHtml2(a2.name)}</span>=<span class="tb-qb-el-attr-val">"${escapeHtml2(a2.value)}"</span>`;
+    }).join(" ");
+    const more = el.moreCount > 0 ? ` <span class="tb-qb-el-more">+${el.moreCount} more</span>` : "";
+    return `<span class="tb-qb-el">&lt;<span class="tb-qb-el-tag">${escapeHtml2(el.tag)}</span>${attrsHtml ? " " : ""}${attrsHtml}${more}&gt;</span>`;
+  }
+  function _buildAITab(report) {
+    const rootCause = report == null ? void 0 : report.rootCause;
+    const hasKey = (() => {
+      try {
+        return !!localStorage.getItem("tracebug_ai_key");
+      } catch (e2) {
+        return false;
+      }
+    })();
+    const deterministic = rootCause ? `
+    <div class="tb-qb-ai-card">
+      <div class="tb-qb-ai-card-head">Pattern-based hint <span class="tb-qb-ai-conf tb-qb-ai-conf-${rootCause.confidence}">${rootCause.confidence}</span></div>
+      <div class="tb-qb-ai-card-body">${escapeHtml2(rootCause.hint)}</div>
+    </div>
+  ` : "";
+    const llmBlock = hasKey ? `
+    <div class="tb-qb-ai-card">
+      <div class="tb-qb-ai-card-head">LLM analysis</div>
+      <div class="tb-qb-ai-card-body"><em>Click \u201CGenerate\u201D below to run the LLM analysis (BYO API key).</em></div>
+      <button class="tb-qb-btn tb-qb-btn-accent" data-action="ai-generate" style="margin-top:10px">\u2728 Generate AI analysis</button>
+    </div>
+  ` : `
+    <div class="tb-qb-ai-card tb-qb-ai-empty">
+      <div class="tb-qb-ai-card-head">AI Debugger \u2014 BYO API key</div>
+      <div class="tb-qb-ai-card-body">
+        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys stay in localStorage \u2014 never leave your machine.</p>
+        <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Configure API key</button>
+      </div>
+    </div>
+  `;
+    return deterministic + llmBlock;
+  }
+  function _buildAnnotationsTab(session) {
+    const sessAnn = (session == null ? void 0 : session.annotations) || [];
+    let els = [];
+    let regions = [];
+    try {
+      els = getElementAnnotations();
+    } catch (e2) {
+    }
+    try {
+      regions = getDrawRegions();
+    } catch (e2) {
+    }
+    if (sessAnn.length === 0 && els.length === 0 && regions.length === 0) {
+      return `<div class="tb-qb-empty">No notes yet \u2014 use the toolbar to add annotations, comments, or draw markup</div>`;
+    }
+    const sessHtml = sessAnn.length > 0 ? `
+    <div class="tb-qb-sec-head">Comments (${sessAnn.length})</div>
+    ${sessAnn.map((a2) => `
+      <div class="tb-qb-note tb-qb-note-${a2.severity}">
+        <div class="tb-qb-note-sev">${escapeHtml2(a2.severity)}</div>
+        <div class="tb-qb-note-text">${escapeHtml2(a2.text || "")}</div>
+        ${a2.expected ? `<div class="tb-qb-note-line"><strong>Expected:</strong> ${escapeHtml2(a2.expected)}</div>` : ""}
+        ${a2.actual ? `<div class="tb-qb-note-line"><strong>Actual:</strong> ${escapeHtml2(a2.actual)}</div>` : ""}
+      </div>
+    `).join("")}
+  ` : "";
+    const elHtml = els.length > 0 ? `
+    <div class="tb-qb-sec-head">Element markup (${els.length})</div>
+    ${els.map((e2) => `
+      <div class="tb-qb-note tb-qb-note-${e2.severity}">
+        <div class="tb-qb-note-sev">${escapeHtml2(e2.intent)} \xB7 ${escapeHtml2(e2.severity)}</div>
+        <div class="tb-qb-note-text">${escapeHtml2(e2.comment || "")}</div>
+        <div class="tb-qb-note-line"><code>${escapeHtml2(e2.selector)}</code> \u2014 ${escapeHtml2((e2.innerText || "").slice(0, 60))}</div>
+      </div>
+    `).join("")}
+  ` : "";
+    const regionHtml = regions.length > 0 ? `
+    <div class="tb-qb-sec-head">Draw regions (${regions.length})</div>
+    ${regions.map((r) => `
+      <div class="tb-qb-note">
+        <div class="tb-qb-note-sev">${escapeHtml2(r.shape)}</div>
+        <div class="tb-qb-note-text">${escapeHtml2(r.comment || "")}</div>
+      </div>
+    `).join("")}
+  ` : "";
+    return sessHtml + elHtml + regionHtml;
+  }
+  function _injectStyles2() {
     if (document.getElementById("tracebug-qb-styles")) return;
     const style = document.createElement("style");
     style.id = "tracebug-qb-styles";
     style.textContent = `
-    @keyframes tracebug-qb-fade-in {
-      from { opacity: 0; } to { opacity: 1; }
-    }
-    @keyframes tracebug-qb-slide-up {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    #${MODAL_ID2} button:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
-    #${MODAL_ID2} button:disabled { opacity: 0.4; cursor: not-allowed; }
-    #${MODAL_ID2} input:focus, #${MODAL_ID2} textarea:focus {
-      border-color: var(--tb-accent, #7B61FF) !important;
-      box-shadow: 0 0 0 2px var(--tb-accent, #7B61FF)33;
-    }
+    @keyframes tracebug-qb-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes tracebug-qb-slide-up { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+    /* \u2500\u2500 Modal shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
+    #${MODAL_ID2} * { box-sizing: border-box; }
+
+    /* \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-header { display:flex; align-items:center; gap:12px; padding:16px 22px; border-bottom:1px solid var(--tb-border); flex-shrink:0; background:var(--tb-bg-primary); }
+    #${MODAL_ID2} .tb-qb-logo { font-size:20px; line-height:1; }
+    #${MODAL_ID2} .tb-qb-titleblock { flex:1; min-width:0; }
+    #${MODAL_ID2} .tb-qb-titletext { font-size:15px; font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
+    #${MODAL_ID2} .tb-qb-sub { font-size:11px; color:var(--tb-text-muted); margin-top:3px; font-weight:500; }
+    #${MODAL_ID2} .tb-qb-sev { font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:5px 10px; border-radius:999px; white-space:nowrap; }
+    #${MODAL_ID2} .tb-qb-close { background:transparent; border:none; color:var(--tb-text-muted); cursor:pointer; font-size:16px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, color 0.15s; }
+    #${MODAL_ID2} .tb-qb-close:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-theme-toggle { background:transparent; border:1px solid var(--tb-border); color:var(--tb-text-muted); cursor:pointer; font-size:13px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s; }
+    #${MODAL_ID2} .tb-qb-theme-toggle:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+
+    /* \u2500\u2500 Two-pane body \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-body { flex:1; display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(340px, 1fr); gap:0; overflow:hidden; min-height:0; background:var(--tb-bg-primary); }
+    @media (max-width: 920px) { #${MODAL_ID2} .tb-qb-body { grid-template-columns:1fr; } }
+    #${MODAL_ID2} .tb-qb-left { padding:20px 22px; overflow-y:auto; min-width:0; border-right:1px solid var(--tb-border); }
+    #${MODAL_ID2} .tb-qb-right { display:flex; flex-direction:column; min-width:0; overflow:hidden; background:var(--tb-bg-secondary); }
+
+    /* \u2500\u2500 Left pane \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-lbl { font-size:10px; color:var(--tb-text-muted); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; }
+    #${MODAL_ID2} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
+    #${MODAL_ID2} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
+    #${MODAL_ID2} .tb-qb-preview { border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
+    #${MODAL_ID2} .tb-qb-preview-empty { padding:32px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
+    #${MODAL_ID2} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
+    #${MODAL_ID2} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
+    #${MODAL_ID2} .tb-qb-vidmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; }
+    #${MODAL_ID2} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
+    #${MODAL_ID2} .tb-qb-btn-sm:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+    #${MODAL_ID2} .tb-qb-scrubber-wrap { margin-bottom:14px; }
+    #${MODAL_ID2} .tb-qb-thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+    #${MODAL_ID2} .tb-qb-thumb { position:relative; padding:0; border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); overflow:hidden; cursor:pointer; background:var(--tb-bg-secondary); width:68px; height:52px; transition:border-color 0.15s, transform 0.1s; }
+    #${MODAL_ID2} .tb-qb-thumb:hover { border-color:var(--tb-accent); transform:translateY(-1px); }
+    #${MODAL_ID2} .tb-qb-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+    #${MODAL_ID2} .tb-qb-thumb-num { position:absolute; top:2px; left:3px; font-size:9px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); background:rgba(0,0,0,0.55); border-radius:3px; padding:1px 5px; }
+    #${MODAL_ID2} .tb-qb-comments { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; max-height:160px; overflow-y:auto; padding-right:4px; }
+    #${MODAL_ID2} .tb-qb-comment { display:flex; align-items:flex-start; gap:10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:8px 10px; color:var(--tb-text-primary); font-family:inherit; font-size:12px; text-align:left; cursor:pointer; line-height:1.4; transition:border-color 0.15s, background 0.15s; }
+    #${MODAL_ID2} .tb-qb-comment:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); }
+    #${MODAL_ID2} .tb-qb-comment-ts { font-variant-numeric:tabular-nums; font-weight:600; color:var(--tb-accent); min-width:42px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-comment-tx { flex:1; }
+    #${MODAL_ID2} .tb-qb-desc-wrap { margin-top:8px; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); background:var(--tb-bg-secondary); }
+    #${MODAL_ID2} .tb-qb-desc-wrap[open] { background:var(--tb-bg-primary); }
+    #${MODAL_ID2} .tb-qb-desc-summary { padding:10px 14px; font-size:11px; color:var(--tb-text-muted); cursor:pointer; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; user-select:none; transition:color 0.15s; }
+    #${MODAL_ID2} .tb-qb-desc-summary:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-textarea { width:100%; min-height:160px; background:var(--tb-bg-primary); border:none; border-top:1px solid var(--tb-border); border-radius:0 0 var(--tb-radius-md) var(--tb-radius-md); color:var(--tb-text-primary); padding:12px 14px; font-size:13px; font-family:var(--tb-font-mono); resize:vertical; outline:none; line-height:1.6; }
+
+    /* \u2500\u2500 Right pane: tabs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-tabstrip { display:flex; flex-direction:row; gap:0; padding:0 12px; background:var(--tb-bg-secondary); border-bottom:1px solid var(--tb-border); overflow-x:auto; flex-shrink:0; }
+    #${MODAL_ID2} .tb-qb-tab { display:inline-flex; align-items:center; gap:7px; padding:14px 14px 12px; border:none; background:transparent; color:var(--tb-text-muted); cursor:pointer; font-size:13px; font-weight:600; font-family:inherit; border-bottom:2px solid transparent; white-space:nowrap; transition:color 0.15s, border-color 0.15s; letter-spacing:-0.01em; margin-bottom:-1px; }
+    #${MODAL_ID2} .tb-qb-tab:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-tab-active { color:var(--tb-text-primary); border-bottom-color:var(--tb-accent); }
+    #${MODAL_ID2} .tb-qb-tab-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--tb-accent-subtle); color:var(--tb-accent); line-height:1.4; min-width:18px; text-align:center; }
+    #${MODAL_ID2} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:#fff; }
+    #${MODAL_ID2} .tb-qb-tabpanels { flex:1; overflow-y:auto; padding:18px 20px; min-height:0; }
+    #${MODAL_ID2} .tb-qb-panel { display:none; animation:tracebug-qb-fade-in 0.18s ease; }
+    #${MODAL_ID2} .tb-qb-panel-active { display:block; }
+
+    /* \u2500\u2500 Tab content \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-empty { font-size:13px; color:var(--tb-text-muted); padding:32px 16px; text-align:center; border:1px dashed var(--tb-border); border-radius:var(--tb-radius-md); }
+    #${MODAL_ID2} .tb-qb-sec-head { font-size:10px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin:18px 0 8px; }
+    #${MODAL_ID2} .tb-qb-sec-head:first-child { margin-top:0; }
+    #${MODAL_ID2} .tb-qb-info { display:flex; flex-direction:column; gap:5px; }
+    #${MODAL_ID2} .tb-qb-kv { display:flex; gap:12px; padding:8px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); transition:border-color 0.15s; }
+    #${MODAL_ID2} .tb-qb-kv:hover { border-color:var(--tb-border); }
+    #${MODAL_ID2} .tb-qb-kv-k { font-size:11px; color:var(--tb-text-muted); min-width:98px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; flex-shrink:0; }
+    #${MODAL_ID2} .tb-qb-kv-v { font-size:12px; color:var(--tb-text-primary); word-break:break-word; min-width:0; flex:1; font-family:var(--tb-font-mono); display:flex; align-items:center; gap:6px; }
+    #${MODAL_ID2} .tb-qb-kv-icon { font-size:13px; line-height:1; flex-shrink:0; }
+    #${MODAL_ID2} .tb-qb-log { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-left:3px solid var(--tb-border-hover); border-radius:var(--tb-radius-sm); }
+    #${MODAL_ID2} .tb-qb-log-error { border-left-color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-log-warn { border-left-color:var(--tb-warning); }
+    #${MODAL_ID2} .tb-qb-log-log { border-left-color:var(--tb-info); }
+    #${MODAL_ID2} .tb-qb-log-info { border-left-color:var(--tb-info); }
+    #${MODAL_ID2} .tb-qb-log-head { display:flex; align-items:flex-start; gap:8px; }
+    #${MODAL_ID2} .tb-qb-log-lvl { font-size:9px; font-weight:700; padding:2px 7px; border-radius:var(--tb-radius-sm); text-transform:uppercase; letter-spacing:0.4px; flex-shrink:0; line-height:1.35; }
+    #${MODAL_ID2} .tb-qb-log-lvl-error { background:var(--tb-error-bg); color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-log-lvl-warn { background:var(--tb-warning-bg); color:var(--tb-warning); }
+    #${MODAL_ID2} .tb-qb-log-lvl-log,
+    #${MODAL_ID2} .tb-qb-log-lvl-info { background:var(--tb-info-bg); color:var(--tb-info); }
+    #${MODAL_ID2} .tb-qb-log-msg { font-size:12px; color:var(--tb-text-primary); font-family:var(--tb-font-mono); word-break:break-word; line-height:1.5; flex:1; min-width:0; }
+    #${MODAL_ID2} .tb-qb-log-error .tb-qb-log-msg { color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-log-stack { font-size:10px; color:var(--tb-text-muted); font-family:var(--tb-font-mono); margin:8px 0 0; padding:8px 10px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:140px; overflow:auto; white-space:pre-wrap; }
+    #${MODAL_ID2} .tb-qb-log-ts { font-size:10px; color:var(--tb-text-muted); margin-top:6px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-net { padding:10px 12px; margin-bottom:6px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); transition:border-color 0.15s; }
+    #${MODAL_ID2} .tb-qb-net:hover { border-color:var(--tb-border-hover); }
+    #${MODAL_ID2} .tb-qb-net-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    #${MODAL_ID2} .tb-qb-net-method { font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--tb-radius-sm); background:var(--tb-bg-elevated); color:var(--tb-text-primary); font-family:var(--tb-font-mono); letter-spacing:0.5px; }
+    #${MODAL_ID2} .tb-qb-net-status { font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--tb-radius-sm); color:#fff; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-2xx { background:#16a34a; }
+    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-3xx { background:#0891b2; }
+    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-4xx { background:#d97706; }
+    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-5xx { background:#dc2626; }
+    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-err { background:#7f1d1d; }
+    /* \u2500\u2500 Network DevTools-style refactor \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-net-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    #${MODAL_ID2} .tb-qb-net-search { flex:1; min-width:0; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:6px 10px; font-size:12px; font-family:inherit; outline:none; transition:border-color .15s; }
+    #${MODAL_ID2} .tb-qb-net-search:focus { border-color:var(--tb-accent); box-shadow:0 0 0 3px var(--tb-accent-subtle); }
+    #${MODAL_ID2} .tb-qb-net-err-toggle { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--tb-text-secondary); cursor:pointer; white-space:nowrap; }
+    #${MODAL_ID2} .tb-qb-net-err-toggle input { accent-color:var(--tb-accent); cursor:pointer; }
+    #${MODAL_ID2} .tb-qb-con-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    #${MODAL_ID2} .tb-qb-con-count { font-size:10px; color:var(--tb-text-muted); white-space:nowrap; text-transform:uppercase; letter-spacing:0.4px; font-weight:600; }
+    #${MODAL_ID2} .tb-qb-net-pills { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; }
+    #${MODAL_ID2} .tb-qb-net-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:4px 11px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
+    #${MODAL_ID2} .tb-qb-net-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-net-pill-active { background:var(--tb-text-primary); color:var(--tb-bg-primary); border-color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-net-pill-n { background:rgba(0,0,0,0.15); padding:1px 6px; border-radius:999px; font-size:9px; font-weight:700; }
+    #${MODAL_ID2} .tb-qb-net-pill-active .tb-qb-net-pill-n { background:rgba(255,255,255,0.2); }
+    #${MODAL_ID2} .tb-qb-net-table { font-family:var(--tb-font-mono); font-size:11px; }
+    #${MODAL_ID2} .tb-qb-net-row { display:grid; grid-template-columns:28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items:center; gap:8px; padding:0; background:transparent; border:none; }
+    #${MODAL_ID2} .tb-qb-net-row.tb-qb-net-head { padding:6px 8px 8px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--tb-text-muted); border-bottom:1px solid var(--tb-border); }
+    #${MODAL_ID2} details.tb-qb-net-row { display:block; border-bottom:1px solid var(--tb-border-subtle); }
+    #${MODAL_ID2} details.tb-qb-net-row:hover { background:var(--tb-bg-secondary); }
+    #${MODAL_ID2} .tb-qb-net-summary { display:grid; grid-template-columns:28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; list-style:none; min-height:24px; }
+    #${MODAL_ID2} .tb-qb-net-summary::-webkit-details-marker { display:none; }
+    #${MODAL_ID2} .tb-qb-net-c-n { color:var(--tb-text-muted); text-align:right; }
+    #${MODAL_ID2} .tb-qb-net-c-name { color:var(--tb-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #${MODAL_ID2} .tb-qb-net-c-meth { color:var(--tb-text-secondary); font-weight:600; font-size:10px; letter-spacing:0.4px; }
+    #${MODAL_ID2} .tb-qb-net-c-stat { font-size:10px; font-weight:700; padding:1px 6px; border-radius:var(--tb-radius-sm); color:#fff; text-align:center; }
+    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-2xx { background:#16a34a; }
+    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-3xx { background:#0891b2; }
+    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-4xx { background:#d97706; }
+    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-5xx { background:#dc2626; }
+    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-err { background:#7f1d1d; }
+    #${MODAL_ID2} .tb-qb-net-c-dom { color:var(--tb-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #${MODAL_ID2} .tb-qb-net-c-type { color:var(--tb-text-muted); font-size:10px; }
+    #${MODAL_ID2} .tb-qb-net-c-time { color:var(--tb-text-secondary); text-align:right; font-size:10px; }
+    #${MODAL_ID2} .tb-qb-net-c-wf { position:relative; height:14px; background:var(--tb-bg-secondary); border-radius:3px; overflow:hidden; }
+    #${MODAL_ID2} .tb-qb-net-wf-bar { position:absolute; top:3px; height:8px; border-radius:2px; background:var(--tb-accent); }
+    #${MODAL_ID2} .tb-qb-net-wf-bar.tb-qb-net-4xx { background:#d97706; }
+    #${MODAL_ID2} .tb-qb-net-wf-bar.tb-qb-net-5xx { background:#dc2626; }
+    #${MODAL_ID2} .tb-qb-net-wf-bar.tb-qb-net-err { background:#7f1d1d; }
+    #${MODAL_ID2} .tb-qb-net-detail { padding:0 8px 10px 36px; }
+    #${MODAL_ID2} .tb-qb-net-detail-url { font-size:11px; color:var(--tb-text-secondary); word-break:break-all; padding-bottom:6px; }
+    #${MODAL_ID2} .tb-qb-net-snippet pre { margin:0; padding:8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); font-size:10px; color:var(--tb-code-text); max-height:120px; overflow:auto; white-space:pre-wrap; }
+    /* Tab notification dots */
+    #${MODAL_ID2} .tb-qb-tab-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--tb-accent); margin-left:4px; vertical-align:middle; }
+    #${MODAL_ID2} .tb-qb-net-time { font-size:11px; color:var(--tb-text-muted); margin-left:auto; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-net-url { font-size:12px; color:var(--tb-text-secondary); font-family:var(--tb-font-mono); word-break:break-all; line-height:1.5; }
+    #${MODAL_ID2} .tb-qb-net-snippet { font-size:10px; color:var(--tb-text-muted); font-family:var(--tb-font-mono); margin:8px 0 0; padding:8px 10px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:96px; overflow:auto; white-space:pre-wrap; }
+    #${MODAL_ID2} .tb-qb-steps { margin:0; padding-left:26px; font-size:13px; color:var(--tb-text-primary); line-height:1.7; }
+    #${MODAL_ID2} .tb-qb-steps li { margin-bottom:5px; }
+    #${MODAL_ID2} .tb-qb-ai-card { padding:14px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); margin-bottom:10px; }
+    #${MODAL_ID2} .tb-qb-ai-card-head { font-size:11px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+    #${MODAL_ID2} .tb-qb-ai-conf { font-size:9px; padding:2px 8px; border-radius:999px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; }
+    #${MODAL_ID2} .tb-qb-ai-conf-high { background:var(--tb-success-bg); color:var(--tb-success); }
+    #${MODAL_ID2} .tb-qb-ai-conf-medium { background:var(--tb-warning-bg); color:var(--tb-warning); }
+    #${MODAL_ID2} .tb-qb-ai-conf-low { background:var(--tb-info-bg); color:var(--tb-info); }
+    #${MODAL_ID2} .tb-qb-ai-card-body { font-size:13px; color:var(--tb-text-primary); line-height:1.6; }
+    #${MODAL_ID2} .tb-qb-ai-card-body p { margin:0 0 10px; }
+    #${MODAL_ID2} .tb-qb-ai-empty .tb-qb-ai-card-body { color:var(--tb-text-secondary); }
+
+    /* Actions tab \u2014 chips with HTML-element preview */
+    #${MODAL_ID2} .tb-qb-chips { display:flex; flex-direction:column; gap:5px; }
+    #${MODAL_ID2} .tb-qb-chip { display:flex; align-items:flex-start; gap:12px; padding:9px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); border-left:3px solid transparent; font-size:12px; line-height:1.5; transition:border-color 0.15s; }
+    #${MODAL_ID2} .tb-qb-chip:hover { border-color:var(--tb-border); }
+    #${MODAL_ID2} .tb-qb-chip-err { border-left-color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-chip-verb { font-size:10px; font-weight:700; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.5px; min-width:66px; flex-shrink:0; padding-top:2px; }
+    #${MODAL_ID2} .tb-qb-chip-verb-click { color:var(--tb-accent); }
+    #${MODAL_ID2} .tb-qb-chip-verb-input { color:var(--tb-success); }
+    #${MODAL_ID2} .tb-qb-chip-verb-select { color:#0891b2; }
+    #${MODAL_ID2} .tb-qb-chip-verb-submit { color:var(--tb-info); }
+    #${MODAL_ID2} .tb-qb-chip-verb-navigate { color:#a855f7; }
+    #${MODAL_ID2} .tb-qb-chip-verb-api { color:var(--tb-warning); }
+    #${MODAL_ID2} .tb-qb-chip-verb-error { color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-chip-verb-mark { color:#ea580c; }
+    #${MODAL_ID2} .tb-qb-chip-body { flex:1; min-width:0; word-break:break-word; }
+    #${MODAL_ID2} .tb-qb-chip-detail { display:inline-block; margin-left:6px; color:var(--tb-text-primary); font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-chip-detail-err { color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-el { font-family:var(--tb-font-mono); font-size:12px; color:var(--tb-code-text); }
+    #${MODAL_ID2} .tb-qb-el-tag { color:var(--tb-code-tag); }
+    #${MODAL_ID2} .tb-qb-el-attr-name { color:var(--tb-code-attr-name); }
+    #${MODAL_ID2} .tb-qb-el-attr-val { color:var(--tb-code-attr-val); }
+    #${MODAL_ID2} .tb-qb-el-more { color:var(--tb-text-muted); font-style:italic; font-size:10px; }
+    /* Human-readable target + frustration glyph */
+    #${MODAL_ID2} .tb-qb-chip-target { display:inline-block; margin-right:8px; font-size:12px; color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-chip-target-name { font-weight:600; }
+    #${MODAL_ID2} .tb-qb-chip-target-noun { color:var(--tb-text-secondary); font-weight:500; }
+    #${MODAL_ID2} .tb-qb-chip-frust { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; font-size:10px; font-weight:700; flex-shrink:0; margin-top:1px; }
+    #${MODAL_ID2} .tb-qb-chip-frust-rage { background:rgba(239,68,68,0.18); color:#ef4444; }
+    #${MODAL_ID2} .tb-qb-chip-frust-dead { background:rgba(245,158,11,0.18); color:#f59e0b; }
+    #${MODAL_ID2} .tb-qb-chip-frust-abandon { background:rgba(59,130,246,0.18); color:#3b82f6; }
+
+    /* Notes tab */
+    #${MODAL_ID2} .tb-qb-note { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border-subtle); border-left:3px solid var(--tb-border); }
+    #${MODAL_ID2} .tb-qb-note-critical { border-left-color:var(--tb-error); }
+    #${MODAL_ID2} .tb-qb-note-major { border-left-color:var(--tb-warning); }
+    #${MODAL_ID2} .tb-qb-note-minor { border-left-color:#ca8a04; }
+    #${MODAL_ID2} .tb-qb-note-info { border-left-color:var(--tb-info); }
+    #${MODAL_ID2} .tb-qb-note-sev { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; color:var(--tb-text-muted); margin-bottom:5px; }
+    #${MODAL_ID2} .tb-qb-note-text { font-size:13px; color:var(--tb-text-primary); line-height:1.5; }
+    #${MODAL_ID2} .tb-qb-note-line { font-size:11px; color:var(--tb-text-secondary); margin-top:5px; line-height:1.4; }
+    #${MODAL_ID2} .tb-qb-note-line code { background:var(--tb-code-bg); padding:2px 6px; border-radius:var(--tb-radius-sm); font-family:var(--tb-font-mono); color:var(--tb-code-text); }
+
+    /* \u2500\u2500 Footer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-footer { padding:14px 22px; border-top:1px solid var(--tb-border); background:var(--tb-bg-primary); flex-shrink:0; }
+    #${MODAL_ID2} .tb-qb-actions { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+    #${MODAL_ID2} .tb-qb-btn { background:var(--tb-bg-secondary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:9px 14px; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; display:inline-flex; align-items:center; gap:7px; transition:all 0.15s; letter-spacing:-0.01em; }
+    #${MODAL_ID2} .tb-qb-btn:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); transform:translateY(-1px); }
+    #${MODAL_ID2} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-accent:hover { background:var(--tb-accent-hover); border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-slack:hover { background:#3a0f3b; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-jira { background:#2684FF; color:#fff; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-jira:hover { background:#1d6fdb; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-btn-locked { background:var(--tb-bg-secondary); color:var(--tb-text-muted); }
+    #${MODAL_ID2} .tb-qb-btn-ghost { background:transparent; color:var(--tb-text-secondary); border:1px dashed var(--tb-accent); }
+    #${MODAL_ID2} .tb-qb-btn-ghost:hover { background:var(--tb-accent-subtle); color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
+    #${MODAL_ID2} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
+    #${MODAL_ID2} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
+    #${MODAL_ID2} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
+    #${MODAL_ID2} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
+    #${MODAL_ID2} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
+    #${MODAL_ID2} .tb-qb-plan-free { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-bg-secondary); color:var(--tb-text-muted); border:1px solid var(--tb-border); letter-spacing:0.4px; }
+
+    /* \u2500\u2500 Focus + disabled states \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} button:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+    #${MODAL_ID2} input:focus, #${MODAL_ID2} textarea:focus { border-color:var(--tb-accent) !important; box-shadow: 0 0 0 3px var(--tb-accent-subtle); }
+    #${MODAL_ID2} button:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
+
+    /* \u2500\u2500 Help overlay (keyboard cheat sheet) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} .tb-qb-help { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:10; padding:24px; }
+    #${MODAL_ID2} .tb-qb-help-card { background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:24px 28px; max-width:420px; width:100%; box-shadow:var(--tb-shadow-md); }
+    #${MODAL_ID2} .tb-qb-help-title { font-size:14px; font-weight:600; margin-bottom:16px; color:var(--tb-text-primary); letter-spacing:-0.01em; }
+    #${MODAL_ID2} .tb-qb-help-row { display:flex; align-items:center; gap:12px; padding:7px 0; font-size:13px; color:var(--tb-text-primary); border-bottom:1px solid var(--tb-border-subtle); }
+    #${MODAL_ID2} .tb-qb-help-row:last-of-type { border-bottom:none; }
+    #${MODAL_ID2} .tb-qb-help-row span { color:var(--tb-text-secondary); flex:1; }
+    #${MODAL_ID2} .tb-qb-help-row kbd { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:2px 8px; font-family:var(--tb-font-mono); font-size:11px; color:var(--tb-text-primary); margin-right:4px; }
+    #${MODAL_ID2} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
+    #${MODAL_ID2} .tb-qb-help-close:hover { background:var(--tb-accent-hover); }
+
+    /* \u2500\u2500 Scrollbar polish \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    #${MODAL_ID2} *::-webkit-scrollbar { width: 8px; height: 8px; }
+    #${MODAL_ID2} *::-webkit-scrollbar-track { background: transparent; }
+    #${MODAL_ID2} *::-webkit-scrollbar-thumb { background: var(--tb-border); border-radius: 4px; }
+    #${MODAL_ID2} *::-webkit-scrollbar-thumb:hover { background: var(--tb-border-hover); }
   `;
     document.head.appendChild(style);
   }
-  var _githubRepo, MODAL_ID2, DRAFT_KEY, _isOpen;
+  var _githubRepo, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -11114,9 +15685,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_environment();
       init_toast();
       init_helpers();
+      init_replay_scrubber();
+      init_html_replay();
+      init_theme();
+      init_annotation_store();
+      init_linear_issue();
+      init_slack_export();
       _githubRepo = null;
       MODAL_ID2 = "tracebug-quick-bug-modal";
       DRAFT_KEY = "tracebug_last_bug_draft";
+      THEME_PREF_KEY = "tracebug_theme_pref";
       _isOpen = false;
     }
   });
@@ -11269,21 +15847,81 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   });
 
+  // src/fingerprint.ts
+  async function computeFingerprint(errorMessage, errorStack, page) {
+    const errorType = extractErrorType(errorMessage);
+    const topFrames = extractTopFrames(errorStack || "", 3);
+    const input = `${errorType}|${topFrames.join("\n")}|${page}`;
+    if (typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function") {
+      try {
+        const buf = new TextEncoder().encode(input);
+        const hash = await crypto.subtle.digest("SHA-1", buf);
+        return bufferToHex(hash).slice(0, 16);
+      } catch (e2) {
+      }
+    }
+    return djb2(input).toString(16).padStart(8, "0");
+  }
+  function extractErrorType(message) {
+    const m = message.match(/^([A-Z][a-zA-Z]+Error|Error)\b/);
+    return m ? m[1] : "Error";
+  }
+  function extractTopFrames(stack, n) {
+    const frames = [];
+    const lines = stack.split("\n");
+    for (const line of lines) {
+      const m = line.match(/(https?:\/\/[^):\s]+|[^():\s]+\.[a-z]+):(\d+):(\d+)/i);
+      if (m) {
+        const url = m[1];
+        const path = url.includes("://") ? new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost").pathname : url;
+        frames.push(`${path}:${m[2]}:${m[3]}`);
+        if (frames.length >= n) break;
+      }
+    }
+    return frames;
+  }
+  function bufferToHex(buf) {
+    const bytes = new Uint8Array(buf);
+    let out = "";
+    for (let i = 0; i < bytes.length; i++) out += bytes[i].toString(16).padStart(2, "0");
+    return out;
+  }
+  function djb2(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) hash = (hash << 5) + hash + str.charCodeAt(i) | 0;
+    return hash >>> 0;
+  }
+  var init_fingerprint = __esm({
+    "src/fingerprint.ts"() {
+      "use strict";
+    }
+  });
+
   // src/scanner/detectors/session-data.ts
   async function detectConsoleErrors(session) {
     var _a, _b, _c;
     if (!session) return [];
-    const issues = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const e2 of session.events) {
+    const groups = /* @__PURE__ */ new Map();
+    for (let i = 0; i < session.events.length; i++) {
+      const e2 = session.events[i];
       if (e2.type !== "error" && e2.type !== "unhandled_rejection" && e2.type !== "console_error") continue;
       const message = ((_a = e2.data.error) == null ? void 0 : _a.message) || e2.data.message || "";
       if (!message) continue;
-      if (seen.has(message)) continue;
-      seen.add(message);
       const stack = ((_b = e2.data.error) == null ? void 0 : _b.stack) || "";
+      const page = e2.page || (typeof window !== "undefined" ? window.location.pathname : "");
+      const fp = await computeFingerprint(message, stack, page);
+      const precedingAction = describePrecedingAction(session.events, i);
+      const existing = groups.get(fp);
+      if (existing) {
+        existing.issue.occurrences = (existing.issue.occurrences || 1) + 1;
+        existing.issue.lastSeenAt = e2.timestamp;
+        if (existing.samples.length < MAX_CONTEXT_SAMPLES) {
+          existing.samples.push({ timestamp: e2.timestamp, precedingAction });
+        }
+        continue;
+      }
       const firstFrame = ((_c = stack.split("\n").find((l) => l.trim().startsWith("at "))) == null ? void 0 : _c.trim()) || "";
-      issues.push({
+      const issue = {
         id: makeIssueId("console-error"),
         detector: "console-error",
         severity: classifyErrorSeverity(message),
@@ -11291,11 +15929,43 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         description: firstFrame ? `${message}
 
 First frame: ${firstFrame}` : message,
-        page: e2.page || window.location.pathname,
-        detectedAt: e2.timestamp
-      });
+        page,
+        detectedAt: e2.timestamp,
+        fingerprint: fp,
+        occurrences: 1,
+        firstSeenAt: e2.timestamp,
+        lastSeenAt: e2.timestamp
+      };
+      groups.set(fp, { issue, samples: [{ timestamp: e2.timestamp, precedingAction }] });
     }
-    return issues;
+    const out = [];
+    for (const g of groups.values()) {
+      const n = g.issue.occurrences || 1;
+      if (n > 1) {
+        g.issue.title = `${g.issue.title} [\xD7${n}]`;
+        g.issue.contextSamples = g.samples;
+      }
+      out.push(g.issue);
+    }
+    return out;
+  }
+  function describePrecedingAction(events, i) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    for (let j = i - 1; j >= 0; j--) {
+      const e2 = events[j];
+      if (e2.type === "click") {
+        const t = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.text) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.ariaLabel) || ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.tag) || "element";
+        return `clicked "${String(t).slice(0, 40)}"`;
+      }
+      if (e2.type === "input") {
+        const n = ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.name) || ((_j = (_i = e2.data) == null ? void 0 : _i.element) == null ? void 0 : _j.id) || "field";
+        return `typed in ${n}`;
+      }
+      if (e2.type === "select_change") return "selected an option";
+      if (e2.type === "form_submit") return "submitted a form";
+      if (e2.type === "route_change") return `navigated to ${((_k = e2.data) == null ? void 0 : _k.to) || "page"}`;
+    }
+    return void 0;
   }
   async function detectFailedRequests(session) {
     if (!session) return [];
@@ -11365,13 +16035,15 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (/Network|fetch|failed to/i.test(message)) return "serious";
     return "moderate";
   }
-  var SLOW_API_MS;
+  var SLOW_API_MS, MAX_CONTEXT_SAMPLES;
   var init_session_data = __esm({
     "src/scanner/detectors/session-data.ts"() {
       "use strict";
       init_collectors();
       init_helpers2();
+      init_fingerprint();
       SLOW_API_MS = 2e3;
+      MAX_CONTEXT_SAMPLES = 10;
     }
   });
 
@@ -17430,7 +22102,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               } catch (ignore) {
               }
               conf.on("get", function(id2) {
-                var cb, context, args;
+                var cb, context2, args;
                 if (!currentCallback) {
                   return;
                 }
@@ -17444,20 +22116,20 @@ Response: ${match.response.slice(0, 160)}` : "";
                   return;
                 }
                 cb = currentCallback;
-                context = currentContext;
+                context2 = currentContext;
                 args = currentArgs;
                 currentCallback = currentContext = currentArgs = null;
                 nextTick(function() {
                   var data;
                   if (hasOwnProperty.call(cache2, id2)) {
                     data = cache2[id2];
-                    conf.emit("getasync", id2, args, context);
+                    conf.emit("getasync", id2, args, context2);
                     apply.call(cb, data.context, data.args);
                   } else {
                     currentCallback = cb;
-                    currentContext = context;
+                    currentContext = context2;
                     currentArgs = args;
-                    base.apply(context, args);
+                    base.apply(context2, args);
                   }
                 });
               });
@@ -17703,7 +22375,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   promise["finally"](onFailure);
                 }
               });
-              conf.on("get", function(id2, args, context) {
+              conf.on("get", function(id2, args, context2) {
                 var promise;
                 if (waiting[id2]) {
                   ++waiting[id2];
@@ -17711,7 +22383,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
                 promise = promises[id2];
                 var emit = function emit2() {
-                  conf.emit("getasync", id2, args, context);
+                  conf.emit("getasync", id2, args, context2);
                 };
                 if (isPromise(promise)) {
                   if (typeof promise.done === "function") {
@@ -17857,7 +22529,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 if (preFetchAge) {
                   preFetchTimeouts = {};
                   preFetchAge = (1 - preFetchAge) * maxAge;
-                  conf.on("get" + postfix, function(id2, args, context) {
+                  conf.on("get" + postfix, function(id2, args, context2) {
                     if (!preFetchTimeouts[id2]) {
                       preFetchTimeouts[id2] = "nextTick";
                       nextTick(function() {
@@ -17871,7 +22543,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                           args = aFrom(args);
                           args.push(noop3);
                         }
-                        result = conf.memoized.apply(context, args);
+                        result = conf.memoized.apply(context2, args);
                         if (options.promise) {
                           if (isPromise(result)) {
                             if (typeof result.done === "function") {
@@ -22498,7 +27170,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (node.nodeType !== 1) {
               var _node$nodeValue;
               var value = (_node$nodeValue = node.nodeValue) !== null && _node$nodeValue !== void 0 ? _node$nodeValue : "";
-              return truncate2(value, maxLength);
+              return truncate3(value, maxLength);
             }
             var deepStr = getOuterHtml(node);
             if (deepStr.length > maxLength) {
@@ -22532,8 +27204,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             }, 0);
             if (2 + nodeName2.length + attrsLength > maxLength) {
               nodeAttrs.forEach(function(attr2) {
-                attr2.name = truncate2(attr2.name, attrLimit);
-                attr2.value = truncate2(attr2.value, attrLimit);
+                attr2.name = truncate3(attr2.name, attrLimit);
+                attr2.value = truncate3(attr2.value, attrLimit);
               });
             }
             var source = "<".concat(nodeName2);
@@ -22557,7 +27229,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return source + tagEnd;
           }
-          function truncate2(str2, attrLimit) {
+          function truncate3(str2, attrLimit) {
             return str2.length <= attrLimit ? str2 : str2.substring(0, attrLimit) + "...";
           }
           var CACHE_KEY = "DqElm.RunOptions";
@@ -23655,13 +28327,13 @@ Response: ${match.response.slice(0, 160)}` : "";
             var q = queue_default();
             var frames = parentContent.frames;
             frames.forEach(function(_ref35) {
-              var frameElement = _ref35.node, context = _objectWithoutProperties(_ref35, _excluded8);
+              var frameElement = _ref35.node, context2 = _objectWithoutProperties(_ref35, _excluded8);
               q.defer(function(res, rej) {
                 var params = {
                   options,
                   command,
                   parameter,
-                  context
+                  context: context2
                 };
                 function callback(results) {
                   if (!results) {
@@ -23907,13 +28579,13 @@ Response: ${match.response.slice(0, 160)}` : "";
           var get_root_node_default = getRootNode;
           var get_root_node_default2 = get_root_node_default;
           function findElmsInContext(_ref36) {
-            var context = _ref36.context, value = _ref36.value, attr = _ref36.attr, _ref36$elm = _ref36.elm, elm = _ref36$elm === void 0 ? "" : _ref36$elm;
+            var context2 = _ref36.context, value = _ref36.value, attr = _ref36.attr, _ref36$elm = _ref36.elm, elm = _ref36$elm === void 0 ? "" : _ref36$elm;
             var root;
             var escapedValue = escape_selector_default(value);
-            if (context.nodeType === 9 || context.nodeType === 11) {
-              root = context;
+            if (context2.nodeType === 9 || context2.nodeType === 11) {
+              root = context2;
             } else {
-              root = get_root_node_default2(context);
+              root = get_root_node_default2(context2);
             }
             return Array.from(root.querySelectorAll(elm + "[" + attr + "=" + escapedValue + "]"));
           }
@@ -25305,18 +29977,18 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
           }
           var idrefs_default = idrefs;
-          function accessibleText(element, context) {
+          function accessibleText(element, context2) {
             var virtualNode = get_node_from_tree_default(element);
-            return _accessibleTextVirtual(virtualNode, context);
+            return _accessibleTextVirtual(virtualNode, context2);
           }
           var accessible_text_default = accessibleText;
           function arialabelledbyText(element) {
-            var context = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+            var context2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var _nodeLookup9 = _nodeLookup(element), vNode = _nodeLookup9.vNode;
             if ((vNode === null || vNode === void 0 ? void 0 : vNode.props.nodeType) !== 1) {
               return "";
             }
-            if (vNode.props.nodeType !== 1 || context.inLabelledByContext || context.inControlContext || !vNode.attr("aria-labelledby")) {
+            if (vNode.props.nodeType !== 1 || context2.inLabelledByContext || context2.inControlContext || !vNode.attr("aria-labelledby")) {
               return "";
             }
             var refs = idrefs_default(vNode, "aria-labelledby").filter(function(elm) {
@@ -25325,8 +29997,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             return refs.reduce(function(accessibleName, elm) {
               var accessibleNameAdd = accessible_text_default(elm, _extends({
                 inLabelledByContext: true,
-                startNode: context.startNode || vNode
-              }, context));
+                startNode: context2.startNode || vNode
+              }, context2));
               if (!accessibleName) {
                 return accessibleNameAdd;
               } else {
@@ -27947,21 +32619,21 @@ Response: ${match.response.slice(0, 160)}` : "";
             ariaRangeValue
           };
           function formControlValue(virtualNode) {
-            var context = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+            var context2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var actualNode = virtualNode.actualNode;
             var unsupportedRoles = unsupported_default.accessibleNameFromFieldValue || [];
             var role = get_role_default(virtualNode);
-            if (context.startNode === virtualNode || !controlValueRoles.includes(role) || unsupportedRoles.includes(role)) {
+            if (context2.startNode === virtualNode || !controlValueRoles.includes(role) || unsupportedRoles.includes(role)) {
               return "";
             }
             var valueMethods = Object.keys(_formControlValueMethods).map(function(name) {
               return _formControlValueMethods[name];
             });
             var valueString = valueMethods.reduce(function(accName, step) {
-              return accName || step(virtualNode, context);
+              return accName || step(virtualNode, context2);
             }, "");
-            if (context.debug) {
-              log_default(valueString || "{empty-value}", actualNode, context);
+            if (context2.debug) {
+              log_default(valueString || "{empty-value}", actualNode, context2);
             }
             return valueString;
           }
@@ -27999,7 +32671,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               return domNode.textContent;
             }
           }
-          function ariaListboxValue(node, context) {
+          function ariaListboxValue(node, context2) {
             var _nodeLookup16 = _nodeLookup(node), vNode = _nodeLookup16.vNode;
             if (!is_aria_listbox_default(vNode)) {
               return "";
@@ -28010,9 +32682,9 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (selected.length === 0) {
               return "";
             }
-            return _accessibleTextVirtual(selected[0], context);
+            return _accessibleTextVirtual(selected[0], context2);
           }
-          function ariaComboboxValue(node, context) {
+          function ariaComboboxValue(node, context2) {
             var _nodeLookup17 = _nodeLookup(node), vNode = _nodeLookup17.vNode;
             if (!is_aria_combobox_default(vNode)) {
               return "";
@@ -28020,7 +32692,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             var listbox = get_owned_virtual_default(vNode).filter(function(elm) {
               return get_role_default(elm) === "listbox";
             })[0];
-            return listbox ? ariaListboxValue(listbox, context) : "";
+            return listbox ? ariaListboxValue(listbox, context2) : "";
           }
           function ariaRangeValue(node) {
             var _nodeLookup18 = _nodeLookup(node), vNode = _nodeLookup18.vNode;
@@ -28032,36 +32704,36 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           var form_control_value_default = formControlValue;
           function subtreeText(virtualNode) {
-            var context = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+            var context2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var alreadyProcessed2 = _accessibleTextVirtual.alreadyProcessed;
-            context.startNode = context.startNode || virtualNode;
-            var _context = context, strict = _context.strict, inControlContext = _context.inControlContext, inLabelledByContext = _context.inLabelledByContext;
+            context2.startNode = context2.startNode || virtualNode;
+            var _context2 = context2, strict = _context2.strict, inControlContext = _context2.inControlContext, inLabelledByContext = _context2.inLabelledByContext;
             var role = get_role_default(virtualNode);
             var _get_element_spec_def2 = get_element_spec_default(virtualNode, {
               noMatchAccessibleName: true
             }), contentTypes = _get_element_spec_def2.contentTypes;
-            if (alreadyProcessed2(virtualNode, context) || virtualNode.props.nodeType !== 1 || contentTypes !== null && contentTypes !== void 0 && contentTypes.includes("embedded") || controlValueRoles.includes(role)) {
+            if (alreadyProcessed2(virtualNode, context2) || virtualNode.props.nodeType !== 1 || contentTypes !== null && contentTypes !== void 0 && contentTypes.includes("embedded") || controlValueRoles.includes(role)) {
               return "";
             }
-            if (!context.subtreeDescendant && !context.inLabelledByContext && !named_from_contents_default(virtualNode, {
+            if (!context2.subtreeDescendant && !context2.inLabelledByContext && !named_from_contents_default(virtualNode, {
               strict
             })) {
               return "";
             }
             if (!strict) {
               var subtreeDescendant = !inControlContext && !inLabelledByContext;
-              context = _extends({
+              context2 = _extends({
                 subtreeDescendant
-              }, context);
+              }, context2);
             }
             return get_owned_virtual_default(virtualNode).reduce(function(contentText, child) {
-              return appendAccessibleText(contentText, child, context);
+              return appendAccessibleText(contentText, child, context2);
             }, "");
           }
           var phrasingElements = get_elements_by_content_type_default("phrasing").concat(["#text"]);
-          function appendAccessibleText(contentText, virtualNode, context) {
+          function appendAccessibleText(contentText, virtualNode, context2) {
             var nodeName2 = virtualNode.props.nodeName;
-            var contentTextAdd = _accessibleTextVirtual(virtualNode, context);
+            var contentTextAdd = _accessibleTextVirtual(virtualNode, context2);
             if (!contentTextAdd) {
               return contentText;
             }
@@ -28077,17 +32749,17 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           var subtree_text_default = subtreeText;
           function labelText(virtualNode) {
-            var context = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+            var context2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var alreadyProcessed2 = _accessibleTextVirtual.alreadyProcessed;
-            if (context.inControlContext || context.inLabelledByContext || alreadyProcessed2(virtualNode, context)) {
+            if (context2.inControlContext || context2.inLabelledByContext || alreadyProcessed2(virtualNode, context2)) {
               return "";
             }
-            if (!context.startNode) {
-              context.startNode = virtualNode;
+            if (!context2.startNode) {
+              context2.startNode = virtualNode;
             }
             var labelContext = _extends({
               inControlContext: true
-            }, context);
+            }, context2);
             var explicitLabels = getExplicitLabels(virtualNode);
             var implicitLabel = closest_default(virtualNode, "label");
             var labels;
@@ -28148,7 +32820,7 @@ Response: ${match.response.slice(0, 160)}` : "";
           function attrText(attr, vNode) {
             return vNode.attr(attr) || "";
           }
-          function descendantText(nodeName2, _ref61, context) {
+          function descendantText(nodeName2, _ref61, context2) {
             var actualNode = _ref61.actualNode;
             nodeName2 = nodeName2.toLowerCase();
             var nodeNames2 = [nodeName2, actualNode.nodeName.toLowerCase()].join(",");
@@ -28156,21 +32828,21 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (!candidate || candidate.nodeName.toLowerCase() !== nodeName2) {
               return "";
             }
-            return accessible_text_default(candidate, context);
+            return accessible_text_default(candidate, context2);
           }
           var native_text_methods_default = nativeTextMethods;
           function _nativeTextAlternative(virtualNode) {
-            var context = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+            var context2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var actualNode = virtualNode.actualNode;
             if (virtualNode.props.nodeType !== 1 || ["presentation", "none"].includes(get_role_default(virtualNode))) {
               return "";
             }
             var textMethods = findTextMethods(virtualNode);
             var accessibleName = textMethods.reduce(function(accName, step) {
-              return accName || step(virtualNode, context);
+              return accName || step(virtualNode, context2);
             }, "");
-            if (context.debug) {
-              axe.log(accessibleName || "{empty-value}", actualNode, context);
+            if (context2.debug) {
+              axe.log(accessibleName || "{empty-value}", actualNode, context2);
             }
             return accessibleName;
           }
@@ -28299,26 +32971,26 @@ Response: ${match.response.slice(0, 160)}` : "";
             return false;
           }
           function _accessibleTextVirtual(virtualNode) {
-            var context = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
-            context = prepareContext(virtualNode, context);
-            if (shouldIgnoreHidden(virtualNode, context)) {
+            var context2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
+            context2 = prepareContext(virtualNode, context2);
+            if (shouldIgnoreHidden(virtualNode, context2)) {
               return "";
             }
-            if (shouldIgnoreIconLigature(virtualNode, context)) {
+            if (shouldIgnoreIconLigature(virtualNode, context2)) {
               return "";
             }
             var computationSteps = [arialabelledby_text_default, _arialabelText, _nativeTextAlternative, form_control_value_default, subtree_text_default, textNodeValue, title_text_default];
             var accessibleName = computationSteps.reduce(function(accName, step) {
-              if (context.startNode === virtualNode) {
+              if (context2.startNode === virtualNode) {
                 accName = sanitize_default(accName);
               }
               if (accName !== "") {
                 return accName;
               }
-              return step(virtualNode, context);
+              return step(virtualNode, context2);
             }, "");
-            if (context.debug) {
-              axe.log(accessibleName || "{empty-value}", virtualNode.actualNode, context);
+            if (context2.debug) {
+              axe.log(accessibleName || "{empty-value}", virtualNode.actualNode, context2);
             }
             return accessibleName;
           }
@@ -28328,11 +33000,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return virtualNode.props.nodeValue;
           }
-          function shouldIgnoreHidden(virtualNode, context) {
+          function shouldIgnoreHidden(virtualNode, context2) {
             if (!virtualNode) {
               return false;
             }
-            if (context.includeHidden && !nativelyHidden(virtualNode)) {
+            if (context2.includeHidden && !nativelyHidden(virtualNode)) {
               return false;
             }
             if (virtualNode.props.nodeType !== 1) {
@@ -28340,34 +33012,34 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return !_isVisibleToScreenReaders(virtualNode);
           }
-          function shouldIgnoreIconLigature(virtualNode, context) {
+          function shouldIgnoreIconLigature(virtualNode, context2) {
             var _context$occurrenceTh;
-            var ignoreIconLigature = context.ignoreIconLigature, pixelThreshold = context.pixelThreshold;
-            var occurrenceThreshold = (_context$occurrenceTh = context.occurrenceThreshold) !== null && _context$occurrenceTh !== void 0 ? _context$occurrenceTh : context.occuranceThreshold;
+            var ignoreIconLigature = context2.ignoreIconLigature, pixelThreshold = context2.pixelThreshold;
+            var occurrenceThreshold = (_context$occurrenceTh = context2.occurrenceThreshold) !== null && _context$occurrenceTh !== void 0 ? _context$occurrenceTh : context2.occuranceThreshold;
             if (virtualNode.props.nodeType !== 3 || !ignoreIconLigature) {
               return false;
             }
             return _isIconLigature(virtualNode, pixelThreshold, occurrenceThreshold);
           }
-          function prepareContext(virtualNode, context) {
-            if (!context.startNode) {
-              context = _extends({
+          function prepareContext(virtualNode, context2) {
+            if (!context2.startNode) {
+              context2 = _extends({
                 startNode: virtualNode
-              }, context);
+              }, context2);
             }
-            if (virtualNode.props.nodeType === 1 && context.inLabelledByContext && context.includeHidden === void 0) {
-              context = _extends({
+            if (virtualNode.props.nodeType === 1 && context2.inLabelledByContext && context2.includeHidden === void 0) {
+              context2 = _extends({
                 includeHidden: !_isVisibleToScreenReaders(virtualNode)
-              }, context);
+              }, context2);
             }
-            return context;
+            return context2;
           }
-          _accessibleTextVirtual.alreadyProcessed = function alreadyProcessed(virtualnode, context) {
-            context.processed = context.processed || [];
-            if (context.processed.includes(virtualnode)) {
+          _accessibleTextVirtual.alreadyProcessed = function alreadyProcessed(virtualnode, context2) {
+            context2.processed = context2.processed || [];
+            if (context2.processed.includes(virtualnode)) {
               return true;
             }
-            context.processed.push(virtualnode);
+            context2.processed.push(virtualnode);
             return false;
           };
           function removeUnicode(str2, options) {
@@ -30262,13 +34934,13 @@ Response: ${match.response.slice(0, 160)}` : "";
           function assert2(bool, str2) {
             assert_default(bool, "Invalid context; ".concat(str2, "\nSee: https://github.com/dequelabs/axe-core/blob/master/doc/context.md"));
           }
-          function parseSelectorArray(context, type2) {
+          function parseSelectorArray(context2, type2) {
             var result = [];
-            for (var _i17 = 0, l = context[type2].length; _i17 < l; _i17++) {
-              var item = context[type2][_i17];
+            for (var _i17 = 0, l = context2[type2].length; _i17 < l; _i17++) {
+              var item = context2[type2][_i17];
               if (item instanceof window2.Node) {
                 if (item.documentElement instanceof window2.Node) {
-                  result.push(context.flatTree[0]);
+                  result.push(context2.flatTree[0]);
                 } else if (item.host instanceof window2.Node) {
                   var children = Array.from(item.children).map(function(child) {
                     return get_node_from_tree_default(child);
@@ -30279,7 +34951,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               } else if (item && item.length) {
                 if (item.length > 1) {
-                  pushUniqueFrameSelector(context, type2, item);
+                  pushUniqueFrameSelector(context2, type2, item);
                 } else {
                   var nodeList = _shadowSelectAll(item[0]);
                   result.push.apply(result, _toConsumableArray(nodeList.map(function(node) {
@@ -30292,17 +34964,17 @@ Response: ${match.response.slice(0, 160)}` : "";
               return r;
             });
           }
-          function pushUniqueFrameSelector(context, type2, selectorArray) {
-            context.frames = context.frames || [];
+          function pushUniqueFrameSelector(context2, type2, selectorArray) {
+            context2.frames = context2.frames || [];
             var frameSelector = selectorArray.shift();
             var frames = _shadowSelectAll(frameSelector);
             frames.forEach(function(frame) {
-              var frameContext = context.frames.find(function(result) {
+              var frameContext = context2.frames.find(function(result) {
                 return result.node === frame;
               });
               if (!frameContext) {
-                frameContext = createFrameContext(frame, context);
-                context.frames.push(frameContext);
+                frameContext = createFrameContext(frame, context2);
+                context2.frames.push(frameContext);
               }
               frameContext[type2].push(selectorArray);
             });
@@ -30338,18 +35010,18 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             this.include.sort(node_sorter_default);
           }
-          function pushUniqueFrame(context, frame) {
-            if (!_isVisibleToScreenReaders(frame) || find_by_default(context.frames, "node", frame)) {
+          function pushUniqueFrame(context2, frame) {
+            if (!_isVisibleToScreenReaders(frame) || find_by_default(context2.frames, "node", frame)) {
               return;
             }
-            context.frames.push(createFrameContext(frame, context));
+            context2.frames.push(createFrameContext(frame, context2));
           }
           function isPageContext(_ref70) {
             var include = _ref70.include;
             return include.length === 1 && include[0].actualNode === document2.documentElement;
           }
-          function validateContext(context) {
-            if (context.include.length === 0 && context.frames.length === 0) {
+          function validateContext(context2) {
+            if (context2.include.length === 0 && context2.frames.length === 0) {
               var env = _respondable.isInFrame() ? "frame" : "page";
               throw new Error("No elements found for include in " + env + " Context");
             }
@@ -30368,12 +35040,12 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return document2.documentElement;
           }
-          function _getFrameContexts(context) {
+          function _getFrameContexts(context2) {
             var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             if (options.iframes === false) {
               return [];
             }
-            var _Context = new Context2(context), frames = _Context.frames;
+            var _Context = new Context2(context2), frames = _Context.frames;
             return frames.map(function(_ref72) {
               var node = _ref72.node, frameContext = _objectWithoutProperties(_ref72, _excluded12);
               frameContext.initiator = false;
@@ -30767,7 +35439,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 this.logMeasures();
                 this.clearMark("mark_audit_start", "mark_audit_end");
               },
-              mark: function mark(markName) {
+              mark: function mark2(markName) {
                 var _window$performance;
                 if ((_window$performance = window2.performance) !== null && _window$performance !== void 0 && _window$performance.mark) {
                   window2.performance.mark(markName);
@@ -31282,10 +35954,10 @@ Response: ${match.response.slice(0, 160)}` : "";
               return false;
             }
           }
-          function ruleShouldRun(rule, context, options) {
+          function ruleShouldRun(rule, context2, options) {
             var runOnly = options.runOnly || {};
             var ruleOptions = (options.rules || {})[rule.id];
-            if (rule.pageLevel && !context.page) {
+            if (rule.pageLevel && !context2.page) {
               return false;
             } else if (runOnly.type === "rule") {
               return runOnly.values.indexOf(rule.id) !== -1;
@@ -31338,7 +36010,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return element_matches_default(node, filterAttrs[attrName]);
           }
-          function _select(selector, context) {
+          function _select(selector, context2) {
             var result = [];
             var candidate;
             if (axe._selectCache) {
@@ -31349,8 +36021,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               }
             }
-            var outerIncludes = getOuterIncludes(context.include);
-            var isInContext = getContextFilter(context);
+            var outerIncludes = getOuterIncludes(context2.include);
+            var isInContext = getContextFilter(context2);
             for (var _i22 = 0; _i22 < outerIncludes.length; _i22++) {
               candidate = outerIncludes[_i22];
               var nodes = query_selector_all_filter_default(candidate, selector, isInContext);
@@ -31372,12 +36044,12 @@ Response: ${match.response.slice(0, 160)}` : "";
               return res;
             }, []);
           }
-          function getContextFilter(context) {
-            if (!context.exclude || context.exclude.length === 0) {
+          function getContextFilter(context2) {
+            if (!context2.exclude || context2.exclude.length === 0) {
               return null;
             }
             return function(node) {
-              return _isNodeInContext(node, context);
+              return _isNodeInContext(node, context2);
             };
           }
           function mergeArrayUniques(arr1, arr2) {
@@ -35486,38 +40158,38 @@ Response: ${match.response.slice(0, 160)}` : "";
                 var _stackingOrder;
                 var vNode = _ref111.vNode;
                 var ancestorVNode2 = (_stackingOrder = stackingOrder[index - 1]) === null || _stackingOrder === void 0 ? void 0 : _stackingOrder.vNode;
-                var context2 = addToStackingContext(contextMap, vNode, ancestorVNode2);
+                var context22 = addToStackingContext(contextMap, vNode, ancestorVNode2);
                 if (index === 0 && !contextMap.get(vNode)) {
-                  stackingContext.unshift(context2);
+                  stackingContext.unshift(context22);
                 }
-                contextMap.set(vNode, context2);
+                contextMap.set(vNode, context22);
               });
               var ancestorVNode = (_stackingOrder2 = stackingOrder[stackingOrder.length - 1]) === null || _stackingOrder2 === void 0 ? void 0 : _stackingOrder2.vNode;
-              var context = addToStackingContext(contextMap, bgVNode, ancestorVNode);
+              var context2 = addToStackingContext(contextMap, bgVNode, ancestorVNode);
               if (!stackingOrder.length) {
-                stackingContext.unshift(context);
+                stackingContext.unshift(context2);
               }
-              context.bgColor = bgColor;
+              context2.bgColor = bgColor;
             });
             virtualNode._stackingContext = stackingContext;
             return stackingContext;
           }
-          function _stackingContextToColor(context) {
+          function _stackingContextToColor(context2) {
             var _context$descendants;
-            if (!((_context$descendants = context.descendants) !== null && _context$descendants !== void 0 && _context$descendants.length)) {
-              var color22 = context.bgColor;
-              color22.alpha *= context.opacity;
+            if (!((_context$descendants = context2.descendants) !== null && _context$descendants !== void 0 && _context$descendants.length)) {
+              var color22 = context2.bgColor;
+              color22.alpha *= context2.opacity;
               return {
                 color: color22,
-                blendMode: context.blendMode
+                blendMode: context2.blendMode
               };
             }
-            var sourceColor = context.descendants.reduce(reduceToColor, createStackingContext2());
-            var color3 = _flattenColors(sourceColor, context.bgColor, context.descendants[0].blendMode);
-            color3.alpha *= context.opacity;
+            var sourceColor = context2.descendants.reduce(reduceToColor, createStackingContext2());
+            var color3 = _flattenColors(sourceColor, context2.bgColor, context2.descendants[0].blendMode);
+            color3.alpha *= context2.opacity;
             return {
               color: color3,
-              blendMode: context.blendMode
+              blendMode: context2.blendMode
             };
           }
           function reduceToColor(backdropContext, sourceContext) {
@@ -35547,11 +40219,11 @@ Response: ${match.response.slice(0, 160)}` : "";
           function addToStackingContext(contextMap, vNode, ancestorVNode) {
             var _contextMap$get;
             var ancestorContext = contextMap.get(ancestorVNode);
-            var context = (_contextMap$get = contextMap.get(vNode)) !== null && _contextMap$get !== void 0 ? _contextMap$get : createStackingContext2(vNode, ancestorContext);
-            if (ancestorContext && ancestorVNode !== vNode && !ancestorContext.descendants.includes(context)) {
-              ancestorContext.descendants.unshift(context);
+            var context2 = (_contextMap$get = contextMap.get(vNode)) !== null && _contextMap$get !== void 0 ? _contextMap$get : createStackingContext2(vNode, ancestorContext);
+            if (ancestorContext && ancestorVNode !== vNode && !ancestorContext.descendants.includes(context2)) {
+              ancestorContext.descendants.unshift(context2);
             }
-            return context;
+            return context2;
           }
           function getOwnBackgroundColor2(vNode) {
             var bgColor = new color_default();
@@ -35732,8 +40404,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               return null;
             }
             var stackingContexts = _getStackingContext(node);
-            var context = findNodeInContexts(stackingContexts, node);
-            return _flattenColors(calculateBlendedForegroundColor(fgColor, context, stackingContexts), new color_default(255, 255, 255, 1));
+            var context2 = findNodeInContexts(stackingContexts, node);
+            return _flattenColors(calculateBlendedForegroundColor(fgColor, context2, stackingContexts), new color_default(255, 255, 255, 1));
           }
           function getTextColor(nodeStyle) {
             return new color_default().parseString(nodeStyle.getPropertyValue("-webkit-text-fill-color") || nodeStyle.getPropertyValue("color"));
@@ -35752,21 +40424,21 @@ Response: ${match.response.slice(0, 160)}` : "";
             var strokeColor = nodeStyle.getPropertyValue("-webkit-text-stroke-color");
             return new color_default().parseString(strokeColor);
           }
-          function calculateBlendedForegroundColor(fgColor, context, stackingContexts) {
-            while (context) {
+          function calculateBlendedForegroundColor(fgColor, context2, stackingContexts) {
+            while (context2) {
               var _context$ancestor;
-              if (context.opacity === 1 && context.ancestor) {
-                context = context.ancestor;
+              if (context2.opacity === 1 && context2.ancestor) {
+                context2 = context2.ancestor;
                 continue;
               }
-              fgColor.alpha *= context.opacity;
-              var stack = ((_context$ancestor = context.ancestor) === null || _context$ancestor === void 0 ? void 0 : _context$ancestor.descendants) || stackingContexts;
-              if (context.opacity !== 1) {
-                stack = stack.slice(0, stack.indexOf(context));
+              fgColor.alpha *= context2.opacity;
+              var stack = ((_context$ancestor = context2.ancestor) === null || _context$ancestor === void 0 ? void 0 : _context$ancestor.descendants) || stackingContexts;
+              if (context2.opacity !== 1) {
+                stack = stack.slice(0, stack.indexOf(context2));
               }
               var bgColors = stack.map(_stackingContextToColor);
               if (!bgColors.length) {
-                context = context.ancestor;
+                context2 = context2.ancestor;
                 continue;
               }
               var bgColor = bgColors.reduce(function(backdrop, source) {
@@ -35776,7 +40448,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 blendMode: "normal"
               });
               fgColor = _flattenColors(fgColor, bgColor);
-              context = context.ancestor;
+              context2 = context2.ancestor;
             }
             return fgColor;
           }
@@ -35785,11 +40457,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             try {
               for (_iterator19.s(); !(_step19 = _iterator19.n()).done; ) {
                 var _context$vNode;
-                var context = _step19.value;
-                if (((_context$vNode = context.vNode) === null || _context$vNode === void 0 ? void 0 : _context$vNode.actualNode) === node) {
-                  return context;
+                var context2 = _step19.value;
+                if (((_context$vNode = context2.vNode) === null || _context$vNode === void 0 ? void 0 : _context$vNode.actualNode) === node) {
+                  return context2;
                 }
-                var found = findNodeInContexts(context.descendants, node);
+                var found = findNodeInContexts(context2.descendants, node);
                 if (found) {
                   return found;
                 }
@@ -36338,8 +41010,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             return true;
           }
           var meta_viewport_scale_evaluate_default = metaViewportScaleEvaluate;
-          function cssOrientationLockEvaluate(node, options, virtualNode, context) {
-            var _ref124 = context || {}, _ref124$cssom = _ref124.cssom, cssom = _ref124$cssom === void 0 ? void 0 : _ref124$cssom;
+          function cssOrientationLockEvaluate(node, options, virtualNode, context2) {
+            var _ref124 = context2 || {}, _ref124$cssom = _ref124.cssom, cssom = _ref124$cssom === void 0 ? void 0 : _ref124$cssom;
             var _ref125 = options || {}, _ref125$degreeThresho = _ref125.degreeThreshold, degreeThreshold = _ref125$degreeThresho === void 0 ? 0 : _ref125$degreeThresho;
             if (!cssom || !cssom.length) {
               return void 0;
@@ -38860,8 +43532,8 @@ Response: ${match.response.slice(0, 160)}` : "";
           function hasVisibleTextMatches(node) {
             return _isVisibleOnScreen(node);
           }
-          function isInitiatorMatches(node, virtualNode, context) {
-            return context.initiator;
+          function isInitiatorMatches(node, virtualNode, context2) {
+            return context2.initiator;
           }
           var is_initiator_matches_default = isInitiatorMatches;
           function insertedIntoFocusOrderMatches(node) {
@@ -38898,9 +43570,9 @@ Response: ${match.response.slice(0, 160)}` : "";
             return !!sanitize_default(title);
           }
           var frame_title_has_text_matches_default = frameTitleHasTextMatches;
-          function frameFocusableContentMatches(node, virtualNode, context) {
+          function frameFocusableContentMatches(node, virtualNode, context2) {
             var _context$size, _context$size2;
-            return !context.initiator && !context.focusable && ((_context$size = context.size) === null || _context$size === void 0 ? void 0 : _context$size.width) * ((_context$size2 = context.size) === null || _context$size2 === void 0 ? void 0 : _context$size2.height) > 1;
+            return !context2.initiator && !context2.focusable && ((_context$size = context2.size) === null || _context$size === void 0 ? void 0 : _context$size.width) * ((_context$size2 = context2.size) === null || _context$size2 === void 0 ? void 0 : _context$size2.height) > 1;
           }
           var frame_focusable_content_matches_default = frameFocusableContentMatches;
           function duplicateIdMiscMatches(node) {
@@ -39044,8 +43716,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               return vChild.props.nodeName === "#text" && !_isIconLigature(vChild);
             });
           }
-          function bypassMatches(node, virtualNode, context) {
-            if (is_initiator_matches_default(node, virtualNode, context)) {
+          function bypassMatches(node, virtualNode, context2) {
+            if (is_initiator_matches_default(node, virtualNode, context2)) {
               return !!node.querySelector("a[href]");
             }
             return true;
@@ -39340,7 +44012,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
           }
           Check.prototype.enabled = true;
-          Check.prototype.run = function run(node, options, context, resolve, reject) {
+          Check.prototype.run = function run(node, options, context2, resolve, reject) {
             options = options || {};
             var enabled = options.hasOwnProperty("enabled") ? options.enabled : this.enabled;
             var checkOptions = this.getOptions(options.options);
@@ -39349,7 +44021,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               var helper = check_helper_default(checkResult, options, resolve, reject);
               var result;
               try {
-                result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
+                result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context2);
               } catch (e2) {
                 if (node && node.actualNode) {
                   e2.errorNode = node_serializer_default.toSpec(node);
@@ -39365,7 +44037,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               resolve(null);
             }
           };
-          Check.prototype.runSync = function runSync(node, options, context) {
+          Check.prototype.runSync = function runSync(node, options, context2) {
             options = options || {};
             var _options2 = options, _options2$enabled = _options2.enabled, enabled = _options2$enabled === void 0 ? this.enabled : _options2$enabled;
             if (!enabled) {
@@ -39379,7 +44051,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             };
             var result;
             try {
-              result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context);
+              result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context2);
             } catch (e2) {
               if (node && node.actualNode) {
                 e2.errorNode = node_serializer_default.toSpec(node);
@@ -39451,7 +44123,7 @@ Response: ${match.response.slice(0, 160)}` : "";
           Rule.prototype.matches = function matches3() {
             return true;
           };
-          Rule.prototype.gather = function gather(context) {
+          Rule.prototype.gather = function gather(context2) {
             var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var markStart = "mark_gather_start_" + this.id;
             var markEnd = "mark_gather_end_" + this.id;
@@ -39460,7 +44132,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (options.performanceTimer) {
               performance_timer_default.mark(markStart);
             }
-            var elements = _select(this.selector, context);
+            var elements = _select(this.selector, context2);
             if (this.excludeHidden) {
               if (options.performanceTimer) {
                 performance_timer_default.mark(markHiddenStart);
@@ -39479,14 +44151,14 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return elements;
           };
-          Rule.prototype.runChecks = function runChecks(type2, node, options, context, resolve, reject) {
+          Rule.prototype.runChecks = function runChecks(type2, node, options, context2, resolve, reject) {
             var self2 = this;
             var checkQueue = queue_default();
             this[type2].forEach(function(c4) {
               var check = self2._audit.checks[c4.id || c4];
               var option = get_check_option_default(check, self2.id, options);
               checkQueue.defer(function(res, rej) {
-                check.run(node, option, context, res, function(error) {
+                check.run(node, option, context2, res, function(error) {
                   rej(new rule_error_default({
                     ruleId: self2.id,
                     method: "".concat(check.id, "#evaluate"),
@@ -39506,13 +44178,13 @@ Response: ${match.response.slice(0, 160)}` : "";
               });
             })["catch"](reject);
           };
-          Rule.prototype.runChecksSync = function runChecksSync(type2, node, options, context) {
+          Rule.prototype.runChecksSync = function runChecksSync(type2, node, options, context2) {
             var self2 = this;
             var results = [];
             this[type2].forEach(function(c4) {
               var check = self2._audit.checks[c4.id || c4];
               var option = get_check_option_default(check, self2.id, options);
-              results.push(check.runSync(node, option, context));
+              results.push(check.runSync(node, option, context2));
             });
             results = results.filter(function(check) {
               return check;
@@ -39522,7 +44194,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               results
             };
           };
-          Rule.prototype.run = function run2(context) {
+          Rule.prototype.run = function run2(context2) {
             var _this1 = this;
             var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var resolve = arguments.length > 2 ? arguments[2] : void 0;
@@ -39534,7 +44206,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             var ruleResult = new rule_result_default(this);
             var nodes;
             try {
-              nodes = this.gatherAndMatchNodes(context, options);
+              nodes = this.gatherAndMatchNodes(context2, options);
             } catch (error) {
               reject(error);
               return;
@@ -39547,7 +44219,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 var checkQueue = queue_default();
                 ["any", "all", "none"].forEach(function(type2) {
                   checkQueue.defer(function(res, rej) {
-                    _this1.runChecks(type2, node, options, context, res, rej);
+                    _this1.runChecks(type2, node, options, context2, res, rej);
                   });
                 });
                 checkQueue.then(function(results) {
@@ -39590,21 +44262,21 @@ Response: ${match.response.slice(0, 160)}` : "";
               reject(error);
             });
           };
-          Rule.prototype.runSync = function runSync2(context) {
+          Rule.prototype.runSync = function runSync2(context2) {
             var _this10 = this;
             var options = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             if (options.performanceTimer) {
               this._trackPerformance();
             }
             var ruleResult = new rule_result_default(this);
-            var nodes = this.gatherAndMatchNodes(context, options);
+            var nodes = this.gatherAndMatchNodes(context2, options);
             if (options.performanceTimer) {
               this._logGatherPerformance(nodes);
             }
             nodes.forEach(function(node) {
               var results = [];
               ["any", "all", "none"].forEach(function(type2) {
-                results.push(_this10.runChecksSync(type2, node, options, context));
+                results.push(_this10.runChecksSync(type2, node, options, context2));
               });
               var result = getResult(results);
               if (result) {
@@ -39666,17 +44338,17 @@ Response: ${match.response.slice(0, 160)}` : "";
               return null;
             }
           }
-          Rule.prototype.gatherAndMatchNodes = function gatherAndMatchNodes(context, options) {
+          Rule.prototype.gatherAndMatchNodes = function gatherAndMatchNodes(context2, options) {
             var _this11 = this;
             var markMatchesStart = "mark_matches_start_" + this.id;
             var markMatchesEnd = "mark_matches_end_" + this.id;
-            var nodes = this.gather(context, options);
+            var nodes = this.gather(context2, options);
             if (options.performanceTimer) {
               performance_timer_default.mark(markMatchesStart);
             }
             nodes = nodes.filter(function(node) {
               try {
-                return _this11.matches(node.actualNode, node, context);
+                return _this11.matches(node.actualNode, node, context2);
               } catch (error) {
                 throw new rule_error_default({
                   ruleId: _this11.id,
@@ -40024,16 +44696,16 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }, {
               key: "run",
-              value: function run(context, options, resolve, reject) {
+              value: function run(context2, options, resolve, reject) {
                 this.normalizeOptions(options);
                 dq_element_default.setRunOptions(options);
                 axe._selectCache = [];
-                var allRulesToRun = getRulesToRun(this.rules, context, options);
+                var allRulesToRun = getRulesToRun(this.rules, context2, options);
                 var runNowRules = allRulesToRun.now;
                 var runLaterRules = allRulesToRun.later;
                 var nowRulesQueue = queue_default();
                 runNowRules.forEach(function(rule) {
-                  nowRulesQueue.defer(getDefferedRule(rule, context, options));
+                  nowRulesQueue.defer(getDefferedRule(rule, context2, options));
                 });
                 var preloaderQueue = queue_default();
                 if (runLaterRules.length) {
@@ -40054,7 +44726,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   if (assetsFromQueue && assetsFromQueue.length) {
                     var assets = assetsFromQueue[0];
                     if (assets) {
-                      context = _extends({}, context, assets);
+                      context2 = _extends({}, context2, assets);
                     }
                   }
                   var nowRulesResults = nowRulesAndPreloaderResults[0];
@@ -40067,7 +44739,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   }
                   var laterRulesQueue = queue_default();
                   runLaterRules.forEach(function(rule) {
-                    var deferredRule = getDefferedRule(rule, context, options);
+                    var deferredRule = getDefferedRule(rule, context2, options);
                     laterRulesQueue.defer(deferredRule);
                   });
                   laterRulesQueue.then(function(laterRuleResults) {
@@ -40306,13 +44978,13 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return b2 || a22;
           };
-          function getRulesToRun(rules, context, options) {
+          function getRulesToRun(rules, context2, options) {
             var base = {
               now: [],
               later: []
             };
             var splitRules = rules.reduce(function(out, rule) {
-              if (!rule_should_run_default(rule, context, options)) {
+              if (!rule_should_run_default(rule, context2, options)) {
                 return out;
               }
               if (rule.preload) {
@@ -40324,12 +44996,12 @@ Response: ${match.response.slice(0, 160)}` : "";
             }, base);
             return splitRules;
           }
-          function getDefferedRule(rule, context, options) {
+          function getDefferedRule(rule, context2, options) {
             if (options.performanceTimer) {
               performance_timer_default.mark("mark_rule_start_" + rule.id);
             }
             return function(resolve, reject) {
-              rule.run(context, options, function(ruleResult) {
+              rule.run(context2, options, function(ruleResult) {
                 return resolve(ruleResult);
               }, function(err2) {
                 if (options.debug) {
@@ -40365,18 +45037,18 @@ Response: ${match.response.slice(0, 160)}` : "";
             var brand = _ref145.brand, application = _ref145.application, lang = _ref145.lang;
             return constants_default.helpUrlBase + brand + "/" + (version || axe.version.substring(0, axe.version.lastIndexOf("."))) + "/" + ruleId + "?application=" + encodeURIComponent(application) + (lang && lang !== "en" ? "&lang=" + encodeURIComponent(lang) : "");
           }
-          function setupGlobals(context) {
+          function setupGlobals(context2) {
             var hasWindow = window2 && "Node" in window2 && "NodeList" in window2;
             var hasDoc = !!document2;
             if (hasWindow && hasDoc) {
               return;
             }
-            if (!context || !context.ownerDocument) {
+            if (!context2 || !context2.ownerDocument) {
               throw new Error('Required "window" or "document" globals not defined and cannot be deduced from the context. Either set the globals before running or pass in a valid Element.');
             }
             if (!hasDoc) {
               cache_default.set("globalDocumentSet", true);
-              document2 = context.ownerDocument;
+              document2 = context2.ownerDocument;
             }
             if (!hasWindow) {
               cache_default.set("globalWindowSet", true);
@@ -40404,11 +45076,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             axe._selectCache = void 0;
           }
           var teardown_default = teardown;
-          function runRules(context, options, resolve, reject) {
+          function runRules(context2, options, resolve, reject) {
             try {
-              context = new Context2(context);
-              axe._tree = context.flatTree;
-              axe._selectorData = _getSelectorData(context.flatTree);
+              context2 = new Context2(context2);
+              axe._tree = context2.flatTree;
+              axe._selectorData = _getSelectorData(context2.flatTree);
             } catch (e2) {
               teardown_default();
               return reject(e2);
@@ -40418,13 +45090,13 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (options.performanceTimer) {
               performance_timer_default.auditStart();
             }
-            if (context.frames.length && options.iframes !== false) {
+            if (context2.frames.length && options.iframes !== false) {
               q.defer(function(res, rej) {
-                _collectResultsFromFrames(context, options, "rules", null, res, rej);
+                _collectResultsFromFrames(context2, options, "rules", null, res, rej);
               });
             }
             q.defer(function(res, rej) {
-              audit.run(context, options, res, rej);
+              audit.run(context2, options, res, rej);
             });
             q.then(function(data) {
               try {
@@ -40436,7 +45108,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                     results: res
                   };
                 }));
-                if (context.initiator) {
+                if (context2.initiator) {
                   if (options.performanceTimer) {
                     performance_timer_default.mark("auditAfterStart");
                   }
@@ -40475,14 +45147,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               callback(err2);
             };
-            var context = data && data.context || {};
-            if (context.hasOwnProperty("include") && !context.include.length) {
-              context.include = [document2];
+            var context2 = data && data.context || {};
+            if (context2.hasOwnProperty("include") && !context2.include.length) {
+              context2.include = [document2];
             }
             var options = data && data.options || {};
             switch (data.command) {
               case "rules":
-                return runRules(context, options, function(results, cleanupFn) {
+                return runRules(context2, options, function(results, cleanupFn) {
                   results = node_serializer_default.mapRawResults(results);
                   resolve(results);
                   cleanupFn();
@@ -40559,7 +45231,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 value: false
               }
             });
-            var context = {
+            var context2 = {
               initiator: true,
               include: [vNode],
               exclude: [],
@@ -40569,7 +45241,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               size: {},
               flatTree: []
             };
-            var rawResults = rule.runSync(context, options);
+            var rawResults = rule.runSync(context2, options);
             _publishMetaData(rawResults);
             _finalizeRuleResult(rawResults);
             var results = aggregate_result_default([rawResults]);
@@ -40584,15 +45256,15 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           function normalizeRunParams(_ref146) {
             var _ref148, _options$reporter, _axe$_audit;
-            var _ref147 = _slicedToArray(_ref146, 3), context = _ref147[0], options = _ref147[1], callback = _ref147[2];
+            var _ref147 = _slicedToArray(_ref146, 3), context2 = _ref147[0], options = _ref147[1], callback = _ref147[2];
             var typeErr = new TypeError("axe.run arguments are invalid");
-            if (!_isContextSpec(context)) {
+            if (!_isContextSpec(context2)) {
               if (callback !== void 0) {
                 throw typeErr;
               }
               callback = options;
-              options = context;
-              context = document2;
+              options = context2;
+              context2 = document2;
             }
             if (_typeof(options) !== "object") {
               if (callback !== void 0) {
@@ -40607,7 +45279,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             options = clone2(options);
             options.reporter = (_ref148 = (_options$reporter = options.reporter) !== null && _options$reporter !== void 0 ? _options$reporter : (_axe$_audit = axe._audit) === null || _axe$_audit === void 0 ? void 0 : _axe$_audit.reporter) !== null && _ref148 !== void 0 ? _ref148 : "v1";
             return {
-              context,
+              context: context2,
               options,
               callback
             };
@@ -40619,7 +45291,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               args[_key10] = arguments[_key10];
             }
             setupGlobals(args[0]);
-            var _normalizeRunParams = normalizeRunParams(args), context = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
+            var _normalizeRunParams = normalizeRunParams(args), context2 = _normalizeRunParams.context, options = _normalizeRunParams.options, _normalizeRunParams$c = _normalizeRunParams.callback, callback = _normalizeRunParams$c === void 0 ? noop2 : _normalizeRunParams$c;
             var _getPromiseHandlers = getPromiseHandlers(callback), thenable = _getPromiseHandlers.thenable, resolve = _getPromiseHandlers.resolve, reject = _getPromiseHandlers.reject;
             try {
               assert_default(axe._audit, "No audit configured");
@@ -40673,7 +45345,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               callback(err2);
               reject(err2);
             }
-            axe._runRules(context, options, handleRunRules, errorRunRules);
+            axe._runRules(context2, options, handleRunRules, errorRunRules);
             return thenable;
           }
           function getPromiseHandlers(callback) {
@@ -40715,10 +45387,10 @@ Response: ${match.response.slice(0, 160)}` : "";
             for (var _len9 = arguments.length, args = new Array(_len9), _key11 = 0; _key11 < _len9; _key11++) {
               args[_key11] = arguments[_key11];
             }
-            var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context = _normalizeRunParams2.context;
+            var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context2 = _normalizeRunParams2.context;
             assert_default(axe._audit, "Axe is not configured. Audit is missing.");
             assert_default(!axe._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
-            var contextObj = new Context2(context, axe._tree);
+            var contextObj = new Context2(context2, axe._tree);
             axe._tree = contextObj.flatTree;
             axe._selectorData = _getSelectorData(contextObj.flatTree);
             axe._running = true;
@@ -44567,6 +49239,196 @@ First element: \`${exampleSnippet}\``,
     }
   });
 
+  // src/scanner/detectors/frustration.ts
+  async function detectFrustration2(session) {
+    var _a;
+    if (!session) return [];
+    const events = session.events;
+    if (events.length === 0) return [];
+    const issues = [];
+    const page = ((_a = session.events[0]) == null ? void 0 : _a.page) || window.location.pathname;
+    issues.push(...detectRageClicks(events, page));
+    issues.push(...detectDeadClicks(events, page));
+    issues.push(...detectFormAbandonment(events, page));
+    issues.push(...detectErrorCorrelated(events, page));
+    return issues;
+  }
+  function detectRageClicks(events, page) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const out = [];
+    const seenGroups = /* @__PURE__ */ new Set();
+    for (let i = 0; i < events.length; i++) {
+      const e2 = events[i];
+      if (e2.type !== "click") continue;
+      const sel = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.testId) || "";
+      if (!sel) continue;
+      const cluster = [e2];
+      let j = i + 1;
+      while (j < events.length) {
+        const next = events[j];
+        if (next.timestamp - e2.timestamp > RAGE_WINDOW_MS2) break;
+        if (isResponseEvent(next)) break;
+        if (next.type === "click") {
+          const nextSel = ((_f = (_e = next.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector) || ((_h = (_g = next.data) == null ? void 0 : _g.element) == null ? void 0 : _h.testId) || "";
+          if (nextSel === sel) cluster.push(next);
+        }
+        j++;
+      }
+      if (cluster.length >= RAGE_MIN_CLICKS2) {
+        const key = `${sel}@${e2.timestamp}`;
+        if (seenGroups.has(key)) continue;
+        seenGroups.add(key);
+        const label = clickLabel2(cluster[0]);
+        out.push({
+          id: makeIssueId("frustration-rage"),
+          detector: "frustration-rage",
+          severity: "serious",
+          title: `Rage clicks on ${label} (${cluster.length}\xD7 in ${Math.round(cluster[cluster.length - 1].timestamp - cluster[0].timestamp)}ms)`,
+          description: `User clicked the same element ${cluster.length} times within ${RAGE_WINDOW_MS2}ms with no observable response (no API call, navigation, or DOM update). The element either doesn't respond to clicks or feels broken.`,
+          selector: sel,
+          page,
+          detectedAt: cluster[0].timestamp,
+          firstSeenAt: cluster[0].timestamp,
+          lastSeenAt: cluster[cluster.length - 1].timestamp,
+          occurrences: cluster.length
+        });
+        i = j - 1;
+      }
+    }
+    return out;
+  }
+  function detectDeadClicks(events, page) {
+    var _a, _b;
+    const out = [];
+    const MAX = 5;
+    for (let i = 0; i < events.length && out.length < MAX; i++) {
+      const e2 = events[i];
+      if (e2.type !== "click") continue;
+      let responsive = false;
+      for (let j = i + 1; j < events.length; j++) {
+        const next = events[j];
+        if (next.timestamp - e2.timestamp > DEAD_RESPONSE_WINDOW_MS2) break;
+        if (isResponseEvent(next)) {
+          responsive = true;
+          break;
+        }
+      }
+      if (responsive) continue;
+      const sel = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || "";
+      const label = clickLabel2(e2);
+      out.push({
+        id: makeIssueId("frustration-dead"),
+        detector: "frustration-dead",
+        severity: "moderate",
+        title: `Dead click on ${label}`,
+        description: `Clicked but nothing happened within ${DEAD_RESPONSE_WINDOW_MS2}ms (no API call, navigation, or DOM input). The element may have an unbound handler, a swallowed event, or be visually clickable but disabled.`,
+        selector: sel,
+        page: e2.page || page,
+        detectedAt: e2.timestamp
+      });
+    }
+    return out;
+  }
+  function detectFormAbandonment(events, page) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    const out = [];
+    const formActivity = {};
+    for (const e2 of events) {
+      if (e2.type === "input") {
+        const formId = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.formId) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.formAction) || "_default";
+        if (!formActivity[formId]) {
+          formActivity[formId] = { firstInputAt: e2.timestamp, fieldsSeen: /* @__PURE__ */ new Set(), lastInputAt: e2.timestamp, page: e2.page };
+        }
+        const name = ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.name) || ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.id) || "field";
+        formActivity[formId].fieldsSeen.add(name);
+        formActivity[formId].lastInputAt = e2.timestamp;
+      } else if (e2.type === "form_submit") {
+        const formId = ((_j = (_i = e2.data) == null ? void 0 : _i.form) == null ? void 0 : _j.id) || "_default";
+        delete formActivity[formId];
+      } else if (e2.type === "route_change") {
+        for (const formId of Object.keys(formActivity)) {
+          const a2 = formActivity[formId];
+          if (e2.timestamp - a2.lastInputAt > ABANDON_WINDOW_MS) continue;
+          if (a2.fieldsSeen.size === 0) continue;
+          out.push({
+            id: makeIssueId("frustration-abandon"),
+            detector: "frustration-abandon",
+            severity: "moderate",
+            title: `Form abandoned on ${a2.page} (${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} filled)`,
+            description: `User typed into ${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} (${Array.from(a2.fieldsSeen).slice(0, 5).join(", ")}) and then navigated away without submitting. Likely a UX problem: the submit button is unclear, the form requires too much info, or it's failing silently.`,
+            page: a2.page,
+            detectedAt: a2.lastInputAt,
+            firstSeenAt: a2.firstInputAt,
+            lastSeenAt: a2.lastInputAt
+          });
+          delete formActivity[formId];
+        }
+      }
+    }
+    return out;
+  }
+  function detectErrorCorrelated(events, page) {
+    var _a, _b, _c, _d, _e, _f;
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (let i = 0; i < events.length; i++) {
+      const e2 = events[i];
+      const isError = e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error";
+      if (!isError) continue;
+      let click = null;
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = events[j];
+        if (e2.timestamp - prev.timestamp > ERROR_CORRELATION_WINDOW_MS) break;
+        if (prev.type === "click") {
+          click = prev;
+          break;
+        }
+      }
+      if (!click) continue;
+      const errMsg = ((_b = (_a = e2.data) == null ? void 0 : _a.error) == null ? void 0 : _b.message) || "";
+      if (!errMsg) continue;
+      const key = `${errMsg}::${((_d = (_c = click.data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const label = clickLabel2(click);
+      const truncMsg = errMsg.length > 60 ? errMsg.slice(0, 57) + "\u2026" : errMsg;
+      const delta = Math.round(e2.timestamp - click.timestamp);
+      out.push({
+        id: makeIssueId("frustration-error-correlated"),
+        detector: "frustration-error-correlated",
+        severity: "critical",
+        title: `Click on ${label} triggered: ${truncMsg}`,
+        description: `An error fired ${delta}ms after the user clicked ${label}. This is almost certainly the offending interaction \u2014 the click handler threw, or its async path failed.`,
+        selector: (_f = (_e = click.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector,
+        page: e2.page || page,
+        detectedAt: e2.timestamp
+      });
+    }
+    return out;
+  }
+  function isResponseEvent(e2) {
+    return e2.type === "api_request" || e2.type === "route_change" || e2.type === "input" || e2.type === "form_submit" || e2.type === "select_change";
+  }
+  function clickLabel2(e2) {
+    var _a;
+    const el = (_a = e2.data) == null ? void 0 : _a.element;
+    const raw = (el == null ? void 0 : el.text) || (el == null ? void 0 : el.ariaLabel) || (el == null ? void 0 : el.testId) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
+    const trimmed = String(raw).replace(/\s+/g, " ").trim();
+    return trimmed.length > 40 ? `"${trimmed.slice(0, 37)}\u2026"` : `"${trimmed}"`;
+  }
+  var RAGE_WINDOW_MS2, RAGE_MIN_CLICKS2, DEAD_RESPONSE_WINDOW_MS2, ABANDON_WINDOW_MS, ERROR_CORRELATION_WINDOW_MS;
+  var init_frustration = __esm({
+    "src/scanner/detectors/frustration.ts"() {
+      "use strict";
+      init_helpers2();
+      RAGE_WINDOW_MS2 = 1500;
+      RAGE_MIN_CLICKS2 = 3;
+      DEAD_RESPONSE_WINDOW_MS2 = 1500;
+      ABANDON_WINDOW_MS = 6e4;
+      ERROR_CORRELATION_WINDOW_MS = 2500;
+    }
+  });
+
   // src/scanner/index.ts
   async function scan() {
     if (_scanInFlight) {
@@ -44586,7 +49448,8 @@ First element: \`${exampleSnippet}\``,
       safeRun(detectConsoleErrors(session)),
       safeRun(detectFailedRequests(session)),
       safeRun(detectSlowApis(session)),
-      safeRun(detectA11yViolations())
+      safeRun(detectA11yViolations()),
+      safeRun(detectFrustration2(session))
     ]).then((results) => {
       const all = [].concat(...results);
       all.sort((a2, b) => {
@@ -44633,7 +49496,11 @@ First element: \`${exampleSnippet}\``,
       "mixed-content": 0,
       "console-error": 0,
       "slow-api": 0,
-      "failed-request": 0
+      "failed-request": 0,
+      "frustration-rage": 0,
+      "frustration-dead": 0,
+      "frustration-abandon": 0,
+      "frustration-error-correlated": 0
     };
     for (const i of _issues) {
       if (i.dismissed) continue;
@@ -44666,6 +49533,7 @@ First element: \`${exampleSnippet}\``,
       init_mixed_content();
       init_session_data();
       init_a11y();
+      init_frustration();
       _issues = [];
       _scanInFlight = null;
       _lastScanAt = 0;
@@ -44691,7 +49559,7 @@ First element: \`${exampleSnippet}\``,
     var _a;
     if (_isOpen2) return;
     _root = root;
-    _injectStyles2();
+    _injectStyles3();
     _open(root, { issues: [], loading: true });
     try {
       if ((_a = options == null ? void 0 : options.rescan) != null ? _a : true) {
@@ -44702,10 +49570,10 @@ First element: \`${exampleSnippet}\``,
     }
     _renderBody(getIssues());
   }
-  function _injectStyles2() {
-    if (document.getElementById(STYLE_ID)) return;
+  function _injectStyles3() {
+    if (document.getElementById(STYLE_ID2)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID;
+    style.id = STYLE_ID2;
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(123,97,255,0.0); outline: 2px solid transparent; }
@@ -44902,6 +49770,17 @@ First element: \`${exampleSnippet}\``,
     const colors = SEVERITY_COLORS[issue.severity];
     const detectorLabel = DETECTOR_LABELS[issue.detector];
     const desc = issue.description.length > 240 ? issue.description.slice(0, 237) + "\u2026" : issue.description;
+    const repeats = (issue.occurrences || 1) > 1;
+    const samplesHtml = repeats && issue.contextSamples && issue.contextSamples.length > 0 ? `<details style="margin-top:6px;font-size:11px">
+         <summary style="cursor:pointer;color:var(--tb-text-muted, #888)">
+           View all ${issue.occurrences} contexts
+         </summary>
+         <ol style="margin:6px 0 0 20px;padding:0;color:var(--tb-text-secondary, #aaa);line-height:1.5">
+           ${issue.contextSamples.map((s) => `
+             <li>${new Date(s.timestamp).toLocaleTimeString()}${s.precedingAction ? ` \xB7 ${escapeHtml2(s.precedingAction)}` : ""}</li>
+           `).join("")}
+         </ol>
+       </details>` : "";
     return `
     <div class="tb-issue-row" data-tb-issue-id="${issue.id}">
       <span class="tb-sev-badge" style="background:${colors.bg};color:${colors.fg};border-color:${colors.border}">${issue.severity}</span>
@@ -44912,6 +49791,7 @@ First element: \`${exampleSnippet}\``,
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml2(desc)}</div>
         ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7B61FF);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
+        ${samplesHtml}
       </div>
       <div class="tb-issue-actions">
         ${issue.selector ? `<button data-action="locate" title="Highlight on page">\u{1F4CD} Locate</button>` : ""}
@@ -44971,14 +49851,14 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID2, STYLE_ID, _isOpen2, _root, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID2, STYLE_ID2, _isOpen2, _root, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
       init_scanner();
       init_helpers();
       PANEL_ID2 = "tracebug-issues-panel";
-      STYLE_ID = "tracebug-issues-panel-styles";
+      STYLE_ID2 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
       _root = null;
       SEVERITY_COLORS = {
@@ -44993,8 +49873,308 @@ First element: \`${exampleSnippet}\``,
         "mixed-content": "Mixed content",
         "console-error": "JS error",
         "slow-api": "Slow API",
-        "failed-request": "Failed request"
+        "failed-request": "Failed request",
+        "frustration-rage": "Rage clicks",
+        "frustration-dead": "Dead click",
+        "frustration-abandon": "Form abandoned",
+        "frustration-error-correlated": "Click \u2192 error"
       };
+    }
+  });
+
+  // src/ui/live-bug-card.ts
+  var live_bug_card_exports = {};
+  __export(live_bug_card_exports, {
+    hideLiveBugCard: () => hideLiveBugCard,
+    isLiveBugCardVisible: () => isLiveBugCardVisible,
+    showLiveBugCard: () => showLiveBugCard
+  });
+  function showLiveBugCard(root, options) {
+    _injectStyles4();
+    hideLiveBugCard();
+    const overlay = document.createElement("div");
+    overlay.id = CARD_ID;
+    overlay.dataset.tracebug = "live-bug-card";
+    overlay.setAttribute("role", "alert");
+    overlay.setAttribute("aria-live", "assertive");
+    const parsed = parseTopFrame(options.stack || "");
+    const errorTitle = options.message || "Unknown error";
+    const truncatedTitle = errorTitle.length > 120 ? errorTitle.slice(0, 117) + "\u2026" : errorTitle;
+    const sourceBlockId = `tb-lbc-src-${Date.now()}`;
+    overlay.innerHTML = `
+    <div class="tb-lbc-card">
+      <div class="tb-lbc-head">
+        <span class="tb-lbc-icon">\u{1F4A5}</span>
+        <span class="tb-lbc-title">${escapeHtml5(truncatedTitle)}</span>
+        <button class="tb-lbc-close" data-action="dismiss" aria-label="Dismiss">&times;</button>
+      </div>
+      ${parsed ? `
+        <div class="tb-lbc-loc">at <span class="tb-lbc-file">${escapeHtml5(parsed.shortFile)}:${parsed.line}</span></div>
+        <div class="tb-lbc-source" id="${sourceBlockId}">
+          <span class="tb-lbc-loading">Loading source\u2026</span>
+        </div>
+      ` : `<div class="tb-lbc-loc tb-lbc-no-source">Stack trace unavailable</div>`}
+      ${options.lastAction ? `<div class="tb-lbc-action">Last action: ${escapeHtml5(options.lastAction)}</div>` : ""}
+      <div class="tb-lbc-buttons">
+        <button class="tb-lbc-btn tb-lbc-primary" data-action="capture">\u{1F4F8} Capture Bug</button>
+        ${options.enableEditorJump && parsed ? `<button class="tb-lbc-btn tb-lbc-editor" data-action="editor">Open in editor</button>` : ""}
+        <button class="tb-lbc-btn tb-lbc-ghost" data-action="dismiss">Dismiss</button>
+      </div>
+    </div>
+  `;
+    root.appendChild(overlay);
+    _currentRoot = overlay;
+    overlay.querySelectorAll("[data-action]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        var _a;
+        const action = btn.dataset.action;
+        if (action === "capture") {
+          try {
+            options.onCapture();
+          } finally {
+            hideLiveBugCard();
+          }
+        } else if (action === "dismiss") {
+          try {
+            (_a = options.onDismiss) == null ? void 0 : _a.call(options);
+          } finally {
+            hideLiveBugCard();
+          }
+        } else if (action === "editor" && parsed) {
+          try {
+            window.location.href = `vscode://file/${parsed.absPath}:${parsed.line}`;
+          } catch (e2) {
+          }
+        }
+      });
+    });
+    const auto = setTimeout(() => hideLiveBugCard(), 12e3);
+    overlay.addEventListener("mouseenter", () => clearTimeout(auto));
+    const esc = (e2) => {
+      var _a;
+      if (e2.key === "Escape" && _currentRoot === overlay) {
+        try {
+          (_a = options.onDismiss) == null ? void 0 : _a.call(options);
+        } finally {
+          hideLiveBugCard();
+        }
+      }
+    };
+    document.addEventListener("keydown", esc);
+    overlay.addEventListener("tracebug:hide", () => document.removeEventListener("keydown", esc));
+    if (parsed) {
+      fetchSourceWindow(parsed.fileUrl, parsed.line, parsed.column).then((html) => {
+        if (_currentRoot !== overlay) return;
+        const block = overlay.querySelector(`#${sourceBlockId}`);
+        if (block) block.innerHTML = html;
+      }).catch(() => {
+        const block = overlay.querySelector(`#${sourceBlockId}`);
+        if (block) block.innerHTML = `<span class="tb-lbc-no-source">Source not available (cross-origin or 404)</span>`;
+      });
+    }
+  }
+  function hideLiveBugCard() {
+    if (!_currentRoot) return;
+    const ev = new CustomEvent("tracebug:hide");
+    _currentRoot.dispatchEvent(ev);
+    _currentRoot.remove();
+    _currentRoot = null;
+  }
+  function isLiveBugCardVisible() {
+    return _currentRoot !== null;
+  }
+  function parseTopFrame(stack) {
+    if (!stack) return null;
+    const lines = stack.split("\n").map((l) => l.trim());
+    for (const line of lines) {
+      let m = line.match(/at\s+(?:[^()]+\s+)?\(?(https?:\/\/[^):\s]+):(\d+):(\d+)\)?$/);
+      if (!m) {
+        m = line.match(/@(https?:\/\/[^):\s]+):(\d+):(\d+)$/);
+      }
+      if (m) {
+        const fileUrl = m[1];
+        if (/tracebug-sdk|tracebug\.|\/tracebug\//i.test(fileUrl)) continue;
+        const url = new URL(fileUrl, window.location.origin);
+        return {
+          fileUrl,
+          shortFile: url.pathname.split("/").pop() || url.pathname,
+          absPath: url.pathname,
+          line: Number(m[2]),
+          column: Number(m[3])
+        };
+      }
+    }
+    return null;
+  }
+  async function fetchSourceLines(fileUrl) {
+    try {
+      const u2 = new URL(fileUrl, window.location.origin);
+      if (u2.origin !== window.location.origin) return null;
+    } catch (e2) {
+      return null;
+    }
+    if (_sourceCache.has(fileUrl)) return _sourceCache.get(fileUrl);
+    if (_sourceFetchInflight.has(fileUrl)) return _sourceFetchInflight.get(fileUrl);
+    const p = (async () => {
+      try {
+        const res = await fetch(fileUrl, { credentials: "same-origin", cache: "force-cache" });
+        if (!res.ok) return null;
+        const text = await res.text();
+        const lines = text.split("\n");
+        _sourceCache.set(fileUrl, lines);
+        return lines;
+      } catch (e2) {
+        return null;
+      } finally {
+        _sourceFetchInflight.delete(fileUrl);
+      }
+    })();
+    _sourceFetchInflight.set(fileUrl, p);
+    return p;
+  }
+  async function fetchSourceWindow(fileUrl, line, _column) {
+    const lines = await fetchSourceLines(fileUrl);
+    if (!lines) {
+      return `<span class="tb-lbc-no-source">Source not available (cross-origin or 404)</span>`;
+    }
+    const target = Math.max(1, Math.min(lines.length, line));
+    const from = Math.max(1, target - 2);
+    const to = Math.min(lines.length, target + 2);
+    const parts = [];
+    for (let i = from; i <= to; i++) {
+      const isTarget = i === target;
+      const num = String(i).padStart(3, " ");
+      const arrow = isTarget ? "\u2192" : " ";
+      const cls = isTarget ? "tb-lbc-line tb-lbc-line-hot" : "tb-lbc-line";
+      parts.push(`<div class="${cls}"><span class="tb-lbc-arrow">${arrow}</span><span class="tb-lbc-num">${num}</span><span class="tb-lbc-code">${escapeHtml5(lines[i - 1] || "")}</span></div>`);
+    }
+    return parts.join("");
+  }
+  function _injectStyles4() {
+    if (document.getElementById(STYLE_ID3)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID3;
+    style.textContent = `
+    @keyframes tb-lbc-in {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    #${CARD_ID} {
+      position: fixed !important;
+      bottom: 16px !important;
+      right: 16px !important;
+      z-index: 2147483647 !important;
+      pointer-events: auto !important;
+      animation: tb-lbc-in 0.18s ease !important;
+    }
+    #${CARD_ID} .tb-lbc-card {
+      box-sizing: border-box !important;
+      max-width: 460px !important;
+      min-width: 340px !important;
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
+      border: 1px solid var(--tb-error, #ef4444) !important;
+      border-left: 4px solid var(--tb-error, #ef4444) !important;
+      border-radius: 10px !important;
+      padding: 12px 14px !important;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.45) !important;
+    }
+    #${CARD_ID} .tb-lbc-card *, #${CARD_ID} .tb-lbc-card *::before, #${CARD_ID} .tb-lbc-card *::after {
+      box-sizing: border-box !important;
+    }
+    #${CARD_ID} .tb-lbc-head {
+      display: flex !important; align-items: flex-start !important; gap: 8px !important;
+      margin-bottom: 8px !important;
+    }
+    #${CARD_ID} .tb-lbc-icon { font-size: 16px !important; line-height: 1.2 !important; flex-shrink: 0 !important; }
+    #${CARD_ID} .tb-lbc-title {
+      flex: 1 !important; font-size: 13px !important; font-weight: 600 !important;
+      color: var(--tb-error, #ef4444) !important; line-height: 1.35 !important; word-break: break-word !important;
+    }
+    #${CARD_ID} .tb-lbc-close {
+      background: none !important; border: none !important; color: var(--tb-text-muted, #888) !important;
+      font-size: 20px !important; line-height: 1 !important; cursor: pointer !important;
+      padding: 0 4px !important; font-family: inherit !important;
+    }
+    #${CARD_ID} .tb-lbc-loc {
+      font-size: 11px !important; color: var(--tb-text-muted, #888) !important;
+      font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
+      margin-bottom: 4px !important;
+    }
+    #${CARD_ID} .tb-lbc-file { color: var(--tb-text-secondary, #aaa) !important; }
+    #${CARD_ID} .tb-lbc-no-source { font-style: italic !important; color: var(--tb-text-muted, #666) !important; }
+    #${CARD_ID} .tb-lbc-source {
+      background: var(--tb-bg-primary, #0f0f1a) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: 6px !important;
+      padding: 8px !important; margin: 6px 0 !important;
+      font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
+      font-size: 11px !important;
+      max-height: 110px !important; overflow: hidden !important;
+    }
+    #${CARD_ID} .tb-lbc-loading {
+      font-style: italic !important; color: var(--tb-text-muted, #666) !important;
+    }
+    #${CARD_ID} .tb-lbc-line {
+      display: flex !important; gap: 8px !important; line-height: 1.45 !important;
+      white-space: pre !important; color: var(--tb-text-secondary, #aaa) !important;
+    }
+    #${CARD_ID} .tb-lbc-line-hot {
+      color: var(--tb-text-primary, #fff) !important; font-weight: 600 !important;
+      background: rgba(239, 68, 68, 0.12) !important;
+      margin: 0 -8px !important; padding: 0 8px !important;
+    }
+    #${CARD_ID} .tb-lbc-arrow { color: var(--tb-error, #ef4444) !important; width: 10px !important; flex-shrink: 0 !important; }
+    #${CARD_ID} .tb-lbc-num { color: var(--tb-text-muted, #555) !important; user-select: none !important; flex-shrink: 0 !important; }
+    #${CARD_ID} .tb-lbc-code { color: inherit !important; flex: 1 !important; }
+    #${CARD_ID} .tb-lbc-action {
+      font-size: 11px !important; color: var(--tb-text-muted, #888) !important;
+      margin-bottom: 10px !important;
+    }
+    #${CARD_ID} .tb-lbc-buttons {
+      display: flex !important; gap: 6px !important; flex-wrap: wrap !important;
+    }
+    #${CARD_ID} .tb-lbc-btn {
+      font-family: inherit !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: 6px !important;
+      padding: 6px 12px !important;
+      font-size: 12px !important; font-weight: 600 !important;
+      cursor: pointer !important;
+      transition: all 0.12s !important;
+    }
+    #${CARD_ID} .tb-lbc-primary {
+      background: var(--tb-accent, #7B61FF) !important;
+      color: #fff !important;
+      border-color: transparent !important;
+    }
+    #${CARD_ID} .tb-lbc-primary:hover { opacity: 0.9 !important; }
+    #${CARD_ID} .tb-lbc-editor {
+      background: transparent !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+    }
+    #${CARD_ID} .tb-lbc-editor:hover { background: var(--tb-btn-hover, #ffffff15) !important; }
+    #${CARD_ID} .tb-lbc-ghost {
+      background: transparent !important;
+      color: var(--tb-text-muted, #888) !important;
+    }
+    #${CARD_ID} .tb-lbc-ghost:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
+  `;
+    document.head.appendChild(style);
+  }
+  function escapeHtml5(str) {
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  var CARD_ID, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var init_live_bug_card = __esm({
+    "src/ui/live-bug-card.ts"() {
+      "use strict";
+      CARD_ID = "tracebug-live-bug-card";
+      STYLE_ID3 = "tracebug-live-bug-card-styles";
+      _sourceCache = /* @__PURE__ */ new Map();
+      _sourceFetchInflight = /* @__PURE__ */ new Map();
+      _currentRoot = null;
     }
   });
 
@@ -45337,101 +50517,12 @@ First element: \`${exampleSnippet}\``,
   // src/dashboard.ts
   init_title_generator();
   init_voice_recorder();
-
-  // src/annotation-store.ts
-  var _elementAnnotations = [];
-  var _drawRegions = [];
-  function addElementAnnotation(ann) {
-    _elementAnnotations.push(ann);
-  }
-  function addDrawRegion(region) {
-    _drawRegions.push(region);
-  }
-  function removeAnnotationById(id) {
-    _elementAnnotations = _elementAnnotations.filter((a2) => a2.id !== id);
-    _drawRegions = _drawRegions.filter((r) => r.id !== id);
-  }
-  function getElementAnnotations() {
-    return _elementAnnotations;
-  }
-  function getDrawRegions() {
-    return _drawRegions;
-  }
-  function getAnnotationReport() {
-    return {
-      elementAnnotations: [..._elementAnnotations],
-      drawRegions: [..._drawRegions],
-      page: typeof window !== "undefined" ? window.location.pathname : "",
-      timestamp: Date.now()
-    };
-  }
-  function clearAllAnnotations() {
-    _elementAnnotations = [];
-    _drawRegions = [];
-  }
-  function exportAsJSON() {
-    return JSON.stringify(getAnnotationReport(), null, 2);
-  }
-  function exportAsMarkdown() {
-    const lines = [];
-    lines.push("# UI Annotations Report");
-    lines.push(`**Page:** ${window.location.href}`);
-    lines.push(`**Date:** ${(/* @__PURE__ */ new Date()).toISOString()}`);
-    lines.push(`**Total:** ${_elementAnnotations.length} element annotations, ${_drawRegions.length} draw regions`);
-    lines.push("");
-    if (_elementAnnotations.length > 0) {
-      lines.push("## Element Annotations");
-      lines.push("");
-      for (let i = 0; i < _elementAnnotations.length; i++) {
-        const a2 = _elementAnnotations[i];
-        const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
-        const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
-        lines.push(`### ${i + 1}. [${intentLabel.toUpperCase()}] \`${a2.selector.slice(0, 60)}\` (${sevLabel})`);
-        lines.push(`- **Element:** \`<${a2.tagName}>\` "${a2.innerText.slice(0, 80)}"`);
-        lines.push(`- **Comment:** ${a2.comment}`);
-        lines.push(`- **Page:** ${a2.page}`);
-        lines.push("");
-      }
-    }
-    if (_drawRegions.length > 0) {
-      lines.push("## Draw Regions");
-      lines.push("");
-      for (let i = 0; i < _drawRegions.length; i++) {
-        const r = _drawRegions[i];
-        const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
-        lines.push(`### ${i + 1}. ${shapeLabel} at (${Math.round(r.x)}, ${Math.round(r.y)}) ${Math.round(r.width)}x${Math.round(r.height)}`);
-        lines.push(`- **Comment:** ${r.comment || "(no comment)"}`);
-        lines.push(`- **Page:** ${r.page}`);
-        lines.push("");
-      }
-    }
-    return lines.join("\n");
-  }
-  async function copyToClipboard(format) {
-    const text = format === "json" ? exportAsJSON() : exportAsMarkdown();
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (e2) {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.cssText = "position:fixed;left:-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-        return true;
-      } catch (e3) {
-        return false;
-      } finally {
-        ta.remove();
-      }
-    }
-  }
+  init_annotation_store();
 
   // src/element-annotate.ts
+  init_annotation_store();
   init_helpers();
-  var _active = false;
+  var _active2 = false;
   var _cleanup = null;
   var _selectedElements = /* @__PURE__ */ new Map();
   var _highlightOverlay = null;
@@ -45446,11 +50537,11 @@ First element: \`${exampleSnippet}\``,
   var HIGHLIGHT_COLOR = "#7B61FF";
   var SELECTION_COLOR = "#00E5FF";
   function isElementAnnotateActive() {
-    return _active;
+    return _active2;
   }
   function activateElementAnnotateMode(root, onUpdate, onDeactivate) {
-    if (_active) return;
-    _active = true;
+    if (_active2) return;
+    _active2 = true;
     _onUpdate = onUpdate || null;
     _onDeactivate = onDeactivate || null;
     _badgeRoot = root;
@@ -45516,7 +50607,7 @@ First element: \`${exampleSnippet}\``,
     window.addEventListener("wheel", preventScroll, { passive: false, capture: true });
     window.addEventListener("touchmove", preventScroll, { passive: false, capture: true });
     const onMouseMove = (e2) => {
-      if (!_active || !_highlightOverlay) return;
+      if (!_active2 || !_highlightOverlay) return;
       if (_popover) return;
       const el = document.elementFromPoint(e2.clientX, e2.clientY);
       if (!el || _isOurElement(el)) {
@@ -45533,7 +50624,7 @@ First element: \`${exampleSnippet}\``,
       _highlightOverlay.style.height = rect.height + "px";
     };
     const onClick = (e2) => {
-      if (!_active) return;
+      if (!_active2) return;
       const target = e2.target;
       if (target && _isOurElement(target)) return;
       if (_popover) {
@@ -45565,7 +50656,7 @@ First element: \`${exampleSnippet}\``,
       }
     };
     const onContext = (e2) => {
-      if (!_active) return;
+      if (!_active2) return;
       if (_selectedElements.size > 0) {
         e2.preventDefault();
         const firstEntry = _selectedElements.values().next().value;
@@ -45592,7 +50683,7 @@ First element: \`${exampleSnippet}\``,
     document.addEventListener("keydown", onKeyDown, { capture: true });
     _cleanup = () => {
       var _a;
-      _active = false;
+      _active2 = false;
       document.removeEventListener("mousemove", onMouseMove, { capture: true });
       document.removeEventListener("click", onClick, { capture: true });
       document.removeEventListener("contextmenu", onContext, { capture: true });
@@ -45988,7 +51079,8 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/draw-mode.ts
-  var _active2 = false;
+  init_annotation_store();
+  var _active3 = false;
   var _cleanup2 = null;
   var _currentShape = "rect";
   var _currentColor = "#7B61FF";
@@ -46003,11 +51095,11 @@ First element: \`${exampleSnippet}\``,
   ];
   var MAX_CANVAS_DIM = 32767;
   function isDrawModeActive() {
-    return _active2;
+    return _active3;
   }
   function activateDrawMode(root, onUpdate, onDeactivate) {
-    if (_active2) return;
-    _active2 = true;
+    if (_active3) return;
+    _active3 = true;
     _onUpdate2 = onUpdate || null;
     _onDeactivate2 = onDeactivate || null;
     const docW = Math.min(document.documentElement.scrollWidth, MAX_CANVAS_DIM);
@@ -46031,7 +51123,7 @@ First element: \`${exampleSnippet}\``,
     let startX = 0, startY = 0;
     const onMouseDown = (e2) => {
       var _a, _b;
-      if (!_active2) return;
+      if (!_active3) return;
       if ((_a = e2.target) == null ? void 0 : _a.closest("#tracebug-draw-toolbar")) return;
       if ((_b = e2.target) == null ? void 0 : _b.closest("[data-tracebug='draw-comment-input']")) return;
       const rect = canvas.getBoundingClientRect();
@@ -46040,7 +51132,7 @@ First element: \`${exampleSnippet}\``,
       isDrawing = true;
     };
     const onMouseMove = (e2) => {
-      if (!isDrawing || !_active2) return;
+      if (!isDrawing || !_active3) return;
       const rect = canvas.getBoundingClientRect();
       const curX = e2.clientX - rect.left + window.scrollX;
       const curY = e2.clientY - rect.top + window.scrollY;
@@ -46048,7 +51140,7 @@ First element: \`${exampleSnippet}\``,
       _drawShape(ctx, _currentShape, _currentColor, startX, startY, curX - startX, curY - startY, 0.3);
     };
     const onMouseUp = (e2) => {
-      if (!isDrawing || !_active2) return;
+      if (!isDrawing || !_active3) return;
       isDrawing = false;
       const rect = canvas.getBoundingClientRect();
       const endX = e2.clientX - rect.left + window.scrollX;
@@ -46063,6 +51155,26 @@ First element: \`${exampleSnippet}\``,
       const normY = h < 0 ? startY + h : startY;
       const normW = Math.abs(w);
       const normH = Math.abs(h);
+      if (_currentShape === "redact") {
+        const region = {
+          id: `dr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: Date.now(),
+          shape: "redact",
+          x: normX,
+          y: normY,
+          width: normW,
+          height: normH,
+          comment: "",
+          color: _currentColor,
+          page: window.location.pathname,
+          scrollX: window.scrollX,
+          scrollY: window.scrollY
+        };
+        addDrawRegion(region);
+        _redrawAllRegions(ctx, docW, docH);
+        if (_onUpdate2) _onUpdate2();
+        return;
+      }
       _showCommentInput(normX, normY, normW, normH, root, ctx, docW, docH);
     };
     const onKeyDown = (e2) => {
@@ -46088,7 +51200,7 @@ First element: \`${exampleSnippet}\``,
     });
     resizeObserver.observe(document.body);
     _cleanup2 = () => {
-      _active2 = false;
+      _active3 = false;
       canvas.removeEventListener("mousedown", onMouseDown);
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseup", onMouseUp);
@@ -46142,7 +51254,8 @@ First element: \`${exampleSnippet}\``,
     bar.appendChild(_sep());
     const shapes = [
       { shape: "rect", label: "Rectangle", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
-      { shape: "ellipse", label: "Ellipse", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` }
+      { shape: "ellipse", label: "Ellipse", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
+      { shape: "redact", label: "Redact (hide PII)", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="9" width="18" height="6" rx="1"/></svg>` }
     ];
     for (const s of shapes) {
       const btn = document.createElement("button");
@@ -46226,6 +51339,26 @@ First element: \`${exampleSnippet}\``,
       ctx.fillRect(x, y, w, h);
       ctx.globalAlpha = 1;
       ctx.strokeRect(x, y, w, h);
+    } else if (shape === "redact") {
+      const nx = Math.min(x, x + w);
+      const ny = Math.min(y, y + h);
+      const nw = Math.abs(w);
+      const nh = Math.abs(h);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(nx, ny, nw, nh);
+      ctx.strokeStyle = "#1f1f1f";
+      ctx.lineWidth = 1;
+      const step = 8;
+      ctx.beginPath();
+      for (let i = -nh; i < nw; i += step) {
+        ctx.moveTo(nx + i, ny);
+        ctx.lineTo(nx + i + nh, ny + nh);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(nx, ny, nw, nh);
     } else {
       const cx = x + w / 2;
       const cy = y + h / 2;
@@ -46248,6 +51381,7 @@ First element: \`${exampleSnippet}\``,
       const r = regions[i];
       if (r.page !== page) continue;
       _drawShape(ctx, r.shape, r.color, r.x, r.y, r.width, r.height, 0.12);
+      if (r.shape === "redact") continue;
       ctx.font = "bold 12px system-ui, -apple-system, sans-serif";
       const label = String(i + 1);
       const metrics = ctx.measureText(label);
@@ -46384,6 +51518,7 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/compact-toolbar.ts
+  init_annotation_store();
   init_screenshot();
   init_voice_recorder();
   init_collectors();
@@ -46626,6 +51761,15 @@ First element: \`${exampleSnippet}\``,
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     </button>
+    <button
+      data-tb-hud="annotate"
+      title="Draw on the page (pen, shapes, redact) \u2014 recording continues"
+      aria-label="Annotate the page"
+      style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:999px;padding:6px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      Draw
+    </button>
     ${showCapture ? `
       <button
         data-tb-hud="capture"
@@ -46653,6 +51797,7 @@ First element: \`${exampleSnippet}\``,
     const capturesEl = hud.querySelector('[data-tb-hud="captures"]');
     const commentInput = hud.querySelector('[data-tb-hud="comment"]');
     const addBtn = hud.querySelector('[data-tb-hud="add"]');
+    const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]');
     const captureBtn = hud.querySelector('[data-tb-hud="capture"]');
     const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
     _timerInterval = setInterval(() => {
@@ -46689,7 +51834,27 @@ First element: \`${exampleSnippet}\``,
         _onCaptureRequested == null ? void 0 : _onCaptureRequested();
       });
     }
+    if (annotateBtn) {
+      annotateBtn.addEventListener("click", () => {
+        const drawRoot = _root2;
+        if (!drawRoot) return;
+        if (isDrawModeActive()) {
+          deactivateDrawMode();
+          return;
+        }
+        if (_hud) _hud.style.setProperty("top", "64px", "important");
+        activateDrawMode(drawRoot, void 0, () => {
+          if (_hud) _hud.style.setProperty("top", "16px", "important");
+        });
+      });
+    }
     stopBtn.addEventListener("click", () => {
+      if (isDrawModeActive()) {
+        try {
+          deactivateDrawMode();
+        } catch (e2) {
+        }
+      }
       _onStopRequested == null ? void 0 : _onStopRequested();
     });
   }
@@ -46707,6 +51872,12 @@ First element: \`${exampleSnippet}\``,
       clearInterval(_timerInterval);
       _timerInterval = null;
     }
+    if (isDrawModeActive()) {
+      try {
+        deactivateDrawMode();
+      } catch (e2) {
+      }
+    }
     _hud == null ? void 0 : _hud.remove();
     _hud = null;
     _root2 = null;
@@ -46720,6 +51891,8 @@ First element: \`${exampleSnippet}\``,
   var DRAG_POS_KEY = "tracebug_toolbar_pos";
   var _isRecording = true;
   var _onToggleRecording = null;
+  var _onSessionStart = null;
+  var _onSessionEnd = null;
   var _renderPanel = null;
   var _panelEl = null;
   var _panelOpen = false;
@@ -46731,6 +51904,10 @@ First element: \`${exampleSnippet}\``,
   function setToolbarRecordingState(isRecording2, onToggle) {
     _isRecording = isRecording2;
     _onToggleRecording = onToggle;
+  }
+  function setSessionLifecycleHandlers(onStart, onEnd) {
+    _onSessionStart = onStart;
+    _onSessionEnd = onEnd;
   }
   function updateToolbarRecordingState(isRecording2) {
     _isRecording = isRecording2;
@@ -46844,8 +52021,15 @@ First element: \`${exampleSnippet}\``,
       },
       "tracebug-toolbar-region-btn"
     ));
+    const eventsRecordBtn = _createToolbarBtn(
+      "Start session (events + screenshots) \u2014 no video, no screen prompt",
+      _eventsRecordIconSvg(false),
+      () => _toggleEventsRecording(root, eventsRecordBtn, showToast3),
+      "tracebug-toolbar-events-record-btn"
+    );
+    toolbar.appendChild(eventsRecordBtn);
     const recordBtn = _createToolbarBtn(
-      "Record screen + steps",
+      "Record session WITH video (asks to share screen)",
       _recordIconSvg(false),
       () => _toggleVideoRecording(root, recordBtn, showToast3),
       "tracebug-toolbar-record-btn"
@@ -46931,9 +52115,46 @@ First element: \`${exampleSnippet}\``,
     d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
     return d;
   }
+  function _eventsRecordIconSvg(active) {
+    if (active) {
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+    }
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>`;
+  }
+  async function _toggleEventsRecording(root, btn, showToast3) {
+    const isActive = btn.classList.contains("tb-active");
+    if (isActive) {
+      showToast3("Stopping recording...", root);
+      btn.innerHTML = _eventsRecordIconSvg(false);
+      btn.classList.remove("tb-active");
+      btn.style.color = "var(--tb-btn-text, #aaa)";
+      try {
+        _onSessionEnd == null ? void 0 : _onSessionEnd();
+      } catch (err) {
+        console.warn("[TraceBug] Session end hook failed:", err);
+      }
+      try {
+        if (!isQuickBugOpen()) await showQuickBugCapture(root);
+      } catch (err) {
+        console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+      }
+      return;
+    }
+    try {
+      _onSessionStart == null ? void 0 : _onSessionStart();
+    } catch (err) {
+      console.warn("[TraceBug] Session start hook failed:", err);
+    }
+    btn.innerHTML = _eventsRecordIconSvg(true);
+    btn.classList.add("tb-active");
+    btn.style.color = "var(--tb-error, #ef4444)";
+    showToast3("Recording \u2014 events + screenshots will be captured", root);
+  }
   function _recordIconSvg(active) {
-    const fill = active ? "var(--tb-error, #ef4444)" : "currentColor";
-    return active ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="${fill}" stroke="${fill}" stroke-width="1.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>` : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>`;
+    if (active) {
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
+    }
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
   }
   async function _toggleVideoRecording(root, btn, showToast3) {
     if (!isVideoSupported()) {
@@ -46948,9 +52169,13 @@ First element: \`${exampleSnippet}\``,
       btn.innerHTML = _recordIconSvg(false);
       btn.classList.remove("tb-active");
       btn.style.color = "var(--tb-btn-text, #aaa)";
+      try {
+        _onSessionEnd == null ? void 0 : _onSessionEnd();
+      } catch (err) {
+        console.warn("[TraceBug] Session end hook failed:", err);
+      }
       if (captures > 0) {
         showToast3(`Recording stopped \xB7 ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
-        return;
       }
       try {
         if (!isQuickBugOpen()) await showQuickBugCapture(root);
@@ -46969,6 +52194,11 @@ First element: \`${exampleSnippet}\``,
     if (!ok) {
       showToast3("Recording cancelled", root);
       return;
+    }
+    try {
+      _onSessionStart == null ? void 0 : _onSessionStart();
+    } catch (err) {
+      console.warn("[TraceBug] Session start hook failed:", err);
     }
     btn.innerHTML = _recordIconSvg(true);
     btn.classList.add("tb-active");
@@ -47501,9 +52731,22 @@ First element: \`${exampleSnippet}\``,
       if (filter === "healthy") filtered = filtered.filter((s) => !s.errorMessage);
       if (search) {
         const q = search.toLowerCase();
-        filtered = filtered.filter(
-          (s) => s.sessionId.toLowerCase().includes(q) || s.errorMessage && s.errorMessage.toLowerCase().includes(q) || s.events.some((e2) => e2.page.toLowerCase().includes(q))
-        );
+        filtered = filtered.filter((s) => {
+          var _a;
+          if (s.sessionId.toLowerCase().includes(q)) return true;
+          if (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) return true;
+          if (s.reproSteps && s.reproSteps.toLowerCase().includes(q)) return true;
+          for (const e2 of s.events) {
+            if (e2.page && e2.page.toLowerCase().includes(q)) return true;
+            const d = e2.data || {};
+            const el = d.element || {};
+            if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
+            if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
+            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q)) return true;
+            if (((_a = d.request) == null ? void 0 : _a.url) && String(d.request.url).toLowerCase().includes(q)) return true;
+          }
+          return false;
+        });
       }
       if (filtered.length === 0) {
         sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
@@ -47526,6 +52769,7 @@ First element: \`${exampleSnippet}\``,
     });
   }
   function _createSessionCard(session, panel) {
+    var _a, _b;
     const card = document.createElement("div");
     card.style.cssText = "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
     card.onmouseenter = () => card.style.borderColor = "var(--tb-border-hover, #4a4a6e)";
@@ -47546,14 +52790,30 @@ First element: \`${exampleSnippet}\``,
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center">
         ${dot}
-        <span style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-weight:600">${escapeHtml3(sessionName)}</span>
+        <span style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-weight:600">${escapeHtml4(sessionName)}</span>
         ${badge}
       </div>
       <span style="color:var(--tb-text-muted, #555);font-size:10px">${timeAgo(session.updatedAt)}</span>
     </div>
-    <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml3(preview)}</div>
+    <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml4(preview)}</div>
     <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events \xB7 ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7B61FF")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
+      <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
+    </div>
   `;
+    (_a = card.querySelector('[data-tracebug="view-ticket"]')) == null ? void 0 : _a.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const root = document.getElementById("tracebug-root");
+      if (root && !isQuickBugOpen()) {
+        showQuickBugCapture(root, { sessionId: session.sessionId }).catch(() => {
+        });
+      }
+    });
+    (_b = card.querySelector('[data-tracebug="open-detail"]')) == null ? void 0 : _b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      renderSessionDetail(panel, session);
+    });
     card.onclick = () => renderSessionDetail(panel, session);
     return card;
   }
@@ -47614,15 +52874,15 @@ First element: \`${exampleSnippet}\``,
     })) : 0;
     const pagesVisited = new Set(s.events.map((e2) => e2.page)).size;
     const bugTitle = generateBugTitle(s) || "Session Details";
-    const severityBadge = problems.some((p) => p.severity === "critical") ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fca5a5">Critical</span>` : problems.length > 0 ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#78350f;color:var(--tb-warning, #fbbf24)">Warning</span>` : `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#14532d;color:#4ade80">Healthy</span>`;
+    const severityBadge2 = problems.some((p) => p.severity === "critical") ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fca5a5">Critical</span>` : problems.length > 0 ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#78350f;color:var(--tb-warning, #fbbf24)">Warning</span>` : `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#14532d;color:#4ade80">Healthy</span>`;
     const hasErrors = errorEvents.length > 0 || s.errorMessage;
     let html = "";
     html += `<div style="position:sticky;top:0;z-index:10;background:var(--tb-panel-bg, #0f0f1a);margin:-12px -16px 12px -16px;padding:12px 16px 0 16px;border-bottom:1px solid var(--tb-border, #2a2a3e)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <button id="bt-back" style="background:none;border:none;color:var(--tb-info, #3b82f6);cursor:pointer;font-size:12px;padding:0;font-family:var(--tb-font-family, inherit)">\u2190 Back</button>
-      ${severityBadge}
+      ${severityBadge2}
     </div>
-    <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);line-height:1.3;margin-bottom:10px">${escapeHtml3(bugTitle)}</div>
+    <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);line-height:1.3;margin-bottom:10px">${escapeHtml4(bugTitle)}</div>
     <div id="bt-tab-bar" style="display:flex;gap:0;overflow-x:auto">
       <button class="bt-tab bt-tab-active" data-tab="overview" style="${_tabBtnStyle(true)}">Overview</button>
       <button class="bt-tab" data-tab="timeline" style="${_tabBtnStyle(false)}">Timeline</button>
@@ -47687,9 +52947,9 @@ First element: \`${exampleSnippet}\``,
         html += `<div style="border:1px solid ${sevBorder};background:${sevBg};border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <span style="font-size:13px">${p.icon}</span>
-          <span style="font-size:11px;font-weight:600;color:${p.color};font-family:var(--tb-font-family, system-ui,sans-serif)">${escapeHtml3(p.title)}</span>
+          <span style="font-size:11px;font-weight:600;color:${p.color};font-family:var(--tb-font-family, system-ui,sans-serif)">${escapeHtml4(p.title)}</span>
         </div>
-        <div style="color:var(--tb-text-muted, #888);font-size:11px;line-height:1.4;padding-left:22px;word-break:break-word">${escapeHtml3(p.detail)}</div>
+        <div style="color:var(--tb-text-muted, #888);font-size:11px;line-height:1.4;padding-left:22px;word-break:break-word">${escapeHtml4(p.detail)}</div>
       </div>`;
       }
       html += `</div>`;
@@ -47703,7 +52963,7 @@ First element: \`${exampleSnippet}\``,
       </div>
       <div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
         <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Message</div>
-        <div style="color:#fca5a5;font-size:12px;line-height:1.5;word-break:break-word">${escapeHtml3(s.errorMessage)}</div>
+        <div style="color:#fca5a5;font-size:12px;line-height:1.5;word-break:break-word">${escapeHtml4(s.errorMessage)}</div>
       </div>`;
       if (s.errorStack) {
         const locationMatch = s.errorStack.match(/at\s+(\S+)\s+\(([^)]+)\)/);
@@ -47711,15 +52971,15 @@ First element: \`${exampleSnippet}\``,
           html += `<div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
           <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Location</div>
           <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:12px;color:#60a5fa">${escapeHtml3(locationMatch[1])}</span>
+            <span style="font-size:12px;color:#60a5fa">${escapeHtml4(locationMatch[1])}</span>
             <span style="font-size:10px;color:var(--tb-text-muted, #555)">at</span>
-            <span style="font-size:10px;color:var(--tb-text-muted, #888);word-break:break-all">${escapeHtml3(locationMatch[2])}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);word-break:break-all">${escapeHtml4(locationMatch[2])}</span>
           </div>
         </div>`;
         }
         html += `<details style="margin-top:4px">
         <summary style="font-size:10px;color:var(--tb-text-muted, #555);cursor:pointer;user-select:none;font-family:var(--tb-font-family, system-ui,sans-serif)">View Full Stack Trace</summary>
-        <pre style="color:#dc262690;font-size:10px;margin-top:6px;white-space:pre-wrap;line-height:1.4;max-height:150px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:var(--tb-radius-sm, 4px)">${escapeHtml3(s.errorStack)}</pre>
+        <pre style="color:#dc262690;font-size:10px;margin-top:6px;white-space:pre-wrap;line-height:1.4;max-height:150px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:var(--tb-radius-sm, 4px)">${escapeHtml4(s.errorStack)}</pre>
       </details>`;
       }
       html += `</div>`;
@@ -47753,7 +53013,7 @@ First element: \`${exampleSnippet}\``,
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:10px;font-weight:600;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r == null ? void 0 : r.method) || "GET"}</span>
-            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml3(urlPath)}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml4(urlPath)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:10px;font-weight:700;color:${statusClr}">${code}</span>
@@ -47777,8 +53037,8 @@ First element: \`${exampleSnippet}\``,
         <div style="font-size:13px;font-weight:700;color:#4ade80;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4CB} Reproduction Steps</div>
         <button id="bt-copy" style="${smallBtnStyle("#3b82f6")}font-size:10px">Copy</button>
       </div>
-      <pre style="color:#bbf7d0;font-size:12px;white-space:pre-wrap;line-height:1.7;margin:0">${escapeHtml3(s.reproSteps)}</pre>
-      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml3(s.errorSummary)}</pre></div>` : ""}
+      <pre style="color:#bbf7d0;font-size:12px;white-space:pre-wrap;line-height:1.7;margin:0">${escapeHtml4(s.reproSteps)}</pre>
+      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml4(s.errorSummary)}</pre></div>` : ""}
     </div>`;
     }
     const annotations = s.annotations || [];
@@ -47792,9 +53052,9 @@ First element: \`${exampleSnippet}\``,
           <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;font-weight:600;text-transform:uppercase">${note.severity}</span>
           <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(note.timestamp).toLocaleTimeString()}</span>
         </div>
-        <div style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;line-height:1.4">${escapeHtml3(note.text)}</div>
-        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:var(--tb-success, #22c55e);font-weight:600">Expected:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml3(note.expected)}</span></div>` : ""}
-        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:var(--tb-error, #ef4444);font-weight:600">Actual:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml3(note.actual)}</span></div>` : ""}
+        <div style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;line-height:1.4">${escapeHtml4(note.text)}</div>
+        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:var(--tb-success, #22c55e);font-weight:600">Expected:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml4(note.expected)}</span></div>` : ""}
+        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:var(--tb-error, #ef4444);font-weight:600">Actual:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml4(note.actual)}</span></div>` : ""}
       </div>`;
       }
       html += `</div>`;
@@ -47805,7 +53065,7 @@ First element: \`${exampleSnippet}\``,
       <div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4F8} Screenshots (${screenshots2.length})</div>`;
       for (const ss of screenshots2) {
         html += `<div style="margin-bottom:10px">
-        <div style="font-size:10px;color:var(--tb-text-muted, #888);margin-bottom:4px">${escapeHtml3(ss.filename)} \u2014 ${escapeHtml3(ss.page)}</div>
+        <div style="font-size:10px;color:var(--tb-text-muted, #888);margin-bottom:4px">${escapeHtml4(ss.filename)} \u2014 ${escapeHtml4(ss.page)}</div>
         <img src="${ss.dataUrl}" style="max-width:100%;border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px)" />
       </div>`;
       }
@@ -47816,9 +53076,9 @@ First element: \`${exampleSnippet}\``,
       html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F5A5} Environment</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Browser</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml3(envInfo.browser)} ${escapeHtml3(envInfo.browserVersion)}</div></div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">OS</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml3(envInfo.os)}</div></div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Viewport</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml3(envInfo.viewport)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Browser</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.browser)} ${escapeHtml4(envInfo.browserVersion)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">OS</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.os)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Viewport</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.viewport)}</div></div>
         <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Device</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${envInfo.deviceType}</div></div>
       </div>
     </div>`;
@@ -47864,7 +53124,7 @@ First element: \`${exampleSnippet}\``,
         html += `<div style="margin-top:4px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <span style="font-size:10px;font-weight:700;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r == null ? void 0 : r.method) || "GET"}</span>
-            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml3((urlPath == null ? void 0 : urlPath.slice(0, 80)) || "")}</span>
+            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml4((urlPath == null ? void 0 : urlPath.slice(0, 80)) || "")}</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <div style="display:flex;align-items:center;gap:4px">
@@ -47884,14 +53144,14 @@ First element: \`${exampleSnippet}\``,
       } else if (ev.type === "click") {
         const el = ev.data.element;
         const target = (el == null ? void 0 : el.ariaLabel) || ((_i = el == null ? void 0 : el.text) == null ? void 0 : _i.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml3(target.slice(0, 60))}</span>"</div>`;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"</div>`;
         const details = [];
-        if (el == null ? void 0 : el.tag) details.push(`&lt;${escapeHtml3(el.tag)}&gt;`);
-        if (el == null ? void 0 : el.id) details.push(`#${escapeHtml3(el.id)}`);
-        if (el == null ? void 0 : el.className) details.push(`.${escapeHtml3(el.className.split(" ")[0])}`);
-        if (el == null ? void 0 : el.href) details.push(`\u2192 ${escapeHtml3(el.href.slice(0, 60))}`);
-        if (el == null ? void 0 : el.role) details.push(`role="${escapeHtml3(el.role)}"`);
-        if (el == null ? void 0 : el.testId) details.push(`data-testid="${escapeHtml3(el.testId)}"`);
+        if (el == null ? void 0 : el.tag) details.push(`&lt;${escapeHtml4(el.tag)}&gt;`);
+        if (el == null ? void 0 : el.id) details.push(`#${escapeHtml4(el.id)}`);
+        if (el == null ? void 0 : el.className) details.push(`.${escapeHtml4(el.className.split(" ")[0])}`);
+        if (el == null ? void 0 : el.href) details.push(`\u2192 ${escapeHtml4(el.href.slice(0, 60))}`);
+        if (el == null ? void 0 : el.role) details.push(`role="${escapeHtml4(el.role)}"`);
+        if (el == null ? void 0 : el.testId) details.push(`data-testid="${escapeHtml4(el.testId)}"`);
         if (details.length > 0) {
           html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">${details.join(" ")}</div>`;
         }
@@ -47900,46 +53160,46 @@ First element: \`${exampleSnippet}\``,
         const fieldName = (inp == null ? void 0 : inp.name) || (inp == null ? void 0 : inp.id) || "field";
         const inputType = (inp == null ? void 0 : inp.type) || "text";
         if (inputType === "checkbox" || inputType === "radio") {
-          html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">${(inp == null ? void 0 : inp.checked) ? "Checked" : "Unchecked"} "<span style="color:#c084fc">${escapeHtml3(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
+          html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">${(inp == null ? void 0 : inp.checked) ? "Checked" : "Unchecked"} "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
         } else {
           const val = inp == null ? void 0 : inp.value;
           if (val && val !== "[REDACTED]") {
-            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml3(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
-            html += `<div style="font-size:10px;color:#a78bfa;margin-top:3px;background:#1e153344;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;word-break:break-word">"${escapeHtml3(val.slice(0, 150))}"</div>`;
+            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
+            html += `<div style="font-size:10px;color:#a78bfa;margin-top:3px;background:#1e153344;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;word-break:break-word">"${escapeHtml4(val.slice(0, 150))}"</div>`;
           } else {
-            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml3(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>
+            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>
             <div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${(inp == null ? void 0 : inp.valueLength) || 0} characters ${val === "[REDACTED]" ? '<span style="color:#f87171">\u{1F512} redacted</span>' : ""}</div>`;
           }
         }
         if (inp == null ? void 0 : inp.placeholder) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #333);margin-top:2px">placeholder: "${escapeHtml3(inp.placeholder)}"</div>`;
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #333);margin-top:2px">placeholder: "${escapeHtml4(inp.placeholder)}"</div>`;
         }
       } else if (ev.type === "select_change") {
         const sel = ev.data.element;
         const fieldName = (sel == null ? void 0 : sel.name) || (sel == null ? void 0 : sel.id) || "dropdown";
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml3(fieldName)}</span>" dropdown</div>`;
-        html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml3((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml4(fieldName)}</span>" dropdown</div>`;
+        html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml4((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
         if ((sel == null ? void 0 : sel.allOptions) && sel.allOptions.length > 0) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o) => escapeHtml3(o)).join(", ")}</div>`;
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o) => escapeHtml4(o)).join(", ")}</div>`;
         }
       } else if (ev.type === "form_submit") {
         const f2 = ev.data.form;
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${(f2 == null ? void 0 : f2.id) ? `"<span style="color:#fb923c">${escapeHtml3(f2.id)}</span>"` : ""}</div>`;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${(f2 == null ? void 0 : f2.id) ? `"<span style="color:#fb923c">${escapeHtml4(f2.id)}</span>"` : ""}</div>`;
         if ((f2 == null ? void 0 : f2.fields) && Object.keys(f2.fields).length > 0) {
           html += `<div style="margin-top:4px;background:#1a150544;padding:6px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid var(--tb-border, #2a2a3e)">`;
           for (const [key, val] of Object.entries(f2.fields)) {
-            html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml3(key)}:</span> <span style="color:var(--tb-warning, #fbbf24)">${escapeHtml3(String(val).slice(0, 80))}</span></div>`;
+            html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> <span style="color:var(--tb-warning, #fbbf24)">${escapeHtml4(String(val).slice(0, 80))}</span></div>`;
           }
           html += `</div>`;
         }
         if (f2 == null ? void 0 : f2.method) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml3(String(f2.method).toUpperCase())} ${f2.action ? `\u2192 ${escapeHtml3(f2.action.slice(0, 60))}` : ""}</div>`;
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml4(String(f2.method).toUpperCase())} ${f2.action ? `\u2192 ${escapeHtml4(f2.action.slice(0, 60))}` : ""}</div>`;
         }
       } else if (ev.type === "route_change") {
         html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px">
-          <span style="color:var(--tb-text-muted, #888);background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px">${escapeHtml3(ev.data.from || "/")}</span>
+          <span style="color:var(--tb-text-muted, #888);background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px">${escapeHtml4(ev.data.from || "/")}</span>
           <span style="color:#22d3ee">\u2192</span>
-          <span style="color:#22d3ee;background:#0c2e3344;padding:2px 6px;border-radius:3px;font-weight:600">${escapeHtml3(ev.data.to || "/")}</span>
+          <span style="color:#22d3ee;background:#0c2e3344;padding:2px 6px;border-radius:3px;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>
         </div>`;
       } else if (ev.type === "error" || ev.type === "unhandled_rejection") {
         const errType = getErrorType(((_j = ev.data.error) == null ? void 0 : _j.message) || "");
@@ -47947,13 +53207,13 @@ First element: \`${exampleSnippet}\``,
           <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
             <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}33">${errType.type}</span>
           </div>
-          <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml3(((_k = ev.data.error) == null ? void 0 : _k.message) || "Unknown error")}</div>
-          ${((_l = ev.data.error) == null ? void 0 : _l.source) ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml3(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
+          <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4(((_k = ev.data.error) == null ? void 0 : _k.message) || "Unknown error")}</div>
+          ${((_l = ev.data.error) == null ? void 0 : _l.source) ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml4(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
         </div>`;
       } else if (ev.type === "console_error") {
-        html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml3((((_m = ev.data.error) == null ? void 0 : _m.message) || "").slice(0, 200))}</div>`;
+        html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4((((_m = ev.data.error) == null ? void 0 : _m.message) || "").slice(0, 200))}</div>`;
       } else {
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.3">${escapeHtml3(describeEvent(ev))}</div>`;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.3">${escapeHtml4(describeEvent(ev))}</div>`;
       }
       html += `</div></div>`;
     }
@@ -48422,21 +53682,21 @@ ${"-".repeat(40)}
       for (const p of problems) {
         const cls = p.severity === "critical" ? "" : p.severity === "warning" ? " warning" : " info";
         html += `<div class="problem${cls}">
-        <div style="margin-bottom:4px"><span style="font-size:14px">${p.icon}</span> <strong style="color:${p.color}">${escapeHtml3(p.title)}</strong></div>
-        <div style="color:var(--tb-text-muted, #888);font-size:12px;padding-left:24px">${escapeHtml3(p.detail)}</div>
+        <div style="margin-bottom:4px"><span style="font-size:14px">${p.icon}</span> <strong style="color:${p.color}">${escapeHtml4(p.title)}</strong></div>
+        <div style="color:var(--tb-text-muted, #888);font-size:12px;padding-left:24px">${escapeHtml4(p.detail)}</div>
       </div>`;
       }
     }
     if (s.errorMessage) {
       html += `<h2>\u{1F4A5} Error Details</h2><div class="card" style="border-color:#7f1d1d;background:#1a0505">
-      <div style="color:#fca5a5;font-size:13px;line-height:1.5;margin-bottom:8px">${escapeHtml3(s.errorMessage)}</div>
-      ${s.errorStack ? `<pre style="color:#dc262690;font-size:11px;background:#0a0a0a;padding:10px;border-radius:var(--tb-radius-md, 6px);max-height:200px;overflow:auto">${escapeHtml3(s.errorStack)}</pre>` : ""}
+      <div style="color:#fca5a5;font-size:13px;line-height:1.5;margin-bottom:8px">${escapeHtml4(s.errorMessage)}</div>
+      ${s.errorStack ? `<pre style="color:#dc262690;font-size:11px;background:#0a0a0a;padding:10px;border-radius:var(--tb-radius-md, 6px);max-height:200px;overflow:auto">${escapeHtml4(s.errorStack)}</pre>` : ""}
     </div>`;
     }
     if (s.reproSteps) {
       html += `<h2>\u{1F4CB} Reproduction Steps</h2><div class="card" style="border-color:#14532d;background:#031a09">
-      <pre style="color:#bbf7d0;line-height:1.8">${escapeHtml3(s.reproSteps)}</pre>
-      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:12px;padding-top:10px"><pre style="color:#86efac;font-size:11px">${escapeHtml3(s.errorSummary)}</pre></div>` : ""}
+      <pre style="color:#bbf7d0;line-height:1.8">${escapeHtml4(s.reproSteps)}</pre>
+      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:12px;padding-top:10px"><pre style="color:#86efac;font-size:11px">${escapeHtml4(s.errorSummary)}</pre></div>` : ""}
     </div>`;
     }
     html += `<h2>\u{1F4CA} Event Timeline (${s.events.length})</h2>
@@ -48470,49 +53730,49 @@ ${"-".repeat(40)}
       case "click": {
         const el = ev.data.element;
         const target = (el == null ? void 0 : el.ariaLabel) || ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
-        let s = `Clicked "<span style="color:#60a5fa">${escapeHtml3(target.slice(0, 60))}</span>"`;
-        if (el == null ? void 0 : el.href) s += ` <span style="font-size:10px;color:var(--tb-text-muted, #444)">\u2192 ${escapeHtml3(el.href.slice(0, 60))}</span>`;
+        let s = `Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"`;
+        if (el == null ? void 0 : el.href) s += ` <span style="font-size:10px;color:var(--tb-text-muted, #444)">\u2192 ${escapeHtml4(el.href.slice(0, 60))}</span>`;
         return s;
       }
       case "input": {
         const inp = ev.data.element;
         const val = inp == null ? void 0 : inp.value;
-        let s = `Typed in "<span style="color:#c084fc">${escapeHtml3((inp == null ? void 0 : inp.name) || "field")}</span>"`;
-        if (val && val !== "[REDACTED]") s += `<div class="value-box">"${escapeHtml3(val.slice(0, 150))}"</div>`;
+        let s = `Typed in "<span style="color:#c084fc">${escapeHtml4((inp == null ? void 0 : inp.name) || "field")}</span>"`;
+        if (val && val !== "[REDACTED]") s += `<div class="value-box">"${escapeHtml4(val.slice(0, 150))}"</div>`;
         else if (val === "[REDACTED]") s += ` <span style="color:#f87171;font-size:10px">\u{1F512} redacted</span>`;
         return s;
       }
       case "select_change": {
         const sel = ev.data.element;
-        let s = `Changed "<span style="color:#34d399">${escapeHtml3((sel == null ? void 0 : sel.name) || "dropdown")}</span>"`;
-        s += `<div class="select-box">Selected: "<strong>${escapeHtml3((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
+        let s = `Changed "<span style="color:#34d399">${escapeHtml4((sel == null ? void 0 : sel.name) || "dropdown")}</span>"`;
+        s += `<div class="select-box">Selected: "<strong>${escapeHtml4((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
         return s;
       }
       case "form_submit": {
         const f2 = ev.data.form;
-        let s = `Submitted form ${(f2 == null ? void 0 : f2.id) ? `"${escapeHtml3(f2.id)}"` : ""}`;
+        let s = `Submitted form ${(f2 == null ? void 0 : f2.id) ? `"${escapeHtml4(f2.id)}"` : ""}`;
         if (f2 == null ? void 0 : f2.fields) {
           s += `<div style="margin-top:4px">`;
           for (const [key, val] of Object.entries(f2.fields)) {
-            s += `<div style="font-size:10px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml3(key)}:</span> ${escapeHtml3(String(val).slice(0, 80))}</div>`;
+            s += `<div style="font-size:10px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> ${escapeHtml4(String(val).slice(0, 80))}</div>`;
           }
           s += `</div>`;
         }
         return s;
       }
       case "route_change":
-        return `<span style="color:var(--tb-text-muted, #888)">${escapeHtml3(ev.data.from || "/")}</span> <span style="color:#22d3ee">\u2192</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml3(ev.data.to || "/")}</span>`;
+        return `<span style="color:var(--tb-text-muted, #888)">${escapeHtml4(ev.data.from || "/")}</span> <span style="color:#22d3ee">\u2192</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>`;
       case "api_request": {
         const r = ev.data.request;
-        return `<span style="font-weight:600">${escapeHtml3((r == null ? void 0 : r.method) || "")}</span> ${escapeHtml3(((r == null ? void 0 : r.url) || "").slice(0, 80))} \u2192 <span style="color:${getStatusColor((r == null ? void 0 : r.statusCode) || 0)};font-weight:700">${r == null ? void 0 : r.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r == null ? void 0 : r.durationMs}ms)</span>`;
+        return `<span style="font-weight:600">${escapeHtml4((r == null ? void 0 : r.method) || "")}</span> ${escapeHtml4(((r == null ? void 0 : r.url) || "").slice(0, 80))} \u2192 <span style="color:${getStatusColor((r == null ? void 0 : r.statusCode) || 0)};font-weight:700">${r == null ? void 0 : r.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r == null ? void 0 : r.durationMs}ms)</span>`;
       }
       case "error":
       case "unhandled_rejection":
-        return `<span style="color:#fca5a5">${escapeHtml3(((_b = ev.data.error) == null ? void 0 : _b.message) || "Unknown error")}</span>`;
+        return `<span style="color:#fca5a5">${escapeHtml4(((_b = ev.data.error) == null ? void 0 : _b.message) || "Unknown error")}</span>`;
       case "console_error":
-        return `<span style="color:#fb923c">${escapeHtml3((((_c = ev.data.error) == null ? void 0 : _c.message) || "").slice(0, 200))}</span>`;
+        return `<span style="color:#fb923c">${escapeHtml4((((_c = ev.data.error) == null ? void 0 : _c.message) || "").slice(0, 200))}</span>`;
       default:
-        return escapeHtml3(JSON.stringify(ev.data).slice(0, 100));
+        return escapeHtml4(JSON.stringify(ev.data).slice(0, 100));
     }
   }
   function describeEventForReport(ev) {
@@ -48671,7 +53931,7 @@ ${"-".repeat(40)}
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;
   }
-  function escapeHtml3(str) {
+  function escapeHtml4(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function smallBtnStyle(color2) {
@@ -48797,10 +54057,10 @@ ${"-".repeat(40)}
           <button class="bt-ann-delete" data-id="${a2.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this annotation">Delete</button>
         </div>
         <div style="font-size:11px;color:#777;margin-bottom:6px">
-          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml3(a2.tagName)}&gt;</span>
-          ${a2.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml3(a2.innerText.slice(0, 40))}"</span>` : ""}
+          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml4(a2.tagName)}&gt;</span>
+          ${a2.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml4(a2.innerText.slice(0, 40))}"</span>` : ""}
         </div>
-        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml3(a2.comment)}</div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml4(a2.comment)}</div>
       </div>`;
       }
     }
@@ -48818,7 +54078,7 @@ ${"-".repeat(40)}
           <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
           <button class="bt-ann-delete" data-id="${r.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this region">Delete</button>
         </div>
-        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${r.comment ? escapeHtml3(r.comment) : '<span style="color:var(--tb-text-muted, #555);font-style:italic">No comment added</span>'}</div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${r.comment ? escapeHtml4(r.comment) : '<span style="color:var(--tb-text-muted, #555);font-style:italic">No comment added</span>'}</div>
       </div>`;
       }
     }
@@ -48827,11 +54087,11 @@ ${"-".repeat(40)}
       for (const ss of screenshotsList) {
         html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f)">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${escapeHtml3(ss.filename)}</span>
+          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${escapeHtml4(ss.filename)}</span>
           <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ss.width}x${ss.height}</span>
           <button class="bt-ss-download" data-id="${ss.id}" style="${smallBtnStyle("#22d3ee")}font-size:10px;padding:2px 8px" title="Download">Download</button>
         </div>
-        <img src="${ss.dataUrl}" style="max-width:100%;border-radius:var(--tb-radius-md, 6px);border:1px solid var(--tb-border, #2a2a3e)" alt="${escapeHtml3(ss.filename)}" />
+        <img src="${ss.dataUrl}" style="max-width:100%;border-radius:var(--tb-radius-md, 6px);border:1px solid var(--tb-border, #2a2a3e)" alt="${escapeHtml4(ss.filename)}" />
       </div>`;
       }
     }
@@ -49153,151 +54413,10 @@ ${"-".repeat(40)}
   init_title_generator();
   init_voice_recorder();
   init_video_recorder();
+  init_dev_api();
   init_scanner();
-
-  // src/theme.ts
-  var DARK_THEME = {
-    "--tb-bg-primary": "#0f0f1a",
-    "--tb-bg-secondary": "#1a1a2e",
-    "--tb-bg-elevated": "#22223a",
-    "--tb-bg-overlay": "#0f0f1aee",
-    "--tb-text-primary": "#e0e0e0",
-    "--tb-text-secondary": "#aaaaaa",
-    "--tb-text-muted": "#666666",
-    "--tb-accent": "#7B61FF",
-    "--tb-accent-hover": "#9B81FF",
-    "--tb-accent-subtle": "#7B61FF33",
-    "--tb-error": "#ef4444",
-    "--tb-error-bg": "#ef444422",
-    "--tb-warning": "#f97316",
-    "--tb-warning-bg": "#f9731622",
-    "--tb-success": "#22c55e",
-    "--tb-success-bg": "#22c55e22",
-    "--tb-info": "#3b82f6",
-    "--tb-info-bg": "#3b82f622",
-    "--tb-border": "#2a2a3e",
-    "--tb-border-subtle": "#1f1f33",
-    "--tb-border-hover": "#4a4a6e",
-    "--tb-radius-sm": "4px",
-    "--tb-radius-md": "8px",
-    "--tb-radius-lg": "12px",
-    "--tb-shadow-sm": "0 2px 8px rgba(0,0,0,0.3)",
-    "--tb-shadow-md": "0 4px 24px rgba(0,0,0,0.5)",
-    "--tb-shadow-lg": "0 8px 32px rgba(0,0,0,0.6)",
-    "--tb-font-family": "system-ui, -apple-system, sans-serif",
-    "--tb-font-mono": "'SF Mono', Consolas, ui-monospace, monospace",
-    "--tb-toolbar-bg": "#0f0f1aee",
-    "--tb-panel-bg": "#0f0f1a",
-    "--tb-btn-hover": "#ffffff15",
-    "--tb-btn-text": "#aaaaaa",
-    "--tb-btn-text-hover": "#ffffff",
-    "--tb-severity-critical": "#ef4444",
-    "--tb-severity-major": "#f97316",
-    "--tb-severity-minor": "#eab308",
-    "--tb-severity-info": "#3b82f6",
-    "--tb-intent-fix": "#ef4444",
-    "--tb-intent-redesign": "#7B61FF",
-    "--tb-intent-remove": "#f97316",
-    "--tb-intent-question": "#3b82f6",
-    "--tb-highlight": "#7B61FF",
-    "--tb-selection": "#00E5FF",
-    "--tb-gradient-start": "#7B61FF",
-    "--tb-gradient-end": "#5B3FDF"
-  };
-  var LIGHT_THEME = {
-    "--tb-bg-primary": "#ffffff",
-    "--tb-bg-secondary": "#f5f5f7",
-    "--tb-bg-elevated": "#ffffff",
-    "--tb-bg-overlay": "#ffffffee",
-    "--tb-text-primary": "#1a1a2e",
-    "--tb-text-secondary": "#555555",
-    "--tb-text-muted": "#999999",
-    "--tb-accent": "#6B4FE0",
-    "--tb-accent-hover": "#5A3ED0",
-    "--tb-accent-subtle": "#6B4FE022",
-    "--tb-error": "#dc2626",
-    "--tb-error-bg": "#fef2f2",
-    "--tb-warning": "#ea580c",
-    "--tb-warning-bg": "#fff7ed",
-    "--tb-success": "#16a34a",
-    "--tb-success-bg": "#f0fdf4",
-    "--tb-info": "#2563eb",
-    "--tb-info-bg": "#eff6ff",
-    "--tb-border": "#e0e0e6",
-    "--tb-border-subtle": "#f0f0f4",
-    "--tb-border-hover": "#c0c0cc",
-    "--tb-radius-sm": "4px",
-    "--tb-radius-md": "8px",
-    "--tb-radius-lg": "12px",
-    "--tb-shadow-sm": "0 1px 4px rgba(0,0,0,0.08)",
-    "--tb-shadow-md": "0 4px 16px rgba(0,0,0,0.12)",
-    "--tb-shadow-lg": "0 8px 32px rgba(0,0,0,0.16)",
-    "--tb-font-family": "system-ui, -apple-system, sans-serif",
-    "--tb-font-mono": "'SF Mono', Consolas, ui-monospace, monospace",
-    "--tb-toolbar-bg": "#ffffffee",
-    "--tb-panel-bg": "#ffffff",
-    "--tb-btn-hover": "#00000010",
-    "--tb-btn-text": "#666666",
-    "--tb-btn-text-hover": "#1a1a2e",
-    "--tb-severity-critical": "#dc2626",
-    "--tb-severity-major": "#ea580c",
-    "--tb-severity-minor": "#ca8a04",
-    "--tb-severity-info": "#2563eb",
-    "--tb-intent-fix": "#dc2626",
-    "--tb-intent-redesign": "#6B4FE0",
-    "--tb-intent-remove": "#ea580c",
-    "--tb-intent-question": "#2563eb",
-    "--tb-highlight": "#6B4FE0",
-    "--tb-selection": "#0ea5e9",
-    "--tb-gradient-start": "#6B4FE0",
-    "--tb-gradient-end": "#4A2FC0"
-  };
-  var THEME_STYLE_ID = "tracebug-theme-vars";
-  var _currentMode = "dark";
-  var _mediaQuery = null;
-  var _mediaListener = null;
-  function getResolvedTheme() {
-    if (_currentMode === "auto") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    return _currentMode === "dark" ? "dark" : "light";
-  }
-  function getThemeTokens() {
-    return getResolvedTheme() === "dark" ? DARK_THEME : LIGHT_THEME;
-  }
-  function injectTheme(mode) {
-    _currentMode = mode;
-    _applyThemeVars();
-    if (mode === "auto") {
-      _mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      _mediaListener = () => _applyThemeVars();
-      _mediaQuery.addEventListener("change", _mediaListener);
-    }
-  }
-  function removeTheme() {
-    const el = document.getElementById(THEME_STYLE_ID);
-    if (el) el.remove();
-    if (_mediaQuery && _mediaListener) {
-      _mediaQuery.removeEventListener("change", _mediaListener);
-      _mediaQuery = null;
-      _mediaListener = null;
-    }
-  }
-  function _applyThemeVars() {
-    const tokens = getThemeTokens();
-    let existing = document.getElementById(THEME_STYLE_ID);
-    if (!existing) {
-      existing = document.createElement("style");
-      existing.id = THEME_STYLE_ID;
-      document.head.appendChild(existing);
-    }
-    const vars = Object.entries(tokens).map(([k, v]) => `  ${k}: ${v};`).join("\n");
-    existing.textContent = `
-    #tracebug-root {
-${vars}
-    }
-  `;
-  }
+  init_annotation_store();
+  init_theme();
 
   // src/plugin-system.ts
   var _plugins = [];
@@ -49375,9 +54494,23 @@ ${vars}
       this.config = null;
       this.cleanups = [];
       this.initialized = false;
-      this.recording = true;
+      /**
+       * True only while a record-driven session is armed — set to true by
+       * _startActiveSession() (Record click) and false by _endActiveSession()
+       * (Stop). Page reloads inherit the previous value via the persisted
+       * active-session-ID flag.
+       */
+      this.recording = false;
       this.sessionId = null;
       this._lastErrorPromptAt = 0;
+      // Session-scoped console.* hook cleanups. Empty when no session is active —
+      // the console wrappers (which would pollute every stack trace) are not
+      // installed until _startActiveSession() arms them, and removed on stop.
+      this._consoleCleanups = [];
+      // The emit fn is created in init(); cached here so the lazy console
+      // collectors attached later can share it without re-wiring.
+      this._emit = null;
+      this._consoleLevel = "errors";
       this._lastErrorMsgPrompted = null;
     }
     /**
@@ -49423,18 +54556,25 @@ ${vars}
           maxEvents: 200,
           maxSessions: 50,
           enableDashboard: true,
-          theme: "dark",
+          theme: "light",
           toolbarPosition: "right",
           minimized: false,
-          captureConsole: "errors",
+          captureConsole: "all",
           ...config
         };
         this.initialized = true;
-        this.recording = true;
-        this.sessionId = getSessionId();
-        const sessionId = this.sessionId;
+        this.sessionId = getActiveSessionId();
+        this.recording = !!this.sessionId;
+        let themeMode = this.config.theme;
         try {
-          injectTheme(this.config.theme);
+          const saved = localStorage.getItem("tracebug_theme_pref");
+          if (saved === "light" || saved === "dark" || saved === "auto") {
+            themeMode = saved;
+          }
+        } catch (e2) {
+        }
+        try {
+          injectTheme(themeMode);
         } catch (e2) {
         }
         hydratePlan().catch(() => {
@@ -49443,31 +54583,15 @@ ${vars}
           Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => m.setGithubRepo(this.config.githubRepo)).catch(() => {
           });
         }
-        try {
-          const env = captureEnvironment();
-          saveEnvironment(sessionId, env);
-        } catch (e2) {
-        }
-        try {
-          const storedUser = localStorage.getItem("tracebug_user");
-          if (storedUser) {
-            const user = JSON.parse(storedUser);
-            const sessions = getAllSessions();
-            const session = sessions.find((s) => s.sessionId === sessionId);
-            if (session) {
-              session.user = user;
-              localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
-            }
-          }
-        } catch (e2) {
-        }
         const emit = (type, data) => {
-          var _a2, _b2, _c;
+          var _a2, _b2, _c, _d;
           try {
             if (!this.recording) return;
+            const sid = this.sessionId;
+            if (!sid) return;
             let event = {
               id: Math.random().toString(36).slice(2, 10),
-              sessionId,
+              sessionId: sid,
               projectId: this.config.projectId,
               type,
               page: window.location.pathname,
@@ -49476,16 +54600,22 @@ ${vars}
             };
             event = runEventPlugins(event);
             if (!event) return;
-            appendEvent(sessionId, event, this.config.maxEvents, this.config.maxSessions);
+            appendEvent(sid, event, this.config.maxEvents, this.config.maxSessions);
             if (type === "error" || type === "unhandled_rejection") {
-              this.processError(sessionId, (_a2 = data.error) == null ? void 0 : _a2.message, (_b2 = data.error) == null ? void 0 : _b2.stack);
+              this.processError(sid, (_a2 = data.error) == null ? void 0 : _a2.message, (_b2 = data.error) == null ? void 0 : _b2.stack);
               emitHook("error:captured", event);
-              this.maybePromptErrorCapture((_c = data.error) == null ? void 0 : _c.message);
+              this.maybePromptErrorCapture((_c = data.error) == null ? void 0 : _c.message, (_d = data.error) == null ? void 0 : _d.stack);
             }
           } catch (err) {
             if (typeof console !== "undefined") console.warn("[TraceBug] Event emit error:", err);
           }
         };
+        setDevApiHooks({
+          emit,
+          processError: (msg, stack) => {
+            if (this.sessionId) this.processError(this.sessionId, msg, stack);
+          }
+        });
         this.cleanups.push(collectClicks(emit));
         this.cleanups.push(collectInputs(emit));
         this.cleanups.push(collectSelectChanges(emit));
@@ -49493,18 +54623,10 @@ ${vars}
         this.cleanups.push(collectRouteChanges(emit));
         this.cleanups.push(collectApiRequests(emit));
         this.cleanups.push(collectXhrRequests(emit));
-        const consoleLevel = (_b = this.config.captureConsole) != null ? _b : "errors";
-        if (consoleLevel !== "none") {
-          this.cleanups.push(collectErrors(emit));
-          if (consoleLevel === "warnings" || consoleLevel === "all") {
-            this.cleanups.push(collectConsoleWarnings(emit));
-          }
-          if (consoleLevel === "all") {
-            this.cleanups.push(collectConsoleLogs(emit));
-          }
-        } else {
-          this.cleanups.push(collectErrors(emit));
-        }
+        this.cleanups.push(collectPerformanceNetwork(emit));
+        this.cleanups.push(collectErrors(emit));
+        this._emit = emit;
+        this._consoleLevel = (_b = this.config.captureConsole) != null ? _b : "errors";
         if (this.config.enableDashboard) {
           try {
             setRecordingState(this.recording, () => {
@@ -49515,14 +54637,40 @@ ${vars}
               }
               updateRecordingState(this.recording);
             });
+            setSessionLifecycleHandlers(
+              () => this._startActiveSession(),
+              () => this._endActiveSession()
+            );
             this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
           } catch (err) {
             console.warn("[TraceBug] Dashboard mount failed:", err);
           }
         }
-        emitHook("session:start", sessionId);
+        wireAutoStopListener();
+        setAutoStopHandler((recording) => this._handleAutoStop(recording));
+        if (this.config.enableDashboard) {
+          restoreFromOffscreenIfActive().then((wasActive) => {
+            if (wasActive) {
+              this._remountRecordingHud();
+              this._attachConsoleCollectors();
+            } else if (this.sessionId) {
+              clearActiveSessionId();
+              this.sessionId = null;
+              this.recording = false;
+              updateRecordingState(false);
+              restoreLastRecordingFromOffscreen().then((rec) => {
+                if (rec) this._handleAutoStop(rec);
+              }).catch(() => {
+              });
+            }
+          }).catch(() => {
+          });
+        }
+        if (this.sessionId) {
+          emitHook("session:start", this.sessionId);
+        }
         console.info(
-          `[TraceBug] Initialized \u2014 project: ${config.projectId}, session: ${sessionId}`
+          `[TraceBug] Initialized \u2014 project: ${config.projectId}${this.sessionId ? `, restored session: ${this.sessionId}` : " (idle \u2014 click Record to start a session)"}`
         );
       } catch (err) {
         console.warn("[TraceBug] Failed to initialize:", err);
@@ -49530,14 +54678,106 @@ ${vars}
         return;
       }
     }
+    /**
+     * Begin a fresh record-driven session: mints a session ID, persists it so
+     * it survives page reloads, and writes the initial environment + user
+     * snapshot. Idempotent — a no-op if a session is already active.
+     */
+    _startActiveSession() {
+      if (this.sessionId) {
+        this.recording = true;
+        updateRecordingState(true);
+        this._attachConsoleCollectors();
+        if (this._emit) drainPerformanceNetwork(this._emit);
+        return;
+      }
+      const id = generateSessionId();
+      this.sessionId = id;
+      this.recording = true;
+      setActiveSessionId(id);
+      this._attachConsoleCollectors();
+      if (this._emit) drainPerformanceNetwork(this._emit);
+      try {
+        const env = captureEnvironment();
+        saveEnvironment(id, env);
+      } catch (e2) {
+      }
+      try {
+        const storedUser = localStorage.getItem("tracebug_user");
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          const sessions = getAllSessions();
+          const session = sessions.find((s) => s.sessionId === id);
+          if (session) {
+            session.user = user;
+            localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
+          }
+        }
+      } catch (e2) {
+      }
+      updateRecordingState(true);
+      emitHook("session:start", id);
+      console.info(`[TraceBug] Session started: ${id}`);
+    }
+    /**
+     * Finalize the active session: flush pending events, drop the persisted
+     * active-session flag, and stop capture. Returns the ID that was active
+     * (or null if nothing was running) so callers can reference it.
+     */
+    _endActiveSession() {
+      if (!this.sessionId) {
+        this.recording = false;
+        this._detachConsoleCollectors();
+        return null;
+      }
+      const id = this.sessionId;
+      flushPendingEvents();
+      clearActiveSessionId();
+      this.sessionId = null;
+      this.recording = false;
+      updateRecordingState(false);
+      this._detachConsoleCollectors();
+      emitHook("session:end", id);
+      console.info(`[TraceBug] Session ended: ${id}`);
+      return id;
+    }
+    /** Install the console.* wrappers for the active session. Idempotent. */
+    _attachConsoleCollectors() {
+      if (this._consoleCleanups.length > 0) return;
+      if (!this._emit) return;
+      if (this._consoleLevel === "none") return;
+      this._consoleCleanups.push(collectConsoleErrors(this._emit));
+      if (this._consoleLevel === "warnings" || this._consoleLevel === "all") {
+        this._consoleCleanups.push(collectConsoleWarnings(this._emit));
+      }
+      if (this._consoleLevel === "all") {
+        this._consoleCleanups.push(collectConsoleLogs(this._emit));
+      }
+    }
+    /** Remove console.* wrappers, restoring the originals. */
+    _detachConsoleCollectors() {
+      while (this._consoleCleanups.length > 0) {
+        const fn = this._consoleCleanups.pop();
+        try {
+          fn && fn();
+        } catch (e2) {
+        }
+      }
+    }
     /** Pause recording — events will not be captured until resumed */
     pauseRecording() {
       this.recording = false;
+      updateRecordingState(false);
       console.info("[TraceBug] Recording paused.");
     }
     /** Resume recording after a pause */
     resumeRecording() {
+      if (!this.sessionId) {
+        this._startActiveSession();
+        return;
+      }
       this.recording = true;
+      updateRecordingState(true);
       console.info("[TraceBug] Recording resumed.");
     }
     /** Alias for resumeRecording — matches the start/stop mental model */
@@ -49545,13 +54785,12 @@ ${vars}
       this.resumeRecording();
     }
     /**
-     * Stop recording and open the ticket-review modal so the user can review
-     * captured steps + screenshots and then export. Same underlying behavior
-     * as pauseRecording(); the only difference is the auto-open of the modal.
+     * Stop the active session and open the ticket-review modal so the user
+     * can review captured steps + screenshots and then export.
      */
     stopRecording() {
       var _a;
-      this.pauseRecording();
+      this._endActiveSession();
       if (!((_a = this.config) == null ? void 0 : _a.enableDashboard)) return;
       const root = document.getElementById("tracebug-root");
       if (!root) return;
@@ -49687,12 +54926,20 @@ ${vars}
      */
     async startVideoRecording(options) {
       var _a;
+      try {
+        this._endActiveSession();
+      } catch (e2) {
+      }
       const ok = await startVideoRecording({
         mode: (_a = options == null ? void 0 : options.mode) != null ? _a : "rolling",
         withMicrophone: options == null ? void 0 : options.withMicrophone,
         onStatus: options == null ? void 0 : options.onStatus
       });
       if (!ok) return false;
+      try {
+        this._startActiveSession();
+      } catch (e2) {
+      }
       const root = document.getElementById("tracebug-root");
       if (root) {
         showRecordingHUD(root, {
@@ -49713,20 +54960,30 @@ ${vars}
      * modal so the user can review + export immediately. Resolves to the
      * recording metadata, or null if no recording was active.
      *
-     * In rolling mode: if the user already captured one or more bugs, no modal
-     * opens (those tickets are already filed) — the screen share simply ends.
+     * The ticket modal opens on every stop — even when rolling captures were
+     * already filed during the session, and even when `_stopVideoRecording`
+     * returns null (RPC hiccup, bfcache, offscreen torn down early). The user
+     * always sees their capture context.
      */
     async stopVideoRecording() {
       var _a;
-      const captureCount = getCaptureCount();
-      const recording = await stopVideoRecording();
+      let recording = null;
+      try {
+        recording = await stopVideoRecording();
+      } catch (err) {
+        console.warn("[TraceBug] stop RPC failed, opening ticket modal anyway:", err);
+      }
       hideRecordingHUD();
-      if (recording && captureCount === 0 && ((_a = this.config) == null ? void 0 : _a.enableDashboard)) {
+      try {
+        this._endActiveSession();
+      } catch (e2) {
+      }
+      if ((_a = this.config) == null ? void 0 : _a.enableDashboard) {
         const root = document.getElementById("tracebug-root");
         if (root) {
           try {
             const m = await Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports));
-            await m.showQuickBugCapture(root);
+            if (!m.isQuickBugOpen()) await m.showQuickBugCapture(root);
           } catch (err) {
             console.warn("[TraceBug] Failed to open ticket review after recording:", err);
           }
@@ -50005,6 +55262,38 @@ ${vars}
       const apiNote = failedApis.length > 0 ? ` ${failedApis[0]}.` : "";
       return `Bug on ${page} \u2014 ${error}${flow}.${apiNote} ${browser}, ${os}.`;
     }
+    // ── Developer Breadcrumbs API ───────────────────────────────────────
+    /**
+     * Drop a labeled marker into the session timeline. Renders as a diamond
+     * on the replay scrubber. Optional payload (must be JSON-serializable).
+     *
+     *   TraceBug.mark("Started checkout flow", { cartTotal: 49.99 });
+     */
+    mark(label, payload) {
+      mark(label, payload);
+    }
+    /**
+     * Assert a runtime invariant. On `false`, captures a synthetic Error and
+     * surfaces the Live Bug Card with the assertion message + call stack.
+     *
+     *   TraceBug.assert(user != null, "User must be logged in here");
+     */
+    assert(condition, message) {
+      assertCondition(condition, message);
+    }
+    /**
+     * Set or merge custom context attached to every subsequent report.
+     * Keys are merged shallow — call multiple times to accumulate fields.
+     *
+     *   TraceBug.context({ buildId: "abc123", featureFlag: "new-checkout" });
+     */
+    context(values) {
+      context(values);
+    }
+    /** Snapshot of current context. */
+    getContext() {
+      return getCurrentContext();
+    }
     // ── User Identification ────────────────────────────────────────────
     /**
      * Identify the current user. Attached to the session for attribution.
@@ -50112,7 +55401,56 @@ ${vars}
      * error is detected. Throttled: same error message won't re-prompt within
      * 30 seconds; any error won't re-prompt within 5 seconds.
      */
-    maybePromptErrorCapture(errorMessage) {
+    /**
+     * Re-mount the floating recording HUD after a page reload when an
+     * offscreen recording is still active. Safe to call repeatedly — the HUD
+     * itself guards against double mounts.
+     */
+    _remountRecordingHud() {
+      const root = document.getElementById("tracebug-root");
+      if (!root) return;
+      showRecordingHUD(root, {
+        onStop: () => {
+          this.stopVideoRecording().catch(() => {
+          });
+        },
+        onCapture: () => {
+          this.captureRollingBuffer().catch(() => {
+          });
+        }
+      });
+      const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
+      if (recordBtn) {
+        recordBtn.classList.add("tb-active");
+        recordBtn.style.color = "var(--tb-error, #ef4444)";
+      }
+    }
+    /**
+     * Called when the offscreen document auto-finalizes the recording because
+     * the user clicked the browser's native "Stop sharing" button. We hide
+     * the HUD and open the ticket modal with the captured video.
+     */
+    async _handleAutoStop(recording) {
+      var _a;
+      hideRecordingHUD();
+      const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
+      if (recordBtn) {
+        recordBtn.classList.remove("tb-active");
+        recordBtn.style.color = "var(--tb-btn-text, #aaa)";
+      }
+      this._endActiveSession();
+      if (!((_a = this.config) == null ? void 0 : _a.enableDashboard)) return;
+      void recording;
+      const root = document.getElementById("tracebug-root");
+      if (!root) return;
+      try {
+        const m = await Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports));
+        if (!m.isQuickBugOpen()) await m.showQuickBugCapture(root);
+      } catch (err) {
+        console.warn("[TraceBug] Failed to open ticket modal after auto-stop:", err);
+      }
+    }
+    maybePromptErrorCapture(errorMessage, errorStack) {
       var _a;
       if (!((_a = this.config) == null ? void 0 : _a.enableDashboard)) return;
       if (!errorMessage) return;
@@ -50125,26 +55463,47 @@ ${vars}
         try {
           const root = document.getElementById("tracebug-root");
           if (!root) return;
+          const lastAction = (() => {
+            var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+            try {
+              const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+              const events = ((_a2 = sessions[0]) == null ? void 0 : _a2.events) || [];
+              for (let i = events.length - 1; i >= 0; i--) {
+                const e2 = events[i];
+                if (e2.type === "click") {
+                  const t = ((_c = (_b = e2.data) == null ? void 0 : _b.element) == null ? void 0 : _c.text) || ((_e = (_d = e2.data) == null ? void 0 : _d.element) == null ? void 0 : _e.ariaLabel) || ((_g = (_f = e2.data) == null ? void 0 : _f.element) == null ? void 0 : _g.tag) || "element";
+                  return `clicked "${String(t).slice(0, 40)}"`;
+                }
+                if (e2.type === "input") {
+                  const n = ((_i = (_h = e2.data) == null ? void 0 : _h.element) == null ? void 0 : _i.name) || ((_k = (_j = e2.data) == null ? void 0 : _j.element) == null ? void 0 : _k.id) || "field";
+                  return `typed in ${n}`;
+                }
+                if (e2.type === "select_change") return `selected an option`;
+                if (e2.type === "form_submit") return `submitted a form`;
+                if (e2.type === "route_change") return `navigated to ${((_l = e2.data) == null ? void 0 : _l.to) || "page"}`;
+              }
+            } catch (e2) {
+            }
+            return void 0;
+          })();
           Promise.all([
-            Promise.resolve().then(() => (init_toast(), toast_exports)),
+            Promise.resolve().then(() => (init_live_bug_card(), live_bug_card_exports)),
             Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports))
-          ]).then(([toastMod, qbMod]) => {
-            const truncated = errorMessage.length > 60 ? errorMessage.slice(0, 60) + "\u2026" : errorMessage;
+          ]).then(([cardMod, qbMod]) => {
             const armed = isRollingMode();
-            const actionLabel = armed ? "Capture with video" : "Capture bug";
-            const onAction = armed ? () => {
+            const onCapture = armed ? () => {
               this.captureRollingBuffer().catch(() => {
               });
             } : () => {
               qbMod.showQuickBugCapture(root).catch(() => {
               });
             };
-            toastMod.showActionToast(
-              `\u26A0\uFE0F Error detected: ${truncated}`,
-              actionLabel,
-              onAction,
-              root
-            );
+            cardMod.showLiveBugCard(root, {
+              message: errorMessage,
+              stack: errorStack,
+              lastAction,
+              onCapture
+            });
           }).catch(() => {
           });
         } catch (e2) {
@@ -50179,6 +55538,7 @@ ${vars}
      */
     destroy() {
       flushPendingEvents();
+      this._detachConsoleCollectors();
       this.cleanups.forEach((fn) => fn());
       this.cleanups = [];
       this.initialized = false;
@@ -50196,6 +55556,7 @@ ${vars}
       clearAllAnnotations();
       clearAllPlugins();
       clearIssues();
+      clearDevApiState();
       removeTheme();
     }
     // ── Network Failures ────────────────────────────────────────────────

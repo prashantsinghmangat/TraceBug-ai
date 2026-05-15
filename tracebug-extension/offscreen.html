@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TraceBug Recording Host</title>
+</head>
+<body>
+  <!--
+    Hidden offscreen document. Holds the MediaStream + MediaRecorder so
+    screen recording survives host-page reloads / navigations. Driven by
+    chrome.runtime messages from background.js.
+  -->
+  <script src="offscreen.js"></script>
+</body>
+</html>
