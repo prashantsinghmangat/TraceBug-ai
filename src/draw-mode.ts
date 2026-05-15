@@ -7,7 +7,7 @@ import { addDrawRegion, getDrawRegions } from "./annotation-store";
 
 let _active = false;
 let _cleanup: (() => void) | null = null;
-let _currentShape: "rect" | "ellipse" = "rect";
+let _currentShape: "rect" | "ellipse" | "redact" = "rect";
 let _currentColor = "#7B61FF";
 let _onUpdate: (() => void) | null = null;
 let _onDeactivate: (() => void) | null = null;
@@ -104,6 +104,26 @@ export function activateDrawMode(
     const normW = Math.abs(w);
     const normH = Math.abs(h);
 
+    if (_currentShape === "redact") {
+      // Redact regions skip the comment prompt — they exist purely to hide
+      // content, so there's nothing to caption.
+      const region: DrawRegion = {
+        id: `dr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        shape: "redact",
+        x: normX, y: normY, width: normW, height: normH,
+        comment: "",
+        color: _currentColor,
+        page: window.location.pathname,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+      };
+      addDrawRegion(region);
+      _redrawAllRegions(ctx, docW, docH);
+      if (_onUpdate) _onUpdate();
+      return;
+    }
+
     _showCommentInput(normX, normY, normW, normH, root, ctx, docW, docH);
   };
 
@@ -199,9 +219,10 @@ function _createToolbar(root: HTMLElement): HTMLElement {
   bar.appendChild(_sep());
 
   // Shape buttons with labels
-  const shapes: Array<{ shape: "rect" | "ellipse"; label: string; icon: string }> = [
+  const shapes: Array<{ shape: "rect" | "ellipse" | "redact"; label: string; icon: string }> = [
     { shape: "rect", label: "Rectangle", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
     { shape: "ellipse", label: "Ellipse", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
+    { shape: "redact", label: "Redact (hide PII)", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="9" width="18" height="6" rx="1"/></svg>` },
   ];
 
   for (const s of shapes) {
@@ -289,7 +310,7 @@ function _sep(): HTMLElement {
 
 function _drawShape(
   ctx: CanvasRenderingContext2D,
-  shape: "rect" | "ellipse",
+  shape: "rect" | "ellipse" | "redact",
   color: string,
   x: number, y: number, w: number, h: number,
   fillOpacity: number
@@ -303,6 +324,31 @@ function _drawShape(
     ctx.fillRect(x, y, w, h);
     ctx.globalAlpha = 1;
     ctx.strokeRect(x, y, w, h);
+  } else if (shape === "redact") {
+    // Solid dark block — hides the underlying content. Drawn as a filled
+    // rect at full opacity (no preview-vs-final difference because the
+    // whole point is to obscure pixels). Diagonal hatching makes it
+    // unmistakably a redaction even when the surrounding screenshot is dark.
+    const nx = Math.min(x, x + w);
+    const ny = Math.min(y, y + h);
+    const nw = Math.abs(w);
+    const nh = Math.abs(h);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#0a0a0a";
+    ctx.fillRect(nx, ny, nw, nh);
+    // Hatch pattern so it reads as "redacted" not "black rectangle"
+    ctx.strokeStyle = "#1f1f1f";
+    ctx.lineWidth = 1;
+    const step = 8;
+    ctx.beginPath();
+    for (let i = -nh; i < nw; i += step) {
+      ctx.moveTo(nx + i, ny);
+      ctx.lineTo(nx + i + nh, ny + nh);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(nx, ny, nw, nh);
   } else {
     const cx = x + w / 2;
     const cy = y + h / 2;
@@ -329,6 +375,10 @@ function _redrawAllRegions(ctx: CanvasRenderingContext2D, w: number, h: number):
     if (r.page !== page) continue;
 
     _drawShape(ctx, r.shape, r.color, r.x, r.y, r.width, r.height, 0.12);
+
+    // Redact regions have no labels — labels would defeat the purpose of
+    // hiding the underlying content.
+    if (r.shape === "redact") continue;
 
     // Number label with better readability
     ctx.font = "bold 12px system-ui, -apple-system, sans-serif";

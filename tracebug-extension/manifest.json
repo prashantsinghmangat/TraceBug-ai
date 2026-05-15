@@ -9,8 +9,11 @@
   "permissions": [
     "activeTab",
     "storage",
+    "unlimitedStorage",
     "scripting",
-    "tabs"
+    "tabs",
+    "offscreen",
+    "tabCapture"
   ],
 
   "host_permissions": [
@@ -33,7 +36,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["content-script.js", "tracebug-sdk.js", "tracebug-init.js"],
+      "resources": ["content-script.js", "tracebug-sdk.js", "tracebug-init.js", "offscreen.html", "offscreen.js"],
       "matches": ["<all_urls>"]
     }
   ],

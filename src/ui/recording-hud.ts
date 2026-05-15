@@ -4,6 +4,7 @@
 // and a Stop button. Comments are timestamped against the video.
 
 import { addVideoComment, getCaptureCount, getVideoElapsedMs, isRollingMode, isVideoRecording } from "../video-recorder";
+import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "../draw-mode";
 
 const HUD_ID = "tracebug-recording-hud";
 
@@ -122,6 +123,15 @@ export function showRecordingHUD(
     >
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     </button>
+    <button
+      data-tb-hud="annotate"
+      title="Draw on the page (pen, shapes, redact) — recording continues"
+      aria-label="Annotate the page"
+      style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:999px;padding:6px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+      Draw
+    </button>
     ${showCapture ? `
       <button
         data-tb-hud="capture"
@@ -151,6 +161,7 @@ export function showRecordingHUD(
   const capturesEl = hud.querySelector('[data-tb-hud="captures"]') as HTMLElement | null;
   const commentInput = hud.querySelector('[data-tb-hud="comment"]') as HTMLInputElement;
   const addBtn = hud.querySelector('[data-tb-hud="add"]') as HTMLButtonElement;
+  const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]') as HTMLButtonElement | null;
   const captureBtn = hud.querySelector('[data-tb-hud="capture"]') as HTMLButtonElement | null;
   const stopBtn = hud.querySelector('[data-tb-hud="stop"]') as HTMLButtonElement;
 
@@ -192,7 +203,31 @@ export function showRecordingHUD(
     });
   }
 
+  if (annotateBtn) {
+    annotateBtn.addEventListener("click", () => {
+      const drawRoot = _root;
+      if (!drawRoot) return;
+      // Draw mode renders its own full-width toolbar at the top of the page,
+      // which would overlap the pill HUD. Slide the HUD down so both are
+      // visible — controls (Stop, Capture, comment) stay reachable while
+      // the user marks up the page. Restore when draw mode exits.
+      if (isDrawModeActive()) {
+        deactivateDrawMode();
+        return;
+      }
+      if (_hud) _hud.style.setProperty("top", "64px", "important");
+      activateDrawMode(drawRoot, undefined, () => {
+        if (_hud) _hud.style.setProperty("top", "16px", "important");
+      });
+    });
+  }
+
   stopBtn.addEventListener("click", () => {
+    // Tear down draw mode first so the toolbar doesn't outlive the
+    // recording (otherwise it sits there with no recording to annotate).
+    if (isDrawModeActive()) {
+      try { deactivateDrawMode(); } catch {}
+    }
     _onStopRequested?.();
   });
 }
@@ -213,6 +248,9 @@ export function hideRecordingHUD(): void {
   if (_timerInterval) {
     clearInterval(_timerInterval);
     _timerInterval = null;
+  }
+  if (isDrawModeActive()) {
+    try { deactivateDrawMode(); } catch {}
   }
   _hud?.remove();
   _hud = null;

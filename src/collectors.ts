@@ -581,8 +581,99 @@ export function collectXhrRequests(emit: Emit): () => void {
   return () => { OrigXHR.prototype.open = origOpen; OrigXHR.prototype.send = origSend; };
 }
 
+// ── PerformanceObserver network backfill ──────────────────────────────────
+// Our fetch/XHR wraps only catch calls that go through the still-attached
+// global APIs. SPAs that cached references (axios, polyfills) or use service
+// workers can bypass us entirely. The Performance API's "resource" entries
+// are populated by the browser itself for EVERY network request — including
+// images, fonts, CSS, and any cached-reference fetches. We use it as a
+// belt-and-suspenders backfill.
+//
+// On attach we drain any entries that already exist (requests fired before
+// our SDK loaded), then keep a PerformanceObserver running to pick up new
+// ones as the page makes them. Each entry is emitted as an api_request so
+// the Network tab includes it.
+
+// Track emitted entries across both the observer and any explicit drains so
+// we don't double-count when our fetch/XHR wraps also catch the same request.
+// Module-level so drainPerformanceNetwork() and the observer share state.
+const _perfSeen = new Set<string>();
+
+function _emitPerfEntry(emit: Emit, e: PerformanceResourceTiming): void {
+  if (!e || !e.name) return;
+  try { if (isInternalUrl(e.name)) return; } catch {}
+  // Skip our own injected scripts so we don't show up in our own report.
+  if (typeof e.name === "string" && e.name.indexOf("tracebug") !== -1) return;
+  const key = `${e.name}|${Math.round(e.startTime)}`;
+  if (_perfSeen.has(key)) return;
+  _perfSeen.add(key);
+
+  const navStart = (typeof performance.timeOrigin === "number") ? performance.timeOrigin : Date.now();
+  const initiator = (e as any).initiatorType || "";
+  const method = ((e as any).method || "GET").toUpperCase();
+  // responseStatus needs same-origin (or Timing-Allow-Origin header) to be
+  // exposed. When the browser hides it we report 0; report-builder treats
+  // 0 as "unknown" rather than "error", so it lands in the Network tab
+  // without polluting the Errors-only filter.
+  const status = (e as any).responseStatus || 0;
+  const url = sanitizeUrl(e.name).slice(0, 500);
+  const timestamp = Math.round(navStart + e.startTime);
+  const durationMs = Math.round(e.duration || 0);
+  try {
+    emit("api_request", {
+      request: { url, method, statusCode: status, durationMs, initiatorType: initiator },
+      _ts: timestamp,
+    });
+  } catch {}
+}
+
+/**
+ * Re-drain the browser's Resource Timing buffer. Called from
+ * _startActiveSession() so any requests fired BEFORE the user armed
+ * recording (e.g., the initial page load + lazy SDK inject window) still
+ * make it into the bug ticket.
+ */
+export function drainPerformanceNetwork(emit: Emit): void {
+  if (typeof performance === "undefined") return;
+  try {
+    const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
+    for (const e of entries) _emitPerfEntry(emit, e);
+  } catch {}
+}
+
+export function collectPerformanceNetwork(emit: Emit): () => void {
+  if (typeof performance === "undefined" || typeof PerformanceObserver === "undefined") {
+    return () => {};
+  }
+
+  // Drain whatever's already in the buffer when we attach.
+  drainPerformanceNetwork(emit);
+
+  let observer: PerformanceObserver | null = null;
+  try {
+    observer = new PerformanceObserver((list) => {
+      for (const e of list.getEntries() as PerformanceResourceTiming[]) {
+        _emitPerfEntry(emit, e);
+      }
+    });
+    // buffered:false because we already drained above. Without this we'd
+    // get the same entries twice (once from the drain, once from the
+    // observer's initial flush).
+    observer.observe({ type: "resource", buffered: false });
+  } catch {}
+
+  return () => {
+    try { observer?.disconnect(); } catch {}
+  };
+}
+
 // ── Errors (window.onerror + unhandledrejection + console.error) ──────────
 
+/**
+ * Eager error capture — window.onerror + unhandledrejection. Cheap; both
+ * are passive callbacks, neither pollutes the call stack of unrelated code.
+ * Safe to attach at SDK init.
+ */
 export function collectErrors(emit: Emit): () => void {
   const prevOnError = window.onerror;
 
@@ -607,6 +698,20 @@ export function collectErrors(emit: Emit): () => void {
   };
   window.addEventListener("unhandledrejection", onRejection);
 
+  return () => {
+    window.onerror = prevOnError;
+    window.removeEventListener("unhandledrejection", onRejection);
+  };
+}
+
+/**
+ * Lazy console.error wrap — installed only while a session is actively
+ * recording. Wrapping console.error adds a frame to every call's stack
+ * trace, which pollutes DevTools when devs are inspecting app errors.
+ * Keeping this lazy means the wrapper is gone when the user isn't
+ * actively capturing.
+ */
+export function collectConsoleErrors(emit: Emit): () => void {
   const origConsoleError = console.error;
   let _insideEmit = false;
   console.error = function (...args: any[]) {
@@ -621,8 +726,6 @@ export function collectErrors(emit: Emit): () => void {
   };
 
   return () => {
-    window.onerror = prevOnError;
-    window.removeEventListener("unhandledrejection", onRejection);
     console.error = origConsoleError;
   };
 }

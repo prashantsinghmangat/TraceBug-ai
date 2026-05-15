@@ -65,35 +65,51 @@ export default defineConfig([
 
 ```
 src/
-├── index.ts               # Entry — TraceBugSDK class, public API, exports
-├── types.ts               # All TypeScript interfaces (TraceBugConfig, TraceBugUser, etc.)
-├── collectors.ts          # Event collectors with self-filtering + console capture
-├── storage.ts             # localStorage persistence with batched writes
-├── repro-generator.ts     # Generates human-readable reproduction steps
-├── dashboard.ts           # In-browser panel UI orchestrator (imports from ui/)
-├── compact-toolbar.ts     # Configurable toolbar (position, drag, mobile FAB)
-├── element-annotate.ts    # Element-level annotation mode + clickable badge popovers
-├── draw-mode.ts           # Rectangle/ellipse drawing on live page
-├── annotation-store.ts    # In-memory annotation store with export
-├── theme.ts               # CSS custom property design tokens (dark/light/auto)
-├── onboarding.ts          # First-run tooltip tour + help button replay
-├── plugin-system.ts       # Plugin API + event hook system
-├── environment.ts         # Browser/OS/viewport detection
-├── screenshot.ts          # html2canvas + extension captureVisibleTab + auto-download
-├── voice-recorder.ts      # Web Speech API speech-to-text
-├── title-generator.ts     # Auto bug title + flow summary
-├── timeline-builder.ts    # Event timeline with elapsed timestamps
-├── report-builder.ts      # BugReport assembly from all data sources
-├── github-issue.ts        # GitHub issue markdown generator
-├── jira-issue.ts          # Jira ticket generator
-├── pdf-generator.ts       # Print-optimized HTML report
-└── ui/                    # Extracted dashboard UI modules
-    ├── index.ts           # Barrel export
-    ├── helpers.ts         # Shared utilities (formatDuration, escapeHtml, etc.)
-    └── toast.ts           # Toast notification system
+├── index.ts                # Entry — TraceBugSDK class, public API, exports
+├── types.ts                # All TypeScript interfaces
+├── collectors.ts           # Event collectors + console/network/Performance backfill
+├── storage.ts              # localStorage persistence with batched writes
+├── action-chips.ts         # Verb + element-preview chips for the Actions tab
+├── repro-generator.ts      # Human-readable reproduction steps
+├── dashboard.ts            # Session panel UI orchestrator
+├── compact-toolbar.ts      # Configurable toolbar (position, drag, mobile FAB)
+├── element-annotate.ts     # Element-level annotation mode
+├── draw-mode.ts            # Rect / ellipse / redact drawing on the page
+├── annotation-store.ts     # In-memory annotation store
+├── theme.ts                # Design tokens (dark / light / auto)
+├── onboarding.ts           # First-run tour
+├── plugin-system.ts        # Plugin API + event hooks
+├── environment.ts          # Browser / OS / viewport detection
+├── screenshot.ts           # html2canvas + extension captureVisibleTab
+├── video-recorder.ts       # MediaRecorder lifecycle (in-page + offscreen transports)
+├── voice-recorder.ts       # Web Speech API
+├── title-generator.ts      # Auto bug title + flow summary
+├── timeline-builder.ts     # Event timeline
+├── report-builder.ts       # BugReport assembly
+├── fingerprint.ts          # Deterministic session/error fingerprints
+├── dev-api.ts              # Dev-mode API hooks
+├── github-issue.ts         # GitHub markdown generator
+├── jira-issue.ts           # Jira ticket generator
+├── linear-issue.ts         # Linear deeplink generator
+├── slack-export.ts         # Slack-flavored export
+├── pdf-generator.ts        # Print-optimized HTML report
+├── exporters/
+│   ├── html-replay.ts      # Standalone HTML replay bundler
+│   └── html-template.ts    # Inlined viewer template + JSON payload
+├── patterns/               # Heuristic detectors (frustration, etc.)
+├── scanner/                # Auto-bug scanner + detector modules
+└── ui/
+    ├── index.ts            # Barrel export
+    ├── helpers.ts          # Shared utilities
+    ├── toast.ts            # Toast notifications
+    ├── quick-bug.ts        # Tabbed ticket modal
+    ├── issues-panel.ts     # Session list + scanner findings panel
+    ├── recording-hud.ts    # Floating recording timer + Stop / Capture / Draw
+    ├── replay-scrubber.ts  # Timeline scrubber for video replay
+    └── live-bug-card.ts    # Inline notification card for auto-detected bugs
 
 cli/
-└── bin.ts                 # CLI tool source (compiled to dist/bin.mjs)
+└── bin.ts                  # CLI tool source (compiled to dist/bin.mjs)
 ```
 
 ## Data Flow
@@ -125,17 +141,56 @@ User exports: GitHub Issue / Jira Ticket / PDF / JSON / Text
 ```
 Popup (popup.html/js)
   ↓ chrome.runtime.sendMessage
-Background Service Worker (background.js)
-  ↓ chrome.tabs.sendMessage
-Content Script (content-script.js) — extension context on page
-  ↓ CustomEvent dispatch
+Background Service Worker (background.js) ────┐
+  ↓ chrome.scripting.executeScript            │  chrome.offscreen.createDocument
+  ↓ chrome.tabs.sendMessage                   ↓
+Content Script (content-script.js)      Offscreen Document (offscreen.html / offscreen.js)
+  — extension context on page                 — holds MediaStream + MediaRecorder
+  ↓ CustomEvent dispatch                      — persists recording via service worker
 Page Context (tracebug-init.js + tracebug-sdk.js) — MAIN world
   ↓ TraceBug SDK methods
 ```
 
 **CSP-Safe Injection:** Uses `chrome.scripting.executeScript({ world: "MAIN" })` — no `<script>` tags, no CSP violations.
 
-**Injection Guard:** `injectedTabs` Set in background + `__TRACEBUG_INITIALIZED__` flag in page context prevents duplicate injection.
+**Injection Guard:** `injectedTabs` Set in background + `__TRACEBUG_INITIALIZED__` flag in page context prevents duplicate injection. `content-script.js` self-guards with `window.__TRACEBUG_CS_LOADED__` so re-injection is a no-op (it has top-level `const` declarations that would otherwise throw `SyntaxError` on the second run).
+
+### Recording Pipeline
+
+Screen recording lives in an **offscreen document** so it survives host-page reloads and navigation. Service workers can't hold `MediaStream` objects; offscreen documents can.
+
+```
+1. Popup → background → page SDK → rpcCall("tb:rec:start")
+2. background routes to offscreen → offscreen.startRecording()
+3. offscreen.getDisplayMedia({ surfaceSwitching: "include" }) → user picks tab/window/screen
+4. MediaRecorder runs with 1 s timeslice; chunks accumulate
+5. User clicks HUD Stop (or Chrome's native "Stop sharing")
+6. offscreen.stopAndBuildRecording()
+   - flush via requestData()
+   - assemble Blob → readAsDataURL → recording { dataUrl, mimeType, durationMs, ... }
+7. offscreen.persistLastRecording()
+   - sends recording to background via chrome.runtime.sendMessage (offscreen can't always reach chrome.storage)
+   - background writes dataUrl + meta to chrome.storage.local (unlimitedStorage permission)
+8. RPC response returns metadata only (with _viaStorage marker)
+9. content-script reads dataUrl back from chrome.storage.local, re-attaches to response
+10. page-side SDK hydrates recording, stashes via revokeAndStash()
+11. Quick Bug modal opens → buildReport(session) → report.video = recording
+12. Export bundles dataUrl into the HTML payload
+```
+
+**Why route the dataUrl through storage instead of IPC?** `chrome.runtime.sendMessage` silently truncates responses larger than ~10 MB. A 30-second recording's base64 dataUrl is several MB. Routing it through `chrome.storage.local` (which has no message-size limit with `unlimitedStorage`) bypasses IPC entirely; `CustomEvent` between the content-script and the page is in-process and has no size limit.
+
+**Auto-stop path:** When the user clicks Chrome's native "Stop sharing", the video track's `ended` event fires. `offscreen.js` finalizes the recording, persists it the same way, and broadcasts `tb:rec:auto-stopped`. Background fans the broadcast out to all tabs; the recording tab's content-script forwards it to the SDK, which opens the ticket modal.
+
+**Defensive guards:**
+
+| Guard | Purpose |
+|-------|---------|
+| `_startInFlight` (SDK + offscreen) | Coalesces concurrent `startVideoRecording` calls so the share-picker can't appear twice |
+| `_autoStopBroadcast` | Dedups the auto-stop broadcast when both `track.ended` and `recorder.onstop` fire |
+| `isUsableRecording()` | Never stashes a recording with an empty dataUrl over a real one |
+| `restoreLastRecordingFromOffscreen()` | Pulls the recording from storage when the page-side cache was lost (reload, race) |
+| `window.__TRACEBUG_CS_LOADED__` | Idempotent content-script injection |
 
 ## Dashboard UI Architecture
 
@@ -321,6 +376,7 @@ All derived in `report-builder.ts` from existing event data — no extra capture
 | Package | Purpose |
 |---------|---------|
 | `html2canvas` | Screenshot capture (bundled, no CDN) |
+| `axe-core` | Accessibility scanner (used by auto-bug detectors) |
 
 ### Development
 
@@ -328,5 +384,7 @@ All derived in `report-builder.ts` from existing event data — no extra capture
 |---------|---------|
 | `tsup` | Build tool (esbuild-based) |
 | `typescript` | Type checking |
+| `vitest` | Test runner |
+| `eslint` + `@typescript-eslint/*` | Linting |
 
-**Total runtime dependencies: 1** (html2canvas). Zero backend dependencies.
+**Total runtime dependencies: 2** (html2canvas, axe-core). Zero backend dependencies.

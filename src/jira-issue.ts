@@ -200,25 +200,17 @@ function formatJiraOffset(ms: number): string {
   return `${m}:${s}`;
 }
 
+/**
+ * Map our top-level `BugReport.severity` (set by determineSeverity in
+ * report-builder) onto Jira's priority enum. Single source of truth — the
+ * rule ladder lives in report-builder.ts now.
+ */
 function determinePriority(report: BugReport): JiraTicket["priority"] {
-  // Critical errors (TypeError, ReferenceError) = Highest
-  const hasCriticalError = report.consoleErrors.some(e =>
-    /TypeError|ReferenceError|SyntaxError/i.test(e.message)
-  );
-  if (hasCriticalError) return "Highest";
-
-  // Server errors (5xx) = High
-  const hasServerError = report.networkErrors.some(r => r.status >= 500);
-  if (hasServerError) return "High";
-
-  // Client errors (4xx) or network failures = Medium
-  if (report.networkErrors.length > 0) return "Medium";
-
-  // Console errors only = Low
-  if (report.consoleErrors.length > 0) return "Low";
-
-  // Tester-reported annotation = Medium
-  if (report.annotations.some(a => a.severity === "critical" || a.severity === "major")) return "Medium";
-
-  return "Low";
+  switch (report.severity) {
+    case "critical": return "Highest";
+    case "high": return "High";
+    case "medium": return "Medium";
+    case "low": return "Low";
+    default: return "Low";
+  }
 }

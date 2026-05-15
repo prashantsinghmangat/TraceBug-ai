@@ -4,6 +4,7 @@
 
 import {
   BugReport,
+  BugSeverity,
   StoredSession,
   ScreenshotData,
   TraceBugEvent,
@@ -15,10 +16,13 @@ import { captureEnvironment } from "./environment";
 import { getScreenshots } from "./screenshot";
 import { getVoiceTranscripts } from "./voice-recorder";
 import { getLastVideoRecording } from "./video-recorder";
+import { getCurrentContext } from "./dev-api";
+import { matchErrorPattern, formatPatternMatch } from "./patterns";
 import { generateBugTitle } from "./title-generator";
 import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
 import { getNetworkFailures } from "./collectors";
+import { buildActionChips } from "./action-chips";
 
 export function buildReport(
   session: StoredSession,
@@ -34,7 +38,8 @@ export function buildReport(
     steps = result.reproSteps;
   }
 
-  // Collect console errors (deduplicated by message)
+  // Collect console errors (deduplicated by message). Errors only — used by
+  // GitHub/Jira/markdown exports + the root-cause + severity rules.
   const seenErrors = new Set<string>();
   const consoleErrors = session.events
     .filter(e => ["error", "unhandled_rejection", "console_error"].includes(e.type))
@@ -49,10 +54,30 @@ export function buildReport(
       return true;
     });
 
-  // Collect network errors from events, then enrich with response snippets
-  // from the in-memory failure buffer (last 10, snippets not persisted).
-  const networkErrors: NetworkErrorEntry[] = session.events
-    .filter(e => e.type === "api_request" && (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0))
+  // Full console capture across all levels — used by the modal + HTML
+  // export Console tab so devs see warnings and logs alongside errors,
+  // matching what's in DevTools.
+  const levelMap: Record<string, "error" | "warn" | "log" | "info"> = {
+    "error": "error",
+    "unhandled_rejection": "error",
+    "console_error": "error",
+    "console_warn": "warn",
+    "console_log": "log",
+  };
+  const consoleLogs = session.events
+    .filter(e => e.type in levelMap)
+    .map(e => ({
+      level: levelMap[e.type],
+      message: e.data.error?.message || "",
+      stack: e.data.error?.stack,
+      timestamp: e.timestamp,
+    }))
+    .filter(e => !!e.message);
+
+  // Collect ALL captured requests (success + failure) for the Network tab.
+  // URLs are already sanitized in collectors.ts (sensitive query params replaced).
+  const networkRequests: import("./types").NetworkRequestEntry[] = session.events
+    .filter(e => e.type === "api_request" && e.data.request)
     .map(e => ({
       method: e.data.request?.method || "GET",
       url: e.data.request?.url || "",
@@ -61,12 +86,15 @@ export function buildReport(
       timestamp: e.timestamp,
     }));
 
+  // Enrich failed requests in `networkRequests` with response snippets from the
+  // in-memory failure buffer (last 10 only; snippets not persisted).
   // Match by (method+url+status) and nearest timestamp within 5s.
   // Only consider buffer entries captured during THIS session — otherwise
   // failures from a previously-cleared session would leak in.
   const sessionStart = session.createdAt || (session.events[0]?.timestamp ?? 0);
   const buffer = getNetworkFailures().filter(b => b.timestamp >= sessionStart);
-  for (const entry of networkErrors) {
+  for (const entry of networkRequests) {
+    if (entry.status < 400 && entry.status !== 0) continue;
     const match = buffer.find(
       b =>
         b.url === entry.url &&
@@ -80,11 +108,11 @@ export function buildReport(
   // If an in-memory failure wasn't yet persisted to events (race on async body
   // read), still surface it so the report isn't missing the snippet.
   for (const buf of buffer) {
-    const already = networkErrors.some(
+    const already = networkRequests.some(
       n => n.url === buf.url && n.method === buf.method && n.status === buf.status && Math.abs(n.timestamp - buf.timestamp) < 5000
     );
     if (!already) {
-      networkErrors.push({
+      networkRequests.push({
         method: buf.method,
         url: buf.url,
         status: buf.status,
@@ -94,6 +122,11 @@ export function buildReport(
       });
     }
   }
+
+  // Failure-only subset used by GitHub/Jira/markdown exports + root-cause logic.
+  const networkErrors: NetworkErrorEntry[] = networkRequests
+    .filter(r => r.status >= 400 || r.status === 0)
+    .map(r => ({ ...r }));
 
   // Screenshots from memory + any extras
   const screenshots = [...getScreenshots(), ...(extraScreenshots || [])];
@@ -108,6 +141,7 @@ export function buildReport(
   const lastVideo = getLastVideoRecording();
   const video = lastVideo ? {
     url: lastVideo.url,
+    dataUrl: lastVideo.dataUrl, // raw base64 — exports use this directly
     durationMs: lastVideo.durationMs,
     mimeType: lastVideo.mimeType,
     sizeBytes: lastVideo.sizeBytes,
@@ -120,32 +154,39 @@ export function buildReport(
 
   // Last ~10 readable user actions (FIFO, newest last)
   const sessionSteps = generateSessionSteps(session.events);
+  const actionChips = buildActionChips(session.events);
 
   // The element the user clicked just before the bug
   const clickedElement = extractClickedElement(session.events);
 
-  // Build report first, then generate summary + rootCause from full context
+  // Build report first, then generate summary + rootCause + severity from full context
   const report: BugReport = {
     title,
     summary: "",
     steps,
     environment,
     consoleErrors,
+    consoleLogs,
     networkErrors,
+    networkRequests,
     sessionSteps,
+    actionChips,
     clickedElement,
     rootCause: { hint: "", confidence: "low" },
+    severity: "low",
     annotations: session.annotations || [],
     screenshots,
     timeline,
     voiceTranscripts,
     video,
+    context: getCurrentContext(),
     session,
     generatedAt: Date.now(),
   };
 
   report.summary = generateSmartSummary(report);
   report.rootCause = generateRootCauseHint(report);
+  report.severity = determineSeverity(report);
   return report;
 }
 
@@ -378,14 +419,72 @@ export function formatRootCauseLine(rc: RootCauseHint | null | undefined): strin
   return `\uD83D\uDD0D Possible Cause (${rc.confidence} confidence): ${rc.hint}`;
 }
 
+// \u2500\u2500 Severity Auto-Tag \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Top-level severity classification \u2014 drives the colored emoji prefix on
+// every export title and the badge in the Quick Bug modal. Same rule ladder
+// `determinePriority` used in jira-issue.ts; relocated so every export
+// (GitHub / PDF / modal / Jira) maps from one source of truth.
+
+const SEVERITY_EMOJI: Record<BugSeverity, string> = {
+  critical: "\uD83D\uDD34", // \uD83D\uDD34
+  high: "\uD83D\uDFE0",     // \uD83D\uDFE0
+  medium: "\uD83D\uDFE1",   // \uD83D\uDFE1
+  low: "\uD83D\uDFE2",      // \uD83D\uDFE2
+};
+
+const SEVERITY_LABEL: Record<BugSeverity, string> = {
+  critical: "Critical",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+};
+
+export function determineSeverity(report: BugReport): BugSeverity {
+  // Critical errors (TypeError, ReferenceError, SyntaxError) \u2192 critical
+  const hasCriticalError = report.consoleErrors.some(e =>
+    /TypeError|ReferenceError|SyntaxError/i.test(e.message)
+  );
+  if (hasCriticalError) return "critical";
+
+  // Server errors (5xx) \u2192 high
+  const hasServerError = report.networkErrors.some(r => r.status >= 500);
+  if (hasServerError) return "high";
+
+  // Client errors (4xx) or network failures \u2192 medium
+  if (report.networkErrors.length > 0) return "medium";
+
+  // Tester-reported critical/major annotation \u2192 medium
+  if (report.annotations.some(a => a.severity === "critical" || a.severity === "major")) return "medium";
+
+  // Console errors only \u2192 low
+  if (report.consoleErrors.length > 0) return "low";
+
+  return "low";
+}
+
+/** Emoji + label, e.g. "\uD83D\uDD34 Critical". */
+export function severityBadge(sev: BugSeverity): string {
+  return `${SEVERITY_EMOJI[sev]} ${SEVERITY_LABEL[sev]}`;
+}
+
+/** Title prefix string, e.g. "\uD83D\uDD34 Critical \u00B7 " \u2014 caller appends raw title. */
+export function severityTitlePrefix(sev: BugSeverity): string {
+  return `${SEVERITY_EMOJI[sev]} ${SEVERITY_LABEL[sev]} \u00B7 `;
+}
+
 function clickLabel(click: ClickedElementSummary): string {
   const raw = click.text || click.ariaLabel || click.testId || click.id || click.tag || "element";
   return truncateMsg(raw, RC_LABEL_MAX);
 }
 
 // Heuristic mapping from error message shape → human cause suggestion.
-// Ordered most-specific-first.
+// First tries the categorized Pattern Library v2 (~60 patterns across React,
+// Vue, Angular, network, auth, storage, general). Falls back to the legacy
+// inline rules if nothing matches — keeps previous behavior on edge cases.
 function suggestCauseFromError(msg: string): string {
+  const match = matchErrorPattern(msg);
+  if (match) return formatPatternMatch(match);
+
   const m = msg.toLowerCase();
 
   if (m.includes("cannot read prop") || m.includes("cannot read properties") ||

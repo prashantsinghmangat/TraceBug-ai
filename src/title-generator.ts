@@ -107,8 +107,9 @@ function getActionContext(event: TraceBugEvent | null): string {
 function describeAction(ev: TraceBugEvent): string {
   switch (ev.type) {
     case "click": {
-      const text = ev.data.element?.text?.trim() || ev.data.element?.id || "element";
-      return `Click "${truncate(text, 20)}"`;
+      const rawText = ev.data.element?.text?.trim() || ev.data.element?.ariaLabel || ev.data.element?.id || "element";
+      const text = rawText.includes("\n") ? rawText.split("\n")[0].trim() : rawText;
+      return `Click "${truncate(text, 40)}"`;
     }
     case "input":
       return `Type in "${ev.data.element?.name || "field"}"`;
