@@ -138,10 +138,19 @@ export function mountReplayScrubber(
   jumpBtn.textContent = "Jump to error";
   jumpBtn.style.display = errorMarkers.length > 0 ? "inline-block" : "none";
   jumpBtn.title = errorMarkers.length === 1 ? "Seek to the error" : `Seek to first of ${errorMarkers.length} errors`;
+  const helpBtn = document.createElement("button");
+  helpBtn.className = "tb-rs-help";
+  helpBtn.type = "button";
+  helpBtn.textContent = "?";
+  helpBtn.title = "Keyboard shortcuts";
+  helpBtn.setAttribute("aria-label", "Keyboard shortcuts");
+  helpBtn.addEventListener("click", () => _toggleHelpOverlay(root));
+
   header.appendChild(playBtn);
   header.appendChild(time);
   header.appendChild(speedSel);
   header.appendChild(jumpBtn);
+  header.appendChild(helpBtn);
 
   const track = document.createElement("div");
   track.className = "tb-rs-track";
@@ -338,16 +347,34 @@ export function mountReplayScrubber(
     tick(startIdx);
   };
 
+  // ── Auto-pause-at-error ──────────────────────────────────────────────
+  // Tracks which error timestamps we've already paused at so a single
+  // session with several errors doesn't loop-pause on the same one. Reset
+  // when the user manually seeks before an error (so re-entering pauses).
+  const visitedErrors = new Set<number>();
+  const PAUSE_TOLERANCE_MS = 250; // window around an error timestamp
+
   const playFromVideo = () => {
     const v = options.videoEl!;
     const vidStart = v.dataset.tbStartTs ? Number(v.dataset.tbStartTs) : startedAt;
     v.playbackRate = speed;
     videoTickHandler = () => {
       const ts = vidStart + v.currentTime * 1000;
+      const prevTs = currentTs;
       currentTs = Math.max(startedAt, Math.min(endedAt, ts));
       renderHandle();
       const marker = findClosestMarker(currentTs);
       options.onSeek?.(currentTs, marker);
+      // Auto-pause if we've just crossed an unvisited error timestamp.
+      for (const em of errorMarkers) {
+        if (visitedErrors.has(em.timestamp)) continue;
+        if (em.timestamp >= prevTs && em.timestamp <= currentTs + PAUSE_TOLERANCE_MS) {
+          visitedErrors.add(em.timestamp);
+          try { v.pause(); } catch {}
+          _flashErrorPause(root, em);
+          break;
+        }
+      }
     };
     v.addEventListener("timeupdate", videoTickHandler);
     v.addEventListener("pause", stopPlay);
@@ -422,6 +449,8 @@ export function mountReplayScrubber(
   track.addEventListener("mouseleave", () => { if (hoverEl) hoverEl.style.display = "none"; });
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  // Space: play/pause · ← →: ±5s · ↑ ↓: prev/next error
+  // 1/2/3: 25/50/75 % · 0: start · ?: toggle help overlay
   const onKey = (e: KeyboardEvent) => {
     if (e.key === " " || e.code === "Space") {
       e.preventDefault();
@@ -430,15 +459,14 @@ export function mountReplayScrubber(
     }
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       e.preventDefault();
-      const idx = timeline.findIndex(t => t.timestamp >= currentTs);
-      let nextIdx = idx;
-      if (e.key === "ArrowRight") nextIdx = Math.min(timeline.length - 1, idx + 1 < 0 ? 0 : idx + 1);
-      else nextIdx = Math.max(0, (idx > 0 ? idx : timeline.length) - 1);
-      seek(timeline[nextIdx].timestamp, { snap: false });
+      const delta = (e.key === "ArrowRight" ? 5000 : -5000);
+      // Whenever the user manually seeks before an error, "re-arm" it so
+      // crossing it again re-triggers the pause.
+      visitedErrors.clear();
+      seek(currentTs + delta, { snap: false });
       return;
     }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      // Jump between errors
       if (errorMarkers.length === 0) return;
       e.preventDefault();
       const errIdx = errorMarkers.findIndex(m => m.timestamp >= currentTs);
@@ -446,6 +474,24 @@ export function mountReplayScrubber(
       if (e.key === "ArrowDown") nextErr = Math.min(errorMarkers.length - 1, (errIdx < 0 ? errorMarkers.length : errIdx) + (errIdx === -1 ? -1 : 1));
       else nextErr = Math.max(0, (errIdx > 0 ? errIdx : errorMarkers.length) - 1);
       seek(errorMarkers[nextErr].timestamp, { snap: false });
+      return;
+    }
+    if (e.key === "0") {
+      e.preventDefault();
+      visitedErrors.clear();
+      seek(startedAt, { snap: false });
+      return;
+    }
+    if (e.key === "1" || e.key === "2" || e.key === "3") {
+      e.preventDefault();
+      const pct = Number(e.key) * 0.25;
+      visitedErrors.clear();
+      seek(startedAt + span * pct, { snap: false });
+      return;
+    }
+    if (e.key === "?") {
+      e.preventDefault();
+      _toggleHelpOverlay(root);
     }
   };
   root.addEventListener("keydown", onKey);
@@ -492,6 +538,49 @@ export function mountReplayScrubber(
   void findClosestScreenshot;
 }
 
+/**
+ * Briefly show a "Paused at error — press ▶ to resume" toast over the
+ * scrubber so the user understands why playback halted. Auto-dismisses
+ * after 2.5 s.
+ */
+function _flashErrorPause(root: HTMLElement, marker: { description: string }): void {
+  const existing = root.querySelector(".tb-rs-err-toast");
+  if (existing) existing.remove();
+  const toast = document.createElement("div");
+  toast.className = "tb-rs-err-toast";
+  toast.textContent = `⏸ Paused at error — ${(marker.description || "").slice(0, 60)}`;
+  root.appendChild(toast);
+  setTimeout(() => { try { toast.remove(); } catch {} }, 2500);
+}
+
+/**
+ * Toggle the keyboard-shortcut cheat sheet. Sits above the scrubber so
+ * the user can glance at the bindings without leaving their flow.
+ */
+function _toggleHelpOverlay(root: HTMLElement): void {
+  const existing = root.querySelector(".tb-rs-help-overlay") as HTMLElement | null;
+  if (existing) { existing.remove(); return; }
+  const overlay = document.createElement("div");
+  overlay.className = "tb-rs-help-overlay";
+  overlay.innerHTML = `
+    <div class="tb-rs-help-card">
+      <div class="tb-rs-help-title">Keyboard shortcuts</div>
+      <table class="tb-rs-help-table">
+        <tr><td><kbd>Space</kbd></td><td>Play / pause</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Seek &minus;5 s / +5 s</td></tr>
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Previous / next error</td></tr>
+        <tr><td><kbd>0</kbd></td><td>Jump to start</td></tr>
+        <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Jump to 25 / 50 / 75 %</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+      </table>
+      <button type="button" class="tb-rs-help-close" aria-label="Close">×</button>
+    </div>
+  `;
+  root.appendChild(overlay);
+  overlay.querySelector(".tb-rs-help-close")?.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
 /** Stylesheet — !important everywhere to defeat host-page resets. */
 function _injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -527,6 +616,52 @@ function _injectStyles(): void {
       font-family: inherit !important; cursor: pointer !important;
     }
     .tb-rs-jump:hover { background: rgba(239, 68, 68, 0.12) !important; }
+    .tb-rs-help {
+      background: transparent !important; color: var(--tb-text-muted, #888) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important; border-radius: 999px !important;
+      width: 22px !important; height: 22px !important; padding: 0 !important;
+      font-size: 12px !important; font-weight: 700 !important; font-family: inherit !important;
+      cursor: pointer !important; display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    }
+    .tb-rs-help:hover { background: var(--tb-bg-elevated, rgba(255,255,255,0.05)) !important; color: var(--tb-text-primary, #fff) !important; }
+    .tb-rs-err-toast {
+      position: absolute !important; top: -34px !important; left: 50% !important; transform: translateX(-50%) !important;
+      background: var(--tb-error, #ef4444) !important; color: #fff !important;
+      padding: 6px 12px !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 600 !important;
+      white-space: nowrap !important; box-shadow: 0 4px 16px rgba(239,68,68,0.35) !important;
+      pointer-events: none !important; z-index: 10 !important;
+      animation: tb-rs-toast-in 0.18s ease !important;
+    }
+    @keyframes tb-rs-toast-in { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .tb-rs-help-overlay {
+      position: absolute !important; inset: 0 !important; background: rgba(0,0,0,0.55) !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      z-index: 20 !important; border-radius: 8px !important;
+    }
+    .tb-rs-help-card {
+      position: relative !important; background: var(--tb-bg-secondary, #1a1a2e) !important;
+      border: 1px solid var(--tb-border-hover, #3a3a5e) !important; border-radius: 8px !important;
+      padding: 16px 18px !important; min-width: 260px !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+    }
+    .tb-rs-help-title { font-size: 12px !important; font-weight: 700 !important; margin-bottom: 10px !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; color: var(--tb-text-muted, #888) !important; }
+    .tb-rs-help-table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; }
+    .tb-rs-help-table td { padding: 4px 8px !important; vertical-align: middle !important; }
+    .tb-rs-help-table td:first-child { white-space: nowrap !important; width: 1% !important; }
+    .tb-rs-help-table kbd {
+      display: inline-block !important; padding: 2px 6px !important; margin-right: 3px !important;
+      background: var(--tb-bg-primary, #0a0a14) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important; border-radius: 4px !important;
+      font-family: var(--tb-font-mono, monospace) !important; font-size: 10px !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+    }
+    .tb-rs-help-close {
+      position: absolute !important; top: 6px !important; right: 8px !important;
+      background: transparent !important; border: none !important; color: var(--tb-text-muted, #888) !important;
+      font-size: 18px !important; cursor: pointer !important; line-height: 1 !important; padding: 4px 8px !important;
+    }
+    .tb-rs-help-close:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
     .tb-rs-track {
       position: relative !important;
       height: 28px !important;

@@ -215,18 +215,23 @@ function formatEnv(report: BugReport): string {
 }
 
 function estimateDuration(session: StoredSession, report: BugReport): number {
-  // Use the widest of: event stream, screenshots, optional video. Otherwise
-  // a session with a single click + one auto-screenshot reads as 0ms even
-  // though several seconds elapsed between the click and the capture.
+  // When a video exists, it IS the canonical span — the user is going to
+  // scrub the video, not the event stream. Older Chrome sessions sometimes
+  // carry forward events from a previous tab, and a Math.max over all
+  // event timestamps would produce nonsensical "343 minute" durations.
+  if (report.video && report.video.durationMs > 0) {
+    return report.video.durationMs;
+  }
+  // No video → fall back to the event/screenshot span (clamped to a
+  // sensible upper bound so stale events can't blow the duration up).
   const tss: number[] = [];
   for (const e of session.events) tss.push(e.timestamp);
   for (const s of report.screenshots) tss.push(s.timestamp);
-  if (report.video) {
-    tss.push(report.video.startedAt);
-    tss.push(report.video.startedAt + report.video.durationMs);
-  }
   if (tss.length === 0) return 0;
-  return Math.max(...tss) - Math.min(...tss);
+  const span = Math.max(...tss) - Math.min(...tss);
+  // 4-hour ceiling — anything more than that is almost certainly a stale
+  // event timestamp leaking into a fresh session.
+  return Math.min(span, 4 * 60 * 60 * 1000);
 }
 
 /**
