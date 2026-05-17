@@ -458,9 +458,8 @@ async function _toggleVideoRecording(
   btn.style.color = "var(--tb-error, #ef4444)";
   showRecordingHUD(root, {
     onStop: () => { _toggleVideoRecording(root, btn, showToast).catch(() => {}); },
-    onCapture: () => { _captureRollingFromHUD(root, showToast).catch(() => {}); },
   });
-  showToast("Sentry mode armed — hit Capture when a bug appears", root);
+  showToast("Recording started — hit Stop to file a ticket", root);
 }
 
 /**
