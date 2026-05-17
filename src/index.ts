@@ -776,7 +776,6 @@ class TraceBugSDK {
     if (root) {
       showRecordingHUD(root, {
         onStop: () => { this.stopVideoRecording().catch(() => {}); },
-        onCapture: () => { this.captureRollingBuffer().catch(() => {}); },
       });
     }
     return true;
@@ -1301,7 +1300,6 @@ class TraceBugSDK {
     if (!root) return;
     showRecordingHUD(root, {
       onStop: () => { this.stopVideoRecording().catch(() => {}); },
-      onCapture: () => { this.captureRollingBuffer().catch(() => {}); },
     });
     // Also flip the toolbar Record button to its active state so the user
     // sees that recording is on.

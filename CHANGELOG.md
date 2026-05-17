@@ -4,6 +4,16 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+### Phase 5 — Console tab → unified event feed
+
+#### Changed
+
+- **Console tab is now a unified, chronological event feed** (matches Jam.dev's mental model). One scrollable story per session: console logs of every level, page navigations, network errors, user clicks/inputs/selects/submits, and video start/stop markers — all merged and sorted by timestamp.
+- **Six category-filter pills** above the list — `All` / `Console` / `Page navigations` / `Network errors` / `User activity` / `Video` — with live counts. Pills hide categories that have zero entries. Existing search input + "Errors only" toggle still apply.
+- **Per-row layout**: 48 px elapsed-time gutter (`m:ss`) | 24 px SVG category icon | message text + optional collapsed stack trace. Replaces the old card-style log entries.
+- **Category-aware coloring**: navigation rows tinted info-blue, network errors tinted error-red, console errors red text, console warnings amber, video markers in accent.
+- **Mirrored in the HTML export** ([src/exporters/html-template.ts](src/exporters/html-template.ts)) — viewers reviewing an exported `.html` see the same unified feed with the same six pills and same filter behavior.
+
 ### Phase 4 — Video recording stabilization
 
 #### Fixed

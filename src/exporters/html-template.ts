@@ -175,8 +175,9 @@ export function buildReplayHtml(payload: BundlePayload): string {
   <div class="tb-vhelp-card">
     <div class="tb-vhelp-title">Keyboard shortcuts</div>
     <div class="tb-vhelp-row"><kbd>Space</kbd><span>Play / pause recording</span></div>
-    <div class="tb-vhelp-row"><kbd>←</kbd> <kbd>→</kbd><span>Step previous / next event</span></div>
+    <div class="tb-vhelp-row"><kbd>←</kbd> <kbd>→</kbd><span>Seek &minus;5s / +5s</span></div>
     <div class="tb-vhelp-row"><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd><span>Rewind 5s / pause / fast-forward 5s</span></div>
+    <div class="tb-vhelp-row"><kbd>0</kbd><span>Jump to start</span></div>
     <div class="tb-vhelp-row"><kbd>E</kbd><span>Jump to first error</span></div>
     <div class="tb-vhelp-row"><kbd>F</kbd><span>Toggle compact mode</span></div>
     <div class="tb-vhelp-row"><kbd>1</kbd>–<kbd>8</kbd><span>Switch tabs</span></div>
@@ -366,6 +367,35 @@ body { min-height: 100vh; }
 .tb-vnet-pill:hover { border-color: var(--tb-border-hover); color: var(--tb-text); }
 .tb-vnet-pill-active { background: var(--tb-text); color: var(--tb-bg); border-color: var(--tb-text); }
 .tb-vnet-pill-n { background: rgba(0,0,0,0.15); padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; }
+
+/* Unified Console feed (Jam-style) */
+.tb-vfeed-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tb-vfeed-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.tb-vfeed-pill { background: var(--tb-bg); border: 1px solid var(--tb-border); color: var(--tb-text-2); padding: 5px 12px; font-size: 11px; font-weight: 600; border-radius: 999px; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; transition: all .15s; }
+.tb-vfeed-pill:hover { border-color: var(--tb-border-hover); color: var(--tb-text); }
+.tb-vfeed-pill-active { background: var(--tb-text); color: var(--tb-bg); border-color: var(--tb-text); }
+.tb-vfeed-pill-n { background: rgba(0,0,0,0.15); padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; min-width: 14px; text-align: center; }
+.tb-vfeed-pill-active .tb-vfeed-pill-n { background: rgba(255,255,255,0.22); }
+.tb-vfeed-list { display: flex; flex-direction: column; }
+.tb-vfeed-row { display: grid; grid-template-columns: 48px 24px 1fr; align-items: flex-start; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--tb-border); transition: background .12s; cursor: pointer; }
+.tb-vfeed-row:hover { background: var(--tb-bg-2); }
+.tb-vfeed-row-active { background: var(--tb-accent-soft) !important; box-shadow: inset 3px 0 0 var(--tb-accent); }
+.tb-vfeed-row:focus { outline: 2px solid var(--tb-accent); outline-offset: -2px; }
+.tb-vfeed-time { font-family: var(--tb-mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-3); padding-top: 3px; }
+.tb-vfeed-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; color: var(--tb-text-2); border-radius: var(--tb-radius-sm); flex-shrink: 0; }
+.tb-vfeed-body { min-width: 0; }
+.tb-vfeed-msg { font-family: var(--tb-mono); font-size: 12px; color: var(--tb-text); word-break: break-word; line-height: 1.5; }
+.tb-vfeed-stack { font-family: var(--tb-mono); font-size: 10px; color: var(--tb-text-3); margin: 6px 0 0; padding: 6px 8px; background: var(--tb-code-bg); border-radius: var(--tb-radius-sm); max-height: 120px; overflow: auto; white-space: pre-wrap; }
+.tb-vfeed-navigation { background: var(--tb-info-bg); }
+.tb-vfeed-navigation .tb-vfeed-icon { color: var(--tb-info); }
+.tb-vfeed-network-error { background: var(--tb-error-bg); }
+.tb-vfeed-network-error .tb-vfeed-icon { color: var(--tb-error); }
+.tb-vfeed-network-error .tb-vfeed-msg { color: var(--tb-error); }
+.tb-vfeed-video .tb-vfeed-icon { color: var(--tb-accent); }
+.tb-vfeed-lvl-error .tb-vfeed-icon { color: var(--tb-error); }
+.tb-vfeed-lvl-error .tb-vfeed-msg { color: var(--tb-error); }
+.tb-vfeed-lvl-warn .tb-vfeed-icon { color: var(--tb-warning); }
+.tb-vfeed-lvl-warn .tb-vfeed-msg { color: var(--tb-warning); }
 .tb-vnet-pill-active .tb-vnet-pill-n { background: rgba(255,255,255,0.2); }
 .tb-vnet-table { font-family: var(--tb-mono); font-size: 11px; }
 .tb-vnet-row { display: grid; grid-template-columns: 28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items: center; gap: 8px; padding: 0; background: transparent; border: none; }
@@ -475,6 +505,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-rs-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-2); flex: 1; font-family: var(--tb-mono); }
 .tb-rs-jump { background: transparent; color: var(--tb-error); border: 1px solid var(--tb-error); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; }
 .tb-rs-jump:hover { background: var(--tb-error-bg); }
+.tb-rs-dl { background: var(--tb-accent); color: #fff; border: 1px solid var(--tb-accent); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: filter .15s; display: inline-flex; align-items: center; gap: 5px; }
+.tb-rs-dl:hover { filter: brightness(1.1); }
 .tb-rs-track { position: relative; height: 30px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: 999px; cursor: pointer; touch-action: none; user-select: none; }
 .tb-rs-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--tb-accent-soft), transparent); border-radius: 999px; pointer-events: none; }
 .tb-rs-markers { position: absolute; inset: 0; pointer-events: none; }
@@ -607,57 +639,128 @@ const REPLAY_RUNTIME = `(function(){
       }).join("");
   document.getElementById("panel-info").innerHTML = infoHtml;
 
-  // Console tab — full DevTools-like log list with level filter
-  var consoleLogs = data.consoleLogs || [];
-  // Backward compat: older bundles only have consoleErrors. Promote them to
-  // the level-aware shape so the rendering pipeline doesn't need two paths.
-  if (consoleLogs.length === 0) {
-    consoleLogs = (data.consoleErrors || []).map(function(e){
-      return { level: "error", message: e.message, stack: e.stack, timestamp: e.timestamp };
-    });
+  // Console tab — unified event feed (Jam-style): console logs + page
+  // navigations + network errors + user activity + video markers, all
+  // chronologically ordered with category-filter pills.
+  var feedConsole = (data.consoleLogs && data.consoleLogs.length) ? data.consoleLogs :
+    (data.consoleErrors || []).map(function(e){ return { level: "error", message: e.message, stack: e.stack, timestamp: e.timestamp }; });
+  var feedEvents = data.events || [];
+  var feedVideo = data.video || null;
+  var feedStartTs = (feedEvents[0] && feedEvents[0].timestamp) || (feedConsole[0] && feedConsole[0].timestamp) || 0;
+
+  var FEED_ICONS = {
+    videoStart: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    videoStop:  '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>',
+    click:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2l1 2.4M2.2 7.2l2.4 1M4.6 4.6l1.8 1.8"/></svg>',
+    nav:        '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/></svg>',
+    netErr:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M4 12l4-4M4 12l4 4"/></svg>',
+    console:    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>'
+  };
+  function fmtFeedTime(ms){
+    var s = Math.max(0, Math.floor(ms / 1000));
+    return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
   }
-  setBadge("badge-console", consoleLogs.length);
-  if (consoleLogs.length === 0) {
-    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No console output recorded</div>';
+
+  var feed = [];
+  for (var i = 0; i < feedEvents.length; i++) {
+    var t = feedEvents[i];
+    var elapsedMs = t.timestamp - feedStartTs;
+    if (t.type === "route_change") {
+      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "navigation", lvl: "", icon: FEED_ICONS.nav,
+        msg: "Navigated to " + (String(t.description).split("→").pop() || t.description).trim() });
+    } else if (t.type === "api_request" && t.isError) {
+      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "network-error", lvl: "", icon: FEED_ICONS.netErr, msg: t.description });
+    } else if (t.type === "click") {
+      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "user-activity", lvl: "", icon: FEED_ICONS.click,
+        msg: String(t.description).replace(/^click /, "Clicked ") });
+    } else if (t.type === "input" || t.type === "select_change" || t.type === "form_submit") {
+      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "user-activity", lvl: "", icon: FEED_ICONS.click, msg: t.description });
+    }
+  }
+  for (var j = 0; j < feedConsole.length; j++) {
+    var l = feedConsole[j];
+    feed.push({ ts: l.timestamp, el: l.timestamp - feedStartTs, cat: "console", lvl: l.level || "log",
+      icon: FEED_ICONS.console, msg: l.message || "", stack: l.stack });
+  }
+  if (feedVideo) {
+    var vs = feedVideo.startedAt;
+    feed.push({ ts: vs, el: vs - feedStartTs, cat: "video", lvl: "", icon: FEED_ICONS.videoStart, msg: "Video started" });
+    var ve = vs + (feedVideo.durationMs || 0);
+    feed.push({ ts: ve, el: ve - feedStartTs, cat: "video", lvl: "", icon: FEED_ICONS.videoStop, msg: "Video stopped" });
+  }
+  feed.sort(function(a, b){ return a.ts - b.ts; });
+  setBadge("badge-console", feed.length);
+
+  if (feed.length === 0) {
+    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No events recorded</div>';
   } else {
-    var conRows = consoleLogs.map(function(e){
-      var stackStr = e.stack ? e.stack.split("\\n").slice(0, 5).join("\\n") : "";
-      var hay = ((e.message || "") + " " + stackStr + " " + (e.level || "")).toLowerCase();
-      var stackHtml = stackStr ? '<pre class="tb-vlog-stack">' + esc(stackStr) + '</pre>' : '';
-      var lvl = e.level || "log";
-      return '<div class="tb-vlog tb-vlog-' + esc(lvl) + '" data-con-row data-level="' + esc(lvl) + '" data-search="' + esc(hay) + '">' +
-        '<div class="tb-vlog-head">' +
-          '<span class="tb-vlog-lvl tb-vlog-lvl-' + esc(lvl) + '">' + esc(lvl) + '</span>' +
-          '<span class="tb-vlog-msg">' + esc(e.message || "") + '</span>' +
-        '</div>' +
-        stackHtml +
-        '<div class="tb-vlog-ts">' + new Date(e.timestamp).toLocaleTimeString() + '</div>' +
-      '</div>';
+    var counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
+    for (var k = 0; k < feed.length; k++) counts[feed[k].cat] = (counts[feed[k].cat] || 0) + 1;
+    function feedPill(key, label){
+      var c = counts[key] || 0;
+      if (key !== "all" && c === 0) return "";
+      return '<button class="tb-vfeed-pill' + (key === "all" ? " tb-vfeed-pill-active" : "") + '" data-cat="' + key + '">' +
+        label + (c > 0 ? '<span class="tb-vfeed-pill-n">' + c + '</span>' : '') + '</button>';
+    }
+    var feedRows = feed.map(function(e){
+      var hay = ((e.msg || "") + " " + (e.stack || "")).toLowerCase();
+      var isErr = e.cat === "network-error" || e.lvl === "error";
+      var stackStr = e.stack ? String(e.stack).split("\\n").slice(0, 5).join("\\n") : "";
+      var stackHtml = stackStr ? '<pre class="tb-vfeed-stack">' + esc(stackStr) + '</pre>' : '';
+      return '<div class="tb-vfeed-row tb-vfeed-' + e.cat + (isErr ? ' tb-vfeed-err' : '') + (e.lvl ? ' tb-vfeed-lvl-' + e.lvl : '') +
+        '" data-cat="' + e.cat + '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-ts="' + e.ts + '" data-search="' + esc(hay) + '" tabindex="0" role="button" title="Click to seek video to this moment">' +
+        '<span class="tb-vfeed-time">' + fmtFeedTime(e.el) + '</span>' +
+        '<span class="tb-vfeed-icon">' + e.icon + '</span>' +
+        '<span class="tb-vfeed-body"><span class="tb-vfeed-msg">' + esc(e.msg) + '</span>' + stackHtml + '</span>' +
+        '</div>';
     }).join("");
     document.getElementById("panel-console").innerHTML =
-      '<div class="tb-vcon-toolbar">' +
-        '<input id="vcon-search" type="search" placeholder="Filter messages" class="tb-vnet-search" />' +
+      '<div class="tb-vfeed-toolbar">' +
+        '<input id="vcon-search" type="search" placeholder="Filter" class="tb-vnet-search" />' +
         '<label class="tb-vnet-err-toggle"><input id="vcon-errors-only" type="checkbox" /> Errors only</label>' +
-        '<span class="tb-vcon-count">' + consoleLogs.length + '</span>' +
       '</div>' +
-      conRows;
+      '<div class="tb-vfeed-pills">' +
+        feedPill("all", "All") + feedPill("console", "Console") +
+        feedPill("navigation", "Page navigations") + feedPill("network-error", "Network errors") +
+        feedPill("user-activity", "User activity") + feedPill("video", "Video") +
+      '</div>' +
+      '<div class="tb-vfeed-list">' + feedRows + '</div>';
     (function(){
       var panel = document.getElementById("panel-console");
       var searchEl = panel.querySelector("#vcon-search");
       var errOnly = panel.querySelector("#vcon-errors-only");
+      var pills = panel.querySelectorAll(".tb-vfeed-pill");
+      var activeCat = "all";
       function apply(){
         var q = (searchEl.value || "").trim().toLowerCase();
         var eo = errOnly.checked;
-        panel.querySelectorAll("[data-con-row]").forEach(function(row){
+        panel.querySelectorAll(".tb-vfeed-row").forEach(function(row){
+          var cat = row.getAttribute("data-cat") || "";
           var hay = row.getAttribute("data-search") || "";
-          var lvl = row.getAttribute("data-level") || "";
+          var isErr = row.getAttribute("data-err") === "1";
+          var catMatch = activeCat === "all" || cat === activeCat;
           var qMatch = q.length === 0 || hay.indexOf(q) !== -1;
-          var lvlMatch = !eo || lvl === "error";
-          row.style.display = (qMatch && lvlMatch) ? "" : "none";
+          var errMatch = !eo || isErr;
+          row.style.display = (catMatch && qMatch && errMatch) ? "" : "none";
         });
       }
       searchEl.addEventListener("input", apply);
       errOnly.addEventListener("change", apply);
+      pills.forEach(function(p){
+        p.addEventListener("click", function(){
+          activeCat = p.getAttribute("data-cat") || "all";
+          pills.forEach(function(q){ q.classList.toggle("tb-vfeed-pill-active", q === p); });
+          apply();
+        });
+      });
+      // Click a Console row to seek the video / scrubber to that moment.
+      panel.addEventListener("click", function(e){
+        var row = e.target.closest ? e.target.closest(".tb-vfeed-row") : null;
+        if (!row) return;
+        var ts = Number(row.getAttribute("data-ts"));
+        if (!isFinite(ts)) return;
+        try { if (typeof scrubberSeek === "function") scrubberSeek(ts); } catch(_e){}
+      });
     })();
   }
 
@@ -944,10 +1047,13 @@ const REPLAY_RUNTIME = `(function(){
     if (videoLoaded || !hasVideo) { if (autoplay) try { video.play(); } catch(e) {} return; }
     videoLoaded = true;
     try {
-      var match = /^data:([^;]+);base64,(.*)$/.exec(data.video.dataUrl);
+      // Non-greedy `(.*?)` because the mime can itself contain commas
+      // (e.g. "video/webm;codecs=vp9,opus") — a `[^;]+` group would
+      // truncate the prefix before `;base64,` and decode garbage.
+      var match = /^data:(.*?);base64,(.*)$/.exec(data.video.dataUrl);
       if (!match) { video.src = data.video.dataUrl; }
       else {
-        var mime = match[1];
+        var mime = (match[1].split(";")[0]) || "video/webm";
         var bin = atob(match[2]);
         var len = bin.length;
         var bytes = new Uint8Array(len);
@@ -970,6 +1076,71 @@ const REPLAY_RUNTIME = `(function(){
   }
   if (playOverlay) {
     playOverlay.addEventListener("click", function(){ loadVideo(true); });
+  }
+
+  // ── Auto-pause-at-error + console-sync (driven by video.timeupdate) ───
+  // While the video plays, push the scrubber along, highlight the
+  // matching Console row, and pause the video the first time we cross
+  // each error marker. _visitedErrors is reset on manual seek so the
+  // user can re-trigger the pause by scrubbing backward.
+  var _visitedErrors = {};
+  if (video) {
+    video.addEventListener("timeupdate", function(){
+      if (!data.video || !data.video.startedAt) return;
+      var ts = data.video.startedAt + video.currentTime * 1000;
+      var prevTs = current;
+      current = Math.max(startedAt, Math.min(endedAt, ts));
+      renderHandle();
+      _syncConsoleFeed(current);
+      // Auto-pause across any unvisited error markers in this tick.
+      var em = data.events || [];
+      for (var i = 0; i < em.length; i++) {
+        if (!em[i].isError) continue;
+        var et = em[i].timestamp;
+        if (_visitedErrors[et]) continue;
+        if (et >= prevTs && et <= current + 250) {
+          _visitedErrors[et] = true;
+          try { video.pause(); } catch(_e){}
+          _flashErrorToast(em[i]);
+          break;
+        }
+      }
+    });
+  }
+
+  function _syncConsoleFeed(ts) {
+    var panel = document.getElementById("panel-console");
+    if (!panel) return;
+    var rows = panel.querySelectorAll(".tb-vfeed-row");
+    if (rows.length === 0) return;
+    var activeRow = null, activeTs = -Infinity;
+    for (var i = 0; i < rows.length; i++) {
+      var rt = Number(rows[i].getAttribute("data-ts"));
+      if (!isFinite(rt)) continue;
+      if (rt <= ts && rt > activeTs) { activeTs = rt; activeRow = rows[i]; }
+    }
+    if (!activeRow) return;
+    if (panel._lastActiveTs === activeTs) return;
+    panel._lastActiveTs = activeTs;
+    for (var j = 0; j < rows.length; j++) {
+      rows[j].classList.toggle("tb-vfeed-row-active", rows[j] === activeRow);
+    }
+    var panelRect = panel.getBoundingClientRect();
+    var rowRect = activeRow.getBoundingClientRect();
+    if (rowRect.top < panelRect.top || rowRect.bottom > panelRect.bottom) {
+      activeRow.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+
+  function _flashErrorToast(marker) {
+    var existing = document.querySelector(".tb-rs-err-toast");
+    if (existing) existing.remove();
+    var t = document.createElement("div");
+    t.className = "tb-rs-err-toast";
+    t.textContent = "⏸ Paused at error — " + String(marker.description || "").slice(0, 60);
+    var host = document.getElementById("scrubber");
+    if (host) host.appendChild(t);
+    setTimeout(function(){ try { t.remove(); } catch(_e){} }, 2500);
   }
 
   function findClosest(list, ts) {
@@ -1016,7 +1187,50 @@ const REPLAY_RUNTIME = `(function(){
   var span = Math.max(1000, endedAt - startedAt); // floor 1s so scrubber is usable
   var errorMarkers = events.filter(function(e){ return e.isError; });
   var scrubberHost = document.getElementById("scrubber");
-  scrubberHost.innerHTML = '<div class="tb-rs-root" tabindex="0"><div class="tb-rs-header"><span class="tb-rs-label">Replay</span><span class="tb-rs-time" id="tb-rs-time">00:00 / ' + fmtElapsed(span) + '</span><button class="tb-rs-jump" id="tb-rs-jump" type="button" style="display:' + (errorMarkers.length ? "inline-block" : "none") + '">Jump to error</button></div><div class="tb-rs-track" id="tb-rs-track"><div class="tb-rs-fill" id="tb-rs-fill"></div><div class="tb-rs-markers" id="tb-rs-markers"></div><div class="tb-rs-handle" id="tb-rs-handle"></div></div></div>';
+  // Download button surfaces only when a video is embedded — gives the
+  // viewer a one-click way to grab the .webm to drag into Jira / GitHub /
+  // Slack etc. instead of having to right-click → Save Video As.
+  var dlBtnHtml = hasVideo
+    ? '<button class="tb-rs-dl" id="tb-rs-dl" type="button" title="Download recording">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M5 13l7 7 7-7M4 21h16"/></svg>' +
+        '<span>Download</span>' +
+      '</button>'
+    : '';
+  scrubberHost.innerHTML = '<div class="tb-rs-root" tabindex="0"><div class="tb-rs-header"><span class="tb-rs-label">Replay</span><span class="tb-rs-time" id="tb-rs-time">00:00 / ' + fmtElapsed(span) + '</span><button class="tb-rs-jump" id="tb-rs-jump" type="button" style="display:' + (errorMarkers.length ? "inline-block" : "none") + '">Jump to error</button>' + dlBtnHtml + '</div><div class="tb-rs-track" id="tb-rs-track"><div class="tb-rs-fill" id="tb-rs-fill"></div><div class="tb-rs-markers" id="tb-rs-markers"></div><div class="tb-rs-handle" id="tb-rs-handle"></div></div></div>';
+
+  if (hasVideo) {
+    var dlBtn = document.getElementById("tb-rs-dl");
+    if (dlBtn) dlBtn.addEventListener("click", function(){
+      // Decode the base64 dataUrl into a blob (avoids the gigantic
+      // chrome://about-blank "Save target as" prompt browsers throw at
+      // multi-MB data: URLs).
+      try {
+        var m = /^data:(.*?);base64,(.*)$/.exec(data.video.dataUrl || "");
+        var mime = (m && m[1].split(";")[0]) || "video/webm";
+        var bytes;
+        if (m) {
+          var bin = atob(m[2]);
+          bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        }
+        var blob = bytes ? new Blob([bytes], { type: mime }) : null;
+        var url = blob ? URL.createObjectURL(blob) : data.video.dataUrl;
+        var ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
+        var sid = (data.meta && data.meta.sessionId ? data.meta.sessionId.slice(0, 8) : "session");
+        var stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "tracebug-recording-" + sid + "-" + stamp + "." + ext;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (blob) setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(_e){} }, 30000);
+      } catch (err) {
+        // Fallback: open the dataUrl in a new tab; user can Save As.
+        try { window.open(data.video.dataUrl, "_blank"); } catch(_e){}
+      }
+    });
+  }
 
   var trackEl = document.getElementById("tb-rs-track");
   var fillEl = document.getElementById("tb-rs-fill");
@@ -1052,6 +1266,9 @@ const REPLAY_RUNTIME = `(function(){
   function scrubberSeek(ts) {
     current = Math.max(startedAt, Math.min(endedAt, ts));
     renderHandle();
+    // Manual seek → re-arm error auto-pause so the user can re-trigger
+    // by scrubbing back across an error.
+    _visitedErrors = {};
     // Swap screenshot preview
     var ss = findClosest(screenshots, current);
     if (ss && img.style.display !== "none") {
@@ -1062,6 +1279,8 @@ const REPLAY_RUNTIME = `(function(){
     if (data.video && data.video.startedAt) {
       try { video.currentTime = Math.max(0, (current - data.video.startedAt) / 1000); } catch(e) {}
     }
+    // Sync Console feed highlight.
+    try { _syncConsoleFeed(current); } catch(_e){}
   }
 
   // Init
@@ -1145,8 +1364,21 @@ const REPLAY_RUNTIME = `(function(){
       return;
     }
     if (e.key === " " || e.code === "Space") { e.preventDefault(); togglePlayback(); return; }
-    if (e.key === "ArrowLeft") { e.preventDefault(); jumpEvent(-1); return; }
-    if (e.key === "ArrowRight") { e.preventDefault(); jumpEvent(1); return; }
+    // Arrows now seek ±5s on the video (matches the modal). J/K/L stays
+    // for power users. Without a video, arrows still step events.
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      _visitedErrors = {};
+      if (hasVideo) { nudgeVideo(-5); } else { jumpEvent(-1); }
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      _visitedErrors = {};
+      if (hasVideo) { nudgeVideo(5); } else { jumpEvent(1); }
+      return;
+    }
+    if (e.key === "0") { e.preventDefault(); _visitedErrors = {}; scrubberSeek(startedAt); return; }
     if (e.key === "j" || e.key === "J") { e.preventDefault(); nudgeVideo(-5); return; }
     if (e.key === "l" || e.key === "L") { e.preventDefault(); nudgeVideo(5); return; }
     if (e.key === "k" || e.key === "K") { e.preventDefault(); togglePlayback(); return; }

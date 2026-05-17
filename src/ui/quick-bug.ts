@@ -328,7 +328,10 @@ function _openModal(
           </div>
           <div class="tb-qb-vidmeta">
             <span>${_formatVideoTime(video.durationMs)} · ${_formatBytes(video.sizeBytes)} · ${video.comments.length} timestamped comment${video.comments.length === 1 ? "" : "s"}</span>
-            <button data-action="download-video" class="tb-qb-btn-sm">⬇ Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}</button>
+            <button data-action="download-video" class="tb-qb-btn-dl" title="Download recording — drag into Jira / GitHub / Slack to attach">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M5 13l7 7 7-7M4 21h16"/></svg>
+              Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}
+            </button>
           </div>
         ` : ""}
 
@@ -444,15 +447,17 @@ function _openModal(
 
   // ── Mount replay scrubber ──────────────────────────────────────────
   // Drives the screenshot preview swap and (if present) the video seek.
-  // Lives between screenshot gallery and video block per ROADMAP §4.3.
+  // The Console feed also subscribes to onSeek for live highlight + scroll,
+  // and emits seek calls back when the user clicks a Console row.
   const scrubberHost = modal.querySelector<HTMLElement>("#tb-qb-scrubber");
+  let _scrubberCtl: { seek: (ts: number) => void; destroy: () => void } | null = null;
   if (scrubberHost && data.timeline.length > 0) {
     const ssForScrub = data.screenshots.map(s => ({ timestamp: s.timestamp, dataUrl: s.dataUrl }));
     const videoEl = modal.querySelector<HTMLVideoElement>("video");
     if (videoEl && video) {
       videoEl.dataset.tbStartTs = String(video.startedAt);
     }
-    mountReplayScrubber(scrubberHost, {
+    _scrubberCtl = mountReplayScrubber(scrubberHost, {
       timeline: data.timeline,
       screenshots: ssForScrub,
       videoEl,
@@ -460,18 +465,32 @@ function _openModal(
         // Swap primary screenshot to whichever is closest to the scrubber.
         const img = modal.querySelector<HTMLImageElement>("#tb-qb-primary-img");
         const meta = modal.querySelector<HTMLDivElement>("#tb-qb-primary-meta");
-        if (!img || data.screenshots.length === 0) return;
-        let best = data.screenshots[0];
-        let bestDelta = Math.abs(best.timestamp - ts);
-        for (const s of data.screenshots) {
-          const d = Math.abs(s.timestamp - ts);
-          if (d < bestDelta) { best = s; bestDelta = d; }
+        if (img && data.screenshots.length > 0) {
+          let best = data.screenshots[0];
+          let bestDelta = Math.abs(best.timestamp - ts);
+          for (const s of data.screenshots) {
+            const d = Math.abs(s.timestamp - ts);
+            if (d < bestDelta) { best = s; bestDelta = d; }
+          }
+          img.src = best.dataUrl;
+          if (meta) meta.textContent = `${best.filename} · ${best.width}x${best.height}`;
         }
-        img.src = best.dataUrl;
-        if (meta) meta.textContent = `${best.filename} · ${best.width}x${best.height}`;
+        // Highlight + scroll the matching Console feed row.
+        _syncConsoleFeedToTimestamp(modal, ts);
       },
     });
   }
+
+  // Console feed click → scrubber.seek (lets devs jump straight from a
+  // suspicious log line to that moment in the video).
+  const conPanelForClicks = modal.querySelector<HTMLElement>('[data-panel="console"]');
+  conPanelForClicks?.addEventListener("click", (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".tb-qb-feed-row");
+    if (!row || !_scrubberCtl) return;
+    const ts = Number(row.dataset.ts);
+    if (!Number.isFinite(ts)) return;
+    _scrubberCtl.seek(ts);
+  });
 
   // ── Wire up actions ────────────────────────────────────────────────
   const getDraft = (): { title: string; description: string } => {
@@ -724,24 +743,35 @@ function _openModal(
     });
   }
 
-  // ── Console tab filters ───────────────────────────────────────────────
+  // ── Console tab filters (unified feed) ────────────────────────────────
   const conPanel = modal.querySelector<HTMLElement>('[data-panel="console"]');
   if (conPanel) {
     const conSearch = conPanel.querySelector<HTMLInputElement>("#tb-qb-con-search");
     const conErrOnly = conPanel.querySelector<HTMLInputElement>("#tb-qb-con-errors-only");
-    const applyConFilter = () => {
+    const pills = conPanel.querySelectorAll<HTMLButtonElement>(".tb-qb-feed-pill");
+    let activeCat = "all";
+    const applyFeedFilter = () => {
       const q = (conSearch?.value || "").trim().toLowerCase();
       const errOnly = !!conErrOnly?.checked;
-      conPanel.querySelectorAll<HTMLElement>("[data-con-row]").forEach((row) => {
-        const hay = (row.dataset.search || "").toLowerCase();
-        const level = row.dataset.level || "";
+      conPanel.querySelectorAll<HTMLElement>(".tb-qb-feed-row").forEach((row) => {
+        const cat = row.dataset.cat || "";
+        const hay = row.dataset.search || "";
+        const isErr = row.dataset.err === "1";
+        const catMatch = activeCat === "all" || cat === activeCat;
         const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
-        const levelMatch = !errOnly || level === "error";
-        (row as HTMLElement).style.display = (searchMatch && levelMatch) ? "" : "none";
+        const errMatch = !errOnly || isErr;
+        row.style.display = (catMatch && searchMatch && errMatch) ? "" : "none";
       });
     };
-    conSearch?.addEventListener("input", applyConFilter);
-    conErrOnly?.addEventListener("change", applyConFilter);
+    conSearch?.addEventListener("input", applyFeedFilter);
+    conErrOnly?.addEventListener("change", applyFeedFilter);
+    pills.forEach((p) => {
+      p.addEventListener("click", () => {
+        activeCat = p.dataset.cat || "all";
+        pills.forEach((q) => q.classList.toggle("tb-qb-feed-pill-active", q === p));
+        applyFeedFilter();
+      });
+    });
   }
 
   // Linear — open prefilled new-issue URL in a new tab (no API key needed).
@@ -971,36 +1001,189 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   return `<div class="tb-qb-info">${rows.join("")}</div>`;
 }
 
+// ── Unified Console feed (Jam-style) ────────────────────────────────────
+// Merges timeline events + console logs + video markers into a single
+// chronological feed, then lets the user filter by category.
+
+interface ConsoleFeedEntry {
+  timestamp: number;
+  elapsedMs: number;
+  cat: "console" | "navigation" | "network-error" | "user-activity" | "video";
+  level: "error" | "warn" | "log" | "info" | ""; // level only for console items
+  icon: string;        // svg or unicode glyph
+  message: string;
+  detail?: string;     // optional secondary text (e.g. URL)
+  stack?: string;      // optional stack for console errors
+}
+
+const CON_ICONS = {
+  videoStart: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
+  videoStop:  `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>`,
+  click:      `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9l5 12 1.8-5.2L21 14z"/><path d="M7.2 2.2l1 2.4M2.2 7.2l2.4 1M4.6 4.6l1.8 1.8"/></svg>`,
+  nav:        `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>`,
+  netErr:     `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M4 12l4-4M4 12l4 4"/></svg>`,
+  console:    `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`,
+};
+
+function _formatFeedElapsed(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Highlight + auto-scroll the Console feed row closest to the given
+ * timestamp. Throttled internally — DOM writes only happen when the
+ * active row actually changes, so the hot timeupdate path stays cheap.
+ */
+let _lastActiveFeedTs = -1;
+function _syncConsoleFeedToTimestamp(modal: HTMLElement, ts: number): void {
+  const panel = modal.querySelector<HTMLElement>('[data-panel="console"]');
+  if (!panel) return;
+  const rows = panel.querySelectorAll<HTMLElement>(".tb-qb-feed-row");
+  if (rows.length === 0) return;
+  // Pick the row with the largest timestamp <= ts (i.e., the most recent
+  // entry up to "now"). Linear scan is fine — feeds rarely exceed a few
+  // hundred rows.
+  let activeRow: HTMLElement | null = null;
+  let activeTs = -Infinity;
+  rows.forEach((row) => {
+    const rt = Number(row.dataset.ts);
+    if (!Number.isFinite(rt)) return;
+    if (rt <= ts && rt > activeTs) { activeTs = rt; activeRow = row; }
+  });
+  if (!activeRow || activeTs === _lastActiveFeedTs) return;
+  _lastActiveFeedTs = activeTs;
+  rows.forEach((row) => row.classList.toggle("tb-qb-feed-row-active", row === activeRow));
+  // Scroll the active row into view only if it's off-screen — never
+  // hijack the user's scroll position while they're reading.
+  const row = activeRow as HTMLElement;
+  const panelRect = panel.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  if (rowRect.top < panelRect.top || rowRect.bottom > panelRect.bottom) {
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+function _buildConsoleFeed(report: import("../types").BugReport | null): ConsoleFeedEntry[] {
+  if (!report) return [];
+  const session = report.session;
+  const events = session?.events || [];
+  const startTs = events[0]?.timestamp || report.consoleLogs?.[0]?.timestamp || Date.now();
+  const feed: ConsoleFeedEntry[] = [];
+
+  // Timeline entries → category mapping
+  for (const t of report.timeline || []) {
+    const elapsedMs = t.timestamp - startTs;
+    if (t.type === "route_change") {
+      feed.push({
+        timestamp: t.timestamp, elapsedMs, cat: "navigation", level: "",
+        icon: CON_ICONS.nav, message: `Navigated to ${t.description.split("→").pop()?.trim() || t.description}`,
+      });
+    } else if (t.type === "api_request" && t.isError) {
+      feed.push({
+        timestamp: t.timestamp, elapsedMs, cat: "network-error", level: "",
+        icon: CON_ICONS.netErr, message: t.description,
+      });
+    } else if (t.type === "click") {
+      feed.push({
+        timestamp: t.timestamp, elapsedMs, cat: "user-activity", level: "",
+        icon: CON_ICONS.click, message: t.description.replace(/^click /, "Clicked "),
+      });
+    } else if (t.type === "input" || t.type === "select_change" || t.type === "form_submit") {
+      feed.push({
+        timestamp: t.timestamp, elapsedMs, cat: "user-activity", level: "",
+        icon: CON_ICONS.click, message: t.description,
+      });
+    }
+  }
+
+  // Console logs → console category (all levels)
+  for (const l of report.consoleLogs || []) {
+    feed.push({
+      timestamp: l.timestamp,
+      elapsedMs: l.timestamp - startTs,
+      cat: "console",
+      level: l.level,
+      icon: CON_ICONS.console,
+      message: l.message,
+      stack: l.stack,
+    });
+  }
+  // Fallback for older reports without consoleLogs but with consoleErrors.
+  if (!report.consoleLogs?.length && report.consoleErrors?.length) {
+    for (const e of report.consoleErrors) {
+      feed.push({
+        timestamp: e.timestamp, elapsedMs: e.timestamp - startTs,
+        cat: "console", level: "error", icon: CON_ICONS.console,
+        message: e.message, stack: e.stack,
+      });
+    }
+  }
+
+  // Video markers — start at recording start, stop at start + duration.
+  if (report.video) {
+    const vs = report.video.startedAt;
+    feed.push({
+      timestamp: vs, elapsedMs: vs - startTs, cat: "video", level: "",
+      icon: CON_ICONS.videoStart, message: "Video started",
+    });
+    const ve = vs + report.video.durationMs;
+    feed.push({
+      timestamp: ve, elapsedMs: ve - startTs, cat: "video", level: "",
+      icon: CON_ICONS.videoStop, message: "Video stopped",
+    });
+  }
+
+  feed.sort((a, b) => a.timestamp - b.timestamp);
+  return feed;
+}
+
 function _buildConsoleTab(report: import("../types").BugReport | null): string {
-  // Prefer full console capture (all levels) when available; fall back to
-  // errors-only for older reports.
-  const fullLogs = report?.consoleLogs as Array<{ level: string; message: string; stack?: string; timestamp: number }> | undefined;
-  const entries: Array<{ level: string; message: string; stack?: string; timestamp: number }> = fullLogs && fullLogs.length
-    ? fullLogs
-    : (report?.consoleErrors || []).map((e) => ({ level: "error", message: e.message, stack: e.stack, timestamp: e.timestamp }));
-  if (entries.length === 0) {
+  const feed = _buildConsoleFeed(report);
+  if (feed.length === 0) {
     return `<div class="tb-qb-empty">No console output recorded this session</div>`;
   }
-  const rows = entries.map((e) => {
-    const stack = e.stack ? e.stack.split("\n").slice(0, 5).join("\n") : "";
-    const hay = `${e.message || ""} ${stack} ${e.level}`.toLowerCase();
-    const lvl = e.level || "log";
-    return `<div class="tb-qb-log tb-qb-log-${lvl}" data-con-row data-search="${escapeHtml(hay)}" data-level="${lvl}">
-      <div class="tb-qb-log-head">
-        <span class="tb-qb-log-lvl tb-qb-log-lvl-${lvl}">${lvl}</span>
-        <span class="tb-qb-log-msg">${escapeHtml(e.message || "")}</span>
-      </div>
-      ${stack ? `<pre class="tb-qb-log-stack">${escapeHtml(stack)}</pre>` : ""}
-      <div class="tb-qb-log-ts">${new Date(e.timestamp).toLocaleTimeString()}</div>
+
+  // Pill counts so the user sees what's available before clicking.
+  const counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
+  for (const e of feed) counts[e.cat] = (counts[e.cat] || 0) + 1;
+
+  const pill = (key: string, label: string) => {
+    const c = (counts as any)[key] || 0;
+    if (key !== "all" && c === 0) return "";
+    return `<button class="tb-qb-feed-pill${key === "all" ? " tb-qb-feed-pill-active" : ""}" data-cat="${key}">${label}${c > 0 ? `<span class="tb-qb-feed-pill-n">${c}</span>` : ""}</button>`;
+  };
+
+  const rows = feed.map((e) => {
+    const hay = `${e.message} ${e.detail || ""} ${e.stack || ""}`.toLowerCase();
+    const isErr = e.cat === "network-error" || e.level === "error";
+    const stackHtml = e.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml(e.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
+    return `<div class="tb-qb-feed-row tb-qb-feed-${e.cat}${isErr ? " tb-qb-feed-err" : ""}${e.level ? " tb-qb-feed-lvl-" + e.level : ""}" data-cat="${e.cat}" data-level="${e.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e.timestamp}" data-search="${escapeHtml(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
+      <span class="tb-qb-feed-time">${_formatFeedElapsed(e.elapsedMs)}</span>
+      <span class="tb-qb-feed-icon" aria-hidden="true">${e.icon}</span>
+      <span class="tb-qb-feed-body">
+        <span class="tb-qb-feed-msg">${escapeHtml(e.message)}</span>
+        ${stackHtml}
+      </span>
     </div>`;
   }).join("");
+
   return `
-    <div class="tb-qb-con-toolbar">
-      <input id="tb-qb-con-search" type="search" placeholder="Filter messages" class="tb-qb-net-search" />
+    <div class="tb-qb-feed-toolbar">
+      <input id="tb-qb-con-search" type="search" placeholder="Filter" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-con-errors-only" type="checkbox" /> Errors only</label>
-      <span class="tb-qb-con-count">${entries.length}</span>
     </div>
-    ${rows}
+    <div class="tb-qb-feed-pills">
+      ${pill("all", "All")}
+      ${pill("console", "Console")}
+      ${pill("navigation", "Page navigations")}
+      ${pill("network-error", "Network errors")}
+      ${pill("user-activity", "User activity")}
+      ${pill("video", "Video")}
+    </div>
+    <div class="tb-qb-feed-list">${rows}</div>
   `;
 }
 
@@ -1285,6 +1468,8 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
     #${MODAL_ID} .tb-qb-btn-sm:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
+    #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }
     #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
     #${MODAL_ID} .tb-qb-thumb { position:relative; padding:0; border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); overflow:hidden; cursor:pointer; background:var(--tb-bg-secondary); width:68px; height:52px; transition:border-color 0.15s, transform 0.1s; }
@@ -1356,6 +1541,38 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-net-err-toggle input { accent-color:var(--tb-accent); cursor:pointer; }
     #${MODAL_ID} .tb-qb-con-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
     #${MODAL_ID} .tb-qb-con-count { font-size:10px; color:var(--tb-text-muted); white-space:nowrap; text-transform:uppercase; letter-spacing:0.4px; font-weight:600; }
+
+    /* Unified Console feed — Jam-style timeline of events */
+    #${MODAL_ID} .tb-qb-feed-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    #${MODAL_ID} .tb-qb-feed-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+    #${MODAL_ID} .tb-qb-feed-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:5px 12px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
+    #${MODAL_ID} .tb-qb-feed-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-feed-pill-active { background:var(--tb-text-primary); color:var(--tb-bg-primary); border-color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-feed-pill-n { background:rgba(0,0,0,0.15); padding:1px 6px; border-radius:999px; font-size:9px; font-weight:700; min-width:14px; text-align:center; }
+    #${MODAL_ID} .tb-qb-feed-pill-active .tb-qb-feed-pill-n { background:rgba(255,255,255,0.22); }
+    #${MODAL_ID} .tb-qb-feed-list { display:flex; flex-direction:column; }
+    #${MODAL_ID} .tb-qb-feed-row { display:grid; grid-template-columns:48px 24px 1fr; align-items:flex-start; gap:10px; padding:8px 10px; border-bottom:1px solid var(--tb-border-subtle); transition:background .12s; cursor:pointer; }
+    #${MODAL_ID} .tb-qb-feed-row:hover { background:var(--tb-bg-secondary); }
+    #${MODAL_ID} .tb-qb-feed-row-active { background:var(--tb-accent-subtle) !important; box-shadow:inset 3px 0 0 var(--tb-accent); }
+    #${MODAL_ID} .tb-qb-feed-row:focus { outline:2px solid var(--tb-accent); outline-offset:-2px; }
+    #${MODAL_ID} .tb-qb-feed-time { font-family:var(--tb-font-mono); font-size:11px; font-variant-numeric:tabular-nums; color:var(--tb-text-muted); padding-top:3px; }
+    #${MODAL_ID} .tb-qb-feed-icon { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; color:var(--tb-text-secondary); border-radius:var(--tb-radius-sm); flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-feed-body { min-width:0; }
+    #${MODAL_ID} .tb-qb-feed-msg { font-family:var(--tb-font-mono); font-size:12px; color:var(--tb-text-primary); word-break:break-word; line-height:1.5; }
+    #${MODAL_ID} .tb-qb-feed-stack { font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-muted); margin:6px 0 0; padding:6px 8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:120px; overflow:auto; white-space:pre-wrap; }
+    /* Category accents */
+    #${MODAL_ID} .tb-qb-feed-navigation { background:var(--tb-info-bg); }
+    #${MODAL_ID} .tb-qb-feed-navigation:hover { background:var(--tb-info-bg); filter:brightness(0.97); }
+    #${MODAL_ID} .tb-qb-feed-navigation .tb-qb-feed-icon { color:var(--tb-info); }
+    #${MODAL_ID} .tb-qb-feed-network-error { background:var(--tb-error-bg); }
+    #${MODAL_ID} .tb-qb-feed-network-error .tb-qb-feed-icon { color:var(--tb-error); }
+    #${MODAL_ID} .tb-qb-feed-network-error .tb-qb-feed-msg { color:var(--tb-error); }
+    #${MODAL_ID} .tb-qb-feed-user-activity .tb-qb-feed-icon { color:var(--tb-text-secondary); }
+    #${MODAL_ID} .tb-qb-feed-video .tb-qb-feed-icon { color:var(--tb-accent); }
+    #${MODAL_ID} .tb-qb-feed-lvl-error .tb-qb-feed-icon { color:var(--tb-error); }
+    #${MODAL_ID} .tb-qb-feed-lvl-error .tb-qb-feed-msg { color:var(--tb-error); }
+    #${MODAL_ID} .tb-qb-feed-lvl-warn .tb-qb-feed-icon { color:var(--tb-warning); }
+    #${MODAL_ID} .tb-qb-feed-lvl-warn .tb-qb-feed-msg { color:var(--tb-warning); }
     #${MODAL_ID} .tb-qb-net-pills { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; }
     #${MODAL_ID} .tb-qb-net-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:4px 11px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
     #${MODAL_ID} .tb-qb-net-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
