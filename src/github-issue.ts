@@ -4,7 +4,7 @@
 
 import { BugReport } from "./types";
 import { formatTimelineText } from "./timeline-builder";
-import { formatRootCauseLine } from "./report-builder";
+import { formatRootCauseLine, severityTitlePrefix } from "./report-builder";
 
 // GitHub URL prefill has a ~8KB practical limit (some browsers/proxies cap at 6-8KB)
 const GITHUB_URL_BODY_LIMIT = 6000;
@@ -29,7 +29,12 @@ export function generateGitHubIssueUrl(
     throw new Error(`Invalid repo format: "${repo}". Expected "owner/repo".`);
   }
 
-  const title = report.title || "Bug report";
+  // Carry the severity emoji into the URL-prefill title so the issue lands
+  // pre-triaged. Skip if the caller already added a leading emoji.
+  const rawTitle = report.title || "Bug report";
+  const title = rawTitle.match(/^[🔴🟠🟡🟢]/)
+    ? rawTitle
+    : `${severityTitlePrefix(report.severity)}${rawTitle}`;
   let body = generateGitHubIssue(report);
 
   // Strip the leading "## title" since GitHub already shows the title separately
@@ -71,7 +76,12 @@ export function openGitHubIssue(repo: string, report: BugReport, labels?: string
 export function generateGitHubIssue(report: BugReport): string {
   const env = report.environment;
 
-  let md = `## ${report.title}\n\n`;
+  // Title carries the severity emoji prefix (🔴 Critical · …) so triagers see
+  // priority at a glance in the issue list.
+  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/)
+    ? report.title
+    : `${severityTitlePrefix(report.severity)}${report.title}`;
+  let md = `## ${titleWithSeverity}\n\n`;
 
   // Root-cause hint — what a dev should check first
   const rc = formatRootCauseLine(report.rootCause);
@@ -102,6 +112,16 @@ export function generateGitHubIssue(report: BugReport): string {
     md += `### Recent Actions\n\n`;
     for (const step of report.sessionSteps) {
       md += `1. ${step}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Custom context (TraceBug.context({...})) — only when non-empty.
+  const ctxKeys = report.context ? Object.keys(report.context) : [];
+  if (ctxKeys.length > 0) {
+    md += `### Context\n\n`;
+    for (const k of ctxKeys) {
+      md += `- **${k}**: \`${String(report.context[k])}\`\n`;
     }
     md += `\n`;
   }
@@ -180,6 +200,23 @@ export function generateGitHubIssue(report: BugReport): string {
     }
   }
 
+  // Screen recording — file is auto-downloaded on export so the dev can attach it.
+  if (report.video) {
+    const v = report.video;
+    const ext = v.mimeType.includes("mp4") ? "mp4" : "webm";
+    const stamp = new Date(v.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const filename = `tracebug-recording-${stamp}.${ext}`;
+    md += `### Screen Recording\n\n`;
+    md += `> Drag and drop the downloaded recording: \`${filename}\` (${formatVideoMeta(v)})\n\n`;
+    if (v.comments.length > 0) {
+      md += `**Timestamped comments:**\n\n`;
+      for (const c of v.comments) {
+        md += `- \`${formatOffset(c.offsetMs)}\` — ${c.text}\n`;
+      }
+      md += `\n`;
+    }
+  }
+
   // Screenshots — filenames listed, auto-downloaded for drag-and-drop
   if (report.screenshots.length > 0) {
     md += `### Screenshots\n\n`;
@@ -207,4 +244,19 @@ export function generateGitHubIssue(report: BugReport): string {
   md += `_[TraceBug SDK](https://www.npmjs.com/package/tracebug-sdk) · Session: \`${report.session.sessionId.slice(0, 8)}\`_\n`;
 
   return md;
+}
+
+function formatVideoMeta(v: { durationMs: number; sizeBytes: number }): string {
+  const sec = Math.max(0, Math.floor(v.durationMs / 1000));
+  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const s = (sec % 60).toString().padStart(2, "0");
+  const sizeMb = (v.sizeBytes / (1024 * 1024)).toFixed(1);
+  return `${m}:${s} · ${sizeMb} MB`;
+}
+
+function formatOffset(ms: number): string {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(sec / 60).toString().padStart(2, "0");
+  const s = (sec % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
 }

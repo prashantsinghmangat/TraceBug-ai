@@ -1,5 +1,16 @@
 # Annotate & Draw
 
+> **v1.0 status — programmatic only.** Both modes were cut from the default toolbar in v1.0 to reduce overlap with the screenshot-annotation editor. The source files still ship in the bundle and the public API is unchanged — anything below works if you call it from your own code or a plugin. The `Ctrl+Shift+A` and `Ctrl+Shift+D` shortcuts are not wired in v1.0.
+>
+> **To re-enable the toolbar buttons** locally, restore the cut blocks in [src/compact-toolbar.ts](../src/compact-toolbar.ts) (`grep "Annotate + Draw modes were cut"` to find the spot). Or call the APIs from your own UI:
+>
+> ```typescript
+> TraceBug.activateAnnotateMode();   // start clicking elements
+> TraceBug.deactivateAnnotateMode();
+> TraceBug.activateDrawMode();       // drag rectangles/ellipses
+> TraceBug.deactivateDrawMode();
+> ```
+
 TraceBug provides two visual feedback modes for marking up UI issues directly on the live page — no screenshots needed.
 
 ## Element Annotate Mode

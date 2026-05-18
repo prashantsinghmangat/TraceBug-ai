@@ -142,24 +142,36 @@ export function generateReproSteps(
 function describeElement(el: any): string {
   if (!el) return "an element";
 
-  const tag = el.tag || "";
+  const tag = (el.tag || "").toLowerCase();
   const rawText = (el.text || "").trim();
   // Clean multi-line text (e.g. dropdown showing "Active\nInactive") — take first line only
   const text = rawText.includes("\n") ? rawText.split("\n")[0].trim() : rawText;
   const id = el.id || "";
   const ariaLabel = el.ariaLabel || "";
 
-  // Prefer aria-label, then text, then id
-  if (ariaLabel && ariaLabel.length < 50) {
-    return `"${ariaLabel}" ${tag}`;
+  // Map raw tag to a reader-friendly noun. Falls back to "element" so we never
+  // emit a stray HTML tag name in user-facing repro steps.
+  const kind =
+    tag === "button" || el.buttonType ? "button"
+    : tag === "a" ? "link"
+    : tag === "input" ? "input"
+    : tag === "select" ? "dropdown"
+    : tag === "textarea" ? "text area"
+    : tag === "img" || tag === "svg" || tag === "picture" ? "image"
+    : tag === "li" ? "list item"
+    : tag === "nav" ? "navigation"
+    : "element";
+
+  // Prefer aria-label, then text, then id. Truncate (don't discard) long
+  // labels — a partial label is far more useful than "a span element".
+  const label = ariaLabel || text || (id ? `#${id}` : "");
+  if (label) {
+    const trimmed = label.length > 60 ? label.slice(0, 60).trimEnd() + "…" : label;
+    return `the "${trimmed}" ${kind}`;
   }
-  if (text && text.length < 50) {
-    return `"${text}" ${tag}`;
-  }
-  if (id) {
-    return `#${id} ${tag}`;
-  }
-  return `a ${tag} element`;
+  // For unlabeled images we want "an image" not "a image" (article fix).
+  const article = /^[aeiou]/i.test(kind) ? "an" : "a";
+  return `${article} ${kind}`;
 }
 
 function friendlyPageName(path: string): string {

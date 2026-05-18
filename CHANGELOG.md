@@ -4,6 +4,127 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+### Phase 5 — Console tab → unified event feed
+
+#### Changed
+
+- **Console tab is now a unified, chronological event feed** (matches Jam.dev's mental model). One scrollable story per session: console logs of every level, page navigations, network errors, user clicks/inputs/selects/submits, and video start/stop markers — all merged and sorted by timestamp.
+- **Six category-filter pills** above the list — `All` / `Console` / `Page navigations` / `Network errors` / `User activity` / `Video` — with live counts. Pills hide categories that have zero entries. Existing search input + "Errors only" toggle still apply.
+- **Per-row layout**: 48 px elapsed-time gutter (`m:ss`) | 24 px SVG category icon | message text + optional collapsed stack trace. Replaces the old card-style log entries.
+- **Category-aware coloring**: navigation rows tinted info-blue, network errors tinted error-red, console errors red text, console warnings amber, video markers in accent.
+- **Mirrored in the HTML export** ([src/exporters/html-template.ts](src/exporters/html-template.ts)) — viewers reviewing an exported `.html` see the same unified feed with the same six pills and same filter behavior.
+
+### Phase 4 — Video recording stabilization
+
+#### Fixed
+
+- **Empty `video` field in exports.** Multi-MB recording dataUrls were silently truncated by `chrome.runtime.sendMessage` (it drops responses >10 MB or so). The exported HTML had everything except the video bytes. Now the offscreen writes the recording into `chrome.storage.local` via the background service worker (which always has storage access), the content-script reads it back, and re-attaches the dataUrl to the page-side response. IPC carries metadata only. (`tracebug-extension/offscreen.js`, `background.js`, `content-script.js`)
+- **`dataUrlToBlob` rejected valid base64.** Splitting on the first `,` was wrong because mime types can contain commas (e.g. `video/webm;codecs=vp9,opus`). Switched to splitting on the literal `;base64,` marker. The `atob` failure was the actual root cause of every previous empty-video export and the `NotSupportedError` on play. (`src/video-recorder.ts`)
+- **`tb:rec:auto-stopped` broadcast dead-coded.** The generic `tb:rec:*` handler in `background.js` was registered before the dedicated auto-stop handler, so the latter never ran. Reordered so `tb:rec:auto-stopped` matches first. (`tracebug-extension/background.js`)
+- **`content-script.js` re-injection crashed** with `SyntaxError: Identifier 'REC_DATA_KEY' has already been declared`. Wrapped the whole script in a `window.__TRACEBUG_CS_LOADED__` guard so re-injection is a no-op. (`tracebug-extension/content-script.js`)
+- **Double share-picker.** Two concurrent `startVideoRecording` calls both passed the `isActive()` check (recorder doesn't exist yet — `getDisplayMedia` is in flight) and showed the picker twice. Added `_startInFlight` coalescing on both SDK and offscreen sides. (`src/video-recorder.ts`, `tracebug-extension/offscreen.js`)
+- **Recording lost on page reload.** When the recording tab navigated and Chrome ended the share, the SDK's reinit cleared the stale `sessionId` flag but didn't recover the finalized recording. Added a recovery path that pulls `_lastBuiltRecording` from the offscreen on init. (`src/index.ts`)
+- **Auto-stop finalize race.** The video track's `ended` event and the `MediaRecorder`'s `stop` event raced; the early bail on `isActive()` could miss the broadcast. Removed the bail and added `_autoStopBroadcast` dedup so finalize fires exactly once regardless of which signal arrives first. (`tracebug-extension/offscreen.js`)
+- **In-modal play threw `NotSupportedError`.** `v.play()` returns a Promise that rejects on no-supported-sources, and the surrounding sync `try/catch` couldn't catch it. Added a `.catch()` that falls back to event-only timeline playback. (`src/ui/replay-scrubber.ts`)
+
+#### Changed
+
+- **Switched from silent `chrome.tabCapture` to `getDisplayMedia` picker.** Tab capture's silent-record path failed on many sites (cross-origin, sandboxed iframes, `chrome://` URLs) and produced recordings the modal couldn't play back. The picker is more reliable, lets the user record any tab / window / screen, and the `surfaceSwitching: "include"` option keeps the recording alive through tab navigation. (`tracebug-extension/offscreen.js`)
+- **Recording HUD now has a "Draw" button** that toggles the existing draw-mode (rect / ellipse / redact, 5 colors) while recording continues. HUD slides down to `top: 64px` so it doesn't collide with the draw toolbar. (`src/ui/recording-hud.ts`)
+- **`hydrateRecording` is non-throwing.** Even if `atob` fails for any reason, the recording is still returned with the dataUrl preserved, so the export still embeds the video. (`src/video-recorder.ts`)
+- **`isUsableRecording` gate.** `revokeAndStash` no longer overwrites a real recording with an empty stub. The auto-stop broadcast and manual stop both go through this check before storing. (`src/video-recorder.ts`)
+- **Manifest:** added `unlimitedStorage` permission for large recordings. (`tracebug-extension/manifest.json`)
+
+### Phase 3 — UI overhaul + parity work
+
+#### Added
+
+- **Minimal popup** with one hero CTA ("Capture Bug Now") plus secondary "Record session" / "View tickets" buttons. The old toggle + 6 quick-action grid + active-sites list are gone. Three actions, three clicks max from "I see a bug" to "report filed".
+- **Lazy SDK injection** — the SDK no longer loads until the user clicks a popup action. No persistent allowlist, no auto-inject on page load. Tracking is fully opt-in per session. (`tracebug-extension/background.js`, `popup.js`)
+- **Silent tab capture (later replaced — see Phase 4)** — initial implementation used `chrome.tabCapture.getMediaStreamId` to avoid the share picker. Phase 4 reverted this to `getDisplayMedia` for reliability.
+- **Quick Bug modal tabbed layout** — two-pane (replay left, tab strip right) with `Info | Console | Network | Actions | AI | Notes` tabs. Each renders real data from the BugReport. Theme toggle (🌗) in header. (`src/ui/quick-bug.ts`)
+- **Action chips** — Actions tab renders chips with verb + HTML element preview (`<button class="play-btn" type="button"> +1 more`) and theme-aware syntax coloring. New module `src/action-chips.ts`, new `BugReport.actionChips` field. Text exports (GitHub/Jira/markdown) still use plain `sessionSteps[]`.
+- **Full network capture** — Network tab shows ALL requests, not just failures. New `NetworkRequestEntry` type + `BugReport.networkRequests` field. Color-coded 2xx/3xx/4xx/5xx/err status badges. (`src/types.ts`, `src/report-builder.ts`)
+- **Linear integration** — `src/linear-issue.ts` opens `https://linear.app/new?title=...&description=...` with prefilled markdown.
+- **Slack export** — `src/slack-export.ts` returns Slack-flavored text (`*bold*`, code blocks, `>` quotes) for clipboard paste.
+- **Redact (blur) tool** — third shape type in draw mode, solid hatched block, no comment prompt. (`src/draw-mode.ts`, `src/types.ts`)
+- **HTML export tabbed layout + dual-theme** — standalone replay file mirrors the modal layout with `Info | Console | Network | Actions | AI | Notes | Events | Description` tabs. Both palettes embedded as CSS variables; auto-switches via `prefers-color-scheme`, manual override via in-header 🌗 toggle saved per file in `localStorage`. (`src/exporters/html-template.ts`, `src/exporters/html-replay.ts`)
+- **Theme toggle in modal header** — cycles ☀ light → 🌙 dark → 🌗 auto. Per-origin preference saved in `localStorage.tracebug_theme_pref`, picked up on next SDK init. (`src/ui/quick-bug.ts`, `src/index.ts`)
+- **Smarter dashboard search** — `renderFilteredSessions()` now also matches click text, input values, aria-labels, repro steps, request URLs — not just sessionId + errorMessage. (`src/dashboard.ts`)
+
+#### Changed
+
+- **Theme palette refresh** — softer zinc + violet ramps replacing navy + cyan. New syntax-highlighting tokens (`--tb-code-tag`, `--tb-code-attr-name`, `--tb-code-attr-val`, `--tb-code-text`, `--tb-code-bg`) so HTML element previews adapt to light/dark. Default mode changed from `"dark"` to `"auto"`. (`src/theme.ts`, `src/index.ts:254`)
+- **Modal CSS polish** — more generous padding, real hover backgrounds (button lifts instead of dimming opacity), pill badges (border-radius 999px), refined focus rings, custom theme-aware scrollbar, larger radii, `-0.01em` letter-spacing on titles. (`src/ui/quick-bug.ts` — `_injectStyles()`)
+- **Popup enable flow no longer reloads** the tab. SDK injects in-place via `chrome.scripting.executeScript`. User keeps current page state. (`tracebug-extension/popup.js`, `background.js` — `INJECT_SDK_NOW` handler)
+- **Badge now reflects "SDK loaded on tab"** rather than "site enabled". Clears automatically on tab reload (since `injectedTabs` is wiped). (`tracebug-extension/background.js`)
+- **"Jam" references removed** from all source comments. 17 mentions replaced with neutral wording.
+
+#### Removed
+
+- Persistent enabled-sites allowlist (`getEnabledSites` / `saveEnabledSites` / `isSiteEnabled` / `toggleSite` and the `TOGGLE_SITE` / `CHECK_SITE` message handlers).
+- Auto-injection on page navigation.
+- Popup's 6 quick-action buttons (Annotate / Draw / Screenshot / PDF Report / GitHub Issue / Jira Ticket) — they duplicated the on-page toolbar.
+- Popup's Enable / Disable toggle row — replaced with informational hint.
+
+#### Known issues
+
+- `console.error` wrapper (in `src/collectors.ts:collectErrors()`) adds a frame at the top of every console.error stack trace once the SDK is loaded. Trace shows `tracebug-sdk.js` as the topmost frame; the actual caller is the line below. Fix candidates: install the wrapper only during active recording, add `//# sourceURL=` magic comment, or default `captureConsole` to `"none"`.
+
+### Added — Sentry Mode (Rolling Video Buffer)
+
+A "Capture this moment" recording flow inspired by NVIDIA Shadowplay / OBS replay buffer. The user arms a session once, then files multiple bug tickets from a single screen-share — no need to re-pick the screen.
+
+- **New module: `src/video-recorder.ts`** — wraps `getDisplayMedia` + `MediaRecorder`. Supports two modes:
+  - `mode: "rolling"` (default) — recording continues across captures; `captureRollingBuffer()` snapshots the in-progress recording into a finished `VideoRecording` while the screen-share keeps running.
+  - `mode: "standard"` — classic record-then-stop flow.
+- **New module: `src/ui/recording-hud.ts`** — floating pill with pulsing red dot, elapsed timer, "captures taken" counter, comment input (timestamped to recording time, Enter to save), 📸 Capture button (rolling mode only), and ⏹ Stop. Defensive CSS injected with `!important` to defeat host-page resets (Tailwind preflight, etc.).
+- **Auto-capture on error** — when an unhandled error fires *and* a rolling session is armed, the existing error toast offers "Capture with video" instead of "Capture bug." One click captures the buffer + opens the ticket modal.
+- **Smart Stop** — if the user already filed tickets via Capture, Stop ends silently with a toast. If no captures were taken, Stop opens the modal with the full recording (preserves the simple one-shot flow).
+- **Public API:**
+  - `TraceBug.startVideoRecording({ mode?, withMicrophone?, onStatus? })`
+  - `TraceBug.stopVideoRecording(): Promise<VideoRecording | null>`
+  - `TraceBug.captureRollingBuffer(): Promise<VideoRecording | null>`
+  - `TraceBug.isVideoRecording()` / `isRollingMode()` / `getCaptureCount()`
+  - `TraceBug.getLastVideoRecording()`
+  - `downloadVideoRecording(rec, filename?)` (named export)
+- **Toolbar:** new red Record button (between Region Screenshot and the right edge). Only enabled when the browser supports `getDisplayMedia`.
+- **Exports updated:** GitHub issue, Jira ticket, and PDF report now include a "Screen Recording" section listing the auto-downloaded `.webm` filename, duration, file size, and any timestamped comments. Every export action auto-downloads the `.webm` alongside screenshots.
+- **Comments reset on capture** — each ticket gets its own set of timestamped comments. Comments accumulate during the recording; capturing snapshots them into the recording and clears the buffer for the next bug.
+
+### Added — Auto-Scanner (Phase 2)
+
+A magnifying-glass toolbar button that runs six in-browser detectors in parallel and surfaces findings as severity-bucketed issues. Each issue offers Locate (flash the offending element), File Ticket (pre-fills the Quick Bug modal), and Dismiss.
+
+- **New runtime dep: `axe-core@4.11.4`** — ~1.4 MB, lazy-loaded via `import("axe-core")` so the base bundle stays light. Only loaded the first time `scanPage()` is called. Extension IIFE bundle grew from 770 KB → 2.17 MB.
+- **New module: `src/scanner/index.ts`** — orchestrator. Runs all detectors in parallel via `Promise.all` + per-detector catch wrapper (one failure doesn't block the others). Concurrent `scan()` calls are coalesced. Issues live in memory only — each scan is a fresh run, results clear on reload.
+- **New module: `src/scanner/helpers.ts`** — shared selector builder (id → data-testid → tag+nth-of-type chain), severity coercion, ID generator.
+- **Detectors** (one file each in `src/scanner/detectors/`):
+  - **`a11y.ts`** — axe-core, restricted to WCAG 2.0/2.1 A+AA rules (skips noisy `best-practice`). Multi-element violations roll into one issue with a `(+ N more)` suffix.
+  - **`broken-images.ts`** — `<img>` where `naturalWidth === 0 && complete === true`.
+  - **`mixed-content.ts`** — `http://` resources on HTTPS pages. Covers `img`, `script`, `iframe`, `link[rel=stylesheet|preload|prefetch|manifest|icon]`, `audio`, `video`, `source`, `embed`, `object`.
+  - **`session-data.ts`** — three detectors that classify already-collected session data: `console-error` (deduped by message), `failed-request` (4xx/5xx/network-error with response snippets), `slow-api` (successful requests over 2s).
+- **New module: `src/ui/issues-panel.ts`** — modal grouped by severity. Defensive CSS with `!important` rules. Locate scrolls into view + outlines the element with a 2.4s purple flash. File Ticket pre-fills the Quick Bug modal via the new `prefilledTitle` / `prefilledDescription` options on `showQuickBugCapture()`.
+- **New types in `src/types.ts`:** `Issue`, `IssueDetector` (`"axe-a11y" | "broken-image" | "mixed-content" | "console-error" | "slow-api" | "failed-request"`), `IssueSeverity` (`"critical" | "serious" | "moderate" | "minor"`).
+- **Public API:**
+  - `TraceBug.scanPage(): Promise<ScanResult>`
+  - `TraceBug.showIssuesPanel({ rescan? })` — runs a fresh scan first by default
+  - `TraceBug.getIssues({ includeDismissed? })`
+  - `TraceBug.dismissIssue(id)` / `undismissIssue(id)` / `clearIssues()`
+  - `TraceBug.getIssue(id)` / `getIssueCounts()` (severity-bucketed counts)
+  - Named exports: `scan`, `getIssues`, `dismissIssue`, etc.
+
+### Changed — UX Cleanup (v1.0 polish pass)
+
+The toolbar grew to 10 buttons over multiple feature releases. Many overlapped or competed for attention. This release cuts the noise so the daily-use surface is just **capture, scan, record**.
+
+- **Toolbar reduced from 10 → 6 elements:** Logo · ⚡ Quick Bug · 🔍 Scan · 📷 Screenshot · ⬚ Region · 🔴 Record. Removed: standalone recording-state dot, Annotate button, Draw button, Annotation List button + badge, Settings card button, Help button.
+- **Quick Bug modal exports reduced from 5 → 3:** Open in GitHub · Copy as GitHub · Copy as Jira. Removed: Copy as Plain Text (GitHub markdown is pasteable anywhere), Download Screenshots (every export already auto-downloads them).
+- **First-run onboarding tour removed.** Most users skipped it. Logo pulse retained as a subtle "we're here" hint; button tooltips are the only discovery aid.
+- **Source files retained for all cut features.** `src/element-annotate.ts`, `src/draw-mode.ts`, `src/onboarding.ts`, `src/pdf-generator.ts` still ship in the bundle and remain accessible programmatically — `TraceBug.activateAnnotateMode()`, `TraceBug.activateDrawMode()`, `TraceBug.downloadPdf()`, `replayOnboarding()`. Only the default UI surface changed.
+- **`shortcuts.annotate` and `shortcuts.draw` config keys retained** in the `TraceBugConfig` type for backwards compatibility. They're now no-ops since the corresponding toolbar buttons aren't mounted.
+- **Build artifacts:** Extension IIFE 2.17 MB (axe-core dominates). npm DTS 32 KB. All 74 tests pass.
+
 ### Added — Freemium Plan
 
 Local-only Free/Premium split. No backend, no auth, no payment. Plan is a flag in `chrome.storage.local` / `localStorage`. Free users get the full bug-reporting workflow; premium unlocks polish features.
