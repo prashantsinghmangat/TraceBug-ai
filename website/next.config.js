@@ -19,6 +19,16 @@ const nextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
+      {
+        // SDK iframe bridge must be embeddable on customer sites.
+        // Override the global X-Frame-Options here and use CSP frame-ancestors
+        // (which supersedes X-Frame-Options in modern browsers) to allow all.
+        source: '/sdk-bridge',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
+        ],
+      },
     ];
   },
 };

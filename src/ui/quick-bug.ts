@@ -18,6 +18,9 @@ import { showToast } from "./toast";
 import { escapeHtml } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { exportSessionAsHtml } from "../exporters/html-replay";
+import { shareSessionAsLink, DEFAULT_CLOUD_ENDPOINT, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
+import { getBridge } from "../auth/iframe-bridge";
+import { showScreenshotTrimModal } from "./screenshot-trim-modal";
 import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
 import { getElementAnnotations, getDrawRegions } from "../annotation-store";
 import { openLinearIssue } from "../linear-issue";
@@ -26,6 +29,13 @@ import { generateSlackPost } from "../slack-export";
 // Caller can set this from the SDK init so the modal knows which repo to target
 let _githubRepo: string | null = null;
 export function setGithubRepo(repo: string | null): void { _githubRepo = repo; }
+
+// Cloud endpoint for the Share link flow. Defaults to production; can be
+// overridden at init time via TraceBug.init({ cloudEndpoint: ... }).
+let _cloudEndpoint: string = DEFAULT_CLOUD_ENDPOINT;
+export function setCloudEndpoint(endpoint: string | null | undefined): void {
+  _cloudEndpoint = (endpoint && endpoint.trim()) || DEFAULT_CLOUD_ENDPOINT;
+}
 
 const MODAL_ID = "tracebug-quick-bug-modal";
 const DRAFT_KEY = "tracebug_last_bug_draft";
@@ -412,6 +422,7 @@ function _openModal(
         <button data-action="slack" class="tb-qb-btn tb-qb-btn-slack" title="Copy a Slack-formatted bug summary to the clipboard">\uD83D\uDCAC Slack</button>
         <button data-action="jira" class="tb-qb-btn ${isPremium() ? "tb-qb-btn-jira" : "tb-qb-btn-locked"}">${isPremium() ? "\uD83C\uDFAB Jira" : "\uD83D\uDD12 Jira (Premium)"}</button>
         <button data-action="export-replay" class="tb-qb-btn tb-qb-btn-ghost" title="Bundle the entire session into a single .html file you can share or open offline">\uD83D\uDCE6 Export .html</button>
+        <button data-action="share-link" class="tb-qb-btn tb-qb-btn-accent" title="Upload to TraceBug cloud and copy a shareable URL (sign-in required)">\uD83D\uDD17 Share link</button>
       </div>
       <div class="tb-qb-tip">
         <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
@@ -690,6 +701,109 @@ function _openModal(
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
+    }
+  });
+
+  // Share link \u2014 upload to cloud + copy URL + open viewer in new tab.
+  // Prompts magic-link sign-in via hidden iframe bridge when needed.
+  // Local capture is unaffected.
+  const shareBtn = modal.querySelector<HTMLButtonElement>('[data-action="share-link"]');
+  shareBtn?.addEventListener("click", async () => {
+    if (!data.currentSession) {
+      showToast("No session to share yet", root);
+      return;
+    }
+    if (shareBtn?.dataset.busy === "1") return; // ignore double-clicks
+
+    // Inline spinner + label swap so the user sees progress on the button
+    // itself, not just the bottom toast which can be missed.
+    const originalHtml = shareBtn ? shareBtn.innerHTML : "";
+    const setBtnState = (label: string) => {
+      if (!shareBtn) return;
+      shareBtn.dataset.busy = "1";
+      shareBtn.disabled = true;
+      shareBtn.style.opacity = "0.85";
+      shareBtn.innerHTML =
+        '<span class="tb-qb-spin" style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:tb-qb-spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px"></span>' +
+        label;
+    };
+    const resetBtn = () => {
+      if (!shareBtn) return;
+      shareBtn.dataset.busy = "";
+      shareBtn.disabled = false;
+      shareBtn.style.opacity = "";
+      shareBtn.innerHTML = originalHtml;
+    };
+    // One-time keyframes injection.
+    if (!document.getElementById("tb-qb-spin-style")) {
+      const s = document.createElement("style");
+      s.id = "tb-qb-spin-style";
+      s.textContent = "@keyframes tb-qb-spin{to{transform:rotate(360deg)}}";
+      document.head.appendChild(s);
+    }
+
+    try {
+      try { await restoreLastRecordingFromOffscreen(); } catch {}
+
+      const bridge = getBridge(_cloudEndpoint);
+      const auth = await bridge.checkAuth();
+      if (!auth.authed) {
+        setBtnState("Signing in\u2026");
+        showToast("Opening sign-in window\u2026", root);
+        await bridge.signIn();
+      }
+
+      // Step 1: bundle locally
+      setBtnState("Bundling\u2026");
+      showToast("Bundling report\u2026", root);
+      const report = buildReport(data.currentSession);
+
+      // Step 1b: if too many screenshots, let the user pick which to keep.
+      // Pause the busy state while they decide so the spinner doesn't
+      // look frozen during what could be tens of seconds of deliberation.
+      if (report.screenshots && report.screenshots.length > MAX_SCREENSHOTS_PER_SHARE) {
+        resetBtn();
+        const chosenIds = await showScreenshotTrimModal(report.screenshots, MAX_SCREENSHOTS_PER_SHARE, root);
+        if (!chosenIds) {
+          showToast("Share cancelled", root);
+          return;
+        }
+        const chosenSet = new Set(chosenIds);
+        report.screenshots = report.screenshots.filter((s) => chosenSet.has(s.id));
+        setBtnState("Uploading\u2026");
+      }
+
+      // Step 2: hand off to share flow (sanitize + uploadInit + PUT + complete)
+      setBtnState("Uploading\u2026");
+      showToast("Uploading to cloud\u2026", root);
+      const result = await shareSessionAsLink(
+        data.currentSession,
+        report,
+        { cloudEndpoint: _cloudEndpoint },
+      );
+
+      // Step 3: copy + open in new tab
+      try { await navigator.clipboard.writeText(result.shareUrl); } catch {}
+      const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+      showToast(`\u2713 Link copied \u00b7 ${sizeMb} MB \u00b7 Opening\u2026`, root);
+      resetBtn();
+      try { window.open(result.shareUrl, "_blank", "noopener,noreferrer"); } catch {}
+      return;
+    } catch (err: any) {
+      resetBtn();
+      const code = err?.code || err?.message || "share_failed";
+      console.warn("[TraceBug] Share failed:", err);
+      if (code === "too_many_screenshots") {
+        showToast(`Too many screenshots (max ${err.limit}). Remove some and try again.`, root);
+      } else if (code === "video_too_long") {
+        showToast(`Video too long (max ${err.limitS}s). Re-record shorter.`, root);
+      } else if (code === "size_too_large") {
+        showToast(`Report too large (${(err.sizeBytes / 1024 / 1024).toFixed(1)} MB). Limit is 50 MB.`, root);
+      } else if (String(err?.body?.error || "").includes("quota_reached")) {
+        showToast("Quota reached. Delete an old share in your dashboard.", root);
+      } else {
+        showToast(`Share failed: ${err?.message || code}`, root);
+      }
     }
   });
 

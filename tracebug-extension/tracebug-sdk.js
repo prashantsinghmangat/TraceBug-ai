@@ -9284,6 +9284,40 @@ var TraceBugModule = (() => {
   });
 
   // src/video-recorder.ts
+  function clearDurationCapTimers() {
+    if (_warnTimer) {
+      clearTimeout(_warnTimer);
+      _warnTimer = null;
+    }
+    if (_finalWarnTimer) {
+      clearTimeout(_finalWarnTimer);
+      _finalWarnTimer = null;
+    }
+    if (_autoStopTimer) {
+      clearTimeout(_autoStopTimer);
+      _autoStopTimer = null;
+    }
+  }
+  function scheduleDurationCap() {
+    clearDurationCapTimers();
+    _warnTimer = setTimeout(() => {
+      if (!_active) return;
+      _onStatus == null ? void 0 : _onStatus("warning", `${MAX_CLOUD_RECORDING_S - WARN_AT_S} seconds left in recording \u2014 cloud share limit is ${MAX_CLOUD_RECORDING_S / 60} min`);
+    }, WARN_AT_S * 1e3);
+    _finalWarnTimer = setTimeout(() => {
+      if (!_active) return;
+      _onStatus == null ? void 0 : _onStatus("warning", `Recording stops in ${MAX_CLOUD_RECORDING_S - FINAL_WARN_AT_S} seconds`);
+    }, FINAL_WARN_AT_S * 1e3);
+    _autoStopTimer = setTimeout(async () => {
+      if (!_active) return;
+      try {
+        const recording = await stopVideoRecording();
+        _onAutoStop == null ? void 0 : _onAutoStop(recording);
+      } catch (e2) {
+        _onAutoStop == null ? void 0 : _onAutoStop(null);
+      }
+    }, MAX_CLOUD_RECORDING_S * 1e3);
+  }
   function setAutoStopHandler(cb) {
     _onAutoStop = cb;
   }
@@ -9369,18 +9403,6 @@ var TraceBugModule = (() => {
       }).catch(() => null);
     }
     return captureRollingBufferInPage();
-  }
-  function addVideoComment(text) {
-    if (!_active) return null;
-    const trimmed = String(text || "").trim();
-    if (!trimmed) return null;
-    const c = { offsetMs: Date.now() - _startedAt, text: trimmed };
-    _comments.push(c);
-    if (isExtensionContext2()) {
-      rpcCall("tb:rec:comment", { text: trimmed }).catch(() => {
-      });
-    }
-    return c;
   }
   function clearVideoRecording() {
     if (_lastRecording) {
@@ -9529,14 +9551,20 @@ var TraceBugModule = (() => {
       if (e2.data && e2.data.size > 0) _chunks.push(e2.data);
     };
     displayStream.getVideoTracks().forEach((track) => {
-      track.addEventListener("ended", () => {
-        if (_active) stopVideoRecording().catch(() => {
-        });
+      track.addEventListener("ended", async () => {
+        if (!_active) return;
+        try {
+          const recording = await stopVideoRecording();
+          _onAutoStop == null ? void 0 : _onAutoStop(recording);
+        } catch (e2) {
+          _onAutoStop == null ? void 0 : _onAutoStop(null);
+        }
       });
     });
     _recorder.start(1e3);
     _active = true;
     installInPageReloadGuards();
+    scheduleDurationCap();
     _onStatus == null ? void 0 : _onStatus("recording");
     return true;
   }
@@ -9552,12 +9580,19 @@ var TraceBugModule = (() => {
       const startedAt = _startedAt;
       const mimeType = _mimeType || "video/webm";
       const comments = _comments.slice();
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(_chunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
+        let dataUrl;
+        try {
+          dataUrl = await blobToDataUrl(blob);
+        } catch (e2) {
+          dataUrl = void 0;
+        }
         const recording = {
           url,
           blob,
+          dataUrl,
           durationMs: Date.now() - startedAt,
           mimeType,
           sizeBytes: blob.size,
@@ -9580,6 +9615,14 @@ var TraceBugModule = (() => {
       }
     });
   }
+  function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+      reader.readAsDataURL(blob);
+    });
+  }
   function captureRollingBufferInPage() {
     return new Promise((resolve) => {
       if (!_recorder || _recorder.state !== "recording") {
@@ -9591,14 +9634,21 @@ var TraceBugModule = (() => {
       const mimeType = _mimeType || "video/webm";
       const commentsCopy = _comments.slice();
       const originalOnData = recorder.ondataavailable;
-      const flushOnce = (e2) => {
+      const flushOnce = async (e2) => {
         if (originalOnData) originalOnData.call(recorder, e2);
         recorder.ondataavailable = originalOnData;
         const blob = new Blob(_chunks.slice(), { type: mimeType });
         const url = URL.createObjectURL(blob);
+        let dataUrl;
+        try {
+          dataUrl = await blobToDataUrl(blob);
+        } catch (e3) {
+          dataUrl = void 0;
+        }
         const recording = {
           url,
           blob,
+          dataUrl,
           durationMs: Date.now() - startedAt,
           mimeType,
           sizeBytes: blob.size,
@@ -9654,6 +9704,7 @@ var TraceBugModule = (() => {
     _capturesTaken = 0;
     _startedAt = 0;
     _mode = "rolling";
+    clearDurationCapTimers();
   }
   function isUsableRecording(rec) {
     if (!rec) return false;
@@ -9737,7 +9788,7 @@ var TraceBugModule = (() => {
       }));
     });
   }
-  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, _recorder, _stream, _chunks, _onAutoStop, _startInFlight, _autoStopWired, _reloadGuardsInstalled, _rpcCounter;
+  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _onAutoStop, _startInFlight, _autoStopWired, _reloadGuardsInstalled, _rpcCounter;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
@@ -9749,6 +9800,12 @@ var TraceBugModule = (() => {
       _capturesTaken = 0;
       _lastRecording = null;
       _onStatus = null;
+      MAX_CLOUD_RECORDING_S = 120;
+      WARN_AT_S = 90;
+      FINAL_WARN_AT_S = 115;
+      _warnTimer = null;
+      _finalWarnTimer = null;
+      _autoStopTimer = null;
       _recorder = null;
       _stream = null;
       _chunks = [];
@@ -12869,8 +12926,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   <div class="tb-vhelp-card">
     <div class="tb-vhelp-title">Keyboard shortcuts</div>
     <div class="tb-vhelp-row"><kbd>Space</kbd><span>Play / pause recording</span></div>
-    <div class="tb-vhelp-row"><kbd>\u2190</kbd> <kbd>\u2192</kbd><span>Step previous / next event</span></div>
+    <div class="tb-vhelp-row"><kbd>\u2190</kbd> <kbd>\u2192</kbd><span>Seek &minus;5s / +5s</span></div>
     <div class="tb-vhelp-row"><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd><span>Rewind 5s / pause / fast-forward 5s</span></div>
+    <div class="tb-vhelp-row"><kbd>0</kbd><span>Jump to start</span></div>
     <div class="tb-vhelp-row"><kbd>E</kbd><span>Jump to first error</span></div>
     <div class="tb-vhelp-row"><kbd>F</kbd><span>Toggle compact mode</span></div>
     <div class="tb-vhelp-row"><kbd>1</kbd>\u2013<kbd>8</kbd><span>Switch tabs</span></div>
@@ -13062,8 +13120,10 @@ body { min-height: 100vh; }
 .tb-vfeed-pill-n { background: rgba(0,0,0,0.15); padding: 1px 6px; border-radius: 999px; font-size: 9px; font-weight: 700; min-width: 14px; text-align: center; }
 .tb-vfeed-pill-active .tb-vfeed-pill-n { background: rgba(255,255,255,0.22); }
 .tb-vfeed-list { display: flex; flex-direction: column; }
-.tb-vfeed-row { display: grid; grid-template-columns: 48px 24px 1fr; align-items: flex-start; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--tb-border); transition: background .12s; }
+.tb-vfeed-row { display: grid; grid-template-columns: 48px 24px 1fr; align-items: flex-start; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--tb-border); transition: background .12s; cursor: pointer; }
 .tb-vfeed-row:hover { background: var(--tb-bg-2); }
+.tb-vfeed-row-active { background: var(--tb-accent-soft) !important; box-shadow: inset 3px 0 0 var(--tb-accent); }
+.tb-vfeed-row:focus { outline: 2px solid var(--tb-accent); outline-offset: -2px; }
 .tb-vfeed-time { font-family: var(--tb-mono); font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-3); padding-top: 3px; }
 .tb-vfeed-icon { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; color: var(--tb-text-2); border-radius: var(--tb-radius-sm); flex-shrink: 0; }
 .tb-vfeed-body { min-width: 0; }
@@ -13188,6 +13248,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-rs-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-2); flex: 1; font-family: var(--tb-mono); }
 .tb-rs-jump { background: transparent; color: var(--tb-error); border: 1px solid var(--tb-error); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; }
 .tb-rs-jump:hover { background: var(--tb-error-bg); }
+.tb-rs-dl { background: var(--tb-accent); color: #fff; border: 1px solid var(--tb-accent); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: filter .15s; display: inline-flex; align-items: center; gap: 5px; }
+.tb-rs-dl:hover { filter: brightness(1.1); }
 .tb-rs-track { position: relative; height: 30px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: 999px; cursor: pointer; touch-action: none; user-select: none; }
 .tb-rs-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--tb-accent-soft), transparent); border-radius: 999px; pointer-events: none; }
 .tb-rs-markers { position: absolute; inset: 0; pointer-events: none; }
@@ -13384,7 +13446,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       var stackStr = e.stack ? String(e.stack).split("\\n").slice(0, 5).join("\\n") : "";
       var stackHtml = stackStr ? '<pre class="tb-vfeed-stack">' + esc(stackStr) + '</pre>' : '';
       return '<div class="tb-vfeed-row tb-vfeed-' + e.cat + (isErr ? ' tb-vfeed-err' : '') + (e.lvl ? ' tb-vfeed-lvl-' + e.lvl : '') +
-        '" data-cat="' + e.cat + '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-search="' + esc(hay) + '">' +
+        '" data-cat="' + e.cat + '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-ts="' + e.ts + '" data-search="' + esc(hay) + '" tabindex="0" role="button" title="Click to seek video to this moment">' +
         '<span class="tb-vfeed-time">' + fmtFeedTime(e.el) + '</span>' +
         '<span class="tb-vfeed-icon">' + e.icon + '</span>' +
         '<span class="tb-vfeed-body"><span class="tb-vfeed-msg">' + esc(e.msg) + '</span>' + stackHtml + '</span>' +
@@ -13428,6 +13490,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           pills.forEach(function(q){ q.classList.toggle("tb-vfeed-pill-active", q === p); });
           apply();
         });
+      });
+      // Click a Console row to seek the video / scrubber to that moment.
+      panel.addEventListener("click", function(e){
+        var row = e.target.closest ? e.target.closest(".tb-vfeed-row") : null;
+        if (!row) return;
+        var ts = Number(row.getAttribute("data-ts"));
+        if (!isFinite(ts)) return;
+        try { if (typeof scrubberSeek === "function") scrubberSeek(ts); } catch(_e){}
       });
     })();
   }
@@ -13715,10 +13785,13 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (videoLoaded || !hasVideo) { if (autoplay) try { video.play(); } catch(e) {} return; }
     videoLoaded = true;
     try {
-      var match = /^data:([^;]+);base64,(.*)$/.exec(data.video.dataUrl);
+      // Non-greedy capture for the mime because the mime can itself contain
+      // commas (e.g. "video/webm;codecs=vp9,opus") \u2014 a no-semicolon group
+      // would truncate the prefix before the base64 marker and decode garbage.
+      var match = /^data:(.*?);base64,(.*)$/.exec(data.video.dataUrl);
       if (!match) { video.src = data.video.dataUrl; }
       else {
-        var mime = match[1];
+        var mime = (match[1].split(";")[0]) || "video/webm";
         var bin = atob(match[2]);
         var len = bin.length;
         var bytes = new Uint8Array(len);
@@ -13741,6 +13814,71 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   }
   if (playOverlay) {
     playOverlay.addEventListener("click", function(){ loadVideo(true); });
+  }
+
+  // \u2500\u2500 Auto-pause-at-error + console-sync (driven by video.timeupdate) \u2500\u2500\u2500
+  // While the video plays, push the scrubber along, highlight the
+  // matching Console row, and pause the video the first time we cross
+  // each error marker. _visitedErrors is reset on manual seek so the
+  // user can re-trigger the pause by scrubbing backward.
+  var _visitedErrors = {};
+  if (video) {
+    video.addEventListener("timeupdate", function(){
+      if (!data.video || !data.video.startedAt) return;
+      var ts = data.video.startedAt + video.currentTime * 1000;
+      var prevTs = current;
+      current = Math.max(startedAt, Math.min(endedAt, ts));
+      renderHandle();
+      _syncConsoleFeed(current);
+      // Auto-pause across any unvisited error markers in this tick.
+      var em = data.events || [];
+      for (var i = 0; i < em.length; i++) {
+        if (!em[i].isError) continue;
+        var et = em[i].timestamp;
+        if (_visitedErrors[et]) continue;
+        if (et >= prevTs && et <= current + 250) {
+          _visitedErrors[et] = true;
+          try { video.pause(); } catch(_e){}
+          _flashErrorToast(em[i]);
+          break;
+        }
+      }
+    });
+  }
+
+  function _syncConsoleFeed(ts) {
+    var panel = document.getElementById("panel-console");
+    if (!panel) return;
+    var rows = panel.querySelectorAll(".tb-vfeed-row");
+    if (rows.length === 0) return;
+    var activeRow = null, activeTs = -Infinity;
+    for (var i = 0; i < rows.length; i++) {
+      var rt = Number(rows[i].getAttribute("data-ts"));
+      if (!isFinite(rt)) continue;
+      if (rt <= ts && rt > activeTs) { activeTs = rt; activeRow = rows[i]; }
+    }
+    if (!activeRow) return;
+    if (panel._lastActiveTs === activeTs) return;
+    panel._lastActiveTs = activeTs;
+    for (var j = 0; j < rows.length; j++) {
+      rows[j].classList.toggle("tb-vfeed-row-active", rows[j] === activeRow);
+    }
+    var panelRect = panel.getBoundingClientRect();
+    var rowRect = activeRow.getBoundingClientRect();
+    if (rowRect.top < panelRect.top || rowRect.bottom > panelRect.bottom) {
+      activeRow.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }
+
+  function _flashErrorToast(marker) {
+    var existing = document.querySelector(".tb-rs-err-toast");
+    if (existing) existing.remove();
+    var t = document.createElement("div");
+    t.className = "tb-rs-err-toast";
+    t.textContent = "\u23F8 Paused at error \u2014 " + String(marker.description || "").slice(0, 60);
+    var host = document.getElementById("scrubber");
+    if (host) host.appendChild(t);
+    setTimeout(function(){ try { t.remove(); } catch(_e){} }, 2500);
   }
 
   function findClosest(list, ts) {
@@ -13787,7 +13925,50 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   var span = Math.max(1000, endedAt - startedAt); // floor 1s so scrubber is usable
   var errorMarkers = events.filter(function(e){ return e.isError; });
   var scrubberHost = document.getElementById("scrubber");
-  scrubberHost.innerHTML = '<div class="tb-rs-root" tabindex="0"><div class="tb-rs-header"><span class="tb-rs-label">Replay</span><span class="tb-rs-time" id="tb-rs-time">00:00 / ' + fmtElapsed(span) + '</span><button class="tb-rs-jump" id="tb-rs-jump" type="button" style="display:' + (errorMarkers.length ? "inline-block" : "none") + '">Jump to error</button></div><div class="tb-rs-track" id="tb-rs-track"><div class="tb-rs-fill" id="tb-rs-fill"></div><div class="tb-rs-markers" id="tb-rs-markers"></div><div class="tb-rs-handle" id="tb-rs-handle"></div></div></div>';
+  // Download button surfaces only when a video is embedded \u2014 gives the
+  // viewer a one-click way to grab the .webm to drag into Jira / GitHub /
+  // Slack etc. instead of having to right-click \u2192 Save Video As.
+  var dlBtnHtml = hasVideo
+    ? '<button class="tb-rs-dl" id="tb-rs-dl" type="button" title="Download recording">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M5 13l7 7 7-7M4 21h16"/></svg>' +
+        '<span>Download</span>' +
+      '</button>'
+    : '';
+  scrubberHost.innerHTML = '<div class="tb-rs-root" tabindex="0"><div class="tb-rs-header"><span class="tb-rs-label">Replay</span><span class="tb-rs-time" id="tb-rs-time">00:00 / ' + fmtElapsed(span) + '</span><button class="tb-rs-jump" id="tb-rs-jump" type="button" style="display:' + (errorMarkers.length ? "inline-block" : "none") + '">Jump to error</button>' + dlBtnHtml + '</div><div class="tb-rs-track" id="tb-rs-track"><div class="tb-rs-fill" id="tb-rs-fill"></div><div class="tb-rs-markers" id="tb-rs-markers"></div><div class="tb-rs-handle" id="tb-rs-handle"></div></div></div>';
+
+  if (hasVideo) {
+    var dlBtn = document.getElementById("tb-rs-dl");
+    if (dlBtn) dlBtn.addEventListener("click", function(){
+      // Decode the base64 dataUrl into a blob (avoids the gigantic
+      // chrome://about-blank "Save target as" prompt browsers throw at
+      // multi-MB data: URLs).
+      try {
+        var m = /^data:(.*?);base64,(.*)$/.exec(data.video.dataUrl || "");
+        var mime = (m && m[1].split(";")[0]) || "video/webm";
+        var bytes;
+        if (m) {
+          var bin = atob(m[2]);
+          bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        }
+        var blob = bytes ? new Blob([bytes], { type: mime }) : null;
+        var url = blob ? URL.createObjectURL(blob) : data.video.dataUrl;
+        var ext = mime.indexOf("mp4") >= 0 ? "mp4" : "webm";
+        var sid = (data.meta && data.meta.sessionId ? data.meta.sessionId.slice(0, 8) : "session");
+        var stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "tracebug-recording-" + sid + "-" + stamp + "." + ext;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (blob) setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(_e){} }, 30000);
+      } catch (err) {
+        // Fallback: open the dataUrl in a new tab; user can Save As.
+        try { window.open(data.video.dataUrl, "_blank"); } catch(_e){}
+      }
+    });
+  }
 
   var trackEl = document.getElementById("tb-rs-track");
   var fillEl = document.getElementById("tb-rs-fill");
@@ -13823,6 +14004,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   function scrubberSeek(ts) {
     current = Math.max(startedAt, Math.min(endedAt, ts));
     renderHandle();
+    // Manual seek \u2192 re-arm error auto-pause so the user can re-trigger
+    // by scrubbing back across an error.
+    _visitedErrors = {};
     // Swap screenshot preview
     var ss = findClosest(screenshots, current);
     if (ss && img.style.display !== "none") {
@@ -13833,6 +14017,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (data.video && data.video.startedAt) {
       try { video.currentTime = Math.max(0, (current - data.video.startedAt) / 1000); } catch(e) {}
     }
+    // Sync Console feed highlight.
+    try { _syncConsoleFeed(current); } catch(_e){}
   }
 
   // Init
@@ -13916,8 +14102,21 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       return;
     }
     if (e.key === " " || e.code === "Space") { e.preventDefault(); togglePlayback(); return; }
-    if (e.key === "ArrowLeft") { e.preventDefault(); jumpEvent(-1); return; }
-    if (e.key === "ArrowRight") { e.preventDefault(); jumpEvent(1); return; }
+    // Arrows now seek \xB15s on the video (matches the modal). J/K/L stays
+    // for power users. Without a video, arrows still step events.
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      _visitedErrors = {};
+      if (hasVideo) { nudgeVideo(-5); } else { jumpEvent(-1); }
+      return;
+    }
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      _visitedErrors = {};
+      if (hasVideo) { nudgeVideo(5); } else { jumpEvent(1); }
+      return;
+    }
+    if (e.key === "0") { e.preventDefault(); _visitedErrors = {}; scrubberSeek(startedAt); return; }
     if (e.key === "j" || e.key === "J") { e.preventDefault(); nudgeVideo(-5); return; }
     if (e.key === "l" || e.key === "L") { e.preventDefault(); nudgeVideo(5); return; }
     if (e.key === "k" || e.key === "K") { e.preventDefault(); togglePlayback(); return; }
@@ -14012,6 +14211,17 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 
   // src/exporters/html-replay.ts
   async function exportSessionAsHtml(session, report, options) {
+    const { blob } = await buildReplayPayload(session, report, options);
+    const url = URL.createObjectURL(blob);
+    const filename = (options == null ? void 0 : options.filename) || defaultFilename(session.sessionId);
+    triggerDownload(url, filename);
+    return { filename, blob, url, sizeBytes: blob.size };
+  }
+  async function buildReplayBlob(session, report, options) {
+    const { blob } = await buildReplayPayload(session, report, options);
+    return blob;
+  }
+  async function buildReplayPayload(session, report, options) {
     var _a, _b, _c, _d, _e, _f;
     const includeVideo = (_a = options == null ? void 0 : options.includeVideo) != null ? _a : !!report.video;
     const timeline = buildTimeline(session.events).map((t) => ({
@@ -14142,10 +14352,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     };
     const html = buildReplayHtml(payload);
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const filename = (options == null ? void 0 : options.filename) || defaultFilename(session.sessionId);
-    triggerDownload(url, filename);
-    return { filename, blob, url, sizeBytes: blob.size };
+    return { blob, html };
   }
   function defaultFilename(sessionId) {
     const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -14203,6 +14410,710 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       "use strict";
       init_timeline_builder();
       init_html_template();
+    }
+  });
+
+  // src/sanitize/cloud-upload.ts
+  function mask(s) {
+    if (s.length <= 12) return REDACTED;
+    return `${s.slice(0, 4)}\u2026${REDACTED}\u2026${s.slice(-4)}`;
+  }
+  function sanitizeUrl2(url) {
+    if (typeof url !== "string" || url.length === 0) return url;
+    try {
+      const isAbs = /^[a-z][a-z0-9+.-]*:/i.test(url);
+      const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
+      let changed = false;
+      u2.searchParams.forEach((_v, k) => {
+        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) {
+          u2.searchParams.set(k, REDACTED);
+          changed = true;
+        }
+      });
+      if (!changed) return sanitizeText(url);
+      const out = isAbs ? u2.toString() : u2.pathname + u2.search + u2.hash;
+      return sanitizeText(out);
+    } catch (e2) {
+      return sanitizeText(url);
+    }
+  }
+  function sanitizeText(s) {
+    if (s == null) return s;
+    let out = String(s);
+    for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
+    return out;
+  }
+  function sanitizeReportForUpload(report) {
+    var _a;
+    const out = structuredClone(report);
+    if (out.consoleErrors) {
+      out.consoleErrors = out.consoleErrors.map((e2) => {
+        var _a2;
+        return {
+          ...e2,
+          message: sanitizeText(e2.message),
+          stack: sanitizeText((_a2 = e2.stack) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.consoleLogs) {
+      out.consoleLogs = out.consoleLogs.map((e2) => {
+        var _a2;
+        return {
+          ...e2,
+          message: sanitizeText(e2.message),
+          stack: sanitizeText((_a2 = e2.stack) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.networkErrors) {
+      out.networkErrors = out.networkErrors.map((e2) => {
+        var _a2;
+        return {
+          ...e2,
+          url: sanitizeUrl2(e2.url),
+          response: sanitizeText((_a2 = e2.response) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.networkRequests) {
+      out.networkRequests = out.networkRequests.map((e2) => {
+        var _a2;
+        return {
+          ...e2,
+          url: sanitizeUrl2(e2.url),
+          response: sanitizeText((_a2 = e2.response) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.steps) out.steps = sanitizeText(out.steps);
+    if (out.summary) out.summary = sanitizeText(out.summary);
+    if (out.title) out.title = sanitizeText(out.title);
+    if (Array.isArray(out.sessionSteps)) out.sessionSteps = out.sessionSteps.map((s) => sanitizeText(s));
+    if (out.actionChips) {
+      out.actionChips = out.actionChips.map((c) => {
+        var _a2, _b;
+        return {
+          ...c,
+          target: sanitizeText((_a2 = c.target) != null ? _a2 : void 0),
+          detail: sanitizeText((_b = c.detail) != null ? _b : void 0)
+        };
+      });
+    }
+    if ((_a = out.environment) == null ? void 0 : _a.url) out.environment.url = sanitizeUrl2(out.environment.url);
+    if (out.context && typeof out.context === "object") {
+      const ctx = {};
+      for (const [k, v] of Object.entries(out.context)) {
+        ctx[k] = typeof v === "string" ? sanitizeText(v) : v;
+      }
+      out.context = ctx;
+    }
+    return out;
+  }
+  var REDACTED, TOKEN_PATTERNS, SENSITIVE_QUERY_KEYS;
+  var init_cloud_upload = __esm({
+    "src/sanitize/cloud-upload.ts"() {
+      "use strict";
+      REDACTED = "[REDACTED]";
+      TOKEN_PATTERNS = [
+        // Bearer <token> in headers, console output, anywhere
+        { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED },
+        // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
+        { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
+        // OpenAI / Stripe-style
+        { name: "sk_prefix", re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
+        { name: "sk_live", re: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
+        // GitHub PATs
+        { name: "github_pat", re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
+        // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.)
+        { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}\b/g, replace: mask },
+        // Slack
+        { name: "slack", re: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
+        // Google API keys
+        { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask }
+      ];
+      SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
+        "token",
+        "access_token",
+        "id_token",
+        "refresh_token",
+        "api_key",
+        "apikey",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "auth",
+        "authorization",
+        "x-api-key",
+        "session",
+        "sid",
+        "csrf"
+      ]);
+    }
+  });
+
+  // src/auth/iframe-bridge.ts
+  function getBridge(cloudEndpoint) {
+    if (!_instance || _instance.endpoint !== cloudEndpoint) {
+      _instance == null ? void 0 : _instance.destroy();
+      _instance = new IframeBridge(cloudEndpoint);
+    }
+    return _instance;
+  }
+  var DEFAULT_TIMEOUT_MS, SIGN_IN_POLL_INTERVAL_MS, SIGN_IN_TIMEOUT_MS, _instance, IframeBridge;
+  var init_iframe_bridge = __esm({
+    "src/auth/iframe-bridge.ts"() {
+      "use strict";
+      DEFAULT_TIMEOUT_MS = 6e4;
+      SIGN_IN_POLL_INTERVAL_MS = 1500;
+      SIGN_IN_TIMEOUT_MS = 3 * 6e4;
+      _instance = null;
+      IframeBridge = class {
+        constructor(cloudEndpoint) {
+          this.iframe = null;
+          this.readyPromise = null;
+          this.pending = /* @__PURE__ */ new Map();
+          this.authChangeListeners = /* @__PURE__ */ new Set();
+          this.endpoint = cloudEndpoint.replace(/\/+$/, "");
+          this.origin = new URL(this.endpoint).origin;
+          this.boundOnMessage = this.onMessage.bind(this);
+        }
+        // Mount iframe and resolve when it announces ready. Idempotent.
+        ready() {
+          if (this.readyPromise) return this.readyPromise;
+          this.readyPromise = new Promise((resolve) => {
+            if (typeof window === "undefined" || typeof document === "undefined") {
+              resolve();
+              return;
+            }
+            window.addEventListener("message", this.boundOnMessage);
+            const iframe = document.createElement("iframe");
+            iframe.src = `${this.endpoint}/sdk-bridge`;
+            iframe.setAttribute("aria-hidden", "true");
+            iframe.style.position = "fixed";
+            iframe.style.width = "1px";
+            iframe.style.height = "1px";
+            iframe.style.left = "-9999px";
+            iframe.style.border = "0";
+            iframe.style.opacity = "0";
+            iframe.title = "TraceBug auth bridge";
+            this.iframe = iframe;
+            const onReady = (e2) => {
+              var _a;
+              if (e2.origin !== this.origin) return;
+              if (((_a = e2.data) == null ? void 0 : _a.type) === "tracebug:bridge-ready") {
+                window.removeEventListener("message", onReady);
+                resolve();
+              }
+            };
+            window.addEventListener("message", onReady);
+            document.documentElement.appendChild(iframe);
+          });
+          return this.readyPromise;
+        }
+        onMessage(e2) {
+          if (e2.origin !== this.origin) return;
+          const d = e2.data;
+          if (!d || typeof d !== "object") return;
+          if (d.type === "tracebug:auth-changed") {
+            const authed = !!d.authed;
+            this.authChangeListeners.forEach((cb) => cb(authed));
+            return;
+          }
+          if (typeof d.requestId !== "string") return;
+          const p = this.pending.get(d.requestId);
+          if (!p) return;
+          clearTimeout(p.timer);
+          this.pending.delete(d.requestId);
+          if (d.data && typeof d.data === "object" && "error" in d.data && Object.keys(d.data).length === 1) {
+            p.reject(new Error(String(d.data.error)));
+          } else {
+            p.resolve(d.data);
+          }
+        }
+        async send(type, extra) {
+          var _a;
+          await this.ready();
+          if (!((_a = this.iframe) == null ? void 0 : _a.contentWindow)) throw new Error("bridge not mounted");
+          const requestId = `req_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+              this.pending.delete(requestId);
+              reject(new Error(`bridge timeout (${type})`));
+            }, DEFAULT_TIMEOUT_MS);
+            this.pending.set(requestId, { resolve, reject, timer });
+            this.iframe.contentWindow.postMessage({ type, requestId, ...extra }, this.origin);
+          });
+        }
+        checkAuth() {
+          return this.send("check-auth");
+        }
+        // Opens a popup to /auth. Resolves when the user is authenticated (or
+        // rejects on timeout). The popup itself runs on tracebug.netlify.app and
+        // sets cookies the iframe also sees.
+        async signIn() {
+          const already = await this.checkAuth();
+          if (already.authed && already.user) return already.user;
+          await this.send("sign-in");
+          const start = Date.now();
+          return new Promise((resolve, reject) => {
+            let done = false;
+            const finish = (err, user) => {
+              if (done) return;
+              done = true;
+              this.authChangeListeners.delete(onChange);
+              clearInterval(poller);
+              clearTimeout(timeout);
+              if (err) reject(err);
+              else resolve(user);
+            };
+            const onChange = async (authed) => {
+              if (!authed) return;
+              try {
+                const r = await this.checkAuth();
+                if (r.authed && r.user) finish(null, r.user);
+              } catch (err) {
+                finish(err);
+              }
+            };
+            this.authChangeListeners.add(onChange);
+            const poller = setInterval(async () => {
+              try {
+                const r = await this.checkAuth();
+                if (r.authed && r.user) finish(null, r.user);
+              } catch (err) {
+                finish(err);
+              }
+              if (Date.now() - start > SIGN_IN_TIMEOUT_MS) {
+                finish(new Error("sign-in timed out \u2014 please try again"));
+              }
+            }, SIGN_IN_POLL_INTERVAL_MS);
+            const timeout = setTimeout(() => finish(new Error("sign-in timed out")), SIGN_IN_TIMEOUT_MS + 5e3);
+          });
+        }
+        async signOut() {
+          await this.send("sign-out");
+        }
+        getQuotas() {
+          return this.send("get-quotas");
+        }
+        async uploadInit(payload) {
+          var _a;
+          const res = await this.send("upload-init", { payload });
+          if (res.status >= 400) {
+            const err = new Error(((_a = res.body) == null ? void 0 : _a.error) || `upload-init failed (${res.status})`);
+            err.status = res.status;
+            err.body = res.body;
+            throw err;
+          }
+          return res.body;
+        }
+        async uploadBlob(storageKey, token, blob, contentType = "text/html") {
+          const res = await this.send("upload-blob", {
+            storageKey,
+            token,
+            blob,
+            contentType
+          });
+          if (res.error) throw new Error(res.error);
+        }
+        async uploadComplete(id) {
+          var _a;
+          const res = await this.send("upload-complete", { id });
+          if (res.status >= 400) {
+            throw new Error(((_a = res.body) == null ? void 0 : _a.error) || `upload-complete failed (${res.status})`);
+          }
+          return res.body;
+        }
+        destroy() {
+          var _a;
+          window.removeEventListener("message", this.boundOnMessage);
+          (_a = this.iframe) == null ? void 0 : _a.remove();
+          this.iframe = null;
+          this.readyPromise = null;
+          this.pending.forEach((p) => {
+            clearTimeout(p.timer);
+            p.reject(new Error("bridge destroyed"));
+          });
+          this.pending.clear();
+          this.authChangeListeners.clear();
+        }
+      };
+    }
+  });
+
+  // src/exporters/thumbnail.ts
+  async function generateThumbnail(report) {
+    var _a;
+    if (typeof document === "undefined") return null;
+    if (((_a = report.video) == null ? void 0 : _a.dataUrl) && report.video.dataUrl.startsWith("data:")) {
+      try {
+        const dataUrl = await captureVideoFrame(report.video.dataUrl);
+        if (dataUrl) return dataUrl;
+      } catch (e2) {
+      }
+    }
+    if (report.screenshots && report.screenshots.length > 0) {
+      const src = report.screenshots[0].originalDataUrl || report.screenshots[0].dataUrl;
+      if (src && src.startsWith("data:")) {
+        try {
+          return await downscaleImage(src);
+        } catch (e2) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+  function captureVideoFrame(videoDataUrl) {
+    return new Promise((resolve) => {
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      video.src = videoDataUrl;
+      const cleanup = () => {
+        try {
+          video.removeAttribute("src");
+          video.load();
+        } catch (e2) {
+        }
+      };
+      let settled = false;
+      const finish = (out) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(out);
+      };
+      const timer = setTimeout(() => finish(null), 8e3);
+      video.onloadedmetadata = () => {
+        const target = Math.min(1, Math.max(0, (video.duration || 0) * 0.1));
+        try {
+          video.currentTime = target;
+        } catch (e2) {
+          finish(null);
+        }
+      };
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = THUMB_W;
+          canvas.height = THUMB_H;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            clearTimeout(timer);
+            finish(null);
+            return;
+          }
+          const { sx, sy, sw, sh } = fitCover(video.videoWidth || THUMB_W, video.videoHeight || THUMB_H);
+          ctx.drawImage(video, sx, sy, sw, sh, 0, 0, THUMB_W, THUMB_H);
+          clearTimeout(timer);
+          finish(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
+        } catch (e2) {
+          clearTimeout(timer);
+          finish(null);
+        }
+      };
+      video.onerror = () => {
+        clearTimeout(timer);
+        finish(null);
+      };
+    });
+  }
+  function downscaleImage(dataUrl) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = THUMB_W;
+          canvas.height = THUMB_H;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return resolve(null);
+          const { sx, sy, sw, sh } = fitCover(img.naturalWidth, img.naturalHeight);
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, THUMB_W, THUMB_H);
+          resolve(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
+        } catch (e2) {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = dataUrl;
+    });
+  }
+  function fitCover(srcW, srcH) {
+    const targetRatio = THUMB_W / THUMB_H;
+    const srcRatio = srcW / srcH;
+    let sw, sh, sx, sy;
+    if (srcRatio > targetRatio) {
+      sh = srcH;
+      sw = srcH * targetRatio;
+      sx = (srcW - sw) / 2;
+      sy = 0;
+    } else {
+      sw = srcW;
+      sh = srcW / targetRatio;
+      sx = 0;
+      sy = (srcH - sh) / 2;
+    }
+    return { sx, sy, sw, sh };
+  }
+  var THUMB_W, THUMB_H, THUMB_QUALITY;
+  var init_thumbnail = __esm({
+    "src/exporters/thumbnail.ts"() {
+      "use strict";
+      THUMB_W = 320;
+      THUMB_H = 180;
+      THUMB_QUALITY = 0.7;
+    }
+  });
+
+  // src/exporters/share-link.ts
+  async function shareSessionAsLink(session, report, options) {
+    var _a, _b, _c, _d, _e;
+    const cloudEndpoint = (options == null ? void 0 : options.cloudEndpoint) || DEFAULT_CLOUD_ENDPOINT;
+    const includeVideo = (_a = options == null ? void 0 : options.includeVideo) != null ? _a : !!report.video;
+    const safe = sanitizeReportForUpload(report);
+    if (safe.screenshots && safe.screenshots.length > MAX_SCREENSHOTS_PER_SHARE) {
+      const err = new Error("too_many_screenshots");
+      err.code = "too_many_screenshots";
+      err.count = safe.screenshots.length;
+      err.limit = MAX_SCREENSHOTS_PER_SHARE;
+      throw err;
+    }
+    if (includeVideo && ((_b = safe.video) == null ? void 0 : _b.durationMs) && safe.video.durationMs > MAX_VIDEO_DURATION_S * 1e3) {
+      const err = new Error("video_too_long");
+      err.code = "video_too_long";
+      err.durationMs = safe.video.durationMs;
+      err.limitS = MAX_VIDEO_DURATION_S;
+      throw err;
+    }
+    const blob = await buildReplayBlob(session, safe, { includeVideo });
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      const err = new Error("size_too_large");
+      err.code = "size_too_large";
+      err.sizeBytes = blob.size;
+      err.limit = MAX_UPLOAD_BYTES;
+      throw err;
+    }
+    let thumbnail = null;
+    try {
+      thumbnail = await generateThumbnail(safe);
+    } catch (e2) {
+      thumbnail = null;
+    }
+    const bridge = getBridge(cloudEndpoint);
+    const init = await bridge.uploadInit({
+      title: (_c = safe.title) == null ? void 0 : _c.slice(0, 200),
+      sizeBytes: blob.size,
+      hasVideo: !!(includeVideo && safe.video),
+      videoDurationS: includeVideo && safe.video ? Math.round(safe.video.durationMs / 1e3) : void 0,
+      screenshotCount: (_e = (_d = safe.screenshots) == null ? void 0 : _d.length) != null ? _e : 0,
+      thumbnail: thumbnail != null ? thumbnail : void 0
+    });
+    await bridge.uploadBlob(init.storageKey, init.uploadToken, blob, "text/html");
+    const complete = await bridge.uploadComplete(init.id);
+    return {
+      id: init.id,
+      shareUrl: complete.shareUrl,
+      shareToken: init.shareToken,
+      sizeBytes: blob.size
+    };
+  }
+  var DEFAULT_CLOUD_ENDPOINT, MAX_UPLOAD_BYTES, MAX_VIDEO_DURATION_S, MAX_SCREENSHOTS_PER_SHARE;
+  var init_share_link = __esm({
+    "src/exporters/share-link.ts"() {
+      "use strict";
+      init_html_replay();
+      init_cloud_upload();
+      init_iframe_bridge();
+      init_thumbnail();
+      DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
+      MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+      MAX_VIDEO_DURATION_S = 120;
+      MAX_SCREENSHOTS_PER_SHARE = 5;
+    }
+  });
+
+  // src/ui/screenshot-trim-modal.ts
+  function showScreenshotTrimModal(screenshots2, max, root) {
+    return new Promise((resolve) => {
+      var _a;
+      (_a = document.getElementById(MODAL_ID2)) == null ? void 0 : _a.remove();
+      const host = root || document.getElementById("tracebug-root") || document.body;
+      const selected = new Set(screenshots2.slice(0, max).map((s) => s.id));
+      const overlay = document.createElement("div");
+      overlay.id = MODAL_ID2;
+      overlay.dataset.tracebug = "screenshot-trim-modal";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.style.cssText = `
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(0,0,0,0.72); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
+    `;
+      const card = document.createElement("div");
+      card.style.cssText = `
+      background: var(--tb-bg-secondary, #1a1a2e);
+      border: 1px solid var(--tb-border-hover, #3a3a5e);
+      border-radius: 12px;
+      width: 100%; max-width: 720px; max-height: 86vh;
+      display: flex; flex-direction: column;
+      color: var(--tb-text-primary, #e0e0e0);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      overflow: hidden;
+    `;
+      const renderCounter = () => `${selected.size} / ${max} selected`;
+      const renderHeader = () => `
+      <div style="padding:18px 22px;border-bottom:1px solid var(--tb-border, #2a2a4e);">
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px">Choose screenshots to share</div>
+        <div style="font-size:12px;color:var(--tb-text-secondary, #aaa);line-height:1.5">
+          Free plan allows ${max} screenshots per shared report. Pick which ${max} to upload \u2014 the rest stay in your local report.
+        </div>
+      </div>
+    `;
+      const tileFor = (s) => {
+        const isSel = selected.has(s.id);
+        const order = isSel ? [...selected].indexOf(s.id) + 1 : null;
+        return `
+        <button type="button" data-id="${escapeAttr(s.id)}" class="tb-trim-tile"
+          aria-pressed="${isSel}"
+          style="
+            position: relative; padding: 0; cursor: pointer; background: var(--tb-bg-primary, #0d0d1a);
+            border: 2px solid ${isSel ? "var(--tb-accent, #7c3aed)" : "var(--tb-border, #2a2a4e)"};
+            border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 10;
+            transition: border-color .15s, transform .12s;
+          ">
+          <img src="${escapeAttr(s.originalDataUrl || s.dataUrl)}" alt=""
+            style="width:100%;height:100%;object-fit:cover;display:block;${isSel ? "" : "opacity:0.55;filter:grayscale(0.4)"}" />
+          ${isSel ? `
+            <div style="position:absolute;top:6px;left:6px;background:var(--tb-accent,#7c3aed);color:#fff;
+              width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+              font-size:11px;font-weight:700">${order}</div>
+          ` : ""}
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:6px 8px;
+            background:linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+            font-size:10px;color:#fff;text-align:left;font-family:var(--tb-font-mono, monospace)">
+            ${escapeText(s.filename || "")}
+          </div>
+        </button>
+      `;
+      };
+      const renderGrid = () => `
+      <div style="padding:16px 22px;overflow-y:auto;flex:1">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));gap:10px">
+          ${screenshots2.map(tileFor).join("")}
+        </div>
+      </div>
+    `;
+      const renderFooter = () => `
+      <div style="padding:14px 22px;border-top:1px solid var(--tb-border, #2a2a4e);
+        display:flex;align-items:center;gap:12px">
+        <div id="tb-trim-counter" style="font-size:13px;color:var(--tb-text-secondary, #aaa)">${renderCounter()}</div>
+        <div style="flex:1"></div>
+        <button data-action="cancel" type="button" style="
+          padding:8px 16px;border-radius:8px;border:1px solid var(--tb-border, #2a2a4e);
+          background:transparent;color:var(--tb-text-primary, #e0e0e0);font-size:13px;font-weight:500;cursor:pointer;
+          font-family:inherit
+        ">Cancel</button>
+        <button data-action="continue" type="button" id="tb-trim-continue" style="
+          padding:8px 18px;border-radius:8px;border:none;
+          background:var(--tb-accent, #7c3aed);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+          font-family:inherit;transition:opacity .15s
+        ">Continue \xB7 upload ${max}</button>
+      </div>
+    `;
+      card.innerHTML = renderHeader() + renderGrid() + renderFooter();
+      overlay.appendChild(card);
+      host.appendChild(overlay);
+      const counterEl = card.querySelector("#tb-trim-counter");
+      const continueBtn = card.querySelector("#tb-trim-continue");
+      function updateContinueState() {
+        if (!continueBtn) return;
+        const ok = selected.size === max;
+        continueBtn.disabled = !ok;
+        continueBtn.style.opacity = ok ? "1" : "0.5";
+        continueBtn.style.cursor = ok ? "pointer" : "not-allowed";
+        if (counterEl) counterEl.textContent = renderCounter();
+      }
+      function rerenderGrid() {
+        const gridHost = card.querySelector("[data-tracebug-trim-grid]");
+        const oldGrid = card.querySelectorAll("button.tb-trim-tile");
+        oldGrid.forEach((b) => {
+          const id = b.dataset.id || "";
+          const isSel = selected.has(id);
+          const order = isSel ? [...selected].indexOf(id) + 1 : null;
+          b.setAttribute("aria-pressed", String(isSel));
+          b.style.borderColor = isSel ? "var(--tb-accent, #7c3aed)" : "var(--tb-border, #2a2a4e)";
+          const img = b.querySelector("img");
+          if (img) img.style.cssText = `width:100%;height:100%;object-fit:cover;display:block;${isSel ? "" : "opacity:0.55;filter:grayscale(0.4)"}`;
+          const badge = b.querySelector("[data-order-badge]");
+          if (isSel && !badge) {
+            const d = document.createElement("div");
+            d.setAttribute("data-order-badge", "1");
+            d.style.cssText = `position:absolute;top:6px;left:6px;background:var(--tb-accent,#7c3aed);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700`;
+            d.textContent = String(order);
+            b.appendChild(d);
+          } else if (!isSel && badge) {
+            badge.remove();
+          } else if (isSel && badge) {
+            badge.textContent = String(order);
+          }
+        });
+        void gridHost;
+      }
+      function close(result) {
+        overlay.remove();
+        resolve(result);
+      }
+      card.addEventListener("click", (e2) => {
+        var _a2;
+        const tgt = e2.target;
+        const tile = tgt.closest(".tb-trim-tile");
+        if (tile) {
+          const id = tile.dataset.id || "";
+          if (selected.has(id)) selected.delete(id);
+          else if (selected.size < max) selected.add(id);
+          rerenderGrid();
+          updateContinueState();
+          return;
+        }
+        const action = (_a2 = tgt.closest("[data-action]")) == null ? void 0 : _a2.dataset.action;
+        if (action === "cancel") close(null);
+        if (action === "continue") {
+          if (selected.size !== max) return;
+          const chosen = screenshots2.filter((s) => selected.has(s.id)).map((s) => s.id);
+          close(chosen);
+        }
+      });
+      overlay.addEventListener("click", (e2) => {
+        if (e2.target === overlay) close(null);
+      });
+      const onKey = (e2) => {
+        if (e2.key === "Escape") {
+          document.removeEventListener("keydown", onKey);
+          close(null);
+        }
+      };
+      document.addEventListener("keydown", onKey);
+      updateContinueState();
+    });
+  }
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+  function escapeText(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  var MODAL_ID2;
+  var init_screenshot_trim_modal = __esm({
+    "src/ui/screenshot-trim-modal.ts"() {
+      "use strict";
+      MODAL_ID2 = "tracebug-screenshot-trim-modal";
     }
   });
 
@@ -14550,11 +15461,15 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
     isQuickBugOpen: () => isQuickBugOpen,
+    setCloudEndpoint: () => setCloudEndpoint,
     setGithubRepo: () => setGithubRepo,
     showQuickBugCapture: () => showQuickBugCapture
   });
   function setGithubRepo(repo) {
     _githubRepo = repo;
+  }
+  function setCloudEndpoint(endpoint) {
+    _cloudEndpoint = endpoint && endpoint.trim() || DEFAULT_CLOUD_ENDPOINT;
   }
   function _loadThemePref() {
     try {
@@ -14689,10 +15604,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
-    const existing = document.getElementById(MODAL_ID2);
+    const existing = document.getElementById(MODAL_ID3);
     if (existing) existing.remove();
     const overlay = document.createElement("div");
-    overlay.id = MODAL_ID2;
+    overlay.id = MODAL_ID3;
     overlay.dataset.tracebug = "quick-bug-modal";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
@@ -14762,7 +15677,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           </div>
           <div class="tb-qb-vidmeta">
             <span>${_formatVideoTime(video.durationMs)} \xB7 ${_formatBytes(video.sizeBytes)} \xB7 ${video.comments.length} timestamped comment${video.comments.length === 1 ? "" : "s"}</span>
-            <button data-action="download-video" class="tb-qb-btn-sm">\u2B07 Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}</button>
+            <button data-action="download-video" class="tb-qb-btn-dl" title="Download recording \u2014 drag into Jira / GitHub / Slack to attach">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M5 13l7 7 7-7M4 21h16"/></svg>
+              Download .${video.mimeType.includes("mp4") ? "mp4" : "webm"}
+            </button>
           </div>
         ` : ""}
 
@@ -14843,6 +15761,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button data-action="slack" class="tb-qb-btn tb-qb-btn-slack" title="Copy a Slack-formatted bug summary to the clipboard">\u{1F4AC} Slack</button>
         <button data-action="jira" class="tb-qb-btn ${isPremium() ? "tb-qb-btn-jira" : "tb-qb-btn-locked"}">${isPremium() ? "\u{1F3AB} Jira" : "\u{1F512} Jira (Premium)"}</button>
         <button data-action="export-replay" class="tb-qb-btn tb-qb-btn-ghost" title="Bundle the entire session into a single .html file you can share or open offline">\u{1F4E6} Export .html</button>
+        <button data-action="share-link" class="tb-qb-btn tb-qb-btn-accent" title="Upload to TraceBug cloud and copy a shareable URL (sign-in required)">\u{1F517} Share link</button>
       </div>
       <div class="tb-qb-tip">
         <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
@@ -15104,6 +16023,97 @@ ${description}`;
       } catch (err) {
         console.warn("[TraceBug] HTML replay export failed:", err);
         showToast("Replay export failed", root);
+      }
+    });
+    const shareBtn = modal.querySelector('[data-action="share-link"]');
+    shareBtn == null ? void 0 : shareBtn.addEventListener("click", async () => {
+      var _a2;
+      if (!data.currentSession) {
+        showToast("No session to share yet", root);
+        return;
+      }
+      if ((shareBtn == null ? void 0 : shareBtn.dataset.busy) === "1") return;
+      const originalHtml = shareBtn ? shareBtn.innerHTML : "";
+      const setBtnState = (label) => {
+        if (!shareBtn) return;
+        shareBtn.dataset.busy = "1";
+        shareBtn.disabled = true;
+        shareBtn.style.opacity = "0.85";
+        shareBtn.innerHTML = '<span class="tb-qb-spin" style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:tb-qb-spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px"></span>' + label;
+      };
+      const resetBtn = () => {
+        if (!shareBtn) return;
+        shareBtn.dataset.busy = "";
+        shareBtn.disabled = false;
+        shareBtn.style.opacity = "";
+        shareBtn.innerHTML = originalHtml;
+      };
+      if (!document.getElementById("tb-qb-spin-style")) {
+        const s = document.createElement("style");
+        s.id = "tb-qb-spin-style";
+        s.textContent = "@keyframes tb-qb-spin{to{transform:rotate(360deg)}}";
+        document.head.appendChild(s);
+      }
+      try {
+        try {
+          await restoreLastRecordingFromOffscreen();
+        } catch (e2) {
+        }
+        const bridge = getBridge(_cloudEndpoint);
+        const auth = await bridge.checkAuth();
+        if (!auth.authed) {
+          setBtnState("Signing in\u2026");
+          showToast("Opening sign-in window\u2026", root);
+          await bridge.signIn();
+        }
+        setBtnState("Bundling\u2026");
+        showToast("Bundling report\u2026", root);
+        const report = buildReport(data.currentSession);
+        if (report.screenshots && report.screenshots.length > MAX_SCREENSHOTS_PER_SHARE) {
+          resetBtn();
+          const chosenIds = await showScreenshotTrimModal(report.screenshots, MAX_SCREENSHOTS_PER_SHARE, root);
+          if (!chosenIds) {
+            showToast("Share cancelled", root);
+            return;
+          }
+          const chosenSet = new Set(chosenIds);
+          report.screenshots = report.screenshots.filter((s) => chosenSet.has(s.id));
+          setBtnState("Uploading\u2026");
+        }
+        setBtnState("Uploading\u2026");
+        showToast("Uploading to cloud\u2026", root);
+        const result = await shareSessionAsLink(
+          data.currentSession,
+          report,
+          { cloudEndpoint: _cloudEndpoint }
+        );
+        try {
+          await navigator.clipboard.writeText(result.shareUrl);
+        } catch (e2) {
+        }
+        const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+        showToast(`\u2713 Link copied \xB7 ${sizeMb} MB \xB7 Opening\u2026`, root);
+        resetBtn();
+        try {
+          window.open(result.shareUrl, "_blank", "noopener,noreferrer");
+        } catch (e2) {
+        }
+        return;
+      } catch (err) {
+        resetBtn();
+        const code = (err == null ? void 0 : err.code) || (err == null ? void 0 : err.message) || "share_failed";
+        console.warn("[TraceBug] Share failed:", err);
+        if (code === "too_many_screenshots") {
+          showToast(`Too many screenshots (max ${err.limit}). Remove some and try again.`, root);
+        } else if (code === "video_too_long") {
+          showToast(`Video too long (max ${err.limitS}s). Re-record shorter.`, root);
+        } else if (code === "size_too_large") {
+          showToast(`Report too large (${(err.sizeBytes / 1024 / 1024).toFixed(1)} MB). Limit is 50 MB.`, root);
+        } else if (String(((_a2 = err == null ? void 0 : err.body) == null ? void 0 : _a2.error) || "").includes("quota_reached")) {
+          showToast("Quota reached. Delete an old share in your dashboard.", root);
+        } else {
+          showToast(`Share failed: ${(err == null ? void 0 : err.message) || code}`, root);
+        }
       }
     });
     const tabButtons = modal.querySelectorAll("[data-tab]");
@@ -15803,283 +16813,285 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     @keyframes tracebug-qb-slide-up { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
     /* \u2500\u2500 Modal shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
-    #${MODAL_ID2} * { box-sizing: border-box; }
+    #${MODAL_ID3} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
+    #${MODAL_ID3} * { box-sizing: border-box; }
 
     /* \u2500\u2500 Header \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-header { display:flex; align-items:center; gap:12px; padding:16px 22px; border-bottom:1px solid var(--tb-border); flex-shrink:0; background:var(--tb-bg-primary); }
-    #${MODAL_ID2} .tb-qb-logo { font-size:20px; line-height:1; }
-    #${MODAL_ID2} .tb-qb-titleblock { flex:1; min-width:0; }
-    #${MODAL_ID2} .tb-qb-titletext { font-size:15px; font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
-    #${MODAL_ID2} .tb-qb-sub { font-size:11px; color:var(--tb-text-muted); margin-top:3px; font-weight:500; }
-    #${MODAL_ID2} .tb-qb-sev { font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:5px 10px; border-radius:999px; white-space:nowrap; }
-    #${MODAL_ID2} .tb-qb-close { background:transparent; border:none; color:var(--tb-text-muted); cursor:pointer; font-size:16px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, color 0.15s; }
-    #${MODAL_ID2} .tb-qb-close:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-theme-toggle { background:transparent; border:1px solid var(--tb-border); color:var(--tb-text-muted); cursor:pointer; font-size:13px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s; }
-    #${MODAL_ID2} .tb-qb-theme-toggle:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+    #${MODAL_ID3} .tb-qb-header { display:flex; align-items:center; gap:12px; padding:16px 22px; border-bottom:1px solid var(--tb-border); flex-shrink:0; background:var(--tb-bg-primary); }
+    #${MODAL_ID3} .tb-qb-logo { font-size:20px; line-height:1; }
+    #${MODAL_ID3} .tb-qb-titleblock { flex:1; min-width:0; }
+    #${MODAL_ID3} .tb-qb-titletext { font-size:15px; font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
+    #${MODAL_ID3} .tb-qb-sub { font-size:11px; color:var(--tb-text-muted); margin-top:3px; font-weight:500; }
+    #${MODAL_ID3} .tb-qb-sev { font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:5px 10px; border-radius:999px; white-space:nowrap; }
+    #${MODAL_ID3} .tb-qb-close { background:transparent; border:none; color:var(--tb-text-muted); cursor:pointer; font-size:16px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, color 0.15s; }
+    #${MODAL_ID3} .tb-qb-close:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-theme-toggle { background:transparent; border:1px solid var(--tb-border); color:var(--tb-text-muted); cursor:pointer; font-size:13px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s; }
+    #${MODAL_ID3} .tb-qb-theme-toggle:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
 
     /* \u2500\u2500 Two-pane body \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-body { flex:1; display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(340px, 1fr); gap:0; overflow:hidden; min-height:0; background:var(--tb-bg-primary); }
-    @media (max-width: 920px) { #${MODAL_ID2} .tb-qb-body { grid-template-columns:1fr; } }
-    #${MODAL_ID2} .tb-qb-left { padding:20px 22px; overflow-y:auto; min-width:0; border-right:1px solid var(--tb-border); }
-    #${MODAL_ID2} .tb-qb-right { display:flex; flex-direction:column; min-width:0; overflow:hidden; background:var(--tb-bg-secondary); }
+    #${MODAL_ID3} .tb-qb-body { flex:1; display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(340px, 1fr); gap:0; overflow:hidden; min-height:0; background:var(--tb-bg-primary); }
+    @media (max-width: 920px) { #${MODAL_ID3} .tb-qb-body { grid-template-columns:1fr; } }
+    #${MODAL_ID3} .tb-qb-left { padding:20px 22px; overflow-y:auto; min-width:0; border-right:1px solid var(--tb-border); }
+    #${MODAL_ID3} .tb-qb-right { display:flex; flex-direction:column; min-width:0; overflow:hidden; background:var(--tb-bg-secondary); }
 
     /* \u2500\u2500 Left pane \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-lbl { font-size:10px; color:var(--tb-text-muted); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; }
-    #${MODAL_ID2} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
-    #${MODAL_ID2} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
-    #${MODAL_ID2} .tb-qb-preview { border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
-    #${MODAL_ID2} .tb-qb-preview-empty { padding:32px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
-    #${MODAL_ID2} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
-    #${MODAL_ID2} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
-    #${MODAL_ID2} .tb-qb-vidmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; }
-    #${MODAL_ID2} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
-    #${MODAL_ID2} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
-    #${MODAL_ID2} .tb-qb-btn-sm:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
-    #${MODAL_ID2} .tb-qb-scrubber-wrap { margin-bottom:14px; }
-    #${MODAL_ID2} .tb-qb-thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
-    #${MODAL_ID2} .tb-qb-thumb { position:relative; padding:0; border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); overflow:hidden; cursor:pointer; background:var(--tb-bg-secondary); width:68px; height:52px; transition:border-color 0.15s, transform 0.1s; }
-    #${MODAL_ID2} .tb-qb-thumb:hover { border-color:var(--tb-accent); transform:translateY(-1px); }
-    #${MODAL_ID2} .tb-qb-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-    #${MODAL_ID2} .tb-qb-thumb-num { position:absolute; top:2px; left:3px; font-size:9px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); background:rgba(0,0,0,0.55); border-radius:3px; padding:1px 5px; }
-    #${MODAL_ID2} .tb-qb-comments { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; max-height:160px; overflow-y:auto; padding-right:4px; }
-    #${MODAL_ID2} .tb-qb-comment { display:flex; align-items:flex-start; gap:10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:8px 10px; color:var(--tb-text-primary); font-family:inherit; font-size:12px; text-align:left; cursor:pointer; line-height:1.4; transition:border-color 0.15s, background 0.15s; }
-    #${MODAL_ID2} .tb-qb-comment:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); }
-    #${MODAL_ID2} .tb-qb-comment-ts { font-variant-numeric:tabular-nums; font-weight:600; color:var(--tb-accent); min-width:42px; font-family:var(--tb-font-mono); }
-    #${MODAL_ID2} .tb-qb-comment-tx { flex:1; }
-    #${MODAL_ID2} .tb-qb-desc-wrap { margin-top:8px; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); background:var(--tb-bg-secondary); }
-    #${MODAL_ID2} .tb-qb-desc-wrap[open] { background:var(--tb-bg-primary); }
-    #${MODAL_ID2} .tb-qb-desc-summary { padding:10px 14px; font-size:11px; color:var(--tb-text-muted); cursor:pointer; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; user-select:none; transition:color 0.15s; }
-    #${MODAL_ID2} .tb-qb-desc-summary:hover { color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-textarea { width:100%; min-height:160px; background:var(--tb-bg-primary); border:none; border-top:1px solid var(--tb-border); border-radius:0 0 var(--tb-radius-md) var(--tb-radius-md); color:var(--tb-text-primary); padding:12px 14px; font-size:13px; font-family:var(--tb-font-mono); resize:vertical; outline:none; line-height:1.6; }
+    #${MODAL_ID3} .tb-qb-lbl { font-size:10px; color:var(--tb-text-muted); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; }
+    #${MODAL_ID3} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
+    #${MODAL_ID3} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
+    #${MODAL_ID3} .tb-qb-preview { border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
+    #${MODAL_ID3} .tb-qb-preview-empty { padding:32px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
+    #${MODAL_ID3} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
+    #${MODAL_ID3} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
+    #${MODAL_ID3} .tb-qb-vidmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; }
+    #${MODAL_ID3} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID3} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
+    #${MODAL_ID3} .tb-qb-btn-sm:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+    #${MODAL_ID3} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
+    #${MODAL_ID3} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
+    #${MODAL_ID3} .tb-qb-scrubber-wrap { margin-bottom:14px; }
+    #${MODAL_ID3} .tb-qb-thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+    #${MODAL_ID3} .tb-qb-thumb { position:relative; padding:0; border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); overflow:hidden; cursor:pointer; background:var(--tb-bg-secondary); width:68px; height:52px; transition:border-color 0.15s, transform 0.1s; }
+    #${MODAL_ID3} .tb-qb-thumb:hover { border-color:var(--tb-accent); transform:translateY(-1px); }
+    #${MODAL_ID3} .tb-qb-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+    #${MODAL_ID3} .tb-qb-thumb-num { position:absolute; top:2px; left:3px; font-size:9px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); background:rgba(0,0,0,0.55); border-radius:3px; padding:1px 5px; }
+    #${MODAL_ID3} .tb-qb-comments { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; max-height:160px; overflow-y:auto; padding-right:4px; }
+    #${MODAL_ID3} .tb-qb-comment { display:flex; align-items:flex-start; gap:10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:8px 10px; color:var(--tb-text-primary); font-family:inherit; font-size:12px; text-align:left; cursor:pointer; line-height:1.4; transition:border-color 0.15s, background 0.15s; }
+    #${MODAL_ID3} .tb-qb-comment:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); }
+    #${MODAL_ID3} .tb-qb-comment-ts { font-variant-numeric:tabular-nums; font-weight:600; color:var(--tb-accent); min-width:42px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID3} .tb-qb-comment-tx { flex:1; }
+    #${MODAL_ID3} .tb-qb-desc-wrap { margin-top:8px; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); background:var(--tb-bg-secondary); }
+    #${MODAL_ID3} .tb-qb-desc-wrap[open] { background:var(--tb-bg-primary); }
+    #${MODAL_ID3} .tb-qb-desc-summary { padding:10px 14px; font-size:11px; color:var(--tb-text-muted); cursor:pointer; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; user-select:none; transition:color 0.15s; }
+    #${MODAL_ID3} .tb-qb-desc-summary:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-textarea { width:100%; min-height:160px; background:var(--tb-bg-primary); border:none; border-top:1px solid var(--tb-border); border-radius:0 0 var(--tb-radius-md) var(--tb-radius-md); color:var(--tb-text-primary); padding:12px 14px; font-size:13px; font-family:var(--tb-font-mono); resize:vertical; outline:none; line-height:1.6; }
 
     /* \u2500\u2500 Right pane: tabs \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-tabstrip { display:flex; flex-direction:row; gap:0; padding:0 12px; background:var(--tb-bg-secondary); border-bottom:1px solid var(--tb-border); overflow-x:auto; flex-shrink:0; }
-    #${MODAL_ID2} .tb-qb-tab { display:inline-flex; align-items:center; gap:7px; padding:14px 14px 12px; border:none; background:transparent; color:var(--tb-text-muted); cursor:pointer; font-size:13px; font-weight:600; font-family:inherit; border-bottom:2px solid transparent; white-space:nowrap; transition:color 0.15s, border-color 0.15s; letter-spacing:-0.01em; margin-bottom:-1px; }
-    #${MODAL_ID2} .tb-qb-tab:hover { color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-tab-active { color:var(--tb-text-primary); border-bottom-color:var(--tb-accent); }
-    #${MODAL_ID2} .tb-qb-tab-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--tb-accent-subtle); color:var(--tb-accent); line-height:1.4; min-width:18px; text-align:center; }
-    #${MODAL_ID2} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:#fff; }
-    #${MODAL_ID2} .tb-qb-tabpanels { flex:1; overflow-y:auto; padding:18px 20px; min-height:0; }
-    #${MODAL_ID2} .tb-qb-panel { display:none; animation:tracebug-qb-fade-in 0.18s ease; }
-    #${MODAL_ID2} .tb-qb-panel-active { display:block; }
+    #${MODAL_ID3} .tb-qb-tabstrip { display:flex; flex-direction:row; gap:0; padding:0 12px; background:var(--tb-bg-secondary); border-bottom:1px solid var(--tb-border); overflow-x:auto; flex-shrink:0; }
+    #${MODAL_ID3} .tb-qb-tab { display:inline-flex; align-items:center; gap:7px; padding:14px 14px 12px; border:none; background:transparent; color:var(--tb-text-muted); cursor:pointer; font-size:13px; font-weight:600; font-family:inherit; border-bottom:2px solid transparent; white-space:nowrap; transition:color 0.15s, border-color 0.15s; letter-spacing:-0.01em; margin-bottom:-1px; }
+    #${MODAL_ID3} .tb-qb-tab:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-tab-active { color:var(--tb-text-primary); border-bottom-color:var(--tb-accent); }
+    #${MODAL_ID3} .tb-qb-tab-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--tb-accent-subtle); color:var(--tb-accent); line-height:1.4; min-width:18px; text-align:center; }
+    #${MODAL_ID3} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:#fff; }
+    #${MODAL_ID3} .tb-qb-tabpanels { flex:1; overflow-y:auto; padding:18px 20px; min-height:0; }
+    #${MODAL_ID3} .tb-qb-panel { display:none; animation:tracebug-qb-fade-in 0.18s ease; }
+    #${MODAL_ID3} .tb-qb-panel-active { display:block; }
 
     /* \u2500\u2500 Tab content \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-empty { font-size:13px; color:var(--tb-text-muted); padding:32px 16px; text-align:center; border:1px dashed var(--tb-border); border-radius:var(--tb-radius-md); }
-    #${MODAL_ID2} .tb-qb-sec-head { font-size:10px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin:18px 0 8px; }
-    #${MODAL_ID2} .tb-qb-sec-head:first-child { margin-top:0; }
-    #${MODAL_ID2} .tb-qb-info { display:flex; flex-direction:column; gap:5px; }
-    #${MODAL_ID2} .tb-qb-kv { display:flex; gap:12px; padding:8px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); transition:border-color 0.15s; }
-    #${MODAL_ID2} .tb-qb-kv:hover { border-color:var(--tb-border); }
-    #${MODAL_ID2} .tb-qb-kv-k { font-size:11px; color:var(--tb-text-muted); min-width:98px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; flex-shrink:0; }
-    #${MODAL_ID2} .tb-qb-kv-v { font-size:12px; color:var(--tb-text-primary); word-break:break-word; min-width:0; flex:1; font-family:var(--tb-font-mono); display:flex; align-items:center; gap:6px; }
-    #${MODAL_ID2} .tb-qb-kv-icon { font-size:13px; line-height:1; flex-shrink:0; }
-    #${MODAL_ID2} .tb-qb-log { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-left:3px solid var(--tb-border-hover); border-radius:var(--tb-radius-sm); }
-    #${MODAL_ID2} .tb-qb-log-error { border-left-color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-log-warn { border-left-color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-log-log { border-left-color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-log-info { border-left-color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-log-head { display:flex; align-items:flex-start; gap:8px; }
-    #${MODAL_ID2} .tb-qb-log-lvl { font-size:9px; font-weight:700; padding:2px 7px; border-radius:var(--tb-radius-sm); text-transform:uppercase; letter-spacing:0.4px; flex-shrink:0; line-height:1.35; }
-    #${MODAL_ID2} .tb-qb-log-lvl-error { background:var(--tb-error-bg); color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-log-lvl-warn { background:var(--tb-warning-bg); color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-log-lvl-log,
-    #${MODAL_ID2} .tb-qb-log-lvl-info { background:var(--tb-info-bg); color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-log-msg { font-size:12px; color:var(--tb-text-primary); font-family:var(--tb-font-mono); word-break:break-word; line-height:1.5; flex:1; min-width:0; }
-    #${MODAL_ID2} .tb-qb-log-error .tb-qb-log-msg { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-log-stack { font-size:10px; color:var(--tb-text-muted); font-family:var(--tb-font-mono); margin:8px 0 0; padding:8px 10px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:140px; overflow:auto; white-space:pre-wrap; }
-    #${MODAL_ID2} .tb-qb-log-ts { font-size:10px; color:var(--tb-text-muted); margin-top:6px; font-family:var(--tb-font-mono); }
-    #${MODAL_ID2} .tb-qb-net { padding:10px 12px; margin-bottom:6px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); transition:border-color 0.15s; }
-    #${MODAL_ID2} .tb-qb-net:hover { border-color:var(--tb-border-hover); }
-    #${MODAL_ID2} .tb-qb-net-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-    #${MODAL_ID2} .tb-qb-net-method { font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--tb-radius-sm); background:var(--tb-bg-elevated); color:var(--tb-text-primary); font-family:var(--tb-font-mono); letter-spacing:0.5px; }
-    #${MODAL_ID2} .tb-qb-net-status { font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--tb-radius-sm); color:#fff; font-family:var(--tb-font-mono); }
-    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-2xx { background:#16a34a; }
-    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-3xx { background:#0891b2; }
-    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-4xx { background:#d97706; }
-    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-5xx { background:#dc2626; }
-    #${MODAL_ID2} .tb-qb-net-status.tb-qb-net-err { background:#7f1d1d; }
+    #${MODAL_ID3} .tb-qb-empty { font-size:13px; color:var(--tb-text-muted); padding:32px 16px; text-align:center; border:1px dashed var(--tb-border); border-radius:var(--tb-radius-md); }
+    #${MODAL_ID3} .tb-qb-sec-head { font-size:10px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin:18px 0 8px; }
+    #${MODAL_ID3} .tb-qb-sec-head:first-child { margin-top:0; }
+    #${MODAL_ID3} .tb-qb-info { display:flex; flex-direction:column; gap:5px; }
+    #${MODAL_ID3} .tb-qb-kv { display:flex; gap:12px; padding:8px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); transition:border-color 0.15s; }
+    #${MODAL_ID3} .tb-qb-kv:hover { border-color:var(--tb-border); }
+    #${MODAL_ID3} .tb-qb-kv-k { font-size:11px; color:var(--tb-text-muted); min-width:98px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; flex-shrink:0; }
+    #${MODAL_ID3} .tb-qb-kv-v { font-size:12px; color:var(--tb-text-primary); word-break:break-word; min-width:0; flex:1; font-family:var(--tb-font-mono); display:flex; align-items:center; gap:6px; }
+    #${MODAL_ID3} .tb-qb-kv-icon { font-size:13px; line-height:1; flex-shrink:0; }
+    #${MODAL_ID3} .tb-qb-log { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-left:3px solid var(--tb-border-hover); border-radius:var(--tb-radius-sm); }
+    #${MODAL_ID3} .tb-qb-log-error { border-left-color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-log-warn { border-left-color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-log-log { border-left-color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-log-info { border-left-color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-log-head { display:flex; align-items:flex-start; gap:8px; }
+    #${MODAL_ID3} .tb-qb-log-lvl { font-size:9px; font-weight:700; padding:2px 7px; border-radius:var(--tb-radius-sm); text-transform:uppercase; letter-spacing:0.4px; flex-shrink:0; line-height:1.35; }
+    #${MODAL_ID3} .tb-qb-log-lvl-error { background:var(--tb-error-bg); color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-log-lvl-warn { background:var(--tb-warning-bg); color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-log-lvl-log,
+    #${MODAL_ID3} .tb-qb-log-lvl-info { background:var(--tb-info-bg); color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-log-msg { font-size:12px; color:var(--tb-text-primary); font-family:var(--tb-font-mono); word-break:break-word; line-height:1.5; flex:1; min-width:0; }
+    #${MODAL_ID3} .tb-qb-log-error .tb-qb-log-msg { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-log-stack { font-size:10px; color:var(--tb-text-muted); font-family:var(--tb-font-mono); margin:8px 0 0; padding:8px 10px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:140px; overflow:auto; white-space:pre-wrap; }
+    #${MODAL_ID3} .tb-qb-log-ts { font-size:10px; color:var(--tb-text-muted); margin-top:6px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID3} .tb-qb-net { padding:10px 12px; margin-bottom:6px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); transition:border-color 0.15s; }
+    #${MODAL_ID3} .tb-qb-net:hover { border-color:var(--tb-border-hover); }
+    #${MODAL_ID3} .tb-qb-net-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    #${MODAL_ID3} .tb-qb-net-method { font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--tb-radius-sm); background:var(--tb-bg-elevated); color:var(--tb-text-primary); font-family:var(--tb-font-mono); letter-spacing:0.5px; }
+    #${MODAL_ID3} .tb-qb-net-status { font-size:10px; font-weight:700; padding:3px 7px; border-radius:var(--tb-radius-sm); color:#fff; font-family:var(--tb-font-mono); }
+    #${MODAL_ID3} .tb-qb-net-status.tb-qb-net-2xx { background:#16a34a; }
+    #${MODAL_ID3} .tb-qb-net-status.tb-qb-net-3xx { background:#0891b2; }
+    #${MODAL_ID3} .tb-qb-net-status.tb-qb-net-4xx { background:#d97706; }
+    #${MODAL_ID3} .tb-qb-net-status.tb-qb-net-5xx { background:#dc2626; }
+    #${MODAL_ID3} .tb-qb-net-status.tb-qb-net-err { background:#7f1d1d; }
     /* \u2500\u2500 Network DevTools-style refactor \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-net-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-    #${MODAL_ID2} .tb-qb-net-search { flex:1; min-width:0; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:6px 10px; font-size:12px; font-family:inherit; outline:none; transition:border-color .15s; }
-    #${MODAL_ID2} .tb-qb-net-search:focus { border-color:var(--tb-accent); box-shadow:0 0 0 3px var(--tb-accent-subtle); }
-    #${MODAL_ID2} .tb-qb-net-err-toggle { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--tb-text-secondary); cursor:pointer; white-space:nowrap; }
-    #${MODAL_ID2} .tb-qb-net-err-toggle input { accent-color:var(--tb-accent); cursor:pointer; }
-    #${MODAL_ID2} .tb-qb-con-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-    #${MODAL_ID2} .tb-qb-con-count { font-size:10px; color:var(--tb-text-muted); white-space:nowrap; text-transform:uppercase; letter-spacing:0.4px; font-weight:600; }
+    #${MODAL_ID3} .tb-qb-net-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    #${MODAL_ID3} .tb-qb-net-search { flex:1; min-width:0; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:6px 10px; font-size:12px; font-family:inherit; outline:none; transition:border-color .15s; }
+    #${MODAL_ID3} .tb-qb-net-search:focus { border-color:var(--tb-accent); box-shadow:0 0 0 3px var(--tb-accent-subtle); }
+    #${MODAL_ID3} .tb-qb-net-err-toggle { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--tb-text-secondary); cursor:pointer; white-space:nowrap; }
+    #${MODAL_ID3} .tb-qb-net-err-toggle input { accent-color:var(--tb-accent); cursor:pointer; }
+    #${MODAL_ID3} .tb-qb-con-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    #${MODAL_ID3} .tb-qb-con-count { font-size:10px; color:var(--tb-text-muted); white-space:nowrap; text-transform:uppercase; letter-spacing:0.4px; font-weight:600; }
 
     /* Unified Console feed \u2014 Jam-style timeline of events */
-    #${MODAL_ID2} .tb-qb-feed-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-    #${MODAL_ID2} .tb-qb-feed-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-    #${MODAL_ID2} .tb-qb-feed-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:5px 12px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
-    #${MODAL_ID2} .tb-qb-feed-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-feed-pill-active { background:var(--tb-text-primary); color:var(--tb-bg-primary); border-color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-feed-pill-n { background:rgba(0,0,0,0.15); padding:1px 6px; border-radius:999px; font-size:9px; font-weight:700; min-width:14px; text-align:center; }
-    #${MODAL_ID2} .tb-qb-feed-pill-active .tb-qb-feed-pill-n { background:rgba(255,255,255,0.22); }
-    #${MODAL_ID2} .tb-qb-feed-list { display:flex; flex-direction:column; }
-    #${MODAL_ID2} .tb-qb-feed-row { display:grid; grid-template-columns:48px 24px 1fr; align-items:flex-start; gap:10px; padding:8px 10px; border-bottom:1px solid var(--tb-border-subtle); transition:background .12s; cursor:pointer; }
-    #${MODAL_ID2} .tb-qb-feed-row:hover { background:var(--tb-bg-secondary); }
-    #${MODAL_ID2} .tb-qb-feed-row-active { background:var(--tb-accent-subtle) !important; box-shadow:inset 3px 0 0 var(--tb-accent); }
-    #${MODAL_ID2} .tb-qb-feed-row:focus { outline:2px solid var(--tb-accent); outline-offset:-2px; }
-    #${MODAL_ID2} .tb-qb-feed-time { font-family:var(--tb-font-mono); font-size:11px; font-variant-numeric:tabular-nums; color:var(--tb-text-muted); padding-top:3px; }
-    #${MODAL_ID2} .tb-qb-feed-icon { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; color:var(--tb-text-secondary); border-radius:var(--tb-radius-sm); flex-shrink:0; }
-    #${MODAL_ID2} .tb-qb-feed-body { min-width:0; }
-    #${MODAL_ID2} .tb-qb-feed-msg { font-family:var(--tb-font-mono); font-size:12px; color:var(--tb-text-primary); word-break:break-word; line-height:1.5; }
-    #${MODAL_ID2} .tb-qb-feed-stack { font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-muted); margin:6px 0 0; padding:6px 8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:120px; overflow:auto; white-space:pre-wrap; }
+    #${MODAL_ID3} .tb-qb-feed-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    #${MODAL_ID3} .tb-qb-feed-pills { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+    #${MODAL_ID3} .tb-qb-feed-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:5px 12px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
+    #${MODAL_ID3} .tb-qb-feed-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-feed-pill-active { background:var(--tb-text-primary); color:var(--tb-bg-primary); border-color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-feed-pill-n { background:rgba(0,0,0,0.15); padding:1px 6px; border-radius:999px; font-size:9px; font-weight:700; min-width:14px; text-align:center; }
+    #${MODAL_ID3} .tb-qb-feed-pill-active .tb-qb-feed-pill-n { background:rgba(255,255,255,0.22); }
+    #${MODAL_ID3} .tb-qb-feed-list { display:flex; flex-direction:column; }
+    #${MODAL_ID3} .tb-qb-feed-row { display:grid; grid-template-columns:48px 24px 1fr; align-items:flex-start; gap:10px; padding:8px 10px; border-bottom:1px solid var(--tb-border-subtle); transition:background .12s; cursor:pointer; }
+    #${MODAL_ID3} .tb-qb-feed-row:hover { background:var(--tb-bg-secondary); }
+    #${MODAL_ID3} .tb-qb-feed-row-active { background:var(--tb-accent-subtle) !important; box-shadow:inset 3px 0 0 var(--tb-accent); }
+    #${MODAL_ID3} .tb-qb-feed-row:focus { outline:2px solid var(--tb-accent); outline-offset:-2px; }
+    #${MODAL_ID3} .tb-qb-feed-time { font-family:var(--tb-font-mono); font-size:11px; font-variant-numeric:tabular-nums; color:var(--tb-text-muted); padding-top:3px; }
+    #${MODAL_ID3} .tb-qb-feed-icon { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; color:var(--tb-text-secondary); border-radius:var(--tb-radius-sm); flex-shrink:0; }
+    #${MODAL_ID3} .tb-qb-feed-body { min-width:0; }
+    #${MODAL_ID3} .tb-qb-feed-msg { font-family:var(--tb-font-mono); font-size:12px; color:var(--tb-text-primary); word-break:break-word; line-height:1.5; }
+    #${MODAL_ID3} .tb-qb-feed-stack { font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-muted); margin:6px 0 0; padding:6px 8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:120px; overflow:auto; white-space:pre-wrap; }
     /* Category accents */
-    #${MODAL_ID2} .tb-qb-feed-navigation { background:var(--tb-info-bg); }
-    #${MODAL_ID2} .tb-qb-feed-navigation:hover { background:var(--tb-info-bg); filter:brightness(0.97); }
-    #${MODAL_ID2} .tb-qb-feed-navigation .tb-qb-feed-icon { color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-feed-network-error { background:var(--tb-error-bg); }
-    #${MODAL_ID2} .tb-qb-feed-network-error .tb-qb-feed-icon { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-feed-network-error .tb-qb-feed-msg { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-feed-user-activity .tb-qb-feed-icon { color:var(--tb-text-secondary); }
-    #${MODAL_ID2} .tb-qb-feed-video .tb-qb-feed-icon { color:var(--tb-accent); }
-    #${MODAL_ID2} .tb-qb-feed-lvl-error .tb-qb-feed-icon { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-feed-lvl-error .tb-qb-feed-msg { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-feed-lvl-warn .tb-qb-feed-icon { color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-feed-lvl-warn .tb-qb-feed-msg { color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-net-pills { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; }
-    #${MODAL_ID2} .tb-qb-net-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:4px 11px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
-    #${MODAL_ID2} .tb-qb-net-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-net-pill-active { background:var(--tb-text-primary); color:var(--tb-bg-primary); border-color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-net-pill-n { background:rgba(0,0,0,0.15); padding:1px 6px; border-radius:999px; font-size:9px; font-weight:700; }
-    #${MODAL_ID2} .tb-qb-net-pill-active .tb-qb-net-pill-n { background:rgba(255,255,255,0.2); }
-    #${MODAL_ID2} .tb-qb-net-table { font-family:var(--tb-font-mono); font-size:11px; }
-    #${MODAL_ID2} .tb-qb-net-row { display:grid; grid-template-columns:28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items:center; gap:8px; padding:0; background:transparent; border:none; }
-    #${MODAL_ID2} .tb-qb-net-row.tb-qb-net-head { padding:6px 8px 8px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--tb-text-muted); border-bottom:1px solid var(--tb-border); }
-    #${MODAL_ID2} details.tb-qb-net-row { display:block; border-bottom:1px solid var(--tb-border-subtle); }
-    #${MODAL_ID2} details.tb-qb-net-row:hover { background:var(--tb-bg-secondary); }
-    #${MODAL_ID2} .tb-qb-net-summary { display:grid; grid-template-columns:28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; list-style:none; min-height:24px; }
-    #${MODAL_ID2} .tb-qb-net-summary::-webkit-details-marker { display:none; }
-    #${MODAL_ID2} .tb-qb-net-c-n { color:var(--tb-text-muted); text-align:right; }
-    #${MODAL_ID2} .tb-qb-net-c-name { color:var(--tb-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    #${MODAL_ID2} .tb-qb-net-c-meth { color:var(--tb-text-secondary); font-weight:600; font-size:10px; letter-spacing:0.4px; }
-    #${MODAL_ID2} .tb-qb-net-c-stat { font-size:10px; font-weight:700; padding:1px 6px; border-radius:var(--tb-radius-sm); color:#fff; text-align:center; }
-    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-2xx { background:#16a34a; }
-    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-3xx { background:#0891b2; }
-    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-4xx { background:#d97706; }
-    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-5xx { background:#dc2626; }
-    #${MODAL_ID2} .tb-qb-net-c-stat.tb-qb-net-err { background:#7f1d1d; }
-    #${MODAL_ID2} .tb-qb-net-c-dom { color:var(--tb-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    #${MODAL_ID2} .tb-qb-net-c-type { color:var(--tb-text-muted); font-size:10px; }
-    #${MODAL_ID2} .tb-qb-net-c-time { color:var(--tb-text-secondary); text-align:right; font-size:10px; }
-    #${MODAL_ID2} .tb-qb-net-c-wf { position:relative; height:14px; background:var(--tb-bg-secondary); border-radius:3px; overflow:hidden; }
-    #${MODAL_ID2} .tb-qb-net-wf-bar { position:absolute; top:3px; height:8px; border-radius:2px; background:var(--tb-accent); }
-    #${MODAL_ID2} .tb-qb-net-wf-bar.tb-qb-net-4xx { background:#d97706; }
-    #${MODAL_ID2} .tb-qb-net-wf-bar.tb-qb-net-5xx { background:#dc2626; }
-    #${MODAL_ID2} .tb-qb-net-wf-bar.tb-qb-net-err { background:#7f1d1d; }
-    #${MODAL_ID2} .tb-qb-net-detail { padding:0 8px 10px 36px; }
-    #${MODAL_ID2} .tb-qb-net-detail-url { font-size:11px; color:var(--tb-text-secondary); word-break:break-all; padding-bottom:6px; }
-    #${MODAL_ID2} .tb-qb-net-snippet pre { margin:0; padding:8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); font-size:10px; color:var(--tb-code-text); max-height:120px; overflow:auto; white-space:pre-wrap; }
+    #${MODAL_ID3} .tb-qb-feed-navigation { background:var(--tb-info-bg); }
+    #${MODAL_ID3} .tb-qb-feed-navigation:hover { background:var(--tb-info-bg); filter:brightness(0.97); }
+    #${MODAL_ID3} .tb-qb-feed-navigation .tb-qb-feed-icon { color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-feed-network-error { background:var(--tb-error-bg); }
+    #${MODAL_ID3} .tb-qb-feed-network-error .tb-qb-feed-icon { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-feed-network-error .tb-qb-feed-msg { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-feed-user-activity .tb-qb-feed-icon { color:var(--tb-text-secondary); }
+    #${MODAL_ID3} .tb-qb-feed-video .tb-qb-feed-icon { color:var(--tb-accent); }
+    #${MODAL_ID3} .tb-qb-feed-lvl-error .tb-qb-feed-icon { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-feed-lvl-error .tb-qb-feed-msg { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-feed-lvl-warn .tb-qb-feed-icon { color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-feed-lvl-warn .tb-qb-feed-msg { color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-net-pills { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:10px; }
+    #${MODAL_ID3} .tb-qb-net-pill { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); color:var(--tb-text-secondary); padding:4px 11px; font-size:11px; font-weight:600; border-radius:999px; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:6px; transition:all .15s; }
+    #${MODAL_ID3} .tb-qb-net-pill:hover { border-color:var(--tb-border-hover); color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-net-pill-active { background:var(--tb-text-primary); color:var(--tb-bg-primary); border-color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-net-pill-n { background:rgba(0,0,0,0.15); padding:1px 6px; border-radius:999px; font-size:9px; font-weight:700; }
+    #${MODAL_ID3} .tb-qb-net-pill-active .tb-qb-net-pill-n { background:rgba(255,255,255,0.2); }
+    #${MODAL_ID3} .tb-qb-net-table { font-family:var(--tb-font-mono); font-size:11px; }
+    #${MODAL_ID3} .tb-qb-net-row { display:grid; grid-template-columns:28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items:center; gap:8px; padding:0; background:transparent; border:none; }
+    #${MODAL_ID3} .tb-qb-net-row.tb-qb-net-head { padding:6px 8px 8px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--tb-text-muted); border-bottom:1px solid var(--tb-border); }
+    #${MODAL_ID3} details.tb-qb-net-row { display:block; border-bottom:1px solid var(--tb-border-subtle); }
+    #${MODAL_ID3} details.tb-qb-net-row:hover { background:var(--tb-bg-secondary); }
+    #${MODAL_ID3} .tb-qb-net-summary { display:grid; grid-template-columns:28px 1.4fr 56px 50px 1.1fr 60px 56px 2fr; align-items:center; gap:8px; padding:6px 8px; cursor:pointer; list-style:none; min-height:24px; }
+    #${MODAL_ID3} .tb-qb-net-summary::-webkit-details-marker { display:none; }
+    #${MODAL_ID3} .tb-qb-net-c-n { color:var(--tb-text-muted); text-align:right; }
+    #${MODAL_ID3} .tb-qb-net-c-name { color:var(--tb-text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #${MODAL_ID3} .tb-qb-net-c-meth { color:var(--tb-text-secondary); font-weight:600; font-size:10px; letter-spacing:0.4px; }
+    #${MODAL_ID3} .tb-qb-net-c-stat { font-size:10px; font-weight:700; padding:1px 6px; border-radius:var(--tb-radius-sm); color:#fff; text-align:center; }
+    #${MODAL_ID3} .tb-qb-net-c-stat.tb-qb-net-2xx { background:#16a34a; }
+    #${MODAL_ID3} .tb-qb-net-c-stat.tb-qb-net-3xx { background:#0891b2; }
+    #${MODAL_ID3} .tb-qb-net-c-stat.tb-qb-net-4xx { background:#d97706; }
+    #${MODAL_ID3} .tb-qb-net-c-stat.tb-qb-net-5xx { background:#dc2626; }
+    #${MODAL_ID3} .tb-qb-net-c-stat.tb-qb-net-err { background:#7f1d1d; }
+    #${MODAL_ID3} .tb-qb-net-c-dom { color:var(--tb-text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #${MODAL_ID3} .tb-qb-net-c-type { color:var(--tb-text-muted); font-size:10px; }
+    #${MODAL_ID3} .tb-qb-net-c-time { color:var(--tb-text-secondary); text-align:right; font-size:10px; }
+    #${MODAL_ID3} .tb-qb-net-c-wf { position:relative; height:14px; background:var(--tb-bg-secondary); border-radius:3px; overflow:hidden; }
+    #${MODAL_ID3} .tb-qb-net-wf-bar { position:absolute; top:3px; height:8px; border-radius:2px; background:var(--tb-accent); }
+    #${MODAL_ID3} .tb-qb-net-wf-bar.tb-qb-net-4xx { background:#d97706; }
+    #${MODAL_ID3} .tb-qb-net-wf-bar.tb-qb-net-5xx { background:#dc2626; }
+    #${MODAL_ID3} .tb-qb-net-wf-bar.tb-qb-net-err { background:#7f1d1d; }
+    #${MODAL_ID3} .tb-qb-net-detail { padding:0 8px 10px 36px; }
+    #${MODAL_ID3} .tb-qb-net-detail-url { font-size:11px; color:var(--tb-text-secondary); word-break:break-all; padding-bottom:6px; }
+    #${MODAL_ID3} .tb-qb-net-snippet pre { margin:0; padding:8px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); font-size:10px; color:var(--tb-code-text); max-height:120px; overflow:auto; white-space:pre-wrap; }
     /* Tab notification dots */
-    #${MODAL_ID2} .tb-qb-tab-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--tb-accent); margin-left:4px; vertical-align:middle; }
-    #${MODAL_ID2} .tb-qb-net-time { font-size:11px; color:var(--tb-text-muted); margin-left:auto; font-family:var(--tb-font-mono); }
-    #${MODAL_ID2} .tb-qb-net-url { font-size:12px; color:var(--tb-text-secondary); font-family:var(--tb-font-mono); word-break:break-all; line-height:1.5; }
-    #${MODAL_ID2} .tb-qb-net-snippet { font-size:10px; color:var(--tb-text-muted); font-family:var(--tb-font-mono); margin:8px 0 0; padding:8px 10px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:96px; overflow:auto; white-space:pre-wrap; }
-    #${MODAL_ID2} .tb-qb-steps { margin:0; padding-left:26px; font-size:13px; color:var(--tb-text-primary); line-height:1.7; }
-    #${MODAL_ID2} .tb-qb-steps li { margin-bottom:5px; }
-    #${MODAL_ID2} .tb-qb-ai-card { padding:14px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); margin-bottom:10px; }
-    #${MODAL_ID2} .tb-qb-ai-card-head { font-size:11px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
-    #${MODAL_ID2} .tb-qb-ai-conf { font-size:9px; padding:2px 8px; border-radius:999px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; }
-    #${MODAL_ID2} .tb-qb-ai-conf-high { background:var(--tb-success-bg); color:var(--tb-success); }
-    #${MODAL_ID2} .tb-qb-ai-conf-medium { background:var(--tb-warning-bg); color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-ai-conf-low { background:var(--tb-info-bg); color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-ai-card-body { font-size:13px; color:var(--tb-text-primary); line-height:1.6; }
-    #${MODAL_ID2} .tb-qb-ai-card-body p { margin:0 0 10px; }
-    #${MODAL_ID2} .tb-qb-ai-empty .tb-qb-ai-card-body { color:var(--tb-text-secondary); }
+    #${MODAL_ID3} .tb-qb-tab-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--tb-accent); margin-left:4px; vertical-align:middle; }
+    #${MODAL_ID3} .tb-qb-net-time { font-size:11px; color:var(--tb-text-muted); margin-left:auto; font-family:var(--tb-font-mono); }
+    #${MODAL_ID3} .tb-qb-net-url { font-size:12px; color:var(--tb-text-secondary); font-family:var(--tb-font-mono); word-break:break-all; line-height:1.5; }
+    #${MODAL_ID3} .tb-qb-net-snippet { font-size:10px; color:var(--tb-text-muted); font-family:var(--tb-font-mono); margin:8px 0 0; padding:8px 10px; background:var(--tb-code-bg); border-radius:var(--tb-radius-sm); max-height:96px; overflow:auto; white-space:pre-wrap; }
+    #${MODAL_ID3} .tb-qb-steps { margin:0; padding-left:26px; font-size:13px; color:var(--tb-text-primary); line-height:1.7; }
+    #${MODAL_ID3} .tb-qb-steps li { margin-bottom:5px; }
+    #${MODAL_ID3} .tb-qb-ai-card { padding:14px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); margin-bottom:10px; }
+    #${MODAL_ID3} .tb-qb-ai-card-head { font-size:11px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+    #${MODAL_ID3} .tb-qb-ai-conf { font-size:9px; padding:2px 8px; border-radius:999px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; }
+    #${MODAL_ID3} .tb-qb-ai-conf-high { background:var(--tb-success-bg); color:var(--tb-success); }
+    #${MODAL_ID3} .tb-qb-ai-conf-medium { background:var(--tb-warning-bg); color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-ai-conf-low { background:var(--tb-info-bg); color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-ai-card-body { font-size:13px; color:var(--tb-text-primary); line-height:1.6; }
+    #${MODAL_ID3} .tb-qb-ai-card-body p { margin:0 0 10px; }
+    #${MODAL_ID3} .tb-qb-ai-empty .tb-qb-ai-card-body { color:var(--tb-text-secondary); }
 
     /* Actions tab \u2014 chips with HTML-element preview */
-    #${MODAL_ID2} .tb-qb-chips { display:flex; flex-direction:column; gap:5px; }
-    #${MODAL_ID2} .tb-qb-chip { display:flex; align-items:flex-start; gap:12px; padding:9px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); border-left:3px solid transparent; font-size:12px; line-height:1.5; transition:border-color 0.15s; }
-    #${MODAL_ID2} .tb-qb-chip:hover { border-color:var(--tb-border); }
-    #${MODAL_ID2} .tb-qb-chip-err { border-left-color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-chip-verb { font-size:10px; font-weight:700; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.5px; min-width:66px; flex-shrink:0; padding-top:2px; }
-    #${MODAL_ID2} .tb-qb-chip-verb-click { color:var(--tb-accent); }
-    #${MODAL_ID2} .tb-qb-chip-verb-input { color:var(--tb-success); }
-    #${MODAL_ID2} .tb-qb-chip-verb-select { color:#0891b2; }
-    #${MODAL_ID2} .tb-qb-chip-verb-submit { color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-chip-verb-navigate { color:#a855f7; }
-    #${MODAL_ID2} .tb-qb-chip-verb-api { color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-chip-verb-error { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-chip-verb-mark { color:#ea580c; }
-    #${MODAL_ID2} .tb-qb-chip-body { flex:1; min-width:0; word-break:break-word; }
-    #${MODAL_ID2} .tb-qb-chip-detail { display:inline-block; margin-left:6px; color:var(--tb-text-primary); font-family:var(--tb-font-mono); }
-    #${MODAL_ID2} .tb-qb-chip-detail-err { color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-el { font-family:var(--tb-font-mono); font-size:12px; color:var(--tb-code-text); }
-    #${MODAL_ID2} .tb-qb-el-tag { color:var(--tb-code-tag); }
-    #${MODAL_ID2} .tb-qb-el-attr-name { color:var(--tb-code-attr-name); }
-    #${MODAL_ID2} .tb-qb-el-attr-val { color:var(--tb-code-attr-val); }
-    #${MODAL_ID2} .tb-qb-el-more { color:var(--tb-text-muted); font-style:italic; font-size:10px; }
+    #${MODAL_ID3} .tb-qb-chips { display:flex; flex-direction:column; gap:5px; }
+    #${MODAL_ID3} .tb-qb-chip { display:flex; align-items:flex-start; gap:12px; padding:9px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); border-left:3px solid transparent; font-size:12px; line-height:1.5; transition:border-color 0.15s; }
+    #${MODAL_ID3} .tb-qb-chip:hover { border-color:var(--tb-border); }
+    #${MODAL_ID3} .tb-qb-chip-err { border-left-color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-chip-verb { font-size:10px; font-weight:700; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.5px; min-width:66px; flex-shrink:0; padding-top:2px; }
+    #${MODAL_ID3} .tb-qb-chip-verb-click { color:var(--tb-accent); }
+    #${MODAL_ID3} .tb-qb-chip-verb-input { color:var(--tb-success); }
+    #${MODAL_ID3} .tb-qb-chip-verb-select { color:#0891b2; }
+    #${MODAL_ID3} .tb-qb-chip-verb-submit { color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-chip-verb-navigate { color:#a855f7; }
+    #${MODAL_ID3} .tb-qb-chip-verb-api { color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-chip-verb-error { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-chip-verb-mark { color:#ea580c; }
+    #${MODAL_ID3} .tb-qb-chip-body { flex:1; min-width:0; word-break:break-word; }
+    #${MODAL_ID3} .tb-qb-chip-detail { display:inline-block; margin-left:6px; color:var(--tb-text-primary); font-family:var(--tb-font-mono); }
+    #${MODAL_ID3} .tb-qb-chip-detail-err { color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-el { font-family:var(--tb-font-mono); font-size:12px; color:var(--tb-code-text); }
+    #${MODAL_ID3} .tb-qb-el-tag { color:var(--tb-code-tag); }
+    #${MODAL_ID3} .tb-qb-el-attr-name { color:var(--tb-code-attr-name); }
+    #${MODAL_ID3} .tb-qb-el-attr-val { color:var(--tb-code-attr-val); }
+    #${MODAL_ID3} .tb-qb-el-more { color:var(--tb-text-muted); font-style:italic; font-size:10px; }
     /* Human-readable target + frustration glyph */
-    #${MODAL_ID2} .tb-qb-chip-target { display:inline-block; margin-right:8px; font-size:12px; color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-chip-target-name { font-weight:600; }
-    #${MODAL_ID2} .tb-qb-chip-target-noun { color:var(--tb-text-secondary); font-weight:500; }
-    #${MODAL_ID2} .tb-qb-chip-frust { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; font-size:10px; font-weight:700; flex-shrink:0; margin-top:1px; }
-    #${MODAL_ID2} .tb-qb-chip-frust-rage { background:rgba(239,68,68,0.18); color:#ef4444; }
-    #${MODAL_ID2} .tb-qb-chip-frust-dead { background:rgba(245,158,11,0.18); color:#f59e0b; }
-    #${MODAL_ID2} .tb-qb-chip-frust-abandon { background:rgba(59,130,246,0.18); color:#3b82f6; }
+    #${MODAL_ID3} .tb-qb-chip-target { display:inline-block; margin-right:8px; font-size:12px; color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-chip-target-name { font-weight:600; }
+    #${MODAL_ID3} .tb-qb-chip-target-noun { color:var(--tb-text-secondary); font-weight:500; }
+    #${MODAL_ID3} .tb-qb-chip-frust { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; font-size:10px; font-weight:700; flex-shrink:0; margin-top:1px; }
+    #${MODAL_ID3} .tb-qb-chip-frust-rage { background:rgba(239,68,68,0.18); color:#ef4444; }
+    #${MODAL_ID3} .tb-qb-chip-frust-dead { background:rgba(245,158,11,0.18); color:#f59e0b; }
+    #${MODAL_ID3} .tb-qb-chip-frust-abandon { background:rgba(59,130,246,0.18); color:#3b82f6; }
 
     /* Notes tab */
-    #${MODAL_ID2} .tb-qb-note { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border-subtle); border-left:3px solid var(--tb-border); }
-    #${MODAL_ID2} .tb-qb-note-critical { border-left-color:var(--tb-error); }
-    #${MODAL_ID2} .tb-qb-note-major { border-left-color:var(--tb-warning); }
-    #${MODAL_ID2} .tb-qb-note-minor { border-left-color:#ca8a04; }
-    #${MODAL_ID2} .tb-qb-note-info { border-left-color:var(--tb-info); }
-    #${MODAL_ID2} .tb-qb-note-sev { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; color:var(--tb-text-muted); margin-bottom:5px; }
-    #${MODAL_ID2} .tb-qb-note-text { font-size:13px; color:var(--tb-text-primary); line-height:1.5; }
-    #${MODAL_ID2} .tb-qb-note-line { font-size:11px; color:var(--tb-text-secondary); margin-top:5px; line-height:1.4; }
-    #${MODAL_ID2} .tb-qb-note-line code { background:var(--tb-code-bg); padding:2px 6px; border-radius:var(--tb-radius-sm); font-family:var(--tb-font-mono); color:var(--tb-code-text); }
+    #${MODAL_ID3} .tb-qb-note { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border-subtle); border-left:3px solid var(--tb-border); }
+    #${MODAL_ID3} .tb-qb-note-critical { border-left-color:var(--tb-error); }
+    #${MODAL_ID3} .tb-qb-note-major { border-left-color:var(--tb-warning); }
+    #${MODAL_ID3} .tb-qb-note-minor { border-left-color:#ca8a04; }
+    #${MODAL_ID3} .tb-qb-note-info { border-left-color:var(--tb-info); }
+    #${MODAL_ID3} .tb-qb-note-sev { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; color:var(--tb-text-muted); margin-bottom:5px; }
+    #${MODAL_ID3} .tb-qb-note-text { font-size:13px; color:var(--tb-text-primary); line-height:1.5; }
+    #${MODAL_ID3} .tb-qb-note-line { font-size:11px; color:var(--tb-text-secondary); margin-top:5px; line-height:1.4; }
+    #${MODAL_ID3} .tb-qb-note-line code { background:var(--tb-code-bg); padding:2px 6px; border-radius:var(--tb-radius-sm); font-family:var(--tb-font-mono); color:var(--tb-code-text); }
 
     /* \u2500\u2500 Footer \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-footer { padding:14px 22px; border-top:1px solid var(--tb-border); background:var(--tb-bg-primary); flex-shrink:0; }
-    #${MODAL_ID2} .tb-qb-actions { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
-    #${MODAL_ID2} .tb-qb-btn { background:var(--tb-bg-secondary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:9px 14px; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; display:inline-flex; align-items:center; gap:7px; transition:all 0.15s; letter-spacing:-0.01em; }
-    #${MODAL_ID2} .tb-qb-btn:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); transform:translateY(-1px); }
-    #${MODAL_ID2} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-accent:hover { background:var(--tb-accent-hover); border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-slack:hover { background:#3a0f3b; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-jira { background:#2684FF; color:#fff; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-jira:hover { background:#1d6fdb; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-btn-locked { background:var(--tb-bg-secondary); color:var(--tb-text-muted); }
-    #${MODAL_ID2} .tb-qb-btn-ghost { background:transparent; color:var(--tb-text-secondary); border:1px dashed var(--tb-accent); }
-    #${MODAL_ID2} .tb-qb-btn-ghost:hover { background:var(--tb-accent-subtle); color:var(--tb-text-primary); }
-    #${MODAL_ID2} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
-    #${MODAL_ID2} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
-    #${MODAL_ID2} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
-    #${MODAL_ID2} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
-    #${MODAL_ID2} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
-    #${MODAL_ID2} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
-    #${MODAL_ID2} .tb-qb-plan-free { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-bg-secondary); color:var(--tb-text-muted); border:1px solid var(--tb-border); letter-spacing:0.4px; }
+    #${MODAL_ID3} .tb-qb-footer { padding:14px 22px; border-top:1px solid var(--tb-border); background:var(--tb-bg-primary); flex-shrink:0; }
+    #${MODAL_ID3} .tb-qb-actions { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+    #${MODAL_ID3} .tb-qb-btn { background:var(--tb-bg-secondary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:9px 14px; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; display:inline-flex; align-items:center; gap:7px; transition:all 0.15s; letter-spacing:-0.01em; }
+    #${MODAL_ID3} .tb-qb-btn:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); transform:translateY(-1px); }
+    #${MODAL_ID3} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-accent:hover { background:var(--tb-accent-hover); border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-slack:hover { background:#3a0f3b; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-jira { background:#2684FF; color:#fff; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-jira:hover { background:#1d6fdb; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-btn-locked { background:var(--tb-bg-secondary); color:var(--tb-text-muted); }
+    #${MODAL_ID3} .tb-qb-btn-ghost { background:transparent; color:var(--tb-text-secondary); border:1px dashed var(--tb-accent); }
+    #${MODAL_ID3} .tb-qb-btn-ghost:hover { background:var(--tb-accent-subtle); color:var(--tb-text-primary); }
+    #${MODAL_ID3} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
+    #${MODAL_ID3} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
+    #${MODAL_ID3} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
+    #${MODAL_ID3} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
+    #${MODAL_ID3} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
+    #${MODAL_ID3} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
+    #${MODAL_ID3} .tb-qb-plan-free { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-bg-secondary); color:var(--tb-text-muted); border:1px solid var(--tb-border); letter-spacing:0.4px; }
 
     /* \u2500\u2500 Focus + disabled states \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} button:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
-    #${MODAL_ID2} input:focus, #${MODAL_ID2} textarea:focus { border-color:var(--tb-accent) !important; box-shadow: 0 0 0 3px var(--tb-accent-subtle); }
-    #${MODAL_ID2} button:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
+    #${MODAL_ID3} button:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+    #${MODAL_ID3} input:focus, #${MODAL_ID3} textarea:focus { border-color:var(--tb-accent) !important; box-shadow: 0 0 0 3px var(--tb-accent-subtle); }
+    #${MODAL_ID3} button:focus-visible { outline: 2px solid var(--tb-accent); outline-offset: 2px; }
 
     /* \u2500\u2500 Help overlay (keyboard cheat sheet) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} .tb-qb-help { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:10; padding:24px; }
-    #${MODAL_ID2} .tb-qb-help-card { background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:24px 28px; max-width:420px; width:100%; box-shadow:var(--tb-shadow-md); }
-    #${MODAL_ID2} .tb-qb-help-title { font-size:14px; font-weight:600; margin-bottom:16px; color:var(--tb-text-primary); letter-spacing:-0.01em; }
-    #${MODAL_ID2} .tb-qb-help-row { display:flex; align-items:center; gap:12px; padding:7px 0; font-size:13px; color:var(--tb-text-primary); border-bottom:1px solid var(--tb-border-subtle); }
-    #${MODAL_ID2} .tb-qb-help-row:last-of-type { border-bottom:none; }
-    #${MODAL_ID2} .tb-qb-help-row span { color:var(--tb-text-secondary); flex:1; }
-    #${MODAL_ID2} .tb-qb-help-row kbd { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:2px 8px; font-family:var(--tb-font-mono); font-size:11px; color:var(--tb-text-primary); margin-right:4px; }
-    #${MODAL_ID2} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
-    #${MODAL_ID2} .tb-qb-help-close:hover { background:var(--tb-accent-hover); }
+    #${MODAL_ID3} .tb-qb-help { position:absolute; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:10; padding:24px; }
+    #${MODAL_ID3} .tb-qb-help-card { background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:24px 28px; max-width:420px; width:100%; box-shadow:var(--tb-shadow-md); }
+    #${MODAL_ID3} .tb-qb-help-title { font-size:14px; font-weight:600; margin-bottom:16px; color:var(--tb-text-primary); letter-spacing:-0.01em; }
+    #${MODAL_ID3} .tb-qb-help-row { display:flex; align-items:center; gap:12px; padding:7px 0; font-size:13px; color:var(--tb-text-primary); border-bottom:1px solid var(--tb-border-subtle); }
+    #${MODAL_ID3} .tb-qb-help-row:last-of-type { border-bottom:none; }
+    #${MODAL_ID3} .tb-qb-help-row span { color:var(--tb-text-secondary); flex:1; }
+    #${MODAL_ID3} .tb-qb-help-row kbd { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:2px 8px; font-family:var(--tb-font-mono); font-size:11px; color:var(--tb-text-primary); margin-right:4px; }
+    #${MODAL_ID3} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
+    #${MODAL_ID3} .tb-qb-help-close:hover { background:var(--tb-accent-hover); }
 
     /* \u2500\u2500 Scrollbar polish \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
-    #${MODAL_ID2} *::-webkit-scrollbar { width: 8px; height: 8px; }
-    #${MODAL_ID2} *::-webkit-scrollbar-track { background: transparent; }
-    #${MODAL_ID2} *::-webkit-scrollbar-thumb { background: var(--tb-border); border-radius: 4px; }
-    #${MODAL_ID2} *::-webkit-scrollbar-thumb:hover { background: var(--tb-border-hover); }
+    #${MODAL_ID3} *::-webkit-scrollbar { width: 8px; height: 8px; }
+    #${MODAL_ID3} *::-webkit-scrollbar-track { background: transparent; }
+    #${MODAL_ID3} *::-webkit-scrollbar-thumb { background: var(--tb-border); border-radius: 4px; }
+    #${MODAL_ID3} *::-webkit-scrollbar-thumb:hover { background: var(--tb-border-hover); }
   `;
     document.head.appendChild(style);
   }
-  var _githubRepo, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, _cloudEndpoint, MODAL_ID3, DRAFT_KEY, THEME_PREF_KEY, _isOpen, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -16097,12 +17109,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_helpers();
       init_replay_scrubber();
       init_html_replay();
+      init_share_link();
+      init_iframe_bridge();
+      init_screenshot_trim_modal();
       init_theme();
       init_annotation_store();
       init_linear_issue();
       init_slack_export();
       _githubRepo = null;
-      MODAL_ID2 = "tracebug-quick-bug-modal";
+      _cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
+      MODAL_ID3 = "tracebug-quick-bug-modal";
       DRAFT_KEY = "tracebug_last_bug_draft";
       THEME_PREF_KEY = "tracebug_theme_pref";
       _isOpen = false;
@@ -29678,8 +30694,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (clipPath && clipPath !== "none") {
               return true;
             }
-            var mask = vNode.getComputedStylePropertyValue("-webkit-mask") || vNode.getComputedStylePropertyValue("mask") || "none";
-            if (mask !== "none") {
+            var mask2 = vNode.getComputedStylePropertyValue("-webkit-mask") || vNode.getComputedStylePropertyValue("mask") || "none";
+            if (mask2 !== "none") {
               return true;
             }
             var maskImage = vNode.getComputedStylePropertyValue("-webkit-mask-image") || vNode.getComputedStylePropertyValue("mask-image") || "none";
@@ -51533,11 +52549,13 @@ First element: \`${exampleSnippet}\``,
     canvas.width = docW;
     canvas.height = docH;
     canvas.style.cssText = `
-    position: absolute; top: 0; left: 0; z-index: 2147483645;
-    width: ${docW}px; height: ${docH}px;
-    cursor: crosshair; pointer-events: auto;
+    position: absolute !important; top: 0 !important; left: 0 !important;
+    z-index: 2147483645 !important;
+    width: ${docW}px !important; height: ${docH}px !important;
+    cursor: crosshair !important; pointer-events: auto !important;
+    margin: 0 !important; padding: 0 !important;
   `;
-    root.appendChild(canvas);
+    document.body.appendChild(canvas);
     const toolbar = _createToolbar(root);
     root.appendChild(toolbar);
     const ctx = canvas.getContext("2d");
@@ -51582,14 +52600,18 @@ First element: \`${exampleSnippet}\``,
       };
       rafId = requestAnimationFrame(tick);
     };
+    const toCanvasCoords = (e2) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e2.clientX - rect.left, y: e2.clientY - rect.top };
+    };
     const onMouseDown = (e2) => {
       var _a, _b;
       if (!_active3) return;
       if ((_a = e2.target) == null ? void 0 : _a.closest("#tracebug-draw-toolbar")) return;
       if ((_b = e2.target) == null ? void 0 : _b.closest("[data-tracebug='draw-comment-input']")) return;
-      const rect = canvas.getBoundingClientRect();
-      startX = e2.clientX - rect.left + window.scrollX;
-      startY = e2.clientY - rect.top + window.scrollY;
+      const p = toCanvasCoords(e2);
+      startX = p.x;
+      startY = p.y;
       isDrawing = true;
       if (_currentShape === "pen") {
         penPoints = [{ x: startX, y: startY }];
@@ -51597,22 +52619,20 @@ First element: \`${exampleSnippet}\``,
     };
     const onMouseMove = (e2) => {
       if (!isDrawing || !_active3) return;
-      const rect = canvas.getBoundingClientRect();
-      const curX = e2.clientX - rect.left + window.scrollX;
-      const curY = e2.clientY - rect.top + window.scrollY;
+      const p = toCanvasCoords(e2);
       if (_currentShape === "pen") {
-        penPoints.push({ x: curX, y: curY });
+        penPoints.push({ x: p.x, y: p.y });
         redrawAll({ shape: "pen", color: _currentColor, x: 0, y: 0, w: 0, h: 0, points: penPoints });
       } else {
-        redrawAll({ shape: _currentShape, color: _currentColor, x: startX, y: startY, w: curX - startX, h: curY - startY });
+        redrawAll({ shape: _currentShape, color: _currentColor, x: startX, y: startY, w: p.x - startX, h: p.y - startY });
       }
     };
     const onMouseUp = (e2) => {
       if (!isDrawing || !_active3) return;
       isDrawing = false;
-      const rect = canvas.getBoundingClientRect();
-      const endX = e2.clientX - rect.left + window.scrollX;
-      const endY = e2.clientY - rect.top + window.scrollY;
+      const p = toCanvasCoords(e2);
+      const endX = p.x;
+      const endY = p.y;
       const w = endX - startX;
       const h = endY - startY;
       if (_currentShape === "pen") {
@@ -51628,7 +52648,7 @@ First element: \`${exampleSnippet}\``,
           startFadeLoop();
           redrawAll();
         } else {
-          const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+          const xs = pts.map((p2) => p2.x), ys = pts.map((p2) => p2.y);
           const minX = Math.min(...xs), minY = Math.min(...ys);
           const maxX = Math.max(...xs), maxY = Math.max(...ys);
           const region = {
@@ -51765,46 +52785,36 @@ First element: \`${exampleSnippet}\``,
     bar.id = "tracebug-draw-toolbar";
     bar.dataset.tracebug = "draw-toolbar";
     bar.style.cssText = `
-    position: fixed; top: 0; left: 0; right: 0;
-    z-index: 2147483647; display: flex; align-items: center; gap: 8px;
-    background: linear-gradient(90deg, var(--tb-gradient-start, #7B61FF), var(--tb-gradient-end, #5B3FDF));
-    padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
-    box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
+    background: var(--tb-bg-secondary, #1a1a2e);
+    border: 1px solid var(--tb-accent, #7B61FF);
+    border-radius: 999px;
+    padding: 5px 8px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     animation: tracebug-draw-slide 0.2s ease;
+    color: var(--tb-text-primary, #e0e0e0);
   `;
     const styleTag = document.createElement("style");
     styleTag.id = "tracebug-draw-styles";
     styleTag.dataset.tracebug = "draw-styles";
     styleTag.textContent = `
-    @keyframes tracebug-draw-slide { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+    @keyframes tracebug-draw-slide { from { opacity:0; transform: translate(-50%, -8px); } to { opacity:1; transform: translate(-50%, 0); } }
   `;
     document.head.appendChild(styleTag);
-    const modeLabel = document.createElement("div");
-    modeLabel.style.cssText = "display:flex;align-items:center;gap:8px;margin-right:8px";
-    modeLabel.innerHTML = `
-    <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
-    <span style="color:#fff;font-weight:600;font-size:13px">Draw Mode</span>
-  `;
-    if (!document.getElementById("tracebug-annotate-styles")) {
-      const pulseStyle = document.createElement("style");
-      pulseStyle.id = "tracebug-draw-pulse";
-      pulseStyle.textContent = `@keyframes tracebug-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }`;
-      document.head.appendChild(pulseStyle);
-    }
-    bar.appendChild(modeLabel);
-    bar.appendChild(_sep());
     const shapes = [
-      { shape: "pen", label: "Pen", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>` },
-      { shape: "rect", label: "Rectangle", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
-      { shape: "ellipse", label: "Ellipse", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
-      { shape: "redact", label: "Redact (hide PII)", icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="9" width="18" height="6" rx="1"/></svg>` }
+      { shape: "pen", label: "Pen", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>` },
+      { shape: "rect", label: "Rectangle", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
+      { shape: "ellipse", label: "Ellipse", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
+      { shape: "redact", label: "Redact (hide PII)", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="9" width="18" height="6" rx="1"/></svg>` }
     ];
     for (const s of shapes) {
       const btn = document.createElement("button");
       btn.dataset.tracebug = "draw-tool-btn";
       btn.dataset.shape = s.shape;
       btn.title = s.label;
-      btn.innerHTML = `${s.icon}<span style="margin-left:4px;font-size:11px">${s.label}</span>`;
+      btn.setAttribute("aria-label", s.label);
+      btn.innerHTML = s.icon;
       btn.style.cssText = _toolBtnStyle(s.shape === _currentShape);
       btn.addEventListener("click", (e2) => {
         e2.stopPropagation();
@@ -51822,7 +52832,7 @@ First element: \`${exampleSnippet}\``,
       btn.dataset.color = c.value;
       btn.title = c.label;
       btn.style.cssText = `
-      width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+      width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
       background: ${c.value}; padding: 0; margin: 0; transition: all 0.15s;
       border: 2px solid ${c.value === _currentColor ? "#fff" : "transparent"};
       box-shadow: ${c.value === _currentColor ? "0 0 0 2px rgba(255,255,255,0.3)" : "none"};
@@ -51838,26 +52848,26 @@ First element: \`${exampleSnippet}\``,
       });
       bar.appendChild(btn);
     }
-    const spacer = document.createElement("div");
-    spacer.style.flex = "1";
-    bar.appendChild(spacer);
-    const hint = document.createElement("span");
-    hint.style.cssText = "color:rgba(255,255,255,0.5);font-size:11px;margin-right:8px";
-    hint.textContent = "Drag to draw. Esc to exit.";
-    bar.appendChild(hint);
+    bar.appendChild(_sep());
     const doneBtn = document.createElement("button");
     doneBtn.dataset.tracebug = "draw-done-btn";
-    doneBtn.textContent = "Done";
+    doneBtn.title = "Exit draw mode (Esc)";
+    doneBtn.setAttribute("aria-label", "Exit draw mode");
+    doneBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`;
     doneBtn.style.cssText = `
-    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-    color: #fff; border-radius: 6px; padding: 6px 16px; cursor: pointer;
-    font-size: 12px; font-weight: 500; font-family: inherit; transition: all 0.15s;
+    width: 24px; height: 24px; padding: 0;
+    background: transparent; border: 1px solid var(--tb-border, #2a2a3e);
+    color: var(--tb-text-muted, #888); border-radius: 999px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: inherit; transition: all 0.15s;
   `;
     doneBtn.addEventListener("mouseenter", () => {
-      doneBtn.style.background = "rgba(255,255,255,0.25)";
+      doneBtn.style.color = "var(--tb-text-primary, #e0e0e0)";
+      doneBtn.style.borderColor = "var(--tb-border-hover, #3a3a5e)";
     });
     doneBtn.addEventListener("mouseleave", () => {
-      doneBtn.style.background = "rgba(255,255,255,0.15)";
+      doneBtn.style.color = "var(--tb-text-muted, #888)";
+      doneBtn.style.borderColor = "var(--tb-border, #2a2a3e)";
     });
     doneBtn.addEventListener("click", (e2) => {
       e2.stopPropagation();
@@ -51869,7 +52879,7 @@ First element: \`${exampleSnippet}\``,
   function _sep() {
     const d = document.createElement("div");
     d.dataset.tracebug = "draw-sep";
-    d.style.cssText = "width:1px;height:22px;background:rgba(255,255,255,0.2);margin:0 4px;flex-shrink:0";
+    d.style.cssText = "width:1px;height:18px;background:var(--tb-border, #2a2a3e);margin:0 4px;flex-shrink:0";
     return d;
   }
   function _drawShape(ctx, shape, color2, x, y, w, h, fillOpacity) {
@@ -52059,10 +53069,11 @@ First element: \`${exampleSnippet}\``,
     });
   }
   function _toolBtnStyle(active) {
+    const base = `width:26px;height:26px;padding:0;border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;`;
     if (active) {
-      return `background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:var(--tb-radius-md, 8px);padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
+      return base + `background:var(--tb-accent, #7B61FF);color:#fff;border:1px solid var(--tb-accent, #7B61FF);`;
     }
-    return `background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.15);border-radius:var(--tb-radius-md, 8px);padding:5px 12px;cursor:pointer;font-size:12px;font-family:inherit;display:flex;align-items:center;transition:all 0.15s;`;
+    return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
   }
 
   // src/compact-toolbar.ts
@@ -52217,7 +53228,6 @@ First element: \`${exampleSnippet}\``,
   var _hud = null;
   var _timerInterval = null;
   var _onStopRequested = null;
-  var _onCommentSaved = null;
   function _formatElapsed(ms) {
     const total = Math.max(0, Math.floor(ms / 1e3));
     const m = Math.floor(total / 60).toString().padStart(2, "0");
@@ -52229,7 +53239,6 @@ First element: \`${exampleSnippet}\``,
     if (!isVideoRecording()) return;
     _root2 = root;
     _onStopRequested = options.onStop;
-    _onCommentSaved = options.onCommentSaved || null;
     const hud = document.createElement("div");
     hud.id = HUD_ID;
     hud.dataset.tracebug = "recording-hud";
@@ -52239,23 +53248,22 @@ First element: \`${exampleSnippet}\``,
       const style = document.createElement("style");
       style.id = "tracebug-hud-anim";
       style.textContent = `
-      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, -8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      @keyframes tracebug-hud-in { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
       @keyframes tracebug-hud-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
       #${HUD_ID} {
         position: fixed !important;
         top: 16px !important;
-        left: 50% !important;
-        transform: translateX(-50%) !important;
+        left: 16px !important;
         width: max-content !important;
         max-width: calc(100vw - 32px) !important;
         background: var(--tb-bg-secondary, #1a1a2e) !important;
         border: 1px solid var(--tb-error, #ef4444) !important;
         border-radius: 999px !important;
-        padding: 8px 8px 8px 14px !important;
+        padding: 5px 6px 5px 10px !important;
         display: flex !important;
         align-items: center !important;
         flex-wrap: nowrap !important;
-        gap: 10px !important;
+        gap: 6px !important;
         color: var(--tb-text-primary, #e0e0e0) !important;
         font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
         font-size: 12px !important;
@@ -52265,97 +53273,85 @@ First element: \`${exampleSnippet}\``,
         pointer-events: auto !important;
         animation: tracebug-hud-in 0.2s ease !important;
         box-sizing: border-box !important;
+        user-select: none !important;
       }
       #${HUD_ID} > * { flex-shrink: 0 !important; box-sizing: border-box !important; }
-      #${HUD_ID} input[data-tb-hud="comment"] {
-        background: transparent !important;
-        border: none !important;
-        outline: none !important;
-        color: var(--tb-text-primary, #e0e0e0) !important;
-        font-size: 12px !important;
-        font-family: inherit !important;
-        width: 180px !important;
-        max-width: 180px !important;
-        padding: 4px 6px !important;
-        box-shadow: none !important;
-        margin: 0 !important;
-      }
-      #${HUD_ID} input[data-tb-hud="comment"]::placeholder { color: var(--tb-text-muted, #888) !important; }
+      #${HUD_ID}[data-tb-dragging="1"] { cursor: grabbing !important; }
+      #${HUD_ID} [data-tb-hud="grip"] { cursor: grab !important; padding: 0 4px !important; color: var(--tb-text-muted, #888) !important; display: inline-flex !important; align-items: center !important; }
+      #${HUD_ID} [data-tb-hud="grip"]:active { cursor: grabbing !important; }
       #${HUD_ID} button { font-family: inherit !important; }
     `;
       document.head.appendChild(style);
     }
     hud.innerHTML = `
+    <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
+      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="3" r="1.3"/><circle cx="8" cy="3" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="8" cy="7" r="1.3"/><circle cx="2" cy="11" r="1.3"/><circle cx="8" cy="11" r="1.3"/></svg>
+    </span>
     <span data-tb-hud="dot" style="width:8px;height:8px;border-radius:50%;background:var(--tb-error, #ef4444);animation:tracebug-hud-pulse 1.2s infinite;flex-shrink:0"></span>
-    <span data-tb-hud="timer" style="font-variant-numeric:tabular-nums;font-weight:600;min-width:38px">00:00</span>
-    <span style="width:1px;height:14px;background:var(--tb-border, #2a2a3e);margin:0 2px"></span>
-    <input
-      data-tb-hud="comment"
-      type="text"
-      placeholder="Add comment at this moment..."
-      maxlength="240"
-      aria-label="Add a timestamped comment"
-      style="background:transparent;border:none;outline:none;color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-family:inherit;width:200px;padding:4px 6px"
-    />
-    <button
-      data-tb-hud="add"
-      title="Save comment (Enter)"
-      aria-label="Save comment"
-      style="background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:999px;width:26px;height:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0"
-    >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-    </button>
+    <span data-tb-hud="timer" style="font-variant-numeric:tabular-nums;font-weight:600;min-width:38px;font-size:12px">00:00</span>
     <button
       data-tb-hud="annotate"
-      title="Draw on the page (pen, shapes, redact) \u2014 recording continues. Markings auto-fade after 3 s."
+      title="Draw on the page \u2014 pen / shapes / redact. Markings auto-fade after 3 s."
       aria-label="Draw on the page"
-      style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:999px;padding:6px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
+      style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:999px;width:28px;height:28px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
     >
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-      Draw
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
     <button
       data-tb-hud="stop"
       title="Stop recording"
       aria-label="Stop recording"
-      style="background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:999px;padding:6px 12px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
+      style="background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
     >
-      <span style="width:8px;height:8px;background:#fff;border-radius:1px;display:inline-block"></span>
+      <span style="width:7px;height:7px;background:#fff;border-radius:1px;display:inline-block"></span>
       Stop
     </button>
   `;
     root.appendChild(hud);
     _hud = hud;
     const timerEl = hud.querySelector('[data-tb-hud="timer"]');
-    const commentInput = hud.querySelector('[data-tb-hud="comment"]');
-    const addBtn = hud.querySelector('[data-tb-hud="add"]');
+    const gripEl = hud.querySelector('[data-tb-hud="grip"]');
     const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]');
     const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
     _timerInterval = setInterval(() => {
       if (!isVideoRecording()) return;
       timerEl.textContent = _formatElapsed(getVideoElapsedMs());
     }, 500);
-    const saveComment = () => {
-      const text = commentInput.value.trim();
-      if (!text) return;
-      const c = addVideoComment(text);
-      if (c) {
-        _onCommentSaved == null ? void 0 : _onCommentSaved(c.text, c.offsetMs);
-        commentInput.value = "";
-        commentInput.style.transition = "background 0.3s";
-        commentInput.style.background = "var(--tb-success, #22c55e)33";
-        setTimeout(() => {
-          commentInput.style.background = "transparent";
-        }, 400);
-      }
-    };
-    addBtn.addEventListener("click", saveComment);
-    commentInput.addEventListener("keydown", (e2) => {
-      if (e2.key === "Enter") {
+    if (gripEl) {
+      let startX = 0, startY = 0, hudX = 0, hudY = 0, dragging = false;
+      const onDown = (e2) => {
+        dragging = true;
+        hud.setAttribute("data-tb-dragging", "1");
+        gripEl.setPointerCapture(e2.pointerId);
+        const rect = hud.getBoundingClientRect();
+        hudX = rect.left;
+        hudY = rect.top;
+        startX = e2.clientX;
+        startY = e2.clientY;
         e2.preventDefault();
-        saveComment();
-      }
-    });
+      };
+      const onMove = (e2) => {
+        if (!dragging) return;
+        const nx = Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, hudX + (e2.clientX - startX)));
+        const ny = Math.max(4, Math.min(window.innerHeight - hud.offsetHeight - 4, hudY + (e2.clientY - startY)));
+        hud.style.setProperty("left", nx + "px", "important");
+        hud.style.setProperty("top", ny + "px", "important");
+        hud.style.setProperty("transform", "none", "important");
+      };
+      const onUp = (e2) => {
+        if (!dragging) return;
+        dragging = false;
+        hud.removeAttribute("data-tb-dragging");
+        try {
+          gripEl.releasePointerCapture(e2.pointerId);
+        } catch (e3) {
+        }
+      };
+      gripEl.addEventListener("pointerdown", onDown);
+      gripEl.addEventListener("pointermove", onMove);
+      gripEl.addEventListener("pointerup", onUp);
+      gripEl.addEventListener("pointercancel", onUp);
+    }
     if (annotateBtn) {
       annotateBtn.addEventListener("click", () => {
         const drawRoot = _root2;
@@ -52364,10 +53360,7 @@ First element: \`${exampleSnippet}\``,
           deactivateDrawMode();
           return;
         }
-        if (_hud) _hud.style.setProperty("top", "64px", "important");
-        activateDrawMode(drawRoot, void 0, () => {
-          if (_hud) _hud.style.setProperty("top", "16px", "important");
-        }, { ephemeralMs: 3e3 });
+        activateDrawMode(drawRoot, void 0, void 0, { ephemeralMs: 3e3 });
       });
     }
     stopBtn.addEventListener("click", () => {
@@ -52404,7 +53397,6 @@ First element: \`${exampleSnippet}\``,
     _hud = null;
     _root2 = null;
     _onStopRequested = null;
-    _onCommentSaved = null;
   }
 
   // src/compact-toolbar.ts
@@ -52711,6 +53703,7 @@ First element: \`${exampleSnippet}\``,
       mode: "rolling",
       onStatus: (status, message) => {
         if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
+        else if (status === "warning" && message) showToast3(message, root);
       }
     });
     if (!ok) {
@@ -54910,6 +55903,8 @@ ${"-".repeat(40)}
   init_report_builder();
   init_github_issue();
   init_jira_issue();
+  init_share_link();
+  init_iframe_bridge();
   init_title_generator();
   init_voice_recorder();
   init_video_recorder();
@@ -55079,10 +56074,12 @@ ${"-".repeat(40)}
         }
         hydratePlan().catch(() => {
         });
-        if (this.config.githubRepo) {
-          Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => m.setGithubRepo(this.config.githubRepo)).catch(() => {
-          });
-        }
+        Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
+          var _a2, _b2;
+          if ((_a2 = this.config) == null ? void 0 : _a2.githubRepo) m.setGithubRepo(this.config.githubRepo);
+          m.setCloudEndpoint((_b2 = this.config) == null ? void 0 : _b2.cloudEndpoint);
+        }).catch(() => {
+        });
         const emit = (type, data) => {
           var _a2, _b2, _c, _d;
           try {
@@ -55597,6 +56594,54 @@ ${"-".repeat(40)}
       const prefix = this._brandingPrefix();
       if (prefix) ticket.description = prefix + ticket.description;
       return ticket;
+    }
+    /**
+     * Open the magic-link sign-in flow for cloud sharing. Returns the user
+     * object once authenticated, or throws on timeout/cancel.
+     * Free, no plan gate.
+     */
+    async signIn() {
+      var _a;
+      const ep = ((_a = this.config) == null ? void 0 : _a.cloudEndpoint) || "https://tracebug.netlify.app";
+      return getBridge(ep).signIn();
+    }
+    /** Sign out of the cloud account (does not affect local capture). */
+    async signOut() {
+      var _a;
+      const ep = ((_a = this.config) == null ? void 0 : _a.cloudEndpoint) || "https://tracebug.netlify.app";
+      await getBridge(ep).signOut();
+    }
+    /** Current cloud user, or null if not signed in. */
+    async getCurrentUser() {
+      var _a;
+      const ep = ((_a = this.config) == null ? void 0 : _a.cloudEndpoint) || "https://tracebug.netlify.app";
+      const r = await getBridge(ep).checkAuth();
+      return r.user;
+    }
+    /** Current cloud quotas (video + screenshot share counts). */
+    async getCloudQuotas() {
+      var _a;
+      const ep = ((_a = this.config) == null ? void 0 : _a.cloudEndpoint) || "https://tracebug.netlify.app";
+      return getBridge(ep).getQuotas();
+    }
+    /**
+     * Upload the current session as a shareable link. Prompts sign-in if the
+     * user isn't authenticated. Returns the public URL.
+     *
+     * Local capture, .html download, GitHub/Linear/Slack export are unaffected
+     * by this call — sharing to cloud is purely additive.
+     */
+    async shareReport(options) {
+      var _a;
+      const ep = (options == null ? void 0 : options.cloudEndpoint) || ((_a = this.config) == null ? void 0 : _a.cloudEndpoint) || "https://tracebug.netlify.app";
+      const bridge = getBridge(ep);
+      const auth = await bridge.checkAuth();
+      if (!auth.authed) await bridge.signIn();
+      const sessions = getAllSessions();
+      const session = sessions.find((s) => s.sessionId === this.sessionId) || sessions[0];
+      if (!session) throw new Error("no_session_to_share");
+      const report = this._redactForFreePlan(buildReport(session));
+      return shareSessionAsLink(session, report, { ...options, cloudEndpoint: ep });
     }
     /**
      * Download a PDF bug report (premium). Free users see the upgrade modal
