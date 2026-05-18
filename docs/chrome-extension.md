@@ -1,136 +1,106 @@
 # Chrome Extension
 
-The TraceBug Chrome Extension lets **non-developers** (QA testers, PMs, clients) use TraceBug on **any website** — no code changes needed.
+The TraceBug Chrome Extension lets non-developers (QA, PMs, support) capture bugs on **any website** — no code changes required.
 
-## Install from Chrome Web Store (Recommended)
+## Install from Chrome Web Store
 
-**[Install TraceBug from Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)**
-
-One-click install. Works immediately on any website.
+**[Install TraceBug](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)** — one-click, works immediately.
 
 ## Browser Compatibility
 
-| Browser | Supported | How to Install |
-|---------|-----------|---------------|
-| **Google Chrome** | Yes | Install from Chrome Web Store (link above) |
-| **Microsoft Edge** | Yes | Install from Chrome Web Store — Edge supports Chrome extensions natively |
-| **Brave** | Yes | Install from Chrome Web Store — Brave supports Chrome extensions natively |
-| **Opera** | Yes | Install the "Install Chrome Extensions" add-on first, then install from Chrome Web Store |
-| **Firefox** | Not yet | Firefox uses a different extension format. Use the npm SDK instead: `npm install tracebug-sdk` |
-| **Safari** | No | Use the npm SDK instead |
+| Browser | Supported | How to install |
+|---------|-----------|----------------|
+| Chrome  | Yes | Chrome Web Store |
+| Edge    | Yes | Chrome Web Store (Edge runs Chrome extensions) |
+| Brave   | Yes | Chrome Web Store |
+| Opera   | Yes | Install "Install Chrome Extensions" add-on first, then Chrome Web Store |
+| Firefox | No (different extension format) | Use the npm SDK: `npm install tracebug-sdk` |
+| Safari  | No | Use the npm SDK |
 
 ## Install from Source (Developers)
 
-For contributing or testing unreleased changes:
-
-1. Clone the repository and build:
-   ```bash
-   git clone https://github.com/prashantsinghmangat/tracebug-ai
-   cd tracebug-ai && npm install && npm run build
-   ```
-2. Open `chrome://extensions/` in your browser
-3. Enable **Developer mode** (top-right toggle)
-4. Click **Load unpacked** → select the `tracebug-extension/` folder
-
-### After Code Changes
-
 ```bash
-npm run build
+git clone https://github.com/prashantsinghmangat/tracebug-ai
+cd tracebug-ai && npm install && npm run build
 ```
 
-Then go to `chrome://extensions/` and click the **Reload** button on TraceBug.
+Then in `chrome://extensions/`:
+1. Enable **Developer mode** (top-right)
+2. Click **Load unpacked** → select `tracebug-extension/`
+
+After code changes, run `npm run build` and click the **reload** icon on the TraceBug card.
 
 ## Usage
 
-### Enable on a Website
+The extension popup has three actions:
 
-1. Navigate to any website
-2. Click the **TraceBug icon** in your browser toolbar
-3. Toggle **Enable TraceBug** on
-4. The page reloads with TraceBug active
-5. A compact toolbar appears on the right edge
+| Action | What it does |
+|--------|--------------|
+| **Capture Bug** (primary) | Starts a screen recording. Chrome's native share-picker appears so you can pick a tab, window, or the whole screen. A floating HUD shows the recording timer plus Draw and Stop buttons. |
+| **Screenshot** | One-shot capture of the current viewport. Opens the ticket modal directly with the screenshot attached. |
+| **View tickets** | Opens the dashboard panel on the current page. |
 
-### Popup Quick Actions
+A 🎤 toggle in the popup adds microphone audio to the recording.
 
-When TraceBug is enabled on a site, the popup shows 6 action buttons:
+### Recording flow
 
-| Button | Action | What Happens |
-|--------|--------|-------------|
-| **Annotate** | Enter annotate mode | Popup closes, click elements on page to annotate |
-| **Draw** | Enter draw mode | Popup closes, drag shapes on page |
-| **Screenshot** | Capture visible page | Uses `chrome.tabs.captureVisibleTab` for reliable capture, auto-downloads PNG |
-| **PDF Report** | Download bug report | PDF opens in print dialog |
-| **GitHub Issue** | Copy GitHub markdown | Formatted issue copied to clipboard |
-| **Jira Ticket** | Copy Jira ticket | Summary + description copied to clipboard |
+1. Click **Capture Bug**.
+2. The share-picker appears — pick what to record. "Current tab" is usually right; for flows that span tab navigation, pick "Window" or "Entire screen".
+3. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements during recording.
+4. Click **Stop** in the HUD (or Chrome's native "Stop sharing" button).
+5. The ticket modal opens with video, screenshots, console, network, and action chips all populated. Fill in title/description and export as HTML, GitHub issue, Jira ticket, Linear issue, or Slack message.
 
-### Managing Sites
+### Per-tab indicator
 
-- The popup shows a list of all enabled sites
-- Click **X** next to a site to disable TraceBug on it
-- When disabled, the page reloads without TraceBug
-
-### Per-Tab Indicator
-
-- **Green "ON" badge** on the extension icon when TraceBug is active on the current tab
-- No badge when inactive
+The toolbar icon shows a green **ON** badge while TraceBug is injected in the current tab. The badge clears automatically when you reload the page.
 
 ## How It Works
 
-The extension uses **Manifest V3** with CSP-safe injection:
-
-1. **Background service worker** checks if the current site is enabled
-2. If enabled, it injects the SDK bundle into the page using `chrome.scripting.executeScript({ world: "MAIN" })`
-3. A **content script** bridges communication between the popup and the page
-4. The SDK initializes with `projectId: "tracebug-extension"` and full dashboard enabled
-
-All data stays in the page's `localStorage` — no data leaves the browser.
-
-## Communication Flow
+Manifest V3 architecture with four extension contexts:
 
 ```
-Popup (extension UI)
-  ↓ chrome.runtime.sendMessage
-Background (service worker)
-  ↓ chrome.tabs.sendMessage
-Content Script (extension context on page)
-  ↓ CustomEvent dispatch
-Page Context (TraceBug SDK)
-  ↓ SDK methods called
+Popup ──sendMessage──▶ Background (service worker)
+                         │
+                         ├─ chrome.scripting.executeScript ─▶ Content script (page tab)
+                         │                                          │
+                         │                                          └─ CustomEvent ─▶ SDK (page main world)
+                         │
+                         └─ chrome.offscreen.createDocument ─▶ Offscreen document (holds MediaRecorder)
 ```
+
+**Why an offscreen document?** Service workers can't hold a `MediaStream`; they get killed when idle. The offscreen document keeps the recording alive across page reloads, navigation, and tab switches. It owns the `MediaRecorder` and persists the finalized recording to `chrome.storage.local` (proxied through the service worker because some Chrome builds don't expose `chrome.storage` to offscreen documents).
+
+**Why proxy storage through the background?** `chrome.runtime.sendMessage` silently truncates responses larger than ~10 MB. A 30-second recording's base64 dataUrl is several MB, so we keep it out of IPC entirely: offscreen writes to storage, content-script reads from storage, page receives the bytes via a CustomEvent (in-process, no size limit).
 
 ## Permissions
 
 | Permission | Why |
 |-----------|-----|
-| `activeTab` | Access the current tab |
-| `storage` | Store which sites are enabled |
-| `scripting` | Inject SDK into pages |
-| `tabs` | Read tab URL and reload |
+| `activeTab` | Access the current tab when the popup is used |
+| `storage` + `unlimitedStorage` | Persist the recording dataUrl (multi-MB) |
+| `scripting` | Inject SDK into pages on demand |
+| `tabs` | Detect navigation on the recording tab for HUD re-mount |
+| `offscreen` | Create the offscreen document that holds `MediaRecorder` |
+| `tabCapture` | Reserved (currently unused — recording uses `getDisplayMedia`) |
 | `<all_urls>` | Work on any website |
 
-## Browser Support
-
-The extension works on all Chromium-based browsers:
-
-- Google Chrome
-- Microsoft Edge
-- Brave
-- Opera
-- Vivaldi
+All recording data stays in `chrome.storage.local` and the page's `localStorage`. Nothing leaves the browser.
 
 ## Files
 
 ```
 tracebug-extension/
 ├── manifest.json       # Extension config (Manifest V3)
-├── background.js       # Service worker — injection & state management
-├── content-script.js   # Message bridge between popup and page
-├── tracebug-init.js    # Page-context SDK initializer
+├── background.js       # Service worker — SDK injection, offscreen lifecycle, storage proxy
+├── content-script.js   # Bridge between extension contexts and the page SDK
+├── offscreen.html      # Host document for the recording context
+├── offscreen.js        # MediaRecorder lifecycle, persists to chrome.storage.local
+├── tracebug-init.js    # Page-context bootstrapper
 ├── tracebug-sdk.js     # Auto-built IIFE bundle (DO NOT EDIT)
-├── popup.html          # Extension popup UI
+├── popup.html          # Three-action popup
 ├── popup.js            # Popup logic
 ├── styles.css          # Popup styles
-└── icons/              # Extension icons (16, 48, 128px)
+└── icons/              # 16 / 48 / 128 px extension icons
 ```
 
-> **Note:** `tracebug-sdk.js` is auto-generated by `npm run build`. Do not edit it manually.
+`tracebug-sdk.js` is auto-generated by `npm run build`. Do not edit it manually.

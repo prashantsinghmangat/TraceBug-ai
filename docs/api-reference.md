@@ -159,15 +159,15 @@ The modal:
 - Auto-saves draft to `tracebug_last_bug_draft` (recovered if you accidentally close)
 - Closes on Escape, click-outside, or after a successful export
 
-**Export actions (all download every screenshot in the ticket):**
+**Export actions (v1.0 — three options; each auto-downloads every attached screenshot + the screen recording if any):**
 
-| Button | Action | Screenshots |
+| Button | Action | Auto-downloads |
 |--------|--------|-------------|
-| Open in GitHub | Opens prefilled GitHub issue page in a new tab | All downloaded, staggered 120ms |
-| Copy as GitHub Issue | Copies markdown to clipboard | All downloaded, staggered 120ms |
-| Copy as Jira Ticket | Copies Jira-formatted text to clipboard | All downloaded, staggered 120ms |
-| Copy as Plain Text | Copies title + description | All downloaded, staggered 120ms |
-| Download Screenshots | Downloads only — no clipboard | All, staggered 120ms |
+| Open in GitHub | Opens prefilled GitHub issue page in a new tab (only shown when `githubRepo` is configured) | Screenshots + `.webm` (staggered 120 ms) |
+| Copy as GitHub Issue | Copies markdown to clipboard | Screenshots + `.webm` |
+| Copy as Jira Ticket | Copies Jira-formatted text to clipboard (premium) | Screenshots + `.webm` |
+
+> **Cut from v1.0 toolbar:** "Copy as Plain Text" and "Download Screenshots" buttons. GitHub markdown is pasteable anywhere; explicit screenshot downloads happen as part of every export. Generate plain text manually via `TraceBug.generateReport()` if needed.
 
 ## Screenshots
 
@@ -798,3 +798,172 @@ interface ClickedElementSummary {
   page: string;
 }
 ```
+
+---
+
+## Sentry Mode (Rolling Video Buffer)
+
+Arm a screen-share once, file multiple bug tickets from the same recording. Inspired by NVIDIA Shadowplay / OBS replay buffer.
+
+### `TraceBug.startVideoRecording(options?): Promise<boolean>`
+
+Open the OS screen-picker and start recording. Resolves to `true` on success, `false` if the user cancelled or the browser refused.
+
+```typescript
+const ok = await TraceBug.startVideoRecording({
+  mode: "rolling",          // default; multiple captures per session
+  withMicrophone: false,    // mux mic audio for narration (asks for mic permission)
+  onStatus: (status, msg) => console.log(status, msg),
+});
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `mode` | `"rolling" \| "standard"` | `"rolling"` | `rolling` = capture-and-keep-recording. `standard` = classic record-then-stop. |
+| `withMicrophone` | `boolean` | `false` | Mux microphone audio for narration. Requires user permission. |
+| `onStatus` | `(status, message?) => void` | — | Status callback. `status` is `"recording" \| "stopped" \| "error"`. |
+
+When recording starts, the floating HUD pill appears with a pulsing red dot, elapsed timer, capture counter, comment input, 📸 Capture button (rolling mode only), and ⏹ Stop.
+
+### `TraceBug.captureRollingBuffer(): Promise<VideoRecording | null>`
+
+Snapshot the in-progress rolling recording into a finished `VideoRecording`. The screen-share keeps running so the same arm session can produce more tickets. Resolves to `null` if no rolling recording is active.
+
+The Quick Bug ticket modal opens automatically on success. The HUD flashes purple to confirm. Comments reset for the next bug — each ticket gets its own set of timestamped notes.
+
+### `TraceBug.stopVideoRecording(): Promise<VideoRecording | null>`
+
+Stop the screen-share, hide the HUD. Smart behavior:
+
+- If captures were already taken this session, stops silently (those tickets are already filed).
+- If no captures were taken, opens the Quick Bug modal with the full recording — preserves the simple one-shot flow.
+
+### `TraceBug.isVideoRecording(): boolean`
+True while a recording is in progress.
+
+### `TraceBug.isRollingMode(): boolean`
+True while the active recording is in rolling/Sentry mode.
+
+### `TraceBug.getCaptureCount(): number`
+Number of captures taken from the current rolling session.
+
+### `TraceBug.getLastVideoRecording(): VideoRecording | null`
+Get the most recently captured recording. Lives in memory only — `null` after page reload.
+
+### `VideoRecording` type
+
+```typescript
+interface VideoRecording {
+  url: string;          // Blob URL (in-memory, valid until clearVideoRecording or reload)
+  blob: Blob;           // Underlying webm Blob
+  durationMs: number;
+  mimeType: string;     // typically "video/webm;codecs=vp9,opus"
+  sizeBytes: number;
+  comments: VideoComment[];
+  startedAt: number;    // ms timestamp when recording started
+}
+
+interface VideoComment {
+  offsetMs: number;     // ms since recording start
+  text: string;
+}
+```
+
+### Auto-capture on error
+
+When an unhandled error fires *and* a rolling session is armed, the existing error toast offers **"Capture with video"** instead of "Capture bug." One click captures the buffer and opens the ticket modal. No need to remember to record before the bug happens.
+
+---
+
+## Auto-Scanner
+
+Six in-browser detectors run in parallel; one failure doesn't block the others.
+
+### `TraceBug.scanPage(): Promise<ScanResult>`
+
+```typescript
+interface ScanResult {
+  issues: Issue[];
+  durationMs: number;
+  scannedAt: number;
+}
+```
+
+Runs all detectors and returns the issues. Concurrent calls are coalesced — a second `scanPage()` while one is in-flight returns the same promise.
+
+```typescript
+const { issues, durationMs } = await TraceBug.scanPage();
+console.log(`${issues.length} issues found in ${durationMs}ms`);
+```
+
+### `TraceBug.showIssuesPanel(options?): Promise<void>`
+
+Opens the issues modal. Runs a fresh scan first by default; pass `{ rescan: false }` to use cached results.
+
+### `TraceBug.getIssues(options?): Issue[]`
+
+Snapshot of current issues. Filters out dismissed by default; pass `{ includeDismissed: true }` to include all.
+
+### `TraceBug.dismissIssue(id) / undismissIssue(id) / clearIssues()`
+
+Per-session dismissal. Returns `true` if the issue was found. `clearIssues()` wipes all results.
+
+### `TraceBug.getIssue(id): Issue | null`
+Lookup helper.
+
+### `TraceBug.getIssueCounts(): Record<IssueSeverity, number>`
+Severity-bucketed counts of non-dismissed issues — useful for badges and CI thresholds.
+
+### `Issue` type
+
+```typescript
+type IssueDetector =
+  | "axe-a11y" | "broken-image" | "mixed-content"
+  | "console-error" | "slow-api" | "failed-request";
+
+type IssueSeverity = "critical" | "serious" | "moderate" | "minor";
+
+interface Issue {
+  id: string;
+  detector: IssueDetector;
+  severity: IssueSeverity;
+  title: string;        // < 80 chars headline
+  description: string;  // longer plain-English explanation
+  selector?: string;    // CSS selector if anchored to DOM
+  url?: string;         // URL if anchored to a request/resource
+  helpUrl?: string;     // axe-core deque docs link, when applicable
+  page: string;
+  detectedAt: number;
+  dismissed?: boolean;  // session-only
+}
+```
+
+### Detector summary
+
+| Detector | What it catches | Notes |
+|---|---|---|
+| **axe-a11y** | WCAG 2.0/2.1 A+AA violations | Lazy-loads axe-core (~1.4 MB) on first scan; multi-element violations roll up with `(+ N more)` suffix |
+| **broken-image** | `<img>` where `naturalWidth === 0 && complete === true` | Skips still-loading images |
+| **mixed-content** | `http://` resources on HTTPS | Covers `img`, `script`, `iframe`, `link[rel=stylesheet|preload|prefetch|manifest|icon]`, `audio`, `video`, `source`, `embed`, `object` |
+| **console-error** | Errors / unhandled rejections in the session, deduped by message | Reads from existing event buffer — no new tracking |
+| **failed-request** | 4xx/5xx/network-error API calls | Pulls response body snippets from the network-failure ring buffer |
+| **slow-api** | Successful API calls over 2 s | Threshold hard-coded at 2000 ms; > 5000 ms bumped to "serious" |
+
+---
+
+## Cut from v1.0 default UI (still callable)
+
+These features were removed from the default toolbar in v1.0 to reduce noise. The source files still ship in the bundle and the public API methods are unchanged — power users can wire them into custom workflows.
+
+| Cut feature | API entry point |
+|---|---|
+| Element Annotate Mode | `TraceBug.activateAnnotateMode()`, `deactivateAnnotateMode()`, `isAnnotateModeActive()` |
+| Draw Mode | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
+| Annotation list / export | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"\|"markdown")`, `clearAnnotations()` |
+| PDF report | `TraceBug.downloadPdf()` (free shows upgrade modal — see [freemium.md](freemium.md)) |
+| First-run onboarding tour | `replayOnboarding()` (named export from `tracebug-sdk`) |
+| Plain text export | Build manually from `TraceBug.generateReport()` |
+
+The `shortcuts.annotate` and `shortcuts.draw` config keys are still typed in `TraceBugConfig` for backwards compatibility but are no-ops in v1.0.

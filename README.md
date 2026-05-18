@@ -53,25 +53,29 @@ That's it. The CLI detects your framework and prints the exact 2-line snippet. P
 ## What TraceBug Does
 
 ```
-Tester uses the app normally
+Tester opens the page
   ↓
 SDK silently captures: clicks, inputs, navigation, API calls, errors, environment
   ↓
-Tester finds a bug → clicks 📸 Screenshot → adds a note or 🎤 voice description
+Three primary toolbar actions cover the main workflows:
+  • ⚡ Quick Bug   — Ctrl+Shift+B opens the ticket-review modal
+  • 🔍 Scan Page   — runs 6 detectors (a11y, broken images, mixed content,
+                     failed APIs, slow APIs, JS errors) → opens issues panel
+  • 🔴 Record      — arms Sentry mode: rolling video buffer + HUD with
+                     timestamped comments. File multiple bugs from one
+                     screen-share without re-picking
   ↓
-Clicks "GitHub Issue" or "Jira Ticket"
+Click "Copy as GitHub Issue" or "Copy as Jira Ticket"
   ↓
 Complete bug report copied to clipboard:
-  - Auto-generated title
+  - Auto-generated title + smart summary + root-cause hint (high/medium/low confidence)
   - Steps to reproduce
-  - Screenshots with annotations
-  - Voice bug description
-  - Console errors + stack traces
-  - Failed network requests
-  - Environment (browser, OS, viewport)
+  - Screenshots, screen recording (.webm) with timestamped comments
+  - Console errors + stack traces, failed network requests with response snippets
+  - Environment (browser, OS, viewport, device)
   - Full session timeline
   ↓
-Paste into GitHub/Jira → Developer has everything. No back-and-forth.
+Paste into GitHub/Jira → screenshots + .webm auto-download. Developer has everything.
 ```
 
 ## Two Ways to Use TraceBug
@@ -139,26 +143,54 @@ All four signals ship inline in GitHub issues, Jira tickets, PDF reports, and th
 | **Unhandled Rejections** | Promise rejection reason + stack |
 | **Environment** | Browser, OS, viewport, device type, connection, language, timezone |
 
-### UI Annotation Tools
+### Sentry Mode — Rolling Video Buffer
 
-| Tool | What it does |
-|------|-------------|
-| **Annotate Mode** | Click any element to attach feedback (intent, severity, comment). Shift+click for multi-select. `Ctrl+Shift+A` |
-| **Draw Mode** | Drag rectangles or ellipses on the live page to mark layout/spacing issues. `Ctrl+Shift+D` |
-| **Clickable Badges** | Numbered badges on annotated elements — click any badge to see intent, severity, and comment in a popover |
-| **Annotation List** | View, export (Markdown/JSON), and manage all annotations in the panel — includes screenshots section |
-| **Save with Annotations** | Screenshot the page with annotation badges visible, auto-downloads as PNG |
+Click **Record** once at the start of a QA session, file as many bug tickets as you want from the same screen-share. Inspired by NVIDIA Shadowplay / OBS replay buffer.
+
+| Feature | What it does |
+|---|---|
+| **One-time picker** | Click Record → pick screen/window/tab in the OS dialog. The HUD appears; you do QA normally. |
+| **📸 Capture button** | Snapshots the in-progress recording into a finished `.webm` and opens the ticket modal. Recording keeps running. |
+| **Timestamped comments** | Type a note in the HUD → press Enter → it's saved with the current video timestamp. |
+| **Auto-capture on error** | When a JS error fires while armed, the error toast offers "Capture with video" — one click captures the buffer. |
+| **Smart Stop** | If you took at least one capture, Stop ends silently. Otherwise it opens the modal with the full recording. |
+
+### Auto-Scanner
+
+Click **Scan** to run six in-browser detectors in parallel and surface issues you might not have noticed:
+
+| Detector | What it catches |
+|---|---|
+| **a11y** | WCAG 2.0/2.1 A+AA violations via [axe-core](https://github.com/dequelabs/axe-core) |
+| **Broken images** | `<img>` elements that failed to load |
+| **Mixed content** | `http://` resources on HTTPS pages (CSP-blocked or downgraded) |
+| **JS errors** | Deduped console errors + unhandled rejections |
+| **Failed requests** | 4xx/5xx/network-error API calls with response body snippets |
+| **Slow APIs** | Successful calls over 2s |
+
+Each issue offers **Locate** (flash the offending element), **File ticket** (pre-fills the Quick Bug modal), and **Dismiss**.
 
 ### QA Tools (One Click)
 
 | Tool | What it does |
 |------|-------------|
-| **Screenshot** | Captures page screenshot with auto-generated name (e.g., `01_click_add_vendor.png`) |
-| **Add Note** | Tester adds Expected/Actual/Severity — becomes part of the bug report |
-| **GitHub Issue** | Generates complete GitHub issue markdown — copies to clipboard |
-| **Jira Ticket** | Generates Jira-compatible ticket with priority, labels, description |
-| **Voice Note** | Speak to describe the bug — speech-to-text, auto-included in reports |
-| **PDF Report** | Opens printable bug report — save as PDF from browser |
+| **Quick Bug Capture** | `Ctrl+Shift+B` opens the ticket-review modal with auto-filled title + description |
+| **Screenshot** | Captures viewport with auto-generated name (e.g., `01_click_add_vendor.png`); added to the active ticket |
+| **Region Screenshot** | Drag-to-select snipping-tool style; added to ticket |
+| **Voice Note** | Speak to describe the bug — speech-to-text via Web Speech API |
+| **GitHub Issue** | Generates complete GitHub markdown — copies to clipboard, screenshots + .webm auto-download |
+| **Jira Ticket** | Generates Jira markup with priority + labels |
+
+### Available Programmatically (cut from default UI in v1.0)
+
+These features still ship in the bundle but no longer have toolbar buttons. Power users can call them directly:
+
+```typescript
+TraceBug.activateAnnotateMode();   // element annotate mode (Ctrl+Shift+A no longer wired)
+TraceBug.activateDrawMode();       // live-page rectangles/ellipses
+TraceBug.downloadPdf();            // PDF report
+TraceBug.exportAnnotationsJSON();  // JSON / Markdown export
+```
 
 ### Auto-Generated
 

@@ -16,7 +16,10 @@ import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
+import { showIssuesPanel, isIssuesPanelOpen } from "./ui/issues-panel";
 import { matchesShortcut } from "./ui/helpers";
+import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, captureRollingBuffer, getCaptureCount } from "./video-recorder";
+import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
@@ -26,6 +29,8 @@ export type ToolbarPosition = "right" | "left" | "bottom-right" | "bottom-left";
 
 let _isRecording = true;
 let _onToggleRecording: (() => void) | null = null;
+let _onSessionStart: (() => void) | null = null;
+let _onSessionEnd: (() => void) | null = null;
 let _renderPanel: ((panel: HTMLElement) => void) | null = null;
 let _panelEl: HTMLElement | null = null;
 let _panelOpen = false;
@@ -40,6 +45,22 @@ const _fabExpanded = false;
 export function setToolbarRecordingState(isRecording: boolean, onToggle: () => void): void {
   _isRecording = isRecording;
   _onToggleRecording = onToggle;
+}
+
+/**
+ * Wire the SDK's session-lifecycle hooks. Called once at SDK init so the
+ * Record button on the toolbar can arm a TraceBug session (events, env,
+ * screenshots) when video recording starts and finalize it when video stops.
+ * Without this, video recording and session capture would be independent —
+ * which is what caused page reloads to look like "new sessions" (the video
+ * survived but no session was ever active).
+ */
+export function setSessionLifecycleHandlers(
+  onStart: () => void,
+  onEnd: () => void
+): void {
+  _onSessionStart = onStart;
+  _onSessionEnd = onEnd;
 }
 
 export function updateToolbarRecordingState(isRecording: boolean): void {
@@ -88,18 +109,7 @@ export function mountCompactToolbar(
     "tracebug-toolbar-panel-btn"
   ));
 
-  // Recording indicator dot
-  const recDot = document.createElement("div");
-  recDot.id = "tracebug-toolbar-rec-dot";
-  recDot.dataset.tracebug = "rec-dot";
-  recDot.style.cssText = `
-    width: 6px; height: 6px; border-radius: 50%; margin: -1px 0 2px 0;
-    background: ${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};
-    animation: ${_isRecording ? "bt-pulse 2s infinite" : "none"};
-  `;
-  toolbar.appendChild(recDot);
-
-  // Divider
+  // Divider after logo — separates panel-toggle from action buttons.
   toolbar.appendChild(_divider());
 
   // ⚡ Quick Bug Capture — the daily-use one-shot button
@@ -125,54 +135,29 @@ export function mountCompactToolbar(
   });
   toolbar.appendChild(quickBugBtn);
 
+  // Scan Page — runs auto-detectors (a11y, broken images, mixed content,
+  // failed/slow APIs, JS errors) and opens the issues panel.
+  const scanBtn = _createToolbarBtn(
+    "Scan page for issues",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+    () => {
+      if (!isIssuesPanelOpen()) {
+        showIssuesPanel(root).catch((err) => {
+          console.warn("[TraceBug] Scan failed:", err);
+          showToast("Scan failed", root);
+        });
+      }
+    },
+    "tracebug-toolbar-scan-btn"
+  );
+  toolbar.appendChild(scanBtn);
+
   // Divider
   toolbar.appendChild(_divider());
 
-  // Element Annotate button
-  const annotateBtn = _createToolbarBtn(
-    "Annotate Elements (Ctrl+Shift+A)",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>`,
-    () => {
-      if (isElementAnnotateActive()) {
-        deactivateElementAnnotateMode();
-        _updateActiveStates(toolbar);
-      } else {
-        if (isDrawModeActive()) deactivateDrawMode();
-        activateElementAnnotateMode(root, () => {
-          _updateAnnotationCount(toolbar);
-          showToast("Annotation saved", root);
-        }, () => {
-          _updateActiveStates(toolbar);
-        });
-        _updateActiveStates(toolbar);
-      }
-    },
-    "tracebug-toolbar-annotate-btn"
-  );
-  toolbar.appendChild(annotateBtn);
-
-  // Draw Mode button
-  const drawBtn = _createToolbarBtn(
-    "Draw Regions (Ctrl+Shift+D)",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>`,
-    () => {
-      if (isDrawModeActive()) {
-        deactivateDrawMode();
-        _updateActiveStates(toolbar);
-      } else {
-        if (isElementAnnotateActive()) deactivateElementAnnotateMode();
-        activateDrawMode(root, () => {
-          _updateAnnotationCount(toolbar);
-          showToast("Region saved", root);
-        }, () => {
-          _updateActiveStates(toolbar);
-        });
-        _updateActiveStates(toolbar);
-      }
-    },
-    "tracebug-toolbar-draw-btn"
-  );
-  toolbar.appendChild(drawBtn);
+  // Annotate + Draw modes were cut from the v1 toolbar — they overlap with
+  // the screenshot annotation editor and confused users with two paradigms.
+  // The underlying APIs still exist (TraceBug.activateAnnotateMode / activateDrawMode).
 
   // Free-plan gate: enforce the screenshot limit at capture time.
   const _checkLimit = (): boolean => {
@@ -225,62 +210,35 @@ export function mountCompactToolbar(
     "tracebug-toolbar-region-btn"
   ));
 
-  // Divider
-  toolbar.appendChild(_divider());
-
-  // Annotation list button (with count badge)
-  const listBtn = _createToolbarBtn(
-    "Annotation List",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`,
-    () => {
-      if (_annotationViewOpen && _panelOpen) {
-        _togglePanel(panel, toolbar, showToast);
-        _annotationViewOpen = false;
-      } else {
-        if (!_panelOpen) _togglePanel(panel, toolbar, showToast);
-        renderAnnotationList(panel);
-        _annotationViewOpen = true;
-      }
-    },
-    "tracebug-toolbar-list-btn"
+  // Events-only Record button — clipboard icon makes it visually obvious this
+  // is the "no-video" capture mode. Arms a TraceBug session (events +
+  // screenshots) WITHOUT a screen-share prompt. Stop opens the ticket modal.
+  const eventsRecordBtn = _createToolbarBtn(
+    "Start session (events + screenshots) — no video, no screen prompt",
+    _eventsRecordIconSvg(false),
+    () => _toggleEventsRecording(root, eventsRecordBtn, showToast),
+    "tracebug-toolbar-events-record-btn"
   );
-  // Badge
-  const badge = document.createElement("div");
-  badge.id = "tracebug-toolbar-badge";
-  badge.dataset.tracebug = "toolbar-badge";
-  badge.style.cssText = `
-    position: absolute; top: -2px; right: -2px;
-    min-width: 14px; height: 14px; border-radius: 7px;
-    background: var(--tb-accent, #7B61FF); color: #fff; font-size: 9px; font-weight: 700;
-    font-family: var(--tb-font-family, system-ui, sans-serif);
-    display: flex; align-items: center; justify-content: center;
-    padding: 0 3px; line-height: 1;
-  `;
-  const count = getAnnotationCount();
-  badge.textContent = String(count);
-  badge.style.display = count > 0 ? "flex" : "none";
-  listBtn.style.position = "relative";
-  listBtn.appendChild(badge);
-  toolbar.appendChild(listBtn);
+  toolbar.appendChild(eventsRecordBtn);
 
-  // Divider
-  toolbar.appendChild(_divider());
+  // Video recording button — film/camera icon. Triggers the screen-share
+  // picker, then captures events + screenshots + video into one ticket. Stop
+  // opens the ticket modal with everything embedded.
+  const recordBtn = _createToolbarBtn(
+    "Record session WITH video (asks to share screen)",
+    _recordIconSvg(false),
+    () => _toggleVideoRecording(root, recordBtn, showToast),
+    "tracebug-toolbar-record-btn"
+  );
+  if (!isVideoSupported()) {
+    recordBtn.style.opacity = "0.4";
+    recordBtn.style.cursor = "not-allowed";
+    recordBtn.title = "Screen recording not supported in this browser";
+  }
+  toolbar.appendChild(recordBtn);
 
-  // Settings button
-  toolbar.appendChild(_createToolbarBtn(
-    "Settings",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
-    (e) => _toggleSettingsCard(e, root, toolbar, showToast),
-    "tracebug-toolbar-settings-btn"
-  ));
-
-  // Help button — replays onboarding tour
-  toolbar.appendChild(_createToolbarBtn(
-    "Help — replay tour",
-    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-    () => replayOnboarding(root),
-    "tracebug-toolbar-help-btn"
-  ));
+  // Annotation list, Settings card, and Help button were cut from the v1
+  // toolbar — they're configurable via init() and accessible via plugins.
 
   root.appendChild(toolbar);
 
@@ -373,6 +331,162 @@ function _divider(): HTMLElement {
   d.dataset.tracebug = "toolbar-divider";
   d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
   return d;
+}
+
+// ── Events-only recording icon + toggle ─────────────────────────────────
+
+function _eventsRecordIconSvg(active: boolean): string {
+  if (active) {
+    // Solid red square — universal "stop" affordance. Clearly different from
+    // the video button's stop state (round filled circle).
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+  }
+  // Clipboard icon — "capture a session of steps". Pairs with the camera icon
+  // on the video button so the two affordances are immediately distinguishable.
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>`;
+}
+
+/**
+ * Toggle events-only session recording. Arms the same session lifecycle as
+ * the video button (so events + screenshots accumulate under one session id)
+ * but skips getDisplayMedia and the HUD entirely.
+ */
+async function _toggleEventsRecording(
+  root: HTMLElement,
+  btn: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  // The button's active state mirrors the SDK's `recording` flag, which the
+  // session-lifecycle hook keeps in sync. We treat the toolbar class as the
+  // source of truth for the toggle since the SDK doesn't expose recording
+  // state directly to this module.
+  const isActive = btn.classList.contains("tb-active");
+
+  if (isActive) {
+    // Stop: end the session and open the ticket modal.
+    showToast("Stopping recording...", root);
+    btn.innerHTML = _eventsRecordIconSvg(false);
+    btn.classList.remove("tb-active");
+    btn.style.color = "var(--tb-btn-text, #aaa)";
+    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
+    try {
+      if (!isQuickBugOpen()) await showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+    }
+    return;
+  }
+
+  // Start: arm the session. No screen picker, no video.
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+  btn.innerHTML = _eventsRecordIconSvg(true);
+  btn.classList.add("tb-active");
+  btn.style.color = "var(--tb-error, #ef4444)";
+  showToast("Recording — events + screenshots will be captured", root);
+}
+
+// ── Video recording icon + toggle ────────────────────────────────────────
+
+function _recordIconSvg(active: boolean): string {
+  if (active) {
+    // Solid red CIRCLE for stop — distinct from the events-only stop state
+    // which uses a square. This way the active states also stay distinguishable.
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
+  }
+  // Video camera icon — instantly readable as "screen recording" and clearly
+  // different from the events-only clipboard.
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
+}
+
+async function _toggleVideoRecording(
+  root: HTMLElement,
+  btn: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  if (!isVideoSupported()) {
+    showToast("Screen recording not supported in this browser", root);
+    return;
+  }
+
+  if (isVideoRecording()) {
+    const captures = getCaptureCount();
+    showToast("Stopping recording...", root);
+    await stopVideoRecording();
+    hideRecordingHUD();
+    btn.innerHTML = _recordIconSvg(false);
+    btn.classList.remove("tb-active");
+    btn.style.color = "var(--tb-btn-text, #aaa)";
+    // Finalize the TraceBug session: clears the active-session flag so the
+    // next Record click starts fresh and stops the event collectors.
+    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
+    if (captures > 0) {
+      showToast(`Recording stopped · ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
+    }
+    // Always open the ticket modal on stop. Earlier we skipped this when
+    // rolling captures had already been filed, but users were left without a
+    // visible "result" of stopping — they expect a ticket every time. Open the
+    // ticket for the most recent session so the recording, replay, and
+    // screenshots are immediately reviewable.
+    try {
+      if (!isQuickBugOpen()) await showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+    }
+    return;
+  }
+
+  showToast("Pick a screen, window, or tab to record", root);
+  const ok = await startVideoRecording({
+    mode: "rolling",
+    onStatus: (status, message) => {
+      if (status === "error" && message) showToast(`Recording error: ${message}`, root);
+    },
+  });
+  if (!ok) {
+    showToast("Recording cancelled", root);
+    return;
+  }
+
+  // Arm the TraceBug session in the same gesture as starting the video so
+  // events, screenshots, and the recording all land under one session id.
+  // Fires before the HUD mounts so the active-session flag is already
+  // persisted when the first event arrives.
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+
+  btn.innerHTML = _recordIconSvg(true);
+  btn.classList.add("tb-active");
+  btn.style.color = "var(--tb-error, #ef4444)";
+  showRecordingHUD(root, {
+    onStop: () => { _toggleVideoRecording(root, btn, showToast).catch(() => {}); },
+  });
+  showToast("Recording started — hit Stop to file a ticket", root);
+}
+
+/**
+ * Snapshot the in-flight rolling recording, open the ticket modal so the
+ * user can edit + export, and let the recorder keep rolling so the same
+ * arm session can produce more tickets.
+ */
+async function _captureRollingFromHUD(
+  root: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  if (isQuickBugOpen()) {
+    showToast("A ticket is already open — close it first", root);
+    return;
+  }
+  const recording = await captureRollingBuffer();
+  if (!recording) {
+    showToast("Capture failed — recording may have ended", root);
+    return;
+  }
+  flashRecordingHUD();
+  showToast("Captured — review the ticket", root);
+  try {
+    await showQuickBugCapture(root);
+  } catch (err) {
+    console.warn("[TraceBug] Failed to open ticket modal after rolling capture:", err);
+  }
 }
 
 function _togglePanel(
