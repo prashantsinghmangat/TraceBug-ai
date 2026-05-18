@@ -1047,9 +1047,9 @@ const REPLAY_RUNTIME = `(function(){
     if (videoLoaded || !hasVideo) { if (autoplay) try { video.play(); } catch(e) {} return; }
     videoLoaded = true;
     try {
-      // Non-greedy `(.*?)` because the mime can itself contain commas
-      // (e.g. "video/webm;codecs=vp9,opus") — a `[^;]+` group would
-      // truncate the prefix before `;base64,` and decode garbage.
+      // Non-greedy capture for the mime because the mime can itself contain
+      // commas (e.g. "video/webm;codecs=vp9,opus") — a no-semicolon group
+      // would truncate the prefix before the base64 marker and decode garbage.
       var match = /^data:(.*?);base64,(.*)$/.exec(data.video.dataUrl);
       if (!match) { video.src = data.video.dataUrl; }
       else {

@@ -76,6 +76,14 @@ export interface TraceBugConfig {
    * issues, Jira tickets, and plain-text exports. Ignored on the free plan.
    */
   companyName?: string;
+
+  /**
+   * Base URL of the TraceBug cloud (auth, storage, dashboard). Defaults to
+   * `https://tracebug.netlify.app`. Override for local development or
+   * self-hosted deployments. Used by `TraceBug.shareReport()` to mount the
+   * hidden iframe bridge.
+   */
+  cloudEndpoint?: string;
 }
 
 // ── Event types ───────────────────────────────────────────────────────────

@@ -39,6 +39,40 @@
     <!-- Main content -->
     <main id="mainContent" class="main">
 
+      <!-- Account / cloud sharing -->
+      <div class="account" id="account">
+        <!-- States populated by popup.js: loading / signed-out / signed-in -->
+        <div class="account-loading" id="accountLoading">
+          <span class="account-spinner"></span>
+          <span class="account-label">Checking sign-in…</span>
+        </div>
+        <div class="account-out" id="accountOut" style="display:none;">
+          <div class="account-row">
+            <span class="account-icon">☁️</span>
+            <div class="account-body">
+              <div class="account-title">Cloud sharing</div>
+              <div class="account-sub">Sign in to share bug reports as a link</div>
+            </div>
+            <button class="account-cta" id="btnSignIn">Sign in</button>
+          </div>
+        </div>
+        <div class="account-in" id="accountIn" style="display:none;">
+          <div class="account-row">
+            <div class="account-avatar" id="accountAvatar">P</div>
+            <div class="account-body">
+              <div class="account-title" id="accountEmail">…</div>
+              <div class="account-sub">
+                <span id="accountQuotaVideo">🎥 0/5</span>
+                <span class="account-sep">·</span>
+                <span id="accountQuotaScreen">📸 0/10</span>
+              </div>
+            </div>
+            <button class="account-cta-ghost" id="btnSignOut" title="Sign out">⎋</button>
+          </div>
+          <a class="account-link" id="linkDashboard" href="#" target="_blank" rel="noopener">Open dashboard →</a>
+        </div>
+      </div>
+
       <!-- Site label -->
       <div class="site-label">
         <span class="site-host" id="hostname">—</span>

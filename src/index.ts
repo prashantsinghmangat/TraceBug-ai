@@ -68,6 +68,8 @@ import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
 import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
+import { shareSessionAsLink, ShareReportOptions, ShareLinkResult } from "./exporters/share-link";
+import { getBridge } from "./auth/iframe-bridge";
 import { generateBugTitle, generateFlowSummary } from "./title-generator";
 import { buildTimeline, formatTimelineText } from "./timeline-builder";
 import { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
@@ -296,10 +298,13 @@ class TraceBugSDK {
       // does, the free behavior applies — acceptable for a local flag.
       hydratePlan().catch(() => {});
 
-      // Wire githubRepo into Quick Bug modal (lazy-loaded on first capture)
-      if (this.config.githubRepo) {
-        import("./ui/quick-bug").then(m => m.setGithubRepo(this.config!.githubRepo!)).catch(() => {});
-      }
+      // Wire githubRepo + cloudEndpoint into Quick Bug modal (lazy-loaded
+      // on first capture). cloudEndpoint always wires through so the Share
+      // button reads the override even when no githubRepo is set.
+      import("./ui/quick-bug").then(m => {
+        if (this.config?.githubRepo) m.setGithubRepo(this.config.githubRepo);
+        m.setCloudEndpoint(this.config?.cloudEndpoint);
+      }).catch(() => {});
 
       // ── Emit function — collectors call this with raw event data ───────
       // Reads sessionId / recording dynamically from `this` so toggling
@@ -750,7 +755,7 @@ class TraceBugSDK {
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
     withMicrophone?: boolean;
-    onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
+    onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
   }): Promise<boolean> {
     // End any stale active session before starting a fresh one. Without this
     // a session id from a previous (abandoned) recording would be restored
@@ -938,6 +943,55 @@ class TraceBugSDK {
     const prefix = this._brandingPrefix();
     if (prefix) ticket.description = prefix + ticket.description;
     return ticket;
+  }
+
+  /**
+   * Open the magic-link sign-in flow for cloud sharing. Returns the user
+   * object once authenticated, or throws on timeout/cancel.
+   * Free, no plan gate.
+   */
+  async signIn() {
+    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    return getBridge(ep).signIn();
+  }
+
+  /** Sign out of the cloud account (does not affect local capture). */
+  async signOut(): Promise<void> {
+    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    await getBridge(ep).signOut();
+  }
+
+  /** Current cloud user, or null if not signed in. */
+  async getCurrentUser() {
+    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const r = await getBridge(ep).checkAuth();
+    return r.user;
+  }
+
+  /** Current cloud quotas (video + screenshot share counts). */
+  async getCloudQuotas() {
+    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    return getBridge(ep).getQuotas();
+  }
+
+  /**
+   * Upload the current session as a shareable link. Prompts sign-in if the
+   * user isn't authenticated. Returns the public URL.
+   *
+   * Local capture, .html download, GitHub/Linear/Slack export are unaffected
+   * by this call — sharing to cloud is purely additive.
+   */
+  async shareReport(options?: ShareReportOptions): Promise<ShareLinkResult> {
+    const ep = options?.cloudEndpoint || this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const bridge = getBridge(ep);
+    const auth = await bridge.checkAuth();
+    if (!auth.authed) await bridge.signIn();
+
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.sessionId === this.sessionId) || sessions[0];
+    if (!session) throw new Error("no_session_to_share");
+    const report = this._redactForFreePlan(buildReport(session));
+    return shareSessionAsLink(session, report, { ...options, cloudEndpoint: ep });
   }
 
   /**

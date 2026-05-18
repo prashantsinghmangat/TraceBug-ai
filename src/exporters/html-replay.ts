@@ -37,6 +37,29 @@ export async function exportSessionAsHtml(
   report: BugReport,
   options?: HtmlReplayOptions
 ): Promise<ExportedReplay> {
+  const { blob } = await buildReplayPayload(session, report, options);
+  const url = URL.createObjectURL(blob);
+  const filename = options?.filename || defaultFilename(session.sessionId);
+  triggerDownload(url, filename);
+  return { filename, blob, url, sizeBytes: blob.size };
+}
+
+// Same payload assembly, without the download trigger. Used by the cloud
+// share path so both code paths stay in lockstep — touching one updates both.
+export async function buildReplayBlob(
+  session: StoredSession,
+  report: BugReport,
+  options?: HtmlReplayOptions,
+): Promise<Blob> {
+  const { blob } = await buildReplayPayload(session, report, options);
+  return blob;
+}
+
+async function buildReplayPayload(
+  session: StoredSession,
+  report: BugReport,
+  options?: HtmlReplayOptions,
+): Promise<{ blob: Blob; html: string }> {
   const includeVideo = options?.includeVideo ?? !!report.video;
 
   // Build a timeline that mirrors the live scrubber's marker logic.
@@ -183,12 +206,7 @@ export async function exportSessionAsHtml(
 
   const html = buildReplayHtml(payload);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  const filename = options?.filename || defaultFilename(session.sessionId);
-  triggerDownload(url, filename);
-
-  return { filename, blob, url, sizeBytes: blob.size };
+  return { blob, html };
 }
 
 function defaultFilename(sessionId: string): string {

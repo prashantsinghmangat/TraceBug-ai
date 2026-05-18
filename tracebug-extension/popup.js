@@ -8,9 +8,79 @@
 const STORAGE_KEY = "tracebug_enabled_sites";
 const THEME_KEY = "tracebug_popup_theme";
 const MIC_KEY = "tracebug_mic_enabled";
+const CLOUD_ENDPOINT_KEY = "tracebug_cloud_endpoint";
+// Production default; override for local dev via:
+//   chrome.storage.local.set({ tracebug_cloud_endpoint: "http://localhost:3001" })
+const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
 
 let currentHostname = "";
 let currentTabId = null;
+let cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
+
+async function loadCloudEndpoint() {
+  try {
+    const r = await chrome.storage.local.get(CLOUD_ENDPOINT_KEY);
+    const v = r?.[CLOUD_ENDPOINT_KEY];
+    if (typeof v === "string" && v.trim()) cloudEndpoint = v.trim().replace(/\/+$/, "");
+  } catch {}
+}
+
+// ── Account / cloud-sharing block ──────────────────────────────────────────
+async function refreshAccount() {
+  const loading = document.getElementById("accountLoading");
+  const out = document.getElementById("accountOut");
+  const inBox = document.getElementById("accountIn");
+  if (!loading || !out || !inBox) return;
+
+  loading.style.display = "flex";
+  out.style.display = "none";
+  inBox.style.display = "none";
+
+  try {
+    const res = await fetch(`${cloudEndpoint}/api/me`, { credentials: "include" });
+    if (res.status === 401) {
+      loading.style.display = "none";
+      out.style.display = "block";
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const me = await res.json();
+    const email = me.email || "";
+    document.getElementById("accountEmail").textContent = email;
+    const avatar = document.getElementById("accountAvatar");
+    avatar.textContent = (email.charAt(0) || "?").toUpperCase();
+    const q = me.quotas || { video: { used: 0, limit: 5 }, screenshot: { used: 0, limit: 10 } };
+    document.getElementById("accountQuotaVideo").textContent = `🎥 ${q.video.used}/${q.video.limit}`;
+    document.getElementById("accountQuotaScreen").textContent = `📸 ${q.screenshot.used}/${q.screenshot.limit}`;
+    const dashLink = document.getElementById("linkDashboard");
+    if (dashLink) dashLink.setAttribute("href", `${cloudEndpoint}/dashboard`);
+    loading.style.display = "none";
+    inBox.style.display = "block";
+  } catch (err) {
+    // Network blocked, endpoint wrong, etc. — treat as signed-out so user
+    // still has an obvious next action.
+    loading.style.display = "none";
+    out.style.display = "block";
+  }
+}
+
+function wireAccountButtons() {
+  const signIn = document.getElementById("btnSignIn");
+  if (signIn) signIn.addEventListener("click", () => {
+    chrome.tabs.create({ url: `${cloudEndpoint}/auth?source=extension` });
+  });
+  const signOut = document.getElementById("btnSignOut");
+  if (signOut) signOut.addEventListener("click", async () => {
+    try {
+      await fetch(`${cloudEndpoint}/api/auth/signout`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch {}
+    refreshAccount();
+  });
+}
 
 // ── Theme toggle ────────────────────────────────────────────────────────────
 function applyTheme(pref) {
@@ -47,6 +117,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyTheme(next);
     themeBtn.textContent = themeIcon(next);
   });
+
+  // Cloud-share account state. Loaded in parallel with the tab check so the
+  // user sees account info even on chrome:// pages where bug capture is
+  // unavailable.
+  await loadCloudEndpoint();
+  wireAccountButtons();
+  void refreshAccount();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
