@@ -27,8 +27,8 @@ describe('generateReproSteps', () => {
       ev('click', { element: { tag: 'button', text: 'Cancel' } }),
     ];
     const r = generateReproSteps(events, 'Oops');
-    expect(r.reproSteps).toContain('1. Click "Save" button');
-    expect(r.reproSteps).toContain('2. Click "Cancel" button');
+    expect(r.reproSteps).toContain('1. Click the "Save" button');
+    expect(r.reproSteps).toContain('2. Click the "Cancel" button');
   });
 
   it('shows field name and value for input events', () => {
@@ -106,7 +106,7 @@ describe('generateReproSteps', () => {
       ev('click', { element: { tag: 'button', text: 'Save' } }),
     ];
     const r = generateReproSteps(events, 'x');
-    const matches = r.reproSteps.match(/Click "Save"/g) || [];
+    const matches = r.reproSteps.match(/Click the "Save"/g) || [];
     expect(matches.length).toBe(1);
   });
 
@@ -127,7 +127,7 @@ describe('generateReproSteps', () => {
     ];
     const r = generateReproSteps(events, 'TypeError');
     const idxNav = r.reproSteps.indexOf('Navigate');
-    const idxClick = r.reproSteps.indexOf('Click "Place Order"');
+    const idxClick = r.reproSteps.indexOf('Click the "Place Order"');
     const idxApi = r.reproSteps.indexOf('API call fails');
     const idxErr = r.reproSteps.indexOf('Error:');
     expect(idxNav).toBeLessThan(idxClick);

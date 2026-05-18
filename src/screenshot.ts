@@ -66,11 +66,14 @@ export function clearScreenshots(): void {
 
 export async function captureScreenshot(
   lastEvent?: TraceBugEvent | null,
-  options?: { includeAnnotations?: boolean }
+  options?: { includeAnnotations?: boolean; highlightClicked?: boolean }
 ): Promise<ScreenshotData> {
   screenshotCounter++;
 
   const includeAnnotations = options?.includeAnnotations ?? false;
+  // Smart-screenshot: when set and the last event is a click with a
+  // boundingBox, draw a translucent ring + arrow at the clicked element.
+  const highlightClicked = options?.highlightClicked ?? false;
 
   const eventContext = lastEvent
     ? buildEventLabel(lastEvent)
@@ -163,10 +166,31 @@ export async function captureScreenshot(
     if (root) root.style.display = "";
   }
 
+  // Smart-screenshot post-processing: draw a click highlight if requested
+  // AND we have a boundingBox AND the element is in the viewport. We always
+  // keep the original dataUrl alongside so the modal can offer an "original"
+  // toggle without re-capturing.
+  let originalDataUrl: string | undefined;
+  if (highlightClicked && lastEvent?.type === "click") {
+    const bbox = lastEvent?.data?.element?.boundingBox;
+    if (bbox && isBoundingBoxInViewport(bbox)) {
+      try {
+        const highlighted = await drawClickHighlight(dataUrl, bbox);
+        if (highlighted) {
+          originalDataUrl = dataUrl;
+          dataUrl = highlighted;
+        }
+      } catch (err) {
+        if (typeof console !== "undefined") console.warn("[TraceBug] Click highlight failed:", err);
+      }
+    }
+  }
+
   const screenshot: ScreenshotData = {
     id: `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     timestamp: Date.now(),
     dataUrl,
+    originalDataUrl,
     filename,
     eventContext,
     page: window.location.pathname,
@@ -261,4 +285,183 @@ function sanitizeFilename(str: string): string {
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
     .slice(0, 50);
+}
+
+// ── Smart-screenshot click highlight ─────────────────────────────────────
+// Loads the captured dataUrl into a canvas, scales the click bounding-box
+// by DPR, draws a translucent purple ring + arrow at the clicked element,
+// and returns the re-encoded PNG dataUrl. Returns null if anything fails so
+// the caller falls back to the un-highlighted screenshot.
+
+interface BBox { x: number; y: number; width: number; height: number; }
+
+function isBoundingBoxInViewport(bbox: BBox): boolean {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Skip if the box is entirely outside the viewport, sized 0, or negative.
+  if (bbox.width <= 0 || bbox.height <= 0) return false;
+  if (bbox.x + bbox.width < 0 || bbox.y + bbox.height < 0) return false;
+  if (bbox.x > vw || bbox.y > vh) return false;
+  return true;
+}
+
+async function drawClickHighlight(dataUrl: string, bbox: BBox): Promise<string | null> {
+  const img = await loadImage(dataUrl);
+  if (!img) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  // Polyfill roundRect on contexts without it (older Chromium/Firefox).
+  if (typeof (ctx as any).roundRect !== "function") {
+    (ctx as any).roundRect = function (x: number, y: number, w: number, h: number, r: number) {
+      const rad = Math.min(r, w / 2, h / 2);
+      this.moveTo(x + rad, y);
+      this.lineTo(x + w - rad, y);
+      this.quadraticCurveTo(x + w, y, x + w, y + rad);
+      this.lineTo(x + w, y + h - rad);
+      this.quadraticCurveTo(x + w, y + h, x + w - rad, y + h);
+      this.lineTo(x + rad, y + h);
+      this.quadraticCurveTo(x, y + h, x, y + h - rad);
+      this.lineTo(x, y + rad);
+      this.quadraticCurveTo(x, y, x + rad, y);
+      this.closePath();
+    };
+  }
+
+  ctx.drawImage(img, 0, 0);
+
+  // DPR scaling — the captured image's pixel dims may differ from CSS px.
+  const scaleX = canvas.width / window.innerWidth;
+  const scaleY = canvas.height / window.innerHeight;
+  const x = bbox.x * scaleX;
+  const y = bbox.y * scaleY;
+  const w = bbox.width * scaleX;
+  const h = bbox.height * scaleY;
+  const padding = 8 * Math.max(scaleX, 1);
+
+  // Cap ring at 80% of canvas to avoid drawing absurdly large highlights.
+  const maxW = canvas.width * 0.8;
+  const maxH = canvas.height * 0.8;
+  const ringW = Math.min(w + padding * 2, maxW);
+  const ringH = Math.min(h + padding * 2, maxH);
+  const ringX = x - padding;
+  const ringY = y - padding;
+  const ringR = Math.min(ringW, ringH) / 2 + 4;
+
+  // Subtle outer dim — focuses attention on the highlighted region.
+  ctx.fillStyle = "rgba(0, 0, 0, 0.18)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Punch a hole back to original at the highlighted area.
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
+  ctx.fill();
+  ctx.restore();
+
+  // Re-draw the original image at the cleared region so the highlighted
+  // area shows the source pixels (not white).
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
+  ctx.clip();
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+
+  // Translucent purple ring around the element.
+  ctx.strokeStyle = "rgba(123, 97, 255, 0.85)";
+  ctx.lineWidth = Math.max(4 * scaleX, 3);
+  ctx.beginPath();
+  ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
+  ctx.stroke();
+
+  // Arrow from the nearest screen edge pointing into the ring.
+  drawArrowToBox(ctx, canvas.width, canvas.height, ringX, ringY, ringW, ringH, scaleX);
+
+  try {
+    return canvas.toDataURL("image/png", 0.85);
+  } catch {
+    return null;
+  }
+}
+
+function drawArrowToBox(
+  ctx: CanvasRenderingContext2D,
+  cw: number,
+  ch: number,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number,
+  scale: number
+): void {
+  const cx = rx + rw / 2;
+  const cy = ry + rh / 2;
+
+  // Pick the nearest edge.
+  const distLeft = rx;
+  const distRight = cw - (rx + rw);
+  const distTop = ry;
+  const distBottom = ch - (ry + rh);
+  const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+
+  let startX: number, startY: number, endX: number, endY: number;
+  const margin = 24 * scale;
+  if (minDist === distLeft) {
+    startX = Math.max(8 * scale, rx - margin - 60 * scale);
+    startY = cy;
+    endX = rx - 6 * scale;
+    endY = cy;
+  } else if (minDist === distRight) {
+    startX = Math.min(cw - 8 * scale, rx + rw + margin + 60 * scale);
+    startY = cy;
+    endX = rx + rw + 6 * scale;
+    endY = cy;
+  } else if (minDist === distTop) {
+    startX = cx;
+    startY = Math.max(8 * scale, ry - margin - 60 * scale);
+    endX = cx;
+    endY = ry - 6 * scale;
+  } else {
+    startX = cx;
+    startY = Math.min(ch - 8 * scale, ry + rh + margin + 60 * scale);
+    endX = cx;
+    endY = ry + rh + 6 * scale;
+  }
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(123, 97, 255, 0.95)";
+  ctx.fillStyle = "rgba(123, 97, 255, 0.95)";
+  ctx.lineWidth = Math.max(3 * scale, 2);
+  ctx.lineCap = "round";
+
+  // Shaft
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+
+  // Arrow head
+  const angle = Math.atan2(endY - startY, endX - startX);
+  const head = 14 * scale;
+  ctx.beginPath();
+  ctx.moveTo(endX, endY);
+  ctx.lineTo(endX - head * Math.cos(angle - Math.PI / 6), endY - head * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(endX - head * Math.cos(angle + Math.PI / 6), endY - head * Math.sin(angle + Math.PI / 6));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
 }

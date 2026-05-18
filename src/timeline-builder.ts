@@ -55,7 +55,10 @@ function describeTimelineEvent(ev: TraceBugEvent): string {
       let target = el?.text?.trim() || el?.ariaLabel || el?.id || el?.tag || "element";
       // Clean multi-line text (e.g. dropdown showing all options)
       if (target.includes("\n")) target = target.split("\n")[0].trim();
-      return `click "${target.slice(0, 50)}"`;
+      // Truncate with ellipsis instead of a hard cut so the timeline doesn't
+      // chop mid-word and look like garbage in the replay viewer.
+      const trimmed = target.length > 80 ? target.slice(0, 80).trimEnd() + "…" : target;
+      return `click "${trimmed}"`;
     }
     case "input": {
       const name = ev.data.element?.name || ev.data.element?.id || "field";
@@ -83,6 +86,14 @@ function describeTimelineEvent(ev: TraceBugEvent): string {
       return ev.data.error?.message || "Unknown error";
     case "console_error":
       return (ev.data.error?.message || "").slice(0, 80);
+    case "mark": {
+      const label = ev.data?.label || "mark";
+      const payload = ev.data?.payload;
+      if (payload && Object.keys(payload).length > 0) {
+        try { return `📌 ${label} ${JSON.stringify(payload).slice(0, 60)}`; } catch {}
+      }
+      return `📌 ${label}`;
+    }
     default:
       return JSON.stringify(ev.data).slice(0, 60);
   }

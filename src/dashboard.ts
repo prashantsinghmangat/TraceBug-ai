@@ -14,7 +14,9 @@ import { generateBugTitle } from "./title-generator";
 import { captureEnvironment } from "./environment";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getAnnotationCount } from "./annotation-store";
-import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, ToolbarPosition } from "./compact-toolbar";
+import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, ToolbarPosition } from "./compact-toolbar";
+
+export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { startOnboarding, addLogoPulse, cleanupOnboarding, injectOnboardingStyles } from "./onboarding";
 import { showToast as _showToastModule } from "./ui/toast";
@@ -167,9 +169,9 @@ export function mountDashboard(
   // ── Show existing annotation badges on page ────────────────────────
   showAnnotationBadges(root);
 
-  // ── First-run onboarding ────────────────────────────────────────────
-  injectOnboardingStyles();
-  startOnboarding(root);
+  // First-run onboarding tour was cut from v1 — most users skip it. The
+  // tooltip on each toolbar button + the highlighted Quick Bug button are
+  // enough discovery aids. Logo pulse retained as a subtle "we're here" hint.
   addLogoPulse();
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────
@@ -310,11 +312,22 @@ function renderPanel(panel: HTMLElement): void {
     if (filter === "healthy") filtered = filtered.filter(s => !s.errorMessage);
     if (search) {
       const q = search.toLowerCase();
-      filtered = filtered.filter(s =>
-        s.sessionId.toLowerCase().includes(q) ||
-        (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) ||
-        s.events.some(e => e.page.toLowerCase().includes(q))
-      );
+      filtered = filtered.filter(s => {
+        if (s.sessionId.toLowerCase().includes(q)) return true;
+        if (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) return true;
+        if (s.reproSteps && s.reproSteps.toLowerCase().includes(q)) return true;
+        // Page URL, click text, input value, and route paths — what users actually recall.
+        for (const e of s.events) {
+          if (e.page && e.page.toLowerCase().includes(q)) return true;
+          const d = e.data || {};
+          const el = d.element || {};
+          if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
+          if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
+          if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q)) return true;
+          if (d.request?.url && String(d.request.url).toLowerCase().includes(q)) return true;
+        }
+        return false;
+      });
     }
     if (filtered.length === 0) {
       sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
@@ -379,8 +392,30 @@ function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLEle
     </div>
     <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(preview)}</div>
     <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events · ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7B61FF")}font-size:10px;flex:1">📋 View Ticket</button>
+      <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
+    </div>
   `;
 
+  // "View Ticket" reopens the quick-bug modal for THIS session — the most
+  // requested missing affordance. Without it, once the user closed the popup
+  // after stopping a recording there was no way to get back to the ticket.
+  card.querySelector('[data-tracebug="view-ticket"]')?.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const root = document.getElementById("tracebug-root");
+    if (root && !isQuickBugOpen()) {
+      showQuickBugCapture(root, { sessionId: session.sessionId }).catch(() => {});
+    }
+  });
+
+  // "Details" keeps the existing in-panel detail view.
+  card.querySelector('[data-tracebug="open-detail"]')?.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    renderSessionDetail(panel, session);
+  });
+
+  // Whole-card click still opens the detail view for back-compat.
   card.onclick = () => renderSessionDetail(panel, session);
   return card;
 }
