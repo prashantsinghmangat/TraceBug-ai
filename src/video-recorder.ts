@@ -50,7 +50,48 @@ let _mode: "rolling" | "standard" = "rolling";
 let _comments: VideoComment[] = [];
 let _capturesTaken = 0;
 let _lastRecording: VideoRecording | null = null;
-let _onStatus: ((status: "recording" | "stopped" | "error", message?: string) => void) | null = null;
+let _onStatus: ((status: "recording" | "stopped" | "error" | "warning", message?: string) => void) | null = null;
+
+// ── Cloud share duration cap ─────────────────────────────────────────────
+// Free-tier cloud share allows max 2 min videos (50 MB upload cap at typical
+// WebM quality). Warn at 1:30, final warning at 1:55, auto-stop at 2:00.
+// All recordings are capped — users who don't want the limit simply don't
+// upload (the existing local .html export is unaffected by this).
+
+const MAX_CLOUD_RECORDING_S = 120;
+const WARN_AT_S = 90;
+const FINAL_WARN_AT_S = 115;
+
+let _warnTimer: ReturnType<typeof setTimeout> | null = null;
+let _finalWarnTimer: ReturnType<typeof setTimeout> | null = null;
+let _autoStopTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearDurationCapTimers(): void {
+  if (_warnTimer) { clearTimeout(_warnTimer); _warnTimer = null; }
+  if (_finalWarnTimer) { clearTimeout(_finalWarnTimer); _finalWarnTimer = null; }
+  if (_autoStopTimer) { clearTimeout(_autoStopTimer); _autoStopTimer = null; }
+}
+
+function scheduleDurationCap(): void {
+  clearDurationCapTimers();
+  _warnTimer = setTimeout(() => {
+    if (!_active) return;
+    _onStatus?.("warning", `${MAX_CLOUD_RECORDING_S - WARN_AT_S} seconds left in recording — cloud share limit is ${MAX_CLOUD_RECORDING_S / 60} min`);
+  }, WARN_AT_S * 1000);
+  _finalWarnTimer = setTimeout(() => {
+    if (!_active) return;
+    _onStatus?.("warning", `Recording stops in ${MAX_CLOUD_RECORDING_S - FINAL_WARN_AT_S} seconds`);
+  }, FINAL_WARN_AT_S * 1000);
+  _autoStopTimer = setTimeout(async () => {
+    if (!_active) return;
+    try {
+      const recording = await stopVideoRecording();
+      _onAutoStop?.(recording);
+    } catch {
+      _onAutoStop?.(null);
+    }
+  }, MAX_CLOUD_RECORDING_S * 1000);
+}
 
 // ── In-page-only state (null when extension transport is in use) ─────────
 
@@ -118,7 +159,7 @@ let _startInFlight: Promise<boolean> | null = null;
 export async function startVideoRecording(options?: {
   mode?: "rolling" | "standard";
   withMicrophone?: boolean;
-  onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
+  onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
 }): Promise<boolean> {
   if (_active) return false;
   if (_startInFlight) return _startInFlight;
@@ -129,7 +170,7 @@ export async function startVideoRecording(options?: {
 async function _startVideoRecordingInner(options?: {
   mode?: "rolling" | "standard";
   withMicrophone?: boolean;
-  onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
+  onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
 }): Promise<boolean> {
   _onStatus = options?.onStatus || null;
   const requestedMode = options?.mode === "standard" ? "standard" : "rolling";
@@ -385,10 +426,19 @@ async function startVideoRecordingInPage(
     if (e.data && e.data.size > 0) _chunks.push(e.data);
   };
 
-  // Native "Stop sharing" → finalize.
+  // Native "Stop sharing" → finalize the recording AND fire the auto-stop
+  // callback so the SDK's host (toolbar) can reset its button state, hide
+  // the recording HUD, and open the bug ticket modal. Without this, the
+  // toolbar stays "recording…" forever from the user's POV.
   displayStream.getVideoTracks().forEach(track => {
-    track.addEventListener("ended", () => {
-      if (_active) stopVideoRecording().catch(() => {});
+    track.addEventListener("ended", async () => {
+      if (!_active) return;
+      try {
+        const recording = await stopVideoRecording();
+        _onAutoStop?.(recording);
+      } catch {
+        _onAutoStop?.(null);
+      }
     });
   });
 
@@ -397,6 +447,10 @@ async function startVideoRecordingInPage(
 
   // Page-reload safety net: warn the user, and finalize chunks on pagehide.
   installInPageReloadGuards();
+
+  // Schedule the 2-min cloud-share cap — warnings at 1:30 / 1:55, auto-stop
+  // at 2:00. Cleared on any stop path so manual stops don't double-fire.
+  scheduleDurationCap();
 
   _onStatus?.("recording");
   return true;
@@ -415,11 +469,16 @@ function stopVideoRecordingInPage(): Promise<VideoRecording | null> {
     const mimeType = _mimeType || "video/webm";
     const comments = _comments.slice();
 
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       const blob = new Blob(_chunks, { type: mimeType });
       const url = URL.createObjectURL(blob);
+      // Encode to base64 dataUrl so revokeAndStash()'s isUsableRecording
+      // check passes AND the HTML exporter has a stable string source that
+      // survives modal close / re-open / page reload (blob URLs get revoked).
+      let dataUrl: string | undefined;
+      try { dataUrl = await blobToDataUrl(blob); } catch { dataUrl = undefined; }
       const recording: VideoRecording = {
-        url, blob,
+        url, blob, dataUrl,
         durationMs: Date.now() - startedAt,
         mimeType,
         sizeBytes: blob.size,
@@ -441,6 +500,17 @@ function stopVideoRecordingInPage(): Promise<VideoRecording | null> {
   });
 }
 
+// FileReader-based blob → base64 dataUrl. Returns a Promise so the in-page
+// recording path can await it before stashing.
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function captureRollingBufferInPage(): Promise<VideoRecording | null> {
   return new Promise((resolve) => {
     if (!_recorder || _recorder.state !== "recording") {
@@ -454,14 +524,18 @@ function captureRollingBufferInPage(): Promise<VideoRecording | null> {
     const commentsCopy = _comments.slice();
     const originalOnData = recorder.ondataavailable;
 
-    const flushOnce = (e: BlobEvent) => {
+    const flushOnce = async (e: BlobEvent) => {
       if (originalOnData) originalOnData.call(recorder, e);
       recorder.ondataavailable = originalOnData;
 
       const blob = new Blob(_chunks.slice(), { type: mimeType });
       const url = URL.createObjectURL(blob);
+      // Same rationale as stopVideoRecordingInPage — generate dataUrl so
+      // revokeAndStash() accepts the recording and the exporter can embed it.
+      let dataUrl: string | undefined;
+      try { dataUrl = await blobToDataUrl(blob); } catch { dataUrl = undefined; }
       const recording: VideoRecording = {
-        url, blob,
+        url, blob, dataUrl,
         durationMs: Date.now() - startedAt,
         mimeType,
         sizeBytes: blob.size,
@@ -530,6 +604,9 @@ function finalizeStop(_recording: VideoRecording | null): void {
   _capturesTaken = 0;
   _startedAt = 0;
   _mode = "rolling";
+  // Clear duration-cap timers so a stop-then-restart sequence doesn't fire
+  // stale warnings on the new recording.
+  clearDurationCapTimers();
 }
 
 function isUsableRecording(rec: VideoRecording | null | undefined): rec is VideoRecording {

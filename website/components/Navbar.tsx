@@ -114,6 +114,12 @@ export default function Navbar() {
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-3">
+          <Link
+            href="/auth"
+            className="px-4 py-2 text-sm text-text-muted hover:text-text-primary transition-colors duration-200 font-medium"
+          >
+            Sign in
+          </Link>
           <a
             href="https://github.com/prashantsinghmangat/tracebug-ai"
             target="_blank"
@@ -167,6 +173,13 @@ export default function Navbar() {
               </a>
             ))}
             <div className="pt-3 pb-1 border-t border-border mt-3 flex flex-col gap-2">
+              <Link
+                href="/auth"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block w-full px-4 py-2.5 text-sm text-center text-text-primary border border-border hover:border-primary/50 rounded-lg transition-colors font-medium"
+              >
+                Sign in
+              </Link>
               <a
                 href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
                 target="_blank"

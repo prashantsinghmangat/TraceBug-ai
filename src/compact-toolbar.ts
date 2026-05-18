@@ -440,6 +440,7 @@ async function _toggleVideoRecording(
     mode: "rolling",
     onStatus: (status, message) => {
       if (status === "error" && message) showToast(`Recording error: ${message}`, root);
+      else if (status === "warning" && message) showToast(message, root);
     },
   });
   if (!ok) {
