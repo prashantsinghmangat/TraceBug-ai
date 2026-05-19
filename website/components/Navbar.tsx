@@ -18,7 +18,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "#demo", label: "Demo", highlight: true },
     { href: "#features", label: "Features" },
-    { href: "#how-it-works", label: "How It Works" },
+    { href: "/pricing", label: "Pricing" },
     { href: "/docs", label: "Docs" },
     { href: "#install", label: "Install" },
     { href: "https://github.com/prashantsinghmangat/tracebug-ai", label: "GitHub", external: true },

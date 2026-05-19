@@ -9,22 +9,38 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#0B0B0F",
-        primary: "#6C5CE7",
-        accent: "#00D4FF",
-        surface: "#13131A",
-        border: "#1E1E2E",
-        "text-muted": "#8892A4",
-        "text-primary": "#E8EAED",
+        // Cyber-graphite palette — same family as Linear / Vercel / Raycast.
+        // Deliberately desaturated darks; only the violet/cyan accents pop.
+        background: "#0B0D10",
+        surface: "#11151A",
+        "surface-2": "#161B22",
+        border: "#1F2630",
+        "border-strong": "#2A3441",
+        primary: "#7C5CFF",
+        "primary-soft": "#7C5CFF1A",
+        accent: "#00D9FF",
+        success: "#22C55E",
+        error: "#FF5D73",
+        warning: "#F59E0B",
+        "text-primary": "#E6EDF3",
+        "text-muted": "#94A3B8",
+        "text-subtle": "#64748B",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        // Wired up via the `geist` package in app/layout.tsx — its default
+        // variables are --font-geist-sans + --font-geist-mono.
+        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
+        mono: ["var(--font-geist-mono)", "JetBrains Mono", "monospace"],
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+        // Subtle dot grid for backgrounds — devtool-y without being noisy.
+        "grid-dot": "radial-gradient(circle, #1F2630 1px, transparent 1px)",
+      },
+      backgroundSize: {
+        "grid-dot": "24px 24px",
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
@@ -42,9 +58,11 @@ const config: Config = {
         },
       },
       boxShadow: {
-        "glow-primary": "0 0 20px rgba(108, 92, 231, 0.3)",
-        "glow-accent": "0 0 20px rgba(0, 212, 255, 0.3)",
-        "glow-sm": "0 0 10px rgba(108, 92, 231, 0.2)",
+        // Glows tuned for the new violet (#7C5CFF) — pulled back from the
+        // previous bright bloom to feel more like a backlit terminal.
+        "glow-primary": "0 0 32px rgba(124, 92, 255, 0.22)",
+        "glow-accent": "0 0 32px rgba(0, 217, 255, 0.22)",
+        "glow-sm": "0 0 12px rgba(124, 92, 255, 0.18)",
       },
     },
   },

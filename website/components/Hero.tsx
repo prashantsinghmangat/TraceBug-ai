@@ -2,62 +2,65 @@
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0 grid-bg opacity-50" />
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
-      <div className="absolute top-1/2 left-1/4 w-[400px] h-[400px] rounded-full bg-accent/5 blur-[100px] pointer-events-none" />
+    <section className="relative min-h-screen flex items-center pt-16 overflow-hidden noise">
+      {/* Background: dot grid + a single restrained violet glow.
+          Replaces the old two-bloom + grid combo — same depth, less candy. */}
+      <div className="absolute inset-0 grid-bg opacity-40 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] rounded-full bg-primary/[0.06] blur-[140px] pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           {/* Left: Copy */}
           <div className="text-center lg:text-left">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-border text-sm text-text-muted mb-6">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400"></span>
+            {/* Badge — terminal-style mono, restrained */}
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface/80 border border-border text-[11px] font-mono uppercase tracking-wider text-text-muted mb-7">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
               </span>
-              Your debugging assistant &bull; Zero setup &bull; Free
+              <span>Local-first</span>
+              <span className="text-text-subtle">·</span>
+              <span>No backend</span>
+              <span className="text-text-subtle">·</span>
+              <span>v1.4</span>
             </div>
 
-            {/* Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-text-primary leading-tight mb-6">
-              Stop opening DevTools{" "}
-              <span className="gradient-text">for every bug</span>
+            {/* Headline — tighter tracking, larger size at lg, premium weight */}
+            <h1 className="text-[40px] sm:text-5xl lg:text-[64px] font-semibold text-text-primary leading-[1.05] tracking-[-0.03em] mb-6">
+              Bug reports your dev can{" "}
+              <span className="gradient-text">actually open</span>
             </h1>
 
-            {/* Subheadline */}
-            <p className="text-text-muted text-lg sm:text-xl leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
-              Capture a bug →{" "}
-              <span className="text-text-primary font-medium">
-                instantly know the likely cause
-              </span>{" "}
-              → create a GitHub issue in one click.
+            {/* Subheadline — looser, lower contrast */}
+            <p className="text-text-muted text-base sm:text-lg leading-[1.65] mb-9 max-w-[540px] mx-auto lg:mx-0">
+              One click → one self-contained{" "}
+              <code className="font-mono text-[0.92em] text-text-primary bg-surface border border-border rounded px-1.5 py-0.5">.html</code>{" "}
+              file. Recipient opens it offline. Full replay, console errors, network
+              requests, screenshots. No account. No SaaS lock-in.
+              Cloud sharing optional.
             </p>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
+            {/* CTAs — tighter, devtool-y */}
+            <div className="flex flex-col sm:flex-row gap-2.5 justify-center lg:justify-start">
               <a
                 href="#install"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl transition-all duration-200 shadow-glow-primary hover:shadow-glow-primary text-sm"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-all duration-150 shadow-glow-sm hover:shadow-glow-primary text-[13px] tracking-tight"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round"/>
+                Get started — free
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
                 </svg>
-                Get Started Free
               </a>
               <a
                 href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 text-text-primary border border-border hover:border-primary/50 hover:bg-surface font-semibold rounded-xl transition-all duration-200 text-sm"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-text-primary bg-surface/60 border border-border hover:border-border-strong hover:bg-surface font-medium rounded-lg transition-all duration-150 text-[13px] tracking-tight"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" strokeLinecap="round"/>
-                  <path d="M8 12l4 4 4-4M12 8v8" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-text-muted">
+                  <path d="M12 0C5.4 0 0 5.4 0 12c0 4.3 2.3 8 5.6 10.1l3.7-6.4c-.6-.7-1-1.6-1-2.5C8.3 11 9.9 9.4 12 9.4h11.7C22.4 4 17.6 0 12 0z"/>
                 </svg>
-                Install Chrome Extension
+                Chrome Extension
               </a>
             </div>
 
@@ -67,19 +70,19 @@ export default function Hero() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-400">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                Works with your existing workflow
+                Reports stay on your machine
               </div>
               <div className="flex items-center gap-1.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-400">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                No setup, no config
+                No dashboard, no account required
               </div>
               <div className="flex items-center gap-1.5">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-green-400">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                Privacy-first
+                Works offline · zero dependencies
               </div>
             </div>
           </div>

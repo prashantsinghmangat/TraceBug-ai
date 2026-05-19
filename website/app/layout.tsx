@@ -1,18 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tracebug.netlify.app"),
-  title: "TraceBug — Automatic Bug Reporting for Developers",
+  title: "TraceBug — Bug reports your dev can actually open",
   description:
-    "TraceBug — Stop opening DevTools for every bug. Capture bugs, see root causes, create GitHub issues in seconds. Zero backend, browser only, free. Try the interactive demo.",
+    "Local-first bug reports. One click → one .html file with the full replay, console errors, network requests, and screenshots. Your dev opens it offline. No account. No SaaS lock-in. Cloud sharing optional.",
   keywords: [
     "bug reporting",
     "QA testing",
@@ -31,9 +26,9 @@ export const metadata: Metadata = {
     apple: "/apple-icon.svg",
   },
   openGraph: {
-    title: "TraceBug — Automatic Bug Reporting for Developers",
+    title: "TraceBug — Bug reports your dev can actually open",
     description:
-      "TraceBug records user sessions and generates developer-ready bug reports with steps, screenshots, console errors, and network logs.",
+      "Local-first bug reports. One .html file with replay, console errors, network requests, screenshots. No account, no SaaS lock-in.",
     type: "website",
     url: "https://tracebug.netlify.app",
     siteName: "TraceBug",
@@ -48,9 +43,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "TraceBug — Automatic Bug Reporting for Developers",
+    title: "TraceBug — Bug reports your dev can actually open",
     description:
-      "TraceBug records user sessions and generates developer-ready bug reports automatically.",
+      "Local-first bug reports. One .html file your dev opens offline. No SaaS lock-in.",
     images: ["/api/og"],
   },
   robots: {
@@ -71,7 +66,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
         <script
           type="application/ld+json"

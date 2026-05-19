@@ -4,6 +4,42 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+### Cloud sharing portal (Phase 6)
+
+The local `.html` export still works exactly as before — this is an **optional** sharing layer on top of it. Local-first stays the product's spine.
+
+#### Added
+
+- **`TraceBug.shareReport()`** — uploads the bug report to TraceBug's cloud and returns a public URL like `https://tracebug.netlify.app/share/<id>`. Recipient opens it in a browser without installing anything. (`src/exporters/share-link.ts`)
+- **Sign-in via Supabase magic link** — `TraceBug.signIn()` / `TraceBug.signOut()` / `TraceBug.getCurrentUser()`. Auth happens in a hidden iframe pointed at `tracebug.netlify.app/sdk-bridge`, so the customer's site never sees the auth token. (`src/auth/iframe-bridge.ts`, `website/app/sdk-bridge/page.tsx`)
+- **🔗 Share link button** in the Bug Ticket modal next to "📦 Export .html". Shows inline spinner during upload; opens the public viewer in a new tab on success. (`src/ui/quick-bug.ts`)
+- **Per-user quotas**: 5 active video shares + 10 active screenshot shares, max 5 screenshots per share, 50 MB upload cap. Enforced both client- and server-side. (`website/lib/quotas.ts`)
+- **Screenshot trim picker** — when a report has more than 5 screenshots, a modal lets the user choose which 5 to upload (numbered selection, max-cap, grid view). Cancel preserves local report unchanged. (`src/ui/screenshot-trim-modal.ts`)
+- **2-min video duration cap for cloud uploads** with warnings at 1:30 and 1:55, auto-stop at 2:00. Local recording stays uncapped if `shareReport()` is never called. (`src/video-recorder.ts`)
+- **Pre-upload sanitization** — strips `Authorization` headers, password fields, and common token shapes (JWT, OpenAI `sk-`, Stripe, GitHub PAT, AWS keys, Slack tokens, Google API keys) from network logs, console output, and URLs before anything leaves the browser. Local download path keeps the unsanitized original. (`src/sanitize/cloud-upload.ts`)
+- **Dashboard at `/dashboard`** — Jam.dev-style sidebar + grid layout with quota bars, real thumbnail previews (320×180 JPEG generated from the first screenshot or video frame at upload time), Copy / Extend +14d / Delete actions, video / screenshot filters, search. (`website/app/dashboard/*`)
+- **Public viewer at `/share/[token]`** — no login required. Server fetches via service-role client with 5-min signed download URLs; renders report in sandboxed `<iframe srcdoc>`. OG tags so links unfurl in Slack/Teams. (`website/app/share/[token]/page.tsx`)
+- **14-day default retention**, user-extendable +14d per click. Nightly `pg_cron` soft-deletes expired rows; hourly Netlify cron purges Storage objects. (`website/supabase/migrations/0001_initial.sql`, `website/app/api/cron/purge-expired/route.ts`)
+- **Chrome extension popup gets a cloud account block** — shows signed-in email + quota (`🎥 X/5 · 📸 Y/10`), Sign-in button when out, dashboard link, sign-out. Reads endpoint from `chrome.storage.local.tracebug_cloud_endpoint` (default: production). (`tracebug-extension/popup.{html,js}`)
+- **CORS middleware** echoes `Access-Control-Allow-Origin` for `chrome-extension://` and `moz-extension://` origins on `/api/*`. (`website/middleware.ts`)
+- **`docs/SHARE-PORTAL-PLAN.md`** — the full design spec for the cloud sharing portal (architecture, quotas, RLS, files-changed, deployment, security checklist).
+- **`docs/PROJECT-CONTEXT.md`** — single-doc orientation for agents/contributors picking up the project cold.
+
+#### Database
+
+- New table `public.sessions` with RLS policies (`sessions_select_own` / `_insert_own` / `_update_own` / `_delete_own`).
+- New Storage RLS on `storage.objects` for the `reports` bucket — users can only PUT/GET/DELETE under their own `<user_id>/` folder.
+- New `pg_cron` job `tracebug-expire-shares` runs daily at 03:00 UTC.
+
+#### Internal
+
+- Refactored `src/exporters/html-replay.ts` to extract `buildReplayPayload()` so the local download and cloud upload paths share the same assembly logic — touching one updates both.
+- Fixed pre-existing bug in `src/video-recorder.ts` where in-page recordings were silently dropped: `isUsableRecording()` required a `dataUrl` that the in-page path never generated. Now FileReader-encodes the blob → base64 dataUrl before stashing.
+- Fixed pre-existing bug where browser-native "Stop sharing" didn't trigger the toolbar UI reset (only the SDK's own Stop button did). The in-page `track.ended` handler now fires `_onAutoStop` callback too.
+- Fixed pre-existing build break in `src/exporters/html-template.ts` where unescaped backticks inside a comment inside a template literal confused esbuild.
+
+### Phase 5 — Console tab → unified event feed
+
 ### Phase 5 — Console tab → unified event feed
 
 #### Changed
