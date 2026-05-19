@@ -1,8 +1,9 @@
 <h1 align="center">TraceBug</h1>
 
 <p align="center">
-  <strong>Stop wasting time debugging bugs.</strong><br>
-  Capture &rarr; Know the cause &rarr; Create GitHub issue &mdash; <em>in 5 seconds</em>.
+  <strong>Bug reports your dev can actually open.</strong><br>
+  Local-first. One <code>.html</code> file with full replay, console errors,
+  network requests, and screenshots. Opens offline.
 </p>
 
 <p align="center">
@@ -24,16 +25,18 @@
 
 ---
 
-TraceBug is a browser-only debugging assistant that captures a bug, tells you the likely cause, and creates a GitHub issue in one click.
+TraceBug is a local-first debugging assistant. Capture a bug → produce a single self-contained `.html` file → email/Slack it to a dev → they open it offline and see exactly what happened.
 
-Every report now opens with:
+Every report opens with:
 
 ```
 🔍 Possible Cause (high confidence): API POST /orders failed with 500 after clicking 'Place Order'
 > TL;DR: TypeError thrown on /checkout when clicking 'Place Order' button
 ```
 
-No servers. No databases. No API keys. Data stays in your browser.
+No accounts. No SaaS lock-in. Data stays in your browser by default.
+
+**Optional cloud sharing** (new in v1.4): if you'd rather share a URL than a file, sign in once and get a `tracebug.netlify.app/share/<id>` link with the same content. Free, 5 video + 10 screenshot shares per account.
 
 **Works with any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, SvelteKit, Remix, Astro, or plain HTML.
 
