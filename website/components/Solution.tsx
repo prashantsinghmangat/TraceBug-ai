@@ -107,12 +107,13 @@ export default function Solution() {
             The Solution
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-text-primary mb-4">
-            Meet your{" "}
-            <span className="gradient-text">debugging assistant</span>
+            Everything your dev needs,{" "}
+            <span className="gradient-text">in one .html file</span>
           </h2>
           <p className="text-text-muted text-lg max-w-2xl mx-auto">
-            TraceBug captures everything automatically — logs, network errors,
-            user actions — and tells you what likely went wrong.
+            TraceBug captures logs, network calls, screenshots, and user actions —
+            then bundles them into a single self-contained file your dev opens
+            offline. No accounts. No dashboards. No SaaS lock-in.
           </p>
         </div>
 
