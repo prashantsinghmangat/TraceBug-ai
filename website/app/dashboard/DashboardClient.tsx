@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  Package,
+  Video,
+  Image as ImageIcon,
+  Inbox,
+  Trash2,
+  Play,
+  Camera,
+  type LucideIcon,
+} from "lucide-react";
 
 interface SessionItem {
   id: string;
@@ -123,9 +133,9 @@ export default function DashboardClient({
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
-          <SidebarLink active={filter === "all"} onClick={() => setFilter("all")} icon="📦" label="All Shares" count={sessions.length} />
-          <SidebarLink active={filter === "video"} onClick={() => setFilter("video")} icon="🎥" label="Video Shares" count={videoUsed} />
-          <SidebarLink active={filter === "screenshot"} onClick={() => setFilter("screenshot")} icon="📸" label="Screenshot Shares" count={screenshotUsed} />
+          <SidebarLink active={filter === "all"} onClick={() => setFilter("all")} Icon={Package} label="All Shares" count={sessions.length} />
+          <SidebarLink active={filter === "video"} onClick={() => setFilter("video")} Icon={Video} label="Video Shares" count={videoUsed} />
+          <SidebarLink active={filter === "screenshot"} onClick={() => setFilter("screenshot")} Icon={ImageIcon} label="Screenshot Shares" count={screenshotUsed} />
 
           <div className="pt-6 pb-2 px-3 text-xs uppercase tracking-wide text-gray-500">Folders</div>
           <div className="px-3 py-2 text-xs text-gray-600">Coming soon</div>
@@ -206,8 +216,8 @@ export default function DashboardClient({
   );
 }
 
-function SidebarLink({ active, onClick, icon, label, count }: {
-  active: boolean; onClick: () => void; icon: string; label: string; count: number;
+function SidebarLink({ active, onClick, Icon, label, count }: {
+  active: boolean; onClick: () => void; Icon: LucideIcon; label: string; count: number;
 }) {
   return (
     <button
@@ -216,9 +226,9 @@ function SidebarLink({ active, onClick, icon, label, count }: {
         active ? "bg-gray-800 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800/60"
       }`}
     >
-      <span className="text-base">{icon}</span>
+      <Icon size={15} strokeWidth={1.75} className="flex-shrink-0" />
       <span className="flex-1 text-left">{label}</span>
-      {count > 0 && <span className="text-xs text-gray-500">{count}</span>}
+      {count > 0 && <span className="text-xs text-gray-500 tabular-nums">{count}</span>}
     </button>
   );
 }
@@ -264,10 +274,10 @@ function EmptyState({ filter, hasAny, onClear }: { filter: Filter; hasAny: boole
   if (!hasAny) {
     return (
       <div className="rounded-lg border border-dashed border-gray-800 p-16 text-center">
-        <div className="text-4xl mb-4">📭</div>
+        <Inbox size={36} strokeWidth={1.5} className="mx-auto mb-4 text-gray-600" />
         <h3 className="text-lg font-medium mb-2">No shares yet</h3>
         <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
-          Install the TraceBug SDK or Chrome extension on your site, capture a bug, and click 🔗 Share link in the bug ticket modal.
+          Install the TraceBug SDK or Chrome extension on your site, capture a bug, and click Share link in the bug ticket modal.
         </p>
         <a href="/docs" target="_blank" rel="noreferrer" className="text-sm text-violet-400 hover:text-violet-300">View docs →</a>
       </div>
@@ -327,8 +337,8 @@ function ShareCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={s.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-5xl opacity-50">{s.has_video ? "🎥" : "📸"}</span>
+          <div className="absolute inset-0 flex items-center justify-center text-white/35">
+            {s.has_video ? <Video size={44} strokeWidth={1.5} /> : <Camera size={44} strokeWidth={1.5} />}
           </div>
         )}
         {/* Play overlay — shown only for video shares so they're visually
@@ -336,9 +346,7 @@ function ShareCard({
         {s.has_video && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="white" className="ml-1">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
+              <Play size={22} fill="white" stroke="white" className="ml-1" />
             </div>
           </div>
         )}
@@ -351,13 +359,14 @@ function ShareCard({
           <span className="text-xs font-medium text-white">{workspaceName}</span>
         </div>
         {/* Type badge — clarifies video vs screenshot at a glance */}
-        <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm rounded px-2 py-1">
-          <span className="text-xs font-medium text-white">{s.has_video ? "🎥 Video" : "📸 Shot"}</span>
+        <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm rounded px-2 py-1 flex items-center gap-1.5">
+          {s.has_video ? <Video size={11} strokeWidth={2} className="text-white" /> : <Camera size={11} strokeWidth={2} className="text-white" />}
+          <span className="text-xs font-medium text-white">{s.has_video ? "Video" : "Shot"}</span>
         </div>
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded px-2 py-1">
+        <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm rounded px-2 py-1">
           {duration ? (
             <>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+              <Play size={10} fill="white" stroke="white" />
               <span className="text-xs font-medium text-white tabular-nums">{duration}</span>
             </>
           ) : (
@@ -393,9 +402,12 @@ function ShareCard({
           <button
             onClick={onDelete}
             disabled={pending}
-            className="px-2 py-1.5 text-xs rounded border border-red-900 text-red-400 hover:bg-red-900/30 disabled:opacity-50"
+            className="px-2.5 py-1.5 text-xs rounded border border-red-900 text-red-400 hover:bg-red-900/30 disabled:opacity-50 flex items-center justify-center"
             title="Delete"
-          >🗑</button>
+            aria-label="Delete"
+          >
+            <Trash2 size={13} strokeWidth={1.75} />
+          </button>
         </div>
       </div>
     </article>

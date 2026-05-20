@@ -5,7 +5,7 @@
 // the html2canvas fallback in plain-SDK context — no new heavy deps.
 
 import { ScreenshotData } from "./types";
-import { captureScreenshot } from "./screenshot";
+import { captureScreenshot, loadHtml2CanvasShared, pushScreenshot } from "./screenshot";
 
 interface Rect { x: number; y: number; w: number; h: number; }
 
@@ -78,15 +78,59 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
       if (rect.w < 5 || rect.h < 5) { resolve(null); return; }
 
       try {
+        // Prefer html2canvas directly with the absolute (document-space)
+        // selection rect. captureScreenshot+crop didn't survive scrolled
+        // pages — html2canvas renders from document origin, not viewport,
+        // so a viewport-space crop landed in the wrong place.
+        const renderer = await loadHtml2CanvasShared();
+        if (renderer) {
+          const docX = window.scrollX + rect.x;
+          const docY = window.scrollY + rect.y;
+          const canvas = await renderer(document.body, {
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            scale: window.devicePixelRatio || 1,
+            x: docX,
+            y: docY,
+            width: rect.w,
+            height: rect.h,
+            windowWidth: document.documentElement.scrollWidth,
+            windowHeight: document.documentElement.scrollHeight,
+            ignoreElements: (el: Element) => {
+              if (el.id === "tracebug-root") return true;
+              if ((el as HTMLElement).dataset?.tracebug) return true;
+              return false;
+            },
+          });
+          const dataUrl = canvas.toDataURL("image/png", 0.92);
+          const ts = Date.now();
+          const ss: ScreenshotData = {
+            id: `ss_${ts}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: ts,
+            dataUrl,
+            filename: `region-${new Date(ts).toISOString().replace(/[:.]/g, "-").slice(0, 19)}.png`,
+            eventContext: "Region screenshot",
+            page: location.pathname,
+            width: rect.w,
+            height: rect.h,
+          };
+          pushScreenshot(ss);
+          resolve(ss);
+          return;
+        }
+        // Fallback (extension-only context, no html2canvas available):
+        // use the legacy capture-then-crop path. captureVisibleTab returns
+        // the visible viewport so the crop math still aligns. The base
+        // captureScreenshot already pushed the full image to the store —
+        // overwrite its dataUrl in place so the store reflects the crop.
         const full = await captureScreenshot(null);
         const cropped = await cropDataUrl(full.dataUrl, rect);
-        resolve({
-          ...full,
-          dataUrl: cropped,
-          width: rect.w,
-          height: rect.h,
-          filename: full.filename.replace(/\.png$/, "_region.png"),
-        });
+        full.dataUrl = cropped;
+        full.width = rect.w;
+        full.height = rect.h;
+        full.filename = full.filename.replace(/\.png$/, "_region.png");
+        resolve(full);
       } catch (err) {
         console.warn("[TraceBug] Region screenshot failed:", err);
         resolve(null);

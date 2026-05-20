@@ -1893,7 +1893,20 @@ function showToast(message: string, root: HTMLElement): void {
 // Provides draw tools: rectangle highlight, arrow, and text overlay.
 // All drawing is done on a canvas overlay on top of the screenshot.
 
-function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): void {
+/** Opens the screenshot annotation editor (highlight / arrow / text +
+ *  4 colors + undo/clear). When the user saves, the optional `onSave`
+ *  callback fires with the new dataUrl + dimensions so callers can persist
+ *  the annotated version back to the active ticket. */
+export function showAnnotationEditor(
+  screenshot: ScreenshotData,
+  root: HTMLElement,
+  onSave?: (patch: { dataUrl: string; filename: string; width: number; height: number }) => void,
+): void {
+  (showAnnotationEditor as any)._onSave = onSave;
+  _showAnnotationEditorImpl(screenshot, root);
+}
+
+function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement): void {
   const overlay = document.createElement("div");
   overlay.id = "bt-annotation-overlay";
   overlay.style.cssText = `
@@ -1919,7 +1932,8 @@ function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): vo
   const toolbarHtml = `
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
       <span style="color:var(--tb-text-muted, #888);font-size:11px;margin-right:8px">ANNOTATE:</span>
-      <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(true)}">▭ Highlight</button>
+      <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">✎ Pen</button>
+      <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">▭ Highlight</button>
       <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">→ Arrow</button>
       <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">T Text</button>
       <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
@@ -1978,11 +1992,14 @@ function showAnnotationEditor(screenshot: ScreenshotData, root: HTMLElement): vo
 }
 
 interface DrawAction {
-  type: "rect" | "arrow" | "text";
+  type: "rect" | "arrow" | "text" | "pen";
   color: string;
   startX: number; startY: number;
   endX: number; endY: number;
   text?: string;
+  /** Freeform stroke points for the pen tool. When present, the renderer
+   *  ignores startX/Y/endX/Y and uses this sequence instead. */
+  points?: { x: number; y: number }[];
 }
 
 function initAnnotationCanvas(
@@ -1995,10 +2012,11 @@ function initAnnotationCanvas(
 ): void {
   const ctx = canvas.getContext("2d")!;
   const actions: DrawAction[] = [];
-  let currentTool: "rect" | "arrow" | "text" = "rect";
+  let currentTool: "rect" | "arrow" | "text" | "pen" = "pen";
   let currentColor = "#ef4444";
   let isDrawing = false;
   let startX = 0, startY = 0;
+  let currentStroke: { x: number; y: number }[] = [];
 
   function redraw(): void {
     ctx.clearRect(0, 0, width, height);
@@ -2011,6 +2029,19 @@ function initAnnotationCanvas(
     c.strokeStyle = a.color;
     c.fillStyle = a.color;
     c.lineWidth = 2.5;
+
+    if (a.type === "pen" && a.points && a.points.length > 0) {
+      c.lineCap = "round";
+      c.lineJoin = "round";
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(a.points[0].x, a.points[0].y);
+      for (let i = 1; i < a.points.length; i++) {
+        c.lineTo(a.points[i].x, a.points[i].y);
+      }
+      c.stroke();
+      return;
+    }
 
     if (a.type === "rect") {
       const w = a.endX - a.startX;
@@ -2072,7 +2103,7 @@ function initAnnotationCanvas(
         (btn as HTMLElement).style.border = `2px solid #fff`;
         return;
       }
-      currentTool = tool as "rect" | "arrow" | "text";
+      currentTool = tool as "rect" | "arrow" | "text" | "pen";
       // Update active state
       overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach(tb => {
         (tb as HTMLElement).style.background = "#22222244";
@@ -2100,6 +2131,12 @@ function initAnnotationCanvas(
       return;
     }
 
+    if (currentTool === "pen") {
+      isDrawing = true;
+      currentStroke = [{ x: startX, y: startY }];
+      return;
+    }
+
     isDrawing = true;
   });
 
@@ -2108,6 +2145,19 @@ function initAnnotationCanvas(
     const rect = canvas.getBoundingClientRect();
     const curX = e.clientX - rect.left;
     const curY = e.clientY - rect.top;
+
+    if (currentTool === "pen") {
+      // Append the new point and redraw the in-progress stroke. Subsample
+      // tiny movements (<1.5 px) so the stroke array stays manageable on
+      // long drags without losing visible smoothness.
+      const last = currentStroke[currentStroke.length - 1];
+      if (!last || Math.hypot(curX - last.x, curY - last.y) > 1.5) {
+        currentStroke.push({ x: curX, y: curY });
+      }
+      redraw();
+      drawAction(ctx, { type: "pen", color: currentColor, startX: 0, startY: 0, endX: 0, endY: 0, points: currentStroke });
+      return;
+    }
 
     // Preview
     redraw();
@@ -2121,6 +2171,22 @@ function initAnnotationCanvas(
     const rect = canvas.getBoundingClientRect();
     const endX = e.clientX - rect.left;
     const endY = e.clientY - rect.top;
+
+    if (currentTool === "pen") {
+      // Need at least 2 points + a few pixels of travel to count. Single-
+      // click dots get dropped to avoid accidental noise.
+      if (currentStroke.length >= 2) {
+        const first = currentStroke[0];
+        const last = currentStroke[currentStroke.length - 1];
+        const travel = Math.hypot(last.x - first.x, last.y - first.y);
+        if (travel >= 3 || currentStroke.length > 4) {
+          actions.push({ type: "pen", color: currentColor, startX: 0, startY: 0, endX: 0, endY: 0, points: currentStroke.slice() });
+        }
+      }
+      currentStroke = [];
+      redraw();
+      return;
+    }
 
     // Skip tiny drags (accidental clicks)
     if (Math.abs(endX - startX) < 5 && Math.abs(endY - startY) < 5) {
@@ -2144,12 +2210,27 @@ function initAnnotationCanvas(
     redraw();
   });
 
-  // Save annotated — merge annotations into screenshot + auto-download
+  // Save annotated — merge annotations into screenshot, hand the result to
+  // the optional onSave callback (which persists it back to the active
+  // ticket / screenshot store). NO auto-download — the user can still hit
+  // the Download button explicitly if they want a PNG copy.
   overlay.querySelector("#bt-ann-save")!.addEventListener("click", () => {
     const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
     screenshot.dataUrl = merged;
-    downloadScreenshot(merged, screenshot.filename);
-    showToast(`✓ Saved & downloaded: ${screenshot.filename}`, root);
+    const onSave = (showAnnotationEditor as any)._onSave as
+      | ((p: { dataUrl: string; filename: string; width: number; height: number }) => void)
+      | undefined;
+    if (onSave) {
+      try {
+        onSave({
+          dataUrl: merged,
+          filename: screenshot.filename,
+          width: screenshot.width,
+          height: screenshot.height,
+        });
+      } catch {}
+    }
+    showToast(`✓ Annotations saved to ${screenshot.filename}`, root);
     overlay.remove();
   });
 
