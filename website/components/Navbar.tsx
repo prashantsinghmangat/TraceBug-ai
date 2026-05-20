@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { ChromeIcon, GitHubIcon } from "@/components/ui/brand-icons";
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -17,11 +18,9 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "#demo", label: "Demo", highlight: true },
-    { href: "#features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
     { href: "/docs", label: "Docs" },
     { href: "#install", label: "Install" },
-    { href: "https://github.com/prashantsinghmangat/tracebug-ai", label: "GitHub", external: true },
   ];
 
   return (
@@ -77,64 +76,63 @@ export default function Navbar() {
             <circle cx="55" cy="34" r="2.2" fill="#9B7DFF" opacity="0.9"/>
             <circle cx="55" cy="34" r="0.9" fill="white"/>
           </svg>
-          <span className="text-text-primary font-bold text-lg tracking-tight group-hover:text-accent transition-colors">
+          <span className="text-text-primary font-semibold text-[15px] tracking-[-0.02em] group-hover:text-accent transition-colors">
             TraceBug
+          </span>
+          <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded bg-surface border border-border text-[10px] font-mono uppercase tracking-wider text-text-muted">
+            v1.4
           </span>
         </Link>
 
-        {/* Desktop nav links */}
-        <div className="hidden md:flex items-center gap-6">
+        {/* Desktop nav links — all internal now (GitHub moved to icon-only CTA) */}
+        <div className="hidden md:flex items-center gap-5">
           {navLinks.map((link) => (
             <a
               key={link.label}
               href={link.href}
-              target={link.external ? "_blank" : undefined}
-              rel={link.external ? "noopener noreferrer" : undefined}
-              className={`text-sm font-medium transition-colors duration-150 flex items-center gap-1.5 ${
+              className={`text-[13px] font-medium transition-colors duration-150 flex items-center gap-1.5 tracking-tight ${
                 link.highlight
-                  ? "text-primary hover:text-accent"
+                  ? "text-text-primary hover:text-accent"
                   : "text-text-muted hover:text-text-primary"
               }`}
             >
               {link.highlight && (
                 <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
                 </span>
               )}
               {link.label}
-              {link.external && (
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="opacity-50">
-                  <path d="M1 9L9 1M9 1H4M9 1V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                </svg>
-              )}
             </a>
           ))}
         </div>
 
-        {/* Desktop CTA */}
-        <div className="hidden md:flex items-center gap-3">
-          <Link
-            href="/auth"
-            className="px-4 py-2 text-sm text-text-muted hover:text-text-primary transition-colors duration-200 font-medium"
-          >
-            Sign in
-          </Link>
+        {/* Desktop CTA — icons make the actions instantly recognizable */}
+        <div className="hidden md:flex items-center gap-1">
           <a
             href="https://github.com/prashantsinghmangat/tracebug-ai"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-4 py-2 text-sm text-text-muted hover:text-text-primary border border-border hover:border-primary/50 rounded-lg transition-all duration-200 font-medium"
+            aria-label="GitHub"
+            title="GitHub"
+            className="p-2 rounded-md text-text-muted hover:text-text-primary hover:bg-surface/60 transition-colors duration-150"
           >
-            View on GitHub
+            <GitHubIcon size={16} />
           </a>
+          <Link
+            href="/auth"
+            className="px-3 py-1.5 text-[13px] text-text-muted hover:text-text-primary transition-colors duration-150 font-medium tracking-tight"
+          >
+            Sign in
+          </Link>
           <a
             href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-4 py-2 text-sm text-white bg-primary hover:bg-primary/90 rounded-lg transition-all duration-200 font-medium shadow-glow-sm hover:shadow-glow-primary"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] text-white bg-primary hover:bg-primary/90 rounded-md transition-all duration-150 font-medium tracking-tight shadow-glow-sm hover:shadow-glow-primary"
           >
-            Install Extension
+            <ChromeIcon size={14} />
+            Install
           </a>
         </div>
 
@@ -164,8 +162,6 @@ export default function Navbar() {
               <a
                 key={link.label}
                 href={link.href}
-                target={link.external ? "_blank" : undefined}
-                rel={link.external ? "noopener noreferrer" : undefined}
                 className="block px-3 py-2.5 text-text-muted hover:text-text-primary hover:bg-surface rounded-lg text-sm font-medium transition-colors"
                 onClick={() => setIsMobileMenuOpen(false)}
               >

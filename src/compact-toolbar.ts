@@ -15,7 +15,7 @@ import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
-import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
+import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 import { showIssuesPanel, isIssuesPanelOpen } from "./ui/issues-panel";
 import { matchesShortcut } from "./ui/helpers";
 import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, captureRollingBuffer, getCaptureCount } from "./video-recorder";
@@ -101,16 +101,12 @@ export function mountCompactToolbar(
   // Drag handle support
   _initDrag(toolbar);
 
-  // TraceBug logo button (opens panel)
-  toolbar.appendChild(_createToolbarBtn(
-    "TraceBug Dashboard",
-    _logoSvg(),
-    () => _togglePanel(panel, toolbar, showToast),
-    "tracebug-toolbar-panel-btn"
-  ));
-
-  // Divider after logo — separates panel-toggle from action buttons.
-  toolbar.appendChild(_divider());
+  // (The hexagon panel-toggle + divider were removed — the floating
+  // "TraceBug AI" panel duplicated the bug ticket modal and the cloud
+  // dashboard at /dashboard, so we cut it. The panel container in the
+  // DOM is now orphaned but harmless; left in for any plugin that might
+  // still reach for `_renderPanel`.)
+  void panel;
 
   // ⚡ Quick Bug Capture — the daily-use one-shot button
   const quickBugBtn = _createToolbarBtn(
@@ -171,19 +167,22 @@ export function mountCompactToolbar(
   };
 
   // Screenshot button — adds to the active ticket; downloads happen on export.
+  // Auto-opens the bug ticket modal after capture so the user sees where the
+  // screenshot landed. If the modal is already open, just refreshes it.
   toolbar.appendChild(_createToolbarBtn(
     "Screenshot (Ctrl+Shift+S) — added to ticket",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`,
     async () => {
       if (!_checkLimit()) return;
-      showToast("Capturing...", root);
+      showToast("Capturing…", root);
       try {
         const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
         const lastEvent = sessions[0]?.events[sessions[0].events.length - 1] || null;
         await captureScreenshot(lastEvent);
         const n = getScreenshots().length;
         const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
-        showToast(`Added to ticket · ${n}${cap} screenshot${n === 1 ? "" : "s"}`, root);
+        showToast(`✓ Screenshot ${n}${cap} added to ticket`, root);
+        await _openOrRefreshTicket(root);
       } catch {
         showToast("Screenshot failed", root);
       }
@@ -202,7 +201,8 @@ export function mountCompactToolbar(
         if (!ss) { showToast("Cancelled", root); return; }
         const n = getScreenshots().length;
         const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
-        showToast(`Region added to ticket · ${n}${cap} screenshot${n === 1 ? "" : "s"}`, root);
+        showToast(`✓ Region ${n}${cap} added to ticket`, root);
+        await _openOrRefreshTicket(root);
       } catch {
         showToast("Region screenshot failed", root);
       }
@@ -461,6 +461,24 @@ async function _toggleVideoRecording(
     onStop: () => { _toggleVideoRecording(root, btn, showToast).catch(() => {}); },
   });
   showToast("Recording started — hit Stop to file a ticket", root);
+}
+
+/**
+ * Open the bug-ticket modal if it isn't already, otherwise re-render it so
+ * the freshly captured screenshot/video shows up. Single entry point that
+ * the screenshot / region / stop-record handlers funnel through, so the
+ * user always sees their draft after a capture.
+ */
+async function _openOrRefreshTicket(root: HTMLElement): Promise<void> {
+  try {
+    if (isQuickBugOpen()) {
+      await refreshQuickBugCapture(root);
+    } else {
+      await showQuickBugCapture(root);
+    }
+  } catch (err) {
+    console.warn("[TraceBug] Failed to open ticket after capture:", err);
+  }
 }
 
 /**

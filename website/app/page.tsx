@@ -1,19 +1,18 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import DemoVideo from "@/components/DemoVideo";
-import Problem from "@/components/Problem";
 import Solution from "@/components/Solution";
-import RootCauseHighlight from "@/components/RootCauseHighlight";
-import Features from "@/components/Features";
 import HowItWorks from "@/components/HowItWorks";
-import Installation from "@/components/Installation";
-import BugReportPreview from "@/components/BugReportPreview";
 import Comparison from "@/components/Comparison";
-import UseCases from "@/components/UseCases";
+import Installation from "@/components/Installation";
 import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
 
+// Intentionally short: 7 content sections, not 12. Repeated themes
+// (Problem, RootCauseHighlight, Features, BugReportPreview, UseCases)
+// were removed because the Hero terminal preview + Solution grid already
+// demonstrate them, and stacking restatements is the #1 "feels AI" tell.
 export default function Home() {
   return (
     <main className="min-h-screen bg-background">
@@ -23,33 +22,18 @@ export default function Home() {
         <DemoVideo />
       </Reveal>
       <Reveal>
-        <Problem />
-      </Reveal>
-      <Reveal delay={100}>
         <Solution />
-      </Reveal>
-      <Reveal>
-        <RootCauseHighlight />
-      </Reveal>
-      <Reveal delay={100}>
-        <Features />
       </Reveal>
       <Reveal>
         <HowItWorks />
       </Reveal>
-      <Reveal delay={100}>
-        <Installation />
-      </Reveal>
       <Reveal>
-        <BugReportPreview />
-      </Reveal>
-      <Reveal delay={100}>
         <Comparison />
       </Reveal>
       <Reveal>
-        <UseCases />
+        <Installation />
       </Reveal>
-      <Reveal delay={100}>
+      <Reveal>
         <FinalCTA />
       </Reveal>
       <Footer />

@@ -13,6 +13,14 @@ import { ScreenshotData, TraceBugEvent } from "./types";
 // capture instead). Never loaded at init — only on first captureScreenshot call.
 let _html2canvasPromise: Promise<typeof html2canvasStatic | null> | null = null;
 
+// Exposed so region-screenshot.ts can capture only the selected region
+// (passing html2canvas's native x/y/width/height) instead of capturing the
+// full viewport and cropping afterward — which broke when the page was
+// scrolled because the crop math assumed viewport-aligned source.
+export function loadHtml2CanvasShared(): Promise<typeof html2canvasStatic | null> {
+  return loadHtml2Canvas();
+}
+
 function loadHtml2Canvas(): Promise<typeof html2canvasStatic | null> {
   if (_html2canvasPromise) return _html2canvasPromise;
   _html2canvasPromise = import("html2canvas")
@@ -62,6 +70,36 @@ export function getScreenshots(): ScreenshotData[] {
 export function clearScreenshots(): void {
   screenshots.length = 0;
   screenshotCounter = 0;
+}
+
+/** Remove a single screenshot from the active ticket by id. Returns true on hit. */
+export function removeScreenshot(id: string): boolean {
+  const idx = screenshots.findIndex((s) => s.id === id);
+  if (idx < 0) return false;
+  screenshots.splice(idx, 1);
+  return true;
+}
+
+/** Push a pre-built screenshot into the active-ticket store. Used by
+ *  region-screenshot.ts which captures via html2canvas's x/y bounds and
+ *  doesn't go through the normal captureScreenshot() pipeline. */
+export function pushScreenshot(ss: ScreenshotData): void {
+  screenshots.push(ss);
+}
+
+/** Replace a screenshot's pixel data + filename (used by the annotation editor
+ *  after the user saves an annotated version). Other fields preserved. */
+export function updateScreenshot(
+  id: string,
+  patch: { dataUrl?: string; filename?: string; width?: number; height?: number },
+): boolean {
+  const ss = screenshots.find((s) => s.id === id);
+  if (!ss) return false;
+  if (patch.dataUrl !== undefined) ss.dataUrl = patch.dataUrl;
+  if (patch.filename !== undefined) ss.filename = patch.filename;
+  if (patch.width !== undefined) ss.width = patch.width;
+  if (patch.height !== undefined) ss.height = patch.height;
+  return true;
 }
 
 export async function captureScreenshot(
