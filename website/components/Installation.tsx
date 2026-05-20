@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChromeIcon, GitHubIcon, NpmIcon, TerminalIcon } from "@/components/ui/brand-icons";
 
 export default function Installation() {
   const [activeTab, setActiveTab] = useState<"npm" | "extension" | "github" | "cli">("npm");
@@ -43,10 +44,10 @@ export default function Installation() {
         <div className="flex justify-center mb-8">
           <div className="flex bg-surface border border-border rounded-xl p-1 gap-1">
             {[
-              { key: "npm" as const, label: "npm (SDK)", icon: "📦" },
-              { key: "cli" as const, label: "CLI Setup", icon: "⚡" },
-              { key: "extension" as const, label: "Chrome Extension", icon: "🔌" },
-              { key: "github" as const, label: "GitHub", icon: "🔗" },
+              { key: "npm" as const, label: "npm (SDK)", icon: <NpmIcon size={14} /> },
+              { key: "cli" as const, label: "CLI Setup", icon: <TerminalIcon size={14} /> },
+              { key: "extension" as const, label: "Chrome Extension", icon: <ChromeIcon size={14} /> },
+              { key: "github" as const, label: "GitHub", icon: <GitHubIcon size={14} /> },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -57,7 +58,7 @@ export default function Installation() {
                     : "text-text-muted hover:text-text-primary hover:bg-background"
                 }`}
               >
-                <span>{tab.icon}</span>
+                {tab.icon}
                 {tab.label}
               </button>
             ))}

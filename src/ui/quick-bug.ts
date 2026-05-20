@@ -2,7 +2,8 @@
 // Zero-friction bug reporting: 1 keystroke → screenshot → auto-filled modal → 1-click copy.
 // Total flow under 5 seconds. Replaces the 6-7 click manual workflow.
 
-import { captureScreenshot, downloadScreenshot, getScreenshots } from "../screenshot";
+import { captureScreenshot, downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot } from "../screenshot";
+import { showAnnotationEditor } from "../dashboard";
 import { isPremium } from "../plan";
 import { showUpgradeModal } from "./upgrade-modal";
 import { getAllSessions } from "../storage";
@@ -19,6 +20,7 @@ import { escapeHtml } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { exportSessionAsHtml } from "../exporters/html-replay";
 import { shareSessionAsLink, DEFAULT_CLOUD_ENDPOINT, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
+import { generateAIPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
 import { getBridge } from "../auth/iframe-bridge";
 import { showScreenshotTrimModal } from "./screenshot-trim-modal";
 import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
@@ -83,6 +85,17 @@ let _isOpen = false;
 /** Check if quick bug modal is currently open */
 export function isQuickBugOpen(): boolean {
   return _isOpen;
+}
+
+/** Force the modal to re-render with fresh state. Used after a screenshot
+ *  is added / deleted / annotated so the user sees the change immediately.
+ *  No-op when the modal isn't already open. */
+export async function refreshQuickBugCapture(root: HTMLElement): Promise<void> {
+  if (!_isOpen) return;
+  const existing = document.getElementById(MODAL_ID);
+  if (existing) existing.remove();
+  _isOpen = false;
+  await showQuickBugCapture(root);
 }
 
 /**
@@ -348,6 +361,10 @@ function _openModal(
         ${!video && primary ? `
           <div class="tb-qb-preview">
             <img id="tb-qb-primary-img" src="${primary.dataUrl}" alt="Bug screenshot" class="tb-qb-img" />
+            <button data-action="annotate-primary" data-ss-id="${escapeHtml(primary.id)}" class="tb-qb-primary-edit" title="Annotate this screenshot" aria-label="Annotate screenshot">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <span>Annotate</span>
+            </button>
           </div>
           <div id="tb-qb-primary-meta" class="tb-qb-imgmeta">${escapeHtml(primary.filename)} \u00B7 ${primary.width}x${primary.height}</div>
         ` : !video && !primary ? `
@@ -358,13 +375,22 @@ function _openModal(
           <div id="tb-qb-scrubber" class="tb-qb-scrubber-wrap"></div>
         ` : ""}
 
-        ${ssCount > 1 ? `
+        ${ssCount > 0 ? `
+          <div class="tb-qb-ss-header">
+            <span class="tb-qb-ss-count">${ssCount} screenshot${ssCount === 1 ? "" : "s"}</span>
+            <span class="tb-qb-ss-hint">Click any to annotate</span>
+            <button data-action="add-screenshot" class="tb-qb-ss-add" title="Capture another screenshot">+ Add</button>
+          </div>
           <div class="tb-qb-thumbs">
             ${screenshots.map((ss, i) => `
-              <button data-thumb-index="${i}" title="${escapeHtml(ss.filename)}" class="tb-qb-thumb">
-                <img src="${ss.dataUrl}" alt="Step ${i + 1}" />
-                <span class="tb-qb-thumb-num">${i + 1}</span>
-              </button>
+              <div class="tb-qb-thumb-wrap">
+                <button data-thumb-index="${i}" title="${escapeHtml(ss.filename)} — click to annotate" class="tb-qb-thumb">
+                  <img src="${ss.dataUrl}" alt="Step ${i + 1}" />
+                  <span class="tb-qb-thumb-num">${i + 1}</span>
+                  <span class="tb-qb-thumb-edit">✎</span>
+                </button>
+                <button data-delete-screenshot="${escapeHtml(ss.id)}" class="tb-qb-thumb-del" title="Delete screenshot ${i + 1}" aria-label="Delete screenshot ${i + 1}">✕</button>
+              </div>
             `).join("")}
           </div>
         ` : ""}
@@ -423,6 +449,7 @@ function _openModal(
         <button data-action="jira" class="tb-qb-btn ${isPremium() ? "tb-qb-btn-jira" : "tb-qb-btn-locked"}">${isPremium() ? "\uD83C\uDFAB Jira" : "\uD83D\uDD12 Jira (Premium)"}</button>
         <button data-action="export-replay" class="tb-qb-btn tb-qb-btn-ghost" title="Bundle the entire session into a single .html file you can share or open offline">\uD83D\uDCE6 Export .html</button>
         <button data-action="share-link" class="tb-qb-btn tb-qb-btn-accent" title="Upload to TraceBug cloud and copy a shareable URL (sign-in required)">\uD83D\uDD17 Share link</button>
+        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ghost" title="Copy a structured debugging prompt for Claude / ChatGPT / Cursor">\uD83E\uDD16 Fix with AI</button>
       </div>
       <div class="tb-qb-tip">
         <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
@@ -807,6 +834,38 @@ function _openModal(
     }
   });
 
+  // Fix with AI — generate a structured debug prompt, copy to clipboard,
+  // and show a tiny popover with "Open in Claude / ChatGPT". No backend,
+  // no API key — purely client-side prompt generation.
+  modal.querySelector('[data-action="ai-prompt"]')?.addEventListener("click", (e) => {
+    if (!data.currentSession) {
+      showToast("No session to share yet", root);
+      return;
+    }
+    try {
+      const report = buildReport(data.currentSession);
+      const prompt = generateAIPrompt(report);
+      let copied = false;
+      try {
+        navigator.clipboard.writeText(prompt);
+        copied = true;
+      } catch {}
+      // Fire a toast immediately so the user has loud, unmissable feedback
+      // even if they don't notice the popover.
+      const sizeKb = (prompt.length / 1024).toFixed(1);
+      showToast(
+        copied
+          ? `✓ AI prompt copied · ${sizeKb} KB · pick an AI ↓`
+          : `AI prompt ready · pick an AI ↓`,
+        root,
+      );
+      showAIPromptPopover(e.currentTarget as HTMLElement, prompt, root);
+    } catch (err) {
+      console.warn("[TraceBug] AI prompt generation failed:", err);
+      showToast("AI prompt failed — check console", root);
+    }
+  });
+
   // Tab switching — show one panel at a time. role=tabpanel via [hidden].
   const tabButtons = modal.querySelectorAll<HTMLButtonElement>("[data-tab]");
   const tabPanels = modal.querySelectorAll<HTMLElement>("[data-panel]");
@@ -930,17 +989,75 @@ function _openModal(
     showToast("AI configuration UI coming soon \u2014 set tracebug_ai_key in localStorage to enable", root);
   });
 
-  // Thumbnail strip: clicking a thumbnail swaps the primary preview.
+  // Thumbnail strip: click \u2192 open the annotation editor on that screenshot.
+  // Saved edits are merged back via updateScreenshot() and the modal
+  // re-renders so the new annotated version replaces the thumb in place.
   modal.querySelectorAll<HTMLButtonElement>("[data-thumb-index]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const idx = Number(btn.dataset.thumbIndex);
       const target = screenshots[idx];
       if (!target) return;
-      const img = modal.querySelector<HTMLImageElement>("#tb-qb-primary-img");
-      const meta = modal.querySelector<HTMLDivElement>("#tb-qb-primary-meta");
-      if (img) img.src = target.dataUrl;
-      if (meta) meta.textContent = `${target.filename} \u00b7 ${target.width}x${target.height}`;
+      try {
+        showAnnotationEditor(target, root, (patch) => {
+          updateScreenshot(target.id, patch);
+          // Re-render the modal so the new dataUrl flows through.
+          refreshQuickBugCapture(root).catch(() => {});
+        });
+      } catch (err) {
+        console.warn("[TraceBug] Annotation editor failed:", err);
+        showToast("Couldn't open annotation editor", root);
+      }
     });
+  });
+
+  // Annotate button overlaid on the primary screenshot preview.
+  modal.querySelector('[data-action="annotate-primary"]')?.addEventListener("click", () => {
+    const ssId = (modal.querySelector('[data-action="annotate-primary"]') as HTMLElement)?.dataset?.ssId;
+    const target = screenshots.find((s) => s.id === ssId) || screenshots[0];
+    if (!target) return;
+    try {
+      showAnnotationEditor(target, root, (patch) => {
+        updateScreenshot(target.id, patch);
+        refreshQuickBugCapture(root).catch(() => {});
+      });
+    } catch (err) {
+      console.warn("[TraceBug] Annotation editor failed:", err);
+      showToast("Couldn't open annotation editor", root);
+    }
+  });
+
+  // Delete-screenshot buttons on each thumb.
+  modal.querySelectorAll<HTMLButtonElement>("[data-delete-screenshot]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteScreenshot;
+      if (!id) return;
+      removeScreenshot(id);
+      const remaining = getScreenshots().length;
+      showToast(
+        remaining === 0
+          ? "Last screenshot removed"
+          : `Screenshot removed \u00b7 ${remaining} left`,
+        root,
+      );
+      refreshQuickBugCapture(root).catch(() => {});
+    });
+  });
+
+  // "+ Add" button in the screenshots header \u2014 captures another shot and
+  // refreshes the modal in place. Saves the close-reopen dance.
+  modal.querySelector('[data-action="add-screenshot"]')?.addEventListener("click", async () => {
+    showToast("Capturing\u2026", root);
+    try {
+      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
+      const lastEvent = sessions[0]?.events[sessions[0].events.length - 1] || null;
+      await captureScreenshot(lastEvent);
+      const n = getScreenshots().length;
+      showToast(`\u2713 Screenshot ${n} added`, root);
+      refreshQuickBugCapture(root).catch(() => {});
+    } catch {
+      showToast("Screenshot failed", root);
+    }
   });
 
   // Video controls: download button + jump-to-comment chips.
@@ -1574,7 +1691,10 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-lbl { font-size:10px; color:var(--tb-text-muted); display:block; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.6px; font-weight:700; }
     #${MODAL_ID} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
     #${MODAL_ID} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
-    #${MODAL_ID} .tb-qb-preview { border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
+    #${MODAL_ID} .tb-qb-preview { position:relative; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
+    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(124,92,255,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+    #${MODAL_ID} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-primary-edit svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-preview-empty { padding:32px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
     #${MODAL_ID} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
     #${MODAL_ID} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
@@ -1585,11 +1705,24 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
     #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }
-    #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
-    #${MODAL_ID} .tb-qb-thumb { position:relative; padding:0; border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); overflow:hidden; cursor:pointer; background:var(--tb-bg-secondary); width:68px; height:52px; transition:border-color 0.15s, transform 0.1s; }
+    /* Screenshot strip — count header + thumbs with delete + annotate */
+    #${MODAL_ID} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
+    #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
+    #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
+    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; background:var(--tb-accent-soft, rgba(124,92,255,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add:hover { filter:brightness(1.15); }
+    #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+    #${MODAL_ID} .tb-qb-thumb-wrap { position:relative; }
+    #${MODAL_ID} .tb-qb-thumb-wrap:hover .tb-qb-thumb-del { opacity:1; transform:scale(1); }
+    #${MODAL_ID} .tb-qb-thumb-wrap:hover .tb-qb-thumb-edit { opacity:1; }
+    #${MODAL_ID} .tb-qb-thumb { position:relative; padding:0; border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); overflow:hidden; cursor:pointer; background:var(--tb-bg-secondary); width:84px; height:60px; transition:border-color 0.15s, transform 0.1s; display:block; }
     #${MODAL_ID} .tb-qb-thumb:hover { border-color:var(--tb-accent); transform:translateY(-1px); }
     #${MODAL_ID} .tb-qb-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
-    #${MODAL_ID} .tb-qb-thumb-num { position:absolute; top:2px; left:3px; font-size:9px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); background:rgba(0,0,0,0.55); border-radius:3px; padding:1px 5px; }
+    #${MODAL_ID} .tb-qb-thumb-num { position:absolute; top:3px; left:3px; font-size:9px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); background:rgba(0,0,0,0.6); border-radius:3px; padding:1px 5px; }
+    #${MODAL_ID} .tb-qb-thumb-edit { position:absolute; bottom:3px; right:4px; font-size:11px; color:#fff; background:rgba(0,0,0,0.6); border-radius:3px; padding:0 4px; opacity:0; transition:opacity 0.15s; line-height:1.4; }
+    #${MODAL_ID} .tb-qb-thumb-del { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--tb-error, #ef4444); color:#fff; border:2px solid var(--tb-bg, #14161E); cursor:pointer; font-size:10px; font-weight:700; line-height:1; padding:0; display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0.85); transition:opacity 0.15s, transform 0.15s, filter 0.15s; font-family:inherit; }
+    #${MODAL_ID} .tb-qb-thumb-del:hover { filter:brightness(1.1); }
+    #${MODAL_ID} .tb-qb-thumb-del:focus-visible { opacity:1; transform:scale(1); outline:2px solid var(--tb-accent); outline-offset:2px; }
     #${MODAL_ID} .tb-qb-comments { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; max-height:160px; overflow-y:auto; padding-right:4px; }
     #${MODAL_ID} .tb-qb-comment { display:flex; align-items:flex-start; gap:10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:8px 10px; color:var(--tb-text-primary); font-family:inherit; font-size:12px; text-align:left; cursor:pointer; line-height:1.4; transition:border-color 0.15s, background 0.15s; }
     #${MODAL_ID} .tb-qb-comment:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); }
@@ -1826,4 +1959,135 @@ function _injectStyles(): void {
     #${MODAL_ID} *::-webkit-scrollbar-thumb:hover { background: var(--tb-border-hover); }
   `;
   document.head.appendChild(style);
+}
+
+// ── AI prompt popover ───────────────────────────────────────────────────
+// Shown after "Fix with AI" copies the prompt. Centered modal-style sheet so
+// it's impossible to miss — earlier version was a tiny popover anchored
+// above the button which got lost on busy pages.
+function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLElement): void {
+  document.getElementById("tb-ai-popover")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "tb-ai-popover";
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 2147483647;
+    background: rgba(5, 7, 12, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    font-family: system-ui, -apple-system, sans-serif;
+    animation: tb-ai-pop-in 0.16s ease;
+  `;
+
+  if (!document.getElementById("tb-ai-pop-anim")) {
+    const s = document.createElement("style");
+    s.id = "tb-ai-pop-anim";
+    s.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
+    document.head.appendChild(s);
+  }
+
+  const sizeKb = (prompt.length / 1024).toFixed(1);
+  const approxTokens = Math.round(prompt.length / 4);
+
+  // Show a real, scrollable preview of the prompt so the user can SEE what
+  // got copied. This was the missing affordance — they thought nothing happened.
+  const escaped = prompt
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const card = document.createElement("div");
+  card.style.cssText = `
+    width: 100%; max-width: 560px; max-height: 80vh;
+    background: #14161E;
+    border: 1px solid rgba(124,92,255,0.28);
+    border-radius: 14px;
+    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    color: #E6EDF3;
+    overflow: hidden;
+  `;
+  card.innerHTML = `
+    <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:16px;line-height:1">🤖</span>
+        <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">AI debugging prompt is ready</div>
+      </div>
+      <div style="font-size:12px;color:#94A3B8;line-height:1.45">
+        ✓ Copied to clipboard · ${sizeKb} KB · ~${approxTokens} tokens · pick an AI below or paste anywhere.
+      </div>
+    </div>
+
+    <pre style="
+      margin:0;padding:14px 18px;
+      flex:1;overflow:auto;
+      background:#0B0D12;
+      font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
+      font-size:11.5px;line-height:1.55;
+      color:#CBD2DA;
+      white-space:pre-wrap;word-break:break-word;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+    ">${escaped}</pre>
+
+    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;background:#14161E">
+      <button data-ai-action="claude" style="
+        flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+        padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
+        background:#CC785C;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+      ">
+        <span style="width:18px;height:18px;border-radius:4px;background:rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">C</span>
+        Open in Claude
+      </button>
+      <button data-ai-action="chatgpt" style="
+        flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+        padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
+        background:#10A37F;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+      ">
+        <span style="width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,0.18);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">AI</span>
+        Open in ChatGPT
+      </button>
+      <button data-ai-action="copy" style="
+        display:inline-flex;align-items:center;justify-content:center;gap:6px;
+        padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
+        background:transparent;color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;
+      ">📋 Copy again</button>
+      <button data-ai-action="close" aria-label="Close" style="
+        display:inline-flex;align-items:center;justify-content:center;
+        width:38px;padding:10px 0;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
+        background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif;
+      ">✕</button>
+    </div>
+  `;
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  card.querySelectorAll<HTMLButtonElement>("button[data-ai-action]").forEach((b) => {
+    b.addEventListener("mouseenter", () => { b.style.filter = "brightness(1.1)"; });
+    b.addEventListener("mouseleave", () => { b.style.filter = ""; });
+  });
+
+  overlay.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const action = target.closest("[data-ai-action]")?.getAttribute("data-ai-action");
+    if (action === "claude") { openInClaude(prompt); close(); }
+    else if (action === "chatgpt") { openInChatGPT(prompt); close(); }
+    else if (action === "copy") {
+      try { navigator.clipboard.writeText(prompt); } catch {}
+      // tiny visual feedback — pulse the button
+      const btn = target.closest("button");
+      if (btn) {
+        btn.textContent = "✓ Copied";
+        setTimeout(() => { btn.innerHTML = "📋 Copy again"; }, 1100);
+      }
+    }
+    else if (action === "close" || target === overlay) close();
+  });
+
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  document.addEventListener("keydown", onKey);
 }

@@ -72,14 +72,30 @@ export function showToast(message: string, root: HTMLElement): void {
   const toast = document.createElement("div");
   toast.className = "bt-toast";
   toast.dataset.tracebug = "toast";
+  // High-contrast against ANY host theme. Pure white text on a solid dark
+  // base with a violet accent border. !important on the readable bits so
+  // host-page CSS resets can't mute them.
   toast.style.cssText = `
-    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:var(--tb-bg-secondary, #1a1a2e)ee;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border-hover, #3a3a5e);
-    border-radius:10px;padding:10px 20px;font-size:13px;
-    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
-    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
-    max-width:420px;text-align:center;line-height:1.4;
-    animation:tracebug-toast-in 0.2s ease;
+    position:fixed !important;
+    bottom:32px !important;
+    left:50% !important;
+    transform:translateX(-50%) !important;
+    background:#0E1117 !important;
+    color:#FFFFFF !important;
+    border:1px solid #7C5CFF !important;
+    border-radius:10px !important;
+    padding:14px 22px !important;
+    font-size:14px !important;
+    font-weight:600 !important;
+    letter-spacing:-0.005em !important;
+    font-family:system-ui,-apple-system,sans-serif !important;
+    z-index:2147483647 !important;
+    box-shadow:0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(124,92,255,0.12) !important;
+    pointer-events:auto !important;
+    max-width:460px !important;
+    text-align:center !important;
+    line-height:1.4 !important;
+    animation:tracebug-toast-in 0.2s ease !important;
   `;
 
   if (!document.getElementById("tracebug-toast-anim")) {
@@ -102,5 +118,5 @@ export function showToast(message: string, root: HTMLElement): void {
     toast.style.transform = "translateX(-50%) translateY(8px)";
     toast.style.transition = "all 0.3s ease";
     setTimeout(() => toast.remove(), 300);
-  }, 2000);
+  }, 2800);
 }
