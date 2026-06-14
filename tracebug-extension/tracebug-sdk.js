@@ -9359,10 +9359,53 @@ var TraceBugModule = (() => {
     return _capturesTaken;
   }
   function getVideoElapsedMs() {
-    return _active ? Date.now() - _startedAt : 0;
+    if (!_active) return 0;
+    return Date.now() - _startedAt - _pausedMs - (_paused ? Date.now() - _pausedAt : 0);
   }
   function getLastVideoRecording() {
     return _lastRecording;
+  }
+  function isVideoPaused() {
+    return _paused;
+  }
+  function pauseVideoRecording() {
+    if (!_active || _paused) return;
+    _paused = true;
+    _pausedAt = Date.now();
+    if (_recorder && _recorder.state === "recording") {
+      try {
+        _recorder.pause();
+      } catch (e2) {
+      }
+    }
+  }
+  function resumeVideoRecording() {
+    if (!_active || !_paused) return;
+    _pausedMs += Date.now() - _pausedAt;
+    _paused = false;
+    _pausedAt = 0;
+    if (_recorder && _recorder.state === "paused") {
+      try {
+        _recorder.resume();
+      } catch (e2) {
+      }
+    }
+  }
+  function hasMicrophoneTrack() {
+    if (!_stream) return false;
+    return _stream.getAudioTracks().length > 0;
+  }
+  function isMicrophoneMuted() {
+    if (!_stream) return false;
+    const tracks = _stream.getAudioTracks();
+    if (tracks.length === 0) return false;
+    return tracks.some((t) => !t.enabled);
+  }
+  function setMicrophoneMuted(muted) {
+    if (!_stream) return;
+    _stream.getAudioTracks().forEach((t) => {
+      t.enabled = !muted;
+    });
   }
   async function startVideoRecording(options) {
     if (_active) return false;
@@ -9375,9 +9418,11 @@ var TraceBugModule = (() => {
   async function _startVideoRecordingInner(options) {
     _onStatus = (options == null ? void 0 : options.onStatus) || null;
     const requestedMode = (options == null ? void 0 : options.mode) === "standard" ? "standard" : "rolling";
+    const surfaceMode = (options == null ? void 0 : options.surfaceMode) === "tab" ? "tab" : "desktop";
     if (isExtensionContext2()) {
       const result = await rpcCall("tb:rec:start", {
         mode: requestedMode,
+        surfaceMode,
         withMicrophone: !!(options == null ? void 0 : options.withMicrophone)
       }).catch((err) => ({ ok: false, error: err && err.message || String(err) }));
       if (!result || !result.ok) {
@@ -9394,7 +9439,7 @@ var TraceBugModule = (() => {
       _onStatus == null ? void 0 : _onStatus("recording");
       return true;
     }
-    return startVideoRecordingInPage(requestedMode, options);
+    return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode });
   }
   function stopVideoRecording() {
     if (!_active) return Promise.resolve(null);
@@ -9455,6 +9500,9 @@ var TraceBugModule = (() => {
     _capturesTaken = 0;
     _startedAt = 0;
     _mode = "rolling";
+    _paused = false;
+    _pausedAt = 0;
+    _pausedMs = 0;
   }
   function downloadVideoRecording(recording, filename = "tracebug-recording.webm") {
     const a2 = document.createElement("a");
@@ -9534,10 +9582,17 @@ var TraceBugModule = (() => {
     }
     let displayStream;
     try {
-      displayStream = await navigator.mediaDevices.getDisplayMedia({
+      const constraints = {
         video: { frameRate: { ideal: 30, max: 60 } },
         audio: true
-      });
+      };
+      if ((options == null ? void 0 : options.surfaceMode) === "tab") {
+        constraints.preferCurrentTab = true;
+        constraints.selfBrowserSurface = "include";
+        constraints.surfaceSwitching = "exclude";
+        constraints.systemAudio = "exclude";
+      }
+      displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
     } catch (err) {
       if ((err == null ? void 0 : err.name) === "NotAllowedError" || (err == null ? void 0 : err.name) === "AbortError") {
         _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
@@ -9584,6 +9639,9 @@ var TraceBugModule = (() => {
     });
     _recorder.start(1e3);
     _active = true;
+    _paused = false;
+    _pausedMs = 0;
+    _pausedAt = 0;
     installInPageReloadGuards();
     scheduleDurationCap();
     _onStatus == null ? void 0 : _onStatus("recording");
@@ -9809,7 +9867,7 @@ var TraceBugModule = (() => {
       }));
     });
   }
-  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _onAutoStop, _startInFlight, _autoStopWired, _reloadGuardsInstalled, _rpcCounter;
+  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _reloadGuardsInstalled, _rpcCounter;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
@@ -9831,6 +9889,9 @@ var TraceBugModule = (() => {
       _stream = null;
       _chunks = [];
       _onAutoStop = null;
+      _paused = false;
+      _pausedAt = 0;
+      _pausedMs = 0;
       _startInFlight = null;
       _autoStopWired = false;
       _reloadGuardsInstalled = false;
@@ -16128,18 +16189,38 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED },
         // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
         { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
-        // OpenAI / Stripe-style
+        // OpenAI / Stripe sk_*
         { name: "sk_prefix", re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
-        { name: "sk_live", re: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
-        // GitHub PATs
+        // Stripe secret + publishable (live/test, secret + publishable + restricted)
+        { name: "stripe", re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
+        // GitHub PATs (classic + fine-grained + OAuth + server tokens)
         { name: "github_pat", re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
         { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
-        // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.)
-        { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}\b/g, replace: mask },
-        // Slack
-        { name: "slack", re: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
+        { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
+        { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
+        { name: "aws_secret", re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
+        // Slack — broader than before (xoxa-z covers all known prefixes)
+        { name: "slack", re: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
         // Google API keys
-        { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask }
+        { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask },
+        // Twilio — Account SID + Auth tokens
+        { name: "twilio_sid", re: /\b(?:AC|SK)[a-f0-9]{32}\b/g, replace: mask },
+        // SendGrid
+        { name: "sendgrid", re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replace: mask },
+        // Mailgun
+        { name: "mailgun", re: /\bkey-[a-f0-9]{32}\b/g, replace: mask },
+        // Postmark
+        { name: "postmark", re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
+        // Linear / Vercel / Cloudflare / Discord
+        { name: "linear", re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
+        { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
+        // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
+        // session IDs, etc. that don't carry a recognizable prefix. Conservative:
+        // only triggers when preceded by a common secret-y keyword to avoid
+        // mangling legitimate hex like git SHAs.
+        { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s) => s.replace(/[a-fA-F0-9]{32,}/, REDACTED) }
       ];
       SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
         "token",
@@ -16663,18 +16744,18 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (s.length <= max) return s;
     return s.slice(0, max - 1) + "\u2026";
   }
-  function openInClaude(prompt2) {
+  function openInClaude(prompt) {
     if (typeof window === "undefined") return;
-    if (prompt2.length <= URL_PREFILL_LIMIT) {
-      window.open(`https://claude.ai/new?q=${encodeURIComponent(prompt2)}`, "_blank", "noopener");
+    if (prompt.length <= URL_PREFILL_LIMIT) {
+      window.open(`https://claude.ai/new?q=${encodeURIComponent(prompt)}`, "_blank", "noopener");
     } else {
       window.open("https://claude.ai/new", "_blank", "noopener");
     }
   }
-  function openInChatGPT(prompt2) {
+  function openInChatGPT(prompt) {
     if (typeof window === "undefined") return;
-    if (prompt2.length <= URL_PREFILL_LIMIT) {
-      window.open(`https://chat.openai.com/?q=${encodeURIComponent(prompt2)}`, "_blank", "noopener");
+    if (prompt.length <= URL_PREFILL_LIMIT) {
+      window.open(`https://chat.openai.com/?q=${encodeURIComponent(prompt)}`, "_blank", "noopener");
     } else {
       window.open("https://chat.openai.com/", "_blank", "noopener");
     }
@@ -17806,6 +17887,8 @@ ${description}`;
         return;
       }
       if ((shareBtn == null ? void 0 : shareBtn.dataset.busy) === "1") return;
+      const consentOk = await _confirmShareConsent(root);
+      if (!consentOk) return;
       const originalHtml = shareBtn ? shareBtn.innerHTML : "";
       const setBtnState = (label) => {
         if (!shareBtn) return;
@@ -17896,19 +17979,19 @@ ${description}`;
       }
       try {
         const report = buildReport(data.currentSession);
-        const prompt2 = generateAIPrompt(report);
+        const prompt = generateAIPrompt(report);
         let copied = false;
         try {
-          navigator.clipboard.writeText(prompt2);
+          navigator.clipboard.writeText(prompt);
           copied = true;
         } catch (e3) {
         }
-        const sizeKb = (prompt2.length / 1024).toFixed(1);
+        const sizeKb = (prompt.length / 1024).toFixed(1);
         showToast(
           copied ? `\u2713 AI prompt copied \xB7 ${sizeKb} KB \xB7 pick an AI \u2193` : `AI prompt ready \xB7 pick an AI \u2193`,
           root
         );
-        showAIPromptPopover(e2.currentTarget, prompt2, root);
+        showAIPromptPopover(e2.currentTarget, prompt, root);
       } catch (err) {
         console.warn("[TraceBug] AI prompt generation failed:", err);
         showToast("AI prompt failed \u2014 check console", root);
@@ -18957,7 +19040,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   `;
     document.head.appendChild(style);
   }
-  function showAIPromptPopover(_anchor, prompt2, _root3) {
+  function showAIPromptPopover(_anchor, prompt, _root3) {
     var _a;
     (_a = document.getElementById("tb-ai-popover")) == null ? void 0 : _a.remove();
     const overlay = document.createElement("div");
@@ -18977,9 +19060,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       s.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
       document.head.appendChild(s);
     }
-    const sizeKb = (prompt2.length / 1024).toFixed(1);
-    const approxTokens = Math.round(prompt2.length / 4);
-    const escaped = prompt2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const sizeKb = (prompt.length / 1024).toFixed(1);
+    const approxTokens = Math.round(prompt.length / 4);
+    const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const card = document.createElement("div");
     card.style.cssText = `
     width: 100%; max-width: 560px; max-height: 80vh;
@@ -19057,14 +19140,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const target = e2.target;
       const action = (_a2 = target.closest("[data-ai-action]")) == null ? void 0 : _a2.getAttribute("data-ai-action");
       if (action === "claude") {
-        openInClaude(prompt2);
+        openInClaude(prompt);
         close();
       } else if (action === "chatgpt") {
-        openInChatGPT(prompt2);
+        openInChatGPT(prompt);
         close();
       } else if (action === "copy") {
         try {
-          navigator.clipboard.writeText(prompt2);
+          navigator.clipboard.writeText(prompt);
         } catch (e3) {
         }
         const btn = target.closest("button");
@@ -19085,7 +19168,106 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey);
   }
-  var _githubRepo, _cloudEndpoint, MODAL_ID3, DRAFT_KEY, THEME_PREF_KEY, _isOpen, CON_ICONS, _lastActiveFeedTs;
+  function _confirmShareConsent(root) {
+    return new Promise((resolve) => {
+      var _a;
+      try {
+        if (localStorage.getItem(CONSENT_KEY) === "ack") return resolve(true);
+      } catch (e2) {
+      }
+      (_a = document.getElementById("tb-share-consent")) == null ? void 0 : _a.remove();
+      const overlay = document.createElement("div");
+      overlay.id = "tb-share-consent";
+      overlay.style.cssText = `
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(5, 7, 12, 0.72);
+      backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+      animation: tb-share-consent-in 0.16s ease;
+    `;
+      if (!document.getElementById("tb-share-consent-anim")) {
+        const s = document.createElement("style");
+        s.id = "tb-share-consent-anim";
+        s.textContent = "@keyframes tb-share-consent-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }";
+        document.head.appendChild(s);
+      }
+      const card = document.createElement("div");
+      card.style.cssText = `
+      width: 100%; max-width: 460px;
+      background: #14161E; color: #E6EDF3;
+      border: 1px solid rgba(124,92,255,0.32);
+      border-radius: 14px;
+      box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+      padding: 22px 24px;
+    `;
+      card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px;line-height:1">\u2601\uFE0F</span>
+        <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">Before you share</div>
+      </div>
+      <div style="font-size:13px;color:#B9C2CC;line-height:1.55;margin-bottom:14px">
+        TraceBug auto-scrubs token shapes (JWTs, Bearer tokens, API keys, etc.)
+        from <strong style="color:#E6EDF3">console logs</strong>, <strong style="color:#E6EDF3">URLs</strong>, and
+        <strong style="color:#E6EDF3">network responses</strong> before upload.
+      </div>
+      <div style="font-size:13px;color:#B9C2CC;line-height:1.55;margin-bottom:18px;padding:10px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px">
+        <strong style="color:#F59E0B">Screenshots and video are uploaded as captured.</strong>
+        If any frame shows sensitive UI (passwords, tokens, PII), redact or
+        delete it before sharing. Use \u270E Annotate to draw over sensitive areas.
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:12px;color:#94A3B8">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="tb-consent-dont-show" style="margin:0;cursor:pointer" />
+          Don't show this again
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button data-act="cancel" style="
+          padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.14);
+          background:transparent;color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+        ">Cancel</button>
+        <button data-act="continue" style="
+          padding:8px 18px;border-radius:8px;border:0;
+          background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+        ">I understand \u2014 continue</button>
+      </div>
+    `;
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      const finish = (ok) => {
+        var _a2;
+        if (ok) {
+          const dontShow = (_a2 = card.querySelector("#tb-consent-dont-show")) == null ? void 0 : _a2.checked;
+          if (dontShow) {
+            try {
+              localStorage.setItem(CONSENT_KEY, "ack");
+            } catch (e2) {
+            }
+          }
+        }
+        overlay.remove();
+        document.removeEventListener("keydown", onKey);
+        resolve(ok);
+      };
+      card.addEventListener("click", (e2) => {
+        var _a2;
+        const act = (_a2 = e2.target.closest("[data-act]")) == null ? void 0 : _a2.getAttribute("data-act");
+        if (act === "continue") finish(true);
+        else if (act === "cancel") finish(false);
+      });
+      overlay.addEventListener("click", (e2) => {
+        if (e2.target === overlay) finish(false);
+      });
+      const onKey = (e2) => {
+        if (e2.key === "Escape") finish(false);
+      };
+      document.addEventListener("keydown", onKey);
+      void root;
+    });
+  }
+  var _githubRepo, _cloudEndpoint, MODAL_ID3, DRAFT_KEY, THEME_PREF_KEY, _isOpen, CON_ICONS, _lastActiveFeedTs, CONSENT_KEY;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -19127,6 +19309,2927 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         console: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>`
       };
       _lastActiveFeedTs = -1;
+      CONSENT_KEY = "tracebug_share_consent_v1";
+    }
+  });
+
+  // src/ui/recording-hud.ts
+  function _formatElapsed(ms) {
+    const total = Math.max(0, Math.floor(ms / 1e3));
+    const m = Math.floor(total / 60).toString().padStart(2, "0");
+    const s = (total % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  }
+  function showRecordingHUD(root, options) {
+    if (_hud) return;
+    if (!isVideoRecording()) return;
+    _root = root;
+    _onStopRequested = options.onStop;
+    const hud = document.createElement("div");
+    hud.id = HUD_ID;
+    hud.dataset.tracebug = "recording-hud";
+    hud.setAttribute("role", "status");
+    hud.setAttribute("aria-live", "polite");
+    if (!document.getElementById("tracebug-hud-anim")) {
+      const style = document.createElement("style");
+      style.id = "tracebug-hud-anim";
+      style.textContent = `
+      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, 8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      #${HUD_ID} {
+        position: fixed !important;
+        bottom: 24px !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: calc(100vw - 32px) !important;
+        background: #1b1d24 !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
+        border-radius: 999px !important;
+        padding: 6px 10px 6px 6px !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+        color: #e9eaee !important;
+        font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
+        font-size: 13px !important;
+        line-height: 1 !important;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.55) !important;
+        z-index: 2147483647 !important;
+        pointer-events: auto !important;
+        animation: tracebug-hud-in 0.2s ease !important;
+        box-sizing: border-box !important;
+        user-select: none !important;
+      }
+      #${HUD_ID} > * { flex-shrink: 0 !important; box-sizing: border-box !important; }
+      #${HUD_ID}[data-tb-dragging="1"] { cursor: grabbing !important; }
+      #${HUD_ID} [data-tb-hud="grip"] { cursor: grab !important; padding: 0 2px !important; color: rgba(255,255,255,0.35) !important; display: inline-flex !important; align-items: center !important; }
+      #${HUD_ID} [data-tb-hud="grip"]:active { cursor: grabbing !important; }
+      #${HUD_ID} button { font-family: inherit !important; }
+      #${HUD_ID} .tb-hud-btn {
+        width: 30px !important; height: 30px !important;
+        background: transparent !important;
+        color: rgba(255,255,255,0.85) !important;
+        border: none !important; border-radius: 999px !important;
+        padding: 0 !important; cursor: pointer !important;
+        display: inline-flex !important; align-items: center !important; justify-content: center !important;
+        transition: background 0.12s ease !important;
+      }
+      #${HUD_ID} .tb-hud-btn:hover { background: rgba(255,255,255,0.08) !important; }
+      #${HUD_ID} .tb-hud-btn[data-active="1"] { background: rgba(124,92,255,0.22) !important; color: #c5b8ff !important; }
+      #${HUD_ID} .tb-hud-btn[data-muted="1"] { color: rgba(239,68,68,0.95) !important; }
+      #${HUD_ID} .tb-hud-stop {
+        background: #ef4444 !important; color: #fff !important;
+        width: 30px !important; height: 30px !important;
+        border: none !important; border-radius: 999px !important;
+        padding: 0 !important; cursor: pointer !important;
+        display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      }
+      #${HUD_ID} .tb-hud-stop:hover { background: #f87171 !important; }
+      #${HUD_ID} .tb-hud-sep { width: 1px !important; height: 18px !important; background: rgba(255,255,255,0.1) !important; margin: 0 2px !important; }
+      #${HUD_ID} .tb-hud-timer { font-variant-numeric: tabular-nums !important; font-weight: 600 !important; min-width: 44px !important; text-align: center !important; padding: 0 4px !important; font-size: 13px !important; }
+    `;
+      document.head.appendChild(style);
+    }
+    const micAvailable = hasMicrophoneTrack();
+    hud.innerHTML = `
+    <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
+      <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
+    </span>
+    <button class="tb-hud-stop" data-tb-hud="stop" title="Stop recording" aria-label="Stop recording">
+      <span style="width:10px;height:10px;background:#fff;border-radius:2px;display:inline-block"></span>
+    </button>
+    <button class="tb-hud-btn" data-tb-hud="pause" title="Pause" aria-label="Pause recording">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    </button>
+    <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
+    <button class="tb-hud-btn" data-tb-hud="mic"
+      title="${micAvailable ? "Mute / unmute microphone" : "No microphone in this recording"}"
+      aria-label="Toggle microphone"
+      ${micAvailable ? "" : "disabled"}
+      style="${micAvailable ? "" : "opacity:0.35;cursor:not-allowed"}"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </button>
+    <span class="tb-hud-sep"></span>
+    <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+    </button>
+    <button class="tb-hud-btn" data-tb-hud="close" title="Stop and review" aria-label="Stop and review">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+    </button>
+  `;
+    root.appendChild(hud);
+    _hud = hud;
+    const timerEl = hud.querySelector('[data-tb-hud="timer"]');
+    const gripEl = hud.querySelector('[data-tb-hud="grip"]');
+    const pauseBtn = hud.querySelector('[data-tb-hud="pause"]');
+    const micBtn = hud.querySelector('[data-tb-hud="mic"]');
+    const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]');
+    const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
+    const closeBtn = hud.querySelector('[data-tb-hud="close"]');
+    _timerInterval = setInterval(() => {
+      if (!isVideoRecording()) return;
+      if (!isVideoPaused()) timerEl.textContent = _formatElapsed(getVideoElapsedMs());
+    }, 500);
+    if (gripEl) {
+      let startX = 0, startY = 0, hudX = 0, hudY = 0, dragging = false;
+      const onDown = (e2) => {
+        dragging = true;
+        hud.setAttribute("data-tb-dragging", "1");
+        gripEl.setPointerCapture(e2.pointerId);
+        const rect = hud.getBoundingClientRect();
+        hudX = rect.left;
+        hudY = rect.top;
+        startX = e2.clientX;
+        startY = e2.clientY;
+        e2.preventDefault();
+      };
+      const onMove = (e2) => {
+        if (!dragging) return;
+        const nx = Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, hudX + (e2.clientX - startX)));
+        const ny = Math.max(4, Math.min(window.innerHeight - hud.offsetHeight - 4, hudY + (e2.clientY - startY)));
+        hud.style.setProperty("left", nx + "px", "important");
+        hud.style.setProperty("top", ny + "px", "important");
+        hud.style.setProperty("bottom", "auto", "important");
+        hud.style.setProperty("transform", "none", "important");
+      };
+      const onUp = (e2) => {
+        if (!dragging) return;
+        dragging = false;
+        hud.removeAttribute("data-tb-dragging");
+        try {
+          gripEl.releasePointerCapture(e2.pointerId);
+        } catch (e3) {
+        }
+      };
+      gripEl.addEventListener("pointerdown", onDown);
+      gripEl.addEventListener("pointermove", onMove);
+      gripEl.addEventListener("pointerup", onUp);
+      gripEl.addEventListener("pointercancel", onUp);
+    }
+    pauseBtn == null ? void 0 : pauseBtn.addEventListener("click", () => {
+      if (isVideoPaused()) {
+        resumeVideoRecording();
+        pauseBtn.dataset.active = "";
+        pauseBtn.title = "Pause";
+        pauseBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
+      } else {
+        pauseVideoRecording();
+        pauseBtn.dataset.active = "1";
+        pauseBtn.title = "Resume";
+        pauseBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 4 7 20 19 12 7 4"/></svg>`;
+      }
+    });
+    micBtn == null ? void 0 : micBtn.addEventListener("click", () => {
+      if (!hasMicrophoneTrack()) return;
+      const nextMuted = !isMicrophoneMuted();
+      setMicrophoneMuted(nextMuted);
+      micBtn.dataset.muted = nextMuted ? "1" : "";
+      micBtn.title = nextMuted ? "Microphone muted \u2014 click to unmute" : "Mute microphone";
+      micBtn.innerHTML = nextMuted ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+    });
+    annotateBtn == null ? void 0 : annotateBtn.addEventListener("click", () => {
+      const drawRoot = _root;
+      if (!drawRoot) return;
+      if (isDrawModeActive()) {
+        deactivateDrawMode();
+        annotateBtn.dataset.active = "";
+        return;
+      }
+      activateDrawMode(drawRoot, void 0, void 0, { ephemeralMs: 3e3 });
+      annotateBtn.dataset.active = "1";
+    });
+    const triggerStop = () => {
+      if (isDrawModeActive()) {
+        try {
+          deactivateDrawMode();
+        } catch (e2) {
+        }
+      }
+      _onStopRequested == null ? void 0 : _onStopRequested();
+    };
+    stopBtn.addEventListener("click", triggerStop);
+    closeBtn == null ? void 0 : closeBtn.addEventListener("click", triggerStop);
+  }
+  function flashRecordingHUD() {
+    if (!_hud) return;
+    const prev = _hud.style.boxShadow;
+    _hud.style.transition = "box-shadow 0.3s";
+    _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7B61FF)66, 0 12px 40px rgba(0,0,0,0.55)";
+    setTimeout(() => {
+      if (_hud) _hud.style.boxShadow = prev;
+    }, 400);
+  }
+  function hideRecordingHUD() {
+    if (_timerInterval) {
+      clearInterval(_timerInterval);
+      _timerInterval = null;
+    }
+    if (isDrawModeActive()) {
+      try {
+        deactivateDrawMode();
+      } catch (e2) {
+      }
+    }
+    _hud == null ? void 0 : _hud.remove();
+    _hud = null;
+    _root = null;
+    _onStopRequested = null;
+  }
+  var HUD_ID, _root, _hud, _timerInterval, _onStopRequested;
+  var init_recording_hud = __esm({
+    "src/ui/recording-hud.ts"() {
+      "use strict";
+      init_video_recorder();
+      init_draw_mode();
+      HUD_ID = "tracebug-recording-hud";
+      _root = null;
+      _hud = null;
+      _timerInterval = null;
+      _onStopRequested = null;
+    }
+  });
+
+  // src/compact-toolbar.ts
+  function setToolbarRecordingState(isRecording2, onToggle) {
+    _isRecording = isRecording2;
+    _onToggleRecording = onToggle;
+  }
+  function setSessionLifecycleHandlers(onStart, onEnd) {
+    _onSessionStart = onStart;
+    _onSessionEnd = onEnd;
+  }
+  function updateToolbarRecordingState(isRecording2) {
+    _isRecording = isRecording2;
+    const dot = document.getElementById("tracebug-toolbar-rec-dot");
+    if (dot) {
+      dot.style.background = isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
+      dot.style.animation = isRecording2 ? "bt-pulse 2s infinite" : "none";
+    }
+  }
+  function setRenderPanel(fn) {
+    _renderPanel = fn;
+  }
+  function mountCompactToolbar(root, panel, showToast3, renderAnnotationList2, position2 = "right", shortcuts) {
+    _panelEl = panel;
+    _position = position2;
+    _isMobile = window.innerWidth < 768;
+    const toolbar = document.createElement("div");
+    toolbar.id = TOOLBAR_ID;
+    toolbar.dataset.tracebug = "compact-toolbar";
+    _toolbar = toolbar;
+    _applyToolbarPosition(toolbar, position2);
+    _initDrag(toolbar);
+    void panel;
+    const _checkLimit = () => {
+      if (isPremium()) return true;
+      if (getScreenshots().length < FREE_LIMITS.screenshots) return true;
+      showUpgradeModal({
+        feature: "Unlimited screenshots",
+        message: `Free plan is capped at ${FREE_LIMITS.screenshots} screenshots per ticket. Upgrade for unlimited captures.`
+      }, root);
+      return false;
+    };
+    toolbar.appendChild(_createToolbarBtn(
+      "Screenshot (Ctrl+Shift+S) \u2014 added to ticket",
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`,
+      async () => {
+        var _a;
+        if (!_checkLimit()) return;
+        showToast3("Capturing\u2026", root);
+        try {
+          const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+          const lastEvent = ((_a = sessions[0]) == null ? void 0 : _a.events[sessions[0].events.length - 1]) || null;
+          await captureScreenshot(lastEvent);
+          const n = getScreenshots().length;
+          const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
+          showToast3(`\u2713 Screenshot ${n}${cap} added to ticket`, root);
+          await _openOrRefreshTicket(root);
+        } catch (e2) {
+          showToast3("Screenshot failed", root);
+        }
+      },
+      "tracebug-toolbar-screenshot-btn"
+    ));
+    toolbar.appendChild(_createToolbarBtn(
+      "Region Screenshot \u2014 drag to select, added to ticket",
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M9 9h6v6H9z"/></svg>`,
+      async () => {
+        if (!_checkLimit()) return;
+        try {
+          const ss = await captureRegionScreenshot();
+          if (!ss) {
+            showToast3("Cancelled", root);
+            return;
+          }
+          const n = getScreenshots().length;
+          const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
+          showToast3(`\u2713 Region ${n}${cap} added to ticket`, root);
+          await _openOrRefreshTicket(root);
+        } catch (e2) {
+          showToast3("Region screenshot failed", root);
+        }
+      },
+      "tracebug-toolbar-region-btn"
+    ));
+    toolbar.appendChild(_divider());
+    const tabRecordBtn = _createToolbarBtn(
+      "Record current tab",
+      _tabRecordIconSvg(false),
+      () => _toggleTabRecording(root, tabRecordBtn, showToast3),
+      "tracebug-toolbar-tab-record-btn"
+    );
+    if (!isVideoSupported()) {
+      tabRecordBtn.style.opacity = "0.4";
+      tabRecordBtn.style.cursor = "not-allowed";
+      tabRecordBtn.title = "Screen recording not supported in this browser";
+    }
+    toolbar.appendChild(tabRecordBtn);
+    const desktopRecordBtn = _createToolbarBtn(
+      "Record desktop / window (asks what to share)",
+      _desktopRecordIconSvg(false),
+      () => _toggleDesktopRecording(root, desktopRecordBtn, showToast3),
+      "tracebug-toolbar-desktop-record-btn"
+    );
+    if (!isVideoSupported()) {
+      desktopRecordBtn.style.opacity = "0.4";
+      desktopRecordBtn.style.cursor = "not-allowed";
+      desktopRecordBtn.title = "Screen recording not supported in this browser";
+    }
+    toolbar.appendChild(desktopRecordBtn);
+    root.appendChild(toolbar);
+    if (_isMobile) {
+      _convertToFab(toolbar, root, panel, showToast3);
+    }
+    const resizeHandler = () => {
+      const wasMobile = _isMobile;
+      _isMobile = window.innerWidth < 768;
+      if (wasMobile !== _isMobile) {
+        if (_isMobile) {
+          _convertToFab(toolbar, root, panel, showToast3);
+        } else {
+          _restoreToolbar(toolbar);
+        }
+      }
+    };
+    window.addEventListener("resize", resizeHandler);
+    const annotateShortcut = (shortcuts == null ? void 0 : shortcuts.annotate) || "ctrl+shift+a";
+    const drawShortcut = (shortcuts == null ? void 0 : shortcuts.draw) || "ctrl+shift+d";
+    const keyHandler = (e2) => {
+      var _a, _b;
+      if (matchesShortcut(e2, annotateShortcut)) {
+        e2.preventDefault();
+        (_a = toolbar.querySelector("#tracebug-toolbar-annotate-btn")) == null ? void 0 : _a.click();
+      }
+      if (matchesShortcut(e2, drawShortcut)) {
+        e2.preventDefault();
+        (_b = toolbar.querySelector("#tracebug-toolbar-draw-btn")) == null ? void 0 : _b.click();
+      }
+    };
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      toolbar.remove();
+      document.removeEventListener("keydown", keyHandler);
+      window.removeEventListener("resize", resizeHandler);
+      deactivateElementAnnotateMode();
+      deactivateDrawMode();
+      const settingsCard = document.getElementById(SETTINGS_ID);
+      settingsCard == null ? void 0 : settingsCard.remove();
+      _toolbar = null;
+    };
+  }
+  function _createToolbarBtn(title, iconHtml, onClick, id) {
+    const btn = document.createElement("button");
+    if (id) btn.id = id;
+    btn.dataset.tracebug = "toolbar-btn";
+    btn.title = title;
+    btn.setAttribute("aria-label", title);
+    btn.innerHTML = iconHtml;
+    btn.style.cssText = `
+    width: 34px; height: 34px; border-radius: var(--tb-radius-md, 8px); border: none;
+    background: transparent; color: var(--tb-btn-text, #aaa); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; transition: all 0.15s;
+  `;
+    btn.addEventListener("mouseenter", () => {
+      if (!btn.classList.contains("tb-active")) {
+        btn.style.background = "var(--tb-btn-hover, #ffffff15)";
+        btn.style.color = "var(--tb-btn-text-hover, #fff)";
+      }
+    });
+    btn.addEventListener("mouseleave", () => {
+      if (!btn.classList.contains("tb-active")) {
+        btn.style.background = "transparent";
+        btn.style.color = "var(--tb-btn-text, #aaa)";
+      }
+    });
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+  function _divider() {
+    const d = document.createElement("div");
+    d.dataset.tracebug = "toolbar-divider";
+    d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
+    return d;
+  }
+  function _tabRecordIconSvg(active) {
+    if (active) {
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+    }
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/><circle cx="6" cy="6" r="0.6" fill="currentColor"/><circle cx="8" cy="6" r="0.6" fill="currentColor"/></svg>`;
+  }
+  function _desktopRecordIconSvg(active) {
+    if (active) {
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
+    }
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>`;
+  }
+  async function _finishRecording(root, btn, iconFn, showToast3) {
+    const captures = getCaptureCount();
+    showToast3("Stopping recording...", root);
+    await stopVideoRecording();
+    hideRecordingHUD();
+    btn.innerHTML = iconFn(false);
+    btn.classList.remove("tb-active");
+    btn.style.color = "var(--tb-btn-text, #aaa)";
+    try {
+      _onSessionEnd == null ? void 0 : _onSessionEnd();
+    } catch (err) {
+      console.warn("[TraceBug] Session end hook failed:", err);
+    }
+    if (captures > 0) {
+      showToast3(`Recording stopped \xB7 ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
+    }
+    try {
+      if (!isQuickBugOpen()) await showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+    }
+  }
+  async function _toggleTabRecording(root, btn, showToast3) {
+    if (!isVideoSupported()) {
+      showToast3("Screen recording not supported in this browser", root);
+      return;
+    }
+    if (isVideoRecording()) {
+      return _finishRecording(root, btn, _tabRecordIconSvg, showToast3);
+    }
+    const ok = await startVideoRecording({
+      mode: "rolling",
+      surfaceMode: "tab",
+      onStatus: (status, message) => {
+        if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
+        else if (status === "warning" && message) showToast3(message, root);
+      }
+    });
+    if (!ok) {
+      showToast3("Recording cancelled", root);
+      return;
+    }
+    try {
+      _onSessionStart == null ? void 0 : _onSessionStart();
+    } catch (err) {
+      console.warn("[TraceBug] Session start hook failed:", err);
+    }
+    btn.innerHTML = _tabRecordIconSvg(true);
+    btn.classList.add("tb-active");
+    btn.style.color = "var(--tb-error, #ef4444)";
+    showRecordingHUD(root, {
+      onStop: () => {
+        _toggleTabRecording(root, btn, showToast3).catch(() => {
+        });
+      }
+    });
+    showToast3("Recording this tab \u2014 hit Stop to file a ticket", root);
+  }
+  async function _toggleDesktopRecording(root, btn, showToast3) {
+    if (!isVideoSupported()) {
+      showToast3("Screen recording not supported in this browser", root);
+      return;
+    }
+    if (isVideoRecording()) {
+      return _finishRecording(root, btn, _desktopRecordIconSvg, showToast3);
+    }
+    const choice = await _showDesktopPreflight(root, btn);
+    if (!choice) {
+      showToast3("Recording cancelled", root);
+      return;
+    }
+    const ok = await startVideoRecording({
+      mode: "rolling",
+      surfaceMode: "desktop",
+      withMicrophone: choice.withMicrophone,
+      onStatus: (status, message) => {
+        if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
+        else if (status === "warning" && message) showToast3(message, root);
+      }
+    });
+    if (!ok) {
+      showToast3("Recording cancelled", root);
+      return;
+    }
+    try {
+      _onSessionStart == null ? void 0 : _onSessionStart();
+    } catch (err) {
+      console.warn("[TraceBug] Session start hook failed:", err);
+    }
+    btn.innerHTML = _desktopRecordIconSvg(true);
+    btn.classList.add("tb-active");
+    btn.style.color = "var(--tb-error, #ef4444)";
+    showRecordingHUD(root, {
+      onStop: () => {
+        _toggleDesktopRecording(root, btn, showToast3).catch(() => {
+        });
+      }
+    });
+    showToast3("Recording started \u2014 hit Stop to file a ticket", root);
+  }
+  function _showDesktopPreflight(root, anchor) {
+    return new Promise((resolve) => {
+      const prior = root.querySelector('[data-tracebug="record-preflight"]');
+      if (prior) prior.remove();
+      const rect = anchor.getBoundingClientRect();
+      const pop = document.createElement("div");
+      pop.dataset.tracebug = "record-preflight";
+      pop.setAttribute("role", "dialog");
+      pop.style.cssText = `
+      position:fixed;
+      top:${Math.round(rect.bottom + 8)}px;
+      left:${Math.round(Math.min(rect.left, window.innerWidth - 260))}px;
+      width:240px;
+      background:var(--tb-bg-secondary, #1a1a2e);
+      border:1px solid var(--tb-border, #2a2a3e);
+      border-radius:12px;
+      padding:12px 12px 10px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.5);
+      z-index:2147483647;
+      font-family:var(--tb-font-family, system-ui, -apple-system, sans-serif);
+      color:var(--tb-text-primary, #e0e0e0);
+      font-size:12px;
+      animation:tracebug-preflight-in 0.15s ease;
+    `;
+      if (!document.getElementById("tracebug-preflight-anim")) {
+        const st = document.createElement("style");
+        st.id = "tracebug-preflight-anim";
+        st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
+        document.head.appendChild(st);
+      }
+      pop.innerHTML = `
+      <div style="font-weight:600;margin-bottom:8px;font-size:12px">Record desktop</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;background:var(--tb-bg-tertiary, #0f0f1e);user-select:none">
+        <input type="checkbox" data-tb-pre="mic" style="margin:0;cursor:pointer" />
+        <span style="display:flex;align-items:center;gap:6px;flex:1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span>Record microphone</span>
+        </span>
+      </label>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
+        <button data-tb-pre="start" style="flex:1.4;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">Start recording</button>
+      </div>
+    `;
+      root.appendChild(pop);
+      const micEl = pop.querySelector('[data-tb-pre="mic"]');
+      const cancelEl = pop.querySelector('[data-tb-pre="cancel"]');
+      const startEl = pop.querySelector('[data-tb-pre="start"]');
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        pop.remove();
+        document.removeEventListener("keydown", onKey, true);
+        document.removeEventListener("mousedown", onOutside, true);
+        resolve(value);
+      };
+      const onKey = (e2) => {
+        if (e2.key === "Escape") {
+          e2.preventDefault();
+          finish(null);
+        }
+        if (e2.key === "Enter") {
+          e2.preventDefault();
+          finish({ withMicrophone: micEl.checked });
+        }
+      };
+      const onOutside = (e2) => {
+        if (!pop.contains(e2.target)) finish(null);
+      };
+      cancelEl.addEventListener("click", () => finish(null));
+      startEl.addEventListener("click", () => finish({ withMicrophone: micEl.checked }));
+      document.addEventListener("keydown", onKey, true);
+      setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+      setTimeout(() => startEl.focus(), 0);
+    });
+  }
+  async function _openOrRefreshTicket(root) {
+    try {
+      if (isQuickBugOpen()) {
+        await refreshQuickBugCapture(root);
+      } else {
+        await showQuickBugCapture(root);
+      }
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket after capture:", err);
+    }
+  }
+  function _applyToolbarPosition(toolbar, position2) {
+    let savedPos = null;
+    try {
+      const raw = localStorage.getItem(DRAG_POS_KEY);
+      if (raw) savedPos = JSON.parse(raw);
+    } catch (e2) {
+    }
+    const isBottom = position2 === "bottom-right" || position2 === "bottom-left";
+    const isLeft = position2 === "left" || position2 === "bottom-left";
+    if (savedPos) {
+      toolbar.style.cssText = `
+      position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
+      z-index: 2147483647; display: flex; flex-direction: column;
+      align-items: center; gap: 3px; padding: 8px 6px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      transition: none; cursor: grab;
+    `;
+    } else if (isBottom) {
+      toolbar.style.cssText = `
+      position: fixed; ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
+      z-index: 2147483647; display: flex; flex-direction: row;
+      align-items: center; gap: 3px; padding: 6px 8px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      transition: all 0.3s ease;
+    `;
+    } else {
+      toolbar.style.cssText = `
+      position: fixed; ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
+      z-index: 2147483647; display: flex; flex-direction: column;
+      align-items: center; gap: 3px; padding: 8px 6px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      transition: ${isLeft ? "left" : "right"} 0.3s ease;
+    `;
+    }
+  }
+  function _initDrag(toolbar) {
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+    let hasMoved = false;
+    const onMouseDown = (e2) => {
+      if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
+      isDragging = true;
+      hasMoved = false;
+      startX = e2.clientX;
+      startY = e2.clientY;
+      const rect = toolbar.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+      toolbar.style.cursor = "grabbing";
+      toolbar.style.transition = "none";
+      e2.preventDefault();
+    };
+    const onMouseMove = (e2) => {
+      if (!isDragging) return;
+      const dx = e2.clientX - startX;
+      const dy = e2.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+      if (!hasMoved) return;
+      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+      const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+      toolbar.style.left = `${newLeft}px`;
+      toolbar.style.top = `${newTop}px`;
+      toolbar.style.right = "auto";
+      toolbar.style.bottom = "auto";
+      toolbar.style.transform = "none";
+    };
+    const onMouseUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      toolbar.style.cursor = "grab";
+      if (hasMoved) {
+        try {
+          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
+            x: parseInt(toolbar.style.left),
+            y: parseInt(toolbar.style.top)
+          }));
+        } catch (e2) {
+        }
+      }
+    };
+    toolbar.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    toolbar.addEventListener("touchstart", (e2) => {
+      if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
+      const touch = e2.touches[0];
+      isDragging = true;
+      hasMoved = false;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      const rect = toolbar.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+      toolbar.style.transition = "none";
+    }, { passive: true });
+    document.addEventListener("touchmove", (e2) => {
+      if (!isDragging) return;
+      const touch = e2.touches[0];
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+      if (!hasMoved) return;
+      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+      const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+      toolbar.style.left = `${newLeft}px`;
+      toolbar.style.top = `${newTop}px`;
+      toolbar.style.right = "auto";
+      toolbar.style.bottom = "auto";
+      toolbar.style.transform = "none";
+    }, { passive: true });
+    document.addEventListener("touchend", () => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (hasMoved) {
+        try {
+          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
+            x: parseInt(toolbar.style.left),
+            y: parseInt(toolbar.style.top)
+          }));
+        } catch (e2) {
+        }
+      }
+    });
+  }
+  function _convertToFab(toolbar, root, panel, showToast3) {
+    const buttons = Array.from(toolbar.children);
+    buttons.forEach((b) => {
+      const el = b;
+      if (el.id !== "tracebug-toolbar-panel-btn" && el.id !== "tracebug-toolbar-rec-dot") {
+        el.style.display = _fabExpanded ? "" : "none";
+      }
+    });
+    toolbar.style.cssText = `
+    position: fixed; right: 12px; bottom: 12px;
+    z-index: 2147483647; display: flex; flex-direction: column;
+    align-items: center; gap: 3px; padding: ${_fabExpanded ? "8px 6px" : "6px"};
+    background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+    border-radius: ${_fabExpanded ? "14px" : "50%"};
+    box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    min-width: 44px; min-height: 44px;
+    transition: all 0.2s ease;
+  `;
+    panel.style.width = "100vw";
+    panel.style.height = "80vh";
+    panel.style.bottom = _panelOpen ? "0" : "-85vh";
+    panel.style.right = "0";
+    panel.style.top = "auto";
+    panel.style.borderRadius = "16px 16px 0 0";
+  }
+  function _restoreToolbar(toolbar) {
+    const buttons = Array.from(toolbar.children);
+    buttons.forEach((b) => b.style.display = "");
+    _applyToolbarPosition(toolbar, _position);
+    if (_panelEl) {
+      _panelEl.style.width = "";
+      _panelEl.style.height = "";
+      _panelEl.style.bottom = "";
+      _panelEl.style.top = "";
+      _panelEl.style.borderRadius = "";
+      _panelEl.style.right = _panelOpen ? "0" : "-480px";
+    }
+  }
+  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _isRecording, _onToggleRecording, _onSessionStart, _onSessionEnd, _renderPanel, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded;
+  var init_compact_toolbar = __esm({
+    "src/compact-toolbar.ts"() {
+      "use strict";
+      init_element_annotate();
+      init_draw_mode();
+      init_annotation_store();
+      init_screenshot();
+      init_voice_recorder();
+      init_collectors();
+      init_screenshot();
+      init_region_screenshot();
+      init_plan();
+      init_upgrade_modal();
+      init_storage();
+      init_quick_bug();
+      init_helpers();
+      init_video_recorder();
+      init_recording_hud();
+      TOOLBAR_ID = "tracebug-compact-toolbar";
+      SETTINGS_ID = "tracebug-settings-card";
+      DRAG_POS_KEY = "tracebug_toolbar_pos";
+      _isRecording = true;
+      _onToggleRecording = null;
+      _onSessionStart = null;
+      _onSessionEnd = null;
+      _renderPanel = null;
+      _panelEl = null;
+      _panelOpen = false;
+      _toolbar = null;
+      _position = "right";
+      _isMobile = false;
+      _fabExpanded = false;
+    }
+  });
+
+  // src/onboarding.ts
+  function isComplete() {
+    try {
+      return localStorage.getItem(STORAGE_KEY2) === "true";
+    } catch (e2) {
+      return false;
+    }
+  }
+  function addLogoPulse() {
+    if (isComplete()) return;
+    const logo = document.getElementById("tracebug-toolbar-panel-btn");
+    if (!logo) return;
+    logo.style.animation = "tracebug-onboard-pulse 1.5s ease-in-out 6";
+    setTimeout(() => {
+      if (logo) logo.style.animation = "";
+    }, 1e4);
+  }
+  function cleanupOnboarding() {
+    _removeTooltip();
+    if (_cleanup3) {
+      _cleanup3();
+      _cleanup3 = null;
+    }
+  }
+  function _removeTooltip() {
+    const el = document.getElementById(TOOLTIP_ID);
+    if (el) el.remove();
+    STEPS.forEach((s) => {
+      const btn = document.getElementById(s.targetId);
+      if (btn) btn.style.boxShadow = "";
+    });
+  }
+  var STORAGE_KEY2, TOOLTIP_ID, STEPS, _cleanup3;
+  var init_onboarding = __esm({
+    "src/onboarding.ts"() {
+      "use strict";
+      STORAGE_KEY2 = "tracebug_onboarding_complete";
+      TOOLTIP_ID = "tracebug-onboarding-tooltip";
+      STEPS = [
+        {
+          targetId: "tracebug-toolbar-panel-btn",
+          text: "TraceBug is recording \u2014 find bugs, we\u2019ll write the report",
+          icon: "\u{1F44B}"
+        },
+        {
+          targetId: "tracebug-toolbar-screenshot-btn",
+          text: "Screenshot anything suspicious",
+          icon: "\u{1F4F7}"
+        },
+        {
+          targetId: "tracebug-toolbar-annotate-btn",
+          text: "Click elements to annotate feedback",
+          icon: "\u{1F3AF}"
+        },
+        {
+          targetId: "tracebug-toolbar-panel-btn",
+          text: "Open here to see sessions & export reports",
+          icon: "\u{1F4CB}"
+        }
+      ];
+      _cleanup3 = null;
+    }
+  });
+
+  // src/dashboard.ts
+  function setRecordingState(isRecording2, onToggle) {
+    _isRecording2 = isRecording2;
+    _onToggleRecording2 = onToggle;
+    setToolbarRecordingState(isRecording2, onToggle);
+  }
+  function updateRecordingState(isRecording2) {
+    _isRecording2 = isRecording2;
+    updateToolbarRecordingState(isRecording2);
+    const indicator = document.getElementById("bt-rec-indicator");
+    if (indicator) {
+      indicator.style.background = isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
+      indicator.title = isRecording2 ? "Recording" : "Paused";
+    }
+    const recBtn = document.getElementById("bt-rec-toggle");
+    if (recBtn) {
+      recBtn.textContent = isRecording2 ? "\u23F8 Pause" : "\u25B6 Record";
+      recBtn.style.color = isRecording2 ? "var(--tb-warning, #fbbf24)" : "var(--tb-success, #22c55e)";
+      recBtn.style.borderColor = isRecording2 ? "var(--tb-warning, #fbbf24)44" : "var(--tb-success, #22c55e)44";
+      recBtn.style.background = isRecording2 ? "var(--tb-warning-bg, #fbbf2422)" : "var(--tb-success-bg, #22c55e22)";
+    }
+  }
+  function mountDashboard(toolbarPosition, shortcuts) {
+    if (document.getElementById("tracebug-compact-toolbar")) return () => {
+    };
+    const style = document.createElement("style");
+    style.id = "tracebug-styles";
+    style.textContent = `
+    #tracebug-root {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 0 !important;
+      height: 0 !important;
+      overflow: visible !important;
+      z-index: 2147483647 !important;
+      pointer-events: none !important;
+      isolation: isolate !important;
+    }
+    #tracebug-root * {
+      pointer-events: auto;
+    }
+    #${PANEL_ID2} {
+      position: fixed !important;
+      top: 0 !important;
+      width: 470px !important;
+      height: 100vh !important;
+      z-index: 2147483647 !important;
+      background: var(--tb-panel-bg, #0f0f1a) !important;
+      border-left: 1px solid var(--tb-border, #2a2a3e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      font-family: var(--tb-font-mono, 'SF Mono', Consolas, monospace), var(--tb-font-family, system-ui, sans-serif) !important;
+      font-size: 13px !important;
+      overflow: hidden !important;
+      transition: right 0.3s ease, left 0.3s ease, bottom 0.3s ease !important;
+      display: flex !important;
+      flex-direction: column !important;
+      box-shadow: var(--tb-shadow-lg, -4px 0 30px rgba(0,0,0,0.6)) !important;
+    }
+    @media (max-width: 767px) {
+      #${PANEL_ID2} {
+        width: 100vw !important;
+        height: 80vh !important;
+        top: auto !important;
+        border-radius: 16px 16px 0 0 !important;
+        border-left: none !important;
+        border-top: 1px solid var(--tb-border, #2a2a3e) !important;
+      }
+    }
+    /* Accessibility: visible focus rings */
+    #tracebug-root button:focus-visible,
+    #tracebug-root input:focus-visible,
+    #tracebug-root select:focus-visible,
+    #tracebug-root textarea:focus-visible,
+    #tracebug-root [tabindex]:focus-visible {
+      outline: 2px solid var(--tb-accent, #7B61FF) !important;
+      outline-offset: 2px !important;
+    }
+    #tracebug-root *:focus:not(:focus-visible) {
+      outline: none !important;
+    }
+  `;
+    document.head.appendChild(style);
+    const root = document.createElement("div");
+    root.id = "tracebug-root";
+    root.setAttribute("role", "complementary");
+    root.setAttribute("aria-label", "TraceBug QA tools");
+    const panel = document.createElement("div");
+    panel.id = PANEL_ID2;
+    panel.style.right = "-480px";
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "false");
+    panel.setAttribute("aria-label", "TraceBug session panel");
+    const liveRegion = document.createElement("div");
+    liveRegion.id = "tracebug-live";
+    liveRegion.setAttribute("aria-live", "polite");
+    liveRegion.setAttribute("aria-atomic", "true");
+    liveRegion.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+    root.appendChild(liveRegion);
+    root.appendChild(panel);
+    document.documentElement.appendChild(root);
+    setRenderPanel(renderPanel);
+    const cleanupToolbar = mountCompactToolbar(root, panel, showToast2, renderAnnotationList, toolbarPosition, shortcuts);
+    showAnnotationBadges(root);
+    addLogoPulse();
+    const screenshotShortcut = (shortcuts == null ? void 0 : shortcuts.screenshot) || "ctrl+shift+s";
+    const keyHandler = async (e2) => {
+      if (matchesShortcut(e2, "ctrl+shift+b")) {
+        e2.preventDefault();
+        if (!isQuickBugOpen()) {
+          showQuickBugCapture(root).catch((err) => {
+            console.warn("[TraceBug] Quick bug capture failed:", err);
+            showToast2("Quick capture failed", root);
+          });
+        }
+        return;
+      }
+      if (matchesShortcut(e2, screenshotShortcut)) {
+        e2.preventDefault();
+        const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+        const currentSession = sessions[0];
+        const lastEvent = (currentSession == null ? void 0 : currentSession.events[currentSession.events.length - 1]) || null;
+        showToast2("Capturing screenshot...", root);
+        try {
+          const ss = await captureScreenshot(lastEvent);
+          showToast2(`Screenshot: ${ss.filename}`, root);
+          showAnnotationEditor(ss, root);
+        } catch (e3) {
+          showToast2("Screenshot failed", root);
+        }
+      }
+    };
+    document.addEventListener("keydown", keyHandler);
+    return () => {
+      root.remove();
+      style.remove();
+      cleanupToolbar();
+      clearAnnotationBadges();
+      cleanupOnboarding();
+      document.removeEventListener("keydown", keyHandler);
+    };
+  }
+  function renderPanel(panel) {
+    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const errorSessions = sessions.filter((s) => s.errorMessage);
+    const allSessions = sessions;
+    panel.innerHTML = `
+    <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="th-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#th-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#th-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#th-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="48" cy="41" r="5" fill="url(#th-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/></svg>TraceBug AI</div>
+          <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording2 ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording2 ? "Recording" : "Paused"}"></div>
+        </div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} \xB7 ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button id="bt-rec-toggle" style="${smallBtnStyle(_isRecording2 ? "#fbbf24" : "#22c55e")}font-size:10px">${_isRecording2 ? "\u23F8 Pause" : "\u25B6 Record"}</button>
+        <button id="bt-refresh" style="${smallBtnStyle("#3b82f6")}font-size:10px">\u21BB</button>
+        <button id="bt-clear" style="${smallBtnStyle("#ef4444")}font-size:10px">Clear</button>
+      </div>
+    </div>
+    <style>@keyframes bt-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }</style>
+    <div id="bt-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
+  `;
+    const content2 = panel.querySelector("#bt-content");
+    panel.querySelector("#bt-refresh").addEventListener("click", () => renderPanel(panel));
+    panel.querySelector("#bt-clear").addEventListener("click", () => {
+      if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
+        try {
+          clearAllSessions();
+        } catch (e2) {
+        }
+        try {
+          clearScreenshots();
+        } catch (e2) {
+        }
+        try {
+          clearVoiceTranscripts();
+        } catch (e2) {
+        }
+        try {
+          clearAllAnnotations();
+        } catch (e2) {
+        }
+        try {
+          clearAnnotationBadges();
+        } catch (e2) {
+        }
+        try {
+          clearNetworkFailures();
+        } catch (e2) {
+        }
+        renderPanel(panel);
+      }
+    });
+    panel.querySelector("#bt-rec-toggle").addEventListener("click", () => {
+      if (_onToggleRecording2) _onToggleRecording2();
+    });
+    if (allSessions.length === 0) {
+      content2.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--tb-text-muted, #555)">
+        <div style="font-size:36px;margin-bottom:12px">\u{1F50D}</div>
+        <div style="font-family:var(--tb-font-family, system-ui,sans-serif)">No sessions recorded yet.</div>
+        <div style="font-size:11px;margin-top:8px;color:var(--tb-text-muted, #444)">Interact with the app to start capturing events.</div>
+      </div>
+    `;
+      return;
+    }
+    const filterBar = document.createElement("div");
+    filterBar.dataset.tracebug = "filter-bar";
+    filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
+    filterBar.innerHTML = `
+    <input id="bt-search" type="text" placeholder="Search sessions..." style="
+      flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
+      border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 10px;
+      font-size:11px;font-family:var(--tb-font-family, inherit);outline:none;
+    " />
+    <select id="bt-filter" style="
+      background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
+      border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 8px;
+      font-size:11px;font-family:var(--tb-font-family, inherit);cursor:pointer;
+    ">
+      <option value="all">All</option>
+      <option value="errors">Has errors</option>
+      <option value="healthy">Healthy</option>
+    </select>
+  `;
+    content2.innerHTML = "";
+    content2.appendChild(filterBar);
+    const sessionsContainer = document.createElement("div");
+    sessionsContainer.id = "bt-sessions-list";
+    content2.appendChild(sessionsContainer);
+    function renderFilteredSessions(filter, search) {
+      sessionsContainer.innerHTML = "";
+      let filtered = allSessions;
+      if (filter === "errors") filtered = filtered.filter((s) => s.errorMessage);
+      if (filter === "healthy") filtered = filtered.filter((s) => !s.errorMessage);
+      if (search) {
+        const q = search.toLowerCase();
+        filtered = filtered.filter((s) => {
+          var _a;
+          if (s.sessionId.toLowerCase().includes(q)) return true;
+          if (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) return true;
+          if (s.reproSteps && s.reproSteps.toLowerCase().includes(q)) return true;
+          for (const e2 of s.events) {
+            if (e2.page && e2.page.toLowerCase().includes(q)) return true;
+            const d = e2.data || {};
+            const el = d.element || {};
+            if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
+            if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
+            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q)) return true;
+            if (((_a = d.request) == null ? void 0 : _a.url) && String(d.request.url).toLowerCase().includes(q)) return true;
+          }
+          return false;
+        });
+      }
+      if (filtered.length === 0) {
+        sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
+        return;
+      }
+      for (const session of filtered) {
+        sessionsContainer.appendChild(_createSessionCard(session, panel));
+      }
+    }
+    renderFilteredSessions("all", "");
+    content2.querySelector("#bt-search").addEventListener("input", (e2) => {
+      const search = e2.target.value;
+      const filter = content2.querySelector("#bt-filter").value;
+      renderFilteredSessions(filter, search);
+    });
+    content2.querySelector("#bt-filter").addEventListener("change", (e2) => {
+      const filter = e2.target.value;
+      const search = content2.querySelector("#bt-search").value;
+      renderFilteredSessions(filter, search);
+    });
+  }
+  function _createSessionCard(session, panel) {
+    var _a, _b;
+    const card = document.createElement("div");
+    card.style.cssText = "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
+    card.onmouseenter = () => card.style.borderColor = "var(--tb-border-hover, #4a4a6e)";
+    card.onmouseleave = () => card.style.borderColor = "var(--tb-border, #2a2a3e)";
+    const hasError = !!session.errorMessage;
+    const dot = hasError ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tb-error, #ef4444);margin-right:6px"></span>' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tb-success, #22c55e);margin-right:6px"></span>';
+    const badge = session.reproSteps ? '<span style="font-size:10px;background:#14532d;color:#4ade80;padding:2px 6px;border-radius:var(--tb-radius-sm, 4px);margin-left:6px">Repro Ready</span>' : "";
+    const lastEvent = session.events[session.events.length - 1];
+    let preview = `${session.events.length} events`;
+    if (hasError) {
+      preview = session.errorMessage.slice(0, 60) + (session.errorMessage.length > 60 ? "..." : "");
+    } else if (lastEvent) {
+      preview = describeEvent(lastEvent).slice(0, 60);
+    }
+    const pages = [...new Set(session.events.map((e2) => e2.page))];
+    const sessionName = pages.length > 0 ? _pageName(pages[0]) + " Session" : "Session";
+    card.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center">
+        ${dot}
+        <span style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-weight:600">${escapeHtml4(sessionName)}</span>
+        ${badge}
+      </div>
+      <span style="color:var(--tb-text-muted, #555);font-size:10px">${timeAgo(session.updatedAt)}</span>
+    </div>
+    <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml4(preview)}</div>
+    <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events \xB7 ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7B61FF")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
+      <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
+    </div>
+  `;
+    (_a = card.querySelector('[data-tracebug="view-ticket"]')) == null ? void 0 : _a.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const root = document.getElementById("tracebug-root");
+      if (root && !isQuickBugOpen()) {
+        showQuickBugCapture(root, { sessionId: session.sessionId }).catch(() => {
+        });
+      }
+    });
+    (_b = card.querySelector('[data-tracebug="open-detail"]')) == null ? void 0 : _b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      renderSessionDetail(panel, session);
+    });
+    card.onclick = () => renderSessionDetail(panel, session);
+    return card;
+  }
+  function _pageName(path) {
+    if (!path || path === "/") return "Home";
+    const parts = path.split("/").filter(Boolean);
+    const last = parts[parts.length - 1] || "Home";
+    return last.charAt(0).toUpperCase() + last.slice(1).replace(/[-_]/g, " ");
+  }
+  function renderSessionDetail(panel, session) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+    const content2 = panel.querySelector("#bt-content");
+    const s = session;
+    const problems = [];
+    const apiEvents = s.events.filter((e2) => e2.type === "api_request");
+    const errorEvents = s.events.filter((e2) => ["error", "unhandled_rejection"].includes(e2.type));
+    const consoleErrors = s.events.filter((e2) => e2.type === "console_error");
+    const failedApis = apiEvents.filter((e2) => {
+      var _a2, _b2;
+      return ((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b2 = e2.data.request) == null ? void 0 : _b2.statusCode) === 0;
+    });
+    const slowApis = apiEvents.filter((e2) => {
+      var _a2;
+      return ((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) > 3e3;
+    });
+    for (const ev of errorEvents) {
+      const errType = getErrorType(((_a = ev.data.error) == null ? void 0 : _a.message) || "");
+      problems.push({ severity: "critical", icon: "\u{1F4A5}", title: `${errType.type}: Runtime Exception`, detail: ((_b = ev.data.error) == null ? void 0 : _b.message) || "Unknown error", color: "#ef4444" });
+    }
+    for (const ev of failedApis) {
+      const r = ev.data.request;
+      const code = (r == null ? void 0 : r.statusCode) || 0;
+      const severity = code >= 500 || code === 0 ? "critical" : "warning";
+      problems.push({ severity, icon: code === 0 ? "\u{1F50C}" : "\u{1F6AB}", title: `HTTP ${code} \u2014 ${getStatusLabel(code)}`, detail: `${r == null ? void 0 : r.method} ${(_c = r == null ? void 0 : r.url) == null ? void 0 : _c.slice(0, 80)}`, color: getStatusColor(code) });
+    }
+    for (const ev of slowApis) {
+      const r = ev.data.request;
+      if (!failedApis.includes(ev)) {
+        problems.push({ severity: "warning", icon: "\u{1F40C}", title: `Slow Response \u2014 ${formatDuration(r == null ? void 0 : r.durationMs)}`, detail: `${r == null ? void 0 : r.method} ${(_d = r == null ? void 0 : r.url) == null ? void 0 : _d.slice(0, 80)}`, color: "#f97316" });
+      }
+    }
+    for (const ev of consoleErrors) {
+      const msg = ((_e = ev.data.error) == null ? void 0 : _e.message) || "";
+      if (!msg.includes("Warning:") && !msg.includes("ReactDOM")) {
+        problems.push({ severity: "info", icon: "\u26A0\uFE0F", title: "Console Error", detail: msg.slice(0, 120), color: "#fb923c" });
+      }
+    }
+    const firstTs = s.events.length > 0 ? s.events[0].timestamp : s.createdAt;
+    const lastTs = s.events.length > 0 ? s.events[s.events.length - 1].timestamp : s.createdAt;
+    const sessionDur = lastTs - firstTs;
+    const avgApiTime = apiEvents.length > 0 ? Math.round(apiEvents.reduce((sum, e2) => {
+      var _a2;
+      return sum + (((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) || 0);
+    }, 0) / apiEvents.length) : 0;
+    const maxApiTime = apiEvents.length > 0 ? Math.max(...apiEvents.map((e2) => {
+      var _a2;
+      return ((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) || 0;
+    })) : 0;
+    const pagesVisited = new Set(s.events.map((e2) => e2.page)).size;
+    const bugTitle = generateBugTitle(s) || "Session Details";
+    const severityBadge2 = problems.some((p) => p.severity === "critical") ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fca5a5">Critical</span>` : problems.length > 0 ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#78350f;color:var(--tb-warning, #fbbf24)">Warning</span>` : `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#14532d;color:#4ade80">Healthy</span>`;
+    const hasErrors = errorEvents.length > 0 || s.errorMessage;
+    let html = "";
+    html += `<div style="position:sticky;top:0;z-index:10;background:var(--tb-panel-bg, #0f0f1a);margin:-12px -16px 12px -16px;padding:12px 16px 0 16px;border-bottom:1px solid var(--tb-border, #2a2a3e)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <button id="bt-back" style="background:none;border:none;color:var(--tb-info, #3b82f6);cursor:pointer;font-size:12px;padding:0;font-family:var(--tb-font-family, inherit)">\u2190 Back</button>
+      ${severityBadge2}
+    </div>
+    <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);line-height:1.3;margin-bottom:10px">${escapeHtml4(bugTitle)}</div>
+    <div id="bt-tab-bar" style="display:flex;gap:0;overflow-x:auto">
+      <button class="bt-tab bt-tab-active" data-tab="overview" style="${_tabBtnStyle(true)}">Overview</button>
+      <button class="bt-tab" data-tab="timeline" style="${_tabBtnStyle(false)}">Timeline</button>
+      ${hasErrors ? `<button class="bt-tab" data-tab="errors" style="${_tabBtnStyle(false)}">Errors <span style="background:var(--tb-error, #ef4444);color:#fff;font-size:8px;padding:1px 5px;border-radius:6px;margin-left:2px">${errorEvents.length}</span></button>` : ""}
+      <button class="bt-tab" data-tab="export" style="${_tabBtnStyle(false)}">Export</button>
+    </div>
+  </div>`;
+    html += `<div id="bt-tab-overview" class="bt-tab-content">`;
+    html += `<div style="background:#0c1222;border:1px solid #1e3a5f;border-radius:10px;padding:10px;margin-bottom:14px">
+    <div style="font-size:10px;color:#60a5fa;font-weight:700;margin-bottom:8px;font-family:var(--tb-font-family, system-ui,sans-serif)">QA TOOLS</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button id="bt-screenshot" style="${smallBtnStyle("#22d3ee")}font-size:10px">\u{1F4F8} Screenshot</button>
+      <button id="bt-add-note" style="${smallBtnStyle("#a78bfa")}font-size:10px">\u{1F4DD} Add Note</button>
+      <button id="bt-voice-note" style="${smallBtnStyle("#f59e0b")}font-size:10px;${isVoiceSupported() ? "" : "display:none"}">\u{1F3A4} Voice</button>
+    </div>
+  </div>`;
+    html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif)">Session Overview</div>
+      <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${problems.some((p) => p.severity === "critical") ? "#7f1d1d" : problems.length > 0 ? "#78350f" : "#14532d"};color:${problems.some((p) => p.severity === "critical") ? "#fca5a5" : problems.length > 0 ? "#fbbf24" : "#4ade80"};font-family:var(--tb-font-family, system-ui,sans-serif)">${problems.some((p) => p.severity === "critical") ? "Has Errors" : problems.length > 0 ? "Has Warnings" : "Healthy"}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Duration</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${formatDuration(sessionDur)}</div>
+      </div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Events</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${s.events.length}</div>
+      </div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Pages Visited</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${pagesVisited}</div>
+      </div>
+      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">API Calls</div>
+        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${apiEvents.length} <span style="font-size:10px;color:${failedApis.length > 0 ? "#ef4444" : "#22c55e"}">(${failedApis.length} failed)</span></div>
+      </div>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <span style="font-size:10px;color:var(--tb-text-muted, #555)">ID: ${s.sessionId.slice(0, 8)}\u2026</span>
+      <span style="font-size:10px;color:var(--tb-text-muted, #444)">\xB7</span>
+      <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(s.createdAt).toLocaleString()}</span>
+    </div>
+  </div>`;
+    if (problems.length > 0) {
+      const criticalCount = problems.filter((p) => p.severity === "critical").length;
+      const warningCount = problems.filter((p) => p.severity === "warning").length;
+      const infoCount = problems.filter((p) => p.severity === "info").length;
+      html += `<div style="border:1px solid ${criticalCount > 0 ? "#7f1d1d" : "#78350f"};background:${criticalCount > 0 ? "#1a0505" : "#1a1005"};border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:${criticalCount > 0 ? "#fca5a5" : "#fbbf24"};font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F50D} Problems Detected (${problems.length})</div>
+        <div style="display:flex;gap:6px">
+          ${criticalCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#7f1d1d;color:#fca5a5">${criticalCount} Critical</span>` : ""}
+          ${warningCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#78350f;color:var(--tb-warning, #fbbf24)">${warningCount} Warning</span>` : ""}
+          ${infoCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#1e1533;color:#c084fc">${infoCount} Info</span>` : ""}
+        </div>
+      </div>`;
+      for (const p of problems) {
+        const sevBorder = p.severity === "critical" ? "#7f1d1d" : p.severity === "warning" ? "#78350f" : "#2a2a3e";
+        const sevBg = p.severity === "critical" ? "#0f0205" : p.severity === "warning" ? "#0f0a02" : "#12121f";
+        html += `<div style="border:1px solid ${sevBorder};background:${sevBg};border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:13px">${p.icon}</span>
+          <span style="font-size:11px;font-weight:600;color:${p.color};font-family:var(--tb-font-family, system-ui,sans-serif)">${escapeHtml4(p.title)}</span>
+        </div>
+        <div style="color:var(--tb-text-muted, #888);font-size:11px;line-height:1.4;padding-left:22px;word-break:break-word">${escapeHtml4(p.detail)}</div>
+      </div>`;
+      }
+      html += `</div>`;
+    }
+    if (s.errorMessage) {
+      const errType = getErrorType(s.errorMessage);
+      html += `<div style="border:1px solid #7f1d1d;background:#1a0505;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:#fca5a5;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Details</span>
+        <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}44">${errType.type}</span>
+      </div>
+      <div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
+        <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Message</div>
+        <div style="color:#fca5a5;font-size:12px;line-height:1.5;word-break:break-word">${escapeHtml4(s.errorMessage)}</div>
+      </div>`;
+      if (s.errorStack) {
+        const locationMatch = s.errorStack.match(/at\s+(\S+)\s+\(([^)]+)\)/);
+        if (locationMatch) {
+          html += `<div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
+          <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Location</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:12px;color:#60a5fa">${escapeHtml4(locationMatch[1])}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #555)">at</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);word-break:break-all">${escapeHtml4(locationMatch[2])}</span>
+          </div>
+        </div>`;
+        }
+        html += `<details style="margin-top:4px">
+        <summary style="font-size:10px;color:var(--tb-text-muted, #555);cursor:pointer;user-select:none;font-family:var(--tb-font-family, system-ui,sans-serif)">View Full Stack Trace</summary>
+        <pre style="color:#dc262690;font-size:10px;margin-top:6px;white-space:pre-wrap;line-height:1.4;max-height:150px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:var(--tb-radius-sm, 4px)">${escapeHtml4(s.errorStack)}</pre>
+      </details>`;
+      }
+      html += `</div>`;
+    }
+    if (apiEvents.length > 0) {
+      html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u26A1 Performance</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Avg</div>
+          <div style="font-size:13px;color:${getSpeedLabel(avgApiTime).color};margin-top:2px">${formatDuration(avgApiTime)}</div>
+        </div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Slowest</div>
+          <div style="font-size:13px;color:${getSpeedLabel(maxApiTime).color};margin-top:2px">${formatDuration(maxApiTime)}</div>
+        </div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
+          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Success</div>
+          <div style="font-size:13px;color:${failedApis.length === 0 ? "#22c55e" : "#fbbf24"};margin-top:2px">${apiEvents.length > 0 ? Math.round((apiEvents.length - failedApis.length) / apiEvents.length * 100) : 0}%</div>
+        </div>
+      </div>`;
+      for (const ev of apiEvents) {
+        const r = ev.data.request;
+        const code = (r == null ? void 0 : r.statusCode) || 0;
+        const dur = (r == null ? void 0 : r.durationMs) || 0;
+        const speed = getSpeedLabel(dur);
+        const statusClr = getStatusColor(code);
+        const isFail = code >= 400 || code === 0;
+        const urlPath = ((r == null ? void 0 : r.url) || "").replace(/https?:\/\/[^/]+/, "").slice(0, 50);
+        html += `<div style="background:${isFail ? "#0f0205" : "#0f0f1a"};border:1px solid ${isFail ? "#7f1d1d44" : "#1e1e32"};border-radius:var(--tb-radius-md, 6px);padding:8px 10px;margin-bottom:4px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:600;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r == null ? void 0 : r.method) || "GET"}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml4(urlPath)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:700;color:${statusClr}">${code}</span>
+            <span style="font-size:9px;color:${statusClr}66">${getStatusLabel(code)}</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;height:3px;background:#1e1e32;border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(100, dur / Math.max(maxApiTime, 1) * 100)}%;background:${speed.color};border-radius:2px"></div>
+          </div>
+          <span style="font-size:10px;color:${speed.color};white-space:nowrap">${formatDuration(dur)}</span>
+          ${dur > 3e3 ? `<span style="font-size:8px;padding:1px 4px;border-radius:2px;background:${speed.color}22;color:${speed.color}">${speed.label}</span>` : ""}
+        </div>
+      </div>`;
+      }
+      html += `</div>`;
+    }
+    if (s.reproSteps) {
+      html += `<div style="border:1px solid #14532d;background:#031a09;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:#4ade80;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4CB} Reproduction Steps</div>
+        <button id="bt-copy" style="${smallBtnStyle("#3b82f6")}font-size:10px">Copy</button>
+      </div>
+      <pre style="color:#bbf7d0;font-size:12px;white-space:pre-wrap;line-height:1.7;margin:0">${escapeHtml4(s.reproSteps)}</pre>
+      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml4(s.errorSummary)}</pre></div>` : ""}
+    </div>`;
+    }
+    const annotations = s.annotations || [];
+    if (annotations.length > 0) {
+      html += `<div style="border:1px solid #1e3a5f;background:#0c1222;border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4DD} Tester Notes (${annotations.length})</div>`;
+      for (const note of annotations) {
+        const sevColor = note.severity === "critical" ? "#ef4444" : note.severity === "major" ? "#f97316" : note.severity === "minor" ? "#3b82f6" : "#888";
+        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);background:var(--tb-bg-primary, #12121f);border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;font-weight:600;text-transform:uppercase">${note.severity}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(note.timestamp).toLocaleTimeString()}</span>
+        </div>
+        <div style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;line-height:1.4">${escapeHtml4(note.text)}</div>
+        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:var(--tb-success, #22c55e);font-weight:600">Expected:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml4(note.expected)}</span></div>` : ""}
+        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:var(--tb-error, #ef4444);font-weight:600">Actual:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml4(note.actual)}</span></div>` : ""}
+      </div>`;
+      }
+      html += `</div>`;
+    }
+    const screenshots2 = getScreenshots();
+    if (screenshots2.length > 0) {
+      html += `<div style="border:1px solid var(--tb-border, #2a2a3e);background:var(--tb-bg-primary, #12121f);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4F8} Screenshots (${screenshots2.length})</div>`;
+      for (const ss of screenshots2) {
+        html += `<div style="margin-bottom:10px">
+        <div style="font-size:10px;color:var(--tb-text-muted, #888);margin-bottom:4px">${escapeHtml4(ss.filename)} \u2014 ${escapeHtml4(ss.page)}</div>
+        <img src="${ss.dataUrl}" style="max-width:100%;border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px)" />
+      </div>`;
+      }
+      html += `</div>`;
+    }
+    const envInfo = s.environment;
+    if (envInfo) {
+      html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F5A5} Environment</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Browser</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.browser)} ${escapeHtml4(envInfo.browserVersion)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">OS</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.os)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Viewport</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.viewport)}</div></div>
+        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Device</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${envInfo.deviceType}</div></div>
+      </div>
+    </div>`;
+    }
+    html += `</div>`;
+    html += `<div id="bt-tab-timeline" class="bt-tab-content" style="display:none">`;
+    html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif)">Event Timeline (${s.events.length})</div>
+    <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(firstTs).toLocaleTimeString()} \u2014 ${new Date(lastTs).toLocaleTimeString()}</span>
+  </div>
+  <div style="position:relative;padding-left:24px">
+    <div style="position:absolute;left:7px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom, #2a2a3e, #1e1e32)"></div>`;
+    for (let i = 0; i < s.events.length; i++) {
+      const ev = s.events[i];
+      const c = eventConfig[ev.type] || { label: ev.type, icon: "\u{1F4CC}", color: "#666", bg: "#1a1a2e" };
+      const isErr = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
+      const isApiErr = ev.type === "api_request" && (((_f = ev.data.request) == null ? void 0 : _f.statusCode) >= 400 || ((_g = ev.data.request) == null ? void 0 : _g.statusCode) === 0);
+      const isSlowApi = ev.type === "api_request" && ((_h = ev.data.request) == null ? void 0 : _h.durationMs) > 3e3;
+      const hasProblem = isErr || isApiErr;
+      const dotColor = hasProblem ? "#ef4444" : isSlowApi ? "#f97316" : c.color;
+      const timeSincePrev = i > 0 ? ev.timestamp - s.events[i - 1].timestamp : 0;
+      if (timeSincePrev > 2e3 && i > 0) {
+        html += `<div style="position:relative;margin-bottom:4px;margin-top:4px">
+        <div style="position:absolute;left:-21px;top:4px;width:6px;height:6px;border-radius:50%;background:#2a2a3e;border:1px solid #333"></div>
+        <div style="font-size:9px;color:var(--tb-text-muted, #444);font-style:italic;padding:2px 0">\u23F1 ${formatDuration(timeSincePrev)} later</div>
+      </div>`;
+      }
+      html += `<div style="position:relative;margin-bottom:6px">
+      <div style="position:absolute;left:-21px;top:6px;width:10px;height:10px;border-radius:50%;background:${dotColor};border:2px solid ${dotColor}44;box-shadow:0 0 ${hasProblem ? "6" : "0"}px ${dotColor}44"></div>
+      <div style="border:1px solid ${hasProblem ? "#7f1d1d" : isSlowApi ? "#78350f44" : "#1e1e32"};background:${hasProblem ? "#1a0505" : isSlowApi ? "#1a0f05" : "#12121f"};border-radius:var(--tb-radius-md, 8px);padding:10px 12px;transition:border-color 0.2s">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:12px">${c.icon}</span>
+          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${c.bg};color:${c.color};font-weight:600">${c.label}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(ev.timestamp).toLocaleTimeString()}</span>
+          <span style="font-size:9px;color:var(--tb-text-muted, #333);margin-left:auto">${ev.page}</span>
+        </div>`;
+      if (ev.type === "api_request") {
+        const r = ev.data.request;
+        const code = (r == null ? void 0 : r.statusCode) || 0;
+        const dur = (r == null ? void 0 : r.durationMs) || 0;
+        const speed = getSpeedLabel(dur);
+        const urlPath = ((r == null ? void 0 : r.url) || "").replace(/https?:\/\/[^/]+/, "");
+        html += `<div style="margin-top:4px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r == null ? void 0 : r.method) || "GET"}</span>
+            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml4((urlPath == null ? void 0 : urlPath.slice(0, 80)) || "")}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:11px;font-weight:700;color:${getStatusColor(code)}">${code}</span>
+              <span style="font-size:10px;color:${getStatusColor(code)}88">${getStatusLabel(code)}</span>
+            </div>
+            <span style="color:var(--tb-text-muted, #333)">\xB7</span>
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="font-size:10px;color:${speed.color}">${formatDuration(dur)}</span>
+              ${dur > 3e3 ? `<span style="font-size:8px;padding:1px 4px;border-radius:2px;background:${speed.color}22;color:${speed.color};border:1px solid ${speed.color}33">${speed.label}</span>` : ""}
+            </div>
+          </div>
+          <div style="height:3px;background:#1e1e32;border-radius:2px;overflow:hidden;margin-top:6px">
+            <div style="height:100%;width:${Math.min(100, dur / Math.max(maxApiTime, 1) * 100)}%;background:${speed.color};border-radius:2px;transition:width 0.3s"></div>
+          </div>
+        </div>`;
+      } else if (ev.type === "click") {
+        const el = ev.data.element;
+        const target = (el == null ? void 0 : el.ariaLabel) || ((_i = el == null ? void 0 : el.text) == null ? void 0 : _i.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"</div>`;
+        const details = [];
+        if (el == null ? void 0 : el.tag) details.push(`&lt;${escapeHtml4(el.tag)}&gt;`);
+        if (el == null ? void 0 : el.id) details.push(`#${escapeHtml4(el.id)}`);
+        if (el == null ? void 0 : el.className) details.push(`.${escapeHtml4(el.className.split(" ")[0])}`);
+        if (el == null ? void 0 : el.href) details.push(`\u2192 ${escapeHtml4(el.href.slice(0, 60))}`);
+        if (el == null ? void 0 : el.role) details.push(`role="${escapeHtml4(el.role)}"`);
+        if (el == null ? void 0 : el.testId) details.push(`data-testid="${escapeHtml4(el.testId)}"`);
+        if (details.length > 0) {
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">${details.join(" ")}</div>`;
+        }
+      } else if (ev.type === "input") {
+        const inp = ev.data.element;
+        const fieldName = (inp == null ? void 0 : inp.name) || (inp == null ? void 0 : inp.id) || "field";
+        const inputType = (inp == null ? void 0 : inp.type) || "text";
+        if (inputType === "checkbox" || inputType === "radio") {
+          html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">${(inp == null ? void 0 : inp.checked) ? "Checked" : "Unchecked"} "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
+        } else {
+          const val = inp == null ? void 0 : inp.value;
+          if (val && val !== "[REDACTED]") {
+            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
+            html += `<div style="font-size:10px;color:#a78bfa;margin-top:3px;background:#1e153344;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;word-break:break-word">"${escapeHtml4(val.slice(0, 150))}"</div>`;
+          } else {
+            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>
+            <div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${(inp == null ? void 0 : inp.valueLength) || 0} characters ${val === "[REDACTED]" ? '<span style="color:#f87171">\u{1F512} redacted</span>' : ""}</div>`;
+          }
+        }
+        if (inp == null ? void 0 : inp.placeholder) {
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #333);margin-top:2px">placeholder: "${escapeHtml4(inp.placeholder)}"</div>`;
+        }
+      } else if (ev.type === "select_change") {
+        const sel = ev.data.element;
+        const fieldName = (sel == null ? void 0 : sel.name) || (sel == null ? void 0 : sel.id) || "dropdown";
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml4(fieldName)}</span>" dropdown</div>`;
+        html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml4((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
+        if ((sel == null ? void 0 : sel.allOptions) && sel.allOptions.length > 0) {
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o) => escapeHtml4(o)).join(", ")}</div>`;
+        }
+      } else if (ev.type === "form_submit") {
+        const f2 = ev.data.form;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${(f2 == null ? void 0 : f2.id) ? `"<span style="color:#fb923c">${escapeHtml4(f2.id)}</span>"` : ""}</div>`;
+        if ((f2 == null ? void 0 : f2.fields) && Object.keys(f2.fields).length > 0) {
+          html += `<div style="margin-top:4px;background:#1a150544;padding:6px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid var(--tb-border, #2a2a3e)">`;
+          for (const [key, val] of Object.entries(f2.fields)) {
+            html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> <span style="color:var(--tb-warning, #fbbf24)">${escapeHtml4(String(val).slice(0, 80))}</span></div>`;
+          }
+          html += `</div>`;
+        }
+        if (f2 == null ? void 0 : f2.method) {
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml4(String(f2.method).toUpperCase())} ${f2.action ? `\u2192 ${escapeHtml4(f2.action.slice(0, 60))}` : ""}</div>`;
+        }
+      } else if (ev.type === "route_change") {
+        html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px">
+          <span style="color:var(--tb-text-muted, #888);background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px">${escapeHtml4(ev.data.from || "/")}</span>
+          <span style="color:#22d3ee">\u2192</span>
+          <span style="color:#22d3ee;background:#0c2e3344;padding:2px 6px;border-radius:3px;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>
+        </div>`;
+      } else if (ev.type === "error" || ev.type === "unhandled_rejection") {
+        const errType = getErrorType(((_j = ev.data.error) == null ? void 0 : _j.message) || "");
+        html += `<div style="margin-top:2px">
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+            <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}33">${errType.type}</span>
+          </div>
+          <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4(((_k = ev.data.error) == null ? void 0 : _k.message) || "Unknown error")}</div>
+          ${((_l = ev.data.error) == null ? void 0 : _l.source) ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml4(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
+        </div>`;
+      } else if (ev.type === "console_error") {
+        html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4((((_m = ev.data.error) == null ? void 0 : _m.message) || "").slice(0, 200))}</div>`;
+      } else {
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.3">${escapeHtml4(describeEvent(ev))}</div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</div>`;
+    html += `</div>`;
+    html += `<div id="bt-tab-export" class="bt-tab-content" style="display:none">`;
+    html += `<div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:14px;font-family:var(--tb-font-family, system-ui,sans-serif)">Export & Share</div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Issue Trackers</div>
+    <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:11px;text-align:left;padding:10px">\u{1F419} Copy GitHub Issue (Markdown)</button>
+    <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:11px;text-align:left;padding:10px">\u{1F3AB} Copy Jira Ticket</button>
+  </div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Downloads</div>
+    <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:11px;text-align:left;padding:10px">\u{1F4C4} PDF Report</button>
+    <button id="bt-download-json" style="${smallBtnStyle("#22d3ee")}font-size:11px;text-align:left;padding:10px">\u2B07 JSON Data</button>
+    <button id="bt-download-txt" style="${smallBtnStyle("#a78bfa")}font-size:11px;text-align:left;padding:10px">\u2B07 Text Report</button>
+    <button id="bt-download-html" style="${smallBtnStyle("#f472b6")}font-size:11px;text-align:left;padding:10px">\u2B07 HTML Report</button>
+  </div>`;
+    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Clipboard</div>
+    <button id="bt-copy-report" style="${smallBtnStyle("#3b82f6")}font-size:11px;text-align:left;padding:10px">\u{1F4CB} Copy Full Report (Plain Text)</button>
+  </div>`;
+    html += `<div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:12px;margin-top:8px">
+    <button id="bt-delete" style="${smallBtnStyle("#ef4444")}font-size:11px;width:100%;padding:10px">\u{1F5D1} Delete This Session</button>
+  </div>`;
+    html += `</div>`;
+    content2.innerHTML = html;
+    const tabs = content2.querySelectorAll(".bt-tab");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        tabs.forEach((t) => {
+          t.style.cssText = _tabBtnStyle(false);
+          t.classList.remove("bt-tab-active");
+        });
+        tab.style.cssText = _tabBtnStyle(true);
+        tab.classList.add("bt-tab-active");
+        content2.querySelectorAll(".bt-tab-content").forEach((c) => c.style.display = "none");
+        const target = content2.querySelector(`#bt-tab-${tab.dataset.tab}`);
+        if (target) target.style.display = "block";
+      });
+    });
+    content2.querySelector("#bt-back").addEventListener("click", () => renderPanel(panel));
+    const copyBtn = content2.querySelector("#bt-copy");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", () => {
+        const text = `Reproduction Steps:
+${s.reproSteps}
+
+Error: ${s.errorMessage}
+
+${s.errorSummary || ""}`;
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = "\u2713 Copied!";
+          setTimeout(() => copyBtn.textContent = "Copy", 2e3);
+        });
+      });
+    }
+    content2.querySelector("#bt-download-json").addEventListener("click", () => {
+      downloadFile(
+        `tracebug-${s.sessionId.slice(0, 8)}.json`,
+        JSON.stringify(s, null, 2),
+        "application/json"
+      );
+    });
+    content2.querySelector("#bt-download-txt").addEventListener("click", () => {
+      const report = buildTextReport(s, problems, apiEvents, sessionDur);
+      downloadFile(
+        `tracebug-report-${s.sessionId.slice(0, 8)}.txt`,
+        report,
+        "text/plain"
+      );
+    });
+    content2.querySelector("#bt-download-html").addEventListener("click", () => {
+      const htmlReport = buildHtmlReport(s, problems, apiEvents, sessionDur);
+      downloadFile(
+        `tracebug-report-${s.sessionId.slice(0, 8)}.html`,
+        htmlReport,
+        "text/html"
+      );
+    });
+    const copyReportBtn = content2.querySelector("#bt-copy-report");
+    if (copyReportBtn) {
+      copyReportBtn.addEventListener("click", () => {
+        const report = buildTextReport(s, problems, apiEvents, sessionDur);
+        navigator.clipboard.writeText(report).then(() => {
+          copyReportBtn.textContent = "\u2713 Copied!";
+          setTimeout(() => copyReportBtn.textContent = "\u{1F4CB} Copy Full Report", 2e3);
+        });
+      });
+    }
+    content2.querySelector("#bt-delete").addEventListener("click", () => {
+      if (confirm("Delete this session?")) {
+        deleteSession(session.sessionId);
+        renderPanel(panel);
+      }
+    });
+    const ssBtn = content2.querySelector("#bt-screenshot");
+    if (ssBtn) {
+      ssBtn.addEventListener("click", async () => {
+        ssBtn.textContent = "\u{1F4F8} Capturing...";
+        try {
+          const lastEvent = s.events[s.events.length - 1] || null;
+          const ss = await captureScreenshot(lastEvent);
+          ssBtn.textContent = `\u2713 ${ss.filename}`;
+          setTimeout(() => {
+            ssBtn.textContent = "\u{1F4F8} Screenshot";
+          }, 3e3);
+          const root = document.getElementById("tracebug-root");
+          if (root) showAnnotationEditor(ss, root);
+        } catch (e2) {
+          ssBtn.textContent = "\u2717 Failed";
+          setTimeout(() => {
+            ssBtn.textContent = "\u{1F4F8} Screenshot";
+          }, 2e3);
+        }
+      });
+    }
+    const noteBtn = content2.querySelector("#bt-add-note");
+    if (noteBtn) {
+      noteBtn.addEventListener("click", () => {
+        showNoteDialog(s.sessionId, panel, session);
+      });
+    }
+    const ghBtn = content2.querySelector("#bt-github-issue");
+    if (ghBtn) {
+      ghBtn.addEventListener("click", () => {
+        const report = buildReport(session);
+        const md = generateGitHubIssue(report);
+        navigator.clipboard.writeText(md).then(() => {
+          ghBtn.textContent = "\u2713 Copied!";
+          setTimeout(() => {
+            ghBtn.textContent = "\u{1F419} GitHub Issue";
+          }, 2e3);
+          if (report.screenshots.length > 0) {
+            downloadAllScreenshots();
+          }
+        });
+      });
+    }
+    const jiraBtn = content2.querySelector("#bt-jira-ticket");
+    if (jiraBtn) {
+      jiraBtn.addEventListener("click", () => {
+        const report = buildReport(session);
+        const ticket = generateJiraTicket(report);
+        const text = `Summary: ${ticket.summary}
+Priority: ${ticket.priority}
+Labels: ${ticket.labels.join(", ")}
+
+${ticket.description}`;
+        navigator.clipboard.writeText(text).then(() => {
+          jiraBtn.textContent = "\u2713 Copied!";
+          setTimeout(() => {
+            jiraBtn.textContent = "\u{1F3AB} Jira Ticket";
+          }, 2e3);
+          if (report.screenshots.length > 0) {
+            downloadAllScreenshots();
+          }
+        });
+      });
+    }
+    const pdfBtn = content2.querySelector("#bt-download-pdf");
+    if (pdfBtn) {
+      pdfBtn.addEventListener("click", () => {
+        const report = buildReport(session);
+        generatePdfReport(report);
+      });
+    }
+    const voiceBtn = content2.querySelector("#bt-voice-note");
+    if (voiceBtn) {
+      voiceBtn.addEventListener("click", () => {
+        showVoiceDialog(s.sessionId, panel, session);
+      });
+    }
+  }
+  function showNoteDialog(sessionId, panel, session) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+    overlay.innerHTML = `
+    <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:12px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4DD} Add Tester Note</div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">What did you observe?</label>
+        <textarea id="bt-note-text" style="width:100%;height:60px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit);resize:vertical" placeholder="Describe the issue..."></textarea>
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Expected behavior</label>
+        <input id="bt-note-expected" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)" placeholder="What should happen?" />
+      </div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Actual behavior</label>
+        <input id="bt-note-actual" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)" placeholder="What actually happened?" />
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Severity</label>
+        <select id="bt-note-severity" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)">
+          <option value="critical">Critical \u2014 App broken/unusable</option>
+          <option value="major">Major \u2014 Feature not working</option>
+          <option value="minor" selected>Minor \u2014 Cosmetic/UX issue</option>
+          <option value="info">Info \u2014 Observation/Note</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="bt-note-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
+        <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save Note</button>
+      </div>
+    </div>
+  `;
+    const panelEl = panel.querySelector("#bt-content") || panel;
+    panelEl.appendChild(overlay);
+    overlay.querySelector("#bt-note-cancel").addEventListener("click", () => overlay.remove());
+    overlay.querySelector("#bt-note-save").addEventListener("click", () => {
+      const text = overlay.querySelector("#bt-note-text").value.trim();
+      if (!text) return;
+      const annotation = {
+        id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        text,
+        expected: overlay.querySelector("#bt-note-expected").value.trim() || void 0,
+        actual: overlay.querySelector("#bt-note-actual").value.trim() || void 0,
+        severity: overlay.querySelector("#bt-note-severity").value
+      };
+      addAnnotation(sessionId, annotation);
+      overlay.remove();
+      const updatedSessions = getAllSessions();
+      const updatedSession = updatedSessions.find((s) => s.sessionId === sessionId);
+      if (updatedSession) {
+        renderSessionDetail(panel, updatedSession);
+      }
+    });
+  }
+  function showVoiceDialog(sessionId, panel, session) {
+    const overlay = document.createElement("div");
+    overlay.id = "bt-voice-overlay";
+    overlay.dataset.tracebug = "voice-dialog";
+    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+    overlay.innerHTML = `
+    <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
+      <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F3A4} Voice Bug Description</div>
+      <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
+      <div id="bt-voice-status" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div id="bt-voice-dot" style="width:10px;height:10px;border-radius:50%;background:#666"></div>
+        <span id="bt-voice-status-text" style="font-size:11px;color:var(--tb-text-muted, #888)">Click Start to begin recording</span>
+      </div>
+      <textarea id="bt-voice-transcript" style="width:100%;height:100px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit);resize:vertical" placeholder="Your speech will appear here...&#10;&#10;You can also type or edit the text manually."></textarea>
+      <div id="bt-voice-interim" style="font-size:11px;color:#f59e0b88;min-height:20px;margin-top:4px;font-style:italic"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button id="bt-voice-start" style="background:var(--tb-success, #22c55e);color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);flex:1">\u{1F3A4} Start Recording</button>
+        <button id="bt-voice-stop" style="background:var(--tb-error, #ef4444)22;color:var(--tb-error, #ef4444);border:1px solid #ef444444;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);flex:1;display:none">\u23F9 Stop</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
+        <button id="bt-voice-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
+        <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save as Note</button>
+      </div>
+    </div>
+  `;
+    const panelEl = panel.querySelector("#bt-content") || panel;
+    panelEl.appendChild(overlay);
+    const transcriptEl = overlay.querySelector("#bt-voice-transcript");
+    const interimEl = overlay.querySelector("#bt-voice-interim");
+    const startBtn = overlay.querySelector("#bt-voice-start");
+    const stopBtn = overlay.querySelector("#bt-voice-stop");
+    const dot = overlay.querySelector("#bt-voice-dot");
+    const statusText = overlay.querySelector("#bt-voice-status-text");
+    let pulseInterval = null;
+    startBtn.addEventListener("click", () => {
+      const started = startVoiceRecording({
+        onUpdate: (text, interim) => {
+          transcriptEl.value = text;
+          interimEl.textContent = interim ? `...${interim}` : "";
+          transcriptEl.scrollTop = transcriptEl.scrollHeight;
+        },
+        onStatus: (status, message) => {
+          if (status === "recording") {
+            dot.style.background = "#22c55e";
+            statusText.textContent = "Listening... speak now";
+            statusText.style.color = "#22c55e";
+            startBtn.style.display = "none";
+            stopBtn.style.display = "block";
+            pulseInterval = setInterval(() => {
+              dot.style.opacity = dot.style.opacity === "0.4" ? "1" : "0.4";
+            }, 500);
+          } else if (status === "stopped") {
+            dot.style.background = "#666";
+            statusText.textContent = "Recording stopped";
+            statusText.style.color = "#888";
+            startBtn.style.display = "block";
+            startBtn.textContent = "\u{1F3A4} Record More";
+            stopBtn.style.display = "none";
+            interimEl.textContent = "";
+            if (pulseInterval) {
+              clearInterval(pulseInterval);
+              pulseInterval = null;
+            }
+            dot.style.opacity = "1";
+          } else if (status === "error") {
+            dot.style.background = "#ef4444";
+            statusText.textContent = message || "Error occurred";
+            statusText.style.color = "#ef4444";
+            startBtn.style.display = "block";
+            startBtn.textContent = "\u{1F3A4} Try Again";
+            stopBtn.style.display = "none";
+            if (pulseInterval) {
+              clearInterval(pulseInterval);
+              pulseInterval = null;
+            }
+            dot.style.opacity = "1";
+          }
+        }
+      });
+      if (!started && !isVoiceSupported()) {
+        statusText.textContent = "Speech recognition not supported in this browser.";
+        statusText.style.color = "#ef4444";
+      }
+    });
+    stopBtn.addEventListener("click", () => {
+      stopVoiceRecording();
+    });
+    overlay.querySelector("#bt-voice-cancel").addEventListener("click", () => {
+      if (isVoiceRecording()) stopVoiceRecording();
+      if (pulseInterval) clearInterval(pulseInterval);
+      overlay.remove();
+    });
+    overlay.querySelector("#bt-voice-save").addEventListener("click", () => {
+      if (isVoiceRecording()) stopVoiceRecording();
+      if (pulseInterval) clearInterval(pulseInterval);
+      const text = transcriptEl.value.trim();
+      if (!text) {
+        statusText.textContent = "No text to save. Record or type something first.";
+        statusText.style.color = "#ef4444";
+        return;
+      }
+      const annotation = {
+        id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        text: `\u{1F3A4} ${text}`,
+        severity: "major"
+      };
+      addAnnotation(sessionId, annotation);
+      overlay.remove();
+      const updatedSessions = getAllSessions();
+      const updatedSession = updatedSessions.find((s) => s.sessionId === sessionId);
+      if (updatedSession) {
+        renderSessionDetail(panel, updatedSession);
+      }
+    });
+  }
+  function buildTextReport(s, problems, apiEvents, sessionDur) {
+    let report = `TraceBug Session Report
+${"=".repeat(50)}
+
+`;
+    report += `Session ID: ${s.sessionId}
+`;
+    report += `Date: ${new Date(s.createdAt).toLocaleString()}
+`;
+    report += `Duration: ${formatDuration(sessionDur)}
+`;
+    report += `Events: ${s.events.length}
+
+`;
+    if (problems.length > 0) {
+      report += `Problems Detected (${problems.length})
+${"-".repeat(40)}
+`;
+      for (const p of problems) {
+        report += `[${p.severity.toUpperCase()}] ${p.title}
+  ${p.detail}
+
+`;
+      }
+    }
+    if (s.errorMessage) {
+      report += `Error Details
+${"-".repeat(40)}
+`;
+      report += `Message: ${s.errorMessage}
+`;
+      if (s.errorStack) report += `Stack:
+${s.errorStack}
+`;
+      report += `
+`;
+    }
+    if (s.reproSteps) {
+      report += `Reproduction Steps
+${"-".repeat(40)}
+${s.reproSteps}
+
+`;
+    }
+    if (s.errorSummary) {
+      report += `Summary
+${"-".repeat(40)}
+${s.errorSummary}
+
+`;
+    }
+    report += `Event Timeline
+${"-".repeat(40)}
+`;
+    for (const ev of s.events) {
+      const time2 = new Date(ev.timestamp).toLocaleTimeString();
+      report += `[${time2}] ${ev.type.toUpperCase()} on ${ev.page}
+`;
+      report += `  ${describeEventForReport(ev)}
+`;
+    }
+    if (apiEvents.length > 0) {
+      report += `
+API Calls
+${"-".repeat(40)}
+`;
+      for (const ev of apiEvents) {
+        const r = ev.data.request;
+        report += `${r == null ? void 0 : r.method} ${r == null ? void 0 : r.url} \u2192 ${r == null ? void 0 : r.statusCode} (${r == null ? void 0 : r.durationMs}ms)
+`;
+      }
+    }
+    return report;
+  }
+  function buildHtmlReport(s, problems, apiEvents, sessionDur) {
+    const hasError = !!s.errorMessage;
+    let html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TraceBug Report \u2014 ${s.sessionId.slice(0, 8)}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'SF Mono',Consolas,monospace,system-ui,sans-serif;background:var(--tb-bg-primary, #0f0f1a);color:var(--tb-text-primary, #e0e0e0);padding:32px;max-width:800px;margin:0 auto}
+  h1{font-size:20px;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)}
+  h2{font-size:15px;color:var(--tb-text-primary, #fff);margin:24px 0 12px;font-family:var(--tb-font-family, system-ui,sans-serif)}
+  .meta{font-size:12px;color:var(--tb-text-muted, #666);margin-bottom:24px}
+  .card{background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:16px;margin-bottom:16px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}
+  .stat{background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:10px;text-align:center}
+  .stat-label{font-size:10px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)}
+  .stat-value{font-size:16px;margin-top:4px}
+  .problem{border:1px solid #7f1d1d;background:#1a0505;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px}
+  .problem.warning{border-color:#78350f;background:#1a1005}
+  .problem.info{border-color:#2a2a3e;background:var(--tb-bg-primary, #12121f)}
+  .timeline-event{border:1px solid #1e1e32;background:var(--tb-bg-primary, #12121f);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:8px;position:relative;margin-left:20px}
+  .timeline-event.error{border-color:#7f1d1d;background:#1a0505}
+  .timeline-dot{position:absolute;left:-26px;top:14px;width:10px;height:10px;border-radius:50%;border:2px solid}
+  .badge{font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);font-weight:600}
+  .tag{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600}
+  pre{white-space:pre-wrap;font-size:12px;line-height:1.5}
+  .value-box{background:#1e153344;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;margin-top:4px;font-size:11px;color:#a78bfa;word-break:break-word}
+  .select-box{background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d;margin-top:4px;font-size:11px;color:#34d399}
+</style></head><body>
+<h1>\u{1F41B} TraceBug Session Report</h1>
+<div class="meta">Session: ${s.sessionId} \xB7 ${new Date(s.createdAt).toLocaleString()} \xB7 Duration: ${formatDuration(sessionDur)}</div>`;
+    html += `<div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <span style="font-size:14px;font-weight:700;font-family:var(--tb-font-family, system-ui,sans-serif)">Session Overview</span>
+      <span class="badge" style="background:${hasError ? "#7f1d1d" : "#14532d"};color:${hasError ? "#fca5a5" : "#4ade80"}">${hasError ? "Has Errors" : "Healthy"}</span>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-label">Duration</div><div class="stat-value">${formatDuration(sessionDur)}</div></div>
+      <div class="stat"><div class="stat-label">Events</div><div class="stat-value">${s.events.length}</div></div>
+      <div class="stat"><div class="stat-label">Pages</div><div class="stat-value">${new Set(s.events.map((e2) => e2.page)).size}</div></div>
+      <div class="stat"><div class="stat-label">API Calls</div><div class="stat-value">${apiEvents.length}</div></div>
+    </div>
+  </div>`;
+    if (problems.length > 0) {
+      html += `<h2>\u{1F50D} Problems Detected (${problems.length})</h2>`;
+      for (const p of problems) {
+        const cls = p.severity === "critical" ? "" : p.severity === "warning" ? " warning" : " info";
+        html += `<div class="problem${cls}">
+        <div style="margin-bottom:4px"><span style="font-size:14px">${p.icon}</span> <strong style="color:${p.color}">${escapeHtml4(p.title)}</strong></div>
+        <div style="color:var(--tb-text-muted, #888);font-size:12px;padding-left:24px">${escapeHtml4(p.detail)}</div>
+      </div>`;
+      }
+    }
+    if (s.errorMessage) {
+      html += `<h2>\u{1F4A5} Error Details</h2><div class="card" style="border-color:#7f1d1d;background:#1a0505">
+      <div style="color:#fca5a5;font-size:13px;line-height:1.5;margin-bottom:8px">${escapeHtml4(s.errorMessage)}</div>
+      ${s.errorStack ? `<pre style="color:#dc262690;font-size:11px;background:#0a0a0a;padding:10px;border-radius:var(--tb-radius-md, 6px);max-height:200px;overflow:auto">${escapeHtml4(s.errorStack)}</pre>` : ""}
+    </div>`;
+    }
+    if (s.reproSteps) {
+      html += `<h2>\u{1F4CB} Reproduction Steps</h2><div class="card" style="border-color:#14532d;background:#031a09">
+      <pre style="color:#bbf7d0;line-height:1.8">${escapeHtml4(s.reproSteps)}</pre>
+      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:12px;padding-top:10px"><pre style="color:#86efac;font-size:11px">${escapeHtml4(s.errorSummary)}</pre></div>` : ""}
+    </div>`;
+    }
+    html += `<h2>\u{1F4CA} Event Timeline (${s.events.length})</h2>
+    <div style="position:relative;padding-left:28px">
+    <div style="position:absolute;left:9px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom, #2a2a3e, #1e1e32)"></div>`;
+    for (let i = 0; i < s.events.length; i++) {
+      const ev = s.events[i];
+      const c = eventConfig[ev.type] || { label: ev.type, icon: "\u{1F4CC}", color: "#666", bg: "#1a1a2e" };
+      const isErr = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
+      const errCls = isErr ? " error" : "";
+      const dotColor = isErr ? "#ef4444" : c.color;
+      html += `<div class="timeline-event${errCls}">
+      <div class="timeline-dot" style="background:${dotColor};border-color:${dotColor}44"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:13px">${c.icon}</span>
+        <span class="tag" style="background:${c.bg};color:${c.color}">${c.label}</span>
+        <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(ev.timestamp).toLocaleTimeString()}</span>
+        <span style="font-size:10px;color:var(--tb-text-muted, #333);margin-left:auto">${ev.page}</span>
+      </div>
+      <div style="font-size:12px;color:var(--tb-text-secondary, #aaa)">${describeEventHtml(ev)}</div>
+    </div>`;
+    }
+    html += `</div>
+<div style="text-align:center;color:var(--tb-text-muted, #333);font-size:11px;margin-top:32px;padding:16px;border-top:1px solid #1e1e32">Generated by TraceBug AI \xB7 ${(/* @__PURE__ */ new Date()).toLocaleString()}</div>
+</body></html>`;
+    return html;
+  }
+  function describeEventHtml(ev) {
+    var _a, _b, _c;
+    switch (ev.type) {
+      case "click": {
+        const el = ev.data.element;
+        const target = (el == null ? void 0 : el.ariaLabel) || ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
+        let s = `Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"`;
+        if (el == null ? void 0 : el.href) s += ` <span style="font-size:10px;color:var(--tb-text-muted, #444)">\u2192 ${escapeHtml4(el.href.slice(0, 60))}</span>`;
+        return s;
+      }
+      case "input": {
+        const inp = ev.data.element;
+        const val = inp == null ? void 0 : inp.value;
+        let s = `Typed in "<span style="color:#c084fc">${escapeHtml4((inp == null ? void 0 : inp.name) || "field")}</span>"`;
+        if (val && val !== "[REDACTED]") s += `<div class="value-box">"${escapeHtml4(val.slice(0, 150))}"</div>`;
+        else if (val === "[REDACTED]") s += ` <span style="color:#f87171;font-size:10px">\u{1F512} redacted</span>`;
+        return s;
+      }
+      case "select_change": {
+        const sel = ev.data.element;
+        let s = `Changed "<span style="color:#34d399">${escapeHtml4((sel == null ? void 0 : sel.name) || "dropdown")}</span>"`;
+        s += `<div class="select-box">Selected: "<strong>${escapeHtml4((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
+        return s;
+      }
+      case "form_submit": {
+        const f2 = ev.data.form;
+        let s = `Submitted form ${(f2 == null ? void 0 : f2.id) ? `"${escapeHtml4(f2.id)}"` : ""}`;
+        if (f2 == null ? void 0 : f2.fields) {
+          s += `<div style="margin-top:4px">`;
+          for (const [key, val] of Object.entries(f2.fields)) {
+            s += `<div style="font-size:10px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> ${escapeHtml4(String(val).slice(0, 80))}</div>`;
+          }
+          s += `</div>`;
+        }
+        return s;
+      }
+      case "route_change":
+        return `<span style="color:var(--tb-text-muted, #888)">${escapeHtml4(ev.data.from || "/")}</span> <span style="color:#22d3ee">\u2192</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>`;
+      case "api_request": {
+        const r = ev.data.request;
+        return `<span style="font-weight:600">${escapeHtml4((r == null ? void 0 : r.method) || "")}</span> ${escapeHtml4(((r == null ? void 0 : r.url) || "").slice(0, 80))} \u2192 <span style="color:${getStatusColor((r == null ? void 0 : r.statusCode) || 0)};font-weight:700">${r == null ? void 0 : r.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r == null ? void 0 : r.durationMs}ms)</span>`;
+      }
+      case "error":
+      case "unhandled_rejection":
+        return `<span style="color:#fca5a5">${escapeHtml4(((_b = ev.data.error) == null ? void 0 : _b.message) || "Unknown error")}</span>`;
+      case "console_error":
+        return `<span style="color:#fb923c">${escapeHtml4((((_c = ev.data.error) == null ? void 0 : _c.message) || "").slice(0, 200))}</span>`;
+      default:
+        return escapeHtml4(JSON.stringify(ev.data).slice(0, 100));
+    }
+  }
+  function describeEventForReport(ev) {
+    var _a, _b, _c, _d;
+    switch (ev.type) {
+      case "click": {
+        const el = ev.data.element;
+        const target = (el == null ? void 0 : el.ariaLabel) || ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
+        let s = `Clicked "${target}"`;
+        if (el == null ? void 0 : el.href) s += ` \u2192 ${el.href}`;
+        return s;
+      }
+      case "input": {
+        const inp = ev.data.element;
+        const val = inp == null ? void 0 : inp.value;
+        if (val && val !== "[REDACTED]") return `Typed "${val}" in "${(inp == null ? void 0 : inp.name) || "field"}" (${(inp == null ? void 0 : inp.type) || "text"})`;
+        return `Typed in "${(inp == null ? void 0 : inp.name) || "field"}" (${(inp == null ? void 0 : inp.valueLength) || 0} chars, ${(inp == null ? void 0 : inp.type) || "text"})`;
+      }
+      case "select_change": {
+        const sel = ev.data.element;
+        return `Selected "${(sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value)}" from "${(sel == null ? void 0 : sel.name) || "dropdown"}" dropdown`;
+      }
+      case "form_submit": {
+        const f2 = ev.data.form;
+        let s = `Submitted form "${(f2 == null ? void 0 : f2.id) || ""}" (${f2 == null ? void 0 : f2.fieldCount} fields)`;
+        if (f2 == null ? void 0 : f2.fields) {
+          const entries = Object.entries(f2.fields);
+          if (entries.length > 0) s += ` \u2014 ` + entries.map(([k, v]) => `${k}="${String(v).slice(0, 40)}"`).join(", ");
+        }
+        return s;
+      }
+      case "route_change":
+        return `${ev.data.from || "/"} \u2192 ${ev.data.to || "/"}`;
+      case "api_request": {
+        const r = ev.data.request;
+        return `${r == null ? void 0 : r.method} ${(_b = r == null ? void 0 : r.url) == null ? void 0 : _b.slice(0, 80)} \u2192 ${r == null ? void 0 : r.statusCode} (${r == null ? void 0 : r.durationMs}ms)`;
+      }
+      case "error":
+      case "unhandled_rejection":
+        return ((_c = ev.data.error) == null ? void 0 : _c.message) || "Unknown error";
+      case "console_error":
+        return (((_d = ev.data.error) == null ? void 0 : _d.message) || "").slice(0, 120);
+      default:
+        return JSON.stringify(ev.data).slice(0, 100);
+    }
+  }
+  function downloadFile(filename, content2, mimeType) {
+    const blob = new Blob([content2], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = filename;
+    document.body.appendChild(a2);
+    a2.click();
+    document.body.removeChild(a2);
+    URL.revokeObjectURL(url);
+  }
+  function getStatusColor(code) {
+    if (code === 0) return "#ef4444";
+    if (code < 300) return "#22c55e";
+    if (code < 400) return "#fbbf24";
+    if (code < 500) return "#f97316";
+    return "#ef4444";
+  }
+  function getStatusLabel(code) {
+    if (code === 0) return "Network Error";
+    const labels = {
+      200: "OK",
+      201: "Created",
+      204: "No Content",
+      301: "Moved",
+      302: "Found",
+      304: "Not Modified",
+      400: "Bad Request",
+      401: "Unauthorized",
+      403: "Forbidden",
+      404: "Not Found",
+      405: "Method Not Allowed",
+      408: "Timeout",
+      409: "Conflict",
+      413: "Payload Too Large",
+      422: "Unprocessable",
+      429: "Rate Limited",
+      500: "Internal Server Error",
+      502: "Bad Gateway",
+      503: "Service Unavailable",
+      504: "Gateway Timeout"
+    };
+    return labels[code] || (code < 300 ? "Success" : code < 400 ? "Redirect" : code < 500 ? "Client Error" : "Server Error");
+  }
+  function getSpeedLabel(ms) {
+    if (ms < 200) return { label: "Fast", color: "#22c55e" };
+    if (ms < 1e3) return { label: "Normal", color: "#fbbf24" };
+    if (ms < 5e3) return { label: "Slow", color: "#f97316" };
+    return { label: "Very Slow", color: "#ef4444" };
+  }
+  function getErrorType(msg) {
+    const m = msg.toLowerCase();
+    if (m.includes("typeerror") || m.includes("cannot read prop")) return { type: "TypeError", color: "#f87171" };
+    if (m.includes("referenceerror")) return { type: "ReferenceError", color: "#fb923c" };
+    if (m.includes("syntaxerror")) return { type: "SyntaxError", color: "#f472b6" };
+    if (m.includes("rangeerror")) return { type: "RangeError", color: "#c084fc" };
+    if (m.includes("networkerror") || m.includes("fetch") || m.includes("network")) return { type: "NetworkError", color: "#fbbf24" };
+    if (m.includes("timeout")) return { type: "TimeoutError", color: "#f97316" };
+    if (m.includes("chunk") || m.includes("loading")) return { type: "ChunkLoadError", color: "#fb923c" };
+    return { type: "RuntimeError", color: "#f87171" };
+  }
+  function formatDuration(ms) {
+    if (ms < 1e3) return `${ms}ms`;
+    if (ms < 6e4) return `${(ms / 1e3).toFixed(1)}s`;
+    return `${Math.floor(ms / 6e4)}m ${Math.floor(ms % 6e4 / 1e3)}s`;
+  }
+  function describeEvent(event) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
+    const d = event.data;
+    switch (event.type) {
+      case "click":
+        return `Clicked "${((_a = d.element) == null ? void 0 : _a.text) || ((_b = d.element) == null ? void 0 : _b.id) || ((_c = d.element) == null ? void 0 : _c.tag) || "element"}"`;
+      case "input": {
+        const val = (_d = d.element) == null ? void 0 : _d.value;
+        if (val && val !== "[REDACTED]") return `Typed "${val.slice(0, 40)}" in "${((_e = d.element) == null ? void 0 : _e.name) || "field"}"`;
+        return `Typed in "${((_f = d.element) == null ? void 0 : _f.name) || "field"}" (${((_g = d.element) == null ? void 0 : _g.valueLength) || 0} chars)`;
+      }
+      case "select_change":
+        return `Selected "${((_h = d.element) == null ? void 0 : _h.selectedText) || ((_i = d.element) == null ? void 0 : _i.value)}" from "${((_j = d.element) == null ? void 0 : _j.name) || "dropdown"}"`;
+      case "form_submit":
+        return `Submitted form "${((_k = d.form) == null ? void 0 : _k.id) || ""}" (${((_l = d.form) == null ? void 0 : _l.fieldCount) || 0} fields)`;
+      case "route_change":
+        return `${d.from} \u2192 ${d.to}`;
+      case "api_request":
+        return `${(_m = d.request) == null ? void 0 : _m.method} ${(_o = (_n = d.request) == null ? void 0 : _n.url) == null ? void 0 : _o.slice(0, 60)} \u2192 ${(_p = d.request) == null ? void 0 : _p.statusCode} (${(_q = d.request) == null ? void 0 : _q.durationMs}ms)`;
+      case "error":
+      case "unhandled_rejection":
+        return ((_r = d.error) == null ? void 0 : _r.message) || "Unknown error";
+      case "console_error":
+        return (((_s = d.error) == null ? void 0 : _s.message) || "").slice(0, 120);
+      default:
+        return JSON.stringify(d).slice(0, 100);
+    }
+  }
+  function timeAgo(ts) {
+    const diff = Math.floor((Date.now() - ts) / 1e3);
+    if (diff < 60) return "just now";
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
+  function escapeHtml4(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function smallBtnStyle(color2) {
+    return `background:${color2}22;color:${color2};border:1px solid ${color2}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
+  }
+  function _tabBtnStyle(active) {
+    return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7B61FF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
+  }
+  function renderAnnotationList(panel) {
+    var _a, _b, _c, _d;
+    const elAnnotations = getElementAnnotations();
+    const drawRegions = getDrawRegions();
+    const screenshotsList = getScreenshots();
+    const total = elAnnotations.length + drawRegions.length + screenshotsList.length;
+    panel.innerHTML = `
+    <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:3px">${elAnnotations.length} element${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} region${drawRegions.length !== 1 ? "s" : ""}, ${screenshotsList.length} screenshot${screenshotsList.length !== 1 ? "s" : ""}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${total > 0 ? `
+          <button id="bt-ann-screenshot" style="${smallBtnStyle("#22c55e")}font-size:10px" title="Screenshot page with annotations visible">\u{1F4F8} Save</button>
+          <button id="bt-ann-export-md" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Copy all annotations as Markdown">Copy MD</button>
+          <button id="bt-ann-export-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Copy all annotations as JSON">Copy JSON</button>
+          <button id="bt-ann-clear-all" style="${smallBtnStyle("#ef4444")}font-size:10px" title="Remove all annotations">Clear All</button>
+        ` : ""}
+      </div>
+    </div>
+    <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
+  `;
+    const content2 = panel.querySelector("#bt-ann-list-content");
+    if (total > 0) {
+      (_a = panel.querySelector("#bt-ann-screenshot")) == null ? void 0 : _a.addEventListener("click", async () => {
+        const btn = panel.querySelector("#bt-ann-screenshot");
+        btn.textContent = "Capturing...";
+        try {
+          const ss = await captureScreenshot(null, { includeAnnotations: true });
+          downloadScreenshot(ss.dataUrl, ss.filename);
+          const root = document.getElementById("tracebug-root");
+          if (root) showToast2(`Saved: ${ss.filename}`, root);
+          btn.textContent = "\u{1F4F8} Save";
+        } catch (e2) {
+          btn.textContent = "Failed";
+          setTimeout(() => {
+            btn.textContent = "\u{1F4F8} Save";
+          }, 2e3);
+        }
+      });
+      (_b = panel.querySelector("#bt-ann-export-md")) == null ? void 0 : _b.addEventListener("click", async () => {
+        const ok = await copyToClipboard("markdown");
+        const btn = panel.querySelector("#bt-ann-export-md");
+        if (ok) {
+          btn.textContent = "Copied!";
+          btn.style.background = "#22c55e33";
+          btn.style.color = "#22c55e";
+          btn.style.borderColor = "#22c55e44";
+        } else {
+          btn.textContent = "Failed";
+        }
+        setTimeout(() => {
+          btn.textContent = "Copy MD";
+          btn.style.cssText = `${smallBtnStyle("#a78bfa")}font-size:10px`;
+        }, 2e3);
+      });
+      (_c = panel.querySelector("#bt-ann-export-json")) == null ? void 0 : _c.addEventListener("click", async () => {
+        const ok = await copyToClipboard("json");
+        const btn = panel.querySelector("#bt-ann-export-json");
+        if (ok) {
+          btn.textContent = "Copied!";
+          btn.style.background = "#22c55e33";
+          btn.style.color = "#22c55e";
+          btn.style.borderColor = "#22c55e44";
+        } else {
+          btn.textContent = "Failed";
+        }
+        setTimeout(() => {
+          btn.textContent = "Copy JSON";
+          btn.style.cssText = `${smallBtnStyle("#22d3ee")}font-size:10px`;
+        }, 2e3);
+      });
+      (_d = panel.querySelector("#bt-ann-clear-all")) == null ? void 0 : _d.addEventListener("click", () => {
+        if (confirm("Remove all annotations? This cannot be undone.")) {
+          clearAllAnnotations();
+          clearAnnotationBadges();
+          renderAnnotationList(panel);
+        }
+      });
+    }
+    if (total === 0) {
+      content2.innerHTML = `
+      <div style="text-align:center;padding:48px 24px;color:var(--tb-text-muted, #666)">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 3"/>
+        </svg>
+        <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
+        <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
+          Use <strong style="color:#7B61FF">Annotate</strong> to click elements or <strong style="color:#7B61FF">Draw</strong> to mark regions on the page.
+        </div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
+          Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
+          <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace;margin-left:4px">Ctrl+Shift+D</span>
+        </div>
+      </div>
+    `;
+      return;
+    }
+    let html = "";
+    if (elAnnotations.length > 0) {
+      html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
+      for (let i = 0; i < elAnnotations.length; i++) {
+        const a2 = elAnnotations[i];
+        const intentColor = _getIntentColor(a2.intent);
+        const sevColor = a2.severity === "critical" ? "#ef4444" : a2.severity === "major" ? "#f97316" : a2.severity === "minor" ? "#3b82f6" : "#888";
+        const ago = timeAgo(a2.timestamp);
+        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="width:22px;height:22px;border-radius:50%;background:${intentColor};color:var(--tb-text-primary, #fff);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a2.intent}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${sevColor}15;color:${sevColor};font-weight:500">${a2.severity}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
+          <button class="bt-ann-delete" data-id="${a2.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this annotation">Delete</button>
+        </div>
+        <div style="font-size:11px;color:#777;margin-bottom:6px">
+          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml4(a2.tagName)}&gt;</span>
+          ${a2.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml4(a2.innerText.slice(0, 40))}"</span>` : ""}
+        </div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml4(a2.comment)}</div>
+      </div>`;
+      }
+    }
+    if (drawRegions.length > 0) {
+      html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
+      for (let i = 0; i < drawRegions.length; i++) {
+        const r = drawRegions[i];
+        const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
+        const ago = timeAgo(r.timestamp);
+        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="width:22px;height:22px;border-radius:${r.shape === "ellipse" ? "50%" : "5px"};background:${r.color}33;border:2px solid ${r.color};display:flex;align-items:center;justify-content:center;flex-shrink:0"></span>
+          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${shapeLabel}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${Math.round(r.width)} x ${Math.round(r.height)}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
+          <button class="bt-ann-delete" data-id="${r.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this region">Delete</button>
+        </div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${r.comment ? escapeHtml4(r.comment) : '<span style="color:var(--tb-text-muted, #555);font-style:italic">No comment added</span>'}</div>
+      </div>`;
+      }
+    }
+    if (screenshotsList.length > 0) {
+      html += `<div style="font-size:11px;color:#22d3ee;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #22d3ee;padding-left:8px">SCREENSHOTS (${screenshotsList.length})</div>`;
+      for (const ss of screenshotsList) {
+        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f)">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${escapeHtml4(ss.filename)}</span>
+          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ss.width}x${ss.height}</span>
+          <button class="bt-ss-download" data-id="${ss.id}" style="${smallBtnStyle("#22d3ee")}font-size:10px;padding:2px 8px" title="Download">Download</button>
+        </div>
+        <img src="${ss.dataUrl}" style="max-width:100%;border-radius:var(--tb-radius-md, 6px);border:1px solid var(--tb-border, #2a2a3e)" alt="${escapeHtml4(ss.filename)}" />
+      </div>`;
+      }
+    }
+    content2.innerHTML = html;
+    content2.querySelectorAll(".bt-ss-download").forEach((btn) => {
+      btn.addEventListener("click", (e2) => {
+        e2.stopPropagation();
+        const id = btn.dataset.id || "";
+        const ss = screenshotsList.find((s) => s.id === id);
+        if (ss) downloadScreenshot(ss.dataUrl, ss.filename);
+      });
+    });
+    content2.querySelectorAll(".bt-ann-delete").forEach((btn) => {
+      btn.addEventListener("click", (e2) => {
+        e2.stopPropagation();
+        const id = btn.dataset.id || "";
+        removeAnnotationById(id);
+        const root = document.getElementById("tracebug-root");
+        if (root) showAnnotationBadges(root);
+        renderAnnotationList(panel);
+      });
+    });
+  }
+  function _getIntentColor(intent) {
+    switch (intent) {
+      case "fix":
+        return "#ef4444";
+      case "redesign":
+        return "#7B61FF";
+      case "remove":
+        return "#f97316";
+      case "question":
+        return "#3b82f6";
+      default:
+        return "#888";
+    }
+  }
+  function showToast2(message, root) {
+    const existing = root.querySelector(".bt-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "bt-toast";
+    toast.dataset.tracebug = "toast";
+    toast.style.cssText = `
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--tb-bg-secondary, #1a1a2e)ee;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border-hover, #3a3a5e);
+    border-radius:10px;padding:10px 20px;font-size:13px;
+    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
+    max-width:420px;text-align:center;line-height:1.4;
+    animation:tracebug-toast-in 0.2s ease;
+  `;
+    if (!document.getElementById("tracebug-toast-anim")) {
+      const style = document.createElement("style");
+      style.id = "tracebug-toast-anim";
+      style.textContent = `
+      @keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    `;
+      document.head.appendChild(style);
+    }
+    toast.textContent = message;
+    toast.setAttribute("role", "status");
+    root.appendChild(toast);
+    const liveRegion = document.getElementById("tracebug-live");
+    if (liveRegion) liveRegion.textContent = message;
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(-50%) translateY(8px)";
+      toast.style.transition = "all 0.3s ease";
+      setTimeout(() => toast.remove(), 300);
+    }, 2e3);
+  }
+  function showAnnotationEditor(screenshot, root, onSave) {
+    showAnnotationEditor._onSave = onSave;
+    _showAnnotationEditorImpl(screenshot, root);
+  }
+  function _showAnnotationEditorImpl(screenshot, root) {
+    const overlay = document.createElement("div");
+    overlay.id = "bt-annotation-overlay";
+    overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.85);z-index:2147483647;
+    display:flex;flex-direction:column;align-items:center;
+    justify-content:center;pointer-events:auto;
+    font-family:var(--tb-font-family, system-ui,sans-serif);
+  `;
+    const maxW = window.innerWidth * 0.85;
+    const maxH = window.innerHeight * 0.78;
+    const imgRatio = screenshot.width / screenshot.height;
+    let displayW = screenshot.width;
+    let displayH = screenshot.height;
+    if (displayW > maxW) {
+      displayW = maxW;
+      displayH = displayW / imgRatio;
+    }
+    if (displayH > maxH) {
+      displayH = maxH;
+      displayW = displayH * imgRatio;
+    }
+    displayW = Math.round(displayW);
+    displayH = Math.round(displayH);
+    const toolbarHtml = `
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <span style="color:var(--tb-text-muted, #888);font-size:11px;margin-right:8px">ANNOTATE:</span>
+      <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">\u270E Pen</button>
+      <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">\u25AD Highlight</button>
+      <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">\u2192 Arrow</button>
+      <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">T Text</button>
+      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
+      <button class="bt-ann-tool" data-tool="color-red" style="background:var(--tb-error, #ef4444);border:2px solid #ef4444;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-yellow" style="background:#eab308;border:2px solid #eab308;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-green" style="background:var(--tb-success, #22c55e);border:2px solid #22c55e;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <button class="bt-ann-tool" data-tool="color-blue" style="background:#3b82f6;border:2px solid #3b82f6;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
+      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
+      <button id="bt-ann-undo" style="${annActionBtnStyle()}">\u21A9 Undo</button>
+      <button id="bt-ann-clear" style="${annActionBtnStyle()}">\u2715 Clear</button>
+      <div style="flex:1"></div>
+      <span style="color:var(--tb-text-muted, #555);font-size:10px">Ctrl+Shift+S</span>
+    </div>
+  `;
+    const actionsHtml = `
+    <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
+      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 20px;cursor:pointer;font-size:13px;font-family:var(--tb-font-family, inherit)">\u2713 Save Annotated</button>
+      <button id="bt-ann-download" style="background:var(--tb-success, #22c55e)22;color:var(--tb-success, #22c55e);border:1px solid #22c55e44;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">\u2193 Download</button>
+      <button id="bt-ann-cancel" style="background:#66666622;color:var(--tb-text-muted, #888);border:1px solid #66666644;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Cancel</button>
+      <div style="flex:1"></div>
+      <span style="color:var(--tb-text-muted, #555);font-size:10px">${screenshot.filename}</span>
+    </div>
+  `;
+    overlay.innerHTML = `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`;
+    root.appendChild(overlay);
+    const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap");
+    const img = new Image();
+    img.onload = () => {
+      img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`;
+      canvasWrap.appendChild(img);
+      const canvas = document.createElement("canvas");
+      canvas.width = displayW;
+      canvas.height = displayH;
+      canvas.dataset.tracebug = "annotation-canvas";
+      canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`;
+      canvasWrap.appendChild(canvas);
+      initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root);
+    };
+    img.src = screenshot.dataUrl;
+    overlay.querySelector("#bt-ann-cancel").addEventListener("click", () => overlay.remove());
+    const escHandler = (e2) => {
+      if (e2.key === "Escape") {
+        overlay.remove();
+        document.removeEventListener("keydown", escHandler);
+      }
+    };
+    document.addEventListener("keydown", escHandler);
+  }
+  function initAnnotationCanvas(canvas, width, height, overlay, screenshot, root) {
+    const ctx = canvas.getContext("2d");
+    const actions = [];
+    let currentTool = "pen";
+    let currentColor = "#ef4444";
+    let isDrawing = false;
+    let startX = 0, startY = 0;
+    let currentStroke = [];
+    let activeTextInput = null;
+    function redraw() {
+      ctx.clearRect(0, 0, width, height);
+      for (const action of actions) {
+        drawAction(ctx, action);
+      }
+    }
+    function drawAction(c, a2) {
+      c.strokeStyle = a2.color;
+      c.fillStyle = a2.color;
+      c.lineWidth = 2.5;
+      if (a2.type === "pen" && a2.points && a2.points.length > 0) {
+        c.lineCap = "round";
+        c.lineJoin = "round";
+        c.lineWidth = 3;
+        c.beginPath();
+        c.moveTo(a2.points[0].x, a2.points[0].y);
+        for (let i = 1; i < a2.points.length; i++) {
+          c.lineTo(a2.points[i].x, a2.points[i].y);
+        }
+        c.stroke();
+        return;
+      }
+      if (a2.type === "rect") {
+        const w = a2.endX - a2.startX;
+        const h = a2.endY - a2.startY;
+        c.globalAlpha = 0.15;
+        c.fillRect(a2.startX, a2.startY, w, h);
+        c.globalAlpha = 1;
+        c.strokeRect(a2.startX, a2.startY, w, h);
+      } else if (a2.type === "arrow") {
+        drawArrow(c, a2.startX, a2.startY, a2.endX, a2.endY, a2.color);
+      } else if (a2.type === "text" && a2.text) {
+        c.font = "bold 14px system-ui, sans-serif";
+        const metrics = c.measureText(a2.text);
+        const padding = 4;
+        c.globalAlpha = 0.85;
+        c.fillStyle = "#000";
+        c.fillRect(a2.startX - padding, a2.startY - 16, metrics.width + padding * 2, 22);
+        c.globalAlpha = 1;
+        c.fillStyle = a2.color;
+        c.fillText(a2.text, a2.startX, a2.startY);
+      }
+    }
+    function drawArrow(c, x1, y1, x2, y2, color2) {
+      const headLen = 12;
+      const angle2 = Math.atan2(y2 - y1, x2 - x1);
+      c.strokeStyle = color2;
+      c.fillStyle = color2;
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.moveTo(x1, y1);
+      c.lineTo(x2, y2);
+      c.stroke();
+      c.beginPath();
+      c.moveTo(x2, y2);
+      c.lineTo(x2 - headLen * Math.cos(angle2 - Math.PI / 6), y2 - headLen * Math.sin(angle2 - Math.PI / 6));
+      c.lineTo(x2 - headLen * Math.cos(angle2 + Math.PI / 6), y2 - headLen * Math.sin(angle2 + Math.PI / 6));
+      c.closePath();
+      c.fill();
+    }
+    overlay.querySelectorAll(".bt-ann-tool").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tool = btn.dataset.tool || "";
+        if (tool.startsWith("color-")) {
+          currentColor = getComputedStyle(btn).backgroundColor;
+          overlay.querySelectorAll("[data-tool^='color-']").forEach((cb) => {
+            cb.style.border = `2px solid ${getComputedStyle(cb).backgroundColor}`;
+          });
+          btn.style.border = `2px solid #fff`;
+          return;
+        }
+        currentTool = tool;
+        overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach((tb) => {
+          tb.style.background = "#22222244";
+          tb.style.color = "#888";
+          tb.style.borderColor = "#33333344";
+        });
+        btn.style.background = "#3b82f633";
+        btn.style.color = "#3b82f6";
+        btn.style.borderColor = "#3b82f6";
+      });
+    });
+    function spawnTextInput(x, y) {
+      const wrap = canvas.parentElement;
+      if (!wrap) return;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Type and press Enter";
+      input.style.cssText = `
+      position:absolute;left:${x}px;top:${Math.max(0, y - 20)}px;
+      background:rgba(0,0,0,0.85);color:${currentColor};
+      border:1px solid ${currentColor};border-radius:4px;
+      padding:2px 6px;font:bold 14px system-ui,sans-serif;
+      outline:none;min-width:140px;z-index:2;
+    `;
+      activeTextInput = input;
+      const commit = () => {
+        if (activeTextInput !== input) return;
+        const value = input.value.trim();
+        input.remove();
+        activeTextInput = null;
+        if (value) {
+          actions.push({ type: "text", color: currentColor, startX: x, startY: y, endX: x, endY: y, text: value });
+          redraw();
+        }
+      };
+      const cancel = () => {
+        if (activeTextInput !== input) return;
+        input.remove();
+        activeTextInput = null;
+      };
+      input.addEventListener("keydown", (ev) => {
+        ev.stopPropagation();
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          commit();
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          cancel();
+        }
+      });
+      input.addEventListener("blur", () => {
+        setTimeout(commit, 0);
+      });
+      wrap.appendChild(input);
+      setTimeout(() => input.focus(), 0);
+    }
+    canvas.addEventListener("mousedown", (e2) => {
+      if (activeTextInput) return;
+      const rect = canvas.getBoundingClientRect();
+      startX = e2.clientX - rect.left;
+      startY = e2.clientY - rect.top;
+      if (currentTool === "text") {
+        spawnTextInput(startX, startY);
+        return;
+      }
+      if (currentTool === "pen") {
+        isDrawing = true;
+        currentStroke = [{ x: startX, y: startY }];
+        return;
+      }
+      isDrawing = true;
+    });
+    canvas.addEventListener("mousemove", (e2) => {
+      if (!isDrawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const curX = e2.clientX - rect.left;
+      const curY = e2.clientY - rect.top;
+      if (currentTool === "pen") {
+        const last = currentStroke[currentStroke.length - 1];
+        if (!last || Math.hypot(curX - last.x, curY - last.y) > 1.5) {
+          currentStroke.push({ x: curX, y: curY });
+        }
+        redraw();
+        drawAction(ctx, { type: "pen", color: currentColor, startX: 0, startY: 0, endX: 0, endY: 0, points: currentStroke });
+        return;
+      }
+      redraw();
+      const preview = { type: currentTool, color: currentColor, startX, startY, endX: curX, endY: curY };
+      drawAction(ctx, preview);
+    });
+    canvas.addEventListener("mouseup", (e2) => {
+      if (!isDrawing) return;
+      isDrawing = false;
+      const rect = canvas.getBoundingClientRect();
+      const endX = e2.clientX - rect.left;
+      const endY = e2.clientY - rect.top;
+      if (currentTool === "pen") {
+        if (currentStroke.length >= 2) {
+          const first = currentStroke[0];
+          const last = currentStroke[currentStroke.length - 1];
+          const travel = Math.hypot(last.x - first.x, last.y - first.y);
+          if (travel >= 3 || currentStroke.length > 4) {
+            actions.push({ type: "pen", color: currentColor, startX: 0, startY: 0, endX: 0, endY: 0, points: currentStroke.slice() });
+          }
+        }
+        currentStroke = [];
+        redraw();
+        return;
+      }
+      if (Math.abs(endX - startX) < 5 && Math.abs(endY - startY) < 5) {
+        redraw();
+        return;
+      }
+      actions.push({ type: currentTool, color: currentColor, startX, startY, endX, endY });
+      redraw();
+    });
+    overlay.querySelector("#bt-ann-undo").addEventListener("click", () => {
+      actions.pop();
+      redraw();
+    });
+    overlay.querySelector("#bt-ann-clear").addEventListener("click", () => {
+      actions.length = 0;
+      redraw();
+    });
+    overlay.querySelector("#bt-ann-save").addEventListener("click", () => {
+      const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
+      screenshot.dataUrl = merged;
+      const onSave = showAnnotationEditor._onSave;
+      if (onSave) {
+        try {
+          onSave({
+            dataUrl: merged,
+            filename: screenshot.filename,
+            width: screenshot.width,
+            height: screenshot.height
+          });
+        } catch (e2) {
+        }
+      }
+      showToast2(`\u2713 Annotations saved to ${screenshot.filename}`, root);
+      overlay.remove();
+    });
+    overlay.querySelector("#bt-ann-download").addEventListener("click", () => {
+      const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
+      const a2 = document.createElement("a");
+      a2.href = merged;
+      a2.download = screenshot.filename;
+      document.body.appendChild(a2);
+      a2.click();
+      document.body.removeChild(a2);
+      showToast2(`\u2713 Downloaded: ${screenshot.filename}`, root);
+    });
+  }
+  function mergeAnnotations(baseDataUrl, annotationCanvas, w, h) {
+    const mergeCanvas = document.createElement("canvas");
+    mergeCanvas.width = w;
+    mergeCanvas.height = h;
+    const mCtx = mergeCanvas.getContext("2d");
+    const img = new Image();
+    img.src = baseDataUrl;
+    mCtx.drawImage(img, 0, 0, w, h);
+    mCtx.drawImage(annotationCanvas, 0, 0);
+    return mergeCanvas.toDataURL("image/png", 0.9);
+  }
+  function annToolBtnStyle(active) {
+    if (active) {
+      return "background:#3b82f633;color:var(--tb-info, #3b82f6);border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
+    }
+    return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
+  }
+  function annActionBtnStyle() {
+    return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
+  }
+  var PANEL_ID2, _isRecording2, _onToggleRecording2, eventConfig;
+  var init_dashboard = __esm({
+    "src/dashboard.ts"() {
+      "use strict";
+      init_storage();
+      init_screenshot();
+      init_collectors();
+      init_report_builder();
+      init_github_issue();
+      init_jira_issue();
+      init_pdf_generator();
+      init_title_generator();
+      init_voice_recorder();
+      init_annotation_store();
+      init_compact_toolbar();
+      init_element_annotate();
+      init_onboarding();
+      init_quick_bug();
+      init_helpers();
+      PANEL_ID2 = "tracebug-dashboard-panel";
+      _isRecording2 = true;
+      _onToggleRecording2 = null;
+      eventConfig = {
+        click: { label: "Click", icon: "\u{1F446}", color: "#60a5fa", bg: "#1e293b" },
+        input: { label: "Input", icon: "\u2328\uFE0F", color: "#c084fc", bg: "#1e1533" },
+        select_change: { label: "Select", icon: "\u{1F4CB}", color: "#34d399", bg: "#052015" },
+        form_submit: { label: "Form Submit", icon: "\u{1F4E4}", color: "#fb923c", bg: "#2a1505" },
+        route_change: { label: "Navigate", icon: "\u{1F500}", color: "#22d3ee", bg: "#0c2e33" },
+        api_request: { label: "API", icon: "\u{1F310}", color: "#fbbf24", bg: "#2a2005" },
+        error: { label: "Error", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" },
+        console_error: { label: "Console Err", icon: "\u26A0\uFE0F", color: "#fb923c", bg: "#2a1505" },
+        unhandled_rejection: { label: "Rejection", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" }
+      };
     }
   });
 
@@ -52977,3104 +56080,6 @@ First element: \`${exampleSnippet}\``,
     }
   });
 
-  // src/ui/issues-panel.ts
-  var issues_panel_exports = {};
-  __export(issues_panel_exports, {
-    isIssuesPanelOpen: () => isIssuesPanelOpen,
-    showIssuesPanel: () => showIssuesPanel
-  });
-  function isIssuesPanelOpen() {
-    return _isOpen2;
-  }
-  async function showIssuesPanel(root, options) {
-    var _a;
-    if (_isOpen2) return;
-    _root = root;
-    _injectStyles3();
-    _open(root, { issues: [], loading: true });
-    try {
-      if ((_a = options == null ? void 0 : options.rescan) != null ? _a : true) {
-        await scan();
-      }
-    } catch (err) {
-      console.warn("[TraceBug] Scan failed:", err);
-    }
-    _renderBody(getIssues());
-  }
-  function _injectStyles3() {
-    if (document.getElementById(STYLE_ID2)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID2;
-    style.textContent = `
-    @keyframes tracebug-issue-locate-flash {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(123,97,255,0.0); outline: 2px solid transparent; }
-      30% { box-shadow: 0 0 0 6px rgba(123,97,255,0.5); outline: 2px solid #7B61FF; }
-    }
-    #${PANEL_ID2}-overlay {
-      position: fixed !important;
-      inset: 0 !important;
-      z-index: 2147483647 !important;
-      background: rgba(0,0,0,0.75) !important;
-      backdrop-filter: blur(6px) !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      padding: 20px !important;
-      pointer-events: auto !important;
-      box-sizing: border-box !important;
-    }
-    #${PANEL_ID2} {
-      background: var(--tb-bg-secondary, #1a1a2e) !important;
-      border: 1px solid var(--tb-border-hover, #3a3a5e) !important;
-      border-radius: var(--tb-radius-lg, 12px) !important;
-      width: 100% !important;
-      max-width: 720px !important;
-      max-height: 90vh !important;
-      display: flex !important;
-      flex-direction: column !important;
-      overflow: hidden !important;
-      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-      box-sizing: border-box !important;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
-    }
-    #${PANEL_ID2} *, #${PANEL_ID2} *::before, #${PANEL_ID2} *::after { box-sizing: border-box !important; }
-    #${PANEL_ID2} button { font-family: inherit !important; cursor: pointer !important; }
-    #${PANEL_ID2} .tb-issue-row {
-      padding: 12px 14px;
-      border-top: 1px solid var(--tb-border, #2a2a3e);
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    #${PANEL_ID2} .tb-issue-row:hover { background: var(--tb-bg-primary, #0f0f1a); }
-    #${PANEL_ID2} .tb-sev-badge {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 3px 7px;
-      border-radius: 4px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      flex-shrink: 0;
-      border: 1px solid;
-    }
-    #${PANEL_ID2} .tb-detector-tag {
-      font-size: 10px;
-      color: var(--tb-text-muted, #888);
-      background: var(--tb-bg-primary, #0f0f1a);
-      border: 1px solid var(--tb-border, #2a2a3e);
-      padding: 2px 6px;
-      border-radius: 4px;
-      flex-shrink: 0;
-    }
-    #${PANEL_ID2} .tb-issue-actions {
-      display: flex;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-    #${PANEL_ID2} .tb-issue-actions button {
-      background: transparent;
-      color: var(--tb-text-secondary, #aaa);
-      border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-size: 11px;
-      transition: all 0.15s;
-    }
-    #${PANEL_ID2} .tb-issue-actions button:hover {
-      background: var(--tb-btn-hover, #ffffff15);
-      color: var(--tb-text-primary, #fff);
-    }
-    #${PANEL_ID2} .tb-issue-actions button[data-action="file"] {
-      background: var(--tb-accent, #7B61FF);
-      color: #fff;
-      border-color: transparent;
-    }
-    #${PANEL_ID2} .tb-issue-actions button[data-action="file"]:hover { opacity: 0.9; }
-  `;
-    document.head.appendChild(style);
-  }
-  function _open(root, state) {
-    var _a;
-    _isOpen2 = true;
-    (_a = document.getElementById(`${PANEL_ID2}-overlay`)) == null ? void 0 : _a.remove();
-    const overlay = document.createElement("div");
-    overlay.id = `${PANEL_ID2}-overlay`;
-    overlay.dataset.tracebug = "issues-panel-overlay";
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.setAttribute("aria-label", "Page issues");
-    const panel = document.createElement("div");
-    panel.id = PANEL_ID2;
-    panel.dataset.tracebug = "issues-panel";
-    panel.innerHTML = _shellHtml(state);
-    overlay.appendChild(panel);
-    root.appendChild(overlay);
-    _wireShellHandlers(overlay, panel);
-  }
-  function _shellHtml(state) {
-    return `
-    <div data-tb-issues="header" style="padding:16px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--tb-border, #2a2a3e)">
-      <span style="font-size:20px">\u{1F50D}</span>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff)">Page Issues</div>
-        <div data-tb-issues="subtitle" style="font-size:11px;color:var(--tb-text-muted, #888);margin-top:2px">${state.loading ? "Scanning\u2026" : "No scan yet"}</div>
-      </div>
-      <button data-tb-issues="rescan" style="background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:6px 12px;font-size:12px;display:flex;align-items:center;gap:6px">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
-        Rescan
-      </button>
-      <button data-tb-issues="close" aria-label="Close" style="background:none;border:none;color:var(--tb-text-muted, #888);font-size:20px;padding:4px 8px;border-radius:6px">&times;</button>
-    </div>
-    <div data-tb-issues="body" style="flex:1;overflow-y:auto;min-height:200px">
-      ${state.loading ? _loadingHtml() : ""}
-    </div>
-  `;
-  }
-  function _loadingHtml() {
-    return `
-    <div style="padding:48px 20px;text-align:center;color:var(--tb-text-muted, #888);font-size:13px">
-      <div style="font-size:24px;margin-bottom:8px">\u{1F50D}</div>
-      Scanning page for issues\u2026
-      <div style="font-size:11px;margin-top:6px;opacity:0.7">Loading axe-core, checking images, network calls, JS errors\u2026</div>
-    </div>
-  `;
-  }
-  function _wireShellHandlers(overlay, panel) {
-    const close = () => {
-      _isOpen2 = false;
-      overlay.remove();
-      document.removeEventListener("keydown", escHandler);
-    };
-    panel.querySelector('[data-tb-issues="close"]').addEventListener("click", close);
-    overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) close();
-    });
-    panel.querySelector('[data-tb-issues="rescan"]').addEventListener("click", async () => {
-      const body = panel.querySelector('[data-tb-issues="body"]');
-      body.innerHTML = _loadingHtml();
-      const sub = panel.querySelector('[data-tb-issues="subtitle"]');
-      sub.textContent = "Scanning\u2026";
-      await scan();
-      _renderBody(getIssues());
-    });
-    const escHandler = (e2) => {
-      if (e2.key === "Escape") close();
-    };
-    document.addEventListener("keydown", escHandler);
-  }
-  function _renderBody(issues) {
-    const panel = document.getElementById(PANEL_ID2);
-    if (!panel) return;
-    const body = panel.querySelector('[data-tb-issues="body"]');
-    const subtitle = panel.querySelector('[data-tb-issues="subtitle"]');
-    if (issues.length === 0) {
-      subtitle.textContent = "No issues found";
-      body.innerHTML = `
-      <div style="padding:48px 20px;text-align:center;color:var(--tb-text-muted, #888);font-size:13px">
-        <div style="font-size:32px;margin-bottom:8px">\u2713</div>
-        Clean scan \u2014 no issues detected on this page.
-        <div style="font-size:11px;margin-top:6px;opacity:0.7">Includes a11y \xB7 broken images \xB7 mixed content \xB7 JS errors \xB7 failed/slow API calls</div>
-      </div>
-    `;
-      return;
-    }
-    const counts = {};
-    for (const i of issues) counts[i.severity] = (counts[i.severity] || 0) + 1;
-    const summary = ["critical", "serious", "moderate", "minor"].filter((s) => counts[s]).map((s) => `${counts[s]} ${s}`).join(" \xB7 ");
-    subtitle.textContent = `${issues.length} issue${issues.length === 1 ? "" : "s"} \xB7 ${summary}`;
-    body.innerHTML = issues.map((issue) => _issueRowHtml(issue)).join("");
-    body.querySelectorAll("[data-tb-issue-id]").forEach((row) => {
-      var _a, _b, _c;
-      const id = row.dataset.tbIssueId;
-      const issue = issues.find((i) => i.id === id);
-      if (!issue) return;
-      (_a = row.querySelector('[data-action="locate"]')) == null ? void 0 : _a.addEventListener("click", () => _locate(issue));
-      (_b = row.querySelector('[data-action="dismiss"]')) == null ? void 0 : _b.addEventListener("click", () => {
-        dismissIssue(id);
-        _renderBody(getIssues());
-      });
-      (_c = row.querySelector('[data-action="file"]')) == null ? void 0 : _c.addEventListener("click", () => _fileAsBug(issue));
-    });
-  }
-  function _issueRowHtml(issue) {
-    const colors = SEVERITY_COLORS[issue.severity];
-    const detectorLabel = DETECTOR_LABELS[issue.detector];
-    const desc = issue.description.length > 240 ? issue.description.slice(0, 237) + "\u2026" : issue.description;
-    const repeats = (issue.occurrences || 1) > 1;
-    const samplesHtml = repeats && issue.contextSamples && issue.contextSamples.length > 0 ? `<details style="margin-top:6px;font-size:11px">
-         <summary style="cursor:pointer;color:var(--tb-text-muted, #888)">
-           View all ${issue.occurrences} contexts
-         </summary>
-         <ol style="margin:6px 0 0 20px;padding:0;color:var(--tb-text-secondary, #aaa);line-height:1.5">
-           ${issue.contextSamples.map((s) => `
-             <li>${new Date(s.timestamp).toLocaleTimeString()}${s.precedingAction ? ` \xB7 ${escapeHtml2(s.precedingAction)}` : ""}</li>
-           `).join("")}
-         </ol>
-       </details>` : "";
-    return `
-    <div class="tb-issue-row" data-tb-issue-id="${issue.id}">
-      <span class="tb-sev-badge" style="background:${colors.bg};color:${colors.fg};border-color:${colors.border}">${issue.severity}</span>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
-          <span class="tb-detector-tag">${detectorLabel}</span>
-          <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml2(issue.title)}</span>
-        </div>
-        <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml2(desc)}</div>
-        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7B61FF);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
-        ${samplesHtml}
-      </div>
-      <div class="tb-issue-actions">
-        ${issue.selector ? `<button data-action="locate" title="Highlight on page">\u{1F4CD} Locate</button>` : ""}
-        <button data-action="file" title="File as bug ticket">File ticket</button>
-        <button data-action="dismiss" title="Dismiss for this session">Dismiss</button>
-      </div>
-    </div>
-  `;
-  }
-  function _locate(issue) {
-    var _a;
-    if (!issue.selector) return;
-    let el = null;
-    try {
-      el = document.querySelector(issue.selector);
-    } catch (e2) {
-      el = null;
-    }
-    if (!el) return;
-    (_a = document.getElementById(`${PANEL_ID2}-overlay`)) == null ? void 0 : _a.remove();
-    _isOpen2 = false;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    const htmlEl = el;
-    const prevOutline = htmlEl.style.outline;
-    const prevTransition = htmlEl.style.transition;
-    htmlEl.style.transition = "outline 0.2s, box-shadow 0.2s";
-    htmlEl.style.outline = "3px solid #7B61FF";
-    htmlEl.style.boxShadow = "0 0 0 6px rgba(123,97,255,0.35)";
-    setTimeout(() => {
-      htmlEl.style.outline = prevOutline;
-      htmlEl.style.boxShadow = "";
-      htmlEl.style.transition = prevTransition;
-    }, 2400);
-  }
-  function _fileAsBug(issue) {
-    var _a;
-    const root = _root || document.getElementById("tracebug-root");
-    if (!root) return;
-    (_a = document.getElementById(`${PANEL_ID2}-overlay`)) == null ? void 0 : _a.remove();
-    _isOpen2 = false;
-    Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
-      m.showQuickBugCapture(root, {
-        prefilledTitle: issue.title,
-        prefilledDescription: _bugDescriptionFromIssue(issue)
-      }).catch(() => {
-      });
-    });
-  }
-  function _bugDescriptionFromIssue(issue) {
-    const lines = [];
-    lines.push(`> Detected by TraceBug auto-scanner: **${DETECTOR_LABELS[issue.detector]}** (${issue.severity})`);
-    lines.push("");
-    lines.push(issue.description);
-    if (issue.selector) lines.push(`
-**Selector:** \`${issue.selector}\``);
-    if (issue.url) lines.push(`**URL:** \`${issue.url}\``);
-    if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
-    return lines.join("\n");
-  }
-  var PANEL_ID2, STYLE_ID2, _isOpen2, _root, SEVERITY_COLORS, DETECTOR_LABELS;
-  var init_issues_panel = __esm({
-    "src/ui/issues-panel.ts"() {
-      "use strict";
-      init_scanner();
-      init_helpers();
-      PANEL_ID2 = "tracebug-issues-panel";
-      STYLE_ID2 = "tracebug-issues-panel-styles";
-      _isOpen2 = false;
-      _root = null;
-      SEVERITY_COLORS = {
-        critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
-        serious: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
-        moderate: { bg: "#713f12", fg: "#fde68a", border: "#ca8a04" },
-        minor: { bg: "#1e3a8a", fg: "#bfdbfe", border: "#2563eb" }
-      };
-      DETECTOR_LABELS = {
-        "axe-a11y": "A11y",
-        "broken-image": "Broken image",
-        "mixed-content": "Mixed content",
-        "console-error": "JS error",
-        "slow-api": "Slow API",
-        "failed-request": "Failed request",
-        "frustration-rage": "Rage clicks",
-        "frustration-dead": "Dead click",
-        "frustration-abandon": "Form abandoned",
-        "frustration-error-correlated": "Click \u2192 error"
-      };
-    }
-  });
-
-  // src/ui/recording-hud.ts
-  function _formatElapsed(ms) {
-    const total = Math.max(0, Math.floor(ms / 1e3));
-    const m = Math.floor(total / 60).toString().padStart(2, "0");
-    const s = (total % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  }
-  function showRecordingHUD(root, options) {
-    if (_hud) return;
-    if (!isVideoRecording()) return;
-    _root2 = root;
-    _onStopRequested = options.onStop;
-    const hud = document.createElement("div");
-    hud.id = HUD_ID;
-    hud.dataset.tracebug = "recording-hud";
-    hud.setAttribute("role", "status");
-    hud.setAttribute("aria-live", "polite");
-    if (!document.getElementById("tracebug-hud-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-hud-anim";
-      style.textContent = `
-      @keyframes tracebug-hud-in { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes tracebug-hud-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
-      #${HUD_ID} {
-        position: fixed !important;
-        top: 16px !important;
-        left: 16px !important;
-        width: max-content !important;
-        max-width: calc(100vw - 32px) !important;
-        background: var(--tb-bg-secondary, #1a1a2e) !important;
-        border: 1px solid var(--tb-error, #ef4444) !important;
-        border-radius: 999px !important;
-        padding: 5px 6px 5px 10px !important;
-        display: flex !important;
-        align-items: center !important;
-        flex-wrap: nowrap !important;
-        gap: 6px !important;
-        color: var(--tb-text-primary, #e0e0e0) !important;
-        font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
-        font-size: 12px !important;
-        line-height: 1 !important;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
-        z-index: 2147483647 !important;
-        pointer-events: auto !important;
-        animation: tracebug-hud-in 0.2s ease !important;
-        box-sizing: border-box !important;
-        user-select: none !important;
-      }
-      #${HUD_ID} > * { flex-shrink: 0 !important; box-sizing: border-box !important; }
-      #${HUD_ID}[data-tb-dragging="1"] { cursor: grabbing !important; }
-      #${HUD_ID} [data-tb-hud="grip"] { cursor: grab !important; padding: 0 4px !important; color: var(--tb-text-muted, #888) !important; display: inline-flex !important; align-items: center !important; }
-      #${HUD_ID} [data-tb-hud="grip"]:active { cursor: grabbing !important; }
-      #${HUD_ID} button { font-family: inherit !important; }
-    `;
-      document.head.appendChild(style);
-    }
-    hud.innerHTML = `
-    <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
-      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="3" r="1.3"/><circle cx="8" cy="3" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="8" cy="7" r="1.3"/><circle cx="2" cy="11" r="1.3"/><circle cx="8" cy="11" r="1.3"/></svg>
-    </span>
-    <span data-tb-hud="dot" style="width:8px;height:8px;border-radius:50%;background:var(--tb-error, #ef4444);animation:tracebug-hud-pulse 1.2s infinite;flex-shrink:0"></span>
-    <span data-tb-hud="timer" style="font-variant-numeric:tabular-nums;font-weight:600;min-width:38px;font-size:12px">00:00</span>
-    <button
-      data-tb-hud="annotate"
-      title="Draw on the page \u2014 pen / shapes / redact. Markings auto-fade after 3 s."
-      aria-label="Draw on the page"
-      style="background:transparent;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border, #2a2a3e);border-radius:999px;width:28px;height:28px;padding:0;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center"
-    >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-    </button>
-    <button
-      data-tb-hud="stop"
-      title="Stop recording"
-      aria-label="Stop recording"
-      style="background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;flex-shrink:0;display:flex;align-items:center;gap:5px"
-    >
-      <span style="width:7px;height:7px;background:#fff;border-radius:1px;display:inline-block"></span>
-      Stop
-    </button>
-  `;
-    root.appendChild(hud);
-    _hud = hud;
-    const timerEl = hud.querySelector('[data-tb-hud="timer"]');
-    const gripEl = hud.querySelector('[data-tb-hud="grip"]');
-    const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]');
-    const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
-    _timerInterval = setInterval(() => {
-      if (!isVideoRecording()) return;
-      timerEl.textContent = _formatElapsed(getVideoElapsedMs());
-    }, 500);
-    if (gripEl) {
-      let startX = 0, startY = 0, hudX = 0, hudY = 0, dragging = false;
-      const onDown = (e2) => {
-        dragging = true;
-        hud.setAttribute("data-tb-dragging", "1");
-        gripEl.setPointerCapture(e2.pointerId);
-        const rect = hud.getBoundingClientRect();
-        hudX = rect.left;
-        hudY = rect.top;
-        startX = e2.clientX;
-        startY = e2.clientY;
-        e2.preventDefault();
-      };
-      const onMove = (e2) => {
-        if (!dragging) return;
-        const nx = Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, hudX + (e2.clientX - startX)));
-        const ny = Math.max(4, Math.min(window.innerHeight - hud.offsetHeight - 4, hudY + (e2.clientY - startY)));
-        hud.style.setProperty("left", nx + "px", "important");
-        hud.style.setProperty("top", ny + "px", "important");
-        hud.style.setProperty("transform", "none", "important");
-      };
-      const onUp = (e2) => {
-        if (!dragging) return;
-        dragging = false;
-        hud.removeAttribute("data-tb-dragging");
-        try {
-          gripEl.releasePointerCapture(e2.pointerId);
-        } catch (e3) {
-        }
-      };
-      gripEl.addEventListener("pointerdown", onDown);
-      gripEl.addEventListener("pointermove", onMove);
-      gripEl.addEventListener("pointerup", onUp);
-      gripEl.addEventListener("pointercancel", onUp);
-    }
-    if (annotateBtn) {
-      annotateBtn.addEventListener("click", () => {
-        const drawRoot = _root2;
-        if (!drawRoot) return;
-        if (isDrawModeActive()) {
-          deactivateDrawMode();
-          return;
-        }
-        activateDrawMode(drawRoot, void 0, void 0, { ephemeralMs: 3e3 });
-      });
-    }
-    stopBtn.addEventListener("click", () => {
-      if (isDrawModeActive()) {
-        try {
-          deactivateDrawMode();
-        } catch (e2) {
-        }
-      }
-      _onStopRequested == null ? void 0 : _onStopRequested();
-    });
-  }
-  function flashRecordingHUD() {
-    if (!_hud) return;
-    const prev = _hud.style.boxShadow;
-    _hud.style.transition = "box-shadow 0.3s";
-    _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7B61FF)66, 0 8px 32px rgba(0,0,0,0.4)";
-    setTimeout(() => {
-      if (_hud) _hud.style.boxShadow = prev;
-    }, 400);
-  }
-  function hideRecordingHUD() {
-    if (_timerInterval) {
-      clearInterval(_timerInterval);
-      _timerInterval = null;
-    }
-    if (isDrawModeActive()) {
-      try {
-        deactivateDrawMode();
-      } catch (e2) {
-      }
-    }
-    _hud == null ? void 0 : _hud.remove();
-    _hud = null;
-    _root2 = null;
-    _onStopRequested = null;
-  }
-  var HUD_ID, _root2, _hud, _timerInterval, _onStopRequested;
-  var init_recording_hud = __esm({
-    "src/ui/recording-hud.ts"() {
-      "use strict";
-      init_video_recorder();
-      init_draw_mode();
-      HUD_ID = "tracebug-recording-hud";
-      _root2 = null;
-      _hud = null;
-      _timerInterval = null;
-      _onStopRequested = null;
-    }
-  });
-
-  // src/compact-toolbar.ts
-  function setToolbarRecordingState(isRecording2, onToggle) {
-    _isRecording = isRecording2;
-    _onToggleRecording = onToggle;
-  }
-  function setSessionLifecycleHandlers(onStart, onEnd) {
-    _onSessionStart = onStart;
-    _onSessionEnd = onEnd;
-  }
-  function updateToolbarRecordingState(isRecording2) {
-    _isRecording = isRecording2;
-    const dot = document.getElementById("tracebug-toolbar-rec-dot");
-    if (dot) {
-      dot.style.background = isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
-      dot.style.animation = isRecording2 ? "bt-pulse 2s infinite" : "none";
-    }
-  }
-  function setRenderPanel(fn) {
-    _renderPanel = fn;
-  }
-  function mountCompactToolbar(root, panel, showToast3, renderAnnotationList2, position2 = "right", shortcuts) {
-    _panelEl = panel;
-    _position = position2;
-    _isMobile = window.innerWidth < 768;
-    const toolbar = document.createElement("div");
-    toolbar.id = TOOLBAR_ID;
-    toolbar.dataset.tracebug = "compact-toolbar";
-    _toolbar = toolbar;
-    _applyToolbarPosition(toolbar, position2);
-    _initDrag(toolbar);
-    void panel;
-    const quickBugBtn = _createToolbarBtn(
-      "Quick Bug Capture (Ctrl+Shift+B)",
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
-      () => {
-        if (!isQuickBugOpen()) {
-          showQuickBugCapture(root).catch(() => showToast3("Quick capture failed", root));
-        }
-      },
-      "tracebug-toolbar-quickbug-btn"
-    );
-    quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
-    quickBugBtn.addEventListener("mouseenter", () => {
-      quickBugBtn.style.background = "var(--tb-accent-subtle, #7B61FF33)";
-      quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
-    });
-    quickBugBtn.addEventListener("mouseleave", () => {
-      quickBugBtn.style.background = "transparent";
-      quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
-    });
-    toolbar.appendChild(quickBugBtn);
-    const scanBtn = _createToolbarBtn(
-      "Scan page for issues",
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
-      () => {
-        if (!isIssuesPanelOpen()) {
-          showIssuesPanel(root).catch((err) => {
-            console.warn("[TraceBug] Scan failed:", err);
-            showToast3("Scan failed", root);
-          });
-        }
-      },
-      "tracebug-toolbar-scan-btn"
-    );
-    toolbar.appendChild(scanBtn);
-    toolbar.appendChild(_divider());
-    const _checkLimit = () => {
-      if (isPremium()) return true;
-      if (getScreenshots().length < FREE_LIMITS.screenshots) return true;
-      showUpgradeModal({
-        feature: "Unlimited screenshots",
-        message: `Free plan is capped at ${FREE_LIMITS.screenshots} screenshots per ticket. Upgrade for unlimited captures.`
-      }, root);
-      return false;
-    };
-    toolbar.appendChild(_createToolbarBtn(
-      "Screenshot (Ctrl+Shift+S) \u2014 added to ticket",
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`,
-      async () => {
-        var _a;
-        if (!_checkLimit()) return;
-        showToast3("Capturing\u2026", root);
-        try {
-          const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-          const lastEvent = ((_a = sessions[0]) == null ? void 0 : _a.events[sessions[0].events.length - 1]) || null;
-          await captureScreenshot(lastEvent);
-          const n = getScreenshots().length;
-          const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
-          showToast3(`\u2713 Screenshot ${n}${cap} added to ticket`, root);
-          await _openOrRefreshTicket(root);
-        } catch (e2) {
-          showToast3("Screenshot failed", root);
-        }
-      },
-      "tracebug-toolbar-screenshot-btn"
-    ));
-    toolbar.appendChild(_createToolbarBtn(
-      "Region Screenshot \u2014 drag to select, added to ticket",
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M9 9h6v6H9z"/></svg>`,
-      async () => {
-        if (!_checkLimit()) return;
-        try {
-          const ss = await captureRegionScreenshot();
-          if (!ss) {
-            showToast3("Cancelled", root);
-            return;
-          }
-          const n = getScreenshots().length;
-          const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
-          showToast3(`\u2713 Region ${n}${cap} added to ticket`, root);
-          await _openOrRefreshTicket(root);
-        } catch (e2) {
-          showToast3("Region screenshot failed", root);
-        }
-      },
-      "tracebug-toolbar-region-btn"
-    ));
-    const eventsRecordBtn = _createToolbarBtn(
-      "Start session (events + screenshots) \u2014 no video, no screen prompt",
-      _eventsRecordIconSvg(false),
-      () => _toggleEventsRecording(root, eventsRecordBtn, showToast3),
-      "tracebug-toolbar-events-record-btn"
-    );
-    toolbar.appendChild(eventsRecordBtn);
-    const recordBtn = _createToolbarBtn(
-      "Record session WITH video (asks to share screen)",
-      _recordIconSvg(false),
-      () => _toggleVideoRecording(root, recordBtn, showToast3),
-      "tracebug-toolbar-record-btn"
-    );
-    if (!isVideoSupported()) {
-      recordBtn.style.opacity = "0.4";
-      recordBtn.style.cursor = "not-allowed";
-      recordBtn.title = "Screen recording not supported in this browser";
-    }
-    toolbar.appendChild(recordBtn);
-    root.appendChild(toolbar);
-    if (_isMobile) {
-      _convertToFab(toolbar, root, panel, showToast3);
-    }
-    const resizeHandler = () => {
-      const wasMobile = _isMobile;
-      _isMobile = window.innerWidth < 768;
-      if (wasMobile !== _isMobile) {
-        if (_isMobile) {
-          _convertToFab(toolbar, root, panel, showToast3);
-        } else {
-          _restoreToolbar(toolbar);
-        }
-      }
-    };
-    window.addEventListener("resize", resizeHandler);
-    const annotateShortcut = (shortcuts == null ? void 0 : shortcuts.annotate) || "ctrl+shift+a";
-    const drawShortcut = (shortcuts == null ? void 0 : shortcuts.draw) || "ctrl+shift+d";
-    const keyHandler = (e2) => {
-      var _a, _b;
-      if (matchesShortcut(e2, annotateShortcut)) {
-        e2.preventDefault();
-        (_a = toolbar.querySelector("#tracebug-toolbar-annotate-btn")) == null ? void 0 : _a.click();
-      }
-      if (matchesShortcut(e2, drawShortcut)) {
-        e2.preventDefault();
-        (_b = toolbar.querySelector("#tracebug-toolbar-draw-btn")) == null ? void 0 : _b.click();
-      }
-    };
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      toolbar.remove();
-      document.removeEventListener("keydown", keyHandler);
-      window.removeEventListener("resize", resizeHandler);
-      deactivateElementAnnotateMode();
-      deactivateDrawMode();
-      const settingsCard = document.getElementById(SETTINGS_ID);
-      settingsCard == null ? void 0 : settingsCard.remove();
-      _toolbar = null;
-    };
-  }
-  function _createToolbarBtn(title, iconHtml, onClick, id) {
-    const btn = document.createElement("button");
-    if (id) btn.id = id;
-    btn.dataset.tracebug = "toolbar-btn";
-    btn.title = title;
-    btn.setAttribute("aria-label", title);
-    btn.innerHTML = iconHtml;
-    btn.style.cssText = `
-    width: 34px; height: 34px; border-radius: var(--tb-radius-md, 8px); border: none;
-    background: transparent; color: var(--tb-btn-text, #aaa); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0; transition: all 0.15s;
-  `;
-    btn.addEventListener("mouseenter", () => {
-      if (!btn.classList.contains("tb-active")) {
-        btn.style.background = "var(--tb-btn-hover, #ffffff15)";
-        btn.style.color = "var(--tb-btn-text-hover, #fff)";
-      }
-    });
-    btn.addEventListener("mouseleave", () => {
-      if (!btn.classList.contains("tb-active")) {
-        btn.style.background = "transparent";
-        btn.style.color = "var(--tb-btn-text, #aaa)";
-      }
-    });
-    btn.addEventListener("click", onClick);
-    return btn;
-  }
-  function _divider() {
-    const d = document.createElement("div");
-    d.dataset.tracebug = "toolbar-divider";
-    d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
-    return d;
-  }
-  function _eventsRecordIconSvg(active) {
-    if (active) {
-      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
-    }
-    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>`;
-  }
-  async function _toggleEventsRecording(root, btn, showToast3) {
-    const isActive = btn.classList.contains("tb-active");
-    if (isActive) {
-      showToast3("Stopping recording...", root);
-      btn.innerHTML = _eventsRecordIconSvg(false);
-      btn.classList.remove("tb-active");
-      btn.style.color = "var(--tb-btn-text, #aaa)";
-      try {
-        _onSessionEnd == null ? void 0 : _onSessionEnd();
-      } catch (err) {
-        console.warn("[TraceBug] Session end hook failed:", err);
-      }
-      try {
-        if (!isQuickBugOpen()) await showQuickBugCapture(root);
-      } catch (err) {
-        console.warn("[TraceBug] Failed to open ticket review after recording:", err);
-      }
-      return;
-    }
-    try {
-      _onSessionStart == null ? void 0 : _onSessionStart();
-    } catch (err) {
-      console.warn("[TraceBug] Session start hook failed:", err);
-    }
-    btn.innerHTML = _eventsRecordIconSvg(true);
-    btn.classList.add("tb-active");
-    btn.style.color = "var(--tb-error, #ef4444)";
-    showToast3("Recording \u2014 events + screenshots will be captured", root);
-  }
-  function _recordIconSvg(active) {
-    if (active) {
-      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
-    }
-    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
-  }
-  async function _toggleVideoRecording(root, btn, showToast3) {
-    if (!isVideoSupported()) {
-      showToast3("Screen recording not supported in this browser", root);
-      return;
-    }
-    if (isVideoRecording()) {
-      const captures = getCaptureCount();
-      showToast3("Stopping recording...", root);
-      await stopVideoRecording();
-      hideRecordingHUD();
-      btn.innerHTML = _recordIconSvg(false);
-      btn.classList.remove("tb-active");
-      btn.style.color = "var(--tb-btn-text, #aaa)";
-      try {
-        _onSessionEnd == null ? void 0 : _onSessionEnd();
-      } catch (err) {
-        console.warn("[TraceBug] Session end hook failed:", err);
-      }
-      if (captures > 0) {
-        showToast3(`Recording stopped \xB7 ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
-      }
-      try {
-        if (!isQuickBugOpen()) await showQuickBugCapture(root);
-      } catch (err) {
-        console.warn("[TraceBug] Failed to open ticket review after recording:", err);
-      }
-      return;
-    }
-    showToast3("Pick a screen, window, or tab to record", root);
-    const ok = await startVideoRecording({
-      mode: "rolling",
-      onStatus: (status, message) => {
-        if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
-        else if (status === "warning" && message) showToast3(message, root);
-      }
-    });
-    if (!ok) {
-      showToast3("Recording cancelled", root);
-      return;
-    }
-    try {
-      _onSessionStart == null ? void 0 : _onSessionStart();
-    } catch (err) {
-      console.warn("[TraceBug] Session start hook failed:", err);
-    }
-    btn.innerHTML = _recordIconSvg(true);
-    btn.classList.add("tb-active");
-    btn.style.color = "var(--tb-error, #ef4444)";
-    showRecordingHUD(root, {
-      onStop: () => {
-        _toggleVideoRecording(root, btn, showToast3).catch(() => {
-        });
-      }
-    });
-    showToast3("Recording started \u2014 hit Stop to file a ticket", root);
-  }
-  async function _openOrRefreshTicket(root) {
-    try {
-      if (isQuickBugOpen()) {
-        await refreshQuickBugCapture(root);
-      } else {
-        await showQuickBugCapture(root);
-      }
-    } catch (err) {
-      console.warn("[TraceBug] Failed to open ticket after capture:", err);
-    }
-  }
-  function _applyToolbarPosition(toolbar, position2) {
-    let savedPos = null;
-    try {
-      const raw = localStorage.getItem(DRAG_POS_KEY);
-      if (raw) savedPos = JSON.parse(raw);
-    } catch (e2) {
-    }
-    const isBottom = position2 === "bottom-right" || position2 === "bottom-left";
-    const isLeft = position2 === "left" || position2 === "bottom-left";
-    if (savedPos) {
-      toolbar.style.cssText = `
-      position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
-      z-index: 2147483647; display: flex; flex-direction: column;
-      align-items: center; gap: 3px; padding: 8px 6px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
-      transition: none; cursor: grab;
-    `;
-    } else if (isBottom) {
-      toolbar.style.cssText = `
-      position: fixed; ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
-      z-index: 2147483647; display: flex; flex-direction: row;
-      align-items: center; gap: 3px; padding: 6px 8px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
-      transition: all 0.3s ease;
-    `;
-    } else {
-      toolbar.style.cssText = `
-      position: fixed; ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
-      z-index: 2147483647; display: flex; flex-direction: column;
-      align-items: center; gap: 3px; padding: 8px 6px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
-      transition: ${isLeft ? "left" : "right"} 0.3s ease;
-    `;
-    }
-  }
-  function _initDrag(toolbar) {
-    let isDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let startLeft = 0;
-    let startTop = 0;
-    let hasMoved = false;
-    const onMouseDown = (e2) => {
-      if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
-      isDragging = true;
-      hasMoved = false;
-      startX = e2.clientX;
-      startY = e2.clientY;
-      const rect = toolbar.getBoundingClientRect();
-      startLeft = rect.left;
-      startTop = rect.top;
-      toolbar.style.cursor = "grabbing";
-      toolbar.style.transition = "none";
-      e2.preventDefault();
-    };
-    const onMouseMove = (e2) => {
-      if (!isDragging) return;
-      const dx = e2.clientX - startX;
-      const dy = e2.clientY - startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
-      if (!hasMoved) return;
-      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-      const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-      toolbar.style.left = `${newLeft}px`;
-      toolbar.style.top = `${newTop}px`;
-      toolbar.style.right = "auto";
-      toolbar.style.bottom = "auto";
-      toolbar.style.transform = "none";
-    };
-    const onMouseUp = () => {
-      if (!isDragging) return;
-      isDragging = false;
-      toolbar.style.cursor = "grab";
-      if (hasMoved) {
-        try {
-          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
-            x: parseInt(toolbar.style.left),
-            y: parseInt(toolbar.style.top)
-          }));
-        } catch (e2) {
-        }
-      }
-    };
-    toolbar.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-    toolbar.addEventListener("touchstart", (e2) => {
-      if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
-      const touch = e2.touches[0];
-      isDragging = true;
-      hasMoved = false;
-      startX = touch.clientX;
-      startY = touch.clientY;
-      const rect = toolbar.getBoundingClientRect();
-      startLeft = rect.left;
-      startTop = rect.top;
-      toolbar.style.transition = "none";
-    }, { passive: true });
-    document.addEventListener("touchmove", (e2) => {
-      if (!isDragging) return;
-      const touch = e2.touches[0];
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
-      if (!hasMoved) return;
-      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-      const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-      toolbar.style.left = `${newLeft}px`;
-      toolbar.style.top = `${newTop}px`;
-      toolbar.style.right = "auto";
-      toolbar.style.bottom = "auto";
-      toolbar.style.transform = "none";
-    }, { passive: true });
-    document.addEventListener("touchend", () => {
-      if (!isDragging) return;
-      isDragging = false;
-      if (hasMoved) {
-        try {
-          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
-            x: parseInt(toolbar.style.left),
-            y: parseInt(toolbar.style.top)
-          }));
-        } catch (e2) {
-        }
-      }
-    });
-  }
-  function _convertToFab(toolbar, root, panel, showToast3) {
-    const buttons = Array.from(toolbar.children);
-    buttons.forEach((b) => {
-      const el = b;
-      if (el.id !== "tracebug-toolbar-panel-btn" && el.id !== "tracebug-toolbar-rec-dot") {
-        el.style.display = _fabExpanded ? "" : "none";
-      }
-    });
-    toolbar.style.cssText = `
-    position: fixed; right: 12px; bottom: 12px;
-    z-index: 2147483647; display: flex; flex-direction: column;
-    align-items: center; gap: 3px; padding: ${_fabExpanded ? "8px 6px" : "6px"};
-    background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-    border-radius: ${_fabExpanded ? "14px" : "50%"};
-    box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
-    min-width: 44px; min-height: 44px;
-    transition: all 0.2s ease;
-  `;
-    panel.style.width = "100vw";
-    panel.style.height = "80vh";
-    panel.style.bottom = _panelOpen ? "0" : "-85vh";
-    panel.style.right = "0";
-    panel.style.top = "auto";
-    panel.style.borderRadius = "16px 16px 0 0";
-  }
-  function _restoreToolbar(toolbar) {
-    const buttons = Array.from(toolbar.children);
-    buttons.forEach((b) => b.style.display = "");
-    _applyToolbarPosition(toolbar, _position);
-    if (_panelEl) {
-      _panelEl.style.width = "";
-      _panelEl.style.height = "";
-      _panelEl.style.bottom = "";
-      _panelEl.style.top = "";
-      _panelEl.style.borderRadius = "";
-      _panelEl.style.right = _panelOpen ? "0" : "-480px";
-    }
-  }
-  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _isRecording, _onToggleRecording, _onSessionStart, _onSessionEnd, _renderPanel, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded;
-  var init_compact_toolbar = __esm({
-    "src/compact-toolbar.ts"() {
-      "use strict";
-      init_element_annotate();
-      init_draw_mode();
-      init_annotation_store();
-      init_screenshot();
-      init_voice_recorder();
-      init_collectors();
-      init_screenshot();
-      init_region_screenshot();
-      init_plan();
-      init_upgrade_modal();
-      init_storage();
-      init_quick_bug();
-      init_issues_panel();
-      init_helpers();
-      init_video_recorder();
-      init_recording_hud();
-      TOOLBAR_ID = "tracebug-compact-toolbar";
-      SETTINGS_ID = "tracebug-settings-card";
-      DRAG_POS_KEY = "tracebug_toolbar_pos";
-      _isRecording = true;
-      _onToggleRecording = null;
-      _onSessionStart = null;
-      _onSessionEnd = null;
-      _renderPanel = null;
-      _panelEl = null;
-      _panelOpen = false;
-      _toolbar = null;
-      _position = "right";
-      _isMobile = false;
-      _fabExpanded = false;
-    }
-  });
-
-  // src/onboarding.ts
-  function isComplete() {
-    try {
-      return localStorage.getItem(STORAGE_KEY2) === "true";
-    } catch (e2) {
-      return false;
-    }
-  }
-  function addLogoPulse() {
-    if (isComplete()) return;
-    const logo = document.getElementById("tracebug-toolbar-panel-btn");
-    if (!logo) return;
-    logo.style.animation = "tracebug-onboard-pulse 1.5s ease-in-out 6";
-    setTimeout(() => {
-      if (logo) logo.style.animation = "";
-    }, 1e4);
-  }
-  function cleanupOnboarding() {
-    _removeTooltip();
-    if (_cleanup3) {
-      _cleanup3();
-      _cleanup3 = null;
-    }
-  }
-  function _removeTooltip() {
-    const el = document.getElementById(TOOLTIP_ID);
-    if (el) el.remove();
-    STEPS.forEach((s) => {
-      const btn = document.getElementById(s.targetId);
-      if (btn) btn.style.boxShadow = "";
-    });
-  }
-  var STORAGE_KEY2, TOOLTIP_ID, STEPS, _cleanup3;
-  var init_onboarding = __esm({
-    "src/onboarding.ts"() {
-      "use strict";
-      STORAGE_KEY2 = "tracebug_onboarding_complete";
-      TOOLTIP_ID = "tracebug-onboarding-tooltip";
-      STEPS = [
-        {
-          targetId: "tracebug-toolbar-panel-btn",
-          text: "TraceBug is recording \u2014 find bugs, we\u2019ll write the report",
-          icon: "\u{1F44B}"
-        },
-        {
-          targetId: "tracebug-toolbar-screenshot-btn",
-          text: "Screenshot anything suspicious",
-          icon: "\u{1F4F7}"
-        },
-        {
-          targetId: "tracebug-toolbar-annotate-btn",
-          text: "Click elements to annotate feedback",
-          icon: "\u{1F3AF}"
-        },
-        {
-          targetId: "tracebug-toolbar-panel-btn",
-          text: "Open here to see sessions & export reports",
-          icon: "\u{1F4CB}"
-        }
-      ];
-      _cleanup3 = null;
-    }
-  });
-
-  // src/dashboard.ts
-  function setRecordingState(isRecording2, onToggle) {
-    _isRecording2 = isRecording2;
-    _onToggleRecording2 = onToggle;
-    setToolbarRecordingState(isRecording2, onToggle);
-  }
-  function updateRecordingState(isRecording2) {
-    _isRecording2 = isRecording2;
-    updateToolbarRecordingState(isRecording2);
-    const indicator = document.getElementById("bt-rec-indicator");
-    if (indicator) {
-      indicator.style.background = isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
-      indicator.title = isRecording2 ? "Recording" : "Paused";
-    }
-    const recBtn = document.getElementById("bt-rec-toggle");
-    if (recBtn) {
-      recBtn.textContent = isRecording2 ? "\u23F8 Pause" : "\u25B6 Record";
-      recBtn.style.color = isRecording2 ? "var(--tb-warning, #fbbf24)" : "var(--tb-success, #22c55e)";
-      recBtn.style.borderColor = isRecording2 ? "var(--tb-warning, #fbbf24)44" : "var(--tb-success, #22c55e)44";
-      recBtn.style.background = isRecording2 ? "var(--tb-warning-bg, #fbbf2422)" : "var(--tb-success-bg, #22c55e22)";
-    }
-  }
-  function mountDashboard(toolbarPosition, shortcuts) {
-    if (document.getElementById("tracebug-compact-toolbar")) return () => {
-    };
-    const style = document.createElement("style");
-    style.id = "tracebug-styles";
-    style.textContent = `
-    #tracebug-root {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 0 !important;
-      height: 0 !important;
-      overflow: visible !important;
-      z-index: 2147483647 !important;
-      pointer-events: none !important;
-      isolation: isolate !important;
-    }
-    #tracebug-root * {
-      pointer-events: auto;
-    }
-    #${PANEL_ID3} {
-      position: fixed !important;
-      top: 0 !important;
-      width: 470px !important;
-      height: 100vh !important;
-      z-index: 2147483647 !important;
-      background: var(--tb-panel-bg, #0f0f1a) !important;
-      border-left: 1px solid var(--tb-border, #2a2a3e) !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-      font-family: var(--tb-font-mono, 'SF Mono', Consolas, monospace), var(--tb-font-family, system-ui, sans-serif) !important;
-      font-size: 13px !important;
-      overflow: hidden !important;
-      transition: right 0.3s ease, left 0.3s ease, bottom 0.3s ease !important;
-      display: flex !important;
-      flex-direction: column !important;
-      box-shadow: var(--tb-shadow-lg, -4px 0 30px rgba(0,0,0,0.6)) !important;
-    }
-    @media (max-width: 767px) {
-      #${PANEL_ID3} {
-        width: 100vw !important;
-        height: 80vh !important;
-        top: auto !important;
-        border-radius: 16px 16px 0 0 !important;
-        border-left: none !important;
-        border-top: 1px solid var(--tb-border, #2a2a3e) !important;
-      }
-    }
-    /* Accessibility: visible focus rings */
-    #tracebug-root button:focus-visible,
-    #tracebug-root input:focus-visible,
-    #tracebug-root select:focus-visible,
-    #tracebug-root textarea:focus-visible,
-    #tracebug-root [tabindex]:focus-visible {
-      outline: 2px solid var(--tb-accent, #7B61FF) !important;
-      outline-offset: 2px !important;
-    }
-    #tracebug-root *:focus:not(:focus-visible) {
-      outline: none !important;
-    }
-  `;
-    document.head.appendChild(style);
-    const root = document.createElement("div");
-    root.id = "tracebug-root";
-    root.setAttribute("role", "complementary");
-    root.setAttribute("aria-label", "TraceBug QA tools");
-    const panel = document.createElement("div");
-    panel.id = PANEL_ID3;
-    panel.style.right = "-480px";
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-modal", "false");
-    panel.setAttribute("aria-label", "TraceBug session panel");
-    const liveRegion = document.createElement("div");
-    liveRegion.id = "tracebug-live";
-    liveRegion.setAttribute("aria-live", "polite");
-    liveRegion.setAttribute("aria-atomic", "true");
-    liveRegion.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
-    root.appendChild(liveRegion);
-    root.appendChild(panel);
-    document.documentElement.appendChild(root);
-    setRenderPanel(renderPanel);
-    const cleanupToolbar = mountCompactToolbar(root, panel, showToast2, renderAnnotationList, toolbarPosition, shortcuts);
-    showAnnotationBadges(root);
-    addLogoPulse();
-    const screenshotShortcut = (shortcuts == null ? void 0 : shortcuts.screenshot) || "ctrl+shift+s";
-    const keyHandler = async (e2) => {
-      if (matchesShortcut(e2, "ctrl+shift+b")) {
-        e2.preventDefault();
-        if (!isQuickBugOpen()) {
-          showQuickBugCapture(root).catch((err) => {
-            console.warn("[TraceBug] Quick bug capture failed:", err);
-            showToast2("Quick capture failed", root);
-          });
-        }
-        return;
-      }
-      if (matchesShortcut(e2, screenshotShortcut)) {
-        e2.preventDefault();
-        const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-        const currentSession = sessions[0];
-        const lastEvent = (currentSession == null ? void 0 : currentSession.events[currentSession.events.length - 1]) || null;
-        showToast2("Capturing screenshot...", root);
-        try {
-          const ss = await captureScreenshot(lastEvent);
-          showToast2(`Screenshot: ${ss.filename}`, root);
-          showAnnotationEditor(ss, root);
-        } catch (e3) {
-          showToast2("Screenshot failed", root);
-        }
-      }
-    };
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      root.remove();
-      style.remove();
-      cleanupToolbar();
-      clearAnnotationBadges();
-      cleanupOnboarding();
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }
-  function renderPanel(panel) {
-    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-    const errorSessions = sessions.filter((s) => s.errorMessage);
-    const allSessions = sessions;
-    panel.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="th-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#th-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#th-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#th-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="48" cy="41" r="5" fill="url(#th-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/></svg>TraceBug AI</div>
-          <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording2 ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording2 ? "Recording" : "Paused"}"></div>
-        </div>
-        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} \xB7 ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button id="bt-rec-toggle" style="${smallBtnStyle(_isRecording2 ? "#fbbf24" : "#22c55e")}font-size:10px">${_isRecording2 ? "\u23F8 Pause" : "\u25B6 Record"}</button>
-        <button id="bt-refresh" style="${smallBtnStyle("#3b82f6")}font-size:10px">\u21BB</button>
-        <button id="bt-clear" style="${smallBtnStyle("#ef4444")}font-size:10px">Clear</button>
-      </div>
-    </div>
-    <style>@keyframes bt-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }</style>
-    <div id="bt-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
-  `;
-    const content2 = panel.querySelector("#bt-content");
-    panel.querySelector("#bt-refresh").addEventListener("click", () => renderPanel(panel));
-    panel.querySelector("#bt-clear").addEventListener("click", () => {
-      if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
-        try {
-          clearAllSessions();
-        } catch (e2) {
-        }
-        try {
-          clearScreenshots();
-        } catch (e2) {
-        }
-        try {
-          clearVoiceTranscripts();
-        } catch (e2) {
-        }
-        try {
-          clearAllAnnotations();
-        } catch (e2) {
-        }
-        try {
-          clearAnnotationBadges();
-        } catch (e2) {
-        }
-        try {
-          clearNetworkFailures();
-        } catch (e2) {
-        }
-        renderPanel(panel);
-      }
-    });
-    panel.querySelector("#bt-rec-toggle").addEventListener("click", () => {
-      if (_onToggleRecording2) _onToggleRecording2();
-    });
-    if (allSessions.length === 0) {
-      content2.innerHTML = `
-      <div style="text-align:center;padding:60px 20px;color:var(--tb-text-muted, #555)">
-        <div style="font-size:36px;margin-bottom:12px">\u{1F50D}</div>
-        <div style="font-family:var(--tb-font-family, system-ui,sans-serif)">No sessions recorded yet.</div>
-        <div style="font-size:11px;margin-top:8px;color:var(--tb-text-muted, #444)">Interact with the app to start capturing events.</div>
-      </div>
-    `;
-      return;
-    }
-    const filterBar = document.createElement("div");
-    filterBar.dataset.tracebug = "filter-bar";
-    filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
-    filterBar.innerHTML = `
-    <input id="bt-search" type="text" placeholder="Search sessions..." style="
-      flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
-      border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 10px;
-      font-size:11px;font-family:var(--tb-font-family, inherit);outline:none;
-    " />
-    <select id="bt-filter" style="
-      background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
-      border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 8px;
-      font-size:11px;font-family:var(--tb-font-family, inherit);cursor:pointer;
-    ">
-      <option value="all">All</option>
-      <option value="errors">Has errors</option>
-      <option value="healthy">Healthy</option>
-    </select>
-  `;
-    content2.innerHTML = "";
-    content2.appendChild(filterBar);
-    const sessionsContainer = document.createElement("div");
-    sessionsContainer.id = "bt-sessions-list";
-    content2.appendChild(sessionsContainer);
-    function renderFilteredSessions(filter, search) {
-      sessionsContainer.innerHTML = "";
-      let filtered = allSessions;
-      if (filter === "errors") filtered = filtered.filter((s) => s.errorMessage);
-      if (filter === "healthy") filtered = filtered.filter((s) => !s.errorMessage);
-      if (search) {
-        const q = search.toLowerCase();
-        filtered = filtered.filter((s) => {
-          var _a;
-          if (s.sessionId.toLowerCase().includes(q)) return true;
-          if (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) return true;
-          if (s.reproSteps && s.reproSteps.toLowerCase().includes(q)) return true;
-          for (const e2 of s.events) {
-            if (e2.page && e2.page.toLowerCase().includes(q)) return true;
-            const d = e2.data || {};
-            const el = d.element || {};
-            if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
-            if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
-            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q)) return true;
-            if (((_a = d.request) == null ? void 0 : _a.url) && String(d.request.url).toLowerCase().includes(q)) return true;
-          }
-          return false;
-        });
-      }
-      if (filtered.length === 0) {
-        sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
-        return;
-      }
-      for (const session of filtered) {
-        sessionsContainer.appendChild(_createSessionCard(session, panel));
-      }
-    }
-    renderFilteredSessions("all", "");
-    content2.querySelector("#bt-search").addEventListener("input", (e2) => {
-      const search = e2.target.value;
-      const filter = content2.querySelector("#bt-filter").value;
-      renderFilteredSessions(filter, search);
-    });
-    content2.querySelector("#bt-filter").addEventListener("change", (e2) => {
-      const filter = e2.target.value;
-      const search = content2.querySelector("#bt-search").value;
-      renderFilteredSessions(filter, search);
-    });
-  }
-  function _createSessionCard(session, panel) {
-    var _a, _b;
-    const card = document.createElement("div");
-    card.style.cssText = "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
-    card.onmouseenter = () => card.style.borderColor = "var(--tb-border-hover, #4a4a6e)";
-    card.onmouseleave = () => card.style.borderColor = "var(--tb-border, #2a2a3e)";
-    const hasError = !!session.errorMessage;
-    const dot = hasError ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tb-error, #ef4444);margin-right:6px"></span>' : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tb-success, #22c55e);margin-right:6px"></span>';
-    const badge = session.reproSteps ? '<span style="font-size:10px;background:#14532d;color:#4ade80;padding:2px 6px;border-radius:var(--tb-radius-sm, 4px);margin-left:6px">Repro Ready</span>' : "";
-    const lastEvent = session.events[session.events.length - 1];
-    let preview = `${session.events.length} events`;
-    if (hasError) {
-      preview = session.errorMessage.slice(0, 60) + (session.errorMessage.length > 60 ? "..." : "");
-    } else if (lastEvent) {
-      preview = describeEvent(lastEvent).slice(0, 60);
-    }
-    const pages = [...new Set(session.events.map((e2) => e2.page))];
-    const sessionName = pages.length > 0 ? _pageName(pages[0]) + " Session" : "Session";
-    card.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center">
-        ${dot}
-        <span style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;font-weight:600">${escapeHtml4(sessionName)}</span>
-        ${badge}
-      </div>
-      <span style="color:var(--tb-text-muted, #555);font-size:10px">${timeAgo(session.updatedAt)}</span>
-    </div>
-    <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml4(preview)}</div>
-    <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events \xB7 ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7B61FF")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
-      <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
-    </div>
-  `;
-    (_a = card.querySelector('[data-tracebug="view-ticket"]')) == null ? void 0 : _a.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      const root = document.getElementById("tracebug-root");
-      if (root && !isQuickBugOpen()) {
-        showQuickBugCapture(root, { sessionId: session.sessionId }).catch(() => {
-        });
-      }
-    });
-    (_b = card.querySelector('[data-tracebug="open-detail"]')) == null ? void 0 : _b.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      renderSessionDetail(panel, session);
-    });
-    card.onclick = () => renderSessionDetail(panel, session);
-    return card;
-  }
-  function _pageName(path) {
-    if (!path || path === "/") return "Home";
-    const parts = path.split("/").filter(Boolean);
-    const last = parts[parts.length - 1] || "Home";
-    return last.charAt(0).toUpperCase() + last.slice(1).replace(/[-_]/g, " ");
-  }
-  function renderSessionDetail(panel, session) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
-    const content2 = panel.querySelector("#bt-content");
-    const s = session;
-    const problems = [];
-    const apiEvents = s.events.filter((e2) => e2.type === "api_request");
-    const errorEvents = s.events.filter((e2) => ["error", "unhandled_rejection"].includes(e2.type));
-    const consoleErrors = s.events.filter((e2) => e2.type === "console_error");
-    const failedApis = apiEvents.filter((e2) => {
-      var _a2, _b2;
-      return ((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b2 = e2.data.request) == null ? void 0 : _b2.statusCode) === 0;
-    });
-    const slowApis = apiEvents.filter((e2) => {
-      var _a2;
-      return ((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) > 3e3;
-    });
-    for (const ev of errorEvents) {
-      const errType = getErrorType(((_a = ev.data.error) == null ? void 0 : _a.message) || "");
-      problems.push({ severity: "critical", icon: "\u{1F4A5}", title: `${errType.type}: Runtime Exception`, detail: ((_b = ev.data.error) == null ? void 0 : _b.message) || "Unknown error", color: "#ef4444" });
-    }
-    for (const ev of failedApis) {
-      const r = ev.data.request;
-      const code = (r == null ? void 0 : r.statusCode) || 0;
-      const severity = code >= 500 || code === 0 ? "critical" : "warning";
-      problems.push({ severity, icon: code === 0 ? "\u{1F50C}" : "\u{1F6AB}", title: `HTTP ${code} \u2014 ${getStatusLabel(code)}`, detail: `${r == null ? void 0 : r.method} ${(_c = r == null ? void 0 : r.url) == null ? void 0 : _c.slice(0, 80)}`, color: getStatusColor(code) });
-    }
-    for (const ev of slowApis) {
-      const r = ev.data.request;
-      if (!failedApis.includes(ev)) {
-        problems.push({ severity: "warning", icon: "\u{1F40C}", title: `Slow Response \u2014 ${formatDuration(r == null ? void 0 : r.durationMs)}`, detail: `${r == null ? void 0 : r.method} ${(_d = r == null ? void 0 : r.url) == null ? void 0 : _d.slice(0, 80)}`, color: "#f97316" });
-      }
-    }
-    for (const ev of consoleErrors) {
-      const msg = ((_e = ev.data.error) == null ? void 0 : _e.message) || "";
-      if (!msg.includes("Warning:") && !msg.includes("ReactDOM")) {
-        problems.push({ severity: "info", icon: "\u26A0\uFE0F", title: "Console Error", detail: msg.slice(0, 120), color: "#fb923c" });
-      }
-    }
-    const firstTs = s.events.length > 0 ? s.events[0].timestamp : s.createdAt;
-    const lastTs = s.events.length > 0 ? s.events[s.events.length - 1].timestamp : s.createdAt;
-    const sessionDur = lastTs - firstTs;
-    const avgApiTime = apiEvents.length > 0 ? Math.round(apiEvents.reduce((sum, e2) => {
-      var _a2;
-      return sum + (((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) || 0);
-    }, 0) / apiEvents.length) : 0;
-    const maxApiTime = apiEvents.length > 0 ? Math.max(...apiEvents.map((e2) => {
-      var _a2;
-      return ((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) || 0;
-    })) : 0;
-    const pagesVisited = new Set(s.events.map((e2) => e2.page)).size;
-    const bugTitle = generateBugTitle(s) || "Session Details";
-    const severityBadge2 = problems.some((p) => p.severity === "critical") ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fca5a5">Critical</span>` : problems.length > 0 ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#78350f;color:var(--tb-warning, #fbbf24)">Warning</span>` : `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#14532d;color:#4ade80">Healthy</span>`;
-    const hasErrors = errorEvents.length > 0 || s.errorMessage;
-    let html = "";
-    html += `<div style="position:sticky;top:0;z-index:10;background:var(--tb-panel-bg, #0f0f1a);margin:-12px -16px 12px -16px;padding:12px 16px 0 16px;border-bottom:1px solid var(--tb-border, #2a2a3e)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <button id="bt-back" style="background:none;border:none;color:var(--tb-info, #3b82f6);cursor:pointer;font-size:12px;padding:0;font-family:var(--tb-font-family, inherit)">\u2190 Back</button>
-      ${severityBadge2}
-    </div>
-    <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);line-height:1.3;margin-bottom:10px">${escapeHtml4(bugTitle)}</div>
-    <div id="bt-tab-bar" style="display:flex;gap:0;overflow-x:auto">
-      <button class="bt-tab bt-tab-active" data-tab="overview" style="${_tabBtnStyle(true)}">Overview</button>
-      <button class="bt-tab" data-tab="timeline" style="${_tabBtnStyle(false)}">Timeline</button>
-      ${hasErrors ? `<button class="bt-tab" data-tab="errors" style="${_tabBtnStyle(false)}">Errors <span style="background:var(--tb-error, #ef4444);color:#fff;font-size:8px;padding:1px 5px;border-radius:6px;margin-left:2px">${errorEvents.length}</span></button>` : ""}
-      <button class="bt-tab" data-tab="export" style="${_tabBtnStyle(false)}">Export</button>
-    </div>
-  </div>`;
-    html += `<div id="bt-tab-overview" class="bt-tab-content">`;
-    html += `<div style="background:#0c1222;border:1px solid #1e3a5f;border-radius:10px;padding:10px;margin-bottom:14px">
-    <div style="font-size:10px;color:#60a5fa;font-weight:700;margin-bottom:8px;font-family:var(--tb-font-family, system-ui,sans-serif)">QA TOOLS</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button id="bt-screenshot" style="${smallBtnStyle("#22d3ee")}font-size:10px">\u{1F4F8} Screenshot</button>
-      <button id="bt-add-note" style="${smallBtnStyle("#a78bfa")}font-size:10px">\u{1F4DD} Add Note</button>
-      <button id="bt-voice-note" style="${smallBtnStyle("#f59e0b")}font-size:10px;${isVoiceSupported() ? "" : "display:none"}">\u{1F3A4} Voice</button>
-    </div>
-  </div>`;
-    html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif)">Session Overview</div>
-      <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${problems.some((p) => p.severity === "critical") ? "#7f1d1d" : problems.length > 0 ? "#78350f" : "#14532d"};color:${problems.some((p) => p.severity === "critical") ? "#fca5a5" : problems.length > 0 ? "#fbbf24" : "#4ade80"};font-family:var(--tb-font-family, system-ui,sans-serif)">${problems.some((p) => p.severity === "critical") ? "Has Errors" : problems.length > 0 ? "Has Warnings" : "Healthy"}</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
-        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Duration</div>
-        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${formatDuration(sessionDur)}</div>
-      </div>
-      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
-        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Events</div>
-        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${s.events.length}</div>
-      </div>
-      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
-        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">Pages Visited</div>
-        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${pagesVisited}</div>
-      </div>
-      <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px 10px">
-        <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)">API Calls</div>
-        <div style="font-size:14px;color:var(--tb-text-primary, #e0e0e0);margin-top:2px">${apiEvents.length} <span style="font-size:10px;color:${failedApis.length > 0 ? "#ef4444" : "#22c55e"}">(${failedApis.length} failed)</span></div>
-      </div>
-    </div>
-    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-      <span style="font-size:10px;color:var(--tb-text-muted, #555)">ID: ${s.sessionId.slice(0, 8)}\u2026</span>
-      <span style="font-size:10px;color:var(--tb-text-muted, #444)">\xB7</span>
-      <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(s.createdAt).toLocaleString()}</span>
-    </div>
-  </div>`;
-    if (problems.length > 0) {
-      const criticalCount = problems.filter((p) => p.severity === "critical").length;
-      const warningCount = problems.filter((p) => p.severity === "warning").length;
-      const infoCount = problems.filter((p) => p.severity === "info").length;
-      html += `<div style="border:1px solid ${criticalCount > 0 ? "#7f1d1d" : "#78350f"};background:${criticalCount > 0 ? "#1a0505" : "#1a1005"};border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:${criticalCount > 0 ? "#fca5a5" : "#fbbf24"};font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F50D} Problems Detected (${problems.length})</div>
-        <div style="display:flex;gap:6px">
-          ${criticalCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#7f1d1d;color:#fca5a5">${criticalCount} Critical</span>` : ""}
-          ${warningCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#78350f;color:var(--tb-warning, #fbbf24)">${warningCount} Warning</span>` : ""}
-          ${infoCount > 0 ? `<span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#1e1533;color:#c084fc">${infoCount} Info</span>` : ""}
-        </div>
-      </div>`;
-      for (const p of problems) {
-        const sevBorder = p.severity === "critical" ? "#7f1d1d" : p.severity === "warning" ? "#78350f" : "#2a2a3e";
-        const sevBg = p.severity === "critical" ? "#0f0205" : p.severity === "warning" ? "#0f0a02" : "#12121f";
-        html += `<div style="border:1px solid ${sevBorder};background:${sevBg};border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:13px">${p.icon}</span>
-          <span style="font-size:11px;font-weight:600;color:${p.color};font-family:var(--tb-font-family, system-ui,sans-serif)">${escapeHtml4(p.title)}</span>
-        </div>
-        <div style="color:var(--tb-text-muted, #888);font-size:11px;line-height:1.4;padding-left:22px;word-break:break-word">${escapeHtml4(p.detail)}</div>
-      </div>`;
-      }
-      html += `</div>`;
-    }
-    if (s.errorMessage) {
-      const errType = getErrorType(s.errorMessage);
-      html += `<div style="border:1px solid #7f1d1d;background:#1a0505;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:700;color:#fca5a5;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Details</span>
-        <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}44">${errType.type}</span>
-      </div>
-      <div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
-        <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Message</div>
-        <div style="color:#fca5a5;font-size:12px;line-height:1.5;word-break:break-word">${escapeHtml4(s.errorMessage)}</div>
-      </div>`;
-      if (s.errorStack) {
-        const locationMatch = s.errorStack.match(/at\s+(\S+)\s+\(([^)]+)\)/);
-        if (locationMatch) {
-          html += `<div style="background:#0f0205;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px">
-          <div style="font-size:9px;color:var(--tb-text-muted, #666);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Error Location</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:12px;color:#60a5fa">${escapeHtml4(locationMatch[1])}</span>
-            <span style="font-size:10px;color:var(--tb-text-muted, #555)">at</span>
-            <span style="font-size:10px;color:var(--tb-text-muted, #888);word-break:break-all">${escapeHtml4(locationMatch[2])}</span>
-          </div>
-        </div>`;
-        }
-        html += `<details style="margin-top:4px">
-        <summary style="font-size:10px;color:var(--tb-text-muted, #555);cursor:pointer;user-select:none;font-family:var(--tb-font-family, system-ui,sans-serif)">View Full Stack Trace</summary>
-        <pre style="color:#dc262690;font-size:10px;margin-top:6px;white-space:pre-wrap;line-height:1.4;max-height:150px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:var(--tb-radius-sm, 4px)">${escapeHtml4(s.errorStack)}</pre>
-      </details>`;
-      }
-      html += `</div>`;
-    }
-    if (apiEvents.length > 0) {
-      html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u26A1 Performance</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
-          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Avg</div>
-          <div style="font-size:13px;color:${getSpeedLabel(avgApiTime).color};margin-top:2px">${formatDuration(avgApiTime)}</div>
-        </div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
-          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Slowest</div>
-          <div style="font-size:13px;color:${getSpeedLabel(maxApiTime).color};margin-top:2px">${formatDuration(maxApiTime)}</div>
-        </div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:8px;text-align:center">
-          <div style="font-size:9px;color:var(--tb-text-muted, #555);text-transform:uppercase;font-family:var(--tb-font-family, system-ui,sans-serif)">Success</div>
-          <div style="font-size:13px;color:${failedApis.length === 0 ? "#22c55e" : "#fbbf24"};margin-top:2px">${apiEvents.length > 0 ? Math.round((apiEvents.length - failedApis.length) / apiEvents.length * 100) : 0}%</div>
-        </div>
-      </div>`;
-      for (const ev of apiEvents) {
-        const r = ev.data.request;
-        const code = (r == null ? void 0 : r.statusCode) || 0;
-        const dur = (r == null ? void 0 : r.durationMs) || 0;
-        const speed = getSpeedLabel(dur);
-        const statusClr = getStatusColor(code);
-        const isFail = code >= 400 || code === 0;
-        const urlPath = ((r == null ? void 0 : r.url) || "").replace(/https?:\/\/[^/]+/, "").slice(0, 50);
-        html += `<div style="background:${isFail ? "#0f0205" : "#0f0f1a"};border:1px solid ${isFail ? "#7f1d1d44" : "#1e1e32"};border-radius:var(--tb-radius-md, 6px);padding:8px 10px;margin-bottom:4px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;font-weight:600;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r == null ? void 0 : r.method) || "GET"}</span>
-            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml4(urlPath)}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;font-weight:700;color:${statusClr}">${code}</span>
-            <span style="font-size:9px;color:${statusClr}66">${getStatusLabel(code)}</span>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:3px;background:#1e1e32;border-radius:2px;overflow:hidden">
-            <div style="height:100%;width:${Math.min(100, dur / Math.max(maxApiTime, 1) * 100)}%;background:${speed.color};border-radius:2px"></div>
-          </div>
-          <span style="font-size:10px;color:${speed.color};white-space:nowrap">${formatDuration(dur)}</span>
-          ${dur > 3e3 ? `<span style="font-size:8px;padding:1px 4px;border-radius:2px;background:${speed.color}22;color:${speed.color}">${speed.label}</span>` : ""}
-        </div>
-      </div>`;
-      }
-      html += `</div>`;
-    }
-    if (s.reproSteps) {
-      html += `<div style="border:1px solid #14532d;background:#031a09;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:700;color:#4ade80;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4CB} Reproduction Steps</div>
-        <button id="bt-copy" style="${smallBtnStyle("#3b82f6")}font-size:10px">Copy</button>
-      </div>
-      <pre style="color:#bbf7d0;font-size:12px;white-space:pre-wrap;line-height:1.7;margin:0">${escapeHtml4(s.reproSteps)}</pre>
-      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:10px;padding-top:8px"><div style="font-size:10px;font-weight:600;color:#4ade80;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Summary</div><pre style="color:#86efac;font-size:11px;white-space:pre-wrap;line-height:1.4;margin:0">${escapeHtml4(s.errorSummary)}</pre></div>` : ""}
-    </div>`;
-    }
-    const annotations = s.annotations || [];
-    if (annotations.length > 0) {
-      html += `<div style="border:1px solid #1e3a5f;background:#0c1222;border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4DD} Tester Notes (${annotations.length})</div>`;
-      for (const note of annotations) {
-        const sevColor = note.severity === "critical" ? "#ef4444" : note.severity === "major" ? "#f97316" : note.severity === "minor" ? "#3b82f6" : "#888";
-        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);background:var(--tb-bg-primary, #12121f);border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:9px;padding:1px 6px;border-radius:3px;background:${sevColor}22;color:${sevColor};border:1px solid ${sevColor}44;font-weight:600;text-transform:uppercase">${note.severity}</span>
-          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(note.timestamp).toLocaleTimeString()}</span>
-        </div>
-        <div style="color:var(--tb-text-primary, #e0e0e0);font-size:12px;line-height:1.4">${escapeHtml4(note.text)}</div>
-        ${note.expected ? `<div style="margin-top:4px;font-size:11px"><span style="color:var(--tb-success, #22c55e);font-weight:600">Expected:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml4(note.expected)}</span></div>` : ""}
-        ${note.actual ? `<div style="margin-top:2px;font-size:11px"><span style="color:var(--tb-error, #ef4444);font-weight:600">Actual:</span> <span style="color:var(--tb-text-secondary, #aaa)">${escapeHtml4(note.actual)}</span></div>` : ""}
-      </div>`;
-      }
-      html += `</div>`;
-    }
-    const screenshots2 = getScreenshots();
-    if (screenshots2.length > 0) {
-      html += `<div style="border:1px solid var(--tb-border, #2a2a3e);background:var(--tb-bg-primary, #12121f);border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:#22d3ee;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4F8} Screenshots (${screenshots2.length})</div>`;
-      for (const ss of screenshots2) {
-        html += `<div style="margin-bottom:10px">
-        <div style="font-size:10px;color:var(--tb-text-muted, #888);margin-bottom:4px">${escapeHtml4(ss.filename)} \u2014 ${escapeHtml4(ss.page)}</div>
-        <img src="${ss.dataUrl}" style="max-width:100%;border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px)" />
-      </div>`;
-      }
-      html += `</div>`;
-    }
-    const envInfo = s.environment;
-    if (envInfo) {
-      html += `<div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F5A5} Environment</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Browser</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.browser)} ${escapeHtml4(envInfo.browserVersion)}</div></div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">OS</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.os)}</div></div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Viewport</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${escapeHtml4(envInfo.viewport)}</div></div>
-        <div style="background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:6px 8px"><span style="font-size:9px;color:var(--tb-text-muted, #555)">Device</span><div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0)">${envInfo.deviceType}</div></div>
-      </div>
-    </div>`;
-    }
-    html += `</div>`;
-    html += `<div id="bt-tab-timeline" class="bt-tab-content" style="display:none">`;
-    html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-    <div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif)">Event Timeline (${s.events.length})</div>
-    <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(firstTs).toLocaleTimeString()} \u2014 ${new Date(lastTs).toLocaleTimeString()}</span>
-  </div>
-  <div style="position:relative;padding-left:24px">
-    <div style="position:absolute;left:7px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom, #2a2a3e, #1e1e32)"></div>`;
-    for (let i = 0; i < s.events.length; i++) {
-      const ev = s.events[i];
-      const c = eventConfig[ev.type] || { label: ev.type, icon: "\u{1F4CC}", color: "#666", bg: "#1a1a2e" };
-      const isErr = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-      const isApiErr = ev.type === "api_request" && (((_f = ev.data.request) == null ? void 0 : _f.statusCode) >= 400 || ((_g = ev.data.request) == null ? void 0 : _g.statusCode) === 0);
-      const isSlowApi = ev.type === "api_request" && ((_h = ev.data.request) == null ? void 0 : _h.durationMs) > 3e3;
-      const hasProblem = isErr || isApiErr;
-      const dotColor = hasProblem ? "#ef4444" : isSlowApi ? "#f97316" : c.color;
-      const timeSincePrev = i > 0 ? ev.timestamp - s.events[i - 1].timestamp : 0;
-      if (timeSincePrev > 2e3 && i > 0) {
-        html += `<div style="position:relative;margin-bottom:4px;margin-top:4px">
-        <div style="position:absolute;left:-21px;top:4px;width:6px;height:6px;border-radius:50%;background:#2a2a3e;border:1px solid #333"></div>
-        <div style="font-size:9px;color:var(--tb-text-muted, #444);font-style:italic;padding:2px 0">\u23F1 ${formatDuration(timeSincePrev)} later</div>
-      </div>`;
-      }
-      html += `<div style="position:relative;margin-bottom:6px">
-      <div style="position:absolute;left:-21px;top:6px;width:10px;height:10px;border-radius:50%;background:${dotColor};border:2px solid ${dotColor}44;box-shadow:0 0 ${hasProblem ? "6" : "0"}px ${dotColor}44"></div>
-      <div style="border:1px solid ${hasProblem ? "#7f1d1d" : isSlowApi ? "#78350f44" : "#1e1e32"};background:${hasProblem ? "#1a0505" : isSlowApi ? "#1a0f05" : "#12121f"};border-radius:var(--tb-radius-md, 8px);padding:10px 12px;transition:border-color 0.2s">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
-          <span style="font-size:12px">${c.icon}</span>
-          <span style="font-size:10px;padding:1px 6px;border-radius:3px;background:${c.bg};color:${c.color};font-weight:600">${c.label}</span>
-          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(ev.timestamp).toLocaleTimeString()}</span>
-          <span style="font-size:9px;color:var(--tb-text-muted, #333);margin-left:auto">${ev.page}</span>
-        </div>`;
-      if (ev.type === "api_request") {
-        const r = ev.data.request;
-        const code = (r == null ? void 0 : r.statusCode) || 0;
-        const dur = (r == null ? void 0 : r.durationMs) || 0;
-        const speed = getSpeedLabel(dur);
-        const urlPath = ((r == null ? void 0 : r.url) || "").replace(/https?:\/\/[^/]+/, "");
-        html += `<div style="margin-top:4px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <span style="font-size:10px;font-weight:700;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r == null ? void 0 : r.method) || "GET"}</span>
-            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml4((urlPath == null ? void 0 : urlPath.slice(0, 80)) || "")}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:11px;font-weight:700;color:${getStatusColor(code)}">${code}</span>
-              <span style="font-size:10px;color:${getStatusColor(code)}88">${getStatusLabel(code)}</span>
-            </div>
-            <span style="color:var(--tb-text-muted, #333)">\xB7</span>
-            <div style="display:flex;align-items:center;gap:4px">
-              <span style="font-size:10px;color:${speed.color}">${formatDuration(dur)}</span>
-              ${dur > 3e3 ? `<span style="font-size:8px;padding:1px 4px;border-radius:2px;background:${speed.color}22;color:${speed.color};border:1px solid ${speed.color}33">${speed.label}</span>` : ""}
-            </div>
-          </div>
-          <div style="height:3px;background:#1e1e32;border-radius:2px;overflow:hidden;margin-top:6px">
-            <div style="height:100%;width:${Math.min(100, dur / Math.max(maxApiTime, 1) * 100)}%;background:${speed.color};border-radius:2px;transition:width 0.3s"></div>
-          </div>
-        </div>`;
-      } else if (ev.type === "click") {
-        const el = ev.data.element;
-        const target = (el == null ? void 0 : el.ariaLabel) || ((_i = el == null ? void 0 : el.text) == null ? void 0 : _i.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"</div>`;
-        const details = [];
-        if (el == null ? void 0 : el.tag) details.push(`&lt;${escapeHtml4(el.tag)}&gt;`);
-        if (el == null ? void 0 : el.id) details.push(`#${escapeHtml4(el.id)}`);
-        if (el == null ? void 0 : el.className) details.push(`.${escapeHtml4(el.className.split(" ")[0])}`);
-        if (el == null ? void 0 : el.href) details.push(`\u2192 ${escapeHtml4(el.href.slice(0, 60))}`);
-        if (el == null ? void 0 : el.role) details.push(`role="${escapeHtml4(el.role)}"`);
-        if (el == null ? void 0 : el.testId) details.push(`data-testid="${escapeHtml4(el.testId)}"`);
-        if (details.length > 0) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">${details.join(" ")}</div>`;
-        }
-      } else if (ev.type === "input") {
-        const inp = ev.data.element;
-        const fieldName = (inp == null ? void 0 : inp.name) || (inp == null ? void 0 : inp.id) || "field";
-        const inputType = (inp == null ? void 0 : inp.type) || "text";
-        if (inputType === "checkbox" || inputType === "radio") {
-          html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">${(inp == null ? void 0 : inp.checked) ? "Checked" : "Unchecked"} "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
-        } else {
-          const val = inp == null ? void 0 : inp.value;
-          if (val && val !== "[REDACTED]") {
-            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>`;
-            html += `<div style="font-size:10px;color:#a78bfa;margin-top:3px;background:#1e153344;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;word-break:break-word">"${escapeHtml4(val.slice(0, 150))}"</div>`;
-          } else {
-            html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Typed in "<span style="color:#c084fc">${escapeHtml4(fieldName)}</span>" <span style="font-size:9px;color:var(--tb-text-muted, #555)">(${inputType})</span></div>
-            <div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${(inp == null ? void 0 : inp.valueLength) || 0} characters ${val === "[REDACTED]" ? '<span style="color:#f87171">\u{1F512} redacted</span>' : ""}</div>`;
-          }
-        }
-        if (inp == null ? void 0 : inp.placeholder) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #333);margin-top:2px">placeholder: "${escapeHtml4(inp.placeholder)}"</div>`;
-        }
-      } else if (ev.type === "select_change") {
-        const sel = ev.data.element;
-        const fieldName = (sel == null ? void 0 : sel.name) || (sel == null ? void 0 : sel.id) || "dropdown";
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml4(fieldName)}</span>" dropdown</div>`;
-        html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml4((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
-        if ((sel == null ? void 0 : sel.allOptions) && sel.allOptions.length > 0) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o) => escapeHtml4(o)).join(", ")}</div>`;
-        }
-      } else if (ev.type === "form_submit") {
-        const f2 = ev.data.form;
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${(f2 == null ? void 0 : f2.id) ? `"<span style="color:#fb923c">${escapeHtml4(f2.id)}</span>"` : ""}</div>`;
-        if ((f2 == null ? void 0 : f2.fields) && Object.keys(f2.fields).length > 0) {
-          html += `<div style="margin-top:4px;background:#1a150544;padding:6px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid var(--tb-border, #2a2a3e)">`;
-          for (const [key, val] of Object.entries(f2.fields)) {
-            html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> <span style="color:var(--tb-warning, #fbbf24)">${escapeHtml4(String(val).slice(0, 80))}</span></div>`;
-          }
-          html += `</div>`;
-        }
-        if (f2 == null ? void 0 : f2.method) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml4(String(f2.method).toUpperCase())} ${f2.action ? `\u2192 ${escapeHtml4(f2.action.slice(0, 60))}` : ""}</div>`;
-        }
-      } else if (ev.type === "route_change") {
-        html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px">
-          <span style="color:var(--tb-text-muted, #888);background:var(--tb-bg-primary, #0f0f1a);padding:2px 6px;border-radius:3px">${escapeHtml4(ev.data.from || "/")}</span>
-          <span style="color:#22d3ee">\u2192</span>
-          <span style="color:#22d3ee;background:#0c2e3344;padding:2px 6px;border-radius:3px;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>
-        </div>`;
-      } else if (ev.type === "error" || ev.type === "unhandled_rejection") {
-        const errType = getErrorType(((_j = ev.data.error) == null ? void 0 : _j.message) || "");
-        html += `<div style="margin-top:2px">
-          <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
-            <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}33">${errType.type}</span>
-          </div>
-          <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4(((_k = ev.data.error) == null ? void 0 : _k.message) || "Unknown error")}</div>
-          ${((_l = ev.data.error) == null ? void 0 : _l.source) ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml4(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
-        </div>`;
-      } else if (ev.type === "console_error") {
-        html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4((((_m = ev.data.error) == null ? void 0 : _m.message) || "").slice(0, 200))}</div>`;
-      } else {
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.3">${escapeHtml4(describeEvent(ev))}</div>`;
-      }
-      html += `</div></div>`;
-    }
-    html += `</div>`;
-    html += `</div>`;
-    html += `<div id="bt-tab-export" class="bt-tab-content" style="display:none">`;
-    html += `<div style="font-size:13px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:14px;font-family:var(--tb-font-family, system-ui,sans-serif)">Export & Share</div>`;
-    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Issue Trackers</div>
-    <button id="bt-github-issue" style="${smallBtnStyle("#e0e0e0")}font-size:11px;text-align:left;padding:10px">\u{1F419} Copy GitHub Issue (Markdown)</button>
-    <button id="bt-jira-ticket" style="${smallBtnStyle("#2684FF")}font-size:11px;text-align:left;padding:10px">\u{1F3AB} Copy Jira Ticket</button>
-  </div>`;
-    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Downloads</div>
-    <button id="bt-download-pdf" style="${smallBtnStyle("#f472b6")}font-size:11px;text-align:left;padding:10px">\u{1F4C4} PDF Report</button>
-    <button id="bt-download-json" style="${smallBtnStyle("#22d3ee")}font-size:11px;text-align:left;padding:10px">\u2B07 JSON Data</button>
-    <button id="bt-download-txt" style="${smallBtnStyle("#a78bfa")}font-size:11px;text-align:left;padding:10px">\u2B07 Text Report</button>
-    <button id="bt-download-html" style="${smallBtnStyle("#f472b6")}font-size:11px;text-align:left;padding:10px">\u2B07 HTML Report</button>
-  </div>`;
-    html += `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-    <div style="font-size:10px;color:var(--tb-text-muted, #888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Clipboard</div>
-    <button id="bt-copy-report" style="${smallBtnStyle("#3b82f6")}font-size:11px;text-align:left;padding:10px">\u{1F4CB} Copy Full Report (Plain Text)</button>
-  </div>`;
-    html += `<div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:12px;margin-top:8px">
-    <button id="bt-delete" style="${smallBtnStyle("#ef4444")}font-size:11px;width:100%;padding:10px">\u{1F5D1} Delete This Session</button>
-  </div>`;
-    html += `</div>`;
-    content2.innerHTML = html;
-    const tabs = content2.querySelectorAll(".bt-tab");
-    tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        tabs.forEach((t) => {
-          t.style.cssText = _tabBtnStyle(false);
-          t.classList.remove("bt-tab-active");
-        });
-        tab.style.cssText = _tabBtnStyle(true);
-        tab.classList.add("bt-tab-active");
-        content2.querySelectorAll(".bt-tab-content").forEach((c) => c.style.display = "none");
-        const target = content2.querySelector(`#bt-tab-${tab.dataset.tab}`);
-        if (target) target.style.display = "block";
-      });
-    });
-    content2.querySelector("#bt-back").addEventListener("click", () => renderPanel(panel));
-    const copyBtn = content2.querySelector("#bt-copy");
-    if (copyBtn) {
-      copyBtn.addEventListener("click", () => {
-        const text = `Reproduction Steps:
-${s.reproSteps}
-
-Error: ${s.errorMessage}
-
-${s.errorSummary || ""}`;
-        navigator.clipboard.writeText(text).then(() => {
-          copyBtn.textContent = "\u2713 Copied!";
-          setTimeout(() => copyBtn.textContent = "Copy", 2e3);
-        });
-      });
-    }
-    content2.querySelector("#bt-download-json").addEventListener("click", () => {
-      downloadFile(
-        `tracebug-${s.sessionId.slice(0, 8)}.json`,
-        JSON.stringify(s, null, 2),
-        "application/json"
-      );
-    });
-    content2.querySelector("#bt-download-txt").addEventListener("click", () => {
-      const report = buildTextReport(s, problems, apiEvents, sessionDur);
-      downloadFile(
-        `tracebug-report-${s.sessionId.slice(0, 8)}.txt`,
-        report,
-        "text/plain"
-      );
-    });
-    content2.querySelector("#bt-download-html").addEventListener("click", () => {
-      const htmlReport = buildHtmlReport(s, problems, apiEvents, sessionDur);
-      downloadFile(
-        `tracebug-report-${s.sessionId.slice(0, 8)}.html`,
-        htmlReport,
-        "text/html"
-      );
-    });
-    const copyReportBtn = content2.querySelector("#bt-copy-report");
-    if (copyReportBtn) {
-      copyReportBtn.addEventListener("click", () => {
-        const report = buildTextReport(s, problems, apiEvents, sessionDur);
-        navigator.clipboard.writeText(report).then(() => {
-          copyReportBtn.textContent = "\u2713 Copied!";
-          setTimeout(() => copyReportBtn.textContent = "\u{1F4CB} Copy Full Report", 2e3);
-        });
-      });
-    }
-    content2.querySelector("#bt-delete").addEventListener("click", () => {
-      if (confirm("Delete this session?")) {
-        deleteSession(session.sessionId);
-        renderPanel(panel);
-      }
-    });
-    const ssBtn = content2.querySelector("#bt-screenshot");
-    if (ssBtn) {
-      ssBtn.addEventListener("click", async () => {
-        ssBtn.textContent = "\u{1F4F8} Capturing...";
-        try {
-          const lastEvent = s.events[s.events.length - 1] || null;
-          const ss = await captureScreenshot(lastEvent);
-          ssBtn.textContent = `\u2713 ${ss.filename}`;
-          setTimeout(() => {
-            ssBtn.textContent = "\u{1F4F8} Screenshot";
-          }, 3e3);
-          const root = document.getElementById("tracebug-root");
-          if (root) showAnnotationEditor(ss, root);
-        } catch (e2) {
-          ssBtn.textContent = "\u2717 Failed";
-          setTimeout(() => {
-            ssBtn.textContent = "\u{1F4F8} Screenshot";
-          }, 2e3);
-        }
-      });
-    }
-    const noteBtn = content2.querySelector("#bt-add-note");
-    if (noteBtn) {
-      noteBtn.addEventListener("click", () => {
-        showNoteDialog(s.sessionId, panel, session);
-      });
-    }
-    const ghBtn = content2.querySelector("#bt-github-issue");
-    if (ghBtn) {
-      ghBtn.addEventListener("click", () => {
-        const report = buildReport(session);
-        const md = generateGitHubIssue(report);
-        navigator.clipboard.writeText(md).then(() => {
-          ghBtn.textContent = "\u2713 Copied!";
-          setTimeout(() => {
-            ghBtn.textContent = "\u{1F419} GitHub Issue";
-          }, 2e3);
-          if (report.screenshots.length > 0) {
-            downloadAllScreenshots();
-          }
-        });
-      });
-    }
-    const jiraBtn = content2.querySelector("#bt-jira-ticket");
-    if (jiraBtn) {
-      jiraBtn.addEventListener("click", () => {
-        const report = buildReport(session);
-        const ticket = generateJiraTicket(report);
-        const text = `Summary: ${ticket.summary}
-Priority: ${ticket.priority}
-Labels: ${ticket.labels.join(", ")}
-
-${ticket.description}`;
-        navigator.clipboard.writeText(text).then(() => {
-          jiraBtn.textContent = "\u2713 Copied!";
-          setTimeout(() => {
-            jiraBtn.textContent = "\u{1F3AB} Jira Ticket";
-          }, 2e3);
-          if (report.screenshots.length > 0) {
-            downloadAllScreenshots();
-          }
-        });
-      });
-    }
-    const pdfBtn = content2.querySelector("#bt-download-pdf");
-    if (pdfBtn) {
-      pdfBtn.addEventListener("click", () => {
-        const report = buildReport(session);
-        generatePdfReport(report);
-      });
-    }
-    const voiceBtn = content2.querySelector("#bt-voice-note");
-    if (voiceBtn) {
-      voiceBtn.addEventListener("click", () => {
-        showVoiceDialog(s.sessionId, panel, session);
-      });
-    }
-  }
-  function showNoteDialog(sessionId, panel, session) {
-    const overlay = document.createElement("div");
-    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
-    overlay.innerHTML = `
-    <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
-      <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:12px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4DD} Add Tester Note</div>
-      <div style="margin-bottom:10px">
-        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">What did you observe?</label>
-        <textarea id="bt-note-text" style="width:100%;height:60px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit);resize:vertical" placeholder="Describe the issue..."></textarea>
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Expected behavior</label>
-        <input id="bt-note-expected" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)" placeholder="What should happen?" />
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Actual behavior</label>
-        <input id="bt-note-actual" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)" placeholder="What actually happened?" />
-      </div>
-      <div style="margin-bottom:14px">
-        <label style="font-size:10px;color:var(--tb-text-muted, #888);display:block;margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">Severity</label>
-        <select id="bt-note-severity" style="width:100%;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit)">
-          <option value="critical">Critical \u2014 App broken/unusable</option>
-          <option value="major">Major \u2014 Feature not working</option>
-          <option value="minor" selected>Minor \u2014 Cosmetic/UX issue</option>
-          <option value="info">Info \u2014 Observation/Note</option>
-        </select>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button id="bt-note-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
-        <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save Note</button>
-      </div>
-    </div>
-  `;
-    const panelEl = panel.querySelector("#bt-content") || panel;
-    panelEl.appendChild(overlay);
-    overlay.querySelector("#bt-note-cancel").addEventListener("click", () => overlay.remove());
-    overlay.querySelector("#bt-note-save").addEventListener("click", () => {
-      const text = overlay.querySelector("#bt-note-text").value.trim();
-      if (!text) return;
-      const annotation = {
-        id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: Date.now(),
-        text,
-        expected: overlay.querySelector("#bt-note-expected").value.trim() || void 0,
-        actual: overlay.querySelector("#bt-note-actual").value.trim() || void 0,
-        severity: overlay.querySelector("#bt-note-severity").value
-      };
-      addAnnotation(sessionId, annotation);
-      overlay.remove();
-      const updatedSessions = getAllSessions();
-      const updatedSession = updatedSessions.find((s) => s.sessionId === sessionId);
-      if (updatedSession) {
-        renderSessionDetail(panel, updatedSession);
-      }
-    });
-  }
-  function showVoiceDialog(sessionId, panel, session) {
-    const overlay = document.createElement("div");
-    overlay.id = "bt-voice-overlay";
-    overlay.dataset.tracebug = "voice-dialog";
-    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
-    overlay.innerHTML = `
-    <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
-      <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F3A4} Voice Bug Description</div>
-      <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
-      <div id="bt-voice-status" style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <div id="bt-voice-dot" style="width:10px;height:10px;border-radius:50%;background:#666"></div>
-        <span id="bt-voice-status-text" style="font-size:11px;color:var(--tb-text-muted, #888)">Click Start to begin recording</span>
-      </div>
-      <textarea id="bt-voice-transcript" style="width:100%;height:100px;background:var(--tb-bg-primary, #0f0f1a);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:8px;font-size:12px;font-family:var(--tb-font-family, inherit);resize:vertical" placeholder="Your speech will appear here...&#10;&#10;You can also type or edit the text manually."></textarea>
-      <div id="bt-voice-interim" style="font-size:11px;color:#f59e0b88;min-height:20px;margin-top:4px;font-style:italic"></div>
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button id="bt-voice-start" style="background:var(--tb-success, #22c55e);color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);flex:1">\u{1F3A4} Start Recording</button>
-        <button id="bt-voice-stop" style="background:var(--tb-error, #ef4444)22;color:var(--tb-error, #ef4444);border:1px solid #ef444444;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);flex:1;display:none">\u23F9 Stop</button>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
-        <button id="bt-voice-cancel" style="${smallBtnStyle("#666")}font-size:11px">Cancel</button>
-        <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save as Note</button>
-      </div>
-    </div>
-  `;
-    const panelEl = panel.querySelector("#bt-content") || panel;
-    panelEl.appendChild(overlay);
-    const transcriptEl = overlay.querySelector("#bt-voice-transcript");
-    const interimEl = overlay.querySelector("#bt-voice-interim");
-    const startBtn = overlay.querySelector("#bt-voice-start");
-    const stopBtn = overlay.querySelector("#bt-voice-stop");
-    const dot = overlay.querySelector("#bt-voice-dot");
-    const statusText = overlay.querySelector("#bt-voice-status-text");
-    let pulseInterval = null;
-    startBtn.addEventListener("click", () => {
-      const started = startVoiceRecording({
-        onUpdate: (text, interim) => {
-          transcriptEl.value = text;
-          interimEl.textContent = interim ? `...${interim}` : "";
-          transcriptEl.scrollTop = transcriptEl.scrollHeight;
-        },
-        onStatus: (status, message) => {
-          if (status === "recording") {
-            dot.style.background = "#22c55e";
-            statusText.textContent = "Listening... speak now";
-            statusText.style.color = "#22c55e";
-            startBtn.style.display = "none";
-            stopBtn.style.display = "block";
-            pulseInterval = setInterval(() => {
-              dot.style.opacity = dot.style.opacity === "0.4" ? "1" : "0.4";
-            }, 500);
-          } else if (status === "stopped") {
-            dot.style.background = "#666";
-            statusText.textContent = "Recording stopped";
-            statusText.style.color = "#888";
-            startBtn.style.display = "block";
-            startBtn.textContent = "\u{1F3A4} Record More";
-            stopBtn.style.display = "none";
-            interimEl.textContent = "";
-            if (pulseInterval) {
-              clearInterval(pulseInterval);
-              pulseInterval = null;
-            }
-            dot.style.opacity = "1";
-          } else if (status === "error") {
-            dot.style.background = "#ef4444";
-            statusText.textContent = message || "Error occurred";
-            statusText.style.color = "#ef4444";
-            startBtn.style.display = "block";
-            startBtn.textContent = "\u{1F3A4} Try Again";
-            stopBtn.style.display = "none";
-            if (pulseInterval) {
-              clearInterval(pulseInterval);
-              pulseInterval = null;
-            }
-            dot.style.opacity = "1";
-          }
-        }
-      });
-      if (!started && !isVoiceSupported()) {
-        statusText.textContent = "Speech recognition not supported in this browser.";
-        statusText.style.color = "#ef4444";
-      }
-    });
-    stopBtn.addEventListener("click", () => {
-      stopVoiceRecording();
-    });
-    overlay.querySelector("#bt-voice-cancel").addEventListener("click", () => {
-      if (isVoiceRecording()) stopVoiceRecording();
-      if (pulseInterval) clearInterval(pulseInterval);
-      overlay.remove();
-    });
-    overlay.querySelector("#bt-voice-save").addEventListener("click", () => {
-      if (isVoiceRecording()) stopVoiceRecording();
-      if (pulseInterval) clearInterval(pulseInterval);
-      const text = transcriptEl.value.trim();
-      if (!text) {
-        statusText.textContent = "No text to save. Record or type something first.";
-        statusText.style.color = "#ef4444";
-        return;
-      }
-      const annotation = {
-        id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: Date.now(),
-        text: `\u{1F3A4} ${text}`,
-        severity: "major"
-      };
-      addAnnotation(sessionId, annotation);
-      overlay.remove();
-      const updatedSessions = getAllSessions();
-      const updatedSession = updatedSessions.find((s) => s.sessionId === sessionId);
-      if (updatedSession) {
-        renderSessionDetail(panel, updatedSession);
-      }
-    });
-  }
-  function buildTextReport(s, problems, apiEvents, sessionDur) {
-    let report = `TraceBug Session Report
-${"=".repeat(50)}
-
-`;
-    report += `Session ID: ${s.sessionId}
-`;
-    report += `Date: ${new Date(s.createdAt).toLocaleString()}
-`;
-    report += `Duration: ${formatDuration(sessionDur)}
-`;
-    report += `Events: ${s.events.length}
-
-`;
-    if (problems.length > 0) {
-      report += `Problems Detected (${problems.length})
-${"-".repeat(40)}
-`;
-      for (const p of problems) {
-        report += `[${p.severity.toUpperCase()}] ${p.title}
-  ${p.detail}
-
-`;
-      }
-    }
-    if (s.errorMessage) {
-      report += `Error Details
-${"-".repeat(40)}
-`;
-      report += `Message: ${s.errorMessage}
-`;
-      if (s.errorStack) report += `Stack:
-${s.errorStack}
-`;
-      report += `
-`;
-    }
-    if (s.reproSteps) {
-      report += `Reproduction Steps
-${"-".repeat(40)}
-${s.reproSteps}
-
-`;
-    }
-    if (s.errorSummary) {
-      report += `Summary
-${"-".repeat(40)}
-${s.errorSummary}
-
-`;
-    }
-    report += `Event Timeline
-${"-".repeat(40)}
-`;
-    for (const ev of s.events) {
-      const time2 = new Date(ev.timestamp).toLocaleTimeString();
-      report += `[${time2}] ${ev.type.toUpperCase()} on ${ev.page}
-`;
-      report += `  ${describeEventForReport(ev)}
-`;
-    }
-    if (apiEvents.length > 0) {
-      report += `
-API Calls
-${"-".repeat(40)}
-`;
-      for (const ev of apiEvents) {
-        const r = ev.data.request;
-        report += `${r == null ? void 0 : r.method} ${r == null ? void 0 : r.url} \u2192 ${r == null ? void 0 : r.statusCode} (${r == null ? void 0 : r.durationMs}ms)
-`;
-      }
-    }
-    return report;
-  }
-  function buildHtmlReport(s, problems, apiEvents, sessionDur) {
-    const hasError = !!s.errorMessage;
-    let html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TraceBug Report \u2014 ${s.sessionId.slice(0, 8)}</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'SF Mono',Consolas,monospace,system-ui,sans-serif;background:var(--tb-bg-primary, #0f0f1a);color:var(--tb-text-primary, #e0e0e0);padding:32px;max-width:800px;margin:0 auto}
-  h1{font-size:20px;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)}
-  h2{font-size:15px;color:var(--tb-text-primary, #fff);margin:24px 0 12px;font-family:var(--tb-font-family, system-ui,sans-serif)}
-  .meta{font-size:12px;color:var(--tb-text-muted, #666);margin-bottom:24px}
-  .card{background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:16px;margin-bottom:16px}
-  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px}
-  .stat{background:var(--tb-bg-primary, #0f0f1a);border-radius:var(--tb-radius-md, 6px);padding:10px;text-align:center}
-  .stat-label{font-size:10px;color:var(--tb-text-muted, #555);text-transform:uppercase;letter-spacing:0.5px;font-family:var(--tb-font-family, system-ui,sans-serif)}
-  .stat-value{font-size:16px;margin-top:4px}
-  .problem{border:1px solid #7f1d1d;background:#1a0505;border-radius:var(--tb-radius-md, 6px);padding:10px;margin-bottom:8px}
-  .problem.warning{border-color:#78350f;background:#1a1005}
-  .problem.info{border-color:#2a2a3e;background:var(--tb-bg-primary, #12121f)}
-  .timeline-event{border:1px solid #1e1e32;background:var(--tb-bg-primary, #12121f);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:8px;position:relative;margin-left:20px}
-  .timeline-event.error{border-color:#7f1d1d;background:#1a0505}
-  .timeline-dot{position:absolute;left:-26px;top:14px;width:10px;height:10px;border-radius:50%;border:2px solid}
-  .badge{font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);font-weight:600}
-  .tag{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600}
-  pre{white-space:pre-wrap;font-size:12px;line-height:1.5}
-  .value-box{background:#1e153344;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;margin-top:4px;font-size:11px;color:#a78bfa;word-break:break-word}
-  .select-box{background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d;margin-top:4px;font-size:11px;color:#34d399}
-</style></head><body>
-<h1>\u{1F41B} TraceBug Session Report</h1>
-<div class="meta">Session: ${s.sessionId} \xB7 ${new Date(s.createdAt).toLocaleString()} \xB7 Duration: ${formatDuration(sessionDur)}</div>`;
-    html += `<div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="font-size:14px;font-weight:700;font-family:var(--tb-font-family, system-ui,sans-serif)">Session Overview</span>
-      <span class="badge" style="background:${hasError ? "#7f1d1d" : "#14532d"};color:${hasError ? "#fca5a5" : "#4ade80"}">${hasError ? "Has Errors" : "Healthy"}</span>
-    </div>
-    <div class="stat-grid">
-      <div class="stat"><div class="stat-label">Duration</div><div class="stat-value">${formatDuration(sessionDur)}</div></div>
-      <div class="stat"><div class="stat-label">Events</div><div class="stat-value">${s.events.length}</div></div>
-      <div class="stat"><div class="stat-label">Pages</div><div class="stat-value">${new Set(s.events.map((e2) => e2.page)).size}</div></div>
-      <div class="stat"><div class="stat-label">API Calls</div><div class="stat-value">${apiEvents.length}</div></div>
-    </div>
-  </div>`;
-    if (problems.length > 0) {
-      html += `<h2>\u{1F50D} Problems Detected (${problems.length})</h2>`;
-      for (const p of problems) {
-        const cls = p.severity === "critical" ? "" : p.severity === "warning" ? " warning" : " info";
-        html += `<div class="problem${cls}">
-        <div style="margin-bottom:4px"><span style="font-size:14px">${p.icon}</span> <strong style="color:${p.color}">${escapeHtml4(p.title)}</strong></div>
-        <div style="color:var(--tb-text-muted, #888);font-size:12px;padding-left:24px">${escapeHtml4(p.detail)}</div>
-      </div>`;
-      }
-    }
-    if (s.errorMessage) {
-      html += `<h2>\u{1F4A5} Error Details</h2><div class="card" style="border-color:#7f1d1d;background:#1a0505">
-      <div style="color:#fca5a5;font-size:13px;line-height:1.5;margin-bottom:8px">${escapeHtml4(s.errorMessage)}</div>
-      ${s.errorStack ? `<pre style="color:#dc262690;font-size:11px;background:#0a0a0a;padding:10px;border-radius:var(--tb-radius-md, 6px);max-height:200px;overflow:auto">${escapeHtml4(s.errorStack)}</pre>` : ""}
-    </div>`;
-    }
-    if (s.reproSteps) {
-      html += `<h2>\u{1F4CB} Reproduction Steps</h2><div class="card" style="border-color:#14532d;background:#031a09">
-      <pre style="color:#bbf7d0;line-height:1.8">${escapeHtml4(s.reproSteps)}</pre>
-      ${s.errorSummary ? `<div style="border-top:1px solid #14532d;margin-top:12px;padding-top:10px"><pre style="color:#86efac;font-size:11px">${escapeHtml4(s.errorSummary)}</pre></div>` : ""}
-    </div>`;
-    }
-    html += `<h2>\u{1F4CA} Event Timeline (${s.events.length})</h2>
-    <div style="position:relative;padding-left:28px">
-    <div style="position:absolute;left:9px;top:0;bottom:0;width:2px;background:linear-gradient(to bottom, #2a2a3e, #1e1e32)"></div>`;
-    for (let i = 0; i < s.events.length; i++) {
-      const ev = s.events[i];
-      const c = eventConfig[ev.type] || { label: ev.type, icon: "\u{1F4CC}", color: "#666", bg: "#1a1a2e" };
-      const isErr = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-      const errCls = isErr ? " error" : "";
-      const dotColor = isErr ? "#ef4444" : c.color;
-      html += `<div class="timeline-event${errCls}">
-      <div class="timeline-dot" style="background:${dotColor};border-color:${dotColor}44"></div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="font-size:13px">${c.icon}</span>
-        <span class="tag" style="background:${c.bg};color:${c.color}">${c.label}</span>
-        <span style="font-size:10px;color:var(--tb-text-muted, #555)">${new Date(ev.timestamp).toLocaleTimeString()}</span>
-        <span style="font-size:10px;color:var(--tb-text-muted, #333);margin-left:auto">${ev.page}</span>
-      </div>
-      <div style="font-size:12px;color:var(--tb-text-secondary, #aaa)">${describeEventHtml(ev)}</div>
-    </div>`;
-    }
-    html += `</div>
-<div style="text-align:center;color:var(--tb-text-muted, #333);font-size:11px;margin-top:32px;padding:16px;border-top:1px solid #1e1e32">Generated by TraceBug AI \xB7 ${(/* @__PURE__ */ new Date()).toLocaleString()}</div>
-</body></html>`;
-    return html;
-  }
-  function describeEventHtml(ev) {
-    var _a, _b, _c;
-    switch (ev.type) {
-      case "click": {
-        const el = ev.data.element;
-        const target = (el == null ? void 0 : el.ariaLabel) || ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
-        let s = `Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"`;
-        if (el == null ? void 0 : el.href) s += ` <span style="font-size:10px;color:var(--tb-text-muted, #444)">\u2192 ${escapeHtml4(el.href.slice(0, 60))}</span>`;
-        return s;
-      }
-      case "input": {
-        const inp = ev.data.element;
-        const val = inp == null ? void 0 : inp.value;
-        let s = `Typed in "<span style="color:#c084fc">${escapeHtml4((inp == null ? void 0 : inp.name) || "field")}</span>"`;
-        if (val && val !== "[REDACTED]") s += `<div class="value-box">"${escapeHtml4(val.slice(0, 150))}"</div>`;
-        else if (val === "[REDACTED]") s += ` <span style="color:#f87171;font-size:10px">\u{1F512} redacted</span>`;
-        return s;
-      }
-      case "select_change": {
-        const sel = ev.data.element;
-        let s = `Changed "<span style="color:#34d399">${escapeHtml4((sel == null ? void 0 : sel.name) || "dropdown")}</span>"`;
-        s += `<div class="select-box">Selected: "<strong>${escapeHtml4((sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value) || "")}</strong>"</div>`;
-        return s;
-      }
-      case "form_submit": {
-        const f2 = ev.data.form;
-        let s = `Submitted form ${(f2 == null ? void 0 : f2.id) ? `"${escapeHtml4(f2.id)}"` : ""}`;
-        if (f2 == null ? void 0 : f2.fields) {
-          s += `<div style="margin-top:4px">`;
-          for (const [key, val] of Object.entries(f2.fields)) {
-            s += `<div style="font-size:10px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> ${escapeHtml4(String(val).slice(0, 80))}</div>`;
-          }
-          s += `</div>`;
-        }
-        return s;
-      }
-      case "route_change":
-        return `<span style="color:var(--tb-text-muted, #888)">${escapeHtml4(ev.data.from || "/")}</span> <span style="color:#22d3ee">\u2192</span> <span style="color:#22d3ee;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>`;
-      case "api_request": {
-        const r = ev.data.request;
-        return `<span style="font-weight:600">${escapeHtml4((r == null ? void 0 : r.method) || "")}</span> ${escapeHtml4(((r == null ? void 0 : r.url) || "").slice(0, 80))} \u2192 <span style="color:${getStatusColor((r == null ? void 0 : r.statusCode) || 0)};font-weight:700">${r == null ? void 0 : r.statusCode}</span> <span style="color:var(--tb-text-muted, #555)">(${r == null ? void 0 : r.durationMs}ms)</span>`;
-      }
-      case "error":
-      case "unhandled_rejection":
-        return `<span style="color:#fca5a5">${escapeHtml4(((_b = ev.data.error) == null ? void 0 : _b.message) || "Unknown error")}</span>`;
-      case "console_error":
-        return `<span style="color:#fb923c">${escapeHtml4((((_c = ev.data.error) == null ? void 0 : _c.message) || "").slice(0, 200))}</span>`;
-      default:
-        return escapeHtml4(JSON.stringify(ev.data).slice(0, 100));
-    }
-  }
-  function describeEventForReport(ev) {
-    var _a, _b, _c, _d;
-    switch (ev.type) {
-      case "click": {
-        const el = ev.data.element;
-        const target = (el == null ? void 0 : el.ariaLabel) || ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
-        let s = `Clicked "${target}"`;
-        if (el == null ? void 0 : el.href) s += ` \u2192 ${el.href}`;
-        return s;
-      }
-      case "input": {
-        const inp = ev.data.element;
-        const val = inp == null ? void 0 : inp.value;
-        if (val && val !== "[REDACTED]") return `Typed "${val}" in "${(inp == null ? void 0 : inp.name) || "field"}" (${(inp == null ? void 0 : inp.type) || "text"})`;
-        return `Typed in "${(inp == null ? void 0 : inp.name) || "field"}" (${(inp == null ? void 0 : inp.valueLength) || 0} chars, ${(inp == null ? void 0 : inp.type) || "text"})`;
-      }
-      case "select_change": {
-        const sel = ev.data.element;
-        return `Selected "${(sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value)}" from "${(sel == null ? void 0 : sel.name) || "dropdown"}" dropdown`;
-      }
-      case "form_submit": {
-        const f2 = ev.data.form;
-        let s = `Submitted form "${(f2 == null ? void 0 : f2.id) || ""}" (${f2 == null ? void 0 : f2.fieldCount} fields)`;
-        if (f2 == null ? void 0 : f2.fields) {
-          const entries = Object.entries(f2.fields);
-          if (entries.length > 0) s += ` \u2014 ` + entries.map(([k, v]) => `${k}="${String(v).slice(0, 40)}"`).join(", ");
-        }
-        return s;
-      }
-      case "route_change":
-        return `${ev.data.from || "/"} \u2192 ${ev.data.to || "/"}`;
-      case "api_request": {
-        const r = ev.data.request;
-        return `${r == null ? void 0 : r.method} ${(_b = r == null ? void 0 : r.url) == null ? void 0 : _b.slice(0, 80)} \u2192 ${r == null ? void 0 : r.statusCode} (${r == null ? void 0 : r.durationMs}ms)`;
-      }
-      case "error":
-      case "unhandled_rejection":
-        return ((_c = ev.data.error) == null ? void 0 : _c.message) || "Unknown error";
-      case "console_error":
-        return (((_d = ev.data.error) == null ? void 0 : _d.message) || "").slice(0, 120);
-      default:
-        return JSON.stringify(ev.data).slice(0, 100);
-    }
-  }
-  function downloadFile(filename, content2, mimeType) {
-    const blob = new Blob([content2], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a2 = document.createElement("a");
-    a2.href = url;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
-    URL.revokeObjectURL(url);
-  }
-  function getStatusColor(code) {
-    if (code === 0) return "#ef4444";
-    if (code < 300) return "#22c55e";
-    if (code < 400) return "#fbbf24";
-    if (code < 500) return "#f97316";
-    return "#ef4444";
-  }
-  function getStatusLabel(code) {
-    if (code === 0) return "Network Error";
-    const labels = {
-      200: "OK",
-      201: "Created",
-      204: "No Content",
-      301: "Moved",
-      302: "Found",
-      304: "Not Modified",
-      400: "Bad Request",
-      401: "Unauthorized",
-      403: "Forbidden",
-      404: "Not Found",
-      405: "Method Not Allowed",
-      408: "Timeout",
-      409: "Conflict",
-      413: "Payload Too Large",
-      422: "Unprocessable",
-      429: "Rate Limited",
-      500: "Internal Server Error",
-      502: "Bad Gateway",
-      503: "Service Unavailable",
-      504: "Gateway Timeout"
-    };
-    return labels[code] || (code < 300 ? "Success" : code < 400 ? "Redirect" : code < 500 ? "Client Error" : "Server Error");
-  }
-  function getSpeedLabel(ms) {
-    if (ms < 200) return { label: "Fast", color: "#22c55e" };
-    if (ms < 1e3) return { label: "Normal", color: "#fbbf24" };
-    if (ms < 5e3) return { label: "Slow", color: "#f97316" };
-    return { label: "Very Slow", color: "#ef4444" };
-  }
-  function getErrorType(msg) {
-    const m = msg.toLowerCase();
-    if (m.includes("typeerror") || m.includes("cannot read prop")) return { type: "TypeError", color: "#f87171" };
-    if (m.includes("referenceerror")) return { type: "ReferenceError", color: "#fb923c" };
-    if (m.includes("syntaxerror")) return { type: "SyntaxError", color: "#f472b6" };
-    if (m.includes("rangeerror")) return { type: "RangeError", color: "#c084fc" };
-    if (m.includes("networkerror") || m.includes("fetch") || m.includes("network")) return { type: "NetworkError", color: "#fbbf24" };
-    if (m.includes("timeout")) return { type: "TimeoutError", color: "#f97316" };
-    if (m.includes("chunk") || m.includes("loading")) return { type: "ChunkLoadError", color: "#fb923c" };
-    return { type: "RuntimeError", color: "#f87171" };
-  }
-  function formatDuration(ms) {
-    if (ms < 1e3) return `${ms}ms`;
-    if (ms < 6e4) return `${(ms / 1e3).toFixed(1)}s`;
-    return `${Math.floor(ms / 6e4)}m ${Math.floor(ms % 6e4 / 1e3)}s`;
-  }
-  function describeEvent(event) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
-    const d = event.data;
-    switch (event.type) {
-      case "click":
-        return `Clicked "${((_a = d.element) == null ? void 0 : _a.text) || ((_b = d.element) == null ? void 0 : _b.id) || ((_c = d.element) == null ? void 0 : _c.tag) || "element"}"`;
-      case "input": {
-        const val = (_d = d.element) == null ? void 0 : _d.value;
-        if (val && val !== "[REDACTED]") return `Typed "${val.slice(0, 40)}" in "${((_e = d.element) == null ? void 0 : _e.name) || "field"}"`;
-        return `Typed in "${((_f = d.element) == null ? void 0 : _f.name) || "field"}" (${((_g = d.element) == null ? void 0 : _g.valueLength) || 0} chars)`;
-      }
-      case "select_change":
-        return `Selected "${((_h = d.element) == null ? void 0 : _h.selectedText) || ((_i = d.element) == null ? void 0 : _i.value)}" from "${((_j = d.element) == null ? void 0 : _j.name) || "dropdown"}"`;
-      case "form_submit":
-        return `Submitted form "${((_k = d.form) == null ? void 0 : _k.id) || ""}" (${((_l = d.form) == null ? void 0 : _l.fieldCount) || 0} fields)`;
-      case "route_change":
-        return `${d.from} \u2192 ${d.to}`;
-      case "api_request":
-        return `${(_m = d.request) == null ? void 0 : _m.method} ${(_o = (_n = d.request) == null ? void 0 : _n.url) == null ? void 0 : _o.slice(0, 60)} \u2192 ${(_p = d.request) == null ? void 0 : _p.statusCode} (${(_q = d.request) == null ? void 0 : _q.durationMs}ms)`;
-      case "error":
-      case "unhandled_rejection":
-        return ((_r = d.error) == null ? void 0 : _r.message) || "Unknown error";
-      case "console_error":
-        return (((_s = d.error) == null ? void 0 : _s.message) || "").slice(0, 120);
-      default:
-        return JSON.stringify(d).slice(0, 100);
-    }
-  }
-  function timeAgo(ts) {
-    const diff = Math.floor((Date.now() - ts) / 1e3);
-    if (diff < 60) return "just now";
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    return `${Math.floor(diff / 86400)}d ago`;
-  }
-  function escapeHtml4(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function smallBtnStyle(color2) {
-    return `background:${color2}22;color:${color2};border:1px solid ${color2}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
-  }
-  function _tabBtnStyle(active) {
-    return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7B61FF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
-  }
-  function renderAnnotationList(panel) {
-    var _a, _b, _c, _d;
-    const elAnnotations = getElementAnnotations();
-    const drawRegions = getDrawRegions();
-    const screenshotsList = getScreenshots();
-    const total = elAnnotations.length + drawRegions.length + screenshotsList.length;
-    panel.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-      <div>
-        <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
-        <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:3px">${elAnnotations.length} element${elAnnotations.length !== 1 ? "s" : ""}, ${drawRegions.length} region${drawRegions.length !== 1 ? "s" : ""}, ${screenshotsList.length} screenshot${screenshotsList.length !== 1 ? "s" : ""}</div>
-      </div>
-      <div style="display:flex;gap:6px">
-        ${total > 0 ? `
-          <button id="bt-ann-screenshot" style="${smallBtnStyle("#22c55e")}font-size:10px" title="Screenshot page with annotations visible">\u{1F4F8} Save</button>
-          <button id="bt-ann-export-md" style="${smallBtnStyle("#a78bfa")}font-size:10px" title="Copy all annotations as Markdown">Copy MD</button>
-          <button id="bt-ann-export-json" style="${smallBtnStyle("#22d3ee")}font-size:10px" title="Copy all annotations as JSON">Copy JSON</button>
-          <button id="bt-ann-clear-all" style="${smallBtnStyle("#ef4444")}font-size:10px" title="Remove all annotations">Clear All</button>
-        ` : ""}
-      </div>
-    </div>
-    <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
-  `;
-    const content2 = panel.querySelector("#bt-ann-list-content");
-    if (total > 0) {
-      (_a = panel.querySelector("#bt-ann-screenshot")) == null ? void 0 : _a.addEventListener("click", async () => {
-        const btn = panel.querySelector("#bt-ann-screenshot");
-        btn.textContent = "Capturing...";
-        try {
-          const ss = await captureScreenshot(null, { includeAnnotations: true });
-          downloadScreenshot(ss.dataUrl, ss.filename);
-          const root = document.getElementById("tracebug-root");
-          if (root) showToast2(`Saved: ${ss.filename}`, root);
-          btn.textContent = "\u{1F4F8} Save";
-        } catch (e2) {
-          btn.textContent = "Failed";
-          setTimeout(() => {
-            btn.textContent = "\u{1F4F8} Save";
-          }, 2e3);
-        }
-      });
-      (_b = panel.querySelector("#bt-ann-export-md")) == null ? void 0 : _b.addEventListener("click", async () => {
-        const ok = await copyToClipboard("markdown");
-        const btn = panel.querySelector("#bt-ann-export-md");
-        if (ok) {
-          btn.textContent = "Copied!";
-          btn.style.background = "#22c55e33";
-          btn.style.color = "#22c55e";
-          btn.style.borderColor = "#22c55e44";
-        } else {
-          btn.textContent = "Failed";
-        }
-        setTimeout(() => {
-          btn.textContent = "Copy MD";
-          btn.style.cssText = `${smallBtnStyle("#a78bfa")}font-size:10px`;
-        }, 2e3);
-      });
-      (_c = panel.querySelector("#bt-ann-export-json")) == null ? void 0 : _c.addEventListener("click", async () => {
-        const ok = await copyToClipboard("json");
-        const btn = panel.querySelector("#bt-ann-export-json");
-        if (ok) {
-          btn.textContent = "Copied!";
-          btn.style.background = "#22c55e33";
-          btn.style.color = "#22c55e";
-          btn.style.borderColor = "#22c55e44";
-        } else {
-          btn.textContent = "Failed";
-        }
-        setTimeout(() => {
-          btn.textContent = "Copy JSON";
-          btn.style.cssText = `${smallBtnStyle("#22d3ee")}font-size:10px`;
-        }, 2e3);
-      });
-      (_d = panel.querySelector("#bt-ann-clear-all")) == null ? void 0 : _d.addEventListener("click", () => {
-        if (confirm("Remove all annotations? This cannot be undone.")) {
-          clearAllAnnotations();
-          clearAnnotationBadges();
-          renderAnnotationList(panel);
-        }
-      });
-    }
-    if (total === 0) {
-      content2.innerHTML = `
-      <div style="text-align:center;padding:48px 24px;color:var(--tb-text-muted, #666)">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
-          <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 3"/>
-        </svg>
-        <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
-        <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
-          Use <strong style="color:#7B61FF">Annotate</strong> to click elements or <strong style="color:#7B61FF">Draw</strong> to mark regions on the page.
-        </div>
-        <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
-          Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
-          <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace;margin-left:4px">Ctrl+Shift+D</span>
-        </div>
-      </div>
-    `;
-      return;
-    }
-    let html = "";
-    if (elAnnotations.length > 0) {
-      html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
-      for (let i = 0; i < elAnnotations.length; i++) {
-        const a2 = elAnnotations[i];
-        const intentColor = _getIntentColor(a2.intent);
-        const sevColor = a2.severity === "critical" ? "#ef4444" : a2.severity === "major" ? "#f97316" : a2.severity === "minor" ? "#3b82f6" : "#888";
-        const ago = timeAgo(a2.timestamp);
-        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <span style="width:22px;height:22px;border-radius:50%;background:${intentColor};color:var(--tb-text-primary, #fff);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
-          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a2.intent}</span>
-          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${sevColor}15;color:${sevColor};font-weight:500">${a2.severity}</span>
-          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
-          <button class="bt-ann-delete" data-id="${a2.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this annotation">Delete</button>
-        </div>
-        <div style="font-size:11px;color:#777;margin-bottom:6px">
-          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml4(a2.tagName)}&gt;</span>
-          ${a2.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml4(a2.innerText.slice(0, 40))}"</span>` : ""}
-        </div>
-        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml4(a2.comment)}</div>
-      </div>`;
-      }
-    }
-    if (drawRegions.length > 0) {
-      html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
-      for (let i = 0; i < drawRegions.length; i++) {
-        const r = drawRegions[i];
-        const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
-        const ago = timeAgo(r.timestamp);
-        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <span style="width:22px;height:22px;border-radius:${r.shape === "ellipse" ? "50%" : "5px"};background:${r.color}33;border:2px solid ${r.color};display:flex;align-items:center;justify-content:center;flex-shrink:0"></span>
-          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${shapeLabel}</span>
-          <span style="font-size:10px;color:var(--tb-text-muted, #555)">${Math.round(r.width)} x ${Math.round(r.height)}</span>
-          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
-          <button class="bt-ann-delete" data-id="${r.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this region">Delete</button>
-        </div>
-        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${r.comment ? escapeHtml4(r.comment) : '<span style="color:var(--tb-text-muted, #555);font-style:italic">No comment added</span>'}</div>
-      </div>`;
-      }
-    }
-    if (screenshotsList.length > 0) {
-      html += `<div style="font-size:11px;color:#22d3ee;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #22d3ee;padding-left:8px">SCREENSHOTS (${screenshotsList.length})</div>`;
-      for (const ss of screenshotsList) {
-        html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f)">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-          <span style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);font-weight:600">${escapeHtml4(ss.filename)}</span>
-          <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ss.width}x${ss.height}</span>
-          <button class="bt-ss-download" data-id="${ss.id}" style="${smallBtnStyle("#22d3ee")}font-size:10px;padding:2px 8px" title="Download">Download</button>
-        </div>
-        <img src="${ss.dataUrl}" style="max-width:100%;border-radius:var(--tb-radius-md, 6px);border:1px solid var(--tb-border, #2a2a3e)" alt="${escapeHtml4(ss.filename)}" />
-      </div>`;
-      }
-    }
-    content2.innerHTML = html;
-    content2.querySelectorAll(".bt-ss-download").forEach((btn) => {
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
-        const id = btn.dataset.id || "";
-        const ss = screenshotsList.find((s) => s.id === id);
-        if (ss) downloadScreenshot(ss.dataUrl, ss.filename);
-      });
-    });
-    content2.querySelectorAll(".bt-ann-delete").forEach((btn) => {
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
-        const id = btn.dataset.id || "";
-        removeAnnotationById(id);
-        const root = document.getElementById("tracebug-root");
-        if (root) showAnnotationBadges(root);
-        renderAnnotationList(panel);
-      });
-    });
-  }
-  function _getIntentColor(intent) {
-    switch (intent) {
-      case "fix":
-        return "#ef4444";
-      case "redesign":
-        return "#7B61FF";
-      case "remove":
-        return "#f97316";
-      case "question":
-        return "#3b82f6";
-      default:
-        return "#888";
-    }
-  }
-  function showToast2(message, root) {
-    const existing = root.querySelector(".bt-toast");
-    if (existing) existing.remove();
-    const toast = document.createElement("div");
-    toast.className = "bt-toast";
-    toast.dataset.tracebug = "toast";
-    toast.style.cssText = `
-    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:var(--tb-bg-secondary, #1a1a2e)ee;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border-hover, #3a3a5e);
-    border-radius:10px;padding:10px 20px;font-size:13px;
-    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
-    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
-    max-width:420px;text-align:center;line-height:1.4;
-    animation:tracebug-toast-in 0.2s ease;
-  `;
-    if (!document.getElementById("tracebug-toast-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-toast-anim";
-      style.textContent = `
-      @keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-    `;
-      document.head.appendChild(style);
-    }
-    toast.textContent = message;
-    toast.setAttribute("role", "status");
-    root.appendChild(toast);
-    const liveRegion = document.getElementById("tracebug-live");
-    if (liveRegion) liveRegion.textContent = message;
-    setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateX(-50%) translateY(8px)";
-      toast.style.transition = "all 0.3s ease";
-      setTimeout(() => toast.remove(), 300);
-    }, 2e3);
-  }
-  function showAnnotationEditor(screenshot, root, onSave) {
-    showAnnotationEditor._onSave = onSave;
-    _showAnnotationEditorImpl(screenshot, root);
-  }
-  function _showAnnotationEditorImpl(screenshot, root) {
-    const overlay = document.createElement("div");
-    overlay.id = "bt-annotation-overlay";
-    overlay.style.cssText = `
-    position:fixed;top:0;left:0;right:0;bottom:0;
-    background:rgba(0,0,0,0.85);z-index:2147483647;
-    display:flex;flex-direction:column;align-items:center;
-    justify-content:center;pointer-events:auto;
-    font-family:var(--tb-font-family, system-ui,sans-serif);
-  `;
-    const maxW = window.innerWidth * 0.85;
-    const maxH = window.innerHeight * 0.78;
-    const imgRatio = screenshot.width / screenshot.height;
-    let displayW = screenshot.width;
-    let displayH = screenshot.height;
-    if (displayW > maxW) {
-      displayW = maxW;
-      displayH = displayW / imgRatio;
-    }
-    if (displayH > maxH) {
-      displayH = maxH;
-      displayW = displayH * imgRatio;
-    }
-    displayW = Math.round(displayW);
-    displayH = Math.round(displayH);
-    const toolbarHtml = `
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-      <span style="color:var(--tb-text-muted, #888);font-size:11px;margin-right:8px">ANNOTATE:</span>
-      <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">\u270E Pen</button>
-      <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">\u25AD Highlight</button>
-      <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">\u2192 Arrow</button>
-      <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">T Text</button>
-      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
-      <button class="bt-ann-tool" data-tool="color-red" style="background:var(--tb-error, #ef4444);border:2px solid #ef4444;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-yellow" style="background:#eab308;border:2px solid #eab308;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-green" style="background:var(--tb-success, #22c55e);border:2px solid #22c55e;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-blue" style="background:#3b82f6;border:2px solid #3b82f6;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
-      <button id="bt-ann-undo" style="${annActionBtnStyle()}">\u21A9 Undo</button>
-      <button id="bt-ann-clear" style="${annActionBtnStyle()}">\u2715 Clear</button>
-      <div style="flex:1"></div>
-      <span style="color:var(--tb-text-muted, #555);font-size:10px">Ctrl+Shift+S</span>
-    </div>
-  `;
-    const actionsHtml = `
-    <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
-      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 20px;cursor:pointer;font-size:13px;font-family:var(--tb-font-family, inherit)">\u2713 Save Annotated</button>
-      <button id="bt-ann-download" style="background:var(--tb-success, #22c55e)22;color:var(--tb-success, #22c55e);border:1px solid #22c55e44;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">\u2193 Download</button>
-      <button id="bt-ann-cancel" style="background:#66666622;color:var(--tb-text-muted, #888);border:1px solid #66666644;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Cancel</button>
-      <div style="flex:1"></div>
-      <span style="color:var(--tb-text-muted, #555);font-size:10px">${screenshot.filename}</span>
-    </div>
-  `;
-    overlay.innerHTML = `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`;
-    root.appendChild(overlay);
-    const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap");
-    const img = new Image();
-    img.onload = () => {
-      img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`;
-      canvasWrap.appendChild(img);
-      const canvas = document.createElement("canvas");
-      canvas.width = displayW;
-      canvas.height = displayH;
-      canvas.dataset.tracebug = "annotation-canvas";
-      canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`;
-      canvasWrap.appendChild(canvas);
-      initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root);
-    };
-    img.src = screenshot.dataUrl;
-    overlay.querySelector("#bt-ann-cancel").addEventListener("click", () => overlay.remove());
-    const escHandler = (e2) => {
-      if (e2.key === "Escape") {
-        overlay.remove();
-        document.removeEventListener("keydown", escHandler);
-      }
-    };
-    document.addEventListener("keydown", escHandler);
-  }
-  function initAnnotationCanvas(canvas, width, height, overlay, screenshot, root) {
-    const ctx = canvas.getContext("2d");
-    const actions = [];
-    let currentTool = "pen";
-    let currentColor = "#ef4444";
-    let isDrawing = false;
-    let startX = 0, startY = 0;
-    let currentStroke = [];
-    function redraw() {
-      ctx.clearRect(0, 0, width, height);
-      for (const action of actions) {
-        drawAction(ctx, action);
-      }
-    }
-    function drawAction(c, a2) {
-      c.strokeStyle = a2.color;
-      c.fillStyle = a2.color;
-      c.lineWidth = 2.5;
-      if (a2.type === "pen" && a2.points && a2.points.length > 0) {
-        c.lineCap = "round";
-        c.lineJoin = "round";
-        c.lineWidth = 3;
-        c.beginPath();
-        c.moveTo(a2.points[0].x, a2.points[0].y);
-        for (let i = 1; i < a2.points.length; i++) {
-          c.lineTo(a2.points[i].x, a2.points[i].y);
-        }
-        c.stroke();
-        return;
-      }
-      if (a2.type === "rect") {
-        const w = a2.endX - a2.startX;
-        const h = a2.endY - a2.startY;
-        c.globalAlpha = 0.15;
-        c.fillRect(a2.startX, a2.startY, w, h);
-        c.globalAlpha = 1;
-        c.strokeRect(a2.startX, a2.startY, w, h);
-      } else if (a2.type === "arrow") {
-        drawArrow(c, a2.startX, a2.startY, a2.endX, a2.endY, a2.color);
-      } else if (a2.type === "text" && a2.text) {
-        c.font = "bold 14px system-ui, sans-serif";
-        const metrics = c.measureText(a2.text);
-        const padding = 4;
-        c.globalAlpha = 0.85;
-        c.fillStyle = "#000";
-        c.fillRect(a2.startX - padding, a2.startY - 16, metrics.width + padding * 2, 22);
-        c.globalAlpha = 1;
-        c.fillStyle = a2.color;
-        c.fillText(a2.text, a2.startX, a2.startY);
-      }
-    }
-    function drawArrow(c, x1, y1, x2, y2, color2) {
-      const headLen = 12;
-      const angle2 = Math.atan2(y2 - y1, x2 - x1);
-      c.strokeStyle = color2;
-      c.fillStyle = color2;
-      c.lineWidth = 2.5;
-      c.beginPath();
-      c.moveTo(x1, y1);
-      c.lineTo(x2, y2);
-      c.stroke();
-      c.beginPath();
-      c.moveTo(x2, y2);
-      c.lineTo(x2 - headLen * Math.cos(angle2 - Math.PI / 6), y2 - headLen * Math.sin(angle2 - Math.PI / 6));
-      c.lineTo(x2 - headLen * Math.cos(angle2 + Math.PI / 6), y2 - headLen * Math.sin(angle2 + Math.PI / 6));
-      c.closePath();
-      c.fill();
-    }
-    overlay.querySelectorAll(".bt-ann-tool").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const tool = btn.dataset.tool || "";
-        if (tool.startsWith("color-")) {
-          currentColor = getComputedStyle(btn).backgroundColor;
-          overlay.querySelectorAll("[data-tool^='color-']").forEach((cb) => {
-            cb.style.border = `2px solid ${getComputedStyle(cb).backgroundColor}`;
-          });
-          btn.style.border = `2px solid #fff`;
-          return;
-        }
-        currentTool = tool;
-        overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach((tb) => {
-          tb.style.background = "#22222244";
-          tb.style.color = "#888";
-          tb.style.borderColor = "#33333344";
-        });
-        btn.style.background = "#3b82f633";
-        btn.style.color = "#3b82f6";
-        btn.style.borderColor = "#3b82f6";
-      });
-    });
-    canvas.addEventListener("mousedown", (e2) => {
-      const rect = canvas.getBoundingClientRect();
-      startX = e2.clientX - rect.left;
-      startY = e2.clientY - rect.top;
-      if (currentTool === "text") {
-        const text = prompt("Enter annotation text:");
-        if (text) {
-          actions.push({ type: "text", color: currentColor, startX, startY, endX: startX, endY: startY, text });
-          redraw();
-        }
-        return;
-      }
-      if (currentTool === "pen") {
-        isDrawing = true;
-        currentStroke = [{ x: startX, y: startY }];
-        return;
-      }
-      isDrawing = true;
-    });
-    canvas.addEventListener("mousemove", (e2) => {
-      if (!isDrawing) return;
-      const rect = canvas.getBoundingClientRect();
-      const curX = e2.clientX - rect.left;
-      const curY = e2.clientY - rect.top;
-      if (currentTool === "pen") {
-        const last = currentStroke[currentStroke.length - 1];
-        if (!last || Math.hypot(curX - last.x, curY - last.y) > 1.5) {
-          currentStroke.push({ x: curX, y: curY });
-        }
-        redraw();
-        drawAction(ctx, { type: "pen", color: currentColor, startX: 0, startY: 0, endX: 0, endY: 0, points: currentStroke });
-        return;
-      }
-      redraw();
-      const preview = { type: currentTool, color: currentColor, startX, startY, endX: curX, endY: curY };
-      drawAction(ctx, preview);
-    });
-    canvas.addEventListener("mouseup", (e2) => {
-      if (!isDrawing) return;
-      isDrawing = false;
-      const rect = canvas.getBoundingClientRect();
-      const endX = e2.clientX - rect.left;
-      const endY = e2.clientY - rect.top;
-      if (currentTool === "pen") {
-        if (currentStroke.length >= 2) {
-          const first = currentStroke[0];
-          const last = currentStroke[currentStroke.length - 1];
-          const travel = Math.hypot(last.x - first.x, last.y - first.y);
-          if (travel >= 3 || currentStroke.length > 4) {
-            actions.push({ type: "pen", color: currentColor, startX: 0, startY: 0, endX: 0, endY: 0, points: currentStroke.slice() });
-          }
-        }
-        currentStroke = [];
-        redraw();
-        return;
-      }
-      if (Math.abs(endX - startX) < 5 && Math.abs(endY - startY) < 5) {
-        redraw();
-        return;
-      }
-      actions.push({ type: currentTool, color: currentColor, startX, startY, endX, endY });
-      redraw();
-    });
-    overlay.querySelector("#bt-ann-undo").addEventListener("click", () => {
-      actions.pop();
-      redraw();
-    });
-    overlay.querySelector("#bt-ann-clear").addEventListener("click", () => {
-      actions.length = 0;
-      redraw();
-    });
-    overlay.querySelector("#bt-ann-save").addEventListener("click", () => {
-      const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
-      screenshot.dataUrl = merged;
-      const onSave = showAnnotationEditor._onSave;
-      if (onSave) {
-        try {
-          onSave({
-            dataUrl: merged,
-            filename: screenshot.filename,
-            width: screenshot.width,
-            height: screenshot.height
-          });
-        } catch (e2) {
-        }
-      }
-      showToast2(`\u2713 Annotations saved to ${screenshot.filename}`, root);
-      overlay.remove();
-    });
-    overlay.querySelector("#bt-ann-download").addEventListener("click", () => {
-      const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
-      const a2 = document.createElement("a");
-      a2.href = merged;
-      a2.download = screenshot.filename;
-      document.body.appendChild(a2);
-      a2.click();
-      document.body.removeChild(a2);
-      showToast2(`\u2713 Downloaded: ${screenshot.filename}`, root);
-    });
-  }
-  function mergeAnnotations(baseDataUrl, annotationCanvas, w, h) {
-    const mergeCanvas = document.createElement("canvas");
-    mergeCanvas.width = w;
-    mergeCanvas.height = h;
-    const mCtx = mergeCanvas.getContext("2d");
-    const img = new Image();
-    img.src = baseDataUrl;
-    mCtx.drawImage(img, 0, 0, w, h);
-    mCtx.drawImage(annotationCanvas, 0, 0);
-    return mergeCanvas.toDataURL("image/png", 0.9);
-  }
-  function annToolBtnStyle(active) {
-    if (active) {
-      return "background:#3b82f633;color:var(--tb-info, #3b82f6);border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
-    }
-    return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
-  }
-  function annActionBtnStyle() {
-    return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
-  }
-  var PANEL_ID3, _isRecording2, _onToggleRecording2, eventConfig;
-  var init_dashboard = __esm({
-    "src/dashboard.ts"() {
-      "use strict";
-      init_storage();
-      init_screenshot();
-      init_collectors();
-      init_report_builder();
-      init_github_issue();
-      init_jira_issue();
-      init_pdf_generator();
-      init_title_generator();
-      init_voice_recorder();
-      init_annotation_store();
-      init_compact_toolbar();
-      init_element_annotate();
-      init_onboarding();
-      init_quick_bug();
-      init_helpers();
-      PANEL_ID3 = "tracebug-dashboard-panel";
-      _isRecording2 = true;
-      _onToggleRecording2 = null;
-      eventConfig = {
-        click: { label: "Click", icon: "\u{1F446}", color: "#60a5fa", bg: "#1e293b" },
-        input: { label: "Input", icon: "\u2328\uFE0F", color: "#c084fc", bg: "#1e1533" },
-        select_change: { label: "Select", icon: "\u{1F4CB}", color: "#34d399", bg: "#052015" },
-        form_submit: { label: "Form Submit", icon: "\u{1F4E4}", color: "#fb923c", bg: "#2a1505" },
-        route_change: { label: "Navigate", icon: "\u{1F500}", color: "#22d3ee", bg: "#0c2e33" },
-        api_request: { label: "API", icon: "\u{1F310}", color: "#fbbf24", bg: "#2a2005" },
-        error: { label: "Error", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" },
-        console_error: { label: "Console Err", icon: "\u26A0\uFE0F", color: "#fb923c", bg: "#2a1505" },
-        unhandled_rejection: { label: "Rejection", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" }
-      };
-    }
-  });
-
   // src/ui/live-bug-card.ts
   var live_bug_card_exports = {};
   __export(live_bug_card_exports, {
@@ -56083,7 +56088,7 @@ ${"-".repeat(40)}
     showLiveBugCard: () => showLiveBugCard
   });
   function showLiveBugCard(root, options) {
-    _injectStyles4();
+    _injectStyles3();
     hideLiveBugCard();
     const overlay = document.createElement("div");
     overlay.id = CARD_ID;
@@ -56243,10 +56248,10 @@ ${"-".repeat(40)}
     }
     return parts.join("");
   }
-  function _injectStyles4() {
-    if (document.getElementById(STYLE_ID3)) return;
+  function _injectStyles3() {
+    if (document.getElementById(STYLE_ID2)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID3;
+    style.id = STYLE_ID2;
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -56359,15 +56364,351 @@ ${"-".repeat(40)}
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID, STYLE_ID2, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
       CARD_ID = "tracebug-live-bug-card";
-      STYLE_ID3 = "tracebug-live-bug-card-styles";
+      STYLE_ID2 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
       _currentRoot = null;
+    }
+  });
+
+  // src/ui/issues-panel.ts
+  var issues_panel_exports = {};
+  __export(issues_panel_exports, {
+    isIssuesPanelOpen: () => isIssuesPanelOpen,
+    showIssuesPanel: () => showIssuesPanel
+  });
+  function isIssuesPanelOpen() {
+    return _isOpen2;
+  }
+  async function showIssuesPanel(root, options) {
+    var _a;
+    if (_isOpen2) return;
+    _root2 = root;
+    _injectStyles4();
+    _open(root, { issues: [], loading: true });
+    try {
+      if ((_a = options == null ? void 0 : options.rescan) != null ? _a : true) {
+        await scan();
+      }
+    } catch (err) {
+      console.warn("[TraceBug] Scan failed:", err);
+    }
+    _renderBody(getIssues());
+  }
+  function _injectStyles4() {
+    if (document.getElementById(STYLE_ID3)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID3;
+    style.textContent = `
+    @keyframes tracebug-issue-locate-flash {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(123,97,255,0.0); outline: 2px solid transparent; }
+      30% { box-shadow: 0 0 0 6px rgba(123,97,255,0.5); outline: 2px solid #7B61FF; }
+    }
+    #${PANEL_ID3}-overlay {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 2147483647 !important;
+      background: rgba(0,0,0,0.75) !important;
+      backdrop-filter: blur(6px) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 20px !important;
+      pointer-events: auto !important;
+      box-sizing: border-box !important;
+    }
+    #${PANEL_ID3} {
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      border: 1px solid var(--tb-border-hover, #3a3a5e) !important;
+      border-radius: var(--tb-radius-lg, 12px) !important;
+      width: 100% !important;
+      max-width: 720px !important;
+      max-height: 90vh !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      box-sizing: border-box !important;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+    }
+    #${PANEL_ID3} *, #${PANEL_ID3} *::before, #${PANEL_ID3} *::after { box-sizing: border-box !important; }
+    #${PANEL_ID3} button { font-family: inherit !important; cursor: pointer !important; }
+    #${PANEL_ID3} .tb-issue-row {
+      padding: 12px 14px;
+      border-top: 1px solid var(--tb-border, #2a2a3e);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    #${PANEL_ID3} .tb-issue-row:hover { background: var(--tb-bg-primary, #0f0f1a); }
+    #${PANEL_ID3} .tb-sev-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      border: 1px solid;
+    }
+    #${PANEL_ID3} .tb-detector-tag {
+      font-size: 10px;
+      color: var(--tb-text-muted, #888);
+      background: var(--tb-bg-primary, #0f0f1a);
+      border: 1px solid var(--tb-border, #2a2a3e);
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    #${PANEL_ID3} .tb-issue-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    #${PANEL_ID3} .tb-issue-actions button {
+      background: transparent;
+      color: var(--tb-text-secondary, #aaa);
+      border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    #${PANEL_ID3} .tb-issue-actions button:hover {
+      background: var(--tb-btn-hover, #ffffff15);
+      color: var(--tb-text-primary, #fff);
+    }
+    #${PANEL_ID3} .tb-issue-actions button[data-action="file"] {
+      background: var(--tb-accent, #7B61FF);
+      color: #fff;
+      border-color: transparent;
+    }
+    #${PANEL_ID3} .tb-issue-actions button[data-action="file"]:hover { opacity: 0.9; }
+  `;
+    document.head.appendChild(style);
+  }
+  function _open(root, state) {
+    var _a;
+    _isOpen2 = true;
+    (_a = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a.remove();
+    const overlay = document.createElement("div");
+    overlay.id = `${PANEL_ID3}-overlay`;
+    overlay.dataset.tracebug = "issues-panel-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", "Page issues");
+    const panel = document.createElement("div");
+    panel.id = PANEL_ID3;
+    panel.dataset.tracebug = "issues-panel";
+    panel.innerHTML = _shellHtml(state);
+    overlay.appendChild(panel);
+    root.appendChild(overlay);
+    _wireShellHandlers(overlay, panel);
+  }
+  function _shellHtml(state) {
+    return `
+    <div data-tb-issues="header" style="padding:16px 18px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--tb-border, #2a2a3e)">
+      <span style="font-size:20px">\u{1F50D}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff)">Page Issues</div>
+        <div data-tb-issues="subtitle" style="font-size:11px;color:var(--tb-text-muted, #888);margin-top:2px">${state.loading ? "Scanning\u2026" : "No scan yet"}</div>
+      </div>
+      <button data-tb-issues="rescan" style="background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);border-radius:6px;padding:6px 12px;font-size:12px;display:flex;align-items:center;gap:6px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+        Rescan
+      </button>
+      <button data-tb-issues="close" aria-label="Close" style="background:none;border:none;color:var(--tb-text-muted, #888);font-size:20px;padding:4px 8px;border-radius:6px">&times;</button>
+    </div>
+    <div data-tb-issues="body" style="flex:1;overflow-y:auto;min-height:200px">
+      ${state.loading ? _loadingHtml() : ""}
+    </div>
+  `;
+  }
+  function _loadingHtml() {
+    return `
+    <div style="padding:48px 20px;text-align:center;color:var(--tb-text-muted, #888);font-size:13px">
+      <div style="font-size:24px;margin-bottom:8px">\u{1F50D}</div>
+      Scanning page for issues\u2026
+      <div style="font-size:11px;margin-top:6px;opacity:0.7">Loading axe-core, checking images, network calls, JS errors\u2026</div>
+    </div>
+  `;
+  }
+  function _wireShellHandlers(overlay, panel) {
+    const close = () => {
+      _isOpen2 = false;
+      overlay.remove();
+      document.removeEventListener("keydown", escHandler);
+    };
+    panel.querySelector('[data-tb-issues="close"]').addEventListener("click", close);
+    overlay.addEventListener("click", (e2) => {
+      if (e2.target === overlay) close();
+    });
+    panel.querySelector('[data-tb-issues="rescan"]').addEventListener("click", async () => {
+      const body = panel.querySelector('[data-tb-issues="body"]');
+      body.innerHTML = _loadingHtml();
+      const sub = panel.querySelector('[data-tb-issues="subtitle"]');
+      sub.textContent = "Scanning\u2026";
+      await scan();
+      _renderBody(getIssues());
+    });
+    const escHandler = (e2) => {
+      if (e2.key === "Escape") close();
+    };
+    document.addEventListener("keydown", escHandler);
+  }
+  function _renderBody(issues) {
+    const panel = document.getElementById(PANEL_ID3);
+    if (!panel) return;
+    const body = panel.querySelector('[data-tb-issues="body"]');
+    const subtitle = panel.querySelector('[data-tb-issues="subtitle"]');
+    if (issues.length === 0) {
+      subtitle.textContent = "No issues found";
+      body.innerHTML = `
+      <div style="padding:48px 20px;text-align:center;color:var(--tb-text-muted, #888);font-size:13px">
+        <div style="font-size:32px;margin-bottom:8px">\u2713</div>
+        Clean scan \u2014 no issues detected on this page.
+        <div style="font-size:11px;margin-top:6px;opacity:0.7">Includes a11y \xB7 broken images \xB7 mixed content \xB7 JS errors \xB7 failed/slow API calls</div>
+      </div>
+    `;
+      return;
+    }
+    const counts = {};
+    for (const i of issues) counts[i.severity] = (counts[i.severity] || 0) + 1;
+    const summary = ["critical", "serious", "moderate", "minor"].filter((s) => counts[s]).map((s) => `${counts[s]} ${s}`).join(" \xB7 ");
+    subtitle.textContent = `${issues.length} issue${issues.length === 1 ? "" : "s"} \xB7 ${summary}`;
+    body.innerHTML = issues.map((issue) => _issueRowHtml(issue)).join("");
+    body.querySelectorAll("[data-tb-issue-id]").forEach((row) => {
+      var _a, _b, _c;
+      const id = row.dataset.tbIssueId;
+      const issue = issues.find((i) => i.id === id);
+      if (!issue) return;
+      (_a = row.querySelector('[data-action="locate"]')) == null ? void 0 : _a.addEventListener("click", () => _locate(issue));
+      (_b = row.querySelector('[data-action="dismiss"]')) == null ? void 0 : _b.addEventListener("click", () => {
+        dismissIssue(id);
+        _renderBody(getIssues());
+      });
+      (_c = row.querySelector('[data-action="file"]')) == null ? void 0 : _c.addEventListener("click", () => _fileAsBug(issue));
+    });
+  }
+  function _issueRowHtml(issue) {
+    const colors = SEVERITY_COLORS[issue.severity];
+    const detectorLabel = DETECTOR_LABELS[issue.detector];
+    const desc = issue.description.length > 240 ? issue.description.slice(0, 237) + "\u2026" : issue.description;
+    const repeats = (issue.occurrences || 1) > 1;
+    const samplesHtml = repeats && issue.contextSamples && issue.contextSamples.length > 0 ? `<details style="margin-top:6px;font-size:11px">
+         <summary style="cursor:pointer;color:var(--tb-text-muted, #888)">
+           View all ${issue.occurrences} contexts
+         </summary>
+         <ol style="margin:6px 0 0 20px;padding:0;color:var(--tb-text-secondary, #aaa);line-height:1.5">
+           ${issue.contextSamples.map((s) => `
+             <li>${new Date(s.timestamp).toLocaleTimeString()}${s.precedingAction ? ` \xB7 ${escapeHtml2(s.precedingAction)}` : ""}</li>
+           `).join("")}
+         </ol>
+       </details>` : "";
+    return `
+    <div class="tb-issue-row" data-tb-issue-id="${issue.id}">
+      <span class="tb-sev-badge" style="background:${colors.bg};color:${colors.fg};border-color:${colors.border}">${issue.severity}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+          <span class="tb-detector-tag">${detectorLabel}</span>
+          <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml2(issue.title)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml2(desc)}</div>
+        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7B61FF);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
+        ${samplesHtml}
+      </div>
+      <div class="tb-issue-actions">
+        ${issue.selector ? `<button data-action="locate" title="Highlight on page">\u{1F4CD} Locate</button>` : ""}
+        <button data-action="file" title="File as bug ticket">File ticket</button>
+        <button data-action="dismiss" title="Dismiss for this session">Dismiss</button>
+      </div>
+    </div>
+  `;
+  }
+  function _locate(issue) {
+    var _a;
+    if (!issue.selector) return;
+    let el = null;
+    try {
+      el = document.querySelector(issue.selector);
+    } catch (e2) {
+      el = null;
+    }
+    if (!el) return;
+    (_a = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a.remove();
+    _isOpen2 = false;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const htmlEl = el;
+    const prevOutline = htmlEl.style.outline;
+    const prevTransition = htmlEl.style.transition;
+    htmlEl.style.transition = "outline 0.2s, box-shadow 0.2s";
+    htmlEl.style.outline = "3px solid #7B61FF";
+    htmlEl.style.boxShadow = "0 0 0 6px rgba(123,97,255,0.35)";
+    setTimeout(() => {
+      htmlEl.style.outline = prevOutline;
+      htmlEl.style.boxShadow = "";
+      htmlEl.style.transition = prevTransition;
+    }, 2400);
+  }
+  function _fileAsBug(issue) {
+    var _a;
+    const root = _root2 || document.getElementById("tracebug-root");
+    if (!root) return;
+    (_a = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a.remove();
+    _isOpen2 = false;
+    Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
+      m.showQuickBugCapture(root, {
+        prefilledTitle: issue.title,
+        prefilledDescription: _bugDescriptionFromIssue(issue)
+      }).catch(() => {
+      });
+    });
+  }
+  function _bugDescriptionFromIssue(issue) {
+    const lines = [];
+    lines.push(`> Detected by TraceBug auto-scanner: **${DETECTOR_LABELS[issue.detector]}** (${issue.severity})`);
+    lines.push("");
+    lines.push(issue.description);
+    if (issue.selector) lines.push(`
+**Selector:** \`${issue.selector}\``);
+    if (issue.url) lines.push(`**URL:** \`${issue.url}\``);
+    if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
+    return lines.join("\n");
+  }
+  var PANEL_ID3, STYLE_ID3, _isOpen2, _root2, SEVERITY_COLORS, DETECTOR_LABELS;
+  var init_issues_panel = __esm({
+    "src/ui/issues-panel.ts"() {
+      "use strict";
+      init_scanner();
+      init_helpers();
+      PANEL_ID3 = "tracebug-issues-panel";
+      STYLE_ID3 = "tracebug-issues-panel-styles";
+      _isOpen2 = false;
+      _root2 = null;
+      SEVERITY_COLORS = {
+        critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
+        serious: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
+        moderate: { bg: "#713f12", fg: "#fde68a", border: "#ca8a04" },
+        minor: { bg: "#1e3a8a", fg: "#bfdbfe", border: "#2563eb" }
+      };
+      DETECTOR_LABELS = {
+        "axe-a11y": "A11y",
+        "broken-image": "Broken image",
+        "mixed-content": "Mixed content",
+        "console-error": "JS error",
+        "slow-api": "Slow API",
+        "failed-request": "Failed request",
+        "frustration-rage": "Rage clicks",
+        "frustration-dead": "Dead click",
+        "frustration-abandon": "Form abandoned",
+        "frustration-error-correlated": "Click \u2192 error"
+      };
     }
   });
 
@@ -56742,6 +57083,7 @@ ${"-".repeat(40)}
       this.sessionId = id;
       this.recording = true;
       setActiveSessionId(id);
+      clearScreenshots();
       this._attachConsoleCollectors();
       if (this._emit) drainPerformanceNetwork(this._emit);
       try {
@@ -56979,6 +57321,7 @@ ${"-".repeat(40)}
       }
       const ok = await startVideoRecording({
         mode: (_a = options == null ? void 0 : options.mode) != null ? _a : "rolling",
+        surfaceMode: options == null ? void 0 : options.surfaceMode,
         withMicrophone: options == null ? void 0 : options.withMicrophone,
         onStatus: options == null ? void 0 : options.onStatus
       });

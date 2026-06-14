@@ -2017,6 +2017,7 @@ function initAnnotationCanvas(
   let isDrawing = false;
   let startX = 0, startY = 0;
   let currentStroke: { x: number; y: number }[] = [];
+  let activeTextInput: HTMLInputElement | null = null;
 
   function redraw(): void {
     ctx.clearRect(0, 0, width, height);
@@ -2116,18 +2117,69 @@ function initAnnotationCanvas(
     });
   });
 
+  // Inline text-annotation input. Renders an <input> positioned over the
+  // canvas at the click coordinates so the user types inside the editor
+  // instead of a native prompt() dialog (which steals focus and breaks
+  // the flow on macOS Safari).
+  function spawnTextInput(x: number, y: number): void {
+    const wrap = canvas.parentElement;
+    if (!wrap) return;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Type and press Enter";
+    input.style.cssText = `
+      position:absolute;left:${x}px;top:${Math.max(0, y - 20)}px;
+      background:rgba(0,0,0,0.85);color:${currentColor};
+      border:1px solid ${currentColor};border-radius:4px;
+      padding:2px 6px;font:bold 14px system-ui,sans-serif;
+      outline:none;min-width:140px;z-index:2;
+    `;
+    activeTextInput = input;
+
+    const commit = () => {
+      if (activeTextInput !== input) return;
+      const value = input.value.trim();
+      input.remove();
+      activeTextInput = null;
+      if (value) {
+        actions.push({ type: "text", color: currentColor, startX: x, startY: y, endX: x, endY: y, text: value });
+        redraw();
+      }
+    };
+    const cancel = () => {
+      if (activeTextInput !== input) return;
+      input.remove();
+      activeTextInput = null;
+    };
+
+    input.addEventListener("keydown", (ev) => {
+      ev.stopPropagation();
+      if (ev.key === "Enter") { ev.preventDefault(); commit(); }
+      else if (ev.key === "Escape") { ev.preventDefault(); cancel(); }
+    });
+    input.addEventListener("blur", () => {
+      // Blur commits — clicking elsewhere on the canvas, switching tools,
+      // or pressing Save all flow through here.
+      setTimeout(commit, 0);
+    });
+
+    wrap.appendChild(input);
+    setTimeout(() => input.focus(), 0);
+  }
+
   // Mouse drawing
   canvas.addEventListener("mousedown", (e) => {
+    // If a text input is active, let its blur handler commit/cancel
+    // first. The next click will fall through normally.
+    if (activeTextInput) return;
+
     const rect = canvas.getBoundingClientRect();
     startX = e.clientX - rect.left;
     startY = e.clientY - rect.top;
 
     if (currentTool === "text") {
-      const text = prompt("Enter annotation text:");
-      if (text) {
-        actions.push({ type: "text", color: currentColor, startX, startY, endX: startX, endY: startY, text });
-        redraw();
-      }
+      spawnTextInput(startX, startY);
       return;
     }
 

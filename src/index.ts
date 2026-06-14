@@ -469,6 +469,12 @@ class TraceBugSDK {
     this.recording = true;
     setActiveSessionId(id);
 
+    // Drop the previous session's in-memory screenshots so they don't bleed
+    // into this ticket. Clearing at session START (not end) is intentional —
+    // stopRecording() opens the ticket-review modal, which still needs the
+    // screenshots until the user explicitly starts a new session.
+    clearScreenshots();
+
     // Install console.* wrappers now that the user has explicitly armed a
     // session. These add a frame to every console call's stack trace, so we
     // keep them lazy — gone the moment the session ends.
@@ -756,6 +762,7 @@ class TraceBugSDK {
    */
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
+    surfaceMode?: "tab" | "desktop";
     withMicrophone?: boolean;
     onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
   }): Promise<boolean> {
@@ -767,6 +774,7 @@ class TraceBugSDK {
 
     const ok = await _startVideoRecording({
       mode: options?.mode ?? "rolling",
+      surfaceMode: options?.surfaceMode,
       withMicrophone: options?.withMicrophone,
       onStatus: options?.onStatus,
     });
