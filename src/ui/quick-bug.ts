@@ -742,6 +742,13 @@ function _openModal(
     }
     if (shareBtn?.dataset.busy === "1") return; // ignore double-clicks
 
+    // One-time consent dialog. Sanitizer scrubs code-side content (tokens
+    // in logs / URLs / network) but cannot scrub screenshots or video pixels.
+    // The user is told this explicitly the first time they share, with a
+    // "don't show again" option once they've understood it.
+    const consentOk = await _confirmShareConsent(root);
+    if (!consentOk) return;
+
     // Inline spinner + label swap so the user sees progress on the button
     // itself, not just the bottom toast which can be missed.
     const originalHtml = shareBtn ? shareBtn.innerHTML : "";
@@ -2090,4 +2097,112 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     document.removeEventListener("keydown", onKey);
   }
   document.addEventListener("keydown", onKey);
+}
+
+// ── Share consent dialog ──────────────────────────────────────────────────
+// Shown ONCE before the user's first cloud share. Privacy promise vs reality:
+// the sanitizer scrubs code-side content (token shapes in logs, URLs, network
+// responses) but cannot scrub pixels inside screenshots or video frames. The
+// user has to know that before they upload.
+//
+// "Don't show again" is honored via localStorage. Resolving false aborts
+// the share; true proceeds.
+const CONSENT_KEY = "tracebug_share_consent_v1";
+
+function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      if (localStorage.getItem(CONSENT_KEY) === "ack") return resolve(true);
+    } catch {}
+
+    document.getElementById("tb-share-consent")?.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "tb-share-consent";
+    overlay.style.cssText = `
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(5, 7, 12, 0.72);
+      backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+      animation: tb-share-consent-in 0.16s ease;
+    `;
+
+    if (!document.getElementById("tb-share-consent-anim")) {
+      const s = document.createElement("style");
+      s.id = "tb-share-consent-anim";
+      s.textContent = "@keyframes tb-share-consent-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }";
+      document.head.appendChild(s);
+    }
+
+    const card = document.createElement("div");
+    card.style.cssText = `
+      width: 100%; max-width: 460px;
+      background: #14161E; color: #E6EDF3;
+      border: 1px solid rgba(124,92,255,0.32);
+      border-radius: 14px;
+      box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+      padding: 22px 24px;
+    `;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:18px;line-height:1">☁️</span>
+        <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">Before you share</div>
+      </div>
+      <div style="font-size:13px;color:#B9C2CC;line-height:1.55;margin-bottom:14px">
+        TraceBug auto-scrubs token shapes (JWTs, Bearer tokens, API keys, etc.)
+        from <strong style="color:#E6EDF3">console logs</strong>, <strong style="color:#E6EDF3">URLs</strong>, and
+        <strong style="color:#E6EDF3">network responses</strong> before upload.
+      </div>
+      <div style="font-size:13px;color:#B9C2CC;line-height:1.55;margin-bottom:18px;padding:10px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px">
+        <strong style="color:#F59E0B">Screenshots and video are uploaded as captured.</strong>
+        If any frame shows sensitive UI (passwords, tokens, PII), redact or
+        delete it before sharing. Use ✎ Annotate to draw over sensitive areas.
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:12px;color:#94A3B8">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="tb-consent-dont-show" style="margin:0;cursor:pointer" />
+          Don't show this again
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button data-act="cancel" style="
+          padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.14);
+          background:transparent;color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+        ">Cancel</button>
+        <button data-act="continue" style="
+          padding:8px 18px;border-radius:8px;border:0;
+          background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+        ">I understand — continue</button>
+      </div>
+    `;
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    const finish = (ok: boolean) => {
+      if (ok) {
+        const dontShow = (card.querySelector<HTMLInputElement>("#tb-consent-dont-show"))?.checked;
+        if (dontShow) {
+          try { localStorage.setItem(CONSENT_KEY, "ack"); } catch {}
+        }
+      }
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
+      resolve(ok);
+    };
+
+    card.addEventListener("click", (e) => {
+      const act = (e.target as HTMLElement).closest("[data-act]")?.getAttribute("data-act");
+      if (act === "continue") finish(true);
+      else if (act === "cancel") finish(false);
+    });
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) finish(false); });
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") finish(false); };
+    document.addEventListener("keydown", onKey);
+
+    // Touch the unused root param so TS doesn't gripe when we plug a more
+    // theme-aware mount target in later.
+    void root;
+  });
 }

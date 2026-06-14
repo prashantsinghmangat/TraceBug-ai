@@ -21,17 +21,21 @@ export default function Reveal({ children, delay = 0, className = '' }: RevealPr
       return;
     }
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setTimeout(() => el.classList.add('reveal-visible'), delay);
+          timer = setTimeout(() => el.classList.add('reveal-visible'), delay);
           observer.unobserve(el);
         }
       },
       { threshold: 0.1 }
     );
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (timer) clearTimeout(timer);
+    };
   }, [delay]);
 
   return (

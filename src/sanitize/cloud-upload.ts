@@ -19,18 +19,38 @@ const TOKEN_PATTERNS: { name: string; re: RegExp; replace: (m: string) => string
   { name: "bearer",      re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED },
   // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
   { name: "jwt",         re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
-  // OpenAI / Stripe-style
+  // OpenAI / Stripe sk_*
   { name: "sk_prefix",   re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
-  { name: "sk_live",     re: /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
-  // GitHub PATs
+  // Stripe secret + publishable (live/test, secret + publishable + restricted)
+  { name: "stripe",      re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
+  // GitHub PATs (classic + fine-grained + OAuth + server tokens)
   { name: "github_pat",  re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
   { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
-  // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.)
-  { name: "aws_access",  re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA)[A-Z0-9]{16}\b/g, replace: mask },
-  // Slack
-  { name: "slack",       re: /\bxox[abprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
+  { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
+  { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
+  // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
+  { name: "aws_access",  re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
+  { name: "aws_secret",  re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
+  // Slack — broader than before (xoxa-z covers all known prefixes)
+  { name: "slack",       re: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
   // Google API keys
   { name: "google_api",  re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask },
+  // Twilio — Account SID + Auth tokens
+  { name: "twilio_sid",  re: /\b(?:AC|SK)[a-f0-9]{32}\b/g, replace: mask },
+  // SendGrid
+  { name: "sendgrid",    re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replace: mask },
+  // Mailgun
+  { name: "mailgun",     re: /\bkey-[a-f0-9]{32}\b/g, replace: mask },
+  // Postmark
+  { name: "postmark",    re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
+  // Linear / Vercel / Cloudflare / Discord
+  { name: "linear",      re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
+  { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
+  // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
+  // session IDs, etc. that don't carry a recognizable prefix. Conservative:
+  // only triggers when preceded by a common secret-y keyword to avoid
+  // mangling legitimate hex like git SHAs.
+  { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s) => s.replace(/[a-fA-F0-9]{32,}/, REDACTED) },
 ];
 
 // Show first 4 and last 4 chars so the user can still recognize which token

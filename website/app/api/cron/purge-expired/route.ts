@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 import { REPORTS_BUCKET } from "@/lib/storage";
+
+/** Constant-time secret comparison. Standard `!==` can leak the secret one
+ *  character at a time via response-time analysis. Even though this endpoint
+ *  isn't widely advertised, the fix is two lines and removes the foot-gun. */
+function safeSecretEqual(given: string, expected: string): boolean {
+  if (given.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 // Hourly cleanup: removes Storage objects + DB rows for sessions that were
 // soft-deleted (either manually or by the nightly pg_cron expiry job).
@@ -10,7 +23,8 @@ import { REPORTS_BUCKET } from "@/lib/storage";
 export async function POST(req: Request) {
   const expected = process.env.CRON_SECRET;
   if (!expected) return NextResponse.json({ error: "cron_disabled" }, { status: 503 });
-  if (req.headers.get("x-cron-secret") !== expected) {
+  const given = req.headers.get("x-cron-secret") || "";
+  if (!safeSecretEqual(given, expected)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
