@@ -29,6 +29,18 @@ const nextConfig = {
           { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
         ],
       },
+      {
+        // Public share viewer should be embeddable in Jira, Linear, Notion,
+        // and other tools where a dev would paste a TraceBug link. The
+        // viewer itself sandboxes the report iframe with `allow-scripts`
+        // only (no allow-same-origin) so even if the parent page is hostile
+        // it cannot exfiltrate auth tokens from the embedded report.
+        source: '/share/:token',
+        headers: [
+          { key: 'X-Frame-Options', value: 'ALLOWALL' },
+          { key: 'Content-Security-Policy', value: 'frame-ancestors *' },
+        ],
+      },
     ];
   },
 };

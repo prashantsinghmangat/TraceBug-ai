@@ -16,7 +16,8 @@ import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
 import { replayOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
-import { showIssuesPanel, isIssuesPanelOpen } from "./ui/issues-panel";
+// issues-panel imports were removed when the Scan button left the floating bar.
+// Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
 import { matchesShortcut } from "./ui/helpers";
 import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, captureRollingBuffer, getCaptureCount } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
@@ -108,48 +109,11 @@ export function mountCompactToolbar(
   // still reach for `_renderPanel`.)
   void panel;
 
-  // ⚡ Quick Bug Capture — the daily-use one-shot button
-  const quickBugBtn = _createToolbarBtn(
-    "Quick Bug Capture (Ctrl+Shift+B)",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
-    () => {
-      if (!isQuickBugOpen()) {
-        showQuickBugCapture(root).catch(() => showToast("Quick capture failed", root));
-      }
-    },
-    "tracebug-toolbar-quickbug-btn"
-  );
-  // Make it stand out with accent color
-  quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
-  quickBugBtn.addEventListener("mouseenter", () => {
-    quickBugBtn.style.background = "var(--tb-accent-subtle, #7B61FF33)";
-    quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
-  });
-  quickBugBtn.addEventListener("mouseleave", () => {
-    quickBugBtn.style.background = "transparent";
-    quickBugBtn.style.color = "var(--tb-accent, #7B61FF)";
-  });
-  toolbar.appendChild(quickBugBtn);
-
-  // Scan Page — runs auto-detectors (a11y, broken images, mixed content,
-  // failed/slow APIs, JS errors) and opens the issues panel.
-  const scanBtn = _createToolbarBtn(
-    "Scan page for issues",
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
-    () => {
-      if (!isIssuesPanelOpen()) {
-        showIssuesPanel(root).catch((err) => {
-          console.warn("[TraceBug] Scan failed:", err);
-          showToast("Scan failed", root);
-        });
-      }
-    },
-    "tracebug-toolbar-scan-btn"
-  );
-  toolbar.appendChild(scanBtn);
-
-  // Divider
-  toolbar.appendChild(_divider());
+  // Quick Bug Capture and Scan buttons were removed from the floating bar.
+  // The Quick Bug shortcut (Ctrl+Shift+B) still works and the modal auto-opens
+  // after every screenshot / stopped recording — the dedicated button gave
+  // no unique value and was easily confused with the screenshot button.
+  // Scan stays available via TraceBug.scanPage() API.
 
   // Annotate + Draw modes were cut from the v1 toolbar — they overlap with
   // the screenshot annotation editor and confused users with two paradigms.
@@ -210,32 +174,41 @@ export function mountCompactToolbar(
     "tracebug-toolbar-region-btn"
   ));
 
-  // Events-only Record button — clipboard icon makes it visually obvious this
-  // is the "no-video" capture mode. Arms a TraceBug session (events +
-  // screenshots) WITHOUT a screen-share prompt. Stop opens the ticket modal.
-  const eventsRecordBtn = _createToolbarBtn(
-    "Start session (events + screenshots) — no video, no screen prompt",
-    _eventsRecordIconSvg(false),
-    () => _toggleEventsRecording(root, eventsRecordBtn, showToast),
-    "tracebug-toolbar-events-record-btn"
-  );
-  toolbar.appendChild(eventsRecordBtn);
+  // Divider between capture group (screenshots) and recording group.
+  toolbar.appendChild(_divider());
 
-  // Video recording button — film/camera icon. Triggers the screen-share
-  // picker, then captures events + screenshots + video into one ticket. Stop
-  // opens the ticket modal with everything embedded.
-  const recordBtn = _createToolbarBtn(
-    "Record session WITH video (asks to share screen)",
-    _recordIconSvg(false),
-    () => _toggleVideoRecording(root, recordBtn, showToast),
-    "tracebug-toolbar-record-btn"
+  // Record Tab — captures the current tab. Prefers a silent capture path
+  // (chrome.tabCapture in the extension build) and falls back to a
+  // preferCurrentTab getDisplayMedia hint elsewhere. Either way the user
+  // doesn't have to wade through the full screen-picker.
+  const tabRecordBtn = _createToolbarBtn(
+    "Record current tab",
+    _tabRecordIconSvg(false),
+    () => _toggleTabRecording(root, tabRecordBtn, showToast),
+    "tracebug-toolbar-tab-record-btn"
   );
   if (!isVideoSupported()) {
-    recordBtn.style.opacity = "0.4";
-    recordBtn.style.cursor = "not-allowed";
-    recordBtn.title = "Screen recording not supported in this browser";
+    tabRecordBtn.style.opacity = "0.4";
+    tabRecordBtn.style.cursor = "not-allowed";
+    tabRecordBtn.title = "Screen recording not supported in this browser";
   }
-  toolbar.appendChild(recordBtn);
+  toolbar.appendChild(tabRecordBtn);
+
+  // Record Desktop — opens a mic-toggle preflight popover, then asks the user
+  // to pick a screen/window in the native share-picker. Audio is recorded
+  // alongside the video when the mic is enabled.
+  const desktopRecordBtn = _createToolbarBtn(
+    "Record desktop / window (asks what to share)",
+    _desktopRecordIconSvg(false),
+    () => _toggleDesktopRecording(root, desktopRecordBtn, showToast),
+    "tracebug-toolbar-desktop-record-btn"
+  );
+  if (!isVideoSupported()) {
+    desktopRecordBtn.style.opacity = "0.4";
+    desktopRecordBtn.style.cursor = "not-allowed";
+    desktopRecordBtn.title = "Screen recording not supported in this browser";
+  }
+  toolbar.appendChild(desktopRecordBtn);
 
   // Annotation list, Settings card, and Help button were cut from the v1
   // toolbar — they're configurable via init() and accessible via plugins.
@@ -333,72 +306,50 @@ function _divider(): HTMLElement {
   return d;
 }
 
-// ── Events-only recording icon + toggle ─────────────────────────────────
+// ── Record Tab / Record Desktop icons + toggles ─────────────────────────
 
-function _eventsRecordIconSvg(active: boolean): string {
+function _tabRecordIconSvg(active: boolean): string {
   if (active) {
-    // Solid red square — universal "stop" affordance. Clearly different from
-    // the video button's stop state (round filled circle).
     return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
   }
-  // Clipboard icon — "capture a session of steps". Pairs with the camera icon
-  // on the video button so the two affordances are immediately distinguishable.
-  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="15" y2="16"/></svg>`;
+  // Single-tab monitor outline — clearly "this tab" not "the desktop".
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/><circle cx="6" cy="6" r="0.6" fill="currentColor"/><circle cx="8" cy="6" r="0.6" fill="currentColor"/></svg>`;
 }
 
-/**
- * Toggle events-only session recording. Arms the same session lifecycle as
- * the video button (so events + screenshots accumulate under one session id)
- * but skips getDisplayMedia and the HUD entirely.
- */
-async function _toggleEventsRecording(
-  root: HTMLElement,
-  btn: HTMLElement,
-  showToast: (msg: string, root: HTMLElement) => void
-): Promise<void> {
-  // The button's active state mirrors the SDK's `recording` flag, which the
-  // session-lifecycle hook keeps in sync. We treat the toolbar class as the
-  // source of truth for the toggle since the SDK doesn't expose recording
-  // state directly to this module.
-  const isActive = btn.classList.contains("tb-active");
-
-  if (isActive) {
-    // Stop: end the session and open the ticket modal.
-    showToast("Stopping recording...", root);
-    btn.innerHTML = _eventsRecordIconSvg(false);
-    btn.classList.remove("tb-active");
-    btn.style.color = "var(--tb-btn-text, #aaa)";
-    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
-    try {
-      if (!isQuickBugOpen()) await showQuickBugCapture(root);
-    } catch (err) {
-      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
-    }
-    return;
-  }
-
-  // Start: arm the session. No screen picker, no video.
-  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
-  btn.innerHTML = _eventsRecordIconSvg(true);
-  btn.classList.add("tb-active");
-  btn.style.color = "var(--tb-error, #ef4444)";
-  showToast("Recording — events + screenshots will be captured", root);
-}
-
-// ── Video recording icon + toggle ────────────────────────────────────────
-
-function _recordIconSvg(active: boolean): string {
+function _desktopRecordIconSvg(active: boolean): string {
   if (active) {
-    // Solid red CIRCLE for stop — distinct from the events-only stop state
-    // which uses a square. This way the active states also stay distinguishable.
     return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
   }
-  // Video camera icon — instantly readable as "screen recording" and clearly
-  // different from the events-only clipboard.
-  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`;
+  // Multi-window glyph — two stacked rectangles — reads as "pick a screen".
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>`;
 }
 
-async function _toggleVideoRecording(
+/** Shared stop-and-finalize path used by both record buttons. */
+async function _finishRecording(
+  root: HTMLElement,
+  btn: HTMLElement,
+  iconFn: (active: boolean) => string,
+  showToast: (msg: string, root: HTMLElement) => void,
+): Promise<void> {
+  const captures = getCaptureCount();
+  showToast("Stopping recording...", root);
+  await stopVideoRecording();
+  hideRecordingHUD();
+  btn.innerHTML = iconFn(false);
+  btn.classList.remove("tb-active");
+  btn.style.color = "var(--tb-btn-text, #aaa)";
+  try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
+  if (captures > 0) {
+    showToast(`Recording stopped · ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
+  }
+  try {
+    if (!isQuickBugOpen()) await showQuickBugCapture(root);
+  } catch (err) {
+    console.warn("[TraceBug] Failed to open ticket review after recording:", err);
+  }
+}
+
+async function _toggleTabRecording(
   root: HTMLElement,
   btn: HTMLElement,
   showToast: (msg: string, root: HTMLElement) => void
@@ -409,35 +360,16 @@ async function _toggleVideoRecording(
   }
 
   if (isVideoRecording()) {
-    const captures = getCaptureCount();
-    showToast("Stopping recording...", root);
-    await stopVideoRecording();
-    hideRecordingHUD();
-    btn.innerHTML = _recordIconSvg(false);
-    btn.classList.remove("tb-active");
-    btn.style.color = "var(--tb-btn-text, #aaa)";
-    // Finalize the TraceBug session: clears the active-session flag so the
-    // next Record click starts fresh and stops the event collectors.
-    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
-    if (captures > 0) {
-      showToast(`Recording stopped · ${captures} bug${captures === 1 ? "" : "s"} captured`, root);
-    }
-    // Always open the ticket modal on stop. Earlier we skipped this when
-    // rolling captures had already been filed, but users were left without a
-    // visible "result" of stopping — they expect a ticket every time. Open the
-    // ticket for the most recent session so the recording, replay, and
-    // screenshots are immediately reviewable.
-    try {
-      if (!isQuickBugOpen()) await showQuickBugCapture(root);
-    } catch (err) {
-      console.warn("[TraceBug] Failed to open ticket review after recording:", err);
-    }
-    return;
+    return _finishRecording(root, btn, _tabRecordIconSvg, showToast);
   }
 
-  showToast("Pick a screen, window, or tab to record", root);
+  // Tab recording uses the silent path on the extension build (chrome.tabCapture
+  // routed through the offscreen doc) and falls back to a preferCurrentTab
+  // getDisplayMedia hint on the npm SDK build. Either way the user isn't
+  // hunting for "the current tab" in a long picker list.
   const ok = await startVideoRecording({
     mode: "rolling",
+    surfaceMode: "tab",
     onStatus: (status, message) => {
       if (status === "error" && message) showToast(`Recording error: ${message}`, root);
       else if (status === "warning" && message) showToast(message, root);
@@ -448,19 +380,151 @@ async function _toggleVideoRecording(
     return;
   }
 
-  // Arm the TraceBug session in the same gesture as starting the video so
-  // events, screenshots, and the recording all land under one session id.
-  // Fires before the HUD mounts so the active-session flag is already
-  // persisted when the first event arrives.
   try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
 
-  btn.innerHTML = _recordIconSvg(true);
+  btn.innerHTML = _tabRecordIconSvg(true);
   btn.classList.add("tb-active");
   btn.style.color = "var(--tb-error, #ef4444)";
   showRecordingHUD(root, {
-    onStop: () => { _toggleVideoRecording(root, btn, showToast).catch(() => {}); },
+    onStop: () => { _toggleTabRecording(root, btn, showToast).catch(() => {}); },
+  });
+  showToast("Recording this tab — hit Stop to file a ticket", root);
+}
+
+async function _toggleDesktopRecording(
+  root: HTMLElement,
+  btn: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void
+): Promise<void> {
+  if (!isVideoSupported()) {
+    showToast("Screen recording not supported in this browser", root);
+    return;
+  }
+
+  if (isVideoRecording()) {
+    return _finishRecording(root, btn, _desktopRecordIconSvg, showToast);
+  }
+
+  // Desktop recording: prompt for mic preference first, then trigger the
+  // native screen-share picker. The popover resolves to false if the user
+  // bails (Esc / click-out) so we don't surprise them with the system picker.
+  const choice = await _showDesktopPreflight(root, btn);
+  if (!choice) {
+    showToast("Recording cancelled", root);
+    return;
+  }
+
+  const ok = await startVideoRecording({
+    mode: "rolling",
+    surfaceMode: "desktop",
+    withMicrophone: choice.withMicrophone,
+    onStatus: (status, message) => {
+      if (status === "error" && message) showToast(`Recording error: ${message}`, root);
+      else if (status === "warning" && message) showToast(message, root);
+    },
+  });
+  if (!ok) {
+    showToast("Recording cancelled", root);
+    return;
+  }
+
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+
+  btn.innerHTML = _desktopRecordIconSvg(true);
+  btn.classList.add("tb-active");
+  btn.style.color = "var(--tb-error, #ef4444)";
+  showRecordingHUD(root, {
+    onStop: () => { _toggleDesktopRecording(root, btn, showToast).catch(() => {}); },
   });
   showToast("Recording started — hit Stop to file a ticket", root);
+}
+
+/**
+ * Compact popover anchored under the Record Desktop button. Lets the user
+ * decide whether to include the mic in the recording before the OS-level
+ * share-picker takes over. Resolves to the user's choice or null if cancelled.
+ */
+function _showDesktopPreflight(
+  root: HTMLElement,
+  anchor: HTMLElement,
+): Promise<{ withMicrophone: boolean } | null> {
+  return new Promise((resolve) => {
+    // Tear down any prior preflight (defensive — shouldn't happen but cheap).
+    const prior = root.querySelector('[data-tracebug="record-preflight"]');
+    if (prior) prior.remove();
+
+    const rect = anchor.getBoundingClientRect();
+    const pop = document.createElement("div");
+    pop.dataset.tracebug = "record-preflight";
+    pop.setAttribute("role", "dialog");
+    pop.style.cssText = `
+      position:fixed;
+      top:${Math.round(rect.bottom + 8)}px;
+      left:${Math.round(Math.min(rect.left, window.innerWidth - 260))}px;
+      width:240px;
+      background:var(--tb-bg-secondary, #1a1a2e);
+      border:1px solid var(--tb-border, #2a2a3e);
+      border-radius:12px;
+      padding:12px 12px 10px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.5);
+      z-index:2147483647;
+      font-family:var(--tb-font-family, system-ui, -apple-system, sans-serif);
+      color:var(--tb-text-primary, #e0e0e0);
+      font-size:12px;
+      animation:tracebug-preflight-in 0.15s ease;
+    `;
+    if (!document.getElementById("tracebug-preflight-anim")) {
+      const st = document.createElement("style");
+      st.id = "tracebug-preflight-anim";
+      st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
+      document.head.appendChild(st);
+    }
+    pop.innerHTML = `
+      <div style="font-weight:600;margin-bottom:8px;font-size:12px">Record desktop</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;background:var(--tb-bg-tertiary, #0f0f1e);user-select:none">
+        <input type="checkbox" data-tb-pre="mic" style="margin:0;cursor:pointer" />
+        <span style="display:flex;align-items:center;gap:6px;flex:1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span>Record microphone</span>
+        </span>
+      </label>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
+        <button data-tb-pre="start" style="flex:1.4;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">Start recording</button>
+      </div>
+    `;
+
+    root.appendChild(pop);
+
+    const micEl = pop.querySelector('[data-tb-pre="mic"]') as HTMLInputElement;
+    const cancelEl = pop.querySelector('[data-tb-pre="cancel"]') as HTMLButtonElement;
+    const startEl = pop.querySelector('[data-tb-pre="start"]') as HTMLButtonElement;
+
+    let settled = false;
+    const finish = (value: { withMicrophone: boolean } | null) => {
+      if (settled) return;
+      settled = true;
+      pop.remove();
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("mousedown", onOutside, true);
+      resolve(value);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); finish(null); }
+      if (e.key === "Enter") { e.preventDefault(); finish({ withMicrophone: micEl.checked }); }
+    };
+    const onOutside = (e: MouseEvent) => {
+      if (!pop.contains(e.target as Node)) finish(null);
+    };
+
+    cancelEl.addEventListener("click", () => finish(null));
+    startEl.addEventListener("click", () => finish({ withMicrophone: micEl.checked }));
+    document.addEventListener("keydown", onKey, true);
+    // Slight delay so the toolbar click that opened the popover doesn't
+    // immediately register as an outside click.
+    setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
+    setTimeout(() => startEl.focus(), 0);
+  });
 }
 
 /**

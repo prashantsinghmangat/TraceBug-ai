@@ -140,11 +140,74 @@ export function getCaptureCount(): number {
 }
 
 export function getVideoElapsedMs(): number {
-  return _active ? Date.now() - _startedAt : 0;
+  if (!_active) return 0;
+  // Subtract any time spent paused so the HUD timer matches the actual
+  // recorded duration.
+  return Date.now() - _startedAt - _pausedMs - (_paused ? Date.now() - _pausedAt : 0);
 }
 
 export function getLastVideoRecording(): VideoRecording | null {
   return _lastRecording;
+}
+
+// ── Pause / Resume ───────────────────────────────────────────────────────
+// Only the in-page transport supports pause/resume today — the extension's
+// MediaRecorder lives in the offscreen doc and would need an additional RPC
+// pair to drive it. Pause on the extension path is a no-op for now; the HUD
+// button is still wired so the UI is consistent across both transports.
+
+let _paused = false;
+let _pausedAt = 0;
+let _pausedMs = 0;
+
+export function isVideoPaused(): boolean {
+  return _paused;
+}
+
+export function pauseVideoRecording(): void {
+  if (!_active || _paused) return;
+  _paused = true;
+  _pausedAt = Date.now();
+  if (_recorder && _recorder.state === "recording") {
+    try { _recorder.pause(); } catch {}
+  }
+}
+
+export function resumeVideoRecording(): void {
+  if (!_active || !_paused) return;
+  _pausedMs += Date.now() - _pausedAt;
+  _paused = false;
+  _pausedAt = 0;
+  if (_recorder && _recorder.state === "paused") {
+    try { _recorder.resume(); } catch {}
+  }
+}
+
+// ── Microphone mute ──────────────────────────────────────────────────────
+// Toggling `enabled` on the mic track sends silence downstream without
+// detaching the track — resume just flips it back. Works regardless of
+// whether the mic came from displayMedia's audio:true or a separately
+// captured getUserMedia track.
+
+export function hasMicrophoneTrack(): boolean {
+  if (!_stream) return false;
+  // Audio tracks from getDisplayMedia's `audio: true` are system/tab audio,
+  // not the mic. The mic track is the one we added via getUserMedia in
+  // startVideoRecordingInPage and is tagged with label containing
+  // "microphone" or kind === "audio" with a non-empty deviceId.
+  return _stream.getAudioTracks().length > 0;
+}
+
+export function isMicrophoneMuted(): boolean {
+  if (!_stream) return false;
+  const tracks = _stream.getAudioTracks();
+  if (tracks.length === 0) return false;
+  return tracks.some(t => !t.enabled);
+}
+
+export function setMicrophoneMuted(muted: boolean): void {
+  if (!_stream) return;
+  _stream.getAudioTracks().forEach(t => { t.enabled = !muted; });
 }
 
 // ── Public mutators — dispatch to the right transport ────────────────────
@@ -158,6 +221,10 @@ let _startInFlight: Promise<boolean> | null = null;
 
 export async function startVideoRecording(options?: {
   mode?: "rolling" | "standard";
+  /** "tab" prefers the current tab silently (extension) or via
+   *  `preferCurrentTab` (SDK). "desktop" shows the full screen-picker.
+   *  Default "desktop" for backwards compatibility. */
+  surfaceMode?: "tab" | "desktop";
   withMicrophone?: boolean;
   onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
 }): Promise<boolean> {
@@ -169,15 +236,18 @@ export async function startVideoRecording(options?: {
 
 async function _startVideoRecordingInner(options?: {
   mode?: "rolling" | "standard";
+  surfaceMode?: "tab" | "desktop";
   withMicrophone?: boolean;
   onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
 }): Promise<boolean> {
   _onStatus = options?.onStatus || null;
   const requestedMode = options?.mode === "standard" ? "standard" : "rolling";
+  const surfaceMode = options?.surfaceMode === "tab" ? "tab" : "desktop";
 
   if (isExtensionContext()) {
     const result = await rpcCall<{ ok: boolean; error?: string }>("tb:rec:start", {
       mode: requestedMode,
+      surfaceMode,
       withMicrophone: !!options?.withMicrophone,
     }).catch((err) => ({ ok: false, error: (err && err.message) || String(err) }));
 
@@ -197,7 +267,7 @@ async function _startVideoRecordingInner(options?: {
     return true;
   }
 
-  return startVideoRecordingInPage(requestedMode, options);
+  return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode });
 }
 
 export function stopVideoRecording(): Promise<VideoRecording | null> {
@@ -271,6 +341,9 @@ export function abortVideoRecording(): void {
   _capturesTaken = 0;
   _startedAt = 0;
   _mode = "rolling";
+  _paused = false;
+  _pausedAt = 0;
+  _pausedMs = 0;
 }
 
 /** Trigger a browser download of the video blob. */
@@ -374,7 +447,7 @@ function pickMimeType(): string {
 
 async function startVideoRecordingInPage(
   requestedMode: "rolling" | "standard",
-  options?: { withMicrophone?: boolean }
+  options?: { withMicrophone?: boolean; surfaceMode?: "tab" | "desktop" }
 ): Promise<boolean> {
   if (!isVideoSupported()) {
     _onStatus?.("error", "Screen recording is not supported in this browser.");
@@ -383,10 +456,21 @@ async function startVideoRecordingInPage(
 
   let displayStream: MediaStream;
   try {
-    displayStream = await navigator.mediaDevices.getDisplayMedia({
+    // For surfaceMode === "tab" we hint the browser to pre-select the
+    // current tab. These constraints are best-effort — the spec only
+    // recently added them and older Chromium silently ignores unknown
+    // keys, so falling back to the standard picker is automatic.
+    const constraints: any = {
       video: { frameRate: { ideal: 30, max: 60 } },
       audio: true,
-    } as MediaStreamConstraints);
+    };
+    if (options?.surfaceMode === "tab") {
+      constraints.preferCurrentTab = true;
+      constraints.selfBrowserSurface = "include";
+      constraints.surfaceSwitching = "exclude";
+      constraints.systemAudio = "exclude";
+    }
+    displayStream = await navigator.mediaDevices.getDisplayMedia(constraints as MediaStreamConstraints);
   } catch (err: any) {
     if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
       _onStatus?.("stopped", "cancelled");
@@ -444,6 +528,9 @@ async function startVideoRecordingInPage(
 
   _recorder.start(1000);
   _active = true;
+  _paused = false;
+  _pausedMs = 0;
+  _pausedAt = 0;
 
   // Page-reload safety net: warn the user, and finalize chunks on pagehide.
   installInPageReloadGuards();
