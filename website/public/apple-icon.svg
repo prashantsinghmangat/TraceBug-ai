@@ -1,0 +1,16 @@
+<svg width="180" height="180" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ios-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E1560"/>
+      <stop offset="55%" stop-color="#0D0D20"/>
+      <stop offset="100%" stop-color="#071220"/>
+    </linearGradient>
+    <linearGradient id="cursor" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C5CFF"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" fill="url(#ios-bg)"/>
+  <path d="M31 34 L49 50 L31 66" fill="none" stroke="#EAECF3" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="54" y="43" width="15" height="15" rx="4" fill="url(#cursor)"/>
+</svg>

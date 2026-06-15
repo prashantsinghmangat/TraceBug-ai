@@ -2,18 +2,18 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/cn";
 
-// Mono-uppercase terminal-style chip. Used for "v1.4", section labels, etc.
+// Pill label used for section eyebrows, version tags, status chips.
 const badgeVariants = cva(
-  "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 " +
-  "font-mono text-[10px] uppercase tracking-wider",
+  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 " +
+  "text-[11px] font-medium tracking-wide",
   {
     variants: {
       tone: {
-        muted: "border-border bg-surface/80 text-text-muted",
-        primary: "border-primary/30 bg-primary/10 text-primary",
-        success: "border-success/30 bg-success/10 text-success",
-        warning: "border-warning/30 bg-warning/10 text-warning",
-        error: "border-error/30 bg-error/10 text-error",
+        muted: "border-border bg-surface text-text-muted",
+        primary: "border-primary/25 bg-primary/[0.07] text-primary",
+        success: "border-success/25 bg-success/10 text-success",
+        warning: "border-warning/25 bg-warning/10 text-warning",
+        error: "border-error/25 bg-error/10 text-error",
       },
     },
     defaultVariants: { tone: "muted" },

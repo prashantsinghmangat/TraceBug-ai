@@ -1,5 +1,5 @@
-// shadcn/ui-style button primitive, tuned for the TraceBug cyber-graphite theme.
-// Variants stay small on purpose — we only ship what the site actually uses.
+// Button primitive — tuned for the light-first TraceBug theme.
+// Variants stay small on purpose; we only ship what the site uses.
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
@@ -8,25 +8,27 @@ import { cn } from "@/lib/cn";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium tracking-tight " +
-  "transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 " +
-  "focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
-  "disabled:pointer-events-none disabled:opacity-50",
+  "transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 " +
+  "focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
+  "disabled:pointer-events-none disabled:opacity-50 active:translate-y-px",
   {
     variants: {
       variant: {
         primary:
-          "bg-primary text-white hover:bg-primary/90 shadow-glow-sm hover:shadow-glow-primary",
+          "bg-primary text-white shadow-glow-sm hover:shadow-glow-primary hover:brightness-110",
+        gradient:
+          "text-white bg-[linear-gradient(120deg,#7C5CFF,#6D4AFF_45%,#22D3EE)] shadow-glow-sm hover:shadow-glow-primary hover:brightness-[1.06]",
         secondary:
-          "bg-surface/60 text-text-primary border border-border hover:border-border-strong hover:bg-surface",
+          "bg-surface text-text-primary border border-border hover:border-border-strong hover:bg-surface-2 shadow-xs",
         ghost:
-          "text-text-muted hover:text-text-primary hover:bg-surface/60",
+          "text-text-muted hover:text-text-primary hover:bg-surface",
         outline:
-          "border border-border text-text-primary hover:border-border-strong",
+          "border border-border-strong text-text-primary hover:border-primary/50 hover:text-primary",
       },
       size: {
-        sm: "h-8 px-3 rounded-md text-[12px]",
-        md: "h-9 px-4 rounded-md text-[13px]",
-        lg: "h-10 px-5 rounded-md text-[14px]",
+        sm: "h-8 px-3.5 rounded-lg text-[12px]",
+        md: "h-10 px-5 rounded-lg text-[13.5px]",
+        lg: "h-12 px-6 rounded-xl text-[15px]",
       },
     },
     defaultVariants: { variant: "primary", size: "md" },

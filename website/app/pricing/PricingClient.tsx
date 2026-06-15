@@ -101,7 +101,7 @@ export default function PricingClient() {
       <section className="pt-32 pb-12 px-4">
         <div className="max-w-3xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-border text-sm text-text-muted mb-6">
-            <span className="text-green-400">●</span>
+            <span className="text-success">●</span>
             Local-first, forever free
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight mb-5">
@@ -180,7 +180,7 @@ function TierCard({ tier }: { tier: Tier }) {
         </div>
       )}
       {tier.status && (
-        <div className="text-[10px] uppercase tracking-wider font-bold text-amber-400 mb-2">
+        <div className="text-[10px] uppercase tracking-wider font-bold text-warning mb-2">
           {tier.status}
         </div>
       )}
@@ -201,7 +201,7 @@ function TierCard({ tier }: { tier: Tier }) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2.5"
-              className="text-green-400 flex-shrink-0 mt-0.5"
+              className="text-success flex-shrink-0 mt-0.5"
             >
               <polyline points="20 6 9 17 4 12" />
             </svg>
@@ -212,7 +212,7 @@ function TierCard({ tier }: { tier: Tier }) {
 
       {tier.ctaSource ? (
         status === "sent" ? (
-          <div className="rounded-md border border-emerald-700 bg-emerald-900/20 px-3 py-2 text-xs text-emerald-300 text-center">
+          <div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs text-success text-center">
             ✓ We&apos;ll email <strong>{email}</strong> when {tier.name} launches.
           </div>
         ) : (
@@ -238,7 +238,7 @@ function TierCard({ tier }: { tier: Tier }) {
               {status === "sending" ? "Sending…" : tier.cta}
             </button>
             {status === "error" && (
-              <p className="text-xs text-red-400 text-center">
+              <p className="text-xs text-error text-center">
                 Couldn&apos;t save — try again in a moment.
               </p>
             )}

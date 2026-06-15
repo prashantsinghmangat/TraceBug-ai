@@ -49,13 +49,13 @@ export default async function SharePage({ params }: { params: { token: string } 
   }
 
   return (
-    <main className="min-h-screen flex flex-col bg-gray-950">
-      <header className="border-b border-gray-800 bg-gray-950 px-4 py-2 flex items-center justify-between text-xs">
-        <span className="text-gray-400">
-          Shared via <a href="/" className="text-blue-400 hover:underline">TraceBug</a>
-          {row.title && <span className="text-gray-300 ml-2">· {row.title}</span>}
+    <main className="min-h-screen flex flex-col bg-background">
+      <header className="border-b border-border bg-surface px-4 py-2 flex items-center justify-between text-xs">
+        <span className="text-text-muted">
+          Shared via <a href="/" className="text-primary hover:underline">TraceBug</a>
+          {row.title && <span className="text-text-primary ml-2">· {row.title}</span>}
         </span>
-        <span className="text-gray-500">
+        <span className="text-text-subtle">
           Expires {new Date(row.expires_at).toLocaleDateString()}
         </span>
       </header>
@@ -81,26 +81,26 @@ export default async function SharePage({ params }: { params: { token: string } 
 // Kept small and informational, not nagging. Loom does the same thing.
 function ViewerFooter() {
   return (
-    <footer className="border-t border-gray-800 bg-gray-950 px-4 py-3 flex flex-wrap items-center justify-center gap-3 text-xs text-gray-400">
+    <footer className="border-t border-border bg-surface px-4 py-3 flex flex-wrap items-center justify-center gap-3 text-xs text-text-muted">
       <span>
         Want bug reports like this one?
       </span>
       <a
         href="/"
-        className="px-3 py-1.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white font-medium text-xs transition-colors"
+        className="px-3 py-1.5 rounded-md bg-primary hover:brightness-110 text-white font-medium text-xs transition-colors"
       >
         Get TraceBug — free
       </a>
-      <span className="text-gray-600">·</span>
-      <a href="/pricing" className="hover:text-gray-200">Pricing</a>
-      <span className="text-gray-600">·</span>
-      <a href="/docs" className="hover:text-gray-200">Docs</a>
-      <span className="text-gray-600">·</span>
+      <span className="text-text-subtle">·</span>
+      <a href="/pricing" className="hover:text-text-primary">Pricing</a>
+      <span className="text-text-subtle">·</span>
+      <a href="/docs" className="hover:text-text-primary">Docs</a>
+      <span className="text-text-subtle">·</span>
       <a
         href="https://github.com/prashantsinghmangat/tracebug-ai"
         target="_blank"
         rel="noreferrer"
-        className="hover:text-gray-200"
+        className="hover:text-text-primary"
       >
         GitHub
       </a>
