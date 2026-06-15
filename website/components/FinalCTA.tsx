@@ -1,46 +1,45 @@
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ChromeIcon, NpmIcon } from "@/components/ui/brand-icons";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
+import { Caret } from "@/components/BrandMark";
+
+const CHROME_URL =
+  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
 export default function FinalCTA() {
   return (
-    <section className="relative py-28 overflow-hidden">
-      <div className="absolute inset-0 grid-bg opacity-25" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] rounded-full bg-primary/[0.06] blur-[140px] pointer-events-none" />
+    <section className="py-20 lg:py-28">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="relative overflow-hidden rounded-[2rem] border border-border bg-background shadow-card">
+          {/* aurora wash */}
+          <div className="absolute inset-0 -z-0 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+          <div className="aurora animate-aurora top-[-30%] left-[15%] h-[280px] w-[320px] bg-[#7C5CFF]/25" />
+          <div className="aurora animate-aurora top-[10%] right-[10%] h-[240px] w-[280px] bg-[#22D3EE]/20" style={{ animationDelay: "-6s" }} />
 
-      <div className="relative max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <Badge tone="primary" className="mb-6">
-          <span>▸</span><span>Free · No account</span>
-        </Badge>
-
-        <h2 className="text-[36px] sm:text-[52px] font-semibold text-text-primary leading-[1.05] tracking-[-0.03em] mb-5">
-          Ship better bug reports{" "}
-          <span className="gradient-text">today</span>
-        </h2>
-
-        <p className="text-text-muted text-base sm:text-[17px] max-w-[460px] mx-auto mb-9 leading-[1.6]">
-          Install in 30 seconds. Works in any frontend framework.
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-2.5 justify-center items-center">
-          <Button asChild size="lg">
-            <a
-              href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ChromeIcon size={14} />
-              Install extension
-              <ArrowRight size={14} />
-            </a>
-          </Button>
-          <Button asChild size="lg" variant="secondary">
-            <a href="#install">
-              <NpmIcon size={14} />
-              npm install tracebug-sdk
-            </a>
-          </Button>
+          <div className="relative px-6 py-16 sm:px-12 sm:py-20 text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-3 py-1 text-[11.5px] font-medium text-success mb-6">
+              <Check size={13} strokeWidth={3} /> Free · No account
+            </span>
+            <h2 className="mx-auto max-w-2xl text-[32px] sm:text-5xl font-semibold tracking-[-0.03em] leading-[1.08] text-text-primary">
+              Ship better bug reports <span className="gradient-text-anim">today</span>
+              <Caret className="ml-2 align-middle w-[0.3em] h-[0.62em]" />
+            </h2>
+            <p className="mx-auto mt-5 max-w-xl text-text-muted text-lg">
+              Install in 30 seconds. Works in any front-end framework. Your data stays yours.
+            </p>
+            <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button asChild size="lg" variant="gradient" className="shimmer w-full sm:w-auto">
+                <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
+                  <ChromeIcon size={16} /> Add to Chrome — free <ArrowRight size={15} />
+                </a>
+              </Button>
+              <Button asChild size="lg" variant="secondary" className="w-full sm:w-auto">
+                <a href="#install">
+                  <NpmIcon size={15} /> npm install tracebug-sdk
+                </a>
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </section>

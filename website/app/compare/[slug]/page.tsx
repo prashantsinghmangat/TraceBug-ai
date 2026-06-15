@@ -126,9 +126,9 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
           {/* Quick install CTA */}
           <div className="bg-surface border border-border rounded-xl p-6 mb-12">
             <p className="text-text-muted text-sm mb-3">Try TraceBug in 30 seconds:</p>
-            <div className="bg-[#0B0B0F] rounded-lg p-4 font-mono text-sm">
+            <div className="code-block p-4 rounded-lg font-mono text-sm">
               <div className="text-text-muted">$ npm install tracebug-sdk</div>
-              <div className="text-green-400 mt-2">
+              <div className="text-success mt-2">
                 {`import TraceBug from "tracebug-sdk";`}
                 <br />
                 {`TraceBug.init({ projectId: "my-app" });`}
@@ -144,7 +144,7 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
             <div className="space-y-4">
               {data.advantages.map((adv, i) => (
                 <div key={i} className="flex items-start gap-3 bg-surface border border-border rounded-lg p-4">
-                  <span className="text-green-400 text-lg flex-shrink-0 mt-0.5">&#10003;</span>
+                  <span className="text-success text-lg flex-shrink-0 mt-0.5">&#10003;</span>
                   <span className="text-text-primary">{adv}</span>
                 </div>
               ))}
@@ -169,14 +169,14 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
           )}
 
           {/* Final CTA */}
-          <div className="bg-gradient-to-r from-[#6C5CE7]/10 to-[#00D4FF]/10 border border-[#6C5CE7]/20 rounded-xl p-8 text-center">
+          <div className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-xl p-8 text-center">
             <h3 className="text-2xl font-bold text-text-primary mb-3">Ready to try TraceBug?</h3>
             <p className="text-text-muted mb-6">Free, open source, and takes under 2 minutes to set up.</p>
             <div className="flex gap-4 justify-center">
-              <a href="/docs" className="px-6 py-3 bg-[#6C5CE7] text-white rounded-lg font-semibold hover:bg-[#5B4BD5] transition-colors">
+              <a href="/docs" className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:brightness-110 transition-colors">
                 Get Started
               </a>
-              <a href="https://github.com/prashantsinghmangat/tracebug-ai" className="px-6 py-3 bg-surface border border-border text-text-primary rounded-lg font-semibold hover:border-[#6C5CE7]/50 transition-colors">
+              <a href="https://github.com/prashantsinghmangat/tracebug-ai" className="px-6 py-3 bg-surface border border-border text-text-primary rounded-lg font-semibold hover:border-primary/50 transition-colors">
                 View on GitHub
               </a>
             </div>

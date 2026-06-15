@@ -1,199 +1,204 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ChromeIcon } from "@/components/ui/brand-icons";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, Copy, ChevronRight } from "lucide-react";
+import { Caret } from "@/components/BrandMark";
+import { useState } from "react";
+
+const CHROME_URL =
+  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
 export default function Hero() {
+  const [copied, setCopied] = useState(false);
+  const copyInstall = async () => {
+    try {
+      await navigator.clipboard.writeText("npx tracebug init");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {}
+  };
+
   return (
-    <section className="relative min-h-screen flex items-center pt-16 overflow-hidden noise">
-      {/* Background: dot grid + a single restrained violet glow.
-          Replaces the old two-bloom + grid combo — same depth, less candy. */}
-      <div className="absolute inset-0 grid-bg opacity-40 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] rounded-full bg-primary/[0.06] blur-[140px] pointer-events-none" />
+    <section className="relative overflow-hidden pt-28 pb-16 lg:pt-36 lg:pb-24">
+      {/* Aurora field + grid — the futuristic light behind the fold */}
+      <div className="absolute inset-0 -z-10 grid-bg opacity-60 [mask-image:radial-gradient(ellipse_75%_55%_at_50%_0%,black,transparent)]" />
+      <div className="aurora animate-aurora -z-10 top-[-10%] left-[10%] h-[420px] w-[460px] bg-[#7C5CFF]/25" />
+      <div className="aurora animate-aurora -z-10 top-[5%] right-[5%] h-[380px] w-[420px] bg-[#22D3EE]/20" style={{ animationDelay: "-6s" }} />
+      <div className="aurora animate-aurora -z-10 top-[30%] left-[40%] h-[300px] w-[360px] bg-[#6D4AFF]/15" style={{ animationDelay: "-12s" }} />
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-28">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left: Copy */}
-          <div className="text-center lg:text-left">
-            {/* Badge */}
-            <Badge className="mb-7">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
-              </span>
-              <span>Local-first</span>
-              <span className="text-text-subtle">·</span>
-              <span>v1.4</span>
-            </Badge>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Eyebrow */}
+        <div className="flex justify-center mb-6">
+          <a
+            href="#features"
+            className="group inline-flex items-center gap-2 rounded-full border border-border bg-background/70 backdrop-blur px-3 py-1.5 text-[12.5px] text-text-muted shadow-xs hover:border-border-strong transition-colors"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
+            </span>
+            <span className="font-medium text-text-primary">v1.4</span>
+            <span className="text-border-strong">·</span>
+            <span>Cloud sharing is here</span>
+            <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+          </a>
+        </div>
 
-            {/* Headline */}
-            <h1 className="text-[40px] sm:text-5xl lg:text-[64px] font-semibold text-text-primary leading-[1.05] tracking-[-0.03em] mb-6">
-              Bug reports your dev can{" "}
-              <span className="gradient-text">actually open</span>
-            </h1>
+        {/* Headline */}
+        <h1 className="mx-auto max-w-4xl text-center text-[42px] sm:text-6xl lg:text-[76px] font-semibold leading-[1.04] tracking-[-0.035em] text-text-primary">
+          Bug reports your dev can{" "}
+          <span className="gradient-text-anim">actually open</span>
+          <Caret className="ml-2.5 align-middle w-[0.32em] h-[0.6em]" />
+        </h1>
 
-            {/* Subheadline — one sentence, not three */}
-            <p className="text-text-muted text-base sm:text-lg leading-[1.65] mb-9 max-w-[520px] mx-auto lg:mx-0">
-              One click. One self-contained{" "}
-              <code className="font-mono text-[0.92em] text-text-primary bg-surface border border-border rounded px-1.5 py-0.5">.html</code>{" "}
-              file. Your dev opens it offline.
-            </p>
+        <p className="mx-auto mt-6 max-w-2xl text-center text-text-muted text-lg sm:text-xl leading-relaxed">
+          One click captures the bug — replay, console errors, network calls, and
+          screenshots — into a single{" "}
+          <code className="font-mono text-[0.86em] text-text-primary bg-surface-2 border border-border rounded px-1.5 py-0.5">
+            .html
+          </code>{" "}
+          file. Your dev opens it offline and sees exactly what broke.
+        </p>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-2.5 justify-center lg:justify-start">
-              <Button asChild size="lg">
-                <a href="#install">
-                  Get started — free
-                  <ArrowRight size={14} />
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="secondary">
-                <a
-                  href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <ChromeIcon size={14} />
-                  Chrome Extension
-                </a>
-              </Button>
-            </div>
+        {/* CTAs */}
+        <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Button asChild size="lg" variant="gradient" className="shimmer w-full sm:w-auto">
+            <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
+              <ChromeIcon size={16} />
+              Add to Chrome — free
+              <ArrowRight size={15} />
+            </a>
+          </Button>
+          <button
+            onClick={copyInstall}
+            className="group inline-flex w-full sm:w-auto items-center justify-center gap-3 rounded-xl border border-border-strong bg-background px-5 h-12 font-mono text-[13.5px] text-text-primary shadow-xs hover:border-primary/40 transition-colors"
+          >
+            <ChevronRight size={15} strokeWidth={2.5} className="text-primary -ml-0.5" />
+            <span>npx tracebug init</span>
+            {copied ? (
+              <Check size={15} className="text-success" />
+            ) : (
+              <Copy size={15} className="text-text-subtle group-hover:text-primary transition-colors" />
+            )}
+          </button>
+        </div>
 
-            {/* Trust line — 3 items, all use lucide Check */}
-            <ul className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 justify-center lg:justify-start text-[13px] text-text-muted">
-              <li className="flex items-center gap-1.5">
-                <Check size={13} className="text-success" strokeWidth={2.5} />
-                Stays on your machine
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check size={13} className="text-success" strokeWidth={2.5} />
-                No account
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check size={13} className="text-success" strokeWidth={2.5} />
-                Works offline
-              </li>
-            </ul>
+        {/* Trust line */}
+        <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-text-muted">
+          {["Stays on your machine", "No account needed", "Works offline", "MIT open source"].map((t) => (
+            <li key={t} className="flex items-center gap-1.5">
+              <Check size={13} className="text-success" strokeWidth={3} />
+              {t}
+            </li>
+          ))}
+        </ul>
+
+        {/* Product visual — light browser frame with the auto-generated report */}
+        <div className="relative mx-auto mt-16 max-w-4xl">
+          <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-[#7C5CFF]/15 via-transparent to-[#22D3EE]/15 blur-2xl" />
+
+          {/* Floating accent chips */}
+          <div className="hidden md:block absolute -left-10 top-16 z-20 animate-float">
+            <FloatChip tone="error" label="POST /api/orders" value="500" />
+          </div>
+          <div className="hidden md:block absolute -right-10 top-40 z-20 animate-float" style={{ animationDelay: "-3s" }}>
+            <FloatChip tone="success" label="Report ready" value="2 clicks" />
           </div>
 
-          {/* Right: Terminal-style bug-report preview */}
-          <div className="relative">
-            <div className="absolute -inset-2 bg-primary/5 blur-3xl rounded-3xl pointer-events-none" />
-            <div className="relative rounded-xl overflow-hidden border border-border bg-[#0A0C10] shadow-2xl font-mono text-[12.5px] leading-[1.65]">
-              {/* Terminal title bar */}
-              <div className="flex items-center gap-1.5 px-3 py-2 bg-surface/60 border-b border-border">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]"></span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]"></span>
-                <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]"></span>
-                <span className="ml-3 text-[11px] text-text-muted tracking-tight">
-                  ~/bugs/checkout-500.html
-                </span>
-                <div className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-text-subtle">
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-success"></span>
-                  </span>
-                  <span>offline</span>
+          <div className="relative rounded-2xl border border-border bg-background shadow-card overflow-hidden">
+            {/* Browser chrome */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-surface">
+              <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+              <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
+              <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+              <div className="ml-3 flex-1 max-w-sm">
+                <div className="flex items-center gap-2 rounded-md bg-background border border-border px-2.5 py-1 text-[11px] text-text-subtle font-mono">
+                  <ChevronRight size={12} strokeWidth={2.5} className="text-primary" />
+                  bugs/checkout-500.html
                 </div>
               </div>
-
-              {/* Terminal body */}
-              <div className="px-4 py-4 space-y-3">
-                {/* Command prompt */}
-                <div>
-                  <span className="text-text-subtle">$ </span>
-                  <span className="text-text-muted">tracebug</span>
-                  <span className="text-text-primary"> capture</span>
-                  <span className="text-text-subtle"> --auto-cause</span>
-                </div>
-
-                {/* Root cause (terminal-style) */}
-                <div className="text-[12px]">
-                  <div className="text-error">
-                    <span className="text-text-subtle">[</span>
-                    <span>cause</span>
-                    <span className="text-text-subtle">]</span>
-                    <span className="text-text-muted"> (high)</span>
-                  </div>
-                  <div className="text-text-primary pl-4">
-                    <span className="text-text-subtle">▸ </span>
-                    POST <span className="text-warning">/api/orders</span> →
-                    <span className="text-error font-semibold"> 500</span>
-                    {" "}after click{" "}
-                    <span className="text-accent">&apos;Place Order&apos;</span>
-                  </div>
-                </div>
-
-                <div className="border-t border-border/60" />
-
-                {/* TL;DR */}
-                <div className="text-[12px]">
-                  <div className="text-primary">
-                    <span className="text-text-subtle">[</span>
-                    <span>tldr</span>
-                    <span className="text-text-subtle">]</span>
-                  </div>
-                  <div className="text-text-primary pl-4">
-                    <span className="text-text-subtle">▸ </span>
-                    TypeError on <span className="text-accent">/checkout</span>
-                    {" "}— Cannot read &apos;status&apos; of undefined
-                  </div>
-                </div>
-
-                <div className="border-t border-border/60" />
-
-                {/* Timeline */}
-                <div className="text-[12px]">
-                  <div className="text-text-muted mb-1">
-                    <span className="text-text-subtle">[</span>
-                    <span>timeline</span>
-                    <span className="text-text-subtle">]</span>
-                  </div>
-                  {[
-                    { t: "00:02", icon: "▸", color: "text-text-muted", label: 'click "Cart"' },
-                    { t: "00:04", icon: "→", color: "text-accent", label: "nav → /checkout" },
-                    { t: "00:09", icon: "▸", color: "text-text-muted", label: 'click "Place Order"' },
-                    { t: "00:09", icon: "⨯", color: "text-error", label: "POST /api/orders → 500" },
-                  ].map((step, i) => (
-                    <div key={i} className="flex items-center gap-2 pl-4">
-                      <span className="text-text-subtle text-[10px] tabular-nums">{step.t}</span>
-                      <span className={`${step.color} w-3 flex-shrink-0`}>{step.icon}</span>
-                      <span className="text-text-primary/90">{step.label}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-border/60" />
-
-                {/* Prompt cursor — implies more below */}
-                <div className="text-text-subtle text-[11px]">
-                  <span>$ </span>
-                  <span className="inline-block w-2 h-3.5 bg-text-muted/70 align-middle animate-pulse" />
-                </div>
-              </div>
+              <span className="ml-auto inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider text-success">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                offline
+              </span>
             </div>
 
-            {/* Shortcut hint — mono only, restrained */}
-            <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] font-mono text-text-subtle">
-              <span>Capture anytime</span>
-              <kbd className="px-1.5 py-0.5 bg-surface border border-border rounded text-[10px] text-text-muted">Ctrl</kbd>
-              <span>+</span>
-              <kbd className="px-1.5 py-0.5 bg-surface border border-border rounded text-[10px] text-text-muted">Shift</kbd>
-              <span>+</span>
-              <kbd className="px-1.5 py-0.5 bg-surface border border-border rounded text-[10px] text-text-muted">B</kbd>
+            {/* Report body */}
+            <div className="p-5 sm:p-7 grid sm:grid-cols-5 gap-6">
+              {/* Left: root cause + tldr */}
+              <div className="sm:col-span-3 space-y-4">
+                <div className="rounded-xl border border-error/20 bg-error/[0.04] p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-error">
+                      Possible cause
+                    </span>
+                    <span className="text-[10px] rounded-full bg-error/10 text-error px-2 py-0.5 font-medium">
+                      high confidence
+                    </span>
+                  </div>
+                  <p className="text-[14px] text-text-primary leading-relaxed">
+                    API <span className="font-mono text-error">POST /api/orders</span> failed
+                    with <span className="font-mono text-error font-semibold">500</span> after
+                    clicking <span className="text-primary font-medium">&apos;Place Order&apos;</span>
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border bg-surface p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle mb-1.5">
+                    TL;DR
+                  </div>
+                  <p className="text-[13.5px] text-text-muted leading-relaxed">
+                    TypeError on <span className="font-mono text-text-primary">/checkout</span> — Cannot
+                    read &apos;status&apos; of undefined.
+                  </p>
+                </div>
+              </div>
+
+              {/* Right: timeline */}
+              <div className="sm:col-span-2 rounded-xl border border-border bg-surface p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle mb-3">
+                  Session timeline
+                </div>
+                <ul className="space-y-2.5 font-mono text-[12px]">
+                  {[
+                    { t: "00:02", label: 'click "Cart"', c: "text-text-muted" },
+                    { t: "00:04", label: "nav → /checkout", c: "text-accent" },
+                    { t: "00:09", label: 'click "Place Order"', c: "text-text-muted" },
+                    { t: "00:09", label: "POST /api/orders → 500", c: "text-error" },
+                  ].map((s, i) => (
+                    <li key={i} className="flex items-center gap-2.5">
+                      <span className="text-text-subtle tabular-nums text-[11px]">{s.t}</span>
+                      <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${s.c === "text-error" ? "bg-error" : s.c === "text-accent" ? "bg-accent" : "bg-border-strong"}`} />
+                      <span className={s.c}>{s.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-text-muted animate-bounce">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </div>
     </section>
+  );
+}
+
+function FloatChip({
+  tone,
+  label,
+  value,
+}: {
+  tone: "error" | "success";
+  label: string;
+  value: string;
+}) {
+  const dot = tone === "error" ? "bg-error" : "bg-success";
+  const val = tone === "error" ? "text-error" : "text-success";
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl border border-border bg-background/90 backdrop-blur px-3 py-2 shadow-card">
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      <span className="text-[12px] font-mono text-text-muted">{label}</span>
+      <span className={`text-[12px] font-mono font-semibold ${val}`}>{value}</span>
+    </div>
   );
 }

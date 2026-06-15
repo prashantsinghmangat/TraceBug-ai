@@ -1,118 +1,81 @@
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import {
-  MousePointerClick,
-  Network,
-  AlertOctagon,
-  Camera,
-  Compass,
-  Monitor,
+  MousePointerClick, Network, AlertOctagon, Camera, Compass, Monitor, X, Check,
 } from "lucide-react";
+import SectionHeading from "@/components/SectionHeading";
 
-// Six captures only — the ones that actually differentiate. Form Inputs,
-// Voice Descriptions, User Identity dropped because they overlap or read
-// as filler.
 const CAPTURES = [
-  {
-    icon: MousePointerClick,
-    label: "Clicks",
-    desc: "Tag, id, aria-label, role, data-testid",
-  },
-  {
-    icon: Network,
-    label: "Network",
-    desc: "Method, URL, status, duration · failures flagged",
-  },
-  {
-    icon: AlertOctagon,
-    label: "Console",
-    desc: "Errors, stack traces, source file, line",
-  },
-  {
-    icon: Camera,
-    label: "Screenshots",
-    desc: "html2canvas · annotate · draw markup",
-  },
-  {
-    icon: Compass,
-    label: "Navigation",
-    desc: "Every route, timestamp, time on page",
-  },
-  {
-    icon: Monitor,
-    label: "Environment",
-    desc: "Browser, OS, viewport, device, connection",
-  },
+  { Icon: MousePointerClick, label: "Clicks", desc: "Tag, id, aria-label, role, data-testid" },
+  { Icon: Network, label: "Network", desc: "Method, URL, status, duration — failures flagged" },
+  { Icon: AlertOctagon, label: "Console", desc: "Errors, stack traces, source file, line" },
+  { Icon: Camera, label: "Screenshots", desc: "html2canvas · annotate · draw markup" },
+  { Icon: Compass, label: "Navigation", desc: "Every route, timestamp, time on page" },
+  { Icon: Monitor, label: "Environment", desc: "Browser, OS, viewport, device, connection" },
 ];
 
 export default function Solution() {
   return (
-    <section className="py-28 relative overflow-hidden">
-      <div className="absolute inset-0 grid-bg opacity-20" />
+    <section id="solution" className="py-20 lg:py-28 bg-surface/50 border-y border-border">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionHeading
+          eyebrow="The solution"
+          title={<>Everything your dev needs, <span className="gradient-text">in one file</span></>}
+          subtitle="Logs, network calls, screenshots, user actions — bundled into a single offline .html file. No accounts. No lock-in."
+          className="mb-14"
+        />
 
-      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section header */}
-        <div className="text-center mb-14">
-          <Badge tone="success" className="mb-5">
-            <span>▸</span>
-            <span>The Solution</span>
-          </Badge>
-          <h2 className="text-[32px] sm:text-[44px] font-semibold text-text-primary leading-[1.1] tracking-[-0.025em] mb-4">
-            Everything your dev needs,{" "}
-            <span className="gradient-text">in one file</span>
-          </h2>
-          <p className="text-text-muted text-base sm:text-[17px] leading-[1.6] max-w-[560px] mx-auto">
-            Logs, network calls, screenshots, user actions — bundled into a
-            single offline `.html` file. No accounts. No lock-in.
-          </p>
-        </div>
-
-        {/* Before / After — slim, two terminal-style cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-14">
-          <Card className="p-5 border-error/20 bg-error/[0.03]">
-            <div className="flex items-center gap-2 mb-3 text-[11px] font-mono uppercase tracking-wider text-error">
-              <span>✗</span><span>Before</span>
+        {/* Before / After */}
+        <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto mb-16">
+          <div className="rounded-2xl border border-error/20 bg-error/[0.03] p-6">
+            <div className="flex items-center gap-2 mb-5">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-error/10 text-error">
+                <X size={14} strokeWidth={2.5} />
+              </span>
+              <span className="text-sm font-semibold text-text-primary">Before — a typical bug report</span>
             </div>
-            <ul className="space-y-1.5 text-[13px] text-text-muted leading-relaxed">
-              <li>“The page is broken”</li>
-              <li>“I don&apos;t remember what I clicked”</li>
-              <li>“There was a red error message”</li>
+            <ul className="space-y-3 text-[14px] text-text-muted">
+              {["“The page is broken”", "“I don't remember what I clicked”", "“There was a red error message”"].map((t) => (
+                <li key={t} className="flex gap-2.5">
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-error/50 flex-shrink-0" />
+                  {t}
+                </li>
+              ))}
             </ul>
-            <div className="mt-4 text-[11px] font-mono text-error/80">
+            <p className="mt-6 pt-4 border-t border-error/15 text-[13px] font-medium text-error">
               → 3+ days of back-and-forth
-            </div>
-          </Card>
+            </p>
+          </div>
 
-          <Card className="p-5 border-success/20 bg-success/[0.03]">
-            <div className="flex items-center gap-2 mb-3 text-[11px] font-mono uppercase tracking-wider text-success">
-              <span>✓</span><span>After</span>
+          <div className="rounded-2xl border border-success/25 bg-success/[0.04] p-6 shadow-card">
+            <div className="flex items-center gap-2 mb-5">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-success/10 text-success">
+                <Check size={14} strokeWidth={2.5} />
+              </span>
+              <span className="text-sm font-semibold text-text-primary">After — a TraceBug report</span>
             </div>
-            <ul className="space-y-1.5 text-[13px] text-text-primary leading-relaxed font-mono">
-              <li>Click Edit → Select Inactive → Click Update</li>
-              <li>TypeError: Cannot read 'status' · line 42</li>
-              <li>POST /api/vendor → 500 · Chrome 121 · Win 11</li>
+            <ul className="space-y-3 text-[13px] font-mono text-text-muted">
+              <li className="flex gap-2.5"><span className="text-success">›</span> Click Edit → Select Inactive → Click Update</li>
+              <li className="flex gap-2.5"><span className="text-error">✕</span> TypeError: Cannot read 'status' · line 42</li>
+              <li className="flex gap-2.5"><span className="text-warning">⟳</span> POST /api/vendor → 500 · Chrome 121 · Win 11</li>
             </ul>
-            <div className="mt-4 text-[11px] font-mono text-success/80">
+            <p className="mt-6 pt-4 border-t border-success/20 text-[13px] font-medium text-success">
               → Fixed in minutes
-            </div>
-          </Card>
+            </p>
+          </div>
         </div>
 
-        {/* Capture grid — six tiles, single-line copy */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {CAPTURES.map(({ icon: Icon, label, desc }) => (
-            <Card
+        {/* Capture grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {CAPTURES.map(({ Icon, label, desc }) => (
+            <div
               key={label}
-              className="p-4 hover:border-border-strong transition-colors duration-150"
+              className="group card-rise rounded-2xl border border-border bg-background p-5 hover:border-primary/30 hover:shadow-card-hover"
             >
-              <Icon size={18} className="text-primary mb-3" strokeWidth={1.75} />
-              <div className="text-[13px] font-semibold text-text-primary mb-1 tracking-tight">
-                {label}
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/[0.08] text-primary mb-4 transition-colors group-hover:bg-primary group-hover:text-white">
+                <Icon size={18} />
               </div>
-              <div className="text-[12px] text-text-muted leading-snug">
-                {desc}
-              </div>
-            </Card>
+              <h3 className="text-[15px] font-semibold text-text-primary mb-1">{label}</h3>
+              <p className="text-[13.5px] text-text-muted leading-relaxed">{desc}</p>
+            </div>
           ))}
         </div>
       </div>

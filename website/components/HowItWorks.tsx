@@ -1,43 +1,55 @@
-import { Badge } from "@/components/ui/badge";
+import SectionHeading from "@/components/SectionHeading";
+import { Download, Keyboard, Share2 } from "lucide-react";
 
-// Three steps. Each line is mono / terminal-style. No icons, no glow boxes,
-// no per-step gradients — those were the AI tell.
 const STEPS = [
-  { n: "01", title: "Install", line: "npm install tracebug-sdk", or: "or add Chrome extension" },
-  { n: "02", title: "Capture", line: "Ctrl + Shift + B", or: "or click the toolbar" },
-  { n: "03", title: "Share", line: ".html file or share-link URL", or: "your dev opens it" },
+  {
+    n: "01", Icon: Download, title: "Install",
+    cmd: "npm install tracebug-sdk",
+    alt: "…or add the Chrome extension — no code at all.",
+  },
+  {
+    n: "02", Icon: Keyboard, title: "Capture",
+    cmd: "Ctrl + Shift + B",
+    alt: "…or click the toolbar. The modal opens pre-filled.",
+  },
+  {
+    n: "03", Icon: Share2, title: "Share",
+    cmd: ".html file or share-link URL",
+    alt: "Your dev opens it offline — everything's inside.",
+  },
 ];
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-28 relative overflow-hidden">
-      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-14">
-          <Badge tone="primary" className="mb-5">
-            <span>▸</span><span>How it works</span>
-          </Badge>
-          <h2 className="text-[32px] sm:text-[44px] font-semibold text-text-primary leading-[1.1] tracking-[-0.025em]">
-            Three steps. <span className="gradient-text">No setup.</span>
-          </h2>
-        </div>
+    <section id="how-it-works" className="py-20 lg:py-28">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <SectionHeading
+          eyebrow="How it works"
+          title={<>Three steps. <span className="gradient-text">No setup.</span></>}
+          className="mb-14"
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border rounded-xl overflow-hidden border border-border">
-          {STEPS.map((s) => (
-            <div
-              key={s.n}
-              className="bg-background p-7 sm:p-8 flex flex-col"
-            >
-              <div className="flex items-center gap-2 mb-5 text-[11px] font-mono uppercase tracking-wider text-text-subtle">
-                <span>{s.n}</span>
-                <span className="h-px flex-1 bg-border" />
+        <div className="relative grid md:grid-cols-3 gap-5">
+          {/* connector line */}
+          <div className="hidden md:block absolute top-[42px] left-[16%] right-[16%] h-px bg-gradient-to-r from-transparent via-border-strong to-transparent" />
+
+          {STEPS.map(({ n, Icon, title, cmd, alt }) => (
+            <div key={n} className="relative text-center md:text-left">
+              <div className="flex md:block items-center gap-4">
+                <div className="relative inline-flex h-[84px] w-[84px] mx-auto md:mx-0 items-center justify-center">
+                  <div className="absolute inset-0 rounded-2xl bg-primary/[0.06]" />
+                  <div className="absolute inset-0 rounded-2xl border border-primary/15" />
+                  <Icon size={26} className="relative text-primary" />
+                  <span className="absolute -top-2 -right-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-background border border-border text-[11px] font-mono font-semibold text-text-subtle shadow-xs">
+                    {n}
+                  </span>
+                </div>
               </div>
-              <h3 className="text-[18px] font-semibold text-text-primary tracking-tight mb-3">
-                {s.title}
-              </h3>
-              <code className="block font-mono text-[12.5px] text-accent bg-surface/60 border border-border rounded px-2.5 py-1.5 mb-2">
-                {s.line}
+              <h3 className="mt-5 text-lg font-semibold text-text-primary">{title}</h3>
+              <code className="mt-2 inline-block rounded-lg bg-surface-2 border border-border px-3 py-1.5 font-mono text-[13px] text-text-primary">
+                {cmd}
               </code>
-              <p className="text-[12px] text-text-muted leading-relaxed">{s.or}</p>
+              <p className="mt-3 text-[13.5px] text-text-muted leading-relaxed max-w-xs mx-auto md:mx-0">{alt}</p>
             </div>
           ))}
         </div>

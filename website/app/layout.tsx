@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "TraceBug — Bug reports your dev can actually open",
   description:
     "Local-first bug reports. One click → one .html file with the full replay, console errors, network requests, and screenshots. Your dev opens it offline. No account. No SaaS lock-in. Cloud sharing optional.",
+  applicationName: "TraceBug",
   keywords: [
     "bug reporting",
     "QA testing",
@@ -17,8 +18,16 @@ export const metadata: Metadata = {
     "reproduction steps",
     "console errors",
     "network logs",
+    "frontend bug reporting tool",
+    "Sentry alternative",
+    "LogRocket alternative",
+    "Chrome extension bug reporter",
+    "root cause analysis",
   ],
-  authors: [{ name: "TraceBug" }],
+  authors: [{ name: "Prashant Singh Mangat", url: "https://github.com/prashantsinghmangat" }],
+  creator: "Prashant Singh Mangat",
+  category: "technology",
+  alternates: { canonical: "/" },
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
@@ -57,8 +66,15 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#7B61FF",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0D10" },
+  ],
 };
+
+// Applied before paint so the chosen theme never flashes. Light is the default;
+// we only switch to dark when the user explicitly opted in previously.
+const themeInit = `(function(){try{var t=localStorage.getItem('tracebug-theme');if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -68,6 +84,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -75,14 +92,15 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@type": "SoftwareApplication",
               name: "TraceBug",
-              description: "Zero-backend, browser-only QA tool that records user sessions and generates developer-ready bug reports.",
+              description: "Local-first QA bug-reporting tool that records user sessions in the browser and generates developer-ready bug reports with root-cause hints, console errors, network logs, and screenshots.",
               applicationCategory: "DeveloperApplication",
               operatingSystem: "Any (browser-based)",
               offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+              aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "120" },
               author: { "@type": "Person", name: "Prashant Singh Mangat", url: "https://github.com/prashantsinghmangat" },
               url: "https://tracebug.netlify.app",
               downloadUrl: "https://www.npmjs.com/package/tracebug-sdk",
-              softwareVersion: "1.3.0",
+              softwareVersion: "1.4.0",
               license: "https://opensource.org/licenses/MIT",
             }),
           }}

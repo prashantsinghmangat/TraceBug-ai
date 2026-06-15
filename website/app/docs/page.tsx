@@ -84,15 +84,15 @@ export default function DocsPage() {
                 </h3>
                 <ul className="space-y-2 text-text-muted text-sm">
                   <li className="flex items-center gap-2">
-                    <span className="text-green-400">✓</span>
+                    <span className="text-success">✓</span>
                     Any frontend framework (React, Vue, Angular, Next.js, Svelte, plain HTML)
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="text-green-400">✓</span>
+                    <span className="text-success">✓</span>
                     Modern browser (Chrome, Edge, Brave, Opera recommended)
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="text-green-400">✓</span>
+                    <span className="text-success">✓</span>
                     Node.js 18+ for the npm package
                   </li>
                 </ul>
@@ -123,7 +123,7 @@ export default function DocsPage() {
                   </div>
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
-                    <span className="text-green-400">npm</span>
+                    <span className="text-success">npm</span>
                     <span className="text-text-primary"> install tracebug-sdk</span>
                   </pre>
                 </div>
@@ -141,27 +141,27 @@ export default function DocsPage() {
                     <span className="ml-2">app/layout.tsx (Next.js) or index.tsx (React)</span>
                   </div>
                   <pre className="text-text-primary font-mono text-sm leading-relaxed">
-                    <span className="text-purple-400">import</span>
+                    <span className="text-primary">import</span>
                     <span className="text-text-primary"> TraceBug </span>
-                    <span className="text-purple-400">from</span>
-                    <span className="text-yellow-400"> &quot;tracebug-sdk&quot;</span>
+                    <span className="text-primary">from</span>
+                    <span className="text-warning"> &quot;tracebug-sdk&quot;</span>
                     <span className="text-text-primary">;</span>
                     {"\n\n"}
                     <span className="text-text-muted">{"// Initialize once at app startup"}</span>
                     {"\n"}
-                    <span className="text-cyan-400">TraceBug</span>
+                    <span className="text-accent">TraceBug</span>
                     <span className="text-text-primary">.</span>
-                    <span className="text-blue-400">init</span>
+                    <span className="text-accent">init</span>
                     <span className="text-text-primary">{"({"}</span>
                     {"\n"}
                     <span className="text-text-primary">{"  "}</span>
                     <span className="text-text-primary">projectId: </span>
-                    <span className="text-yellow-400">&quot;my-app&quot;</span>
+                    <span className="text-warning">&quot;my-app&quot;</span>
                     <span className="text-text-muted">,</span>
                     {"\n"}
                     <span className="text-text-primary">{"  "}</span>
                     <span className="text-text-primary">enabled: </span>
-                    <span className="text-yellow-400">&quot;auto&quot;</span>
+                    <span className="text-warning">&quot;auto&quot;</span>
                     <span className="text-text-muted">,  </span>
                     <span className="text-text-muted">{"// auto | development | all | off"}</span>
                     {"\n"}
@@ -206,8 +206,8 @@ export default function DocsPage() {
                           <td className="py-3 pr-6">
                             <code className="text-primary">{row.opt}</code>
                           </td>
-                          <td className="py-3 pr-6 text-yellow-400 font-mono text-xs">{row.type}</td>
-                          <td className="py-3 pr-6 font-mono text-xs text-cyan-400">{row.def}</td>
+                          <td className="py-3 pr-6 text-warning font-mono text-xs">{row.type}</td>
+                          <td className="py-3 pr-6 font-mono text-xs text-accent">{row.def}</td>
                           <td className="py-3">{row.desc}</td>
                         </tr>
                       ))}
@@ -221,7 +221,7 @@ export default function DocsPage() {
           {/* Configuration */}
           <section id="configuration" className="mb-16">
             <h2 className="text-2xl font-bold text-text-primary mb-6">Configuration</h2>
-            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 overflow-x-auto">
+            <div className="code-block p-5 rounded-xl overflow-x-auto">
               <pre className="text-sm font-mono text-text-primary leading-relaxed">
 {`TraceBug.init({
   projectId: "my-app",        // Required
@@ -246,7 +246,7 @@ export default function DocsPage() {
             <p className="text-text-muted mb-4">
               Identify users so sessions are attributed. Persisted in localStorage across page loads.
             </p>
-            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 overflow-x-auto">
+            <div className="code-block p-5 rounded-xl overflow-x-auto">
               <pre className="text-sm font-mono text-text-primary leading-relaxed">
 {`// Identify the current user
 TraceBug.setUser({ id: "user_123", email: "dev@co.com", name: "Jane" });
@@ -269,7 +269,7 @@ TraceBug.clearUser();`}
               <p><strong className="text-text-primary">Clickable badges:</strong> Numbered badges on annotated elements are clickable — opens a popover showing intent, severity, and comment.</p>
               <p><strong className="text-text-primary">Chrome Extension:</strong> Uses <code className="text-primary bg-background px-1 rounded text-xs">chrome.tabs.captureVisibleTab</code> for reliable cross-origin screenshots.</p>
             </div>
-            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 mt-4 overflow-x-auto">
+            <div className="code-block p-5 rounded-xl mt-4 overflow-x-auto">
               <pre className="text-sm font-mono text-text-primary leading-relaxed">
 {`// Clean page screenshot (auto-downloads)
 await TraceBug.takeScreenshot();
@@ -387,15 +387,15 @@ await TraceBug.takeScreenshot({ includeAnnotations: true });`}
               </div>
               <pre className="text-sm font-mono leading-relaxed text-text-muted overflow-x-auto">
                 <span className="text-text-primary">## 🐛 Vendor Update Fails — TypeError</span>{"\n\n"}
-                <span className="text-yellow-400">**Environment:**</span> Chrome 121, Windows 11, 1920x1080{"\n"}
-                <span className="text-yellow-400">**Reported:**</span> 2026-03-12 14:23:01{"\n\n"}
+                <span className="text-warning">**Environment:**</span> Chrome 121, Windows 11, 1920x1080{"\n"}
+                <span className="text-warning">**Reported:**</span> 2026-03-12 14:23:01{"\n\n"}
                 <span className="text-text-primary">## Steps to Reproduce</span>{"\n"}
                 1. Navigate to /vendor{"\n"}
                 2. Click {'"Edit"'} button (role=button){"\n"}
                 3. Select {'"Inactive"'} from Status dropdown{"\n"}
                 4. Click {'"Update"'} button{"\n\n"}
                 <span className="text-text-primary">## Console Errors</span>{"\n"}
-                <span className="text-red-400">```{"\n"}TypeError: Cannot read properties of undefined (reading 'status'){"\n"}  at updateVendor (vendor/page.tsx:42:18){"\n"}```</span>
+                <span className="text-error">```{"\n"}TypeError: Cannot read properties of undefined (reading 'status'){"\n"}  at updateVendor (vendor/page.tsx:42:18){"\n"}```</span>
               </pre>
             </div>
             <div className="bg-surface border border-border rounded-xl p-4">
@@ -416,7 +416,7 @@ await TraceBug.takeScreenshot({ includeAnnotations: true });`}
             <p className="text-text-muted mb-4">
               Extend TraceBug without forking. Plugins can filter events, enrich reports, and transform exports.
             </p>
-            <div className="bg-[#0B0B0F] rounded-xl border border-border p-5 overflow-x-auto">
+            <div className="code-block p-5 rounded-xl overflow-x-auto">
               <pre className="text-sm font-mono text-text-primary leading-relaxed">
 {`// Plugin: filter or transform events
 TraceBug.use({
