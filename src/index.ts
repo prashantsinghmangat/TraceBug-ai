@@ -26,6 +26,7 @@ import {
   DrawRegion,
   UIAnnotationReport,
   AnnotationIntent,
+  BugPriority,
 } from "./types";
 import {
   getActiveSessionId,
@@ -37,6 +38,7 @@ import {
   getAllSessions,
   addAnnotation,
   saveEnvironment,
+  setSessionPriority,
   flushPendingEvents,
 } from "./storage";
 import { generateReproSteps } from "./repro-generator";
@@ -89,6 +91,8 @@ import {
   restoreLastRecordingFromOffscreen as _restoreLastRecording,
   wireAutoStopListener as _wireAutoStop,
   setAutoStopHandler as _setAutoStopHandler,
+  wireStartedListener as _wireStarted,
+  setStartedHandler as _setStartedHandler,
   type VideoRecording,
 } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
@@ -408,6 +412,11 @@ class TraceBugSDK {
       // fresh.
       _wireAutoStop();
       _setAutoStopHandler((recording) => this._handleAutoStop(recording));
+      // Mount the HUD the instant the offscreen doc signals capture began —
+      // independent of the start RPC's return value (which can spuriously
+      // report "cancelled" while recording is actually live).
+      _wireStarted();
+      _setStartedHandler(() => this._handleRecordingStarted());
       if (this.config.enableDashboard) {
         _restoreVideoState().then((wasActive) => {
           if (wasActive) {
@@ -627,12 +636,14 @@ class TraceBugSDK {
 
   /** Capture a screenshot of the current page */
   async takeScreenshot(): Promise<ScreenshotData | null> {
-    if (!this.sessionId) return null;
     if (!this._checkScreenshotLimit()) return null;
 
-    // Get the last event for context-aware naming
-    const sessions = getAllSessions();
-    const session = sessions.find(s => s.sessionId === this.sessionId);
+    // Screenshots live in a global store and must work even when no recording
+    // session is active yet (e.g. the extension "Screenshot only" flow, where
+    // this.sessionId was set at init before any session existed). Resolve the
+    // session only for context-aware filenames — never block capture on it.
+    const sid = this.sessionId || getActiveSessionId();
+    const session = sid ? getAllSessions().find(s => s.sessionId === sid) : null;
     const lastEvent = session?.events[session.events.length - 1] || null;
 
     const screenshot = await captureScreenshot(lastEvent);
@@ -677,6 +688,17 @@ class TraceBugSDK {
     }
     const { showQuickBugCapture } = await import("./ui/quick-bug");
     return showQuickBugCapture(root);
+  }
+
+  /**
+   * Open the cloud dashboard in a new tab — where a signed-in user sees all
+   * the bug tickets shared from their account. If they aren't signed in, the
+   * dashboard prompts for login. Uses the configured cloudEndpoint.
+   */
+  openCloudDashboard(): void {
+    if (typeof window === "undefined") return;
+    const base = (this.config?.cloudEndpoint || "https://tracebug.netlify.app").replace(/\/+$/, "");
+    window.open(`${base}/dashboard`, "_blank", "noopener");
   }
 
   // ── Annotations ─────────────────────────────────────────────────────
@@ -924,7 +946,19 @@ class TraceBugSDK {
     const session = sessions.find(s => s.sessionId === this.sessionId);
     if (!session) return null;
 
-    return this._redactForFreePlan(buildReport(session));
+    const report = this._redactForFreePlan(buildReport(session));
+    // Honor opt-out: drop the Web Storage snapshot when disabled.
+    if (this.config?.captureStorage === false) delete report.storage;
+    return report;
+  }
+
+  /**
+   * Set the tester-assigned priority for the current session's report.
+   * Persists across reloads. No-op if there's no active session.
+   */
+  setPriority(priority: BugPriority): void {
+    if (!this.sessionId) return;
+    setSessionPriority(this.sessionId, priority);
   }
 
   /** Generate GitHub issue markdown (free + premium). */
@@ -1359,6 +1393,19 @@ class TraceBugSDK {
    * offscreen recording is still active. Safe to call repeatedly — the HUD
    * itself guards against double mounts.
    */
+  /**
+   * Fired when the offscreen document broadcasts that capture actually began.
+   * Mounts the recording HUD + attaches console collectors so the user always
+   * sees the controls (Stop / Pause / Pen / Blur …) while recording — even if
+   * the start RPC reported a (false) cancellation. Idempotent: the HUD guards
+   * against double mounts.
+   */
+  private _handleRecordingStarted(): void {
+    if (!this.config?.enableDashboard) return;
+    this._remountRecordingHud();
+    this._attachConsoleCollectors();
+  }
+
   private _remountRecordingHud(): void {
     const root = document.getElementById("tracebug-root");
     if (!root) return;

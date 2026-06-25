@@ -14,7 +14,6 @@ import { captureRegionScreenshot } from "./region-screenshot";
 import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
-import { replayOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
@@ -99,8 +98,8 @@ export function mountCompactToolbar(
   // Apply position-dependent styles
   _applyToolbarPosition(toolbar, position);
 
-  // Drag handle support
-  _initDrag(toolbar);
+  // Drag handle support (returns a teardown for its document-level listeners)
+  const dragCleanup = _initDrag(toolbar);
 
   // (The hexagon panel-toggle + divider were removed — the floating
   // "TraceBug AI" panel duplicated the bug ticket modal and the cloud
@@ -129,6 +128,17 @@ export function mountCompactToolbar(
     }, root);
     return false;
   };
+
+  // Drag handle — drag already works from any non-button area, but the grip
+  // makes it discoverable so users know the bar can be moved anywhere.
+  const dragHandle = document.createElement("div");
+  dragHandle.dataset.tracebug = "toolbar-handle";
+  dragHandle.title = "Drag to move TraceBug";
+  dragHandle.setAttribute("aria-label", "Drag to move TraceBug");
+  dragHandle.style.cssText =
+    "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;color:rgba(255,255,255,0.45);";
+  dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
+  toolbar.appendChild(dragHandle);
 
   // Screenshot button — adds to the active ticket; downloads happen on export.
   // Auto-opens the bug ticket modal after capture so the user sees where the
@@ -177,38 +187,39 @@ export function mountCompactToolbar(
   // Divider between capture group (screenshots) and recording group.
   toolbar.appendChild(_divider());
 
-  // Record Tab — captures the current tab. Prefers a silent capture path
-  // (chrome.tabCapture in the extension build) and falls back to a
-  // preferCurrentTab getDisplayMedia hint elsewhere. Either way the user
-  // doesn't have to wade through the full screen-picker.
-  const tabRecordBtn = _createToolbarBtn(
-    "Record current tab",
-    _tabRecordIconSvg(false),
-    () => _toggleTabRecording(root, tabRecordBtn, showToast),
-    "tracebug-toolbar-tab-record-btn"
+  // Record — one button. A small preflight asks "this tab vs screen / window"
+  // and whether to include the mic; the native picker then confirms the
+  // surface. (Replaced the old separate tab/desktop buttons — two entry points
+  // for the same action just confused people, and the picker already chooses.)
+  const recordBtn = _createToolbarBtn(
+    "Record (video + session)",
+    _recordIconSvg(false),
+    () => _toggleRecording(root, recordBtn, showToast),
+    "tracebug-toolbar-record-btn"
   );
   if (!isVideoSupported()) {
-    tabRecordBtn.style.opacity = "0.4";
-    tabRecordBtn.style.cursor = "not-allowed";
-    tabRecordBtn.title = "Screen recording not supported in this browser";
+    recordBtn.style.opacity = "0.4";
+    recordBtn.style.cursor = "not-allowed";
+    recordBtn.title = "Screen recording not supported in this browser";
   }
-  toolbar.appendChild(tabRecordBtn);
+  toolbar.appendChild(recordBtn);
 
-  // Record Desktop — opens a mic-toggle preflight popover, then asks the user
-  // to pick a screen/window in the native share-picker. Audio is recorded
-  // alongside the video when the mic is enabled.
-  const desktopRecordBtn = _createToolbarBtn(
-    "Record desktop / window (asks what to share)",
-    _desktopRecordIconSvg(false),
-    () => _toggleDesktopRecording(root, desktopRecordBtn, showToast),
-    "tracebug-toolbar-desktop-record-btn"
-  );
-  if (!isVideoSupported()) {
-    desktopRecordBtn.style.opacity = "0.4";
-    desktopRecordBtn.style.cursor = "not-allowed";
-    desktopRecordBtn.title = "Screen recording not supported in this browser";
-  }
-  toolbar.appendChild(desktopRecordBtn);
+  // Close — turn TraceBug off on this page. Re-open from the extension popup.
+  toolbar.appendChild(_divider());
+  toolbar.appendChild(_createToolbarBtn(
+    "Turn off TraceBug on this page",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+    () => {
+      try {
+        const tb = (window as unknown as { TraceBug?: { destroy?: () => void } }).TraceBug;
+        if (tb?.destroy) tb.destroy();
+        else { _toolbar?.remove(); _panelEl?.remove(); }
+      } catch {
+        _toolbar?.remove();
+      }
+    },
+    "tracebug-toolbar-close-btn"
+  ));
 
   // Annotation list, Settings card, and Help button were cut from the v1
   // toolbar — they're configurable via init() and accessible via plugins.
@@ -253,6 +264,7 @@ export function mountCompactToolbar(
 
   return () => {
     toolbar.remove();
+    dragCleanup();
     document.removeEventListener("keydown", keyHandler);
     window.removeEventListener("resize", resizeHandler);
     deactivateElementAnnotateMode();
@@ -306,22 +318,14 @@ function _divider(): HTMLElement {
   return d;
 }
 
-// ── Record Tab / Record Desktop icons + toggles ─────────────────────────
+// ── Record icon + toggle ────────────────────────────────────────────────
 
-function _tabRecordIconSvg(active: boolean): string {
+// Unified record icon — a video camera (idle) / red stop square (active).
+function _recordIconSvg(active: boolean): string {
   if (active) {
     return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
   }
-  // Single-tab monitor outline — clearly "this tab" not "the desktop".
-  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/><circle cx="6" cy="6" r="0.6" fill="currentColor"/><circle cx="8" cy="6" r="0.6" fill="currentColor"/></svg>`;
-}
-
-function _desktopRecordIconSvg(active: boolean): string {
-  if (active) {
-    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
-  }
-  // Multi-window glyph — two stacked rectangles — reads as "pick a screen".
-  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>`;
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 9.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-2.5l5 3.5V6z"/></svg>`;
 }
 
 /** Shared stop-and-finalize path used by both record buttons. */
@@ -349,7 +353,7 @@ async function _finishRecording(
   }
 }
 
-async function _toggleTabRecording(
+async function _toggleRecording(
   root: HTMLElement,
   btn: HTMLElement,
   showToast: (msg: string, root: HTMLElement) => void
@@ -360,63 +364,18 @@ async function _toggleTabRecording(
   }
 
   if (isVideoRecording()) {
-    return _finishRecording(root, btn, _tabRecordIconSvg, showToast);
+    return _finishRecording(root, btn, _recordIconSvg, showToast);
   }
 
-  // Tab recording uses the silent path on the extension build (chrome.tabCapture
-  // routed through the offscreen doc) and falls back to a preferCurrentTab
-  // getDisplayMedia hint on the npm SDK build. Either way the user isn't
-  // hunting for "the current tab" in a long picker list.
-  const ok = await startVideoRecording({
-    mode: "rolling",
-    surfaceMode: "tab",
-    onStatus: (status, message) => {
-      if (status === "error" && message) showToast(`Recording error: ${message}`, root);
-      else if (status === "warning" && message) showToast(message, root);
-    },
-  });
-  if (!ok) {
-    showToast("Recording cancelled", root);
-    return;
-  }
-
-  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
-
-  btn.innerHTML = _tabRecordIconSvg(true);
-  btn.classList.add("tb-active");
-  btn.style.color = "var(--tb-error, #ef4444)";
-  showRecordingHUD(root, {
-    onStop: () => { _toggleTabRecording(root, btn, showToast).catch(() => {}); },
-  });
-  showToast("Recording this tab — hit Stop to file a ticket", root);
-}
-
-async function _toggleDesktopRecording(
-  root: HTMLElement,
-  btn: HTMLElement,
-  showToast: (msg: string, root: HTMLElement) => void
-): Promise<void> {
-  if (!isVideoSupported()) {
-    showToast("Screen recording not supported in this browser", root);
-    return;
-  }
-
-  if (isVideoRecording()) {
-    return _finishRecording(root, btn, _desktopRecordIconSvg, showToast);
-  }
-
-  // Desktop recording: prompt for mic preference first, then trigger the
-  // native screen-share picker. The popover resolves to false if the user
-  // bails (Esc / click-out) so we don't surprise them with the system picker.
-  const choice = await _showDesktopPreflight(root, btn);
-  if (!choice) {
-    showToast("Recording cancelled", root);
-    return;
-  }
+  // One preflight for both modes: pick "this tab" vs "screen / window" and
+  // whether to record the mic. The native picker then confirms the surface.
+  // (Replaces the old two separate record buttons.)
+  const choice = await _showRecordPreflight(root, btn);
+  if (!choice) return; // dismissed — don't surface a scary "cancelled" toast
 
   const ok = await startVideoRecording({
     mode: "rolling",
-    surfaceMode: "desktop",
+    surfaceMode: choice.surface,
     withMicrophone: choice.withMicrophone,
     onStatus: (status, message) => {
       if (status === "error" && message) showToast(`Recording error: ${message}`, root);
@@ -424,32 +383,38 @@ async function _toggleDesktopRecording(
     },
   });
   if (!ok) {
+    // The start RPC can report "cancelled" even when the offscreen document
+    // actually began capturing (a Chrome AbortError quirk). Give the
+    // tb:rec:started broadcast a beat to flip our state before declaring
+    // failure — if it really started, the SDK's started-handler already
+    // mounted the HUD, so bail quietly instead of showing a false toast.
+    await new Promise((r) => setTimeout(r, 400));
+    if (isVideoRecording()) return;
     showToast("Recording cancelled", root);
     return;
   }
 
   try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
 
-  btn.innerHTML = _desktopRecordIconSvg(true);
+  btn.innerHTML = _recordIconSvg(true);
   btn.classList.add("tb-active");
   btn.style.color = "var(--tb-error, #ef4444)";
   showRecordingHUD(root, {
-    onStop: () => { _toggleDesktopRecording(root, btn, showToast).catch(() => {}); },
+    onStop: () => { _toggleRecording(root, btn, showToast).catch(() => {}); },
   });
-  showToast("Recording started — hit Stop to file a ticket", root);
+  showToast(choice.surface === "tab" ? "Recording this tab — hit Stop to file a ticket" : "Recording — hit Stop to file a ticket", root);
 }
 
 /**
- * Compact popover anchored under the Record Desktop button. Lets the user
- * decide whether to include the mic in the recording before the OS-level
- * share-picker takes over. Resolves to the user's choice or null if cancelled.
+ * Compact popover anchored under the Record button. Picks the capture surface
+ * ("this tab" vs "screen / window") and whether to record the mic, before the
+ * native share-picker takes over. Resolves to the choice, or null if dismissed.
  */
-function _showDesktopPreflight(
+function _showRecordPreflight(
   root: HTMLElement,
   anchor: HTMLElement,
-): Promise<{ withMicrophone: boolean } | null> {
+): Promise<{ surface: "tab" | "desktop"; withMicrophone: boolean } | null> {
   return new Promise((resolve) => {
-    // Tear down any prior preflight (defensive — shouldn't happen but cheap).
     const prior = root.querySelector('[data-tracebug="record-preflight"]');
     if (prior) prior.remove();
 
@@ -460,12 +425,12 @@ function _showDesktopPreflight(
     pop.style.cssText = `
       position:fixed;
       top:${Math.round(rect.bottom + 8)}px;
-      left:${Math.round(Math.min(rect.left, window.innerWidth - 260))}px;
-      width:240px;
+      left:${Math.round(Math.min(rect.left, window.innerWidth - 290))}px;
+      width:262px;
       background:var(--tb-bg-secondary, #1a1a2e);
       border:1px solid var(--tb-border, #2a2a3e);
       border-radius:12px;
-      padding:12px 12px 10px;
+      padding:14px;
       box-shadow:0 12px 40px rgba(0,0,0,0.5);
       z-index:2147483647;
       font-family:var(--tb-font-family, system-ui, -apple-system, sans-serif);
@@ -479,29 +444,54 @@ function _showDesktopPreflight(
       st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
       document.head.appendChild(st);
     }
+    // Use a theme-agnostic translucent fill (not --tb-bg-tertiary, whose dark
+    // fallback rendered as an unreadable black block on light pages).
+    const segBase = "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:9px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.12s;border:1px solid var(--tb-border, #2a2a3e);background:rgba(127,127,140,0.14);color:var(--tb-text-secondary, #9aa0aa)";
     pop.innerHTML = `
-      <div style="font-weight:600;margin-bottom:8px;font-size:12px">Record desktop</div>
-      <label style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;background:var(--tb-bg-tertiary, #0f0f1e);user-select:none">
+      <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
+      <div style="display:flex;gap:7px;margin-bottom:10px">
+        <button data-tb-pre="surface-tab" style="${segBase}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg>
+          This tab
+        </button>
+        <button data-tb-pre="surface-desktop" style="${segBase}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>
+          Screen / window
+        </button>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;background:rgba(127,127,140,0.14);user-select:none;margin-bottom:10px">
         <input type="checkbox" data-tb-pre="mic" style="margin:0;cursor:pointer" />
         <span style="display:flex;align-items:center;gap:6px;flex:1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          <span>Record microphone</span>
+          <span>Include microphone</span>
         </span>
       </label>
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
-        <button data-tb-pre="start" style="flex:1.4;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">Start recording</button>
+      <div style="display:flex;gap:6px">
+        <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
+        <button data-tb-pre="start" style="flex:1.6;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">● Start recording</button>
       </div>
     `;
 
     root.appendChild(pop);
 
+    let surface: "tab" | "desktop" = "tab";
+    const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]') as HTMLButtonElement;
+    const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]') as HTMLButtonElement;
     const micEl = pop.querySelector('[data-tb-pre="mic"]') as HTMLInputElement;
     const cancelEl = pop.querySelector('[data-tb-pre="cancel"]') as HTMLButtonElement;
     const startEl = pop.querySelector('[data-tb-pre="start"]') as HTMLButtonElement;
 
+    const paintSurface = () => {
+      const on = ";border-color:var(--tb-accent, #7C5CFF);background:var(--tb-accent-subtle, rgba(124,92,255,0.15));color:var(--tb-text-primary, #fff)";
+      tabBtn.style.cssText = segBase + (surface === "tab" ? on : "");
+      deskBtn.style.cssText = segBase + (surface === "desktop" ? on : "");
+    };
+    paintSurface();
+    tabBtn.addEventListener("click", () => { surface = "tab"; paintSurface(); });
+    deskBtn.addEventListener("click", () => { surface = "desktop"; paintSurface(); });
+
     let settled = false;
-    const finish = (value: { withMicrophone: boolean } | null) => {
+    const finish = (value: { surface: "tab" | "desktop"; withMicrophone: boolean } | null) => {
       if (settled) return;
       settled = true;
       pop.remove();
@@ -511,14 +501,14 @@ function _showDesktopPreflight(
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); finish(null); }
-      if (e.key === "Enter") { e.preventDefault(); finish({ withMicrophone: micEl.checked }); }
+      if (e.key === "Enter") { e.preventDefault(); finish({ surface, withMicrophone: micEl.checked }); }
     };
     const onOutside = (e: MouseEvent) => {
       if (!pop.contains(e.target as Node)) finish(null);
     };
 
     cancelEl.addEventListener("click", () => finish(null));
-    startEl.addEventListener("click", () => finish({ withMicrophone: micEl.checked }));
+    startEl.addEventListener("click", () => finish({ surface, withMicrophone: micEl.checked }));
     document.addEventListener("keydown", onKey, true);
     // Slight delay so the toolbar click that opened the popover doesn't
     // immediately register as an outside click.
@@ -613,14 +603,14 @@ function _updateActiveStates(toolbar: HTMLElement): void {
   if (annotateBtn) {
     const active = isElementAnnotateActive();
     annotateBtn.classList.toggle("tb-active", active);
-    annotateBtn.style.background = active ? "var(--tb-accent-subtle, #7B61FF33)" : "transparent";
-    annotateBtn.style.color = active ? "var(--tb-accent, #7B61FF)" : "var(--tb-text-muted, #888)";
+    annotateBtn.style.background = active ? "var(--tb-accent-subtle, #7C5CFF33)" : "transparent";
+    annotateBtn.style.color = active ? "var(--tb-accent, #7C5CFF)" : "var(--tb-text-muted, #888)";
   }
   if (drawBtn) {
     const active = isDrawModeActive();
     drawBtn.classList.toggle("tb-active", active);
-    drawBtn.style.background = active ? "var(--tb-accent-subtle, #7B61FF33)" : "transparent";
-    drawBtn.style.color = active ? "var(--tb-accent, #7B61FF)" : "var(--tb-text-muted, #888)";
+    drawBtn.style.background = active ? "var(--tb-accent-subtle, #7C5CFF33)" : "transparent";
+    drawBtn.style.color = active ? "var(--tb-accent, #7C5CFF)" : "var(--tb-text-muted, #888)";
   }
 }
 
@@ -693,7 +683,7 @@ function _toggleSettingsCard(
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Plan</span>
-        <span id="tracebug-settings-plan-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;${isPremium() ? "background:var(--tb-accent, #7B61FF);color:#fff" : "background:var(--tb-border, #2a2a3e);color:var(--tb-text-secondary, #aaa)"}">${isPremium() ? "✨ Premium" : "Free Plan"}</span>
+        <span id="tracebug-settings-plan-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--tb-accent, #7C5CFF);color:#fff">✨ All features free</span>
       </div>
       <div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:10px;display:flex;gap:6px">
         <button id="tracebug-settings-clear-ann" style="flex:1;background:var(--tb-warning-bg, #f9731622);color:var(--tb-warning, #f97316);border:1px solid var(--tb-warning, #f97316)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear Annotations</button>
@@ -713,14 +703,12 @@ function _toggleSettingsCard(
   const planBadge = card.querySelector("#tracebug-settings-plan-badge") as HTMLElement | null;
   if (planBadge) {
     planBadge.style.cursor = "pointer";
-    planBadge.title = "View plan / upgrade";
+    planBadge.title = "Plan info";
     planBadge.addEventListener("click", () => {
       card.remove();
       showUpgradeModal({
-        feature: isPremium() ? "Premium plan" : "Premium plan",
-        message: isPremium()
-          ? "You're on Premium. Use the dev toggle below to switch back to Free for testing."
-          : "Unlock unlimited screenshots, PDF export, Jira tickets, advanced metadata, and custom branding.",
+        feature: "Plans coming soon",
+        message: "Every feature is free right now — unlimited screenshots, video, PDF/HTML export, Jira/GitHub/Linear, and more. Paid plans (cloud sharing, team workspaces) are coming soon. Thanks for being early!",
       }, root);
     });
   }
@@ -800,7 +788,7 @@ function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition):
   }
 }
 
-function _initDrag(toolbar: HTMLElement): void {
+function _initDrag(toolbar: HTMLElement): () => void {
   let isDragging = false;
   let startX = 0;
   let startY = 0;
@@ -854,12 +842,8 @@ function _initDrag(toolbar: HTMLElement): void {
     }
   };
 
-  toolbar.addEventListener("mousedown", onMouseDown);
-  document.addEventListener("mousemove", onMouseMove);
-  document.addEventListener("mouseup", onMouseUp);
-
-  // Touch support for mobile drag
-  toolbar.addEventListener("touchstart", (e) => {
+  // Touch support for mobile drag (named so we can detach on unmount)
+  const onTouchStart = (e: TouchEvent) => {
     if ((e.target as HTMLElement).tagName === "BUTTON" || (e.target as HTMLElement).closest("button")) return;
     const touch = e.touches[0];
     isDragging = true;
@@ -870,9 +854,8 @@ function _initDrag(toolbar: HTMLElement): void {
     startLeft = rect.left;
     startTop = rect.top;
     toolbar.style.transition = "none";
-  }, { passive: true });
-
-  document.addEventListener("touchmove", (e) => {
+  };
+  const onTouchMove = (e: TouchEvent) => {
     if (!isDragging) return;
     const touch = e.touches[0];
     const dx = touch.clientX - startX;
@@ -887,9 +870,8 @@ function _initDrag(toolbar: HTMLElement): void {
     toolbar.style.right = "auto";
     toolbar.style.bottom = "auto";
     toolbar.style.transform = "none";
-  }, { passive: true });
-
-  document.addEventListener("touchend", () => {
+  };
+  const onTouchEnd = () => {
     if (!isDragging) return;
     isDragging = false;
     if (hasMoved) {
@@ -900,7 +882,24 @@ function _initDrag(toolbar: HTMLElement): void {
         }));
       } catch {}
     }
-  });
+  };
+
+  toolbar.addEventListener("mousedown", onMouseDown);
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+  toolbar.addEventListener("touchstart", onTouchStart, { passive: true });
+  document.addEventListener("touchmove", onTouchMove, { passive: true });
+  document.addEventListener("touchend", onTouchEnd);
+
+  // Teardown: the toolbar element's own listeners die with it, but the
+  // document-level ones must be removed explicitly or they leak (+ keep the
+  // toolbar closure alive) on every re-mount.
+  return () => {
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+    document.removeEventListener("touchmove", onTouchMove);
+    document.removeEventListener("touchend", onTouchEnd);
+  };
 }
 
 // ── Mobile FAB ──────────────────────────────────────────────────────────
@@ -958,5 +957,5 @@ function _restoreToolbar(toolbar: HTMLElement): void {
 }
 
 function _logoSvg(): string {
-  return `<svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="tb-cr" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#tb-cr)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#tb-cr)" stroke-width="2.5"/><circle cx="48" cy="41" r="5" fill="url(#tb-cr)"/><circle cx="48" cy="41" r="2.2" fill="white"/></svg>`;
+  return `<svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="tb-cr" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B0F"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#tb-cr)"/></svg>`;
 }

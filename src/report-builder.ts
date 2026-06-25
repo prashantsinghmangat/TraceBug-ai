@@ -5,6 +5,7 @@
 import {
   BugReport,
   BugSeverity,
+  BugPriority,
   StoredSession,
   ScreenshotData,
   TraceBugEvent,
@@ -13,6 +14,7 @@ import {
   RootCauseHint,
 } from "./types";
 import { captureEnvironment } from "./environment";
+import { captureStorageSnapshot } from "./storage-capture";
 import { getScreenshots } from "./screenshot";
 import { getVoiceTranscripts } from "./voice-recorder";
 import { getLastVideoRecording } from "./video-recorder";
@@ -30,18 +32,33 @@ export function buildReport(
 ): BugReport {
   const environment = session.environment || captureEnvironment();
 
+  // Anchor the report to the actual capture moment, then drop events from long
+  // before it. A session reused after a long idle gap (hours later) would
+  // otherwise make the replay timeline span that whole gap — stale events at
+  // the start, the fresh screenshot/recording at the end — e.g. showing
+  // "194:44" instead of the real ~28s. captureTs = latest of video start +
+  // screenshot timestamps; falls back to the newest event when there's no media.
+  const _ssForAnchor = [...getScreenshots(), ...(extraScreenshots || [])];
+  const _vidForAnchor = getLastVideoRecording();
+  const captureTs = Math.max(
+    _vidForAnchor?.startedAt ?? 0,
+    ..._ssForAnchor.map((s) => s.timestamp),
+    0,
+  );
+  const events = trimStaleEvents(session.events, captureTs);
+
   // Generate repro steps if not already present
   let steps = session.reproSteps || "";
-  if (!steps && session.events.length > 0) {
+  if (!steps && events.length > 0) {
     const errorMsg = session.errorMessage || "Issue reported by tester";
-    const result = generateReproSteps(session.events, errorMsg, session.errorStack || undefined);
+    const result = generateReproSteps(events, errorMsg, session.errorStack || undefined);
     steps = result.reproSteps;
   }
 
   // Collect console errors (deduplicated by message). Errors only — used by
   // GitHub/Jira/markdown exports + the root-cause + severity rules.
   const seenErrors = new Set<string>();
-  const consoleErrors = session.events
+  const consoleErrors = events
     .filter(e => ["error", "unhandled_rejection", "console_error"].includes(e.type))
     .map(e => ({
       message: e.data.error?.message || "",
@@ -64,7 +81,7 @@ export function buildReport(
     "console_warn": "warn",
     "console_log": "log",
   };
-  const consoleLogs = session.events
+  const consoleLogs = events
     .filter(e => e.type in levelMap)
     .map(e => ({
       level: levelMap[e.type],
@@ -76,7 +93,7 @@ export function buildReport(
 
   // Collect ALL captured requests (success + failure) for the Network tab.
   // URLs are already sanitized in collectors.ts (sensitive query params replaced).
-  const networkRequests: import("./types").NetworkRequestEntry[] = session.events
+  const networkRequests: import("./types").NetworkRequestEntry[] = events
     .filter(e => e.type === "api_request" && e.data.request)
     .map(e => ({
       method: e.data.request?.method || "GET",
@@ -91,7 +108,7 @@ export function buildReport(
   // Match by (method+url+status) and nearest timestamp within 5s.
   // Only consider buffer entries captured during THIS session — otherwise
   // failures from a previously-cleared session would leak in.
-  const sessionStart = session.createdAt || (session.events[0]?.timestamp ?? 0);
+  const sessionStart = events[0]?.timestamp ?? (captureTs || session.createdAt || 0);
   const buffer = getNetworkFailures().filter(b => b.timestamp >= sessionStart);
   for (const entry of networkRequests) {
     if (entry.status < 400 && entry.status !== 0) continue;
@@ -132,7 +149,7 @@ export function buildReport(
   const screenshots = [...getScreenshots(), ...(extraScreenshots || [])];
 
   // Timeline
-  const timeline = buildTimeline(session.events);
+  const timeline = buildTimeline(events);
 
   // Voice transcripts from memory
   const voiceTranscripts = getVoiceTranscripts();
@@ -153,11 +170,11 @@ export function buildReport(
   const title = generateBugTitle(session);
 
   // Last ~10 readable user actions (FIFO, newest last)
-  const sessionSteps = generateSessionSteps(session.events);
-  const actionChips = buildActionChips(session.events);
+  const sessionSteps = generateSessionSteps(events);
+  const actionChips = buildActionChips(events);
 
   // The element the user clicked just before the bug
-  const clickedElement = extractClickedElement(session.events);
+  const clickedElement = extractClickedElement(events);
 
   // Build report first, then generate summary + rootCause + severity from full context
   const report: BugReport = {
@@ -174,20 +191,56 @@ export function buildReport(
     clickedElement,
     rootCause: { hint: "", confidence: "low" },
     severity: "low",
+    priority: "low",
+    storage: captureStorageSnapshot(),
     annotations: session.annotations || [],
     screenshots,
     timeline,
     voiceTranscripts,
     video,
     context: getCurrentContext(),
-    session,
+    // Store the trimmed-events session so the HTML export's timeline/duration
+    // match the live ticket (both anchored to the capture, no stale span).
+    session: { ...session, events },
     generatedAt: Date.now(),
   };
 
   report.summary = generateSmartSummary(report);
   report.rootCause = generateRootCauseHint(report);
   report.severity = determineSeverity(report);
+  // Priority is the tester's call; default it from severity when unset.
+  report.priority = session.priority ?? derivePriorityFromSeverity(report.severity);
   return report;
+}
+
+/** Default priority mapping when the tester hasn't set one explicitly. */
+export function derivePriorityFromSeverity(severity: BugSeverity): BugPriority {
+  if (severity === "critical" || severity === "high") return "high";
+  if (severity === "medium") return "medium";
+  return "low";
+}
+
+/** Title-case label for a priority, e.g. "High". */
+export function priorityLabel(priority: BugPriority): string {
+  return priority.charAt(0).toUpperCase() + priority.slice(1);
+}
+
+/**
+ * Drop events from long before the capture so a session reused after a long
+ * idle gap doesn't make the replay timeline span hours. `anchorTs` is the
+ * capture moment (video start / latest screenshot); when 0 (no media) we anchor
+ * to the newest event. Events older than `lookbackMs` before the anchor are
+ * dropped. May return an empty array — correct when every event is stale.
+ */
+export function trimStaleEvents(
+  events: TraceBugEvent[],
+  anchorTs: number,
+  lookbackMs = 30 * 60 * 1000,
+): TraceBugEvent[] {
+  if (events.length === 0) return events;
+  const anchor = anchorTs > 0 ? anchorTs : Math.max(...events.map((e) => e.timestamp));
+  const cutoff = anchor - lookbackMs;
+  return events.filter((e) => e.timestamp >= cutoff);
 }
 
 // ── Smart Summary ─────────────────────────────────────────────────────────

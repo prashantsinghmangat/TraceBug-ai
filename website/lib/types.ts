@@ -24,6 +24,8 @@ export interface UploadInitRequest {
   screenshotCount: number;
   /** Base64 JPEG data URL for the dashboard preview card. */
   thumbnail?: string;
+  /** Tester-assigned triage priority, shown in the share-portal header. */
+  priority?: "high" | "medium" | "low";
 }
 
 export interface UploadInitResponse {

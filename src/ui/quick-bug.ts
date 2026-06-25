@@ -2,14 +2,15 @@
 // Zero-friction bug reporting: 1 keystroke → screenshot → auto-filled modal → 1-click copy.
 // Total flow under 5 seconds. Replaces the 6-7 click manual workflow.
 
-import { captureScreenshot, downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot } from "../screenshot";
+import { captureScreenshot, downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot, pushScreenshot } from "../screenshot";
+import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { isPremium } from "../plan";
 import { showUpgradeModal } from "./upgrade-modal";
-import { getAllSessions } from "../storage";
+import { getAllSessions, setSessionPriority } from "../storage";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
-import { buildReport, formatRootCauseLine, severityBadge } from "../report-builder";
+import { buildReport, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
 import { generateBugTitle, generateFlowSummary } from "../title-generator";
@@ -18,6 +19,7 @@ import { ScreenshotData, StoredSession } from "../types";
 import { showToast } from "./toast";
 import { escapeHtml } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
+import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
 import { shareSessionAsLink, DEFAULT_CLOUD_ENDPOINT, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 import { generateAIPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
@@ -93,7 +95,15 @@ export function isQuickBugOpen(): boolean {
 export async function refreshQuickBugCapture(root: HTMLElement): Promise<void> {
   if (!_isOpen) return;
   const existing = document.getElementById(MODAL_ID);
-  if (existing) existing.remove();
+  if (existing) {
+    // Detach the document keydown listeners this overlay registered before we
+    // drop it — close() isn't called on the refresh path, so they'd leak.
+    const k = (existing as any).__tbModalKey;
+    const esc = (existing as any).__tbEscKey;
+    if (k) document.removeEventListener("keydown", k);
+    if (esc) document.removeEventListener("keydown", esc);
+    existing.remove();
+  }
   _isOpen = false;
   await showQuickBugCapture(root);
 }
@@ -133,21 +143,11 @@ export async function showQuickBugCapture(
   const currentSession = options?.sessionId
     ? (sessions.find(s => s.sessionId === options.sessionId) || sessions[0] || null)
     : (sessions[0] || null);
-  const lastEvent = currentSession?.events[currentSession.events.length - 1] || null;
-
-  // Use the screenshots already collected for the active ticket; fall back to
-  // capturing one fresh if the user opened the modal without having taken any.
-  let screenshots: ScreenshotData[] = getScreenshots();
-  if (screenshots.length === 0) {
-    try {
-      // Smart-screenshot: highlight the clicked element so the dev sees the
-      // exact button/element that triggered the bug.
-      await captureScreenshot(lastEvent, { includeAnnotations: true, highlightClicked: true });
-      screenshots = getScreenshots();
-    } catch (err) {
-      console.warn("[TraceBug] Quick capture screenshot failed:", err);
-    }
-  }
+  // Only show screenshots the user EXPLICITLY captured — never auto-grab one.
+  // (Auto-capturing on open surprised users mid-recording with a stray frame.)
+  // Shots are added on demand: the toolbar/HUD camera, the "+ Add" button, or
+  // the "Take screenshot" button in the empty state below.
+  const screenshots: ScreenshotData[] = getScreenshots();
 
   // Auto-fill title + description from session context
   const draft = _loadDraft();
@@ -331,6 +331,9 @@ function _openModal(
         <div class="tb-qb-sub">${ssCountLabel} \u00B7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
       <span class="tb-qb-sev" style="background:${sevC.bg};color:${sevC.fg};border:1px solid ${sevC.border}">${sevLabel}</span>
+      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority — your triage call (defaults from severity)">
+        ${(["high", "medium", "low"] as const).map((p) => `<option value="${p}"${(data.report?.priority || "low") === p ? " selected" : ""}>🚩 ${priorityLabel(p)}</option>`).join("")}
+      </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
       <button data-action="help-toggle" class="tb-qb-theme-toggle" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
       <button data-action="close" class="tb-qb-close" aria-label="Close">\u2715</button>
@@ -347,7 +350,11 @@ function _openModal(
 
         ${video ? `
           <div class="tb-qb-preview">
-            <video id="tb-qb-video" controls preload="metadata" src="${video.url}" class="tb-qb-video"></video>
+            <video id="tb-qb-video" controls preload="metadata" src="${video.url || video.dataUrl}" class="tb-qb-video"></video>
+            <button data-action="grab-frame" class="tb-qb-grab-frame" title="Pause the video on the moment you want, then click to save that exact frame as a screenshot you can annotate &amp; attach">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Grab frame
+            </button>
           </div>
           <div class="tb-qb-vidmeta">
             <span>${_formatVideoTime(video.durationMs)} · ${_formatBytes(video.sizeBytes)} · ${video.comments.length} timestamped comment${video.comments.length === 1 ? "" : "s"}</span>
@@ -368,10 +375,16 @@ function _openModal(
           </div>
           <div id="tb-qb-primary-meta" class="tb-qb-imgmeta">${escapeHtml(primary.filename)} \u00B7 ${primary.width}x${primary.height}</div>
         ` : !video && !primary ? `
-          <div class="tb-qb-preview tb-qb-preview-empty">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>
+          <div class="tb-qb-preview tb-qb-preview-empty">
+            <span>No screenshots \u2014 add one only if you want to</span>
+            <button data-action="add-screenshot" class="tb-qb-empty-shot" title="Capture a screenshot of the current page">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Take screenshot
+            </button>
+          </div>
         ` : ""}
 
-        ${data.timeline.length > 0 ? `
+        ${video && data.timeline.length > 0 ? `
           <div id="tb-qb-scrubber" class="tb-qb-scrubber-wrap"></div>
         ` : ""}
 
@@ -379,7 +392,10 @@ function _openModal(
           <div class="tb-qb-ss-header">
             <span class="tb-qb-ss-count">${ssCount} screenshot${ssCount === 1 ? "" : "s"}</span>
             <span class="tb-qb-ss-hint">Click any to annotate</span>
-            <button data-action="add-screenshot" class="tb-qb-ss-add" title="Capture another screenshot">+ Add</button>
+            <button data-action="add-screenshot" class="tb-qb-ss-add" title="${video ? "Capture a fresh screenshot of the current page (use “Grab frame” on the video for a video frame)" : "Capture a fresh screenshot of the current page"}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Add page shot
+            </button>
           </div>
           <div class="tb-qb-thumbs">
             ${screenshots.map((ss, i) => `
@@ -417,9 +433,9 @@ function _openModal(
       <div class="tb-qb-right">
         <div class="tb-qb-tabstrip" role="tablist">
           <button data-tab="info" class="tb-qb-tab tb-qb-tab-active" role="tab">Info</button>
+          <button data-tab="actions" class="tb-qb-tab" role="tab">Actions${actionsCount ? `<span class="tb-qb-tab-badge">${actionsCount}</span>` : ""}</button>
           <button data-tab="console" class="tb-qb-tab" role="tab">Console${consoleCount ? `<span class="tb-qb-tab-badge">${consoleCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
           <button data-tab="network" class="tb-qb-tab" role="tab">Network${networkCount ? `<span class="tb-qb-tab-badge">${networkCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
-          <button data-tab="actions" class="tb-qb-tab" role="tab">Actions${actionsCount ? `<span class="tb-qb-tab-badge">${actionsCount}</span>` : ""}</button>
           <button data-tab="ai" class="tb-qb-tab" role="tab">AI</button>
           <button data-tab="annotations" class="tb-qb-tab" role="tab">Notes${annotationsCount ? `<span class="tb-qb-tab-badge">${annotationsCount}</span>` : ""}</button>
         </div>
@@ -437,23 +453,26 @@ function _openModal(
     <!-- Footer: export actions -->
     <div class="tb-qb-footer">
       <div class="tb-qb-actions">
-        ${_githubRepo ? `
-          <button data-action="open-github" class="tb-qb-btn tb-qb-btn-gh-primary" title="Open GitHub new-issue page with title + body prefilled">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-            Open in GitHub (${escapeHtml(_githubRepo)})
-          </button>
-        ` : ""}
-        <button data-action="github" class="tb-qb-btn tb-qb-btn-accent">\uD83D\uDC19 GitHub</button>
-        <button data-action="linear" class="tb-qb-btn tb-qb-btn-linear" title="Open Linear new-issue page with prefilled title + description">\u25B3 Linear</button>
-        <button data-action="slack" class="tb-qb-btn tb-qb-btn-slack" title="Copy a Slack-formatted bug summary to the clipboard">\uD83D\uDCAC Slack</button>
-        <button data-action="jira" class="tb-qb-btn ${isPremium() ? "tb-qb-btn-jira" : "tb-qb-btn-locked"}">${isPremium() ? "\uD83C\uDFAB Jira" : "\uD83D\uDD12 Jira (Premium)"}</button>
-        <button data-action="export-replay" class="tb-qb-btn tb-qb-btn-ghost" title="Bundle the entire session into a single .html file you can share or open offline">\uD83D\uDCE6 Export .html</button>
-        <button data-action="share-link" class="tb-qb-btn tb-qb-btn-accent" title="Upload to TraceBug cloud and copy a shareable URL (sign-in required)">\uD83D\uDD17 Share link</button>
-        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ghost" title="Copy a structured debugging prompt for Claude / ChatGPT / Cursor">\uD83E\uDD16 Fix with AI</button>
+        <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
+        </button>
+        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">🤖 Fix with AI</button>
+        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">📦 Export .html</button>
+        <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">🔗 Share link</button>
+        <div class="tb-qb-more">
+          <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
+          <div class="tb-qb-more-menu" data-open="false" role="menu">
+            ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">🐙 Copy GitHub markdown</button>` : ""}
+            <button data-action="linear" class="tb-qb-more-item" role="menuitem">△ Linear</button>
+            <button data-action="slack" class="tb-qb-more-item" role="menuitem">💬 Slack</button>
+            <button data-action="jira" class="tb-qb-more-item" role="menuitem">🎫 Jira</button>
+          </div>
+        </div>
       </div>
       <div class="tb-qb-tip">
         <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
-        <span class="tb-qb-tip-right"><span>Draft auto-saved</span><span class="${isPremium() ? "tb-qb-plan-premium" : "tb-qb-plan-free"}">${isPremium() ? "✨ Premium" : "Free"}</span></span>
+        <span class="tb-qb-tip-right"><span>Draft auto-saved</span></span>
       </div>
     </div>
 
@@ -495,10 +514,19 @@ function _openModal(
     if (videoEl && video) {
       videoEl.dataset.tbStartTs = String(video.startedAt);
     }
+    // Chip markers above the track: annotations/markings + blurs. Screenshots
+    // are added automatically by the scrubber from `screenshots`.
+    const extraMarkers: { timestamp: number; kind: "screenshot" | "note" | "annotation" | "blur"; label: string }[] = [];
+    try {
+      for (const a of getElementAnnotations()) extraMarkers.push({ timestamp: a.timestamp, kind: "annotation", label: a.comment ? `Note: ${a.comment.slice(0, 40)}` : "Annotation added" });
+      for (const d of getDrawRegions()) extraMarkers.push({ timestamp: d.timestamp, kind: d.shape === "redact" ? "blur" : "annotation", label: d.shape === "redact" ? "Redaction added" : "Marking added" });
+      for (const b of getBlurEvents()) extraMarkers.push({ timestamp: b.timestamp, kind: "blur", label: "Blur added" });
+    } catch {}
     _scrubberCtl = mountReplayScrubber(scrubberHost, {
       timeline: data.timeline,
       screenshots: ssForScrub,
       videoEl,
+      extraMarkers,
       onSeek: (ts) => {
         // Swap primary screenshot to whichever is closest to the scrubber.
         const img = modal.querySelector<HTMLImageElement>("#tb-qb-primary-img");
@@ -573,6 +601,16 @@ function _openModal(
     if (btn) btn.innerHTML = _themeIcon();
   });
 
+  // ── Priority selector — persist the tester's triage call + refresh Info ──
+  modal.querySelector('[data-action="set-priority"]')?.addEventListener("change", (e) => {
+    const val = (e.target as HTMLSelectElement).value as import("../types").BugPriority;
+    const sid = data.currentSession?.sessionId;
+    if (sid) setSessionPriority(sid, val);
+    if (data.report) data.report.priority = val;
+    const infoPanel = modal.querySelector('[data-panel="info"]');
+    if (infoPanel) infoPanel.innerHTML = _buildInfoTab(data.report, data.currentSession ?? null);
+  });
+
   // ── Help overlay + global keyboard shortcuts ─────────────────────────
   const helpEl = modal.querySelector<HTMLElement>("#tb-qb-help");
   const toggleHelp = (force?: boolean) => {
@@ -595,7 +633,7 @@ function _openModal(
     const btn = modal.querySelector<HTMLButtonElement>(`[data-tab="${which}"]`);
     if (btn) btn.click();
   };
-  const TAB_ORDER = ["info", "console", "network", "actions", "ai", "annotations"];
+  const TAB_ORDER = ["info", "actions", "console", "network", "ai", "annotations"];
   const modalKeyHandler = (e: KeyboardEvent) => {
     // Help open: only Esc / ? close it.
     if (helpEl && helpEl.style.display !== "none") {
@@ -636,6 +674,10 @@ function _openModal(
 
   const escHandler = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
   document.addEventListener("keydown", escHandler);
+  // Stash so a refresh (which removes the DOM without calling close()) can also
+  // detach it — otherwise every screenshot refresh leaked two document keydown
+  // listeners pointing at the discarded overlay.
+  (overlay as any).__tbEscKey = escHandler;
 
   // Open in GitHub — prefilled URL, opens new tab (no API key needed)
   const openGhBtn = modal.querySelector('[data-action="open-github"]');
@@ -706,6 +748,25 @@ function _openModal(
   // Plain Text + Download Screenshots buttons were cut from v1 \u2014 devs paste
   // GitHub markdown anywhere; explicit screenshot downloads happen as part
   // of the GitHub/Jira export flow.
+
+  // "More \u25be" export menu \u2014 toggle open/closed; close on outside click or after
+  // an option is picked (each option keeps its own data-action handler).
+  const moreBtn = modal.querySelector<HTMLButtonElement>('[data-action="more-toggle"]');
+  const moreMenu = modal.querySelector<HTMLElement>(".tb-qb-more-menu");
+  if (moreBtn && moreMenu) {
+    const setMoreOpen = (open: boolean) => {
+      moreMenu.dataset.open = open ? "true" : "false";
+      moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    moreBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      setMoreOpen(moreMenu.dataset.open !== "true");
+    });
+    moreMenu.addEventListener("click", () => setMoreOpen(false));
+    modal.addEventListener("click", (e) => {
+      if (moreMenu.dataset.open === "true" && !moreMenu.contains(e.target as Node) && e.target !== moreBtn) setMoreOpen(false);
+    });
+  }
 
   // Export Replay (.html) \u2014 bundles the entire session into a single
   // self-contained HTML file. Recipient opens offline \u2192 full interactive replay.
@@ -1054,16 +1115,68 @@ function _openModal(
   // "+ Add" button in the screenshots header \u2014 captures another shot and
   // refreshes the modal in place. Saves the close-reopen dance.
   modal.querySelector('[data-action="add-screenshot"]')?.addEventListener("click", async () => {
-    showToast("Capturing\u2026", root);
+    // Region drag-select. Hide the modal first so the user can see and select
+    // the page underneath, capture the chosen area, then restore + refresh.
+    const prevModal = modal.style.display;
+    const prevOverlay = overlay.style.display;
+    modal.style.display = "none";
+    overlay.style.display = "none";
+    showToast("Drag to select a region \u2014 Esc to cancel", root);
+    let captured: ScreenshotData | null = null;
     try {
-      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-      const lastEvent = sessions[0]?.events[sessions[0].events.length - 1] || null;
-      await captureScreenshot(lastEvent);
-      const n = getScreenshots().length;
-      showToast(`\u2713 Screenshot ${n} added`, root);
+      captured = await captureRegionScreenshot();
+    } catch {
+      // treated as cancel below
+    } finally {
+      modal.style.display = prevModal;
+      overlay.style.display = prevOverlay;
+    }
+    if (captured) {
+      showToast(`\u2713 Screenshot ${getScreenshots().length} added`, root);
+      refreshQuickBugCapture(root).catch(() => {});
+    } else {
+      showToast("Screenshot cancelled", root);
+    }
+  });
+
+  // "Grab frame" — captures the CURRENT video frame (pausing first so the saved
+  // image matches exactly what the reviewer sees) and adds it as a screenshot.
+  // This is the useful capture while reviewing a recording; the page-shot button
+  // above just snaps the live page.
+  modal.querySelector('[data-action="grab-frame"]')?.addEventListener("click", () => {
+    const v = modal.querySelector<HTMLVideoElement>("#tb-qb-video");
+    if (!v) return;
+    if (!v.paused) { try { v.pause(); } catch {} }
+    if (!v.videoWidth || !v.videoHeight) {
+      showToast("Video still loading — try again in a moment", root);
+      return;
+    }
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("no 2d context");
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/png");
+      const t = Math.floor(v.currentTime || 0);
+      const mm = String(Math.floor(t / 60)).padStart(2, "0");
+      const ss2 = String(t % 60).padStart(2, "0");
+      const n = getScreenshots().length + 1;
+      pushScreenshot({
+        id: `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        dataUrl,
+        filename: `${String(n).padStart(2, "0")}_frame_${mm}-${ss2}.png`,
+        eventContext: `Video frame at ${mm}:${ss2}`,
+        page: window.location.pathname,
+        width: canvas.width,
+        height: canvas.height,
+      });
+      showToast(`✓ Frame at ${mm}:${ss2} added`, root);
       refreshQuickBugCapture(root).catch(() => {});
     } catch {
-      showToast("Screenshot failed", root);
+      showToast("Couldn't grab that frame", root);
     }
   });
 
@@ -1229,12 +1342,30 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
   rows.push(_kvRow("Session", (session?.sessionId || "").slice(0, 12), "🆔"));
   rows.push(_kvRow("Severity", sevLabel));
+  if (report?.priority) rows.push(_kvRow("Priority", priorityLabel(report.priority), "🚩"));
   const ctxKeys = Object.keys(ctx);
   if (ctxKeys.length > 0) {
     rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
     for (const k of ctxKeys) {
       rows.push(_kvRow(k, String(ctx[k])));
     }
+  }
+  // Web Storage snapshot (sensitive values already redacted at capture).
+  const storage = report?.storage;
+  if (storage) {
+    const renderArea = (label: string, entries: import("../types").StorageEntry[] | undefined, dropped?: number) => {
+      if (!entries || entries.length === 0) return;
+      rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
+      const shown = entries.slice(0, 20);
+      for (const e of shown) {
+        rows.push(_kvRow(e.key, e.redacted ? `🔒 ${e.value}` : e.value, "🗄"));
+      }
+      if (entries.length > shown.length) {
+        rows.push(_kvRow("…", `+${entries.length - shown.length} more`, "🗄"));
+      }
+    };
+    renderArea("localStorage", storage.local, storage.localTruncated);
+    renderArea("sessionStorage", storage.session, storage.sessionTruncated);
   }
   return `<div class="tb-qb-info">${rows.join("")}</div>`;
 }
@@ -1683,6 +1814,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-titletext { font-size:15px; font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-sub { font-size:11px; color:var(--tb-text-muted); margin-top:3px; font-weight:500; }
     #${MODAL_ID} .tb-qb-sev { font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:5px 10px; border-radius:999px; white-space:nowrap; }
+    #${MODAL_ID} .tb-qb-priority { font-size:11px; font-weight:600; padding:5px 8px; border-radius:8px; background:var(--tb-btn-hover); color:var(--tb-text-primary); border:1px solid var(--tb-border); cursor:pointer; }
     #${MODAL_ID} .tb-qb-close { background:transparent; border:none; color:var(--tb-text-muted); cursor:pointer; font-size:16px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, color 0.15s; }
     #${MODAL_ID} .tb-qb-close:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); }
     #${MODAL_ID} .tb-qb-theme-toggle { background:transparent; border:1px solid var(--tb-border); color:var(--tb-text-muted); cursor:pointer; font-size:13px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s; }
@@ -1702,7 +1834,13 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(124,92,255,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
     #${MODAL_ID} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
     #${MODAL_ID} .tb-qb-primary-edit svg { flex-shrink:0; }
-    #${MODAL_ID} .tb-qb-preview-empty { padding:32px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
+    #${MODAL_ID} .tb-qb-preview-empty { flex-direction:column; gap:12px; padding:30px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
+    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-empty-shot:hover { filter:brightness(1.1); }
+    #${MODAL_ID} .tb-qb-empty-shot svg { flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-grab-frame { position:absolute; top:10px; right:10px; z-index:2; display:inline-flex; align-items:center; gap:6px; background:rgba(11,11,15,0.74); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+    #${MODAL_ID} .tb-qb-grab-frame:hover { filter:brightness(1.25); transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-grab-frame svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
     #${MODAL_ID} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
     #${MODAL_ID} .tb-qb-vidmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; }
@@ -1716,7 +1854,8 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
-    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; background:var(--tb-accent-soft, rgba(124,92,255,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(124,92,255,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-ss-add:hover { filter:brightness(1.15); }
     #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
     #${MODAL_ID} .tb-qb-thumb-wrap { position:relative; }
@@ -1937,6 +2076,17 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn-ghost:hover { background:var(--tb-accent-subtle); color:var(--tb-text-primary); }
     #${MODAL_ID} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
     #${MODAL_ID} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
+    /* "Fix with AI" — the highlight action. Gradient accent so it stands out. */
+    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(124,92,255,0.35); }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
+    /* Clean footer: one accent primary + a tidy "More" popover for the rest */
+    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; }
+    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent-hover); border-color:transparent; transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-more { position:relative; display:inline-flex; }
+    #${MODAL_ID} .tb-qb-more-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:200px; background:var(--tb-bg-elevated); border:1px solid var(--tb-border-hover); border-radius:var(--tb-radius-md); box-shadow:var(--tb-shadow-lg); padding:6px; display:none; flex-direction:column; gap:2px; z-index:6; }
+    #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
+    #${MODAL_ID} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
+    #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
@@ -2067,7 +2217,11 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     </div>
   `;
   overlay.appendChild(card);
-  document.body.appendChild(overlay);
+  // Append INSIDE the open ticket modal so it shares the same stacking context
+  // and paints on top. Appending to document.body left it behind the modal —
+  // both used the max z-index, so DOM order decided and the modal won.
+  const host = document.getElementById(MODAL_ID) || document.body;
+  host.appendChild(overlay);
 
   card.querySelectorAll<HTMLButtonElement>("button[data-ai-action]").forEach((b) => {
     b.addEventListener("mouseenter", () => { b.style.filter = "brightness(1.1)"; });

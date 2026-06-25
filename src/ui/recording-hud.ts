@@ -19,6 +19,8 @@ import {
   hasMicrophoneTrack,
 } from "../video-recorder";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "../draw-mode";
+import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBoxes } from "./blur-tool";
+import { captureScreenshot } from "../screenshot";
 
 const HUD_ID = "tracebug-recording-hud";
 
@@ -56,10 +58,14 @@ export function showRecordingHUD(
     const style = document.createElement("style");
     style.id = "tracebug-hud-anim";
     style.textContent = `
-      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, 8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, -8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      /* Docked top-center: Chrome pins its un-movable "… is sharing your screen /
+         Stop sharing" bar to the BOTTOM-center, so anchoring the HUD there hid our
+         controls behind it. Top-center keeps them clear (and is what Loom/Jam do).
+         Still fully draggable via the grip. */
       #${HUD_ID} {
         position: fixed !important;
-        bottom: 24px !important;
+        top: 18px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         width: max-content !important;
@@ -136,11 +142,14 @@ export function showRecordingHUD(
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
     </button>
     <span class="tb-hud-sep"></span>
+    <button class="tb-hud-btn" data-tb-hud="shot" title="Take a screenshot now (adds to the ticket)" aria-label="Take a screenshot">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    </button>
     <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
-    <button class="tb-hud-btn" data-tb-hud="close" title="Stop and review" aria-label="Stop and review">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive areas — drag to redact (captured in the recording)" aria-label="Blur sensitive areas">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22" opacity="0.45"/></svg>
     </button>
   `;
 
@@ -152,8 +161,9 @@ export function showRecordingHUD(
   const pauseBtn = hud.querySelector('[data-tb-hud="pause"]') as HTMLButtonElement | null;
   const micBtn = hud.querySelector('[data-tb-hud="mic"]') as HTMLButtonElement | null;
   const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]') as HTMLButtonElement | null;
+  const blurBtn = hud.querySelector('[data-tb-hud="blur"]') as HTMLButtonElement | null;
+  const shotBtn = hud.querySelector('[data-tb-hud="shot"]') as HTMLButtonElement | null;
   const stopBtn = hud.querySelector('[data-tb-hud="stop"]') as HTMLButtonElement;
-  const closeBtn = hud.querySelector('[data-tb-hud="close"]') as HTMLButtonElement | null;
 
   _timerInterval = setInterval(() => {
     if (!isVideoRecording()) return;
@@ -227,8 +237,31 @@ export function showRecordingHUD(
       annotateBtn.dataset.active = "";
       return;
     }
+    if (isBlurModeActive()) { deactivateBlurMode(); if (blurBtn) blurBtn.dataset.active = ""; }
     activateDrawMode(drawRoot, undefined, undefined, { ephemeralMs: 3000 });
     annotateBtn.dataset.active = "1";
+  });
+
+  shotBtn?.addEventListener("click", async () => {
+    if (shotBtn.dataset.busy === "1") return;
+    shotBtn.dataset.busy = "1";
+    try {
+      await captureScreenshot(null);
+      flashRecordingHUD();
+    } catch {}
+    shotBtn.dataset.busy = "";
+  });
+
+  blurBtn?.addEventListener("click", () => {
+    if (isBlurModeActive()) {
+      deactivateBlurMode();
+      blurBtn.dataset.active = "";
+      return;
+    }
+    // Blur and draw are mutually exclusive — only one capture overlay at a time.
+    if (isDrawModeActive()) { try { deactivateDrawMode(); } catch {} if (annotateBtn) annotateBtn.dataset.active = ""; }
+    activateBlurMode(_root || document.body, () => { blurBtn.dataset.active = ""; });
+    blurBtn.dataset.active = "1";
   });
 
   const triggerStop = () => {
@@ -236,7 +269,6 @@ export function showRecordingHUD(
     _onStopRequested?.();
   };
   stopBtn.addEventListener("click", triggerStop);
-  closeBtn?.addEventListener("click", triggerStop);
 }
 
 /** Briefly flash the HUD to confirm a capture was taken. */
@@ -244,7 +276,7 @@ export function flashRecordingHUD(): void {
   if (!_hud) return;
   const prev = _hud.style.boxShadow;
   _hud.style.transition = "box-shadow 0.3s";
-  _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7B61FF)66, 0 12px 40px rgba(0,0,0,0.55)";
+  _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7C5CFF)66, 0 12px 40px rgba(0,0,0,0.55)";
   setTimeout(() => {
     if (_hud) _hud.style.boxShadow = prev;
   }, 400);
@@ -259,6 +291,10 @@ export function hideRecordingHUD(): void {
   if (isDrawModeActive()) {
     try { deactivateDrawMode(); } catch {}
   }
+  // Recording is done — the video already captured any blur boxes, so take them
+  // off the live page (keep the timestamped events for the timeline/report).
+  if (isBlurModeActive()) { try { deactivateBlurMode(); } catch {} }
+  removeAllBlurBoxes();
   _hud?.remove();
   _hud = null;
   _root = null;

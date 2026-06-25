@@ -8,7 +8,7 @@
 // users who screenshot a password input will share that screenshot. Document
 // this limitation in the share-modal copy.
 
-import type { BugReport } from "../types";
+import type { BugReport, StorageEntry } from "../types";
 
 const REDACTED = "[REDACTED]";
 
@@ -138,6 +138,14 @@ export function sanitizeReportForUpload(report: BugReport): BugReport {
       target: sanitizeText(c.target ?? undefined),
       detail: sanitizeText(c.detail ?? undefined),
     }));
+  }
+  if (out.storage) {
+    // Storage values are already key-redacted at capture; run the token-shape
+    // pass too as defense-in-depth before they leave the machine.
+    const scrub = (entries: StorageEntry[]) =>
+      entries.map((e) => ({ ...e, value: sanitizeText(e.value) }));
+    out.storage.local = scrub(out.storage.local || []);
+    out.storage.session = scrub(out.storage.session || []);
   }
   if (out.environment?.url) out.environment.url = sanitizeUrl(out.environment.url);
   if (out.context && typeof out.context === "object") {

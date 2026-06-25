@@ -6,7 +6,15 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") ?? "/dashboard";
+  const requestedNext = url.searchParams.get("next") ?? "/dashboard";
+
+  // Prevent open redirect: only allow same-site relative paths. Reject absolute
+  // URLs and protocol-relative ("//evil.com") values, which new URL() would
+  // otherwise resolve to an attacker-controlled origin.
+  const next =
+    requestedNext.startsWith("/") && !requestedNext.startsWith("//")
+      ? requestedNext
+      : "/dashboard";
 
   if (code) {
     const supabase = createSupabaseServerClient();

@@ -6,9 +6,10 @@
 // Inputs reuse what's already in memory: events from the session, screenshots
 // (already base64 dataUrls), the optional video Blob, and the BugReport.
 
-import { BugReport, StoredSession } from "../types";
+import { BugReport, StoredSession, StorageEntry } from "../types";
 import { buildTimeline } from "../timeline-builder";
 import { buildReplayHtml, BundlePayload } from "./html-template";
+import { priorityLabel } from "../report-builder";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -63,7 +64,7 @@ async function buildReplayPayload(
   const includeVideo = options?.includeVideo ?? !!report.video;
 
   // Build a timeline that mirrors the live scrubber's marker logic.
-  const timeline = buildTimeline(session.events).map(t => ({
+  const timeline = buildTimeline(report.session.events).map(t => ({
     timestamp: t.timestamp,
     type: t.type,
     description: t.description,
@@ -152,11 +153,30 @@ async function buildReplayPayload(
     { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
     { k: "Session", v: session.sessionId.slice(0, 12), i: "🆔" },
     { k: "Severity", v: report.severity },
+    { k: "Priority", v: priorityLabel(report.priority), i: "🚩" },
   ];
   if (report.context) {
     for (const k of Object.keys(report.context)) {
       info.push({ k, v: String(report.context[k]) });
     }
+  }
+
+  // Web Storage snapshot — each entry as its own kv row (capped for display).
+  // Values are already redacted at capture for sensitive keys.
+  const STORAGE_DISPLAY_CAP = 20;
+  function pushStorageRows(label: string, entries: StorageEntry[] | undefined, droppedAtCapture?: number) {
+    if (!entries || entries.length === 0) return;
+    const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
+    for (const e of shown) {
+      info.push({ k: `${label} · ${e.key}`, v: e.redacted ? `🔒 ${e.value}` : e.value, i: "🗄" });
+    }
+    const hiddenForDisplay = entries.length - shown.length;
+    const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
+    if (totalHidden > 0) info.push({ k: `${label} · …`, v: `+${totalHidden} more`, i: "🗄" });
+  }
+  if (report.storage) {
+    pushStorageRows("localStorage", report.storage.local, report.storage.localTruncated);
+    pushStorageRows("sessionStorage", report.storage.session, report.storage.sessionTruncated);
   }
 
   const payload: BundlePayload = {
@@ -165,11 +185,11 @@ async function buildReplayPayload(
       severity: report.severity,
       summary: report.summary || "",
       rootCause: report.rootCause?.hint || "",
-      page: report.environment?.url || session.events[0]?.page || "",
+      page: report.environment?.url || report.session.events[0]?.page || "",
       generatedAt: report.generatedAt,
       sessionId: session.sessionId,
       environment: formatEnv(report),
-      durationMs: estimateDuration(session, report),
+      durationMs: estimateDuration(report.session, report),
     },
     description: options?.descriptionOverride ?? report.steps ?? "",
     events: timeline,

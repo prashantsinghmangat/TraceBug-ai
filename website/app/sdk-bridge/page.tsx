@@ -10,9 +10,36 @@
 import { useEffect } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-// Origins the bridge will talk to. "*" during development; tighten before
-// production launch (move to an env-driven allowlist).
-const ALLOWED_PARENT_ORIGINS = "*";
+// Origins the bridge will talk to. Configure via NEXT_PUBLIC_SDK_ALLOWED_ORIGINS
+// (comma-separated list of customer origins). In development we additionally
+// allow localhost so the demo works without configuration. The list is
+// fail-closed: an empty allowlist in production means the bridge refuses every
+// parent rather than trusting "*".
+const ALLOWED_PARENT_ORIGINS: string[] = [
+  ...(process.env.NEXT_PUBLIC_SDK_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  ...(process.env.NODE_ENV !== "production"
+    ? ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"]
+    : []),
+];
+
+function isAllowedOrigin(origin: string): boolean {
+  return ALLOWED_PARENT_ORIGINS.includes(origin);
+}
+
+// Post a message to the embedding parent, but only to origins we trust.
+function broadcastToParents(message: unknown) {
+  if (!(window.parent && window.parent !== window)) return;
+  for (const o of ALLOWED_PARENT_ORIGINS) {
+    try {
+      window.parent.postMessage(message, o);
+    } catch {
+      /* parent not reachable on this origin — ignore */
+    }
+  }
+}
 
 type BridgeRequest =
   | { type: "check-auth"; requestId: string }
@@ -29,8 +56,9 @@ export default function SdkBridgePage() {
 
     function reply(target: MessageEventSource | null, origin: string, requestId: string, data: unknown) {
       if (!target) return;
-      const o = ALLOWED_PARENT_ORIGINS === "*" ? "*" : origin;
-      (target as Window).postMessage({ requestId, data }, { targetOrigin: o });
+      // origin was already validated in onMessage; never reply with "*".
+      if (!isAllowedOrigin(origin)) return;
+      (target as Window).postMessage({ requestId, data }, { targetOrigin: origin });
     }
 
     async function handle(msg: BridgeRequest, source: MessageEventSource | null, origin: string) {
@@ -101,6 +129,8 @@ export default function SdkBridgePage() {
     }
 
     function onMessage(e: MessageEvent) {
+      // Reject any parent origin not on the allowlist before doing any work.
+      if (!isAllowedOrigin(e.origin)) return;
       if (!e.data || typeof e.data !== "object" || !("type" in e.data) || !("requestId" in e.data)) return;
       void handle(e.data as BridgeRequest, e.source, e.origin);
     }
@@ -110,19 +140,12 @@ export default function SdkBridgePage() {
     // Broadcast auth-state changes to the parent so the SDK's signIn() can
     // resolve as soon as the magic-link callback fires in another tab.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (window.parent && window.parent !== window) {
-        const authed = event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION";
-        window.parent.postMessage(
-          { type: "tracebug:auth-changed", authed, event },
-          "*",
-        );
-      }
+      const authed = event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION";
+      broadcastToParents({ type: "tracebug:auth-changed", authed, event });
     });
 
     // Tell parent we're ready
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: "tracebug:bridge-ready" }, "*");
-    }
+    broadcastToParents({ type: "tracebug:bridge-ready" });
     return () => {
       window.removeEventListener("message", onMessage);
       subscription.unsubscribe();

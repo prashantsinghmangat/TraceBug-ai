@@ -22,7 +22,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { title, sizeBytes, hasVideo, videoDurationS, screenshotCount, thumbnail } = body;
+  const { title, sizeBytes, hasVideo, videoDurationS, screenshotCount, thumbnail, priority } = body;
+
+  // Validate priority if present; ignore anything unexpected.
+  const safePriority =
+    priority === "high" || priority === "medium" || priority === "low" ? priority : null;
 
   // Compressed JPEG (~5-30 KB at 320x180). Hard-cap at 100 KB so a
   // misbehaving client can't stuff a full screenshot in here and blow up
@@ -104,6 +108,16 @@ export async function POST(req: Request) {
       await supabase.from("sessions").update({ thumbnail: safeThumbnail }).eq("id", inserted.id);
     } catch {
       // Ignore — dashboard falls back to gradient placeholder.
+    }
+  }
+
+  // Best-effort priority update — resilient to the 0006 migration being
+  // unapplied (same pattern as thumbnail above).
+  if (safePriority) {
+    try {
+      await supabase.from("sessions").update({ priority: safePriority }).eq("id", inserted.id);
+    } catch {
+      // Ignore — share header just omits the priority badge.
     }
   }
 

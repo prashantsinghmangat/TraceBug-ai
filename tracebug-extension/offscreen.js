@@ -231,12 +231,17 @@ async function _startRecordingImpl(options) {
     return { ok: false, error: (err && err.message) || "Could not start screen capture." };
   }
 
+  let micIncluded = false;
   if (options?.withMicrophone) {
     try {
       const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       mic.getAudioTracks().forEach(t => displayStream.addTrack(t));
-    } catch {
-      // mic denied — keep recording without narration
+      micIncluded = mic.getAudioTracks().length > 0;
+    } catch (err) {
+      // Mic permission not granted to the extension. We can't prompt from an
+      // offscreen document — the popup's mic toggle is where the user grants it.
+      // Keep recording (screen + tab audio) so they still get a video.
+      console.warn("[TraceBug offscreen] microphone unavailable — grant it from the extension popup:", (err && err.name) || err);
     }
   }
 
@@ -324,6 +329,12 @@ async function _startRecordingImpl(options) {
   });
 
   _recorder.start(1000);
+  // Tell every tab the recording REALLY started. The page mounts its HUD on
+  // this (not on the start-RPC return) because in some Chrome builds the
+  // offscreen getDisplayMedia surfaces an AbortError on the RPC channel even
+  // though capture began — which used to leave the page showing "Recording
+  // cancelled" with no controls while the screen was actually being recorded.
+  try { broadcast({ type: "tb:rec:started", startedAt: _startedAt, mode: _mode, mimeType: _mimeType, micRequested: !!options?.withMicrophone, micIncluded }); } catch (e) {}
   return { ok: true };
 }
 

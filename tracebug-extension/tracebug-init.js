@@ -36,9 +36,23 @@
     }
   });
 
+  // Re-initialize the SDK if it was torn down via the toolbar's ✕ ("Turn off
+  // TraceBug"), which calls TraceBug.destroy() and removes #tracebug-root.
+  // Without this, popup actions (Screenshot / Capture / Record) silently no-op
+  // because quickCapture() needs the dashboard mounted — even though the
+  // extension popup still shows "On".
+  function ensureActive() {
+    try {
+      if (!document.getElementById("tracebug-root") && window.TraceBug && window.TraceBug.init) {
+        window.TraceBug.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true });
+      }
+    } catch (e) {}
+  }
+
   window.addEventListener("tracebug-ext-action", function (e) {
     var action = e.detail ? e.detail.action : null;
     if (!window.TraceBug || !action) return;
+    ensureActive();
 
     switch (action) {
       case "report":
@@ -115,11 +129,22 @@
         break;
 
       // ── New popup flow ────────────────────────────────────────────────
-      // capture-now: open the Quick Bug modal with a fresh screenshot of the
-      // current page. SDK auto-captures one if no screenshots exist yet.
+      // capture-now: the popup's "Screenshot only" action. Capture a fresh
+      // screenshot of the current page FIRST (the modal isn't open yet, so the
+      // shot is of the real page), then open the Quick Bug modal showing it.
+      // quickCapture() itself never auto-captures, so without this the ticket
+      // opens empty.
       case "capture-now":
-        if (window.TraceBug.quickCapture) {
-          window.TraceBug.quickCapture();
+        var openModal = function () {
+          if (window.TraceBug.quickCapture) window.TraceBug.quickCapture();
+        };
+        if (window.TraceBug.takeScreenshot) {
+          Promise.resolve()
+            .then(function () { return window.TraceBug.takeScreenshot(); })
+            .catch(function () { /* capture failed — still open the modal */ })
+            .then(openModal);
+        } else {
+          openModal();
         }
         break;
 
@@ -136,13 +161,17 @@
         }
         break;
 
-      // view-tickets: open the dashboard panel by clicking its toolbar button.
-      // No public SDK method for this — the panel toggle lives inside the
-      // compact toolbar so we trigger it the same way the user would.
+      // view-tickets: open the cloud dashboard (all tickets shared from the
+      // signed-in account). Falls back to the local toolbar panel only if the
+      // SDK build is too old to have openCloudDashboard.
       case "view-tickets":
-        var panelBtn = document.getElementById("tracebug-toolbar-panel-btn");
-        if (panelBtn) panelBtn.click();
-        else showToast("Open the toolbar to view tickets");
+        if (window.TraceBug.openCloudDashboard) {
+          window.TraceBug.openCloudDashboard();
+        } else {
+          var panelBtn = document.getElementById("tracebug-toolbar-panel-btn");
+          if (panelBtn) panelBtn.click();
+          else showToast("Open the toolbar to view tickets");
+        }
         break;
     }
   });

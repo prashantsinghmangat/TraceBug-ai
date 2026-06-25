@@ -43,20 +43,19 @@ That's it. A compact toolbar appears on the right edge of the screen. TraceBug s
 
 ## What You'll See
 
-After initialization, a **vertical toolbar rail** appears on the right edge of your page with these buttons (top to bottom):
+After initialization, a **compact toolbar rail** appears on the right edge of your page:
 
 | Icon | Action | Shortcut |
 |------|--------|----------|
-| Logo | Open session panel (bug reports, timeline, export) | — |
-| ⚡ | **Quick Bug Capture** — screenshot + auto-filled report + 1-click copy | `Ctrl+Shift+B` |
-| Crosshair | Annotate mode — click elements to attach feedback | `Ctrl+Shift+A` |
-| Grid | Draw mode — drag rectangles/ellipses on the page | `Ctrl+Shift+D` |
-| Camera | Take screenshot | `Ctrl+Shift+S` |
-| List | View all annotations | — |
-| Gear | Settings (pause recording, clear data) | — |
-| ? | Help — replay the onboarding tour | — |
+| 📷 Camera | **Take screenshot** — added to the current ticket | `Ctrl+Shift+S` |
+| ⛶ Region | **Region screenshot** — drag to select an area | — |
+| ▶ Record | **Record** video + session — a quick preflight lets you pick *this tab* or *screen / window* and whether to include the microphone | — |
 
-**First-run tour:** On first use, a 4-step tooltip sequence walks you through the toolbar. Click "?" to replay it anytime.
+Press **`Ctrl+Shift+B`** anywhere to open the **Quick Bug** ticket modal — auto-filled title, editable description, screenshots, the interactive replay scrubber, and one-click export (Open in GitHub · Export .html · Share link · plus Linear / Slack / Jira / AI under **More**).
+
+While recording, a floating HUD (top-center) gives you **Stop · Pause · Mic · Screenshot · Pen · Blur**.
+
+> **Annotate & Draw** modes ship in the SDK but aren't on the toolbar — call them programmatically (`TraceBug.activateAnnotateMode()` / `activateDrawMode()`); Draw is also on the recording HUD's ✎ button. See [annotate-and-draw.md](annotate-and-draw.md).
 
 **Toolbar position:** The toolbar defaults to the right edge, but you can change it:
 
@@ -105,31 +104,30 @@ await TraceBug.quickCapture();
 For more control:
 
 1. Use the app normally — TraceBug records everything silently
-2. Find a bug
-3. Click **Camera** to take a screenshot — it auto-downloads to your system and opens the annotation editor
-4. Open the **session panel** (logo button) to see the full timeline
-5. Click **GitHub Issue** or **Jira Ticket** to copy a complete bug report
+2. Find a bug, then press **`Ctrl+Shift+B`** (or click 📷 Screenshot / ▶ Record on the toolbar)
+3. Review the auto-filled ticket — title, editable description, screenshots, and the interactive replay
+4. Click **Open in GitHub** (or **Export .html** / **Share link**, or pick Jira / Linear / Slack / Fix-with-AI under **More**)
 
-### Saving annotations as a screenshot
+### Annotations in reports
 
-1. Annotate elements or draw regions on the page
-2. Open the **Annotation List** (list icon in toolbar)
-3. Click the green **"Save"** button — captures a screenshot with all annotation badges visible and downloads it
+Element annotations and draw regions (added via the API or the recording HUD's ✎ **Pen**) are captured into screenshots and baked into the exported report and the replay timeline automatically — there's no separate "save" step. To grab a clean annotated frame, take a screenshot while the badges are visible.
 
-### Annotating UI issues
+### Annotating UI issues (programmatic)
 
-1. Press `Ctrl+Shift+A` to enter **Annotate mode**
+These modes ship in the SDK but are no longer on the toolbar — activate them from your own code (see [annotate-and-draw.md](annotate-and-draw.md)).
+
+1. Call `TraceBug.activateAnnotateMode()` to enter **Annotate mode**
 2. Click any element — a feedback form appears
 3. Choose intent (Bug Fix / Redesign / Remove / Question), priority, and describe the issue
 4. Save — a numbered badge appears on the element
-5. Press `Esc` or click **Exit** to leave annotate mode
+5. Press `Esc` or call `TraceBug.deactivateAnnotateMode()` to leave
 
 ### Drawing layout regions
 
-1. Press `Ctrl+Shift+D` to enter **Draw mode**
+1. Call `TraceBug.activateDrawMode()` — or click the ✎ **Pen** on the recording HUD while recording
 2. Drag to draw rectangles or ellipses marking spacing/layout issues
 3. Add a comment for each region
-4. Click **Done** or press `Esc` to exit
+4. Press `Esc` to exit
 
 ## Framework Compatibility
 

@@ -79,7 +79,9 @@ Read storage and cache. Called automatically at `init()`; rarely needed directly
 
 **Free vs premium gates summary** (see [docs/freemium.md](freemium.md) for the full table):
 
-| Method | Free behavior |
+> ⚠️ **Gates are currently OFF** — paid plans aren't live yet, so `PLANS_LIVE` is `false` and `isPremium()` returns `true` for everyone. Every method below behaves as the "premium" path today (unlimited screenshots, PDF/Jira generated, full report). The table describes behavior *when plans launch*.
+
+| Method | Free behavior (when plans are live) |
 |---|---|
 | `takeScreenshot()` / `takeRegionScreenshot()` | Returns `null` and shows upgrade modal at the 2-screenshot cap |
 | `downloadPdf()` | Shows upgrade modal; no PDF generated |
