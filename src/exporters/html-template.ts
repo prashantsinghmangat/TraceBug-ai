@@ -220,9 +220,9 @@ const REPLAY_CSS = `
   --tb-text: #09090b;
   --tb-text-2: #52525b;
   --tb-text-3: #a1a1aa;
-  --tb-accent: #7c3aed;
-  --tb-accent-2: #6d28d9;
-  --tb-accent-soft: #7c3aed14;
+  --tb-accent: #6D4AFF;
+  --tb-accent-2: #5B3FE6;
+  --tb-accent-soft: #6D4AFF14;
   --tb-border: #e4e4e7;
   --tb-border-sub: #f4f4f5;
   --tb-border-hover: #d4d4d8;
@@ -252,9 +252,9 @@ const REPLAY_CSS = `
   --tb-text: #fafafa;
   --tb-text-2: #a1a1aa;
   --tb-text-3: #71717a;
-  --tb-accent: #8b5cf6;
+  --tb-accent: #7C5CFF;
   --tb-accent-2: #a78bfa;
-  --tb-accent-soft: #8b5cf61f;
+  --tb-accent-soft: #7C5CFF1f;
   --tb-border: #27272a;
   --tb-border-sub: #1f1f23;
   --tb-border-hover: #3f3f46;
@@ -1239,7 +1239,7 @@ const REPLAY_RUNTIME = `(function(){
   var markersEl = document.getElementById("tb-rs-markers");
   var jumpEl = document.getElementById("tb-rs-jump");
 
-  var COLORS = { click: "#7B61FF", input: "#7B61FF", select_change: "#7B61FF", form_submit: "#7B61FF", route_change: "#22d3ee", api_request: "#facc15" };
+  var COLORS = { click: "#7C5CFF", input: "#7C5CFF", select_change: "#7C5CFF", form_submit: "#7C5CFF", route_change: "#22d3ee", api_request: "#facc15" };
   // Cap markers
   var MAX = 200;
   var visible = events.length <= MAX ? events : sample(events, MAX);
@@ -1248,7 +1248,7 @@ const REPLAY_RUNTIME = `(function(){
     m.className = ev.isError ? "tb-rs-marker tb-rs-error" : "tb-rs-marker";
     var leftPct = ((ev.timestamp - startedAt) / span) * 100;
     m.style.left = Math.max(0, Math.min(100, leftPct)) + "%";
-    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#7B61FF");
+    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#7C5CFF");
     m.dataset.ts = String(ev.timestamp);
     if (ev.isError) m.textContent = "!";
     m.title = (ev.elapsed || "") + " · " + (ev.description || ev.type);

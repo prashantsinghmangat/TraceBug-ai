@@ -1,7 +1,7 @@
 // ── localStorage-based storage engine ─────────────────────────────────────
 // All session data lives in the browser. Nothing leaves the machine.
 
-import { TraceBugEvent, StoredSession, Annotation, EnvironmentInfo } from "./types";
+import { TraceBugEvent, StoredSession, Annotation, EnvironmentInfo, BugPriority } from "./types";
 
 const SESSIONS_KEY = "tracebug_sessions";
 const ACTIVE_SESSION_KEY = "tracebug_active_session";
@@ -54,17 +54,51 @@ export function getAllSessions(): StoredSession[] {
 function saveSessions(sessions: StoredSession[]): void {
   try {
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    return;
   } catch {
-    // localStorage full — drop oldest session and retry once
-    if (sessions.length > 1) {
-      sessions.shift();
-      try {
-        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-      } catch {
-        // give up silently
+    // localStorage full. Free space *progressively* — the old code dropped a
+    // single session and gave up, which silently lost every pending event when
+    // one large session exceeded quota on its own.
+  }
+
+  // Mutate `sessions` in place as we trim so the caller's array (and the shared
+  // _cachedSessions, which is passed straight in on flush) stays in sync with
+  // what actually persisted.
+  const commit = (next: StoredSession[]): boolean => {
+    try {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
+      sessions.length = 0;
+      sessions.push(...next);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // 1) Drop oldest sessions one at a time.
+  const working = sessions.slice();
+  while (working.length > 1) {
+    working.shift();
+    if (commit(working)) {
+      if (typeof console !== "undefined") console.warn("[TraceBug] Storage full — dropped oldest session(s) to fit.");
+      return;
+    }
+  }
+
+  // 2) One session left and still too big — halve its oldest events repeatedly.
+  const last = working[0];
+  if (last && Array.isArray(last.events)) {
+    while (last.events.length > 1) {
+      last.events = last.events.slice(Math.ceil(last.events.length / 2));
+      if (commit(working)) {
+        if (typeof console !== "undefined") console.warn("[TraceBug] Storage full — trimmed older events from the current session to fit.");
+        return;
       }
     }
   }
+
+  // 3) Genuinely cannot persist — surface it instead of losing data silently.
+  if (typeof console !== "undefined") console.error("[TraceBug] Could not persist sessions: localStorage quota exceeded.");
 }
 
 // ── Get or create the current session ─────────────────────────────────────
@@ -246,6 +280,18 @@ export function saveEnvironment(sessionId: string, env: EnvironmentInfo): void {
   if (!session) return;
 
   session.environment = env;
+  scheduleFlush();
+}
+
+// ── Save tester-assigned priority to session ─────────────────────────────
+
+export function setSessionPriority(sessionId: string, priority: BugPriority): void {
+  const sessions = getCachedSessions();
+  const session = sessions.find((s) => s.sessionId === sessionId);
+  if (!session) return;
+
+  session.priority = priority;
+  session.updatedAt = Date.now();
   scheduleFlush();
 }
 

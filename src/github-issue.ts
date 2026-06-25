@@ -96,7 +96,9 @@ export function generateGitHubIssue(report: BugReport): string {
 
   // Compact environment line
   md += `**Environment:** ${env.browser} ${env.browserVersion} · ${env.os} · ${env.viewport} · ${env.deviceType}\n`;
-  md += `**URL:** ${env.url}\n\n`;
+  md += `**URL:** ${env.url}\n`;
+  if (report.priority) md += `**Priority:** ${report.priority}\n`;
+  md += `\n`;
 
   // What the user did — derived from last clicked element
   if (report.clickedElement) {

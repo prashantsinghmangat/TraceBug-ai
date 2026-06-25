@@ -9,6 +9,17 @@ export const MAX_SCREENSHOTS_PER_TICKET = 5;
 
 export const RETENTION_DAYS = 14;
 export const EXTEND_DAYS = 14;
+// Hard cap on how many times a single share can be extended, so a free user
+// can't keep a report alive forever (14 + 14×MAX_EXTENSIONS days max).
+export const MAX_EXTENSIONS = 4;
+
+// ── AI Root-Cause limits ─────────────────────────────────────────────────────
+// Free-tier monthly cap on AI diagnoses, enforced server-side in
+// /api/ai/diagnose. This is the real cost ceiling per user (each analysis is a
+// metered Claude call). AI_RATE_LIMIT_PER_MINUTE is a coarse burst guard until
+// a proper rate limiter (e.g. Upstash) is wired in.
+export const AI_ANALYSES_FREE_PER_MONTH = 10;
+export const AI_RATE_LIMIT_PER_MINUTE = 5;
 
 export interface QuotaSnapshot {
   video: { used: number; limit: number };

@@ -33,12 +33,12 @@ interface EphemeralShape {
 let _active = false;
 let _cleanup: (() => void) | null = null;
 let _currentShape: DrawShape = "rect";
-let _currentColor = "#7B61FF";
+let _currentColor = "#7C5CFF";
 let _onUpdate: (() => void) | null = null;
 let _onDeactivate: (() => void) | null = null;
 
 const COLORS: { value: string; label: string }[] = [
-  { value: "#7B61FF", label: "Purple" },
+  { value: "#7C5CFF", label: "Purple" },
   { value: "#ef4444", label: "Red" },
   { value: "#eab308", label: "Yellow" },
   { value: "#22c55e", label: "Green" },
@@ -369,11 +369,14 @@ function _createToolbar(root: HTMLElement): HTMLElement {
   // Floating pill near the top-center — far narrower than the old
   // full-width strip so the page content stays visible. Drops the giant
   // gradient bar in favor of the same dark pill style as the recording HUD.
+  // When the recording HUD is showing (also top-center), drop below it so the
+  // two pills don't overlap and both stay usable.
+  const topPx = document.getElementById("tracebug-recording-hud") ? 64 : 12;
   bar.style.cssText = `
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #7B61FF);
+    border: 1px solid var(--tb-accent, #7C5CFF);
     border-radius: 999px;
     padding: 5px 8px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -396,7 +399,8 @@ function _createToolbar(root: HTMLElement): HTMLElement {
     { shape: "pen", label: "Pen", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>` },
     { shape: "rect", label: "Rectangle", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
     { shape: "ellipse", label: "Ellipse", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
-    { shape: "redact", label: "Redact (hide PII)", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="9" width="18" height="6" rx="1"/></svg>` },
+    // "Redact" removed from the palette — superseded by the Blur tool. The
+    // shape rendering code is kept for backward-compat with old saved regions.
   ];
 
   for (const s of shapes) {
@@ -650,7 +654,7 @@ function _showCommentInput(
   saveBtn.textContent = "Save";
   saveBtn.dataset.tracebug = "draw-save-btn";
   saveBtn.style.cssText = `
-    background: #7B61FF; border: none; color: #fff; padding: 8px 14px;
+    background: #7C5CFF; border: none; color: #fff; padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
     font-family: inherit; box-shadow: 0 2px 6px rgba(123,97,255,0.3);
     transition: all 0.15s; white-space: nowrap;
@@ -713,7 +717,7 @@ function _showCommentInput(
 function _toolBtnStyle(active: boolean): string {
   const base = `width:26px;height:26px;padding:0;border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;`;
   if (active) {
-    return base + `background:var(--tb-accent, #7B61FF);color:#fff;border:1px solid var(--tb-accent, #7B61FF);`;
+    return base + `background:var(--tb-accent, #7C5CFF);color:#fff;border:1px solid var(--tb-accent, #7C5CFF);`;
   }
   return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
 }

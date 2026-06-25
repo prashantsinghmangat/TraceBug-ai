@@ -64,14 +64,14 @@ export function showScreenshotTrimModal(
           aria-pressed="${isSel}"
           style="
             position: relative; padding: 0; cursor: pointer; background: var(--tb-bg-primary, #0d0d1a);
-            border: 2px solid ${isSel ? "var(--tb-accent, #7c3aed)" : "var(--tb-border, #2a2a4e)"};
+            border: 2px solid ${isSel ? "var(--tb-accent, #6D4AFF)" : "var(--tb-border, #2a2a4e)"};
             border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 10;
             transition: border-color .15s, transform .12s;
           ">
           <img src="${escapeAttr(s.originalDataUrl || s.dataUrl)}" alt=""
             style="width:100%;height:100%;object-fit:cover;display:block;${isSel ? "" : "opacity:0.55;filter:grayscale(0.4)"}" />
           ${isSel ? `
-            <div style="position:absolute;top:6px;left:6px;background:var(--tb-accent,#7c3aed);color:#fff;
+            <div style="position:absolute;top:6px;left:6px;background:var(--tb-accent,#6D4AFF);color:#fff;
               width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
               font-size:11px;font-weight:700">${order}</div>
           ` : ""}
@@ -104,7 +104,7 @@ export function showScreenshotTrimModal(
         ">Cancel</button>
         <button data-action="continue" type="button" id="tb-trim-continue" style="
           padding:8px 18px;border-radius:8px;border:none;
-          background:var(--tb-accent, #7c3aed);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+          background:var(--tb-accent, #6D4AFF);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
           font-family:inherit;transition:opacity .15s
         ">Continue · upload ${max}</button>
       </div>
@@ -132,14 +132,14 @@ export function showScreenshotTrimModal(
         const isSel = selected.has(id);
         const order = isSel ? [...selected].indexOf(id) + 1 : null;
         b.setAttribute("aria-pressed", String(isSel));
-        (b as HTMLElement).style.borderColor = isSel ? "var(--tb-accent, #7c3aed)" : "var(--tb-border, #2a2a4e)";
+        (b as HTMLElement).style.borderColor = isSel ? "var(--tb-accent, #6D4AFF)" : "var(--tb-border, #2a2a4e)";
         const img = b.querySelector<HTMLImageElement>("img");
         if (img) img.style.cssText = `width:100%;height:100%;object-fit:cover;display:block;${isSel ? "" : "opacity:0.55;filter:grayscale(0.4)"}`;
         const badge = b.querySelector("[data-order-badge]");
         if (isSel && !badge) {
           const d = document.createElement("div");
           d.setAttribute("data-order-badge", "1");
-          d.style.cssText = `position:absolute;top:6px;left:6px;background:var(--tb-accent,#7c3aed);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700`;
+          d.style.cssText = `position:absolute;top:6px;left:6px;background:var(--tb-accent,#6D4AFF);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700`;
           d.textContent = String(order);
           b.appendChild(d);
         } else if (!isSel && badge) {

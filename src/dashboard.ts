@@ -18,7 +18,7 @@ import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingSt
 
 export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
-import { startOnboarding, addLogoPulse, cleanupOnboarding, injectOnboardingStyles } from "./onboarding";
+import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showToast as _showToastModule } from "./ui/toast";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
 // UI helpers extracted to src/ui/ — imported with prefix for gradual migration
@@ -128,7 +128,7 @@ export function mountDashboard(
     #tracebug-root select:focus-visible,
     #tracebug-root textarea:focus-visible,
     #tracebug-root [tabindex]:focus-visible {
-      outline: 2px solid var(--tb-accent, #7B61FF) !important;
+      outline: 2px solid var(--tb-accent, #7C5CFF) !important;
       outline-offset: 2px !important;
     }
     #tracebug-root *:focus:not(:focus-visible) {
@@ -234,7 +234,7 @@ function renderPanel(panel: HTMLElement): void {
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="th-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#th-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#th-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#th-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="48" cy="41" r="5" fill="url(#th-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/></svg>TraceBug AI</div>
+          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B0F"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</div>
           <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording ? "Recording" : "Paused"}"></div>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} · ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
@@ -393,7 +393,7 @@ function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLEle
     <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(preview)}</div>
     <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events · ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7B61FF")}font-size:10px;flex:1">📋 View Ticket</button>
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7C5CFF")}font-size:10px;flex:1">📋 View Ticket</button>
       <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
     </div>
   `;
@@ -1640,7 +1640,7 @@ function smallBtnStyle(color: string): string {
 
 function _tabBtnStyle(active: boolean): string {
   return active
-    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7B61FF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
+    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7C5CFF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
     : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
 }
 
@@ -1736,7 +1736,7 @@ function renderAnnotationList(panel: HTMLElement): void {
         </svg>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
         <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
-          Use <strong style="color:#7B61FF">Annotate</strong> to click elements or <strong style="color:#7B61FF">Draw</strong> to mark regions on the page.
+          Use <strong style="color:#7C5CFF">Annotate</strong> to click elements or <strong style="color:#7C5CFF">Draw</strong> to mark regions on the page.
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
           Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
@@ -1751,7 +1751,7 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   // Element annotations
   if (elAnnotations.length > 0) {
-    html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
+    html += `<div style="font-size:11px;color:#7C5CFF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7C5CFF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
     for (let i = 0; i < elAnnotations.length; i++) {
       const a = elAnnotations[i];
       const intentColor = _getIntentColor(a.intent);
@@ -1776,7 +1776,7 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   // Draw regions
   if (drawRegions.length > 0) {
-    html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
+    html += `<div style="font-size:11px;color:#22D3EE;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #22D3EE;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
     for (let i = 0; i < drawRegions.length; i++) {
       const r = drawRegions[i];
       const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
@@ -1837,7 +1837,7 @@ function renderAnnotationList(panel: HTMLElement): void {
 function _getIntentColor(intent: string): string {
   switch (intent) {
     case "fix": return "#ef4444";
-    case "redesign": return "#7B61FF";
+    case "redesign": return "#7C5CFF";
     case "remove": return "#f97316";
     case "question": return "#3b82f6";
     default: return "#888";
@@ -1930,8 +1930,8 @@ function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement
 
   // Toolbar
   const toolbarHtml = `
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-      <span style="color:var(--tb-text-muted, #888);font-size:11px;margin-right:8px">ANNOTATE:</span>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:var(--tb-bg-secondary, #16161f);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:14px;padding:9px 14px;box-shadow:0 12px 38px rgba(0,0,0,0.6);max-width:calc(100vw - 40px)">
+      <span style="color:var(--tb-text-secondary, #cbd5e1);font-size:11px;font-weight:600;letter-spacing:0.4px;margin-right:6px">ANNOTATE</span>
       <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">✎ Pen</button>
       <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">▭ Highlight</button>
       <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">→ Arrow</button>
@@ -1951,8 +1951,8 @@ function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement
 
   // Bottom actions
   const actionsHtml = `
-    <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
-      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 20px;cursor:pointer;font-size:13px;font-family:var(--tb-font-family, inherit)">✓ Save Annotated</button>
+    <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:var(--tb-bg-secondary, #16161f);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:14px;padding:9px 14px;box-shadow:0 12px 38px rgba(0,0,0,0.6);max-width:calc(100vw - 40px)">
+      <button id="bt-ann-save" style="background:var(--tb-accent, #7C5CFF);color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:9px 22px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 4px 14px rgba(124,92,255,0.4)">✓ Save Annotated</button>
       <button id="bt-ann-download" style="background:var(--tb-success, #22c55e)22;color:var(--tb-success, #22c55e);border:1px solid #22c55e44;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">↓ Download</button>
       <button id="bt-ann-cancel" style="background:#66666622;color:var(--tb-text-muted, #888);border:1px solid #66666644;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Cancel</button>
       <div style="flex:1"></div>
@@ -2105,15 +2105,12 @@ function initAnnotationCanvas(
         return;
       }
       currentTool = tool as "rect" | "arrow" | "text" | "pen";
-      // Update active state
+      // Update active state — re-apply the full style so the selected tool is
+      // unmistakably highlighted (solid accent) and the rest stay readable.
       overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach(tb => {
-        (tb as HTMLElement).style.background = "#22222244";
-        (tb as HTMLElement).style.color = "#888";
-        (tb as HTMLElement).style.borderColor = "#33333344";
+        (tb as HTMLElement).style.cssText = annToolBtnStyle(false);
       });
-      (btn as HTMLElement).style.background = "#3b82f633";
-      (btn as HTMLElement).style.color = "#3b82f6";
-      (btn as HTMLElement).style.borderColor = "#3b82f6";
+      (btn as HTMLElement).style.cssText = annToolBtnStyle(true);
     });
   });
 
@@ -2318,11 +2315,11 @@ function mergeAnnotations(baseDataUrl: string, annotationCanvas: HTMLCanvasEleme
 
 function annToolBtnStyle(active: boolean): string {
   if (active) {
-    return "background:#3b82f633;color:var(--tb-info, #3b82f6);border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
+    return "background:var(--tb-accent, #7C5CFF);color:#fff;border:1px solid var(--tb-accent, #7C5CFF);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 10px rgba(124,92,255,0.45);";
   }
-  return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
+  return "background:var(--tb-bg-elevated, #27272a);color:var(--tb-text-secondary, #cbd5e1);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);";
 }
 
 function annActionBtnStyle(): string {
-  return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
+  return "background:var(--tb-bg-elevated, #27272a);color:var(--tb-text-secondary, #cbd5e1);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
 }

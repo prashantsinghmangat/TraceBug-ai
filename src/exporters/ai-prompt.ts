@@ -39,6 +39,7 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
   if (report.title) lines.push(`**Title:** ${truncate(report.title, 200)}`);
   if (report.summary) lines.push(`**Summary:** ${truncate(report.summary, 240)}`);
   if (report.severity) lines.push(`**Severity:** ${report.severity}`);
+  if (report.priority) lines.push(`**Priority:** ${report.priority}`);
 
   // ── Environment ────────────────────────────────────────────────────────
   if (env) {

@@ -30,6 +30,10 @@ export interface MountReplayScrubberOptions {
   screenshots?: { timestamp: number; dataUrl: string }[];
   /** Optional video element to seek as the scrubber moves. */
   videoEl?: HTMLVideoElement | null;
+  /** Extra "chip" markers shown ABOVE the track — screenshots, notes,
+   *  annotations/markings, and blurs. Screenshots are added automatically from
+   *  `screenshots`; pass the rest here. */
+  extraMarkers?: { timestamp: number; kind: "screenshot" | "note" | "annotation" | "blur"; label: string }[];
   /** Called on every seek with the timestamp closest to the scrubber position. */
   onSeek?: (timestamp: number, marker?: ScrubberMarker) => void;
   /** Optional explicit start/end. Defaults to first/last marker timestamps. */
@@ -47,16 +51,24 @@ export interface ScrubberHandle {
 const STYLE_ID = "tracebug-replay-scrubber-styles";
 
 const MARKER_COLORS: Record<string, string> = {
-  click: "#7B61FF",
-  input: "#7B61FF",
-  select_change: "#7B61FF",
-  form_submit: "#7B61FF",
+  click: "#7C5CFF",
+  input: "#7C5CFF",
+  select_change: "#7C5CFF",
+  form_submit: "#7C5CFF",
   route_change: "#22d3ee",
   api_request: "#facc15",
   error: "#ef4444",
   unhandled_rejection: "#ef4444",
   console_error: "#ef4444",
   mark: "#a855f7",
+};
+
+// Chip markers shown above the track (parity with jam.dev's event chips).
+const CHIP_META: Record<string, { color: string; icon: string }> = {
+  screenshot: { color: "#22d3ee", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>` },
+  annotation: { color: "#a855f7", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>` },
+  note: { color: "#f59e0b", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
+  blur: { color: "#94a3b8", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` },
 };
 
 /**
@@ -191,7 +203,7 @@ export function mountReplayScrubber(
       ? "tb-rs-marker tb-rs-error"
       : isMark ? "tb-rs-marker tb-rs-mark" : "tb-rs-marker";
     m.style.left = `${pct(entry.timestamp, startedAt, span)}%`;
-    m.style.background = isError ? MARKER_COLORS.error : (MARKER_COLORS[entry.type] || "#7B61FF");
+    m.style.background = isError ? MARKER_COLORS.error : (MARKER_COLORS[entry.type] || "#7C5CFF");
     m.dataset.ts = String(entry.timestamp);
     m.dataset.desc = `${entry.elapsed} · ${entry.description}`;
     if (isError) m.textContent = "!";
@@ -303,6 +315,33 @@ export function mountReplayScrubber(
     const ts = Number(target.dataset.ts);
     if (!Number.isNaN(ts)) seek(ts, { snap: true });
   });
+
+  // ── Chip markers above the track ────────────────────────────────────────
+  // Screenshots (auto) + notes / annotations / blurs (from extraMarkers).
+  // Each is an icon chip you can click to jump to that moment.
+  const chipDefs: { ts: number; kind: string; label: string }[] = [];
+  for (const s of screenshots) chipDefs.push({ ts: s.timestamp, kind: "screenshot", label: "Screenshot added" });
+  for (const em of options.extraMarkers || []) chipDefs.push({ ts: em.timestamp, kind: em.kind, label: em.label });
+  if (chipDefs.length > 0) {
+    const chipLayer = document.createElement("div");
+    chipLayer.className = "tb-rs-chips";
+    chipDefs.sort((a, b) => a.ts - b.ts);
+    for (const c of chipDefs) {
+      const meta = CHIP_META[c.kind] || CHIP_META.note;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tb-rs-chip";
+      chip.style.left = `${pct(c.ts, startedAt, span)}%`;
+      chip.style.setProperty("background", meta.color, "important");
+      chip.dataset.ts = String(c.ts);
+      chip.title = `${formatElapsed(c.ts - startedAt)} · ${c.label}`;
+      chip.innerHTML = meta.icon;
+      chip.addEventListener("click", () => seek(c.ts, { snap: false }));
+      chipLayer.appendChild(chip);
+    }
+    track.appendChild(chipLayer);
+    root.classList.add("tb-rs-has-chips");
+  }
 
   // ── Play / pause + speed control ────────────────────────────────────────
   // Two modes:
@@ -597,7 +636,7 @@ function _injectStyles(): void {
       border-radius: var(--tb-radius-md, 6px) !important;
       outline: none !important;
     }
-    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #7B61FF) !important; }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #7C5CFF) !important; }
     .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
     .tb-rs-empty {
       font-size: 11px; color: var(--tb-text-muted, #888);
@@ -680,13 +719,26 @@ function _injectStyles(): void {
       pointer-events: none !important;
     }
     .tb-rs-markers { position: absolute !important; inset: 0 !important; pointer-events: none !important; }
+    /* Chip markers above the track (screenshots / notes / annotations / blur) */
+    .tb-rs-has-chips .tb-rs-track { margin-top: 24px !important; }
+    .tb-rs-chips { position: absolute !important; left: 0 !important; right: 0 !important; bottom: calc(100% + 7px) !important; height: 0 !important; pointer-events: none !important; }
+    .tb-rs-chip {
+      position: absolute !important; bottom: -9px !important; transform: translateX(-50%) !important;
+      width: 18px !important; height: 18px !important; border-radius: 50% !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      color: #fff !important; border: 1.5px solid var(--tb-bg-primary, #0f0f1a) !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.45) !important; cursor: pointer !important; pointer-events: auto !important;
+      padding: 0 !important; font-family: inherit !important; transition: transform 0.12s !important;
+    }
+    .tb-rs-chip:hover { transform: translateX(-50%) scale(1.18) !important; z-index: 3 !important; }
+    .tb-rs-chip svg { display: block !important; }
     .tb-rs-marker {
       position: absolute !important;
       top: 50% !important;
       transform: translate(-50%, -50%) !important;
       width: 10px !important; height: 10px !important;
       border-radius: 50% !important;
-      background: #7B61FF !important;
+      background: #7C5CFF !important;
       box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
       pointer-events: auto !important;
       cursor: pointer !important;
@@ -714,7 +766,7 @@ function _injectStyles(): void {
       width: 16px !important; height: 16px !important;
       transform: translate(-50%, -50%) !important;
       background: #fff !important;
-      border: 3px solid var(--tb-accent, #7B61FF) !important;
+      border: 3px solid var(--tb-accent, #7C5CFF) !important;
       border-radius: 50% !important;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
       pointer-events: none !important;
@@ -742,7 +794,7 @@ function _injectStyles(): void {
     /* Play button + speed selector */
     .tb-rs-play {
       width: 28px !important; height: 28px !important;
-      background: var(--tb-accent, #7B61FF) !important;
+      background: var(--tb-accent, #7C5CFF) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;

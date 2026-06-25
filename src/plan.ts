@@ -7,6 +7,12 @@ export type Plan = "free" | "premium";
 
 const STORAGE_KEY = "tracebug_plan";
 
+// Paid plans aren't live yet — every feature is free for everyone ("plans
+// coming soon"). While this is false, all gates below unlock and no upgrade
+// wall ever interrupts the flow. Flip to true when a real checkout ships; the
+// stored-plan logic underneath is preserved and takes over automatically.
+export const PLANS_LIVE = false;
+
 export const FREE_LIMITS = {
   /** Maximum screenshots a free user can attach to a single ticket. */
   screenshots: 2,
@@ -54,8 +60,11 @@ export function getPlan(): Plan {
   return _cached;
 }
 
-/** Convenience: true when the user is on the premium plan. */
+/** Convenience: true when the user is on the premium plan.
+ *  While plans aren't live, this returns true for everyone so every feature is
+ *  unlocked and free. */
 export function isPremium(): boolean {
+  if (!PLANS_LIVE) return true;
   return _cached === "premium";
 }
 

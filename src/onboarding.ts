@@ -121,7 +121,7 @@ function _showStep(root: HTMLElement): void {
     right: ${window.innerWidth - rect.left + 12}px;
     top: ${rect.top + rect.height / 2 - 24}px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #7B61FF);
+    border: 1px solid var(--tb-accent, #7C5CFF);
     border-radius: var(--tb-radius-lg, 12px);
     padding: 12px 16px;
     max-width: 260px;
@@ -139,8 +139,8 @@ function _showStep(root: HTMLElement): void {
       position: absolute; right: -6px; top: 18px;
       width: 10px; height: 10px;
       background: var(--tb-bg-secondary, #1a1a2e);
-      border-right: 1px solid var(--tb-accent, #7B61FF);
-      border-top: 1px solid var(--tb-accent, #7B61FF);
+      border-right: 1px solid var(--tb-accent, #7C5CFF);
+      border-top: 1px solid var(--tb-accent, #7C5CFF);
       transform: rotate(45deg);
     "></div>
   `;
@@ -164,7 +164,7 @@ function _showStep(root: HTMLElement): void {
               cursor:pointer;font-size:11px;padding:4px 8px;font-family:inherit
             ">Skip</button>
             <button data-action="next" style="
-              background:var(--tb-accent, #7B61FF);border:none;color:#fff;
+              background:var(--tb-accent, #7C5CFF);border:none;color:#fff;
               border-radius:var(--tb-radius-sm, 4px);cursor:pointer;font-size:11px;
               padding:4px 12px;font-family:inherit;font-weight:600
             ">${isLast ? "Done" : "Next"}</button>
@@ -177,7 +177,7 @@ function _showStep(root: HTMLElement): void {
   root.appendChild(tooltip);
 
   // Highlight the target button
-  target.style.boxShadow = "0 0 0 2px var(--tb-accent, #7B61FF), 0 0 12px rgba(123,97,255,0.4)";
+  target.style.boxShadow = "0 0 0 2px var(--tb-accent, #7C5CFF), 0 0 12px rgba(123,97,255,0.4)";
   target.style.borderRadius = "var(--tb-radius-md, 8px)";
 
   tooltip.querySelector('[data-action="next"]')!.addEventListener("click", () => {

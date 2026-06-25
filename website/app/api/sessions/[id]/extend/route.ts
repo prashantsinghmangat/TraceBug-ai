@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { EXTEND_DAYS } from "@/lib/quotas";
+import { EXTEND_DAYS, MAX_EXTENSIONS } from "@/lib/quotas";
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const supabase = createSupabaseServerClient();
@@ -18,6 +18,13 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   if (fetchErr || !row) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  if ((row.extended_count ?? 0) >= MAX_EXTENSIONS) {
+    return NextResponse.json(
+      { error: "max_extensions_reached", limit: MAX_EXTENSIONS },
+      { status: 403 },
+    );
   }
 
   const newExpires = new Date(Date.now() + EXTEND_DAYS * 86400_000).toISOString();

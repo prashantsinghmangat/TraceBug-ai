@@ -19,8 +19,8 @@ let _onDeactivate: (() => void) | null = null;
 let _persistentBadges: HTMLElement[] = [];
 let _badgeRoot: HTMLElement | null = null;
 
-const HIGHLIGHT_COLOR = "#7B61FF";
-const SELECTION_COLOR = "#00E5FF";
+const HIGHLIGHT_COLOR = "#7C5CFF";
+const SELECTION_COLOR = "#22D3EE";
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ export function activateElementAnnotateMode(
   _modeBanner.dataset.tracebug = "annotate-banner";
   _modeBanner.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-    background: linear-gradient(90deg, var(--tb-gradient-start, #7B61FF), var(--tb-gradient-end, #5B3FDF)); color: #fff;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #7C5CFF), var(--tb-gradient-end, #5B3FDF)); color: #fff;
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
     box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
@@ -560,7 +560,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#7B61FF;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
+      <button id="tracebug-ann-save" style="background:#7C5CFF;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
     </div>
   `;
 
@@ -661,7 +661,7 @@ function _intentBtnStyle(intent: AnnotationIntent, active: boolean): string {
 function _intentColor(intent: AnnotationIntent): string {
   switch (intent) {
     case "fix": return "#ef4444";
-    case "redesign": return "#7B61FF";
+    case "redesign": return "#7C5CFF";
     case "remove": return "#f97316";
     case "question": return "#3b82f6";
   }

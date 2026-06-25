@@ -194,6 +194,20 @@ if (isExtAlive()) {
   } catch (e) {}
 }
 
+// ── Recording-started fan-out ───────────────────────────────────────────────
+// The offscreen broadcasts `tb:rec:started` the moment MediaRecorder.start
+// fires. Forward it to the page so the SDK can mount the recording HUD even if
+// the start RPC's return value got lost/aborted on the way back.
+if (isExtAlive()) {
+  try {
+    chrome.runtime.onMessage.addListener((message) => safeRun(() => {
+      if (message && message.type === "tb:rec:started") {
+        window.dispatchEvent(new CustomEvent("tracebug-rec-started", { detail: message }));
+      }
+    }));
+  } catch (e) {}
+}
+
 // ── Listen for messages from popup/background ───────────────────────────────
 if (isExtAlive()) {
  try {

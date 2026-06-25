@@ -31,11 +31,12 @@ export default defineConfig([
     outExtension: () => ({ js: ".mjs" }),
   },
   // ── IIFE build for Chrome Extension ───────────────────────────────────
-  // NOTE: This bundle is ~720KB because html2canvas is inlined (IIFE format
-  // cannot split chunks — everything must be a single file for the extension
-  // content-script). Future optimization: gate html2canvas behind an
-  // extension-only entry point so it's dropped entirely when the extension
-  // uses chrome.tabs.captureVisibleTab instead.
+  // NOTE: This bundle is ~2.5MB because IIFE format cannot split chunks, so
+  // esbuild inlines every dynamic import — html2canvas AND axe-core — into the
+  // single content-script file. Marking them `external` is a no-op for IIFE
+  // (there's no runtime loader to resolve the import). Shrinking this requires
+  // stubbing those modules via an esbuild plugin, which also drops a11y
+  // scanning from the extension — a product call, tracked separately.
   {
     entry: { "tracebug-sdk": "src/index.ts" },
     format: ["iife"],
