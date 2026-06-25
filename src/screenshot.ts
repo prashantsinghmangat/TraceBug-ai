@@ -33,6 +33,19 @@ function loadHtml2Canvas(): Promise<typeof html2canvasStatic | null> {
 }
 
 /**
+ * Invisible <link> tags (preload/prefetch/etc.) that html2canvas would otherwise
+ * clone into its offscreen render iframe — where the browser logs warnings like
+ * "<link rel=preload> must have a valid `as` value". They contribute nothing to
+ * the rendered pixels, so we skip cloning them. Used by every html2canvas
+ * `ignoreElements` callback in the SDK.
+ */
+export function isNonRenderingLink(el: Element): boolean {
+  if (el.tagName !== "LINK") return false;
+  const rel = (el.getAttribute("rel") || "").toLowerCase();
+  return /(^|\s)(preload|prefetch|modulepreload|preconnect|dns-prefetch)(\s|$)/.test(rel);
+}
+
+/**
  * When running inside a Chrome Extension, html2canvas fails due to CORS.
  * Use chrome.tabs.captureVisibleTab instead, routed through a CustomEvent
  * to the content script → background script.
@@ -102,7 +115,22 @@ export function updateScreenshot(
   return true;
 }
 
-export async function captureScreenshot(
+// Serialize captures. Each one hides the SDK UI → renders → restores it; two
+// concurrent calls (toolbar + HUD + error-prompt) would interleave those steps
+// and either capture the toolbar or leave the page UI hidden. Chaining makes
+// each capture atomic.
+let _captureLock: Promise<unknown> = Promise.resolve();
+
+export function captureScreenshot(
+  lastEvent?: TraceBugEvent | null,
+  options?: { includeAnnotations?: boolean; highlightClicked?: boolean }
+): Promise<ScreenshotData> {
+  const run = _captureLock.then(() => _captureScreenshotImpl(lastEvent, options));
+  _captureLock = run.catch(() => {}); // a failed capture must not break the chain
+  return run;
+}
+
+async function _captureScreenshotImpl(
   lastEvent?: TraceBugEvent | null,
   options?: { includeAnnotations?: boolean; highlightClicked?: boolean }
 ): Promise<ScreenshotData> {
@@ -168,6 +196,9 @@ export async function captureScreenshot(
           windowWidth: window.innerWidth,
           windowHeight: window.innerHeight,
           ignoreElements: (el: Element) => {
+            // Skip invisible preload/prefetch links — avoids a browser warning
+            // when html2canvas clones them into its render iframe.
+            if (isNonRenderingLink(el)) return true;
             if (includeAnnotations) {
               // Keep annotation badges/outlines, skip everything else from TraceBug
               const tbAttr = (el as HTMLElement).dataset?.tracebug || "";
@@ -195,13 +226,14 @@ export async function captureScreenshot(
   } catch (err) {
     console.warn("[TraceBug] Screenshot capture error:", err);
     dataUrl = await captureViaCanvas();
-  }
-
-  // Restore TraceBug UI
-  if (includeAnnotations) {
-    hiddenEls.forEach(el => el.style.display = "");
-  } else {
-    if (root) root.style.display = "";
+  } finally {
+    // Restore TraceBug UI — in finally so a capture failure can never leave the
+    // page UI hidden.
+    if (includeAnnotations) {
+      hiddenEls.forEach(el => el.style.display = "");
+    } else {
+      if (root) root.style.display = "";
+    }
   }
 
   // Smart-screenshot post-processing: draw a click highlight if requested

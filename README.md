@@ -62,8 +62,10 @@ SDK silently captures: clicks, inputs, navigation, API calls, errors, environmen
   ↓
 Three primary toolbar actions cover the main workflows:
   • ⚡ Quick Bug   — Ctrl+Shift+B opens the ticket-review modal
-  • 🔍 Scan Page   — runs 6 detectors (a11y, broken images, mixed content,
-                     failed APIs, slow APIs, JS errors) → opens issues panel
+  • 🔍 Scan Page   — runs in-browser detectors (a11y via axe-core, broken
+                     images, mixed content, frustration signals like rage/dead
+                     clicks, plus failed APIs, slow APIs, and JS errors from
+                     the session) → opens issues panel
   • 🔴 Record      — arms Sentry mode: rolling video buffer + HUD with
                      timestamped comments. File multiple bugs from one
                      screen-share without re-picking
@@ -449,10 +451,11 @@ The compact toolbar on the right edge of the screen provides:
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Shift+A` | Toggle annotate mode |
-| `Ctrl+Shift+D` | Toggle draw mode |
-| `Ctrl+Shift+S` | Take screenshot |
-| `Esc` | Exit current mode |
+| `Ctrl+Shift+B` | Open the Quick Bug ticket modal |
+| `Ctrl+Shift+S` | Take a screenshot |
+| `Esc` | Exit the current mode / close the modal |
+
+> Note: `Ctrl+Shift+A` (annotate) and `Ctrl+Shift+D` (draw) are no longer bound by default. The underlying modes remain callable via the programmatic API (`TraceBug.activateAnnotateMode()` / `activateDrawMode()`); draw mode is also reachable from the ✎ button on the recording HUD.
 
 ## Documentation
 

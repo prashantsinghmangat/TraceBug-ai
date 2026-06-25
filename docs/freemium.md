@@ -1,8 +1,15 @@
 # Freemium Plan
 
-TraceBug ships a Free / Premium split. The free tier covers the entire bug-reporting workflow end-to-end; the premium tier unlocks polish features (PDF, Jira, unlimited screenshots, advanced metadata, custom branding).
+> **Current status — everything is free.** Paid plans aren't live yet ("coming
+> soon"). The flag `PLANS_LIVE` in [src/plan.ts](../src/plan.ts) is `false`, which
+> makes `isPremium()` return `true` for everyone — so **none of the gates below
+> are active**: unlimited screenshots, PDF, Jira, full network/console in
+> reports, and custom branding all work for free right now. The table documents
+> the *planned* split for when paid plans launch (flip `PLANS_LIVE` to `true`).
 
-There is **no backend, no auth, no payment integration**. The plan is a local flag persisted to `chrome.storage.local` (extension context) or `localStorage` (web SDK). The "Upgrade" CTA is a placeholder — flip the flag manually for testing via the **dev toggle** in the upgrade modal.
+TraceBug is designed around a Free / Premium split. The free tier covers the entire bug-reporting workflow end-to-end; the premium tier will unlock polish features (PDF, Jira, unlimited screenshots, advanced metadata, custom branding) once plans go live.
+
+There is **no backend, no auth, no payment integration**. The plan is a local flag persisted to `chrome.storage.local` (extension context) or `localStorage` (web SDK). When plans launch, the "Upgrade" CTA will drive it; today it's a "coming soon" note and you can flip the flag manually for testing via the **dev toggle**.
 
 ---
 

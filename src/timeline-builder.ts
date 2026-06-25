@@ -7,11 +7,16 @@ import { TraceBugEvent, TimelineEntry } from "./types";
 export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
   if (events.length === 0) return [];
 
-  const startTs = events[0].timestamp;
+  // Process in chronological order. Events are normally appended in order, but
+  // restored/merged sessions (e.g. across a reload) can interleave timestamps,
+  // which made the replay timeline + scrubber markers appear to run backward.
+  const ordered = [...events].sort((a, b) => a.timestamp - b.timestamp);
+
+  const startTs = ordered[0].timestamp;
   const timeline: TimelineEntry[] = [];
   let lastDescription = "";
 
-  for (const ev of events) {
+  for (const ev of ordered) {
     const elapsed = formatElapsed(ev.timestamp - startTs);
     const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
     const isApiError = ev.type === "api_request" &&

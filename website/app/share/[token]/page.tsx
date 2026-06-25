@@ -38,6 +38,20 @@ export default async function SharePage({ params }: { params: { token: string } 
   if (!row) notFound();
 
   const admin = createSupabaseAdminClient();
+
+  // Best-effort: the `priority` column may not exist yet (0006 migration
+  // pending). A failed/empty select just leaves the badge off — never 404s.
+  let priority: "high" | "medium" | "low" | null = null;
+  {
+    const { data: p } = await admin
+      .from("sessions")
+      .select("priority")
+      .eq("share_token", params.token)
+      .maybeSingle();
+    const val = (p as { priority?: string } | null)?.priority;
+    if (val === "high" || val === "medium" || val === "low") priority = val;
+  }
+
   let html: string;
   try {
     const signedUrl = await createSignedDownloadUrl(admin, row.storage_key, 300);
@@ -54,6 +68,19 @@ export default async function SharePage({ params }: { params: { token: string } 
         <span className="text-text-muted">
           Shared via <a href="/" className="text-primary hover:underline">TraceBug</a>
           {row.title && <span className="text-text-primary ml-2">· {row.title}</span>}
+          {priority && (
+            <span
+              className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                priority === "high"
+                  ? "bg-red-500/15 text-red-400"
+                  : priority === "medium"
+                    ? "bg-amber-500/15 text-amber-400"
+                    : "bg-emerald-500/15 text-emerald-400"
+              }`}
+            >
+              {priority} priority
+            </span>
+          )}
         </span>
         <span className="text-text-subtle">
           Expires {new Date(row.expires_at).toLocaleDateString()}

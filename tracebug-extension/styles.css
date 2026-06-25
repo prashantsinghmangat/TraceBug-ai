@@ -13,9 +13,9 @@
   --text-3: #a1a1aa;
   --border: #e4e4e7;
   --border-hover: #d4d4d8;
-  --accent: #7c3aed;
-  --accent-2: #6d28d9;
-  --accent-soft: rgba(124, 58, 237, 0.10);
+  --accent: #6D4AFF;
+  --accent-2: #5B3FE6;
+  --accent-soft: rgba(109, 74, 255, 0.10);
   --success: #059669;
   --success-bg: rgba(5, 150, 105, 0.10);
   --error: #dc2626;
@@ -35,9 +35,9 @@
   --text-3: #71717a;
   --border: #27272a;
   --border-hover: #3f3f46;
-  --accent: #8b5cf6;
-  --accent-2: #a78bfa;
-  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent: #7C5CFF;
+  --accent-2: #9B7DFF;
+  --accent-soft: rgba(124, 92, 255, 0.14);
   --success: #10b981;
   --success-bg: rgba(16, 185, 129, 0.14);
   --error: #ef4444;
@@ -98,7 +98,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   transition: transform 0.15s, box-shadow 0.15s;
   text-align: left;
 }
-.cta-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124, 58, 237, 0.35); }
+.cta-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(124, 92, 255, 0.35); }
 .cta-primary:active { transform: translateY(0); }
 .cta-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 .cta-icon { font-size: 22px; line-height: 1; }
@@ -213,7 +213,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-avatar {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+  background: linear-gradient(135deg, #7C5CFF, #22D3EE);
   color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0;
 }
 .account-body { flex: 1; min-width: 0; }

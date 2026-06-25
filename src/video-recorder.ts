@@ -98,6 +98,10 @@ function scheduleDurationCap(): void {
 let _recorder: MediaRecorder | null = null;
 let _stream: MediaStream | null = null;
 let _chunks: Blob[] = [];
+// Guards against the native-"Stop sharing" track `ended` handler re-entering
+// the stop flow when WE call track.stop() during finalization (which would
+// double-fire _onAutoStop → the ticket modal opening twice).
+let _stopping = false;
 
 // ── Auto-stop callback (when user hits browser's "Stop sharing" button) ──
 // SDK init wires this so the HUD can dismiss + Quick Bug modal can open with
@@ -263,6 +267,10 @@ async function _startVideoRecordingInner(options?: {
     _capturesTaken = 0;
     _comments = [];
     _mimeType = "video/webm";
+    // Same 2-min cloud-share cap as the in-page path. Previously the extension
+    // transport had NO client cap, so a long recording would silently blow past
+    // the 50 MB cloud-upload limit. Cleared by finalizeStop on any stop.
+    scheduleDurationCap();
     _onStatus?.("recording");
     return true;
   }
@@ -427,6 +435,45 @@ export function wireAutoStopListener(): void {
   });
 }
 
+// ── Recording-started subscription (extension mode only) ─────────────────
+// Mirror of wireAutoStopListener: the offscreen broadcasts tb:rec:started the
+// moment capture begins; the content-script relays it as `tracebug-rec-started`.
+// We flip the page-side recording state (in case the start RPC reported
+// cancelled by mistake) and let the SDK mount the HUD. Idempotent — the HUD
+// guards double-mounts and we no-op if already active.
+
+let _onStarted: (() => void) | null = null;
+export function setStartedHandler(cb: (() => void) | null): void { _onStarted = cb; }
+
+let _startedWired = false;
+export function wireStartedListener(): void {
+  if (_startedWired || typeof window === "undefined") return;
+  _startedWired = true;
+  window.addEventListener("tracebug-rec-started", (e: Event) => {
+    const d = ((e as CustomEvent).detail || {}) as {
+      startedAt?: number; mode?: string; mimeType?: string;
+      micRequested?: boolean; micIncluded?: boolean;
+    };
+    if (!_active) {
+      _active = true;
+      _startedAt = typeof d.startedAt === "number" ? d.startedAt : Date.now();
+      _mode = d.mode === "standard" ? "standard" : "rolling";
+      _mimeType = typeof d.mimeType === "string" && d.mimeType ? d.mimeType : "video/webm";
+    }
+    // Mic was requested but the extension lacks microphone permission (an
+    // offscreen document can't prompt). Tell the user where to grant it.
+    if (d.micRequested && d.micIncluded === false) {
+      const root = document.getElementById("tracebug-root");
+      if (root) {
+        import("./ui/toast")
+          .then((m) => m.showToast("Recording without mic — turn on the microphone toggle in the TraceBug extension popup (it'll ask for permission), then record again.", root))
+          .catch(() => {});
+      }
+    }
+    _onStarted?.();
+  });
+}
+
 // ── In-page transport (preserved unchanged) ──────────────────────────────
 
 function pickMimeType(): string {
@@ -516,7 +563,9 @@ async function startVideoRecordingInPage(
   // toolbar stays "recording…" forever from the user's POV.
   displayStream.getVideoTracks().forEach(track => {
     track.addEventListener("ended", async () => {
-      if (!_active) return;
+      // Ignore the `ended` we trigger ourselves by calling track.stop() during
+      // a normal stop — only the user's native "Stop sharing" should auto-stop.
+      if (!_active || _stopping) return;
       try {
         const recording = await stopVideoRecording();
         _onAutoStop?.(recording);
@@ -550,6 +599,7 @@ function stopVideoRecordingInPage(): Promise<VideoRecording | null> {
       resolve(null);
       return;
     }
+    _stopping = true;
     const recorder = _recorder;
     const stream = _stream;
     const startedAt = _startedAt;
@@ -687,6 +737,7 @@ function installInPageReloadGuards(): void {
 
 function finalizeStop(_recording: VideoRecording | null): void {
   _active = false;
+  _stopping = false;
   _comments = [];
   _capturesTaken = 0;
   _startedAt = 0;

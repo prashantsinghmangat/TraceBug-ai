@@ -68,15 +68,38 @@ var TraceBugModule = (() => {
   function saveSessions(sessions) {
     try {
       localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+      return;
     } catch (e2) {
-      if (sessions.length > 1) {
-        sessions.shift();
-        try {
-          localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-        } catch (e3) {
+    }
+    const commit = (next) => {
+      try {
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
+        sessions.length = 0;
+        sessions.push(...next);
+        return true;
+      } catch (e2) {
+        return false;
+      }
+    };
+    const working = sessions.slice();
+    while (working.length > 1) {
+      working.shift();
+      if (commit(working)) {
+        if (typeof console !== "undefined") console.warn("[TraceBug] Storage full \u2014 dropped oldest session(s) to fit.");
+        return;
+      }
+    }
+    const last = working[0];
+    if (last && Array.isArray(last.events)) {
+      while (last.events.length > 1) {
+        last.events = last.events.slice(Math.ceil(last.events.length / 2));
+        if (commit(working)) {
+          if (typeof console !== "undefined") console.warn("[TraceBug] Storage full \u2014 trimmed older events from the current session to fit.");
+          return;
         }
       }
     }
+    if (typeof console !== "undefined") console.error("[TraceBug] Could not persist sessions: localStorage quota exceeded.");
   }
   function getCachedSessions() {
     if (!_cachedSessions) {
@@ -169,6 +192,14 @@ var TraceBugModule = (() => {
     const session = sessions.find((s) => s.sessionId === sessionId);
     if (!session) return;
     session.environment = env;
+    scheduleFlush();
+  }
+  function setSessionPriority(sessionId, priority) {
+    const sessions = getCachedSessions();
+    const session = sessions.find((s) => s.sessionId === sessionId);
+    if (!session) return;
+    session.priority = priority;
+    session.updatedAt = Date.now();
     scheduleFlush();
   }
   function clearAllSessions() {
@@ -8082,6 +8113,11 @@ var TraceBugModule = (() => {
     }).catch(() => null);
     return _html2canvasPromise;
   }
+  function isNonRenderingLink(el) {
+    if (el.tagName !== "LINK") return false;
+    const rel = (el.getAttribute("rel") || "").toLowerCase();
+    return /(^|\s)(preload|prefetch|modulepreload|preconnect|dns-prefetch)(\s|$)/.test(rel);
+  }
   function isExtensionContext() {
     return !!window.__TRACEBUG_INITIALIZED__;
   }
@@ -8126,7 +8162,13 @@ var TraceBugModule = (() => {
     if (patch.height !== void 0) ss.height = patch.height;
     return true;
   }
-  async function captureScreenshot(lastEvent, options) {
+  function captureScreenshot(lastEvent, options) {
+    const run = _captureLock.then(() => _captureScreenshotImpl(lastEvent, options));
+    _captureLock = run.catch(() => {
+    });
+    return run;
+  }
+  async function _captureScreenshotImpl(lastEvent, options) {
     var _a, _b, _c, _d, _e;
     screenshotCounter++;
     const includeAnnotations = (_a = options == null ? void 0 : options.includeAnnotations) != null ? _a : false;
@@ -8174,6 +8216,7 @@ var TraceBugModule = (() => {
             windowHeight: window.innerHeight,
             ignoreElements: (el) => {
               var _a2, _b2;
+              if (isNonRenderingLink(el)) return true;
               if (includeAnnotations) {
                 const tbAttr = ((_a2 = el.dataset) == null ? void 0 : _a2.tracebug) || "";
                 if (tbAttr === "annotation-badge" || tbAttr === "annotation-outline") return false;
@@ -8197,11 +8240,12 @@ var TraceBugModule = (() => {
     } catch (err) {
       console.warn("[TraceBug] Screenshot capture error:", err);
       dataUrl = await captureViaCanvas();
-    }
-    if (includeAnnotations) {
-      hiddenEls.forEach((el) => el.style.display = "");
-    } else {
-      if (root) root.style.display = "";
+    } finally {
+      if (includeAnnotations) {
+        hiddenEls.forEach((el) => el.style.display = "");
+      } else {
+        if (root) root.style.display = "";
+      }
     }
     let originalDataUrl;
     if (highlightClicked && (lastEvent == null ? void 0 : lastEvent.type) === "click") {
@@ -8431,7 +8475,7 @@ var TraceBugModule = (() => {
       img.src = src;
     });
   }
-  var _html2canvasPromise, MAX_SCREENSHOTS, screenshotCounter, screenshots;
+  var _html2canvasPromise, MAX_SCREENSHOTS, screenshotCounter, screenshots, _captureLock;
   var init_screenshot = __esm({
     "src/screenshot.ts"() {
       "use strict";
@@ -8439,6 +8483,7 @@ var TraceBugModule = (() => {
       MAX_SCREENSHOTS = 50;
       screenshotCounter = 0;
       screenshots = [];
+      _captureLock = Promise.resolve();
     }
   });
 
@@ -9166,6 +9211,79 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/storage-capture.ts
+  function maskValue(raw) {
+    if (!raw) return "";
+    if (raw.length <= 8) return "[REDACTED]";
+    return `${raw.slice(0, 4)}\u2026${raw.slice(-4)} [REDACTED]`;
+  }
+  function readArea(area) {
+    var _a;
+    const entries = [];
+    let truncated = 0;
+    let len = 0;
+    try {
+      len = area.length;
+    } catch (e2) {
+      return { entries, truncated: 0 };
+    }
+    for (let i = 0; i < len; i++) {
+      let key = null;
+      let value = "";
+      try {
+        key = area.key(i);
+        if (key == null) continue;
+        value = (_a = area.getItem(key)) != null ? _a : "";
+      } catch (e2) {
+        continue;
+      }
+      if (entries.length >= MAX_ENTRIES_PER_AREA) {
+        truncated++;
+        continue;
+      }
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+      let outValue;
+      let redacted = false;
+      if (sensitive) {
+        outValue = maskValue(value);
+        redacted = true;
+      } else if (value.length > MAX_VALUE_LEN) {
+        outValue = value.slice(0, MAX_VALUE_LEN) + "\u2026";
+      } else {
+        outValue = value;
+      }
+      entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
+    }
+    return { entries, truncated };
+  }
+  function captureStorageSnapshot() {
+    const snapshot = { local: [], session: [] };
+    if (typeof window === "undefined") return snapshot;
+    try {
+      const ls = readArea(window.localStorage);
+      snapshot.local = ls.entries;
+      if (ls.truncated > 0) snapshot.localTruncated = ls.truncated;
+    } catch (e2) {
+    }
+    try {
+      const ss = readArea(window.sessionStorage);
+      snapshot.session = ss.entries;
+      if (ss.truncated > 0) snapshot.sessionTruncated = ss.truncated;
+    } catch (e2) {
+    }
+    return snapshot;
+  }
+  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE;
+  var init_storage_capture = __esm({
+    "src/storage-capture.ts"() {
+      "use strict";
+      MAX_ENTRIES_PER_AREA = 50;
+      MAX_VALUE_LEN = 300;
+      SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
+      SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
+    }
+  });
+
   // src/voice-recorder.ts
   function isVoiceSupported() {
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -9304,6 +9422,109 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/ui/toast.ts
+  var toast_exports = {};
+  __export(toast_exports, {
+    showActionToast: () => showActionToast,
+    showToast: () => showToast
+  });
+  function showActionToast(message, actionLabel, onAction, root) {
+    const existing = root.querySelector(".bt-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "bt-toast bt-toast-action";
+    toast.dataset.tracebug = "toast";
+    toast.setAttribute("role", "alert");
+    toast.style.cssText = `
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--tb-bg-secondary, #1a1a2e);color:var(--tb-text-primary, #e0e0e0);
+    border:1px solid var(--tb-error, #ef4444);border-left:4px solid var(--tb-error, #ef4444);
+    border-radius:10px;padding:12px 14px 12px 16px;font-size:13px;
+    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
+    max-width:480px;line-height:1.4;
+    display:flex;align-items:center;gap:12px;
+    animation:tracebug-toast-in 0.2s ease;
+  `;
+    if (!document.getElementById("tracebug-toast-anim")) {
+      const style = document.createElement("style");
+      style.id = "tracebug-toast-anim";
+      style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
+      document.head.appendChild(style);
+    }
+    toast.innerHTML = `
+    <span style="flex:1">${message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
+    <button data-tb-action="capture" style="background:var(--tb-accent, #7C5CFF);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</button>
+    <button data-tb-action="dismiss" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px">\u2715</button>
+  `;
+    root.appendChild(toast);
+    const liveRegion = document.getElementById("tracebug-live");
+    if (liveRegion) liveRegion.textContent = message;
+    const dismiss = () => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(-50%) translateY(8px)";
+      toast.style.transition = "all 0.3s ease";
+      setTimeout(() => toast.remove(), 300);
+    };
+    toast.querySelector('[data-tb-action="capture"]').addEventListener("click", () => {
+      dismiss();
+      onAction();
+    });
+    toast.querySelector('[data-tb-action="dismiss"]').addEventListener("click", dismiss);
+    setTimeout(dismiss, 8e3);
+  }
+  function showToast(message, root) {
+    const existing = root.querySelector(".bt-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "bt-toast";
+    toast.dataset.tracebug = "toast";
+    toast.style.cssText = `
+    position:fixed !important;
+    bottom:32px !important;
+    left:50% !important;
+    transform:translateX(-50%) !important;
+    background:#0E1117 !important;
+    color:#FFFFFF !important;
+    border:1px solid #7C5CFF !important;
+    border-radius:10px !important;
+    padding:14px 22px !important;
+    font-size:14px !important;
+    font-weight:600 !important;
+    letter-spacing:-0.005em !important;
+    font-family:system-ui,-apple-system,sans-serif !important;
+    z-index:2147483647 !important;
+    box-shadow:0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(124,92,255,0.12) !important;
+    pointer-events:auto !important;
+    max-width:460px !important;
+    text-align:center !important;
+    line-height:1.4 !important;
+    animation:tracebug-toast-in 0.2s ease !important;
+  `;
+    if (!document.getElementById("tracebug-toast-anim")) {
+      const style = document.createElement("style");
+      style.id = "tracebug-toast-anim";
+      style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
+      document.head.appendChild(style);
+    }
+    toast.textContent = message;
+    toast.setAttribute("role", "status");
+    root.appendChild(toast);
+    const liveRegion = document.getElementById("tracebug-live");
+    if (liveRegion) liveRegion.textContent = message;
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(-50%) translateY(8px)";
+      toast.style.transition = "all 0.3s ease";
+      setTimeout(() => toast.remove(), 300);
+    }, 2800);
+  }
+  var init_toast = __esm({
+    "src/ui/toast.ts"() {
+      "use strict";
+    }
+  });
+
   // src/video-recorder.ts
   function clearDurationCapTimers() {
     if (_warnTimer) {
@@ -9436,6 +9657,7 @@ var TraceBugModule = (() => {
       _capturesTaken = 0;
       _comments = [];
       _mimeType = "video/webm";
+      scheduleDurationCap();
       _onStatus == null ? void 0 : _onStatus("recording");
       return true;
     }
@@ -9560,6 +9782,30 @@ var TraceBugModule = (() => {
       _onAutoStop == null ? void 0 : _onAutoStop(recording);
     });
   }
+  function setStartedHandler(cb) {
+    _onStarted = cb;
+  }
+  function wireStartedListener() {
+    if (_startedWired || typeof window === "undefined") return;
+    _startedWired = true;
+    window.addEventListener("tracebug-rec-started", (e2) => {
+      const d = e2.detail || {};
+      if (!_active) {
+        _active = true;
+        _startedAt = typeof d.startedAt === "number" ? d.startedAt : Date.now();
+        _mode = d.mode === "standard" ? "standard" : "rolling";
+        _mimeType = typeof d.mimeType === "string" && d.mimeType ? d.mimeType : "video/webm";
+      }
+      if (d.micRequested && d.micIncluded === false) {
+        const root = document.getElementById("tracebug-root");
+        if (root) {
+          Promise.resolve().then(() => (init_toast(), toast_exports)).then((m) => m.showToast("Recording without mic \u2014 turn on the microphone toggle in the TraceBug extension popup (it'll ask for permission), then record again.", root)).catch(() => {
+          });
+        }
+      }
+      _onStarted == null ? void 0 : _onStarted();
+    });
+  }
   function pickMimeType() {
     const candidates = [
       "video/webm;codecs=vp9,opus",
@@ -9628,7 +9874,7 @@ var TraceBugModule = (() => {
     };
     displayStream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", async () => {
-        if (!_active) return;
+        if (!_active || _stopping) return;
         try {
           const recording = await stopVideoRecording();
           _onAutoStop == null ? void 0 : _onAutoStop(recording);
@@ -9654,6 +9900,7 @@ var TraceBugModule = (() => {
         resolve(null);
         return;
       }
+      _stopping = true;
       const recorder = _recorder;
       const stream = _stream;
       const startedAt = _startedAt;
@@ -9779,6 +10026,7 @@ var TraceBugModule = (() => {
   }
   function finalizeStop(_recording) {
     _active = false;
+    _stopping = false;
     _comments = [];
     _capturesTaken = 0;
     _startedAt = 0;
@@ -9867,7 +10115,7 @@ var TraceBugModule = (() => {
       }));
     });
   }
-  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _reloadGuardsInstalled, _rpcCounter;
+  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled, _rpcCounter;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
@@ -9888,12 +10136,15 @@ var TraceBugModule = (() => {
       _recorder = null;
       _stream = null;
       _chunks = [];
+      _stopping = false;
       _onAutoStop = null;
       _paused = false;
       _pausedAt = 0;
       _pausedMs = 0;
       _startInFlight = null;
       _autoStopWired = false;
+      _onStarted = null;
+      _startedWired = false;
       _reloadGuardsInstalled = false;
       _rpcCounter = 0;
     }
@@ -10572,10 +10823,11 @@ var TraceBugModule = (() => {
   function buildTimeline(events) {
     var _a, _b;
     if (events.length === 0) return [];
-    const startTs = events[0].timestamp;
+    const ordered = [...events].sort((a2, b) => a2.timestamp - b.timestamp);
+    const startTs = ordered[0].timestamp;
     const timeline = [];
     let lastDescription = "";
-    for (const ev of events) {
+    for (const ev of ordered) {
       const elapsed = formatElapsed(ev.timestamp - startTs);
       const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
       const isApiError = ev.type === "api_request" && (((_a = ev.data.request) == null ? void 0 : _a.statusCode) >= 400 || ((_b = ev.data.request) == null ? void 0 : _b.statusCode) === 0);
@@ -10693,7 +10945,7 @@ var TraceBugModule = (() => {
       if (!str) continue;
       total += 1;
       if (picked.length < MAX_INLINE_ATTRS) {
-        const value = str.length > MAX_VALUE_LEN ? str.slice(0, MAX_VALUE_LEN) + "\u2026" : str;
+        const value = str.length > MAX_VALUE_LEN2 ? str.slice(0, MAX_VALUE_LEN2) + "\u2026" : str;
         picked.push({ name: spec.label || spec.key, value });
       }
     }
@@ -10919,7 +11171,7 @@ var TraceBugModule = (() => {
           const attrs = [];
           if (f2.id) attrs.push({ name: "id", value: String(f2.id) });
           if (f2.method) attrs.push({ name: "method", value: String(f2.method).toUpperCase() });
-          if (f2.action) attrs.push({ name: "action", value: truncate2(String(f2.action), MAX_VALUE_LEN) });
+          if (f2.action) attrs.push({ name: "action", value: truncate2(String(f2.action), MAX_VALUE_LEN2) });
           chips.push({
             verb: "Submitted",
             kind: "submit",
@@ -10995,13 +11247,13 @@ var TraceBugModule = (() => {
     }
     return chips;
   }
-  var MAX_CHIPS, MAX_INLINE_ATTRS, MAX_VALUE_LEN, MAX_DETAIL_LEN, MAX_TARGET_LEN, RAGE_WINDOW_MS, RAGE_MIN_CLICKS, DEAD_RESPONSE_WINDOW_MS, ATTR_PRIORITY;
+  var MAX_CHIPS, MAX_INLINE_ATTRS, MAX_VALUE_LEN2, MAX_DETAIL_LEN, MAX_TARGET_LEN, RAGE_WINDOW_MS, RAGE_MIN_CLICKS, DEAD_RESPONSE_WINDOW_MS, ATTR_PRIORITY;
   var init_action_chips = __esm({
     "src/action-chips.ts"() {
       "use strict";
       MAX_CHIPS = 60;
       MAX_INLINE_ATTRS = 4;
-      MAX_VALUE_LEN = 60;
+      MAX_VALUE_LEN2 = 60;
       MAX_DETAIL_LEN = 80;
       MAX_TARGET_LEN = 40;
       RAGE_WINDOW_MS = 1500;
@@ -11024,16 +11276,24 @@ var TraceBugModule = (() => {
 
   // src/report-builder.ts
   function buildReport(session, extraScreenshots) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const environment = session.environment || captureEnvironment();
+    const _ssForAnchor = [...getScreenshots(), ...extraScreenshots || []];
+    const _vidForAnchor = getLastVideoRecording();
+    const captureTs = Math.max(
+      (_a = _vidForAnchor == null ? void 0 : _vidForAnchor.startedAt) != null ? _a : 0,
+      ..._ssForAnchor.map((s) => s.timestamp),
+      0
+    );
+    const events = trimStaleEvents(session.events, captureTs);
     let steps = session.reproSteps || "";
-    if (!steps && session.events.length > 0) {
+    if (!steps && events.length > 0) {
       const errorMsg = session.errorMessage || "Issue reported by tester";
-      const result = generateReproSteps(session.events, errorMsg, session.errorStack || void 0);
+      const result = generateReproSteps(events, errorMsg, session.errorStack || void 0);
       steps = result.reproSteps;
     }
     const seenErrors = /* @__PURE__ */ new Set();
-    const consoleErrors = session.events.filter((e2) => ["error", "unhandled_rejection", "console_error"].includes(e2.type)).map((e2) => {
+    const consoleErrors = events.filter((e2) => ["error", "unhandled_rejection", "console_error"].includes(e2.type)).map((e2) => {
       var _a2, _b2;
       return {
         message: ((_a2 = e2.data.error) == null ? void 0 : _a2.message) || "",
@@ -11052,7 +11312,7 @@ var TraceBugModule = (() => {
       "console_warn": "warn",
       "console_log": "log"
     };
-    const consoleLogs = session.events.filter((e2) => e2.type in levelMap).map((e2) => {
+    const consoleLogs = events.filter((e2) => e2.type in levelMap).map((e2) => {
       var _a2, _b2;
       return {
         level: levelMap[e2.type],
@@ -11061,17 +11321,17 @@ var TraceBugModule = (() => {
         timestamp: e2.timestamp
       };
     }).filter((e2) => !!e2.message);
-    const networkRequests = session.events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
-      var _a2, _b2, _c, _d;
+    const networkRequests = events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
+      var _a2, _b2, _c2, _d2;
       return {
         method: ((_a2 = e2.data.request) == null ? void 0 : _a2.method) || "GET",
         url: ((_b2 = e2.data.request) == null ? void 0 : _b2.url) || "",
-        status: ((_c = e2.data.request) == null ? void 0 : _c.statusCode) || 0,
-        duration: ((_d = e2.data.request) == null ? void 0 : _d.durationMs) || 0,
+        status: ((_c2 = e2.data.request) == null ? void 0 : _c2.statusCode) || 0,
+        duration: ((_d2 = e2.data.request) == null ? void 0 : _d2.durationMs) || 0,
         timestamp: e2.timestamp
       };
     });
-    const sessionStart = session.createdAt || ((_b = (_a = session.events[0]) == null ? void 0 : _a.timestamp) != null ? _b : 0);
+    const sessionStart = (_c = (_b = events[0]) == null ? void 0 : _b.timestamp) != null ? _c : captureTs || session.createdAt || 0;
     const buffer = getNetworkFailures().filter((b) => b.timestamp >= sessionStart);
     for (const entry of networkRequests) {
       if (entry.status < 400 && entry.status !== 0) continue;
@@ -11097,7 +11357,7 @@ var TraceBugModule = (() => {
     }
     const networkErrors = networkRequests.filter((r) => r.status >= 400 || r.status === 0).map((r) => ({ ...r }));
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
-    const timeline = buildTimeline(session.events);
+    const timeline = buildTimeline(events);
     const voiceTranscripts = getVoiceTranscripts();
     const lastVideo = getLastVideoRecording();
     const video = lastVideo ? {
@@ -11111,9 +11371,9 @@ var TraceBugModule = (() => {
       startedAt: lastVideo.startedAt
     } : void 0;
     const title = generateBugTitle(session);
-    const sessionSteps = generateSessionSteps(session.events);
-    const actionChips = buildActionChips(session.events);
-    const clickedElement = extractClickedElement(session.events);
+    const sessionSteps = generateSessionSteps(events);
+    const actionChips = buildActionChips(events);
+    const clickedElement = extractClickedElement(events);
     const report = {
       title,
       summary: "",
@@ -11128,19 +11388,38 @@ var TraceBugModule = (() => {
       clickedElement,
       rootCause: { hint: "", confidence: "low" },
       severity: "low",
+      priority: "low",
+      storage: captureStorageSnapshot(),
       annotations: session.annotations || [],
       screenshots: screenshots2,
       timeline,
       voiceTranscripts,
       video,
       context: getCurrentContext(),
-      session,
+      // Store the trimmed-events session so the HTML export's timeline/duration
+      // match the live ticket (both anchored to the capture, no stale span).
+      session: { ...session, events },
       generatedAt: Date.now()
     };
     report.summary = generateSmartSummary(report);
     report.rootCause = generateRootCauseHint(report);
     report.severity = determineSeverity(report);
+    report.priority = (_d = session.priority) != null ? _d : derivePriorityFromSeverity(report.severity);
     return report;
+  }
+  function derivePriorityFromSeverity(severity) {
+    if (severity === "critical" || severity === "high") return "high";
+    if (severity === "medium") return "medium";
+    return "low";
+  }
+  function priorityLabel(priority) {
+    return priority.charAt(0).toUpperCase() + priority.slice(1);
+  }
+  function trimStaleEvents(events, anchorTs, lookbackMs = 30 * 60 * 1e3) {
+    if (events.length === 0) return events;
+    const anchor = anchorTs > 0 ? anchorTs : Math.max(...events.map((e2) => e2.timestamp));
+    const cutoff = anchor - lookbackMs;
+    return events.filter((e2) => e2.timestamp >= cutoff);
   }
   function generateSmartSummary(report) {
     var _a, _b, _c, _d;
@@ -11366,6 +11645,7 @@ var TraceBugModule = (() => {
     "src/report-builder.ts"() {
       "use strict";
       init_environment();
+      init_storage_capture();
       init_screenshot();
       init_voice_recorder();
       init_video_recorder();
@@ -11450,7 +11730,10 @@ var TraceBugModule = (() => {
     md += `**Environment:** ${env.browser} ${env.browserVersion} \xB7 ${env.os} \xB7 ${env.viewport} \xB7 ${env.deviceType}
 `;
     md += `**URL:** ${env.url}
-
+`;
+    if (report.priority) md += `**Priority:** ${report.priority}
+`;
+    md += `
 `;
     if (report.clickedElement) {
       const ce = report.clickedElement;
@@ -12318,7 +12601,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     _modeBanner.dataset.tracebug = "annotate-banner";
     _modeBanner.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-    background: linear-gradient(90deg, var(--tb-gradient-start, #7B61FF), var(--tb-gradient-end, #5B3FDF)); color: #fff;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #7C5CFF), var(--tb-gradient-end, #5B3FDF)); color: #fff;
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
     box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
@@ -12752,7 +13035,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#7B61FF;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
+      <button id="tracebug-ann-save" style="background:#7C5CFF;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
     </div>
   `;
     root.appendChild(popover);
@@ -12836,7 +13119,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       case "fix":
         return "#ef4444";
       case "redesign":
-        return "#7B61FF";
+        return "#7C5CFF";
       case "remove":
         return "#f97316";
       case "question":
@@ -12861,8 +13144,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _onDeactivate = null;
       _persistentBadges = [];
       _badgeRoot = null;
-      HIGHLIGHT_COLOR = "#7B61FF";
-      SELECTION_COLOR = "#00E5FF";
+      HIGHLIGHT_COLOR = "#7C5CFF";
+      SELECTION_COLOR = "#22D3EE";
     }
   });
 
@@ -13122,11 +13405,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     const bar = document.createElement("div");
     bar.id = "tracebug-draw-toolbar";
     bar.dataset.tracebug = "draw-toolbar";
+    const topPx = document.getElementById("tracebug-recording-hud") ? 64 : 12;
     bar.style.cssText = `
-    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #7B61FF);
+    border: 1px solid var(--tb-accent, #7C5CFF);
     border-radius: 999px;
     padding: 5px 8px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -13143,8 +13427,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     const shapes = [
       { shape: "pen", label: "Pen", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>` },
       { shape: "rect", label: "Rectangle", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>` },
-      { shape: "ellipse", label: "Ellipse", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` },
-      { shape: "redact", label: "Redact (hide PII)", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="9" width="18" height="6" rx="1"/></svg>` }
+      { shape: "ellipse", label: "Ellipse", icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="12" rx="10" ry="7"/></svg>` }
+      // "Redact" removed from the palette — superseded by the Blur tool. The
+      // shape rendering code is kept for backward-compat with old saved regions.
     ];
     for (const s of shapes) {
       const btn = document.createElement("button");
@@ -13351,7 +13636,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     saveBtn.textContent = "Save";
     saveBtn.dataset.tracebug = "draw-save-btn";
     saveBtn.style.cssText = `
-    background: #7B61FF; border: none; color: #fff; padding: 8px 14px;
+    background: #7C5CFF; border: none; color: #fff; padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
     font-family: inherit; box-shadow: 0 2px 6px rgba(123,97,255,0.3);
     transition: all 0.15s; white-space: nowrap;
@@ -13409,7 +13694,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   function _toolBtnStyle(active) {
     const base = `width:26px;height:26px;padding:0;border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;`;
     if (active) {
-      return base + `background:var(--tb-accent, #7B61FF);color:#fff;border:1px solid var(--tb-accent, #7B61FF);`;
+      return base + `background:var(--tb-accent, #7C5CFF);color:#fff;border:1px solid var(--tb-accent, #7C5CFF);`;
     }
     return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
   }
@@ -13421,11 +13706,11 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _active3 = false;
       _cleanup2 = null;
       _currentShape = "rect";
-      _currentColor = "#7B61FF";
+      _currentColor = "#7C5CFF";
       _onUpdate2 = null;
       _onDeactivate2 = null;
       COLORS2 = [
-        { value: "#7B61FF", label: "Purple" },
+        { value: "#7C5CFF", label: "Purple" },
         { value: "#ef4444", label: "Red" },
         { value: "#eab308", label: "Yellow" },
         { value: "#22c55e", label: "Green" },
@@ -13452,7 +13737,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       sel.dataset.tracebug = "region-overlay";
       Object.assign(sel.style, {
         position: "absolute",
-        border: "2px dashed #7B61FF",
+        border: "2px dashed #7C5CFF",
         background: "rgba(123,97,255,0.15)",
         display: "none",
         pointerEvents: "none"
@@ -13538,6 +13823,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
               windowHeight: document.documentElement.scrollHeight,
               ignoreElements: (el) => {
                 var _a;
+                if (isNonRenderingLink(el)) return true;
                 if (el.id === "tracebug-root") return true;
                 if ((_a = el.dataset) == null ? void 0 : _a.tracebug) return true;
                 return false;
@@ -13639,6 +13925,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     return _cached;
   }
   function isPremium() {
+    if (!PLANS_LIVE) return true;
     return _cached === "premium";
   }
   async function setPlan(plan) {
@@ -13663,11 +13950,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     } catch (e2) {
     }
   }
-  var STORAGE_KEY, FREE_LIMITS, _cached, _hydrated;
+  var STORAGE_KEY, PLANS_LIVE, FREE_LIMITS, _cached, _hydrated;
   var init_plan = __esm({
     "src/plan.ts"() {
       "use strict";
       STORAGE_KEY = "tracebug_plan";
+      PLANS_LIVE = false;
       FREE_LIMITS = {
         /** Maximum screenshots a free user can attach to a single ticket. */
         screenshots: 2
@@ -13717,7 +14005,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button data-action="upgrade" style="flex:1;background:var(--tb-accent, #7B61FF);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Upgrade (Coming Soon)</button>
+      <button data-action="upgrade" style="flex:1;background:var(--tb-accent, #7C5CFF);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Upgrade (Coming Soon)</button>
       <button data-action="close" style="background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px 14px;cursor:pointer;font-size:12px;font-family:inherit">Not now</button>
     </div>
 
@@ -13762,59 +14050,6 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       "use strict";
       init_plan();
       MODAL_ID = "tracebug-upgrade-modal";
-    }
-  });
-
-  // src/ui/toast.ts
-  function showToast(message, root) {
-    const existing = root.querySelector(".bt-toast");
-    if (existing) existing.remove();
-    const toast = document.createElement("div");
-    toast.className = "bt-toast";
-    toast.dataset.tracebug = "toast";
-    toast.style.cssText = `
-    position:fixed !important;
-    bottom:32px !important;
-    left:50% !important;
-    transform:translateX(-50%) !important;
-    background:#0E1117 !important;
-    color:#FFFFFF !important;
-    border:1px solid #7C5CFF !important;
-    border-radius:10px !important;
-    padding:14px 22px !important;
-    font-size:14px !important;
-    font-weight:600 !important;
-    letter-spacing:-0.005em !important;
-    font-family:system-ui,-apple-system,sans-serif !important;
-    z-index:2147483647 !important;
-    box-shadow:0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(124,92,255,0.12) !important;
-    pointer-events:auto !important;
-    max-width:460px !important;
-    text-align:center !important;
-    line-height:1.4 !important;
-    animation:tracebug-toast-in 0.2s ease !important;
-  `;
-    if (!document.getElementById("tracebug-toast-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-toast-anim";
-      style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
-      document.head.appendChild(style);
-    }
-    toast.textContent = message;
-    toast.setAttribute("role", "status");
-    root.appendChild(toast);
-    const liveRegion = document.getElementById("tracebug-live");
-    if (liveRegion) liveRegion.textContent = message;
-    setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateX(-50%) translateY(8px)";
-      toast.style.transition = "all 0.3s ease";
-      setTimeout(() => toast.remove(), 300);
-    }, 2800);
-  }
-  var init_toast = __esm({
-    "src/ui/toast.ts"() {
-      "use strict";
     }
   });
 
@@ -13917,7 +14152,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       const isMark = entry.type === "mark";
       m.className = isError ? "tb-rs-marker tb-rs-error" : isMark ? "tb-rs-marker tb-rs-mark" : "tb-rs-marker";
       m.style.left = `${pct(entry.timestamp, startedAt, span)}%`;
-      m.style.background = isError ? MARKER_COLORS.error : MARKER_COLORS[entry.type] || "#7B61FF";
+      m.style.background = isError ? MARKER_COLORS.error : MARKER_COLORS[entry.type] || "#7C5CFF";
       m.dataset.ts = String(entry.timestamp);
       m.dataset.desc = `${entry.elapsed} \xB7 ${entry.description}`;
       if (isError) m.textContent = "!";
@@ -14022,6 +14257,29 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       const ts = Number(target.dataset.ts);
       if (!Number.isNaN(ts)) seek(ts, { snap: true });
     });
+    const chipDefs = [];
+    for (const s of screenshots2) chipDefs.push({ ts: s.timestamp, kind: "screenshot", label: "Screenshot added" });
+    for (const em of options.extraMarkers || []) chipDefs.push({ ts: em.timestamp, kind: em.kind, label: em.label });
+    if (chipDefs.length > 0) {
+      const chipLayer = document.createElement("div");
+      chipLayer.className = "tb-rs-chips";
+      chipDefs.sort((a2, b) => a2.ts - b.ts);
+      for (const c of chipDefs) {
+        const meta = CHIP_META[c.kind] || CHIP_META.note;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tb-rs-chip";
+        chip.style.left = `${pct(c.ts, startedAt, span)}%`;
+        chip.style.setProperty("background", meta.color, "important");
+        chip.dataset.ts = String(c.ts);
+        chip.title = `${formatElapsed2(c.ts - startedAt)} \xB7 ${c.label}`;
+        chip.innerHTML = meta.icon;
+        chip.addEventListener("click", () => seek(c.ts, { snap: false }));
+        chipLayer.appendChild(chip);
+      }
+      track.appendChild(chipLayer);
+      root.classList.add("tb-rs-has-chips");
+    }
     let isPlaying = false;
     let playTimer = null;
     let videoTickHandler = null;
@@ -14300,7 +14558,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       border-radius: var(--tb-radius-md, 6px) !important;
       outline: none !important;
     }
-    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #7B61FF) !important; }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #7C5CFF) !important; }
     .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
     .tb-rs-empty {
       font-size: 11px; color: var(--tb-text-muted, #888);
@@ -14383,13 +14641,26 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       pointer-events: none !important;
     }
     .tb-rs-markers { position: absolute !important; inset: 0 !important; pointer-events: none !important; }
+    /* Chip markers above the track (screenshots / notes / annotations / blur) */
+    .tb-rs-has-chips .tb-rs-track { margin-top: 24px !important; }
+    .tb-rs-chips { position: absolute !important; left: 0 !important; right: 0 !important; bottom: calc(100% + 7px) !important; height: 0 !important; pointer-events: none !important; }
+    .tb-rs-chip {
+      position: absolute !important; bottom: -9px !important; transform: translateX(-50%) !important;
+      width: 18px !important; height: 18px !important; border-radius: 50% !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      color: #fff !important; border: 1.5px solid var(--tb-bg-primary, #0f0f1a) !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.45) !important; cursor: pointer !important; pointer-events: auto !important;
+      padding: 0 !important; font-family: inherit !important; transition: transform 0.12s !important;
+    }
+    .tb-rs-chip:hover { transform: translateX(-50%) scale(1.18) !important; z-index: 3 !important; }
+    .tb-rs-chip svg { display: block !important; }
     .tb-rs-marker {
       position: absolute !important;
       top: 50% !important;
       transform: translate(-50%, -50%) !important;
       width: 10px !important; height: 10px !important;
       border-radius: 50% !important;
-      background: #7B61FF !important;
+      background: #7C5CFF !important;
       box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
       pointer-events: auto !important;
       cursor: pointer !important;
@@ -14417,7 +14688,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       width: 16px !important; height: 16px !important;
       transform: translate(-50%, -50%) !important;
       background: #fff !important;
-      border: 3px solid var(--tb-accent, #7B61FF) !important;
+      border: 3px solid var(--tb-accent, #7C5CFF) !important;
       border-radius: 50% !important;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
       pointer-events: none !important;
@@ -14445,7 +14716,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     /* Play button + speed selector */
     .tb-rs-play {
       width: 28px !important; height: 28px !important;
-      background: var(--tb-accent, #7B61FF) !important;
+      background: var(--tb-accent, #7C5CFF) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;
@@ -14498,16 +14769,16 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   `;
     document.head.appendChild(style);
   }
-  var STYLE_ID, MARKER_COLORS;
+  var STYLE_ID, MARKER_COLORS, CHIP_META;
   var init_replay_scrubber = __esm({
     "src/ui/replay-scrubber.ts"() {
       "use strict";
       STYLE_ID = "tracebug-replay-scrubber-styles";
       MARKER_COLORS = {
-        click: "#7B61FF",
-        input: "#7B61FF",
-        select_change: "#7B61FF",
-        form_submit: "#7B61FF",
+        click: "#7C5CFF",
+        input: "#7C5CFF",
+        select_change: "#7C5CFF",
+        form_submit: "#7C5CFF",
         route_change: "#22d3ee",
         api_request: "#facc15",
         error: "#ef4444",
@@ -14515,6 +14786,189 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         console_error: "#ef4444",
         mark: "#a855f7"
       };
+      CHIP_META = {
+        screenshot: { color: "#22d3ee", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>` },
+        annotation: { color: "#a855f7", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>` },
+        note: { color: "#f59e0b", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
+        blur: { color: "#94a3b8", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` }
+      };
+    }
+  });
+
+  // src/ui/blur-tool.ts
+  function isBlurModeActive() {
+    return _active4;
+  }
+  function getBlurEvents() {
+    return [..._events];
+  }
+  function removeAllBlurBoxes() {
+    var _a;
+    (_a = document.getElementById(BOX_LAYER_ID)) == null ? void 0 : _a.remove();
+  }
+  function _ensureStyles() {
+    var _a, _b;
+    if (document.getElementById(STYLE_ID2)) return;
+    const supportsBackdrop = typeof CSS !== "undefined" && (((_a = CSS.supports) == null ? void 0 : _a.call(CSS, "backdrop-filter", "blur(8px)")) || ((_b = CSS.supports) == null ? void 0 : _b.call(CSS, "-webkit-backdrop-filter", "blur(8px)")));
+    const s = document.createElement("style");
+    s.id = STYLE_ID2;
+    s.textContent = `
+    #${BOX_LAYER_ID} { position: fixed !important; inset: 0 !important; z-index: 2147483646 !important; pointer-events: none !important; }
+    #${BOX_LAYER_ID} .tb-blur-box {
+      position: fixed !important;
+      ${supportsBackdrop ? "backdrop-filter: blur(12px) saturate(0.6) !important; -webkit-backdrop-filter: blur(12px) saturate(0.6) !important; background: rgba(20,20,28,0.18) !important;" : "background: rgba(28,28,38,0.96) !important;"}
+      border: 1px solid rgba(255,255,255,0.35) !important;
+      border-radius: 4px !important;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25) !important;
+      pointer-events: none !important;
+      overflow: visible !important;
+    }
+    #${BOX_LAYER_ID} .tb-blur-x {
+      position: absolute !important; top: -9px !important; right: -9px !important;
+      width: 18px !important; height: 18px !important; border-radius: 50% !important;
+      background: #1b1d24 !important; color: #fff !important; border: 1px solid rgba(255,255,255,0.4) !important;
+      font: 700 11px/1 system-ui, sans-serif !important; cursor: pointer !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      pointer-events: auto !important; padding: 0 !important;
+    }
+    #${DRAW_OVERLAY_ID} {
+      position: fixed !important; inset: 0 !important; z-index: 2147483646 !important;
+      cursor: crosshair !important; background: rgba(10,12,18,0.12) !important;
+      user-select: none !important; touch-action: none !important;
+    }
+    #${DRAW_OVERLAY_ID} .tb-blur-hint {
+      position: fixed !important; top: 64px !important; left: 50% !important; transform: translateX(-50%) !important;
+      background: #1b1d24 !important; color: #e9eaee !important; border: 1px solid rgba(255,255,255,0.12) !important;
+      padding: 7px 14px !important; border-radius: 999px !important; font: 600 12px/1 system-ui, sans-serif !important;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; pointer-events: none !important; white-space: nowrap !important;
+    }
+    #${DRAW_OVERLAY_ID} .tb-blur-rubber {
+      position: fixed !important; border: 1.5px dashed #7C5CFF !important;
+      background: rgba(124,92,255,0.12) !important; border-radius: 4px !important; pointer-events: none !important;
+    }
+  `;
+    document.head.appendChild(s);
+  }
+  function _boxLayer() {
+    let layer = document.getElementById(BOX_LAYER_ID);
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = BOX_LAYER_ID;
+      layer.dataset.tracebug = "blur-layer";
+      document.body.appendChild(layer);
+    }
+    return layer;
+  }
+  function _addBox(x, y, w, h) {
+    if (w < 6 || h < 6) return;
+    const layer = _boxLayer();
+    const box = document.createElement("div");
+    box.className = "tb-blur-box";
+    box.style.setProperty("left", x + "px", "important");
+    box.style.setProperty("top", y + "px", "important");
+    box.style.setProperty("width", w + "px", "important");
+    box.style.setProperty("height", h + "px", "important");
+    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const del = document.createElement("button");
+    del.className = "tb-blur-x";
+    del.type = "button";
+    del.textContent = "\u2715";
+    del.title = "Remove this blur";
+    del.addEventListener("click", (e2) => {
+      e2.stopPropagation();
+      box.remove();
+      const i = _events.findIndex((ev) => ev.id === evtId);
+      if (i >= 0) _events.splice(i, 1);
+    });
+    box.appendChild(del);
+    layer.appendChild(box);
+    _events.push({ id: evtId, timestamp: Date.now() });
+  }
+  function activateBlurMode(_root3, onExit) {
+    if (_active4) return;
+    _active4 = true;
+    _onExit = onExit || null;
+    _ensureStyles();
+    _boxLayer();
+    const overlay = document.createElement("div");
+    overlay.id = DRAW_OVERLAY_ID;
+    overlay.dataset.tracebug = "blur-draw";
+    const hint = document.createElement("div");
+    hint.className = "tb-blur-hint";
+    hint.textContent = "Drag to blur sensitive areas \xB7 Esc to finish";
+    overlay.appendChild(hint);
+    document.body.appendChild(overlay);
+    let startX = 0, startY = 0, drawing = false;
+    let rubber = null;
+    const onDown = (e2) => {
+      var _a;
+      if ((_a = e2.target.classList) == null ? void 0 : _a.contains("tb-blur-x")) return;
+      drawing = true;
+      startX = e2.clientX;
+      startY = e2.clientY;
+      rubber = document.createElement("div");
+      rubber.className = "tb-blur-rubber";
+      overlay.appendChild(rubber);
+      overlay.setPointerCapture(e2.pointerId);
+      e2.preventDefault();
+    };
+    const onMove = (e2) => {
+      if (!drawing || !rubber) return;
+      const x = Math.min(startX, e2.clientX), y = Math.min(startY, e2.clientY);
+      const w = Math.abs(e2.clientX - startX), h = Math.abs(e2.clientY - startY);
+      rubber.style.setProperty("left", x + "px", "important");
+      rubber.style.setProperty("top", y + "px", "important");
+      rubber.style.setProperty("width", w + "px", "important");
+      rubber.style.setProperty("height", h + "px", "important");
+    };
+    const onUp = (e2) => {
+      if (!drawing) return;
+      drawing = false;
+      const x = Math.min(startX, e2.clientX), y = Math.min(startY, e2.clientY);
+      const w = Math.abs(e2.clientX - startX), h = Math.abs(e2.clientY - startY);
+      rubber == null ? void 0 : rubber.remove();
+      rubber = null;
+      try {
+        overlay.releasePointerCapture(e2.pointerId);
+      } catch (e3) {
+      }
+      _addBox(x, y, w, h);
+    };
+    const onKey = (e2) => {
+      if (e2.key === "Escape") {
+        e2.preventDefault();
+        deactivateBlurMode();
+      }
+    };
+    overlay.addEventListener("pointerdown", onDown);
+    overlay.addEventListener("pointermove", onMove);
+    overlay.addEventListener("pointerup", onUp);
+    document.addEventListener("keydown", onKey, true);
+    overlay._tbKey = onKey;
+  }
+  function deactivateBlurMode() {
+    if (!_active4) return;
+    _active4 = false;
+    const overlay = document.getElementById(DRAW_OVERLAY_ID);
+    if (overlay) {
+      const onKey = overlay._tbKey;
+      if (onKey) document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+    }
+    const cb = _onExit;
+    _onExit = null;
+    cb == null ? void 0 : cb();
+  }
+  var BOX_LAYER_ID, DRAW_OVERLAY_ID, STYLE_ID2, _active4, _onExit, _events;
+  var init_blur_tool = __esm({
+    "src/ui/blur-tool.ts"() {
+      "use strict";
+      BOX_LAYER_ID = "tracebug-blur-layer";
+      DRAW_OVERLAY_ID = "tracebug-blur-draw";
+      STYLE_ID2 = "tracebug-blur-styles";
+      _active4 = false;
+      _onExit = null;
+      _events = [];
     }
   });
 
@@ -14632,9 +15086,9 @@ ${REPLAY_RUNTIME}
   --tb-text: #09090b;
   --tb-text-2: #52525b;
   --tb-text-3: #a1a1aa;
-  --tb-accent: #7c3aed;
-  --tb-accent-2: #6d28d9;
-  --tb-accent-soft: #7c3aed14;
+  --tb-accent: #6D4AFF;
+  --tb-accent-2: #5B3FE6;
+  --tb-accent-soft: #6D4AFF14;
   --tb-border: #e4e4e7;
   --tb-border-sub: #f4f4f5;
   --tb-border-hover: #d4d4d8;
@@ -14664,9 +15118,9 @@ ${REPLAY_RUNTIME}
   --tb-text: #fafafa;
   --tb-text-2: #a1a1aa;
   --tb-text-3: #71717a;
-  --tb-accent: #8b5cf6;
+  --tb-accent: #7C5CFF;
   --tb-accent-2: #a78bfa;
-  --tb-accent-soft: #8b5cf61f;
+  --tb-accent-soft: #7C5CFF1f;
   --tb-border: #27272a;
   --tb-border-sub: #1f1f23;
   --tb-border-hover: #3f3f46;
@@ -15646,7 +16100,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   var markersEl = document.getElementById("tb-rs-markers");
   var jumpEl = document.getElementById("tb-rs-jump");
 
-  var COLORS = { click: "#7B61FF", input: "#7B61FF", select_change: "#7B61FF", form_submit: "#7B61FF", route_change: "#22d3ee", api_request: "#facc15" };
+  var COLORS = { click: "#7C5CFF", input: "#7C5CFF", select_change: "#7C5CFF", form_submit: "#7C5CFF", route_change: "#22d3ee", api_request: "#facc15" };
   // Cap markers
   var MAX = 200;
   var visible = events.length <= MAX ? events : sample(events, MAX);
@@ -15655,7 +16109,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     m.className = ev.isError ? "tb-rs-marker tb-rs-error" : "tb-rs-marker";
     var leftPct = ((ev.timestamp - startedAt) / span) * 100;
     m.style.left = Math.max(0, Math.min(100, leftPct)) + "%";
-    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#7B61FF");
+    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#7C5CFF");
     m.dataset.ts = String(ev.timestamp);
     if (ev.isError) m.textContent = "!";
     m.title = (ev.elapsed || "") + " \xB7 " + (ev.description || ev.type);
@@ -15893,7 +16347,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   async function buildReplayPayload(session, report, options) {
     var _a, _b, _c, _d, _e, _f;
     const includeVideo = (_a = options == null ? void 0 : options.includeVideo) != null ? _a : !!report.video;
-    const timeline = buildTimeline(session.events).map((t) => ({
+    const timeline = buildTimeline(report.session.events).map((t) => ({
       timestamp: t.timestamp,
       type: t.type,
       description: t.description,
@@ -15968,12 +16422,28 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       { k: "Timezone", v: env.timezone, i: "\u{1F30D}" },
       { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
       { k: "Session", v: session.sessionId.slice(0, 12), i: "\u{1F194}" },
-      { k: "Severity", v: report.severity }
+      { k: "Severity", v: report.severity },
+      { k: "Priority", v: priorityLabel(report.priority), i: "\u{1F6A9}" }
     ];
     if (report.context) {
       for (const k of Object.keys(report.context)) {
         info.push({ k, v: String(report.context[k]) });
       }
+    }
+    const STORAGE_DISPLAY_CAP = 20;
+    function pushStorageRows(label, entries, droppedAtCapture) {
+      if (!entries || entries.length === 0) return;
+      const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
+      for (const e2 of shown) {
+        info.push({ k: `${label} \xB7 ${e2.key}`, v: e2.redacted ? `\u{1F512} ${e2.value}` : e2.value, i: "\u{1F5C4}" });
+      }
+      const hiddenForDisplay = entries.length - shown.length;
+      const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
+      if (totalHidden > 0) info.push({ k: `${label} \xB7 \u2026`, v: `+${totalHidden} more`, i: "\u{1F5C4}" });
+    }
+    if (report.storage) {
+      pushStorageRows("localStorage", report.storage.local, report.storage.localTruncated);
+      pushStorageRows("sessionStorage", report.storage.session, report.storage.sessionTruncated);
     }
     const payload = {
       meta: {
@@ -15981,11 +16451,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         severity: report.severity,
         summary: report.summary || "",
         rootCause: ((_b = report.rootCause) == null ? void 0 : _b.hint) || "",
-        page: ((_c = report.environment) == null ? void 0 : _c.url) || ((_d = session.events[0]) == null ? void 0 : _d.page) || "",
+        page: ((_c = report.environment) == null ? void 0 : _c.url) || ((_d = report.session.events[0]) == null ? void 0 : _d.page) || "",
         generatedAt: report.generatedAt,
         sessionId: session.sessionId,
         environment: formatEnv(report),
-        durationMs: estimateDuration(session, report)
+        durationMs: estimateDuration(report.session, report)
       },
       description: (_f = (_e = options == null ? void 0 : options.descriptionOverride) != null ? _e : report.steps) != null ? _f : "",
       events: timeline,
@@ -16079,6 +16549,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       "use strict";
       init_timeline_builder();
       init_html_template();
+      init_report_builder();
     }
   });
 
@@ -16168,6 +16639,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           detail: sanitizeText((_b = c.detail) != null ? _b : void 0)
         };
       });
+    }
+    if (out.storage) {
+      const scrub = (entries) => entries.map((e2) => ({ ...e2, value: sanitizeText(e2.value) }));
+      out.storage.local = scrub(out.storage.local || []);
+      out.storage.session = scrub(out.storage.session || []);
     }
     if ((_a = out.environment) == null ? void 0 : _a.url) out.environment.url = sanitizeUrl2(out.environment.url);
     if (out.context && typeof out.context === "object") {
@@ -16601,7 +17077,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       hasVideo: !!(includeVideo && safe.video),
       videoDurationS: includeVideo && safe.video ? Math.round(safe.video.durationMs / 1e3) : void 0,
       screenshotCount: (_e = (_d = safe.screenshots) == null ? void 0 : _d.length) != null ? _e : 0,
-      thumbnail: thumbnail != null ? thumbnail : void 0
+      thumbnail: thumbnail != null ? thumbnail : void 0,
+      priority: safe.priority
     });
     await bridge.uploadBlob(init.storageKey, init.uploadToken, blob, "text/html");
     const complete = await bridge.uploadComplete(init.id);
@@ -16639,6 +17116,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (report.title) lines.push(`**Title:** ${truncate3(report.title, 200)}`);
     if (report.summary) lines.push(`**Summary:** ${truncate3(report.summary, 240)}`);
     if (report.severity) lines.push(`**Severity:** ${report.severity}`);
+    if (report.priority) lines.push(`**Priority:** ${report.priority}`);
     if (env) {
       lines.push(`
 ## Environment`);
@@ -16819,14 +17297,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           aria-pressed="${isSel}"
           style="
             position: relative; padding: 0; cursor: pointer; background: var(--tb-bg-primary, #0d0d1a);
-            border: 2px solid ${isSel ? "var(--tb-accent, #7c3aed)" : "var(--tb-border, #2a2a4e)"};
+            border: 2px solid ${isSel ? "var(--tb-accent, #6D4AFF)" : "var(--tb-border, #2a2a4e)"};
             border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 10;
             transition: border-color .15s, transform .12s;
           ">
           <img src="${escapeAttr(s.originalDataUrl || s.dataUrl)}" alt=""
             style="width:100%;height:100%;object-fit:cover;display:block;${isSel ? "" : "opacity:0.55;filter:grayscale(0.4)"}" />
           ${isSel ? `
-            <div style="position:absolute;top:6px;left:6px;background:var(--tb-accent,#7c3aed);color:#fff;
+            <div style="position:absolute;top:6px;left:6px;background:var(--tb-accent,#6D4AFF);color:#fff;
               width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
               font-size:11px;font-weight:700">${order}</div>
           ` : ""}
@@ -16857,7 +17335,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         ">Cancel</button>
         <button data-action="continue" type="button" id="tb-trim-continue" style="
           padding:8px 18px;border-radius:8px;border:none;
-          background:var(--tb-accent, #7c3aed);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+          background:var(--tb-accent, #6D4AFF);color:#fff;font-size:13px;font-weight:600;cursor:pointer;
           font-family:inherit;transition:opacity .15s
         ">Continue \xB7 upload ${max}</button>
       </div>
@@ -16881,14 +17359,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           const isSel = selected.has(id);
           const order = isSel ? [...selected].indexOf(id) + 1 : null;
           b.setAttribute("aria-pressed", String(isSel));
-          b.style.borderColor = isSel ? "var(--tb-accent, #7c3aed)" : "var(--tb-border, #2a2a4e)";
+          b.style.borderColor = isSel ? "var(--tb-accent, #6D4AFF)" : "var(--tb-border, #2a2a4e)";
           const img = b.querySelector("img");
           if (img) img.style.cssText = `width:100%;height:100%;object-fit:cover;display:block;${isSel ? "" : "opacity:0.55;filter:grayscale(0.4)"}`;
           const badge = b.querySelector("[data-order-badge]");
           if (isSel && !badge) {
             const d = document.createElement("div");
             d.setAttribute("data-order-badge", "1");
-            d.style.cssText = `position:absolute;top:6px;left:6px;background:var(--tb-accent,#7c3aed);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700`;
+            d.style.cssText = `position:absolute;top:6px;left:6px;background:var(--tb-accent,#6D4AFF);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700`;
             d.textContent = String(order);
             b.appendChild(d);
           } else if (!isSel && badge) {
@@ -17004,9 +17482,9 @@ ${vars}
         "--tb-text-primary": "#fafafa",
         "--tb-text-secondary": "#a1a1aa",
         "--tb-text-muted": "#71717a",
-        "--tb-accent": "#8b5cf6",
-        "--tb-accent-hover": "#a78bfa",
-        "--tb-accent-subtle": "#8b5cf61f",
+        "--tb-accent": "#7C5CFF",
+        "--tb-accent-hover": "#9B7DFF",
+        "--tb-accent-subtle": "#7C5CFF1f",
         "--tb-error": "#ef4444",
         "--tb-error-bg": "#ef44441a",
         "--tb-warning": "#f59e0b",
@@ -17036,13 +17514,13 @@ ${vars}
         "--tb-severity-minor": "#eab308",
         "--tb-severity-info": "#3b82f6",
         "--tb-intent-fix": "#ef4444",
-        "--tb-intent-redesign": "#8b5cf6",
+        "--tb-intent-redesign": "#7C5CFF",
         "--tb-intent-remove": "#f97316",
         "--tb-intent-question": "#3b82f6",
-        "--tb-highlight": "#8b5cf6",
-        "--tb-selection": "#06b6d4",
-        "--tb-gradient-start": "#8b5cf6",
-        "--tb-gradient-end": "#6d28d9",
+        "--tb-highlight": "#7C5CFF",
+        "--tb-selection": "#22D3EE",
+        "--tb-gradient-start": "#7C5CFF",
+        "--tb-gradient-end": "#22D3EE",
         "--tb-code-tag": "#f472b6",
         "--tb-code-attr-name": "#fcd34d",
         "--tb-code-attr-val": "#86efac",
@@ -17057,9 +17535,9 @@ ${vars}
         "--tb-text-primary": "#09090b",
         "--tb-text-secondary": "#52525b",
         "--tb-text-muted": "#a1a1aa",
-        "--tb-accent": "#7c3aed",
-        "--tb-accent-hover": "#6d28d9",
-        "--tb-accent-subtle": "#7c3aed14",
+        "--tb-accent": "#6D4AFF",
+        "--tb-accent-hover": "#5B3FE6",
+        "--tb-accent-subtle": "#6D4AFF14",
         "--tb-error": "#dc2626",
         "--tb-error-bg": "#fef2f2",
         "--tb-warning": "#d97706",
@@ -17089,13 +17567,13 @@ ${vars}
         "--tb-severity-minor": "#ca8a04",
         "--tb-severity-info": "#2563eb",
         "--tb-intent-fix": "#dc2626",
-        "--tb-intent-redesign": "#7c3aed",
+        "--tb-intent-redesign": "#6D4AFF",
         "--tb-intent-remove": "#ea580c",
         "--tb-intent-question": "#2563eb",
-        "--tb-highlight": "#7c3aed",
+        "--tb-highlight": "#6D4AFF",
         "--tb-selection": "#0891b2",
-        "--tb-gradient-start": "#7c3aed",
-        "--tb-gradient-end": "#5b21b6",
+        "--tb-gradient-start": "#7C5CFF",
+        "--tb-gradient-end": "#22D3EE",
         "--tb-code-tag": "#be185d",
         "--tb-code-attr-name": "#a16207",
         "--tb-code-attr-val": "#15803d",
@@ -17336,7 +17814,13 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   async function refreshQuickBugCapture(root) {
     if (!_isOpen) return;
     const existing = document.getElementById(MODAL_ID3);
-    if (existing) existing.remove();
+    if (existing) {
+      const k = existing.__tbModalKey;
+      const esc = existing.__tbEscKey;
+      if (k) document.removeEventListener("keydown", k);
+      if (esc) document.removeEventListener("keydown", esc);
+      existing.remove();
+    }
     _isOpen = false;
     await showQuickBugCapture(root);
   }
@@ -17351,16 +17835,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     }
     const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
     const currentSession = (options == null ? void 0 : options.sessionId) ? sessions.find((s) => s.sessionId === options.sessionId) || sessions[0] || null : sessions[0] || null;
-    const lastEvent = (currentSession == null ? void 0 : currentSession.events[currentSession.events.length - 1]) || null;
-    let screenshots2 = getScreenshots();
-    if (screenshots2.length === 0) {
-      try {
-        await captureScreenshot(lastEvent, { includeAnnotations: true, highlightClicked: true });
-        screenshots2 = getScreenshots();
-      } catch (err) {
-        console.warn("[TraceBug] Quick capture screenshot failed:", err);
-      }
-    }
+    const screenshots2 = getScreenshots();
     const draft = _loadDraft();
     const autoTitle = currentSession ? generateBugTitle(currentSession) : `Bug on ${window.location.pathname}`;
     const autoDesc = _buildDescription(currentSession);
@@ -17440,7 +17915,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root, data) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -17497,6 +17972,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <div class="tb-qb-sub">${ssCountLabel} \xB7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
       <span class="tb-qb-sev" style="background:${sevC.bg};color:${sevC.fg};border:1px solid ${sevC.border}">${sevLabel}</span>
+      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority \u2014 your triage call (defaults from severity)">
+        ${["high", "medium", "low"].map((p) => {
+      var _a2;
+      return `<option value="${p}"${(((_a2 = data.report) == null ? void 0 : _a2.priority) || "low") === p ? " selected" : ""}>\u{1F6A9} ${priorityLabel(p)}</option>`;
+    }).join("")}
+      </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
       <button data-action="help-toggle" class="tb-qb-theme-toggle" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
       <button data-action="close" class="tb-qb-close" aria-label="Close">\u2715</button>
@@ -17513,7 +17994,11 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
 
         ${video ? `
           <div class="tb-qb-preview">
-            <video id="tb-qb-video" controls preload="metadata" src="${video.url}" class="tb-qb-video"></video>
+            <video id="tb-qb-video" controls preload="metadata" src="${video.url || video.dataUrl}" class="tb-qb-video"></video>
+            <button data-action="grab-frame" class="tb-qb-grab-frame" title="Pause the video on the moment you want, then click to save that exact frame as a screenshot you can annotate &amp; attach">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Grab frame
+            </button>
           </div>
           <div class="tb-qb-vidmeta">
             <span>${_formatVideoTime(video.durationMs)} \xB7 ${_formatBytes(video.sizeBytes)} \xB7 ${video.comments.length} timestamped comment${video.comments.length === 1 ? "" : "s"}</span>
@@ -17534,10 +18019,16 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           </div>
           <div id="tb-qb-primary-meta" class="tb-qb-imgmeta">${escapeHtml2(primary.filename)} \xB7 ${primary.width}x${primary.height}</div>
         ` : !video && !primary ? `
-          <div class="tb-qb-preview tb-qb-preview-empty">No screenshots attached \u2014 take one from the toolbar to add to this ticket</div>
+          <div class="tb-qb-preview tb-qb-preview-empty">
+            <span>No screenshots \u2014 add one only if you want to</span>
+            <button data-action="add-screenshot" class="tb-qb-empty-shot" title="Capture a screenshot of the current page">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Take screenshot
+            </button>
+          </div>
         ` : ""}
 
-        ${data.timeline.length > 0 ? `
+        ${video && data.timeline.length > 0 ? `
           <div id="tb-qb-scrubber" class="tb-qb-scrubber-wrap"></div>
         ` : ""}
 
@@ -17545,7 +18036,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <div class="tb-qb-ss-header">
             <span class="tb-qb-ss-count">${ssCount} screenshot${ssCount === 1 ? "" : "s"}</span>
             <span class="tb-qb-ss-hint">Click any to annotate</span>
-            <button data-action="add-screenshot" class="tb-qb-ss-add" title="Capture another screenshot">+ Add</button>
+            <button data-action="add-screenshot" class="tb-qb-ss-add" title="${video ? "Capture a fresh screenshot of the current page (use \u201CGrab frame\u201D on the video for a video frame)" : "Capture a fresh screenshot of the current page"}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Add page shot
+            </button>
           </div>
           <div class="tb-qb-thumbs">
             ${screenshots2.map((ss, i) => `
@@ -17583,9 +18077,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       <div class="tb-qb-right">
         <div class="tb-qb-tabstrip" role="tablist">
           <button data-tab="info" class="tb-qb-tab tb-qb-tab-active" role="tab">Info</button>
+          <button data-tab="actions" class="tb-qb-tab" role="tab">Actions${actionsCount ? `<span class="tb-qb-tab-badge">${actionsCount}</span>` : ""}</button>
           <button data-tab="console" class="tb-qb-tab" role="tab">Console${consoleCount ? `<span class="tb-qb-tab-badge">${consoleCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
           <button data-tab="network" class="tb-qb-tab" role="tab">Network${networkCount ? `<span class="tb-qb-tab-badge">${networkCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
-          <button data-tab="actions" class="tb-qb-tab" role="tab">Actions${actionsCount ? `<span class="tb-qb-tab-badge">${actionsCount}</span>` : ""}</button>
           <button data-tab="ai" class="tb-qb-tab" role="tab">AI</button>
           <button data-tab="annotations" class="tb-qb-tab" role="tab">Notes${annotationsCount ? `<span class="tb-qb-tab-badge">${annotationsCount}</span>` : ""}</button>
         </div>
@@ -17603,23 +18097,26 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     <!-- Footer: export actions -->
     <div class="tb-qb-footer">
       <div class="tb-qb-actions">
-        ${_githubRepo ? `
-          <button data-action="open-github" class="tb-qb-btn tb-qb-btn-gh-primary" title="Open GitHub new-issue page with title + body prefilled">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-            Open in GitHub (${escapeHtml2(_githubRepo)})
-          </button>
-        ` : ""}
-        <button data-action="github" class="tb-qb-btn tb-qb-btn-accent">\u{1F419} GitHub</button>
-        <button data-action="linear" class="tb-qb-btn tb-qb-btn-linear" title="Open Linear new-issue page with prefilled title + description">\u25B3 Linear</button>
-        <button data-action="slack" class="tb-qb-btn tb-qb-btn-slack" title="Copy a Slack-formatted bug summary to the clipboard">\u{1F4AC} Slack</button>
-        <button data-action="jira" class="tb-qb-btn ${isPremium() ? "tb-qb-btn-jira" : "tb-qb-btn-locked"}">${isPremium() ? "\u{1F3AB} Jira" : "\u{1F512} Jira (Premium)"}</button>
-        <button data-action="export-replay" class="tb-qb-btn tb-qb-btn-ghost" title="Bundle the entire session into a single .html file you can share or open offline">\u{1F4E6} Export .html</button>
-        <button data-action="share-link" class="tb-qb-btn tb-qb-btn-accent" title="Upload to TraceBug cloud and copy a shareable URL (sign-in required)">\u{1F517} Share link</button>
-        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ghost" title="Copy a structured debugging prompt for Claude / ChatGPT / Cursor">\u{1F916} Fix with AI</button>
+        <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
+        </button>
+        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">\u{1F916} Fix with AI</button>
+        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">\u{1F4E6} Export .html</button>
+        <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">\u{1F517} Share link</button>
+        <div class="tb-qb-more">
+          <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More \u25BE</button>
+          <div class="tb-qb-more-menu" data-open="false" role="menu">
+            ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">\u{1F419} Copy GitHub markdown</button>` : ""}
+            <button data-action="linear" class="tb-qb-more-item" role="menuitem">\u25B3 Linear</button>
+            <button data-action="slack" class="tb-qb-more-item" role="menuitem">\u{1F4AC} Slack</button>
+            <button data-action="jira" class="tb-qb-more-item" role="menuitem">\u{1F3AB} Jira</button>
+          </div>
+        </div>
       </div>
       <div class="tb-qb-tip">
         <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
-        <span class="tb-qb-tip-right"><span>Draft auto-saved</span><span class="${isPremium() ? "tb-qb-plan-premium" : "tb-qb-plan-free"}">${isPremium() ? "\u2728 Premium" : "Free"}</span></span>
+        <span class="tb-qb-tip-right"><span>Draft auto-saved</span></span>
       </div>
     </div>
 
@@ -17652,10 +18149,18 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (videoEl2 && video) {
         videoEl2.dataset.tbStartTs = String(video.startedAt);
       }
+      const extraMarkers = [];
+      try {
+        for (const a2 of getElementAnnotations()) extraMarkers.push({ timestamp: a2.timestamp, kind: "annotation", label: a2.comment ? `Note: ${a2.comment.slice(0, 40)}` : "Annotation added" });
+        for (const d of getDrawRegions()) extraMarkers.push({ timestamp: d.timestamp, kind: d.shape === "redact" ? "blur" : "annotation", label: d.shape === "redact" ? "Redaction added" : "Marking added" });
+        for (const b of getBlurEvents()) extraMarkers.push({ timestamp: b.timestamp, kind: "blur", label: "Blur added" });
+      } catch (e2) {
+      }
       _scrubberCtl = mountReplayScrubber(scrubberHost, {
         timeline: data.timeline,
         screenshots: ssForScrub,
         videoEl: videoEl2,
+        extraMarkers,
         onSeek: (ts) => {
           const img = modal.querySelector("#tb-qb-primary-img");
           const meta = modal.querySelector("#tb-qb-primary-meta");
@@ -17718,14 +18223,23 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const btn = modal.querySelector('[data-action="theme-toggle"]');
       if (btn) btn.innerHTML = _themeIcon();
     });
+    (_q = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _q.addEventListener("change", (e2) => {
+      var _a2, _b2;
+      const val = e2.target.value;
+      const sid = (_a2 = data.currentSession) == null ? void 0 : _a2.sessionId;
+      if (sid) setSessionPriority(sid, val);
+      if (data.report) data.report.priority = val;
+      const infoPanel = modal.querySelector('[data-panel="info"]');
+      if (infoPanel) infoPanel.innerHTML = _buildInfoTab(data.report, (_b2 = data.currentSession) != null ? _b2 : null);
+    });
     const helpEl = modal.querySelector("#tb-qb-help");
     const toggleHelp = (force) => {
       if (!helpEl) return;
       const open = force !== void 0 ? force : helpEl.style.display === "none";
       helpEl.style.display = open ? "flex" : "none";
     };
-    (_q = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _q.addEventListener("click", () => toggleHelp());
-    (_r = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _r.addEventListener("click", () => toggleHelp(false));
+    (_r = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _r.addEventListener("click", () => toggleHelp());
+    (_s = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _s.addEventListener("click", () => toggleHelp(false));
     helpEl == null ? void 0 : helpEl.addEventListener("click", (e2) => {
       if (e2.target === helpEl) toggleHelp(false);
     });
@@ -17738,7 +18252,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const btn = modal.querySelector(`[data-tab="${which}"]`);
       if (btn) btn.click();
     };
-    const TAB_ORDER = ["info", "console", "network", "actions", "ai", "annotations"];
+    const TAB_ORDER = ["info", "actions", "console", "network", "ai", "annotations"];
     const modalKeyHandler = (e2) => {
       if (helpEl && helpEl.style.display !== "none") {
         if (e2.key === "Escape" || e2.key === "?") {
@@ -17782,6 +18296,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (e2.key === "Escape") close();
     };
     document.addEventListener("keydown", escHandler);
+    overlay.__tbEscKey = escHandler;
     const openGhBtn = modal.querySelector('[data-action="open-github"]');
     if (openGhBtn && _githubRepo) {
       openGhBtn.addEventListener("click", () => {
@@ -17859,7 +18374,23 @@ ${description}`;
       _clearDraft();
       setTimeout(close, 300);
     });
-    (_s = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _s.addEventListener("click", async () => {
+    const moreBtn = modal.querySelector('[data-action="more-toggle"]');
+    const moreMenu = modal.querySelector(".tb-qb-more-menu");
+    if (moreBtn && moreMenu) {
+      const setMoreOpen = (open) => {
+        moreMenu.dataset.open = open ? "true" : "false";
+        moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      };
+      moreBtn.addEventListener("click", (e2) => {
+        e2.stopPropagation();
+        setMoreOpen(moreMenu.dataset.open !== "true");
+      });
+      moreMenu.addEventListener("click", () => setMoreOpen(false));
+      modal.addEventListener("click", (e2) => {
+        if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
+      });
+    }
+    (_t = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _t.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root);
         return;
@@ -17972,7 +18503,7 @@ ${description}`;
         }
       }
     });
-    (_t = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _t.addEventListener("click", (e2) => {
+    (_u = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _u.addEventListener("click", (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root);
         return;
@@ -18116,7 +18647,7 @@ ${r.steps}` });
       _clearDraft();
       setTimeout(close, 300);
     });
-    (_u = modal.querySelector('[data-action="ai-configure"]')) == null ? void 0 : _u.addEventListener("click", () => {
+    (_v = modal.querySelector('[data-action="ai-configure"]')) == null ? void 0 : _v.addEventListener("click", () => {
       showToast("AI configuration UI coming soon \u2014 set tracebug_ai_key in localStorage to enable", root);
     });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
@@ -18136,7 +18667,7 @@ ${r.steps}` });
         }
       });
     });
-    (_v = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _v.addEventListener("click", () => {
+    (_w = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _w.addEventListener("click", () => {
       var _a2, _b2;
       const ssId = (_b2 = (_a2 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a2.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s) => s.id === ssId) || screenshots2[0];
@@ -18167,19 +18698,68 @@ ${r.steps}` });
         });
       });
     });
-    (_w = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _w.addEventListener("click", async () => {
-      var _a2;
-      showToast("Capturing\u2026", root);
+    (_x = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _x.addEventListener("click", async () => {
+      const prevModal = modal.style.display;
+      const prevOverlay = overlay.style.display;
+      modal.style.display = "none";
+      overlay.style.display = "none";
+      showToast("Drag to select a region \u2014 Esc to cancel", root);
+      let captured = null;
       try {
-        const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-        const lastEvent = ((_a2 = sessions[0]) == null ? void 0 : _a2.events[sessions[0].events.length - 1]) || null;
-        await captureScreenshot(lastEvent);
-        const n = getScreenshots().length;
-        showToast(`\u2713 Screenshot ${n} added`, root);
+        captured = await captureRegionScreenshot();
+      } catch (e2) {
+      } finally {
+        modal.style.display = prevModal;
+        overlay.style.display = prevOverlay;
+      }
+      if (captured) {
+        showToast(`\u2713 Screenshot ${getScreenshots().length} added`, root);
+        refreshQuickBugCapture(root).catch(() => {
+        });
+      } else {
+        showToast("Screenshot cancelled", root);
+      }
+    });
+    (_y = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _y.addEventListener("click", () => {
+      const v = modal.querySelector("#tb-qb-video");
+      if (!v) return;
+      if (!v.paused) {
+        try {
+          v.pause();
+        } catch (e2) {
+        }
+      }
+      if (!v.videoWidth || !v.videoHeight) {
+        showToast("Video still loading \u2014 try again in a moment", root);
+        return;
+      }
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = v.videoWidth;
+        canvas.height = v.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("no 2d context");
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/png");
+        const t = Math.floor(v.currentTime || 0);
+        const mm = String(Math.floor(t / 60)).padStart(2, "0");
+        const ss2 = String(t % 60).padStart(2, "0");
+        const n = getScreenshots().length + 1;
+        pushScreenshot({
+          id: `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: Date.now(),
+          dataUrl,
+          filename: `${String(n).padStart(2, "0")}_frame_${mm}-${ss2}.png`,
+          eventContext: `Video frame at ${mm}:${ss2}`,
+          page: window.location.pathname,
+          width: canvas.width,
+          height: canvas.height
+        });
+        showToast(`\u2713 Frame at ${mm}:${ss2} added`, root);
         refreshQuickBugCapture(root).catch(() => {
         });
       } catch (e2) {
-        showToast("Screenshot failed", root);
+        showToast("Couldn't grab that frame", root);
       }
     });
     const videoEl = modal.querySelector("#tb-qb-video");
@@ -18345,12 +18925,29 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
     rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), "\u{1F194}"));
     rows.push(_kvRow("Severity", sevLabel));
+    if (report == null ? void 0 : report.priority) rows.push(_kvRow("Priority", priorityLabel(report.priority), "\u{1F6A9}"));
     const ctxKeys = Object.keys(ctx);
     if (ctxKeys.length > 0) {
       rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
       for (const k of ctxKeys) {
         rows.push(_kvRow(k, String(ctx[k])));
       }
+    }
+    const storage = report == null ? void 0 : report.storage;
+    if (storage) {
+      const renderArea = (label, entries, dropped) => {
+        if (!entries || entries.length === 0) return;
+        rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
+        const shown = entries.slice(0, 20);
+        for (const e2 of shown) {
+          rows.push(_kvRow(e2.key, e2.redacted ? `\u{1F512} ${e2.value}` : e2.value, "\u{1F5C4}"));
+        }
+        if (entries.length > shown.length) {
+          rows.push(_kvRow("\u2026", `+${entries.length - shown.length} more`, "\u{1F5C4}"));
+        }
+      };
+      renderArea("localStorage", storage.local, storage.localTruncated);
+      renderArea("sessionStorage", storage.session, storage.sessionTruncated);
     }
     return `<div class="tb-qb-info">${rows.join("")}</div>`;
   }
@@ -18756,6 +19353,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID3} .tb-qb-titletext { font-size:15px; font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID3} .tb-qb-sub { font-size:11px; color:var(--tb-text-muted); margin-top:3px; font-weight:500; }
     #${MODAL_ID3} .tb-qb-sev { font-size:10px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:5px 10px; border-radius:999px; white-space:nowrap; }
+    #${MODAL_ID3} .tb-qb-priority { font-size:11px; font-weight:600; padding:5px 8px; border-radius:8px; background:var(--tb-btn-hover); color:var(--tb-text-primary); border:1px solid var(--tb-border); cursor:pointer; }
     #${MODAL_ID3} .tb-qb-close { background:transparent; border:none; color:var(--tb-text-muted); cursor:pointer; font-size:16px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:background 0.15s, color 0.15s; }
     #${MODAL_ID3} .tb-qb-close:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); }
     #${MODAL_ID3} .tb-qb-theme-toggle { background:transparent; border:1px solid var(--tb-border); color:var(--tb-text-muted); cursor:pointer; font-size:13px; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; transition:all 0.15s; }
@@ -18775,7 +19373,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID3} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(124,92,255,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
     #${MODAL_ID3} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
     #${MODAL_ID3} .tb-qb-primary-edit svg { flex-shrink:0; }
-    #${MODAL_ID3} .tb-qb-preview-empty { padding:32px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
+    #${MODAL_ID3} .tb-qb-preview-empty { flex-direction:column; gap:12px; padding:30px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
+    #${MODAL_ID3} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID3} .tb-qb-empty-shot:hover { filter:brightness(1.1); }
+    #${MODAL_ID3} .tb-qb-empty-shot svg { flex-shrink:0; }
+    #${MODAL_ID3} .tb-qb-grab-frame { position:absolute; top:10px; right:10px; z-index:2; display:inline-flex; align-items:center; gap:6px; background:rgba(11,11,15,0.74); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+    #${MODAL_ID3} .tb-qb-grab-frame:hover { filter:brightness(1.25); transform:translateY(-1px); }
+    #${MODAL_ID3} .tb-qb-grab-frame svg { flex-shrink:0; }
     #${MODAL_ID3} .tb-qb-video { display:block; width:100%; max-height:380px; background:#000; }
     #${MODAL_ID3} .tb-qb-img { display:block; max-width:100%; max-height:380px; width:auto; margin:0 auto; }
     #${MODAL_ID3} .tb-qb-vidmeta { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; }
@@ -18789,7 +19393,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID3} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID3} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID3} .tb-qb-ss-hint { color:var(--tb-text-muted); }
-    #${MODAL_ID3} .tb-qb-ss-add { margin-left:auto; background:var(--tb-accent-soft, rgba(124,92,255,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID3} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(124,92,255,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID3} .tb-qb-ss-add svg { flex-shrink:0; }
     #${MODAL_ID3} .tb-qb-ss-add:hover { filter:brightness(1.15); }
     #${MODAL_ID3} .tb-qb-thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
     #${MODAL_ID3} .tb-qb-thumb-wrap { position:relative; }
@@ -19010,6 +19615,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID3} .tb-qb-btn-ghost:hover { background:var(--tb-accent-subtle); color:var(--tb-text-primary); }
     #${MODAL_ID3} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
     #${MODAL_ID3} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
+    /* "Fix with AI" \u2014 the highlight action. Gradient accent so it stands out. */
+    #${MODAL_ID3} .tb-qb-btn-ai { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(124,92,255,0.35); }
+    #${MODAL_ID3} .tb-qb-btn-ai:hover { filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
+    /* Clean footer: one accent primary + a tidy "More" popover for the rest */
+    #${MODAL_ID3} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; }
+    #${MODAL_ID3} .tb-qb-btn-primary:hover { background:var(--tb-accent-hover); border-color:transparent; transform:translateY(-1px); }
+    #${MODAL_ID3} .tb-qb-more { position:relative; display:inline-flex; }
+    #${MODAL_ID3} .tb-qb-more-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:200px; background:var(--tb-bg-elevated); border:1px solid var(--tb-border-hover); border-radius:var(--tb-radius-md); box-shadow:var(--tb-shadow-lg); padding:6px; display:none; flex-direction:column; gap:2px; z-index:6; }
+    #${MODAL_ID3} .tb-qb-more-menu[data-open="true"] { display:flex; }
+    #${MODAL_ID3} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
+    #${MODAL_ID3} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID3} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID3} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
     #${MODAL_ID3} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
@@ -19126,7 +19742,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     </div>
   `;
     overlay.appendChild(card);
-    document.body.appendChild(overlay);
+    const host = document.getElementById(MODAL_ID3) || document.body;
+    host.appendChild(overlay);
     card.querySelectorAll("button[data-ai-action]").forEach((b) => {
       b.addEventListener("mouseenter", () => {
         b.style.filter = "brightness(1.1)";
@@ -19272,6 +19889,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     "src/ui/quick-bug.ts"() {
       "use strict";
       init_screenshot();
+      init_region_screenshot();
       init_dashboard();
       init_plan();
       init_upgrade_modal();
@@ -19285,6 +19903,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_toast();
       init_helpers();
       init_replay_scrubber();
+      init_blur_tool();
       init_html_replay();
       init_share_link();
       init_ai_prompt();
@@ -19334,10 +19953,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const style = document.createElement("style");
       style.id = "tracebug-hud-anim";
       style.textContent = `
-      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, 8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, -8px); } to { opacity:1; transform:translate(-50%, 0); } }
+      /* Docked top-center: Chrome pins its un-movable "\u2026 is sharing your screen /
+         Stop sharing" bar to the BOTTOM-center, so anchoring the HUD there hid our
+         controls behind it. Top-center keeps them clear (and is what Loom/Jam do).
+         Still fully draggable via the grip. */
       #${HUD_ID} {
         position: fixed !important;
-        bottom: 24px !important;
+        top: 18px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         width: max-content !important;
@@ -19412,11 +20035,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
     </button>
     <span class="tb-hud-sep"></span>
+    <button class="tb-hud-btn" data-tb-hud="shot" title="Take a screenshot now (adds to the ticket)" aria-label="Take a screenshot">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    </button>
     <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
-    <button class="tb-hud-btn" data-tb-hud="close" title="Stop and review" aria-label="Stop and review">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive areas \u2014 drag to redact (captured in the recording)" aria-label="Blur sensitive areas">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22" opacity="0.45"/></svg>
     </button>
   `;
     root.appendChild(hud);
@@ -19426,8 +20052,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const pauseBtn = hud.querySelector('[data-tb-hud="pause"]');
     const micBtn = hud.querySelector('[data-tb-hud="mic"]');
     const annotateBtn = hud.querySelector('[data-tb-hud="annotate"]');
+    const blurBtn = hud.querySelector('[data-tb-hud="blur"]');
+    const shotBtn = hud.querySelector('[data-tb-hud="shot"]');
     const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
-    const closeBtn = hud.querySelector('[data-tb-hud="close"]');
     _timerInterval = setInterval(() => {
       if (!isVideoRecording()) return;
       if (!isVideoPaused()) timerEl.textContent = _formatElapsed(getVideoElapsedMs());
@@ -19497,8 +20124,40 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         annotateBtn.dataset.active = "";
         return;
       }
+      if (isBlurModeActive()) {
+        deactivateBlurMode();
+        if (blurBtn) blurBtn.dataset.active = "";
+      }
       activateDrawMode(drawRoot, void 0, void 0, { ephemeralMs: 3e3 });
       annotateBtn.dataset.active = "1";
+    });
+    shotBtn == null ? void 0 : shotBtn.addEventListener("click", async () => {
+      if (shotBtn.dataset.busy === "1") return;
+      shotBtn.dataset.busy = "1";
+      try {
+        await captureScreenshot(null);
+        flashRecordingHUD();
+      } catch (e2) {
+      }
+      shotBtn.dataset.busy = "";
+    });
+    blurBtn == null ? void 0 : blurBtn.addEventListener("click", () => {
+      if (isBlurModeActive()) {
+        deactivateBlurMode();
+        blurBtn.dataset.active = "";
+        return;
+      }
+      if (isDrawModeActive()) {
+        try {
+          deactivateDrawMode();
+        } catch (e2) {
+        }
+        if (annotateBtn) annotateBtn.dataset.active = "";
+      }
+      activateBlurMode(_root || document.body, () => {
+        blurBtn.dataset.active = "";
+      });
+      blurBtn.dataset.active = "1";
     });
     const triggerStop = () => {
       if (isDrawModeActive()) {
@@ -19510,13 +20169,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _onStopRequested == null ? void 0 : _onStopRequested();
     };
     stopBtn.addEventListener("click", triggerStop);
-    closeBtn == null ? void 0 : closeBtn.addEventListener("click", triggerStop);
   }
   function flashRecordingHUD() {
     if (!_hud) return;
     const prev = _hud.style.boxShadow;
     _hud.style.transition = "box-shadow 0.3s";
-    _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7B61FF)66, 0 12px 40px rgba(0,0,0,0.55)";
+    _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7C5CFF)66, 0 12px 40px rgba(0,0,0,0.55)";
     setTimeout(() => {
       if (_hud) _hud.style.boxShadow = prev;
     }, 400);
@@ -19532,6 +20190,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       } catch (e2) {
       }
     }
+    if (isBlurModeActive()) {
+      try {
+        deactivateBlurMode();
+      } catch (e2) {
+      }
+    }
+    removeAllBlurBoxes();
     _hud == null ? void 0 : _hud.remove();
     _hud = null;
     _root = null;
@@ -19543,6 +20208,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       "use strict";
       init_video_recorder();
       init_draw_mode();
+      init_blur_tool();
+      init_screenshot();
       HUD_ID = "tracebug-recording-hud";
       _root = null;
       _hud = null;
@@ -19580,7 +20247,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     toolbar.dataset.tracebug = "compact-toolbar";
     _toolbar = toolbar;
     _applyToolbarPosition(toolbar, position2);
-    _initDrag(toolbar);
+    const dragCleanup = _initDrag(toolbar);
     void panel;
     const _checkLimit = () => {
       if (isPremium()) return true;
@@ -19591,6 +20258,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }, root);
       return false;
     };
+    const dragHandle = document.createElement("div");
+    dragHandle.dataset.tracebug = "toolbar-handle";
+    dragHandle.title = "Drag to move TraceBug";
+    dragHandle.setAttribute("aria-label", "Drag to move TraceBug");
+    dragHandle.style.cssText = "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;color:rgba(255,255,255,0.45);";
+    dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
+    toolbar.appendChild(dragHandle);
     toolbar.appendChild(_createToolbarBtn(
       "Screenshot (Ctrl+Shift+S) \u2014 added to ticket",
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`,
@@ -19634,30 +20308,36 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       "tracebug-toolbar-region-btn"
     ));
     toolbar.appendChild(_divider());
-    const tabRecordBtn = _createToolbarBtn(
-      "Record current tab",
-      _tabRecordIconSvg(false),
-      () => _toggleTabRecording(root, tabRecordBtn, showToast3),
-      "tracebug-toolbar-tab-record-btn"
+    const recordBtn = _createToolbarBtn(
+      "Record (video + session)",
+      _recordIconSvg(false),
+      () => _toggleRecording(root, recordBtn, showToast3),
+      "tracebug-toolbar-record-btn"
     );
     if (!isVideoSupported()) {
-      tabRecordBtn.style.opacity = "0.4";
-      tabRecordBtn.style.cursor = "not-allowed";
-      tabRecordBtn.title = "Screen recording not supported in this browser";
+      recordBtn.style.opacity = "0.4";
+      recordBtn.style.cursor = "not-allowed";
+      recordBtn.title = "Screen recording not supported in this browser";
     }
-    toolbar.appendChild(tabRecordBtn);
-    const desktopRecordBtn = _createToolbarBtn(
-      "Record desktop / window (asks what to share)",
-      _desktopRecordIconSvg(false),
-      () => _toggleDesktopRecording(root, desktopRecordBtn, showToast3),
-      "tracebug-toolbar-desktop-record-btn"
-    );
-    if (!isVideoSupported()) {
-      desktopRecordBtn.style.opacity = "0.4";
-      desktopRecordBtn.style.cursor = "not-allowed";
-      desktopRecordBtn.title = "Screen recording not supported in this browser";
-    }
-    toolbar.appendChild(desktopRecordBtn);
+    toolbar.appendChild(recordBtn);
+    toolbar.appendChild(_divider());
+    toolbar.appendChild(_createToolbarBtn(
+      "Turn off TraceBug on this page",
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+      () => {
+        try {
+          const tb = window.TraceBug;
+          if (tb == null ? void 0 : tb.destroy) tb.destroy();
+          else {
+            _toolbar == null ? void 0 : _toolbar.remove();
+            _panelEl == null ? void 0 : _panelEl.remove();
+          }
+        } catch (e2) {
+          _toolbar == null ? void 0 : _toolbar.remove();
+        }
+      },
+      "tracebug-toolbar-close-btn"
+    ));
     root.appendChild(toolbar);
     if (_isMobile) {
       _convertToFab(toolbar, root, panel, showToast3);
@@ -19690,6 +20370,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     document.addEventListener("keydown", keyHandler);
     return () => {
       toolbar.remove();
+      dragCleanup();
       document.removeEventListener("keydown", keyHandler);
       window.removeEventListener("resize", resizeHandler);
       deactivateElementAnnotateMode();
@@ -19733,17 +20414,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
     return d;
   }
-  function _tabRecordIconSvg(active) {
+  function _recordIconSvg(active) {
     if (active) {
       return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
     }
-    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/><circle cx="6" cy="6" r="0.6" fill="currentColor"/><circle cx="8" cy="6" r="0.6" fill="currentColor"/></svg>`;
-  }
-  function _desktopRecordIconSvg(active) {
-    if (active) {
-      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-error, #ef4444)" stroke="var(--tb-error, #ef4444)" stroke-width="1.5"><circle cx="12" cy="12" r="6"/></svg>`;
-    }
-    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>`;
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 9.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-2.5l5 3.5V6z"/></svg>`;
   }
   async function _finishRecording(root, btn, iconFn, showToast3) {
     const captures = getCaptureCount();
@@ -19767,58 +20442,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       console.warn("[TraceBug] Failed to open ticket review after recording:", err);
     }
   }
-  async function _toggleTabRecording(root, btn, showToast3) {
+  async function _toggleRecording(root, btn, showToast3) {
     if (!isVideoSupported()) {
       showToast3("Screen recording not supported in this browser", root);
       return;
     }
     if (isVideoRecording()) {
-      return _finishRecording(root, btn, _tabRecordIconSvg, showToast3);
+      return _finishRecording(root, btn, _recordIconSvg, showToast3);
     }
+    const choice = await _showRecordPreflight(root, btn);
+    if (!choice) return;
     const ok = await startVideoRecording({
       mode: "rolling",
-      surfaceMode: "tab",
-      onStatus: (status, message) => {
-        if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
-        else if (status === "warning" && message) showToast3(message, root);
-      }
-    });
-    if (!ok) {
-      showToast3("Recording cancelled", root);
-      return;
-    }
-    try {
-      _onSessionStart == null ? void 0 : _onSessionStart();
-    } catch (err) {
-      console.warn("[TraceBug] Session start hook failed:", err);
-    }
-    btn.innerHTML = _tabRecordIconSvg(true);
-    btn.classList.add("tb-active");
-    btn.style.color = "var(--tb-error, #ef4444)";
-    showRecordingHUD(root, {
-      onStop: () => {
-        _toggleTabRecording(root, btn, showToast3).catch(() => {
-        });
-      }
-    });
-    showToast3("Recording this tab \u2014 hit Stop to file a ticket", root);
-  }
-  async function _toggleDesktopRecording(root, btn, showToast3) {
-    if (!isVideoSupported()) {
-      showToast3("Screen recording not supported in this browser", root);
-      return;
-    }
-    if (isVideoRecording()) {
-      return _finishRecording(root, btn, _desktopRecordIconSvg, showToast3);
-    }
-    const choice = await _showDesktopPreflight(root, btn);
-    if (!choice) {
-      showToast3("Recording cancelled", root);
-      return;
-    }
-    const ok = await startVideoRecording({
-      mode: "rolling",
-      surfaceMode: "desktop",
+      surfaceMode: choice.surface,
       withMicrophone: choice.withMicrophone,
       onStatus: (status, message) => {
         if (status === "error" && message) showToast3(`Recording error: ${message}`, root);
@@ -19826,6 +20462,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     });
     if (!ok) {
+      await new Promise((r) => setTimeout(r, 400));
+      if (isVideoRecording()) return;
       showToast3("Recording cancelled", root);
       return;
     }
@@ -19834,18 +20472,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     } catch (err) {
       console.warn("[TraceBug] Session start hook failed:", err);
     }
-    btn.innerHTML = _desktopRecordIconSvg(true);
+    btn.innerHTML = _recordIconSvg(true);
     btn.classList.add("tb-active");
     btn.style.color = "var(--tb-error, #ef4444)";
     showRecordingHUD(root, {
       onStop: () => {
-        _toggleDesktopRecording(root, btn, showToast3).catch(() => {
+        _toggleRecording(root, btn, showToast3).catch(() => {
         });
       }
     });
-    showToast3("Recording started \u2014 hit Stop to file a ticket", root);
+    showToast3(choice.surface === "tab" ? "Recording this tab \u2014 hit Stop to file a ticket" : "Recording \u2014 hit Stop to file a ticket", root);
   }
-  function _showDesktopPreflight(root, anchor) {
+  function _showRecordPreflight(root, anchor) {
     return new Promise((resolve) => {
       const prior = root.querySelector('[data-tracebug="record-preflight"]');
       if (prior) prior.remove();
@@ -19856,12 +20494,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       pop.style.cssText = `
       position:fixed;
       top:${Math.round(rect.bottom + 8)}px;
-      left:${Math.round(Math.min(rect.left, window.innerWidth - 260))}px;
-      width:240px;
+      left:${Math.round(Math.min(rect.left, window.innerWidth - 290))}px;
+      width:262px;
       background:var(--tb-bg-secondary, #1a1a2e);
       border:1px solid var(--tb-border, #2a2a3e);
       border-radius:12px;
-      padding:12px 12px 10px;
+      padding:14px;
       box-shadow:0 12px 40px rgba(0,0,0,0.5);
       z-index:2147483647;
       font-family:var(--tb-font-family, system-ui, -apple-system, sans-serif);
@@ -19875,24 +20513,52 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
         document.head.appendChild(st);
       }
+      const segBase = "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:9px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.12s;border:1px solid var(--tb-border, #2a2a3e);background:rgba(127,127,140,0.14);color:var(--tb-text-secondary, #9aa0aa)";
       pop.innerHTML = `
-      <div style="font-weight:600;margin-bottom:8px;font-size:12px">Record desktop</div>
-      <label style="display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer;background:var(--tb-bg-tertiary, #0f0f1e);user-select:none">
+      <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
+      <div style="display:flex;gap:7px;margin-bottom:10px">
+        <button data-tb-pre="surface-tab" style="${segBase}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg>
+          This tab
+        </button>
+        <button data-tb-pre="surface-desktop" style="${segBase}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>
+          Screen / window
+        </button>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;background:rgba(127,127,140,0.14);user-select:none;margin-bottom:10px">
         <input type="checkbox" data-tb-pre="mic" style="margin:0;cursor:pointer" />
         <span style="display:flex;align-items:center;gap:6px;flex:1">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          <span>Record microphone</span>
+          <span>Include microphone</span>
         </span>
       </label>
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
-        <button data-tb-pre="start" style="flex:1.4;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:7px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">Start recording</button>
+      <div style="display:flex;gap:6px">
+        <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
+        <button data-tb-pre="start" style="flex:1.6;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">\u25CF Start recording</button>
       </div>
     `;
       root.appendChild(pop);
+      let surface = "tab";
+      const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]');
+      const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]');
       const micEl = pop.querySelector('[data-tb-pre="mic"]');
       const cancelEl = pop.querySelector('[data-tb-pre="cancel"]');
       const startEl = pop.querySelector('[data-tb-pre="start"]');
+      const paintSurface = () => {
+        const on = ";border-color:var(--tb-accent, #7C5CFF);background:var(--tb-accent-subtle, rgba(124,92,255,0.15));color:var(--tb-text-primary, #fff)";
+        tabBtn.style.cssText = segBase + (surface === "tab" ? on : "");
+        deskBtn.style.cssText = segBase + (surface === "desktop" ? on : "");
+      };
+      paintSurface();
+      tabBtn.addEventListener("click", () => {
+        surface = "tab";
+        paintSurface();
+      });
+      deskBtn.addEventListener("click", () => {
+        surface = "desktop";
+        paintSurface();
+      });
       let settled = false;
       const finish = (value) => {
         if (settled) return;
@@ -19909,14 +20575,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
         if (e2.key === "Enter") {
           e2.preventDefault();
-          finish({ withMicrophone: micEl.checked });
+          finish({ surface, withMicrophone: micEl.checked });
         }
       };
       const onOutside = (e2) => {
         if (!pop.contains(e2.target)) finish(null);
       };
       cancelEl.addEventListener("click", () => finish(null));
-      startEl.addEventListener("click", () => finish({ withMicrophone: micEl.checked }));
+      startEl.addEventListener("click", () => finish({ surface, withMicrophone: micEl.checked }));
       document.addEventListener("keydown", onKey, true);
       setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
       setTimeout(() => startEl.focus(), 0);
@@ -20019,10 +20685,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       }
     };
-    toolbar.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-    toolbar.addEventListener("touchstart", (e2) => {
+    const onTouchStart = (e2) => {
       if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
       const touch = e2.touches[0];
       isDragging = true;
@@ -20033,8 +20696,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       startLeft = rect.left;
       startTop = rect.top;
       toolbar.style.transition = "none";
-    }, { passive: true });
-    document.addEventListener("touchmove", (e2) => {
+    };
+    const onTouchMove = (e2) => {
       if (!isDragging) return;
       const touch = e2.touches[0];
       const dx = touch.clientX - startX;
@@ -20048,8 +20711,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       toolbar.style.right = "auto";
       toolbar.style.bottom = "auto";
       toolbar.style.transform = "none";
-    }, { passive: true });
-    document.addEventListener("touchend", () => {
+    };
+    const onTouchEnd = () => {
       if (!isDragging) return;
       isDragging = false;
       if (hasMoved) {
@@ -20061,7 +20724,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         } catch (e2) {
         }
       }
-    });
+    };
+    toolbar.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    toolbar.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: true });
+    document.addEventListener("touchend", onTouchEnd);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+    };
   }
   function _convertToFab(toolbar, root, panel, showToast3) {
     const buttons = Array.from(toolbar.children);
@@ -20276,7 +20951,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #tracebug-root select:focus-visible,
     #tracebug-root textarea:focus-visible,
     #tracebug-root [tabindex]:focus-visible {
-      outline: 2px solid var(--tb-accent, #7B61FF) !important;
+      outline: 2px solid var(--tb-accent, #7C5CFF) !important;
       outline-offset: 2px !important;
     }
     #tracebug-root *:focus:not(:focus-visible) {
@@ -20351,7 +21026,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#9B7DFF"/><stop offset="50%" stop-color="#7B61FF"/><stop offset="100%" stop-color="#00E5FF"/></linearGradient><linearGradient id="th-s" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#00E5FF" stop-opacity="0"/><stop offset="35%" stop-color="#00E5FF" stop-opacity="0.9"/><stop offset="65%" stop-color="#7B61FF" stop-opacity="0.9"/><stop offset="100%" stop-color="#7B61FF" stop-opacity="0"/></linearGradient></defs><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="url(#th-p)" opacity="0.18"/><path d="M48 20 L66 30 L66 52 L48 62 L30 52 L30 30 Z" fill="none" stroke="url(#th-p)" stroke-width="2.5"/><rect x="22" y="39" width="52" height="3" rx="1.5" fill="url(#th-s)" opacity="0.95"/><line x1="34" y1="29" x2="21" y2="16" stroke="#9B7DFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="21" cy="16" r="3.5" fill="#9B7DFF"/><line x1="62" y1="29" x2="75" y2="16" stroke="#00E5FF" stroke-width="2.5" stroke-linecap="round"/><circle cx="75" cy="16" r="3.5" fill="#00E5FF"/><circle cx="48" cy="41" r="5" fill="url(#th-p)"/><circle cx="48" cy="41" r="2.2" fill="white"/><circle cx="41" cy="34" r="2.5" fill="#00E5FF" opacity="0.9"/><circle cx="55" cy="34" r="2.5" fill="#9B7DFF" opacity="0.9"/></svg>TraceBug AI</div>
+          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B0F"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</div>
           <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording2 ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording2 ? "Recording" : "Paused"}"></div>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} \xB7 ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
@@ -20507,7 +21182,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml4(preview)}</div>
     <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events \xB7 ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7B61FF")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7C5CFF")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
       <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
     </div>
   `;
@@ -21636,7 +22311,7 @@ ${"-".repeat(40)}
     return `background:${color2}22;color:${color2};border:1px solid ${color2}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
   }
   function _tabBtnStyle(active) {
-    return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7B61FF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
+    return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7C5CFF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
   }
   function renderAnnotationList(panel) {
     var _a, _b, _c, _d;
@@ -21728,7 +22403,7 @@ ${"-".repeat(40)}
         </svg>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
         <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
-          Use <strong style="color:#7B61FF">Annotate</strong> to click elements or <strong style="color:#7B61FF">Draw</strong> to mark regions on the page.
+          Use <strong style="color:#7C5CFF">Annotate</strong> to click elements or <strong style="color:#7C5CFF">Draw</strong> to mark regions on the page.
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
           Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
@@ -21740,7 +22415,7 @@ ${"-".repeat(40)}
     }
     let html = "";
     if (elAnnotations.length > 0) {
-      html += `<div style="font-size:11px;color:#7B61FF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7B61FF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
+      html += `<div style="font-size:11px;color:#7C5CFF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7C5CFF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
       for (let i = 0; i < elAnnotations.length; i++) {
         const a2 = elAnnotations[i];
         const intentColor = _getIntentColor(a2.intent);
@@ -21763,7 +22438,7 @@ ${"-".repeat(40)}
       }
     }
     if (drawRegions.length > 0) {
-      html += `<div style="font-size:11px;color:#00E5FF;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #00E5FF;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
+      html += `<div style="font-size:11px;color:#22D3EE;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #22D3EE;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
       for (let i = 0; i < drawRegions.length; i++) {
         const r = drawRegions[i];
         const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
@@ -21818,7 +22493,7 @@ ${"-".repeat(40)}
       case "fix":
         return "#ef4444";
       case "redesign":
-        return "#7B61FF";
+        return "#7C5CFF";
       case "remove":
         return "#f97316";
       case "question":
@@ -21892,8 +22567,8 @@ ${"-".repeat(40)}
     displayW = Math.round(displayW);
     displayH = Math.round(displayH);
     const toolbarHtml = `
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-      <span style="color:var(--tb-text-muted, #888);font-size:11px;margin-right:8px">ANNOTATE:</span>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:var(--tb-bg-secondary, #16161f);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:14px;padding:9px 14px;box-shadow:0 12px 38px rgba(0,0,0,0.6);max-width:calc(100vw - 40px)">
+      <span style="color:var(--tb-text-secondary, #cbd5e1);font-size:11px;font-weight:600;letter-spacing:0.4px;margin-right:6px">ANNOTATE</span>
       <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">\u270E Pen</button>
       <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">\u25AD Highlight</button>
       <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">\u2192 Arrow</button>
@@ -21911,8 +22586,8 @@ ${"-".repeat(40)}
     </div>
   `;
     const actionsHtml = `
-    <div style="display:flex;gap:10px;margin-top:10px;align-items:center">
-      <button id="bt-ann-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 20px;cursor:pointer;font-size:13px;font-family:var(--tb-font-family, inherit)">\u2713 Save Annotated</button>
+    <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:var(--tb-bg-secondary, #16161f);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:14px;padding:9px 14px;box-shadow:0 12px 38px rgba(0,0,0,0.6);max-width:calc(100vw - 40px)">
+      <button id="bt-ann-save" style="background:var(--tb-accent, #7C5CFF);color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:9px 22px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 4px 14px rgba(124,92,255,0.4)">\u2713 Save Annotated</button>
       <button id="bt-ann-download" style="background:var(--tb-success, #22c55e)22;color:var(--tb-success, #22c55e);border:1px solid #22c55e44;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">\u2193 Download</button>
       <button id="bt-ann-cancel" style="background:#66666622;color:var(--tb-text-muted, #888);border:1px solid #66666644;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Cancel</button>
       <div style="flex:1"></div>
@@ -22026,13 +22701,9 @@ ${"-".repeat(40)}
         }
         currentTool = tool;
         overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach((tb) => {
-          tb.style.background = "#22222244";
-          tb.style.color = "#888";
-          tb.style.borderColor = "#33333344";
+          tb.style.cssText = annToolBtnStyle(false);
         });
-        btn.style.background = "#3b82f633";
-        btn.style.color = "#3b82f6";
-        btn.style.borderColor = "#3b82f6";
+        btn.style.cssText = annToolBtnStyle(true);
       });
     });
     function spawnTextInput(x, y) {
@@ -22190,12 +22861,12 @@ ${"-".repeat(40)}
   }
   function annToolBtnStyle(active) {
     if (active) {
-      return "background:#3b82f633;color:var(--tb-info, #3b82f6);border:1px solid #3b82f6;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
+      return "background:var(--tb-accent, #7C5CFF);color:#fff;border:1px solid var(--tb-accent, #7C5CFF);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 10px rgba(124,92,255,0.45);";
     }
-    return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit);";
+    return "background:var(--tb-bg-elevated, #27272a);color:var(--tb-text-secondary, #cbd5e1);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);";
   }
   function annActionBtnStyle() {
-    return "background:#22222244;color:var(--tb-text-muted, #888);border:1px solid #33333344;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
+    return "background:var(--tb-bg-elevated, #27272a);color:var(--tb-text-secondary, #cbd5e1);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
   }
   var PANEL_ID2, _isRecording2, _onToggleRecording2, eventConfig;
   var init_dashboard = __esm({
@@ -56249,9 +56920,9 @@ First element: \`${exampleSnippet}\``,
     return parts.join("");
   }
   function _injectStyles3() {
-    if (document.getElementById(STYLE_ID2)) return;
+    if (document.getElementById(STYLE_ID3)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID2;
+    style.id = STYLE_ID3;
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -56343,7 +57014,7 @@ First element: \`${exampleSnippet}\``,
       transition: all 0.12s !important;
     }
     #${CARD_ID} .tb-lbc-primary {
-      background: var(--tb-accent, #7B61FF) !important;
+      background: var(--tb-accent, #7C5CFF) !important;
       color: #fff !important;
       border-color: transparent !important;
     }
@@ -56364,12 +57035,12 @@ First element: \`${exampleSnippet}\``,
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID, STYLE_ID2, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
       CARD_ID = "tracebug-live-bug-card";
-      STYLE_ID2 = "tracebug-live-bug-card-styles";
+      STYLE_ID3 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
       _currentRoot = null;
@@ -56401,13 +57072,13 @@ First element: \`${exampleSnippet}\``,
     _renderBody(getIssues());
   }
   function _injectStyles4() {
-    if (document.getElementById(STYLE_ID3)) return;
+    if (document.getElementById(STYLE_ID4)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID3;
+    style.id = STYLE_ID4;
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(123,97,255,0.0); outline: 2px solid transparent; }
-      30% { box-shadow: 0 0 0 6px rgba(123,97,255,0.5); outline: 2px solid #7B61FF; }
+      30% { box-shadow: 0 0 0 6px rgba(123,97,255,0.5); outline: 2px solid #7C5CFF; }
     }
     #${PANEL_ID3}-overlay {
       position: fixed !important;
@@ -56485,7 +57156,7 @@ First element: \`${exampleSnippet}\``,
       color: var(--tb-text-primary, #fff);
     }
     #${PANEL_ID3} .tb-issue-actions button[data-action="file"] {
-      background: var(--tb-accent, #7B61FF);
+      background: var(--tb-accent, #7C5CFF);
       color: #fff;
       border-color: transparent;
     }
@@ -56620,7 +57291,7 @@ First element: \`${exampleSnippet}\``,
           <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml2(issue.title)}</span>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml2(desc)}</div>
-        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7B61FF);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
+        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7C5CFF);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
         ${samplesHtml}
       </div>
       <div class="tb-issue-actions">
@@ -56648,7 +57319,7 @@ First element: \`${exampleSnippet}\``,
     const prevOutline = htmlEl.style.outline;
     const prevTransition = htmlEl.style.transition;
     htmlEl.style.transition = "outline 0.2s, box-shadow 0.2s";
-    htmlEl.style.outline = "3px solid #7B61FF";
+    htmlEl.style.outline = "3px solid #7C5CFF";
     htmlEl.style.boxShadow = "0 0 0 6px rgba(123,97,255,0.35)";
     setTimeout(() => {
       htmlEl.style.outline = prevOutline;
@@ -56681,14 +57352,14 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID3, STYLE_ID3, _isOpen2, _root2, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID3, STYLE_ID4, _isOpen2, _root2, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
       init_scanner();
       init_helpers();
       PANEL_ID3 = "tracebug-issues-panel";
-      STYLE_ID3 = "tracebug-issues-panel-styles";
+      STYLE_ID4 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
       _root2 = null;
       SEVERITY_COLORS = {
@@ -57036,6 +57707,8 @@ First element: \`${exampleSnippet}\``,
         }
         wireAutoStopListener();
         setAutoStopHandler((recording) => this._handleAutoStop(recording));
+        wireStartedListener();
+        setStartedHandler(() => this._handleRecordingStarted());
         if (this.config.enableDashboard) {
           restoreFromOffscreenIfActive().then((wasActive) => {
             if (wasActive) {
@@ -57210,10 +57883,9 @@ First element: \`${exampleSnippet}\``,
     }
     /** Capture a screenshot of the current page */
     async takeScreenshot() {
-      if (!this.sessionId) return null;
       if (!this._checkScreenshotLimit()) return null;
-      const sessions = getAllSessions();
-      const session = sessions.find((s) => s.sessionId === this.sessionId);
+      const sid = this.sessionId || getActiveSessionId();
+      const session = sid ? getAllSessions().find((s) => s.sessionId === sid) : null;
       const lastEvent = (session == null ? void 0 : session.events[session.events.length - 1]) || null;
       const screenshot = await captureScreenshot(lastEvent);
       console.info(`[TraceBug] Screenshot captured: ${screenshot.filename}`);
@@ -57253,6 +57925,17 @@ First element: \`${exampleSnippet}\``,
       }
       const { showQuickBugCapture: showQuickBugCapture2 } = await Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports));
       return showQuickBugCapture2(root);
+    }
+    /**
+     * Open the cloud dashboard in a new tab — where a signed-in user sees all
+     * the bug tickets shared from their account. If they aren't signed in, the
+     * dashboard prompts for login. Uses the configured cloudEndpoint.
+     */
+    openCloudDashboard() {
+      var _a;
+      if (typeof window === "undefined") return;
+      const base = (((_a = this.config) == null ? void 0 : _a.cloudEndpoint) || "https://tracebug.netlify.app").replace(/\/+$/, "");
+      window.open(`${base}/dashboard`, "_blank", "noopener");
     }
     // ── Annotations ─────────────────────────────────────────────────────
     /** Add a tester note/annotation to the current session */
@@ -57456,11 +58139,22 @@ First element: \`${exampleSnippet}\``,
     }
     /** Generate a complete bug report for the current session */
     generateReport() {
+      var _a;
       if (!this.sessionId) return null;
       const sessions = getAllSessions();
       const session = sessions.find((s) => s.sessionId === this.sessionId);
       if (!session) return null;
-      return this._redactForFreePlan(buildReport(session));
+      const report = this._redactForFreePlan(buildReport(session));
+      if (((_a = this.config) == null ? void 0 : _a.captureStorage) === false) delete report.storage;
+      return report;
+    }
+    /**
+     * Set the tester-assigned priority for the current session's report.
+     * Persists across reloads. No-op if there's no active session.
+     */
+    setPriority(priority) {
+      if (!this.sessionId) return;
+      setSessionPriority(this.sessionId, priority);
     }
     /** Generate GitHub issue markdown (free + premium). */
     getGitHubIssue() {
@@ -57840,6 +58534,19 @@ First element: \`${exampleSnippet}\``,
      * offscreen recording is still active. Safe to call repeatedly — the HUD
      * itself guards against double mounts.
      */
+    /**
+     * Fired when the offscreen document broadcasts that capture actually began.
+     * Mounts the recording HUD + attaches console collectors so the user always
+     * sees the controls (Stop / Pause / Pen / Blur …) while recording — even if
+     * the start RPC reported a (false) cancellation. Idempotent: the HUD guards
+     * against double mounts.
+     */
+    _handleRecordingStarted() {
+      var _a;
+      if (!((_a = this.config) == null ? void 0 : _a.enableDashboard)) return;
+      this._remountRecordingHud();
+      this._attachConsoleCollectors();
+    }
     _remountRecordingHud() {
       const root = document.getElementById("tracebug-root");
       if (!root) return;

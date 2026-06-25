@@ -70,6 +70,14 @@ export interface TraceBugConfig {
   captureConsole?: "errors" | "warnings" | "all" | "none";
 
   /**
+   * Capture a snapshot of localStorage + sessionStorage in each report.
+   * Default: true. Values under sensitive-looking keys (token, secret, auth,
+   * password, jwt, session, key, …) are redacted before storing. Set false to
+   * skip Web Storage capture entirely.
+   */
+  captureStorage?: boolean;
+
+  /**
    * Optional team/company name for custom branding in exported reports
    * (premium feature). When set and the user is on the premium plan, a
    * "Reported via TraceBug — {companyName}" header is prepended to GitHub
@@ -142,6 +150,9 @@ export interface StoredSession {
   environment: EnvironmentInfo | null;
   isBug?: boolean;
   user?: TraceBugUser | null;
+  /** Tester-assigned priority for this session's report. Persisted so it
+   *  survives reloads; read by buildReport. Unset → derived from severity. */
+  priority?: BugPriority;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────
@@ -333,6 +344,33 @@ export interface RootCauseHint {
 /** Top-level severity classification — feeds the colored emoji prefix on titles. */
 export type BugSeverity = "critical" | "high" | "medium" | "low";
 
+/**
+ * Tester-assigned priority. Distinct from `severity` (which is auto-derived
+ * from the captured signals): priority is a human triage call. Defaults to a
+ * value mapped from severity, overridable in the Quick Bug modal.
+ */
+export type BugPriority = "high" | "medium" | "low";
+
+// ── Storage snapshot ────────────────────────────────────────────────────────
+
+/** One localStorage/sessionStorage entry captured at report time. */
+export interface StorageEntry {
+  key: string;
+  /** Value, possibly redacted/truncated. See `redacted`. */
+  value: string;
+  /** True when the value was masked because the key/value looked sensitive. */
+  redacted?: boolean;
+}
+
+/** Snapshot of the page's Web Storage at the moment the report was built. */
+export interface StorageSnapshot {
+  local: StorageEntry[];
+  session: StorageEntry[];
+  /** Entries dropped to stay under the capture cap (per area), if any. */
+  localTruncated?: number;
+  sessionTruncated?: number;
+}
+
 export interface BugReport {
   title: string;
   /** One-line smart summary of what went wrong — top of every report. */
@@ -362,6 +400,11 @@ export interface BugReport {
   rootCause: RootCauseHint;
   /** Auto-classified severity from rule ladder in report-builder. */
   severity: BugSeverity;
+  /** Tester-assigned triage priority. Defaults from severity, set in the modal. */
+  priority: BugPriority;
+  /** localStorage + sessionStorage snapshot (sensitive values redacted).
+   *  Omitted when capture is disabled via `captureStorage: false`. */
+  storage?: StorageSnapshot;
   annotations: Annotation[];
   screenshots: ScreenshotData[];
   timeline: TimelineEntry[];

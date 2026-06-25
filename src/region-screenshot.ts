@@ -5,7 +5,7 @@
 // the html2canvas fallback in plain-SDK context — no new heavy deps.
 
 import { ScreenshotData } from "./types";
-import { captureScreenshot, loadHtml2CanvasShared, pushScreenshot } from "./screenshot";
+import { captureScreenshot, loadHtml2CanvasShared, pushScreenshot, isNonRenderingLink } from "./screenshot";
 
 interface Rect { x: number; y: number; w: number; h: number; }
 
@@ -22,7 +22,7 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
     const sel = document.createElement("div");
     sel.dataset.tracebug = "region-overlay";
     Object.assign(sel.style, {
-      position: "absolute", border: "2px dashed #7B61FF",
+      position: "absolute", border: "2px dashed #7C5CFF",
       background: "rgba(123,97,255,0.15)", display: "none",
       pointerEvents: "none",
     });
@@ -98,6 +98,9 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
             windowWidth: document.documentElement.scrollWidth,
             windowHeight: document.documentElement.scrollHeight,
             ignoreElements: (el: Element) => {
+              // Skip invisible preload/prefetch links — avoids a browser warning
+              // when html2canvas clones them into its render iframe.
+              if (isNonRenderingLink(el)) return true;
               if (el.id === "tracebug-root") return true;
               if ((el as HTMLElement).dataset?.tracebug) return true;
               return false;

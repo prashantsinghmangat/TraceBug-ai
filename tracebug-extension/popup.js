@@ -171,8 +171,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     micPill.textContent = micOn ? "On" : "Off";
   }
   applyMicUI();
-  micBtn.addEventListener("click", () => {
-    micOn = !micOn;
+  micBtn.addEventListener("click", async () => {
+    const turningOn = !micOn;
+    if (turningOn) {
+      // Request mic permission HERE. The popup is an extension page that can
+      // show the permission prompt; the offscreen recorder cannot. A grant
+      // persists for the extension origin, so the offscreen getUserMedia({audio})
+      // then succeeds and narration is actually included. If denied, stay OFF
+      // and tell the user instead of silently recording without a mic.
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast("Microphone not available in this browser", true);
+        return;
+      }
+      try {
+        const test = await navigator.mediaDevices.getUserMedia({ audio: true });
+        test.getTracks().forEach((t) => t.stop());
+      } catch (err) {
+        micOn = false;
+        try { localStorage.setItem(MIC_KEY, "0"); } catch {}
+        applyMicUI();
+        showToast(
+          err && err.name === "NotAllowedError"
+            ? "Microphone blocked — allow it for this extension, then toggle again"
+            : "Couldn't access the microphone",
+          true,
+        );
+        return;
+      }
+    }
+    micOn = turningOn;
     try { localStorage.setItem(MIC_KEY, micOn ? "1" : "0"); } catch {}
     applyMicUI();
   });
