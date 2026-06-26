@@ -5,7 +5,7 @@
 // the html2canvas fallback in plain-SDK context — no new heavy deps.
 
 import { ScreenshotData } from "./types";
-import { captureScreenshot, loadHtml2CanvasShared, pushScreenshot, isNonRenderingLink } from "./screenshot";
+import { captureScreenshot, loadHtml2CanvasShared, pushScreenshot, isNonRenderingLink, isExtensionContext } from "./screenshot";
 
 interface Rect { x: number; y: number; w: number; h: number; }
 
@@ -78,10 +78,27 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
       if (rect.w < 5 || rect.h < 5) { resolve(null); return; }
 
       try {
-        // Prefer html2canvas directly with the absolute (document-space)
-        // selection rect. captureScreenshot+crop didn't survive scrolled
-        // pages — html2canvas renders from document origin, not viewport,
-        // so a viewport-space crop landed in the wrong place.
+        // Extension context: capture the visible viewport with
+        // chrome.tabs.captureVisibleTab (pixel-perfect, fast) and crop the
+        // selection. The region rect and captureVisibleTab are BOTH
+        // viewport-space, so the crop lands exactly on the selected area even
+        // after scrolling. We avoid html2canvas here because it renders the
+        // whole document in document-space — slow on big pages and it
+        // mis-positions the crop on scrolled / lazy-loaded content (the bug:
+        // "takes long and captures elsewhere").
+        if (isExtensionContext()) {
+          const full = await captureScreenshot(null);
+          const cropped = await cropDataUrl(full.dataUrl, rect);
+          full.dataUrl = cropped;
+          full.width = rect.w;
+          full.height = rect.h;
+          full.filename = full.filename.replace(/\.png$/, "_region.png");
+          resolve(full);
+          return;
+        }
+
+        // Plain-SDK context (no captureVisibleTab): html2canvas with the
+        // absolute (document-space) selection rect.
         const renderer = await loadHtml2CanvasShared();
         if (renderer) {
           const docX = window.scrollX + rect.x;

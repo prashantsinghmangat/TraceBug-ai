@@ -680,7 +680,9 @@ function _showCommentInput(
     const region: DrawRegion = {
       id: `dr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
-      shape: _currentShape,
+      // save() runs only for region shapes — pen strokes have their own path and
+      // never reach here — so _currentShape is always a DrawRegion["shape"].
+      shape: _currentShape as DrawRegion["shape"],
       x, y, width: w, height: h,
       comment,
       color: _currentColor,

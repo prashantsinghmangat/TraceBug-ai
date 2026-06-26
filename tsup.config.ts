@@ -1,5 +1,26 @@
 import { defineConfig } from "tsup";
 
+// Replace html2canvas with an empty stub in the Chrome-extension (IIFE) bundle.
+// The extension captures screenshots via chrome.tabs.captureVisibleTab (full
+// page) and captureVisibleTab+crop (region) — it NEVER loads html2canvas (that
+// path runs only in plain-SDK context). So inlining its ~600KB into the
+// content-script bundle is pure dead weight. loadHtml2Canvas() sees `default:
+// null`, returns null, and the captureVisibleTab paths take over. No feature
+// loss in the extension.
+const stubHtml2Canvas = {
+  name: "stub-html2canvas",
+  setup(build: { onResolve: Function; onLoad: Function }) {
+    build.onResolve({ filter: /^html2canvas$/ }, () => ({
+      path: "html2canvas",
+      namespace: "tb-stub",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "tb-stub" }, () => ({
+      contents: "export default null;",
+      loader: "js",
+    }));
+  },
+};
+
 export default defineConfig([
   // ── Main SDK build (npm package) ──────────────────────────────────────
   // splitting: true so that `await import("html2canvas")` in screenshot.ts
@@ -31,12 +52,9 @@ export default defineConfig([
     outExtension: () => ({ js: ".mjs" }),
   },
   // ── IIFE build for Chrome Extension ───────────────────────────────────
-  // NOTE: This bundle is ~2.5MB because IIFE format cannot split chunks, so
-  // esbuild inlines every dynamic import — html2canvas AND axe-core — into the
-  // single content-script file. Marking them `external` is a no-op for IIFE
-  // (there's no runtime loader to resolve the import). Shrinking this requires
-  // stubbing those modules via an esbuild plugin, which also drops a11y
-  // scanning from the extension — a product call, tracked separately.
+  // IIFE can't split chunks, so esbuild inlines every dynamic import. We stub
+  // html2canvas (unused in the extension — see stubHtml2Canvas above) to drop
+  // ~600KB. axe-core stays: it powers the a11y auto-scanner, an actual feature.
   {
     entry: { "tracebug-sdk": "src/index.ts" },
     format: ["iife"],
@@ -45,6 +63,7 @@ export default defineConfig([
     clean: false,
     splitting: false,
     sourcemap: false,
+    esbuildPlugins: [stubHtml2Canvas],
     outDir: "tracebug-extension",
     outExtension: () => ({ js: ".js" }),
     footer: {

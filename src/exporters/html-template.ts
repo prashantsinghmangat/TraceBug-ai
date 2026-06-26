@@ -136,6 +136,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
     </div>
     <div id="scrubber"></div>
     <div class="tb-vss-meta" id="ssmeta"></div>
+    <div id="ss-gallery" class="tb-vss-gallery" style="display:none"></div>
     <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
       <img id="hover-thumb-img" alt="" />
       <div id="hover-thumb-time"></div>
@@ -529,6 +530,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 :root[data-compact="1"] .tb-vright { display: none !important; }
 :root[data-compact="1"] .tb-vpreview img,
 :root[data-compact="1"] .tb-vpreview video { max-height: 75vh; }
+
+/* ── Screenshot gallery (shown when there's no video) ──────── */
+.tb-vss-gallery { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.tb-vss-thumb { position: relative; padding: 0; border: 2px solid var(--tb-border); border-radius: var(--tb-radius-sm); overflow: hidden; cursor: pointer; background: var(--tb-bg); width: 150px; height: 96px; transition: border-color .12s, transform .12s; }
+.tb-vss-thumb:hover { transform: translateY(-1px); }
+.tb-vss-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tb-vss-thumb span { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.72); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 4px; }
+.tb-vss-thumb.active { border-color: var(--tb-accent, #7C5CFF); }
 
 /* ── Hover thumbnail on scrubber ──────────────────── */
 .tb-vhover-thumb { position: fixed; pointer-events: none; z-index: 50; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 4px; box-shadow: var(--tb-shadow-md); }
@@ -1034,10 +1043,43 @@ const REPLAY_RUNTIME = `(function(){
     }
   } else if (screenshots.length > 0) {
     img.src = screenshots[0].dataUrl;
+    img.style.display = "block";
     ssMeta.textContent = screenshots[0].filename + " · " + new Date(screenshots[0].timestamp).toLocaleTimeString();
   } else {
     img.style.display = "none";
     emptyMsg.style.display = "block";
+  }
+
+  // Screenshot gallery — with no video, show ALL screenshots as clickable
+  // thumbnails and hide the scrubber. For a screenshots-only report the
+  // timeline just spans the minutes between captures, which isn't useful;
+  // the user wants to browse the shots. Clicking a thumb shows it full-size.
+  var ssGallery = document.getElementById("ss-gallery");
+  if (!hasVideo && screenshots.length > 0 && ssGallery) {
+    for (var gi = 0; gi < screenshots.length; gi++) {
+      (function (s, idx) {
+        var t = document.createElement("button");
+        t.className = "tb-vss-thumb" + (idx === 0 ? " active" : "");
+        t.type = "button";
+        var im = document.createElement("img");
+        im.src = s.dataUrl; im.alt = "Screenshot " + (idx + 1);
+        var num = document.createElement("span");
+        num.textContent = String(idx + 1);
+        t.appendChild(im); t.appendChild(num);
+        t.addEventListener("click", function () {
+          img.src = s.dataUrl;
+          img.style.display = "block";
+          if (ssMeta) ssMeta.textContent = s.filename + " · " + new Date(s.timestamp).toLocaleTimeString();
+          var all = ssGallery.querySelectorAll(".tb-vss-thumb");
+          for (var k = 0; k < all.length; k++) all[k].classList.remove("active");
+          t.classList.add("active");
+        });
+        ssGallery.appendChild(t);
+      })(screenshots[gi], gi);
+    }
+    ssGallery.style.display = "flex";
+    var scEl = document.getElementById("scrubber");
+    if (scEl) scEl.style.display = "none";
   }
 
   // Decode the base64 data URL into a Blob URL only when the user actually

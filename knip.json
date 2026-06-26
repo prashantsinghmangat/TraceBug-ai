@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unjs.io/schema/knip.json",
+  "entry": ["src/index.ts", "cli/bin.ts"],
+  "project": ["src/**/*.ts", "cli/**/*.ts"],
+  "ignore": ["website/**", "example-app/**", "tracebug-extension/**", "tests/**", "dist/**"],
+  "ignoreDependencies": [],
+  "ignoreExportsUsedInFile": true
+}

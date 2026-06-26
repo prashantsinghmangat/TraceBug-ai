@@ -50,7 +50,7 @@ export function isNonRenderingLink(el: Element): boolean {
  * Use chrome.tabs.captureVisibleTab instead, routed through a CustomEvent
  * to the content script → background script.
  */
-function isExtensionContext(): boolean {
+export function isExtensionContext(): boolean {
   return !!(window as any).__TRACEBUG_INITIALIZED__;
 }
 
