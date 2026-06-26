@@ -30,7 +30,9 @@ export function buildSelector(el: Element): string {
   let depth = 0;
   while (cur && cur.nodeType === 1 && cur.tagName !== "BODY" && depth < 5) {
     const tag = cur.tagName.toLowerCase();
-    const parent = cur.parentElement;
+    // Explicit annotation breaks the circular inference from `cur = parent`
+    // below (which otherwise makes `parent` — and `parent.children` — `any`).
+    const parent: HTMLElement | null = cur.parentElement;
     if (!parent) {
       parts.unshift(tag);
       break;

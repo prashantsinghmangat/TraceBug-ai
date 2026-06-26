@@ -41,27 +41,27 @@ var TraceBugModule = (() => {
   function getActiveSessionId() {
     try {
       return localStorage.getItem(ACTIVE_SESSION_KEY);
-    } catch (e2) {
+    } catch (e) {
       return null;
     }
   }
   function setActiveSessionId(id) {
     try {
       localStorage.setItem(ACTIVE_SESSION_KEY, id);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function clearActiveSessionId() {
     try {
       localStorage.removeItem(ACTIVE_SESSION_KEY);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function getAllSessions() {
     try {
       const raw = localStorage.getItem(SESSIONS_KEY);
       return raw ? JSON.parse(raw) : [];
-    } catch (e2) {
+    } catch (e) {
       return [];
     }
   }
@@ -69,7 +69,7 @@ var TraceBugModule = (() => {
     try {
       localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
       return;
-    } catch (e2) {
+    } catch (e) {
     }
     const commit = (next) => {
       try {
@@ -77,7 +77,7 @@ var TraceBugModule = (() => {
         sessions.length = 0;
         sessions.push(...next);
         return true;
-      } catch (e2) {
+      } catch (e) {
         return false;
       }
     };
@@ -206,7 +206,7 @@ var TraceBugModule = (() => {
     invalidateCache();
     try {
       localStorage.removeItem(SESSIONS_KEY);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   var SESSIONS_KEY, ACTIVE_SESSION_KEY, _cachedSessions, _pendingFlush, FLUSH_INTERVAL_MS;
@@ -276,9 +276,9 @@ var TraceBugModule = (() => {
           break;
         }
         case "form_submit": {
-          const f2 = event.data.form;
-          const formName = (f2 == null ? void 0 : f2.id) || (f2 == null ? void 0 : f2.action) || "form";
-          const fieldCount = (f2 == null ? void 0 : f2.fieldCount) || 0;
+          const f = event.data.form;
+          const formName = (f == null ? void 0 : f.id) || (f == null ? void 0 : f.action) || "form";
+          const fieldCount = (f == null ? void 0 : f.fieldCount) || 0;
           steps.push(`${stepNum++}. Submit ${formName} form (${fieldCount} fields)`);
           break;
         }
@@ -346,9 +346,9 @@ var TraceBugModule = (() => {
   }
   function shortenUrl(url) {
     try {
-      const u2 = new URL(url, window.location.origin);
-      return u2.pathname + (u2.search ? "..." : "");
-    } catch (e2) {
+      const u = new URL(url, window.location.origin);
+      return u.pathname + (u.search ? "..." : "");
+    } catch (e) {
       return url.slice(0, 60);
     }
   }
@@ -363,13 +363,13 @@ var TraceBugModule = (() => {
       }
     }
     const errorEvents = events.filter(
-      (e2) => e2.type === "error" || e2.type === "unhandled_rejection"
+      (e) => e.type === "error" || e.type === "unhandled_rejection"
     );
     if (errorEvents.length > 0) {
       parts.push(`Page: ${errorEvents[0].page}`);
     }
     const userActions = events.filter(
-      (e2) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e2.type)
+      (e) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e.type)
     );
     if (userActions.length > 0) {
       const last = userActions[userActions.length - 1];
@@ -398,7706 +398,16 @@ var TraceBugModule = (() => {
     }
   });
 
-  // node_modules/html2canvas/dist/html2canvas.esm.js
-  var html2canvas_esm_exports = {};
-  __export(html2canvas_esm_exports, {
-    default: () => html2canvas_esm_default
+  // tb-stub:html2canvas
+  var html2canvas_exports = {};
+  __export(html2canvas_exports, {
+    default: () => html2canvas_default
   });
-  function __extends(d, b) {
-    if (typeof b !== "function" && b !== null)
-      throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-    extendStatics(d, b);
-    function __() {
-      this.constructor = d;
-    }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-  }
-  function __awaiter(thisArg, _arguments, P, generator) {
-    function adopt(value) {
-      return value instanceof P ? value : new P(function(resolve) {
-        resolve(value);
-      });
-    }
-    return new (P || (P = Promise))(function(resolve, reject) {
-      function fulfilled(value) {
-        try {
-          step(generator.next(value));
-        } catch (e2) {
-          reject(e2);
-        }
-      }
-      function rejected(value) {
-        try {
-          step(generator["throw"](value));
-        } catch (e2) {
-          reject(e2);
-        }
-      }
-      function step(result) {
-        result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-      }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-  }
-  function __generator(thisArg, body) {
-    var _ = { label: 0, sent: function() {
-      if (t[0] & 1) throw t[1];
-      return t[1];
-    }, trys: [], ops: [] }, f2, y, t, g;
-    return g = { next: verb(0), "throw": verb(1), "return": verb(2) }, typeof Symbol === "function" && (g[Symbol.iterator] = function() {
-      return this;
-    }), g;
-    function verb(n) {
-      return function(v) {
-        return step([n, v]);
-      };
-    }
-    function step(op) {
-      if (f2) throw new TypeError("Generator is already executing.");
-      while (_) try {
-        if (f2 = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
-        if (y = 0, t) op = [op[0] & 2, t.value];
-        switch (op[0]) {
-          case 0:
-          case 1:
-            t = op;
-            break;
-          case 4:
-            _.label++;
-            return { value: op[1], done: false };
-          case 5:
-            _.label++;
-            y = op[1];
-            op = [0];
-            continue;
-          case 7:
-            op = _.ops.pop();
-            _.trys.pop();
-            continue;
-          default:
-            if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) {
-              _ = 0;
-              continue;
-            }
-            if (op[0] === 3 && (!t || op[1] > t[0] && op[1] < t[3])) {
-              _.label = op[1];
-              break;
-            }
-            if (op[0] === 6 && _.label < t[1]) {
-              _.label = t[1];
-              t = op;
-              break;
-            }
-            if (t && _.label < t[2]) {
-              _.label = t[2];
-              _.ops.push(op);
-              break;
-            }
-            if (t[2]) _.ops.pop();
-            _.trys.pop();
-            continue;
-        }
-        op = body.call(thisArg, _);
-      } catch (e2) {
-        op = [6, e2];
-        y = 0;
-      } finally {
-        f2 = t = 0;
-      }
-      if (op[0] & 5) throw op[1];
-      return { value: op[0] ? op[1] : void 0, done: true };
-    }
-  }
-  function __spreadArray(to, from, pack2) {
-    if (pack2 || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
-      if (ar || !(i in from)) {
-        if (!ar) ar = Array.prototype.slice.call(from, 0, i);
-        ar[i] = from[i];
-      }
-    }
-    return to.concat(ar || from);
-  }
-  function hue2rgb(t1, t2, hue) {
-    if (hue < 0) {
-      hue += 1;
-    }
-    if (hue >= 1) {
-      hue -= 1;
-    }
-    if (hue < 1 / 6) {
-      return (t2 - t1) * hue * 6 + t1;
-    } else if (hue < 1 / 2) {
-      return t2;
-    } else if (hue < 2 / 3) {
-      return (t2 - t1) * 6 * (2 / 3 - hue) + t1;
-    } else {
-      return t1;
-    }
-  }
-  function isSupportedImage(value) {
-    return !(value.type === 20 && value.value === "none") && (value.type !== 18 || !!SUPPORTED_IMAGE_FUNCTIONS[value.name]);
-  }
-  var extendStatics, __assign, Bounds, parseBounds, parseDocumentSize, toCodePoints$1, fromCodePoint$1, chars$2, lookup$2, i$2, chars$1$1, lookup$1$1, i$1$1, decode$1, polyUint16Array$1, polyUint32Array$1, UTRIE2_SHIFT_2$1, UTRIE2_SHIFT_1$1, UTRIE2_INDEX_SHIFT$1, UTRIE2_SHIFT_1_2$1, UTRIE2_LSCP_INDEX_2_OFFSET$1, UTRIE2_DATA_BLOCK_LENGTH$1, UTRIE2_DATA_MASK$1, UTRIE2_LSCP_INDEX_2_LENGTH$1, UTRIE2_INDEX_2_BMP_LENGTH$1, UTRIE2_UTF8_2B_INDEX_2_OFFSET$1, UTRIE2_UTF8_2B_INDEX_2_LENGTH$1, UTRIE2_INDEX_1_OFFSET$1, UTRIE2_OMITTED_BMP_INDEX_1_LENGTH$1, UTRIE2_INDEX_2_BLOCK_LENGTH$1, UTRIE2_INDEX_2_MASK$1, slice16$1, slice32$1, createTrieFromBase64$1, Trie$1, chars$3, lookup$3, i$3, base64$1, LETTER_NUMBER_MODIFIER, BK, CR$1, LF$1, CM, NL, WJ, ZW, GL, SP, ZWJ$1, B2, BA, BB, HY, CB, CL, CP, EX, IN, NS, OP, QU, IS, NU, PO, PR, SY, AI, AL, CJ, EB, EM, H2, H3, HL, ID, JL, JV, JT, RI$1, SA, XX, ea_OP, BREAK_MANDATORY, BREAK_NOT_ALLOWED$1, BREAK_ALLOWED$1, UnicodeTrie$1, ALPHABETICS, HARD_LINE_BREAKS, SPACE$1, PREFIX_POSTFIX, LINE_BREAKS, KOREAN_SYLLABLE_BLOCK, HYPHEN, codePointsToCharacterClasses, isAdjacentWithSpaceIgnored, previousNonSpaceClassType, _lineBreakAtIndex, cssFormattedClasses, Break, LineBreaker, FLAG_UNRESTRICTED, FLAG_ID, FLAG_INTEGER, FLAG_NUMBER, LINE_FEED, SOLIDUS, REVERSE_SOLIDUS, CHARACTER_TABULATION, SPACE, QUOTATION_MARK, EQUALS_SIGN, NUMBER_SIGN, DOLLAR_SIGN, PERCENTAGE_SIGN, APOSTROPHE, LEFT_PARENTHESIS, RIGHT_PARENTHESIS, LOW_LINE, HYPHEN_MINUS, EXCLAMATION_MARK, LESS_THAN_SIGN, GREATER_THAN_SIGN, COMMERCIAL_AT, LEFT_SQUARE_BRACKET, RIGHT_SQUARE_BRACKET, CIRCUMFLEX_ACCENT, LEFT_CURLY_BRACKET, QUESTION_MARK, RIGHT_CURLY_BRACKET, VERTICAL_LINE, TILDE, CONTROL, REPLACEMENT_CHARACTER, ASTERISK, PLUS_SIGN, COMMA, COLON, SEMICOLON, FULL_STOP, NULL, BACKSPACE, LINE_TABULATION, SHIFT_OUT, INFORMATION_SEPARATOR_ONE, DELETE, EOF, ZERO, a, e, f, u, z, A, E, F, U, Z, isDigit, isSurrogateCodePoint, isHex, isLowerCaseLetter, isUpperCaseLetter, isLetter, isNonASCIICodePoint, isWhiteSpace, isNameStartCodePoint, isNameCodePoint, isNonPrintableCodePoint, isValidEscape, isIdentifierStart, isNumberStart, stringToNumber, LEFT_PARENTHESIS_TOKEN, RIGHT_PARENTHESIS_TOKEN, COMMA_TOKEN, SUFFIX_MATCH_TOKEN, PREFIX_MATCH_TOKEN, COLUMN_TOKEN, DASH_MATCH_TOKEN, INCLUDE_MATCH_TOKEN, LEFT_CURLY_BRACKET_TOKEN, RIGHT_CURLY_BRACKET_TOKEN, SUBSTRING_MATCH_TOKEN, BAD_URL_TOKEN, BAD_STRING_TOKEN, CDO_TOKEN, CDC_TOKEN, COLON_TOKEN, SEMICOLON_TOKEN, LEFT_SQUARE_BRACKET_TOKEN, RIGHT_SQUARE_BRACKET_TOKEN, WHITESPACE_TOKEN, EOF_TOKEN, Tokenizer, Parser, isDimensionToken, isNumberToken, isIdentToken, isStringToken, isIdentWithValue, nonWhiteSpace, nonFunctionArgSeparator, parseFunctionArgs, isEndingTokenFor, isLength, isLengthPercentage, parseLengthPercentageTuple, ZERO_LENGTH, FIFTY_PERCENT, HUNDRED_PERCENT, getAbsoluteValueForTuple, getAbsoluteValue, DEG, GRAD, RAD, TURN, angle, isAngle, parseNamedSide, deg, color$1, isTransparent, asString, pack, getTokenColorValue, rgb, hsl, SUPPORTED_COLOR_FUNCTIONS, parseColor, COLORS, backgroundClip, backgroundColor, parseColorStop, processColorStops, getAngleFromCorner, calculateGradientDirection, distance, findCorner, calculateRadius, linearGradient, prefixLinearGradient, webkitGradient, CLOSEST_SIDE, FARTHEST_SIDE, CLOSEST_CORNER, FARTHEST_CORNER, CIRCLE, ELLIPSE, COVER, CONTAIN, radialGradient, prefixRadialGradient, isLinearGradient, isRadialGradient, image, SUPPORTED_IMAGE_FUNCTIONS, backgroundImage, backgroundOrigin, backgroundPosition, backgroundRepeat, parseBackgroundRepeat, BACKGROUND_SIZE, backgroundSize, isBackgroundSizeInfoToken, borderColorForSide, borderTopColor, borderRightColor, borderBottomColor, borderLeftColor, borderRadiusForSide, borderTopLeftRadius, borderTopRightRadius, borderBottomRightRadius, borderBottomLeftRadius, borderStyleForSide, borderTopStyle, borderRightStyle, borderBottomStyle, borderLeftStyle, borderWidthForSide, borderTopWidth, borderRightWidth, borderBottomWidth, borderLeftWidth, color, direction, display, parseDisplayValue, float, letterSpacing, LINE_BREAK, lineBreak, lineHeight, computeLineHeight, listStyleImage, listStylePosition, listStyleType, marginForSide, marginTop, marginRight, marginBottom, marginLeft, overflow, overflowWrap, paddingForSide, paddingTop, paddingRight, paddingBottom, paddingLeft, textAlign, position, textShadow, textTransform, transform$1, matrix, matrix3d, SUPPORTED_TRANSFORM_FUNCTIONS, DEFAULT_VALUE, DEFAULT, transformOrigin, visibility, WORD_BREAK, wordBreak, zIndex, time, opacity, textDecorationColor, textDecorationLine, fontFamily, fontSize, fontWeight, fontVariant, fontStyle, contains, content, counterIncrement, counterReset, duration, quotes, getQuote, boxShadow, paintOrder, webkitTextStrokeColor, webkitTextStrokeWidth, CSSParsedDeclaration, CSSParsedPseudoDeclaration, CSSParsedCounterDeclaration, parse, elementDebuggerAttribute, getElementDebugType, isDebugging, ElementContainer, base64, chars$1, lookup$1, i$1, decode, polyUint16Array, polyUint32Array, UTRIE2_SHIFT_2, UTRIE2_SHIFT_1, UTRIE2_INDEX_SHIFT, UTRIE2_SHIFT_1_2, UTRIE2_LSCP_INDEX_2_OFFSET, UTRIE2_DATA_BLOCK_LENGTH, UTRIE2_DATA_MASK, UTRIE2_LSCP_INDEX_2_LENGTH, UTRIE2_INDEX_2_BMP_LENGTH, UTRIE2_UTF8_2B_INDEX_2_OFFSET, UTRIE2_UTF8_2B_INDEX_2_LENGTH, UTRIE2_INDEX_1_OFFSET, UTRIE2_OMITTED_BMP_INDEX_1_LENGTH, UTRIE2_INDEX_2_BLOCK_LENGTH, UTRIE2_INDEX_2_MASK, slice16, slice32, createTrieFromBase64, Trie, chars, lookup, i, Prepend, CR, LF, Control, Extend, SpacingMark, L, V, T, LV, LVT, ZWJ, Extended_Pictographic, RI, toCodePoints, fromCodePoint, UnicodeTrie, BREAK_NOT_ALLOWED, BREAK_ALLOWED, codePointToClass, _graphemeBreakAtIndex, GraphemeBreaker, splitGraphemes, testRangeBounds, testIOSLineBreak, testCORS, testResponseType, testSVG, isGreenPixel, testForeignObject, createForeignObjectSVG, loadSerializedSVG$1, FEATURES, TextBounds, parseTextBounds, getWrapperBounds, createRange, segmentGraphemes, segmentWords, breakText, wordSeparators, breakWords, TextContainer, transform, CAPITALIZE, capitalize, ImageElementContainer, CanvasElementContainer, SVGElementContainer, LIElementContainer, OLElementContainer, CHECKBOX_BORDER_RADIUS, RADIO_BORDER_RADIUS, reformatInputBounds, getInputValue, CHECKBOX, RADIO, PASSWORD, INPUT_COLOR, InputElementContainer, SelectElementContainer, TextareaElementContainer, IFrameElementContainer, LIST_OWNERS, parseNodeTree, createContainer, parseTree, createsRealStackingContext, createsStackingContext, isTextNode, isElementNode, isHTMLElementNode, isSVGElementNode, isLIElement, isOLElement, isInputElement, isHTMLElement, isSVGElement, isBodyElement, isCanvasElement, isVideoElement, isImageElement, isIFrameElement, isStyleElement, isScriptElement, isTextareaElement, isSelectElement, isSlotElement, isCustomElement, CounterState, ROMAN_UPPER, ARMENIAN, HEBREW, GEORGIAN, createAdditiveCounter, createCounterStyleWithSymbolResolver, createCounterStyleFromRange, createCounterStyleFromSymbols, CJK_ZEROS, CJK_TEN_COEFFICIENTS, CJK_TEN_HIGH_COEFFICIENTS, CJK_HUNDRED_COEFFICIENTS, createCJKCounter, CHINESE_INFORMAL_MULTIPLIERS, CHINESE_FORMAL_MULTIPLIERS, JAPANESE_NEGATIVE, KOREAN_NEGATIVE, createCounterText, IGNORE_ATTRIBUTE, DocumentCloner, PseudoElementType, createIFrameContainer, imageReady, imagesReady, iframeLoader, ignoredStyleProperties, copyCSSStyles, serializeDoctype, restoreOwnerScroll, restoreNodeScroll, PSEUDO_BEFORE, PSEUDO_AFTER, PSEUDO_HIDE_ELEMENT_CLASS_BEFORE, PSEUDO_HIDE_ELEMENT_CLASS_AFTER, PSEUDO_HIDE_ELEMENT_STYLE, createPseudoHideStyles, createStyles, CacheStorage, Cache, INLINE_SVG, INLINE_BASE64, INLINE_IMG, isRenderable, isInlineImage, isInlineBase64Image, isBlobImage, isSVG, Vector, lerp, BezierCurve, isBezierCurve, BoundCurves, CORNER, getCurvePoints, calculateBorderBoxPath, calculateContentBoxPath, calculatePaddingBoxPath, TransformEffect, ClipEffect, OpacityEffect, isTransformEffect, isClipEffect, isOpacityEffect, equalPath, transformPath, StackingContext, ElementPaint, parseStackTree, processListItems, parseStackingContexts, parsePathForBorder, parsePathForBorderDoubleOuter, parsePathForBorderDoubleInner, parsePathForBorderStroke, createStrokePathFromCurves, createPathFromCurves, paddingBox, contentBox, calculateBackgroundPositioningArea, calculateBackgroundPaintingArea, calculateBackgroundRendering, isAuto, hasIntrinsicValue, calculateBackgroundSize, getBackgroundValueForIndex, calculateBackgroundRepeatPath, SMALL_IMAGE, SAMPLE_TEXT, FontMetrics, Renderer, MASK_OFFSET, CanvasRenderer, isTextInputElement, calculateBackgroundCurvedPaintingArea, canvasTextAlign, iOSBrokenFonts, fixIOSSystemFonts, ForeignObjectRenderer, loadSerializedSVG, Logger, Context, html2canvas, renderElement, parseBackgroundColor, html2canvas_esm_default;
-  var init_html2canvas_esm = __esm({
-    "node_modules/html2canvas/dist/html2canvas.esm.js"() {
+  var html2canvas_default;
+  var init_html2canvas = __esm({
+    "tb-stub:html2canvas"() {
       "use strict";
-      extendStatics = function(d, b) {
-        extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
-          d2.__proto__ = b2;
-        } || function(d2, b2) {
-          for (var p in b2) if (Object.prototype.hasOwnProperty.call(b2, p)) d2[p] = b2[p];
-        };
-        return extendStatics(d, b);
-      };
-      __assign = function() {
-        __assign = Object.assign || function __assign2(t) {
-          for (var s, i = 1, n = arguments.length; i < n; i++) {
-            s = arguments[i];
-            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-          }
-          return t;
-        };
-        return __assign.apply(this, arguments);
-      };
-      Bounds = /** @class */
-      (function() {
-        function Bounds2(left, top, width, height) {
-          this.left = left;
-          this.top = top;
-          this.width = width;
-          this.height = height;
-        }
-        Bounds2.prototype.add = function(x, y, w, h) {
-          return new Bounds2(this.left + x, this.top + y, this.width + w, this.height + h);
-        };
-        Bounds2.fromClientRect = function(context2, clientRect) {
-          return new Bounds2(clientRect.left + context2.windowBounds.left, clientRect.top + context2.windowBounds.top, clientRect.width, clientRect.height);
-        };
-        Bounds2.fromDOMRectList = function(context2, domRectList) {
-          var domRect = Array.from(domRectList).find(function(rect) {
-            return rect.width !== 0;
-          });
-          return domRect ? new Bounds2(domRect.left + context2.windowBounds.left, domRect.top + context2.windowBounds.top, domRect.width, domRect.height) : Bounds2.EMPTY;
-        };
-        Bounds2.EMPTY = new Bounds2(0, 0, 0, 0);
-        return Bounds2;
-      })();
-      parseBounds = function(context2, node) {
-        return Bounds.fromClientRect(context2, node.getBoundingClientRect());
-      };
-      parseDocumentSize = function(document2) {
-        var body = document2.body;
-        var documentElement = document2.documentElement;
-        if (!body || !documentElement) {
-          throw new Error("Unable to get document size");
-        }
-        var width = Math.max(Math.max(body.scrollWidth, documentElement.scrollWidth), Math.max(body.offsetWidth, documentElement.offsetWidth), Math.max(body.clientWidth, documentElement.clientWidth));
-        var height = Math.max(Math.max(body.scrollHeight, documentElement.scrollHeight), Math.max(body.offsetHeight, documentElement.offsetHeight), Math.max(body.clientHeight, documentElement.clientHeight));
-        return new Bounds(0, 0, width, height);
-      };
-      toCodePoints$1 = function(str) {
-        var codePoints = [];
-        var i = 0;
-        var length = str.length;
-        while (i < length) {
-          var value = str.charCodeAt(i++);
-          if (value >= 55296 && value <= 56319 && i < length) {
-            var extra = str.charCodeAt(i++);
-            if ((extra & 64512) === 56320) {
-              codePoints.push(((value & 1023) << 10) + (extra & 1023) + 65536);
-            } else {
-              codePoints.push(value);
-              i--;
-            }
-          } else {
-            codePoints.push(value);
-          }
-        }
-        return codePoints;
-      };
-      fromCodePoint$1 = function() {
-        var codePoints = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-          codePoints[_i] = arguments[_i];
-        }
-        if (String.fromCodePoint) {
-          return String.fromCodePoint.apply(String, codePoints);
-        }
-        var length = codePoints.length;
-        if (!length) {
-          return "";
-        }
-        var codeUnits = [];
-        var index = -1;
-        var result = "";
-        while (++index < length) {
-          var codePoint = codePoints[index];
-          if (codePoint <= 65535) {
-            codeUnits.push(codePoint);
-          } else {
-            codePoint -= 65536;
-            codeUnits.push((codePoint >> 10) + 55296, codePoint % 1024 + 56320);
-          }
-          if (index + 1 === length || codeUnits.length > 16384) {
-            result += String.fromCharCode.apply(String, codeUnits);
-            codeUnits.length = 0;
-          }
-        }
-        return result;
-      };
-      chars$2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      lookup$2 = typeof Uint8Array === "undefined" ? [] : new Uint8Array(256);
-      for (i$2 = 0; i$2 < chars$2.length; i$2++) {
-        lookup$2[chars$2.charCodeAt(i$2)] = i$2;
-      }
-      chars$1$1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      lookup$1$1 = typeof Uint8Array === "undefined" ? [] : new Uint8Array(256);
-      for (i$1$1 = 0; i$1$1 < chars$1$1.length; i$1$1++) {
-        lookup$1$1[chars$1$1.charCodeAt(i$1$1)] = i$1$1;
-      }
-      decode$1 = function(base642) {
-        var bufferLength = base642.length * 0.75, len = base642.length, i, p = 0, encoded1, encoded2, encoded3, encoded4;
-        if (base642[base642.length - 1] === "=") {
-          bufferLength--;
-          if (base642[base642.length - 2] === "=") {
-            bufferLength--;
-          }
-        }
-        var buffer = typeof ArrayBuffer !== "undefined" && typeof Uint8Array !== "undefined" && typeof Uint8Array.prototype.slice !== "undefined" ? new ArrayBuffer(bufferLength) : new Array(bufferLength);
-        var bytes = Array.isArray(buffer) ? buffer : new Uint8Array(buffer);
-        for (i = 0; i < len; i += 4) {
-          encoded1 = lookup$1$1[base642.charCodeAt(i)];
-          encoded2 = lookup$1$1[base642.charCodeAt(i + 1)];
-          encoded3 = lookup$1$1[base642.charCodeAt(i + 2)];
-          encoded4 = lookup$1$1[base642.charCodeAt(i + 3)];
-          bytes[p++] = encoded1 << 2 | encoded2 >> 4;
-          bytes[p++] = (encoded2 & 15) << 4 | encoded3 >> 2;
-          bytes[p++] = (encoded3 & 3) << 6 | encoded4 & 63;
-        }
-        return buffer;
-      };
-      polyUint16Array$1 = function(buffer) {
-        var length = buffer.length;
-        var bytes = [];
-        for (var i = 0; i < length; i += 2) {
-          bytes.push(buffer[i + 1] << 8 | buffer[i]);
-        }
-        return bytes;
-      };
-      polyUint32Array$1 = function(buffer) {
-        var length = buffer.length;
-        var bytes = [];
-        for (var i = 0; i < length; i += 4) {
-          bytes.push(buffer[i + 3] << 24 | buffer[i + 2] << 16 | buffer[i + 1] << 8 | buffer[i]);
-        }
-        return bytes;
-      };
-      UTRIE2_SHIFT_2$1 = 5;
-      UTRIE2_SHIFT_1$1 = 6 + 5;
-      UTRIE2_INDEX_SHIFT$1 = 2;
-      UTRIE2_SHIFT_1_2$1 = UTRIE2_SHIFT_1$1 - UTRIE2_SHIFT_2$1;
-      UTRIE2_LSCP_INDEX_2_OFFSET$1 = 65536 >> UTRIE2_SHIFT_2$1;
-      UTRIE2_DATA_BLOCK_LENGTH$1 = 1 << UTRIE2_SHIFT_2$1;
-      UTRIE2_DATA_MASK$1 = UTRIE2_DATA_BLOCK_LENGTH$1 - 1;
-      UTRIE2_LSCP_INDEX_2_LENGTH$1 = 1024 >> UTRIE2_SHIFT_2$1;
-      UTRIE2_INDEX_2_BMP_LENGTH$1 = UTRIE2_LSCP_INDEX_2_OFFSET$1 + UTRIE2_LSCP_INDEX_2_LENGTH$1;
-      UTRIE2_UTF8_2B_INDEX_2_OFFSET$1 = UTRIE2_INDEX_2_BMP_LENGTH$1;
-      UTRIE2_UTF8_2B_INDEX_2_LENGTH$1 = 2048 >> 6;
-      UTRIE2_INDEX_1_OFFSET$1 = UTRIE2_UTF8_2B_INDEX_2_OFFSET$1 + UTRIE2_UTF8_2B_INDEX_2_LENGTH$1;
-      UTRIE2_OMITTED_BMP_INDEX_1_LENGTH$1 = 65536 >> UTRIE2_SHIFT_1$1;
-      UTRIE2_INDEX_2_BLOCK_LENGTH$1 = 1 << UTRIE2_SHIFT_1_2$1;
-      UTRIE2_INDEX_2_MASK$1 = UTRIE2_INDEX_2_BLOCK_LENGTH$1 - 1;
-      slice16$1 = function(view, start, end) {
-        if (view.slice) {
-          return view.slice(start, end);
-        }
-        return new Uint16Array(Array.prototype.slice.call(view, start, end));
-      };
-      slice32$1 = function(view, start, end) {
-        if (view.slice) {
-          return view.slice(start, end);
-        }
-        return new Uint32Array(Array.prototype.slice.call(view, start, end));
-      };
-      createTrieFromBase64$1 = function(base642, _byteLength) {
-        var buffer = decode$1(base642);
-        var view32 = Array.isArray(buffer) ? polyUint32Array$1(buffer) : new Uint32Array(buffer);
-        var view16 = Array.isArray(buffer) ? polyUint16Array$1(buffer) : new Uint16Array(buffer);
-        var headerLength = 24;
-        var index = slice16$1(view16, headerLength / 2, view32[4] / 2);
-        var data = view32[5] === 2 ? slice16$1(view16, (headerLength + view32[4]) / 2) : slice32$1(view32, Math.ceil((headerLength + view32[4]) / 4));
-        return new Trie$1(view32[0], view32[1], view32[2], view32[3], index, data);
-      };
-      Trie$1 = /** @class */
-      (function() {
-        function Trie2(initialValue, errorValue, highStart, highValueIndex, index, data) {
-          this.initialValue = initialValue;
-          this.errorValue = errorValue;
-          this.highStart = highStart;
-          this.highValueIndex = highValueIndex;
-          this.index = index;
-          this.data = data;
-        }
-        Trie2.prototype.get = function(codePoint) {
-          var ix;
-          if (codePoint >= 0) {
-            if (codePoint < 55296 || codePoint > 56319 && codePoint <= 65535) {
-              ix = this.index[codePoint >> UTRIE2_SHIFT_2$1];
-              ix = (ix << UTRIE2_INDEX_SHIFT$1) + (codePoint & UTRIE2_DATA_MASK$1);
-              return this.data[ix];
-            }
-            if (codePoint <= 65535) {
-              ix = this.index[UTRIE2_LSCP_INDEX_2_OFFSET$1 + (codePoint - 55296 >> UTRIE2_SHIFT_2$1)];
-              ix = (ix << UTRIE2_INDEX_SHIFT$1) + (codePoint & UTRIE2_DATA_MASK$1);
-              return this.data[ix];
-            }
-            if (codePoint < this.highStart) {
-              ix = UTRIE2_INDEX_1_OFFSET$1 - UTRIE2_OMITTED_BMP_INDEX_1_LENGTH$1 + (codePoint >> UTRIE2_SHIFT_1$1);
-              ix = this.index[ix];
-              ix += codePoint >> UTRIE2_SHIFT_2$1 & UTRIE2_INDEX_2_MASK$1;
-              ix = this.index[ix];
-              ix = (ix << UTRIE2_INDEX_SHIFT$1) + (codePoint & UTRIE2_DATA_MASK$1);
-              return this.data[ix];
-            }
-            if (codePoint <= 1114111) {
-              return this.data[this.highValueIndex];
-            }
-          }
-          return this.errorValue;
-        };
-        return Trie2;
-      })();
-      chars$3 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      lookup$3 = typeof Uint8Array === "undefined" ? [] : new Uint8Array(256);
-      for (i$3 = 0; i$3 < chars$3.length; i$3++) {
-        lookup$3[chars$3.charCodeAt(i$3)] = i$3;
-      }
-      base64$1 = "KwAAAAAAAAAACA4AUD0AADAgAAACAAAAAAAIABAAGABAAEgAUABYAGAAaABgAGgAYgBqAF8AZwBgAGgAcQB5AHUAfQCFAI0AlQCdAKIAqgCyALoAYABoAGAAaABgAGgAwgDKAGAAaADGAM4A0wDbAOEA6QDxAPkAAQEJAQ8BFwF1AH0AHAEkASwBNAE6AUIBQQFJAVEBWQFhAWgBcAF4ATAAgAGGAY4BlQGXAZ8BpwGvAbUBvQHFAc0B0wHbAeMB6wHxAfkBAQIJAvEBEQIZAiECKQIxAjgCQAJGAk4CVgJeAmQCbAJ0AnwCgQKJApECmQKgAqgCsAK4ArwCxAIwAMwC0wLbAjAA4wLrAvMC+AIAAwcDDwMwABcDHQMlAy0DNQN1AD0DQQNJA0kDSQNRA1EDVwNZA1kDdQB1AGEDdQBpA20DdQN1AHsDdQCBA4kDkQN1AHUAmQOhA3UAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AKYDrgN1AHUAtgO+A8YDzgPWAxcD3gPjA+sD8wN1AHUA+wMDBAkEdQANBBUEHQQlBCoEFwMyBDgEYABABBcDSARQBFgEYARoBDAAcAQzAXgEgASIBJAEdQCXBHUAnwSnBK4EtgS6BMIEyAR1AHUAdQB1AHUAdQCVANAEYABgAGAAYABgAGAAYABgANgEYADcBOQEYADsBPQE/AQEBQwFFAUcBSQFLAU0BWQEPAVEBUsFUwVbBWAAYgVgAGoFcgV6BYIFigWRBWAAmQWfBaYFYABgAGAAYABgAKoFYACxBbAFuQW6BcEFwQXHBcEFwQXPBdMF2wXjBeoF8gX6BQIGCgYSBhoGIgYqBjIGOgZgAD4GRgZMBmAAUwZaBmAAYABgAGAAYABgAGAAYABgAGAAYABgAGIGYABpBnAGYABgAGAAYABgAGAAYABgAGAAYAB4Bn8GhQZgAGAAYAB1AHcDFQSLBmAAYABgAJMGdQA9A3UAmwajBqsGqwaVALMGuwbDBjAAywbSBtIG1QbSBtIG0gbSBtIG0gbdBuMG6wbzBvsGAwcLBxMHAwcbByMHJwcsBywHMQcsB9IGOAdAB0gHTgfSBkgHVgfSBtIG0gbSBtIG0gbSBtIG0gbSBiwHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAdgAGAALAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAdbB2MHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsB2kH0gZwB64EdQB1AHUAdQB1AHUAdQB1AHUHfQdgAIUHjQd1AHUAlQedB2AAYAClB6sHYACzB7YHvgfGB3UAzgfWBzMB3gfmB1EB7gf1B/0HlQENAQUIDQh1ABUIHQglCBcDLQg1CD0IRQhNCEEDUwh1AHUAdQBbCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIaQhjCGQIZQhmCGcIaAhpCGMIZAhlCGYIZwhoCGkIYwhkCGUIZghnCGgIcAh3CHoIMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwAIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIgggwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAALAcsBywHLAcsBywHLAcsBywHLAcsB4oILAcsB44I0gaWCJ4Ipgh1AHUAqgiyCHUAdQB1AHUAdQB1AHUAdQB1AHUAtwh8AXUAvwh1AMUIyQjRCNkI4AjoCHUAdQB1AO4I9gj+CAYJDgkTCS0HGwkjCYIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiCCIIIggiAAIAAAAFAAYABgAGIAXwBgAHEAdQBFAJUAogCyAKAAYABgAEIA4ABGANMA4QDxAMEBDwE1AFwBLAE6AQEBUQF4QkhCmEKoQrhCgAHIQsAB0MLAAcABwAHAAeDC6ABoAHDCwMMAAcABwAHAAdDDGMMAAcAB6MM4wwjDWMNow3jDaABoAGgAaABoAGgAaABoAGgAaABoAGgAaABoAGgAaABoAGgAaABoAEjDqABWw6bDqABpg6gAaABoAHcDvwOPA+gAaABfA/8DvwO/A78DvwO/A78DvwO/A78DvwO/A78DvwO/A78DvwO/A78DvwO/A78DvwO/A78DvwO/A78DpcPAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcAB9cPKwkyCToJMAB1AHUAdQBCCUoJTQl1AFUJXAljCWcJawkwADAAMAAwAHMJdQB2CX4JdQCECYoJjgmWCXUAngkwAGAAYABxAHUApgn3A64JtAl1ALkJdQDACTAAMAAwADAAdQB1AHUAdQB1AHUAdQB1AHUAowYNBMUIMAAwADAAMADICcsJ0wnZCRUE4QkwAOkJ8An4CTAAMAB1AAAKvwh1AAgKDwoXCh8KdQAwACcKLgp1ADYKqAmICT4KRgowADAAdQB1AE4KMAB1AFYKdQBeCnUAZQowADAAMAAwADAAMAAwADAAMAAVBHUAbQowADAAdQC5CXUKMAAwAHwBxAijBogEMgF9CoQKiASMCpQKmgqIBKIKqgquCogEDQG2Cr4KxgrLCjAAMADTCtsKCgHjCusK8Qr5CgELMAAwADAAMAB1AIsECQsRC3UANAEZCzAAMAAwADAAMAB1ACELKQswAHUANAExCzkLdQBBC0kLMABRC1kLMAAwADAAMAAwADAAdQBhCzAAMAAwAGAAYABpC3ELdwt/CzAAMACHC4sLkwubC58Lpwt1AK4Ltgt1APsDMAAwADAAMAAwADAAMAAwAL4LwwvLC9IL1wvdCzAAMADlC+kL8Qv5C/8LSQswADAAMAAwADAAMAAwADAAMAAHDDAAMAAwADAAMAAODBYMHgx1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1ACYMMAAwADAAdQB1AHUALgx1AHUAdQB1AHUAdQA2DDAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwAHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AD4MdQBGDHUAdQB1AHUAdQB1AEkMdQB1AHUAdQB1AFAMMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwAHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQBYDHUAdQB1AF8MMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUA+wMVBGcMMAAwAHwBbwx1AHcMfwyHDI8MMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAYABgAJcMMAAwADAAdQB1AJ8MlQClDDAAMACtDCwHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsB7UMLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHdQB1AHUAdQB1AHUAdQB1AHUAdQB1AHUAdQB1AA0EMAC9DDAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAsBywHLAcsBywHLAcsBywHLQcwAMEMyAwsBywHLAcsBywHLAcsBywHLAcsBywHzAwwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwAHUAdQB1ANQM2QzhDDAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMABgAGAAYABgAGAAYABgAOkMYADxDGAA+AwADQYNYABhCWAAYAAODTAAMAAwADAAFg1gAGAAHg37AzAAMAAwADAAYABgACYNYAAsDTQNPA1gAEMNPg1LDWAAYABgAGAAYABgAGAAYABgAGAAUg1aDYsGVglhDV0NcQBnDW0NdQ15DWAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAlQCBDZUAiA2PDZcNMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAnw2nDTAAMAAwADAAMAAwAHUArw23DTAAMAAwADAAMAAwADAAMAAwADAAMAB1AL8NMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAB1AHUAdQB1AHUAdQDHDTAAYABgAM8NMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAA1w11ANwNMAAwAD0B5A0wADAAMAAwADAAMADsDfQN/A0EDgwOFA4wABsOMAAwADAAMAAwADAAMAAwANIG0gbSBtIG0gbSBtIG0gYjDigOwQUuDsEFMw7SBjoO0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIGQg5KDlIOVg7SBtIGXg5lDm0OdQ7SBtIGfQ6EDooOjQ6UDtIGmg6hDtIG0gaoDqwO0ga0DrwO0gZgAGAAYADEDmAAYAAkBtIGzA5gANIOYADaDokO0gbSBt8O5w7SBu8O0gb1DvwO0gZgAGAAxA7SBtIG0gbSBtIGYABgAGAAYAAED2AAsAUMD9IG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIGFA8sBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAccD9IGLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHJA8sBywHLAcsBywHLAccDywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywPLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAc0D9IG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIGLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAccD9IG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIGFA8sBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHLAcsBywHPA/SBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gbSBtIG0gYUD0QPlQCVAJUAMAAwADAAMACVAJUAlQCVAJUAlQCVAEwPMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAA//8EAAQABAAEAAQABAAEAAQABAANAAMAAQABAAIABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQACgATABcAHgAbABoAHgAXABYAEgAeABsAGAAPABgAHABLAEsASwBLAEsASwBLAEsASwBLABgAGAAeAB4AHgATAB4AUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQABYAGwASAB4AHgAeAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAWAA0AEQAeAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAAQABAAEAAQABAAFAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAJABYAGgAbABsAGwAeAB0AHQAeAE8AFwAeAA0AHgAeABoAGwBPAE8ADgBQAB0AHQAdAE8ATwAXAE8ATwBPABYAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAFAAUABQAFAAUABQAFAAUAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAFAAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAeAB4AHgAeAFAATwBAAE8ATwBPAEAATwBQAFAATwBQAB4AHgAeAB4AHgAeAB0AHQAdAB0AHgAdAB4ADgBQAFAAUABQAFAAHgAeAB4AHgAeAB4AHgBQAB4AUAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4ABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAJAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAkACQAJAAkACQAJAAkABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAeAB4AHgAeAFAAHgAeAB4AKwArAFAAUABQAFAAGABQACsAKwArACsAHgAeAFAAHgBQAFAAUAArAFAAKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4ABAAEAAQABAAEAAQABAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAUAAeAB4AHgAeAB4AHgBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAYAA0AKwArAB4AHgAbACsABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQADQAEAB4ABAAEAB4ABAAEABMABAArACsAKwArACsAKwArACsAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAKwArACsAKwBWAFYAVgBWAB4AHgArACsAKwArACsAKwArACsAKwArACsAHgAeAB4AHgAeAB4AHgAeAB4AGgAaABoAGAAYAB4AHgAEAAQABAAEAAQABAAEAAQABAAEAAQAEwAEACsAEwATAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABABLAEsASwBLAEsASwBLAEsASwBLABoAGQAZAB4AUABQAAQAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQABMAUAAEAAQABAAEAAQABAAEAB4AHgAEAAQABAAEAAQABABQAFAABAAEAB4ABAAEAAQABABQAFAASwBLAEsASwBLAEsASwBLAEsASwBQAFAAUAAeAB4AUAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwAeAFAABABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQABAAEAFAAKwArACsAKwArACsAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQAUABQAB4AHgAYABMAUAArACsABAAbABsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAFAABAAEAAQABAAEAFAABAAEAAQAUAAEAAQABAAEAAQAKwArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAArACsAHgArAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwArACsAKwArACsAKwArAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAB4ABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAUAAEAAQABAAEAAQABAAEAFAAUABQAFAAUABQAFAAUABQAFAABAAEAA0ADQBLAEsASwBLAEsASwBLAEsASwBLAB4AUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAArAFAAUABQAFAAUABQAFAAUAArACsAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAUAArACsAKwBQAFAAUABQACsAKwAEAFAABAAEAAQABAAEAAQABAArACsABAAEACsAKwAEAAQABABQACsAKwArACsAKwArACsAKwAEACsAKwArACsAUABQACsAUABQAFAABAAEACsAKwBLAEsASwBLAEsASwBLAEsASwBLAFAAUAAaABoAUABQAFAAUABQAEwAHgAbAFAAHgAEACsAKwAEAAQABAArAFAAUABQAFAAUABQACsAKwArACsAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAUABQACsAUABQACsAUABQACsAKwAEACsABAAEAAQABAAEACsAKwArACsABAAEACsAKwAEAAQABAArACsAKwAEACsAKwArACsAKwArACsAUABQAFAAUAArAFAAKwArACsAKwArACsAKwBLAEsASwBLAEsASwBLAEsASwBLAAQABABQAFAAUAAEAB4AKwArACsAKwArACsAKwArACsAKwAEAAQABAArAFAAUABQAFAAUABQAFAAUABQACsAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAUABQACsAUABQAFAAUABQACsAKwAEAFAABAAEAAQABAAEAAQABAAEACsABAAEAAQAKwAEAAQABAArACsAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAABAAEACsAKwBLAEsASwBLAEsASwBLAEsASwBLAB4AGwArACsAKwArACsAKwArAFAABAAEAAQABAAEAAQAKwAEAAQABAArAFAAUABQAFAAUABQAFAAUAArACsAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABAArACsABAAEACsAKwAEAAQABAArACsAKwArACsAKwArAAQABAAEACsAKwArACsAUABQACsAUABQAFAABAAEACsAKwBLAEsASwBLAEsASwBLAEsASwBLAB4AUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArAAQAUAArAFAAUABQAFAAUABQACsAKwArAFAAUABQACsAUABQAFAAUAArACsAKwBQAFAAKwBQACsAUABQACsAKwArAFAAUAArACsAKwBQAFAAUAArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArAAQABAAEAAQABAArACsAKwAEAAQABAArAAQABAAEAAQAKwArAFAAKwArACsAKwArACsABAArACsAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAUABQAFAAHgAeAB4AHgAeAB4AGwAeACsAKwArACsAKwAEAAQABAAEAAQAUABQAFAAUABQAFAAUABQACsAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAUAAEAAQABAAEAAQABAAEACsABAAEAAQAKwAEAAQABAAEACsAKwArACsAKwArACsABAAEACsAUABQAFAAKwArACsAKwArAFAAUAAEAAQAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAKwAOAFAAUABQAFAAUABQAFAAHgBQAAQABAAEAA4AUABQAFAAUABQAFAAUABQACsAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAKwArAAQAUAAEAAQABAAEAAQABAAEACsABAAEAAQAKwAEAAQABAAEACsAKwArACsAKwArACsABAAEACsAKwArACsAKwArACsAUAArAFAAUAAEAAQAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwBQAFAAKwArACsAKwArACsAKwArACsAKwArACsAKwAEAAQABAAEAFAAUABQAFAAUABQAFAAUABQACsAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAFAABAAEAAQABAAEAAQABAArAAQABAAEACsABAAEAAQABABQAB4AKwArACsAKwBQAFAAUAAEAFAAUABQAFAAUABQAFAAUABQAFAABAAEACsAKwBLAEsASwBLAEsASwBLAEsASwBLAFAAUABQAFAAUABQAFAAUABQABoAUABQAFAAUABQAFAAKwAEAAQABAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQACsAUAArACsAUABQAFAAUABQAFAAUAArACsAKwAEACsAKwArACsABAAEAAQABAAEAAQAKwAEACsABAAEAAQABAAEAAQABAAEACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArAAQABAAeACsAKwArACsAKwArACsAKwArACsAKwArAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXAAqAFwAXAAqACoAKgAqACoAKgAqACsAKwArACsAGwBcAFwAXABcAFwAXABcACoAKgAqACoAKgAqACoAKgAeAEsASwBLAEsASwBLAEsASwBLAEsADQANACsAKwArACsAKwBcAFwAKwBcACsAXABcAFwAXABcACsAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcACsAXAArAFwAXABcAFwAXABcAFwAXABcAFwAKgBcAFwAKgAqACoAKgAqACoAKgAqACoAXAArACsAXABcAFwAXABcACsAXAArACoAKgAqACoAKgAqACsAKwBLAEsASwBLAEsASwBLAEsASwBLACsAKwBcAFwAXABcAFAADgAOAA4ADgAeAA4ADgAJAA4ADgANAAkAEwATABMAEwATAAkAHgATAB4AHgAeAAQABAAeAB4AHgAeAB4AHgBLAEsASwBLAEsASwBLAEsASwBLAFAAUABQAFAAUABQAFAAUABQAFAADQAEAB4ABAAeAAQAFgARABYAEQAEAAQAUABQAFAAUABQAFAAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQADQAEAAQABAAEAAQADQAEAAQAUABQAFAAUABQAAQABAAEAAQABAAEAAQABAAEAAQABAArAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAArAA0ADQAeAB4AHgAeAB4AHgAEAB4AHgAeAB4AHgAeACsAHgAeAA4ADgANAA4AHgAeAB4AHgAeAAkACQArACsAKwArACsAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgBcAEsASwBLAEsASwBLAEsASwBLAEsADQANAB4AHgAeAB4AXABcAFwAXABcAFwAKgAqACoAKgBcAFwAXABcACoAKgAqAFwAKgAqACoAXABcACoAKgAqACoAKgAqACoAXABcAFwAKgAqACoAKgBcAFwAXABcAFwAXABcAFwAXABcAFwAXABcACoAKgAqACoAKgAqACoAKgAqACoAKgAqAFwAKgBLAEsASwBLAEsASwBLAEsASwBLACoAKgAqACoAKgAqAFAAUABQAFAAUABQACsAUAArACsAKwArACsAUAArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAHgBQAFAAUABQAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFAAUABQAFAAUABQAFAAUABQACsAUABQAFAAUAArACsAUABQAFAAUABQAFAAUAArAFAAKwBQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAKwArAFAAUABQAFAAUABQAFAAKwBQACsAUABQAFAAUAArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsABAAEAAQAHgANAB4AHgAeAB4AHgAeAB4AUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwBQAFAAUABQAFAAUAArACsADQBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAHgAeAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAANAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAWABEAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAA0ADQANAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAAQABAAEACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAANAA0AKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUAArAAQABAArACsAKwArACsAKwArACsAKwArACsAKwBcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqAA0ADQAVAFwADQAeAA0AGwBcACoAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwAeAB4AEwATAA0ADQAOAB4AEwATAB4ABAAEAAQACQArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAFAAUABQAFAAUAAEAAQAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQAUAArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwAEAAQABAAEAAQABAAEAAQABAAEAAQABAArACsAKwArAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsAKwArACsAHgArACsAKwATABMASwBLAEsASwBLAEsASwBLAEsASwBcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXAArACsAXABcAFwAXABcACsAKwArACsAKwArACsAKwArACsAKwBcAFwAXABcAFwAXABcAFwAXABcAFwAXAArACsAKwArAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAXAArACsAKwAqACoAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABAArACsAHgAeAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcACoAKgAqACoAKgAqACoAKgAqACoAKwAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKwArAAQASwBLAEsASwBLAEsASwBLAEsASwArACsAKwArACsAKwBLAEsASwBLAEsASwBLAEsASwBLACsAKwArACsAKwArACoAKgAqACoAKgAqACoAXAAqACoAKgAqACoAKgArACsABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsABAAEAAQABAAEAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABABQAFAAUABQAFAAUABQACsAKwArACsASwBLAEsASwBLAEsASwBLAEsASwANAA0AHgANAA0ADQANAB4AHgAeAB4AHgAeAB4AHgAeAB4ABAAEAAQABAAEAAQABAAEAAQAHgAeAB4AHgAeAB4AHgAeAB4AKwArACsABAAEAAQAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABABQAFAASwBLAEsASwBLAEsASwBLAEsASwBQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsAKwArACsAKwArACsAKwAeAB4AHgAeAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsAKwArAA0ADQANAA0ADQBLAEsASwBLAEsASwBLAEsASwBLACsAKwArAFAAUABQAEsASwBLAEsASwBLAEsASwBLAEsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAA0ADQBQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwBQAFAAUAAeAB4AHgAeAB4AHgAeAB4AKwArACsAKwArACsAKwArAAQABAAEAB4ABAAEAAQABAAEAAQABAAEAAQABAAEAAQABABQAFAAUABQAAQAUABQAFAAUABQAFAABABQAFAABAAEAAQAUAArACsAKwArACsABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsABAAEAAQABAAEAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwArAFAAUABQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAKwBQACsAUAArAFAAKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACsAKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArAB4AHgAeAB4AHgAeAB4AHgBQAB4AHgAeAFAAUABQACsAHgAeAB4AHgAeAB4AHgAeAB4AHgBQAFAAUABQACsAKwAeAB4AHgAeAB4AHgArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwArAFAAUABQACsAHgAeAB4AHgAeAB4AHgAOAB4AKwANAA0ADQANAA0ADQANAAkADQANAA0ACAAEAAsABAAEAA0ACQANAA0ADAAdAB0AHgAXABcAFgAXABcAFwAWABcAHQAdAB4AHgAUABQAFAANAAEAAQAEAAQABAAEAAQACQAaABoAGgAaABoAGgAaABoAHgAXABcAHQAVABUAHgAeAB4AHgAeAB4AGAAWABEAFQAVABUAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4ADQAeAA0ADQANAA0AHgANAA0ADQAHAB4AHgAeAB4AKwAEAAQABAAEAAQABAAEAAQABAAEAFAAUAArACsATwBQAFAAUABQAFAAHgAeAB4AFgARAE8AUABPAE8ATwBPAFAAUABQAFAAUAAeAB4AHgAWABEAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArABsAGwAbABsAGwAbABsAGgAbABsAGwAbABsAGwAbABsAGwAbABsAGwAbABsAGgAbABsAGwAbABoAGwAbABoAGwAbABsAGwAbABsAGwAbABsAGwAbABsAGwAbABsAGwAbAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAHgAeAFAAGgAeAB0AHgBQAB4AGgAeAB4AHgAeAB4AHgAeAB4AHgBPAB4AUAAbAB4AHgBQAFAAUABQAFAAHgAeAB4AHQAdAB4AUAAeAFAAHgBQAB4AUABPAFAAUAAeAB4AHgAeAB4AHgAeAFAAUABQAFAAUAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAFAAHgBQAFAAUABQAE8ATwBQAFAAUABQAFAATwBQAFAATwBQAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAFAAUABQAFAATwBPAE8ATwBPAE8ATwBPAE8ATwBQAFAAUABQAFAAUABQAFAAUAAeAB4AUABQAFAAUABPAB4AHgArACsAKwArAB0AHQAdAB0AHQAdAB0AHQAdAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB0AHgAdAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAB4AHQAdAB4AHgAeAB0AHQAeAB4AHQAeAB4AHgAdAB4AHQAbABsAHgAdAB4AHgAeAB4AHQAeAB4AHQAdAB0AHQAeAB4AHQAeAB0AHgAdAB0AHQAdAB0AHQAeAB0AHgAeAB4AHgAeAB0AHQAdAB0AHgAeAB4AHgAdAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAB4AHgAeAB0AHgAeAB4AHgAeAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAB0AHgAeAB0AHQAdAB0AHgAeAB0AHQAeAB4AHQAdAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB0AHQAeAB4AHQAdAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHQAeAB4AHgAdAB4AHgAeAB4AHgAeAB4AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AFAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeABYAEQAWABEAHgAeAB4AHgAeAB4AHQAeAB4AHgAeAB4AHgAeACUAJQAeAB4AHgAeAB4AHgAeAB4AHgAWABEAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AJQAlACUAJQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAFAAHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHgAeAB4AHgAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAeAB4AHQAdAB0AHQAeAB4AHgAeAB4AHgAeAB4AHgAeAB0AHQAeAB0AHQAdAB0AHQAdAB0AHgAeAB4AHgAeAB4AHgAeAB0AHQAeAB4AHQAdAB4AHgAeAB4AHQAdAB4AHgAeAB4AHQAdAB0AHgAeAB0AHgAeAB0AHQAdAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAB0AHQAdAB4AHgAeAB4AHgAeAB4AHgAeAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAlACUAJQAlAB4AHQAdAB4AHgAdAB4AHgAeAB4AHQAdAB4AHgAeAB4AJQAlAB0AHQAlAB4AJQAlACUAIAAlACUAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAlACUAJQAeAB4AHgAeAB0AHgAdAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAB0AHgAdAB0AHQAeAB0AJQAdAB0AHgAdAB0AHgAdAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACUAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHQAdAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAlACUAJQAlACUAJQAlACUAJQAlACUAJQAdAB0AHQAdACUAHgAlACUAJQAdACUAJQAdAB0AHQAlACUAHQAdACUAHQAdACUAJQAlAB4AHQAeAB4AHgAeAB0AHQAlAB0AHQAdAB0AHQAdACUAJQAlACUAJQAdACUAJQAgACUAHQAdACUAJQAlACUAJQAlACUAJQAeAB4AHgAlACUAIAAgACAAIAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB0AHgAeAB4AFwAXABcAFwAXABcAHgATABMAJQAeAB4AHgAWABEAFgARABYAEQAWABEAFgARABYAEQAWABEATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeABYAEQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAWABEAFgARABYAEQAWABEAFgARAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AFgARABYAEQAWABEAFgARABYAEQAWABEAFgARABYAEQAWABEAFgARABYAEQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAWABEAFgARAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AFgARAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAdAB0AHQAdAB0AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AUABQAFAAUAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAEAAQABAAeAB4AKwArACsAKwArABMADQANAA0AUAATAA0AUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAUAANACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAEAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQACsAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXAA0ADQANAA0ADQANAA0ADQAeAA0AFgANAB4AHgAXABcAHgAeABcAFwAWABEAFgARABYAEQAWABEADQANAA0ADQATAFAADQANAB4ADQANAB4AHgAeAB4AHgAMAAwADQANAA0AHgANAA0AFgANAA0ADQANAA0ADQANAA0AHgANAB4ADQANAB4AHgAeACsAKwArACsAKwArACsAKwArACsAKwArACsAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACsAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAKwArACsAKwArACsAKwArACsAKwArACsAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAlACUAJQAlACUAJQAlACUAJQAlACUAJQArACsAKwArAA0AEQARACUAJQBHAFcAVwAWABEAFgARABYAEQAWABEAFgARACUAJQAWABEAFgARABYAEQAWABEAFQAWABEAEQAlAFcAVwBXAFcAVwBXAFcAVwBXAAQABAAEAAQABAAEACUAVwBXAFcAVwA2ACUAJQBXAFcAVwBHAEcAJQAlACUAKwBRAFcAUQBXAFEAVwBRAFcAUQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFEAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBRAFcAUQBXAFEAVwBXAFcAVwBXAFcAUQBXAFcAVwBXAFcAVwBRAFEAKwArAAQABAAVABUARwBHAFcAFQBRAFcAUQBXAFEAVwBRAFcAUQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFEAVwBRAFcAUQBXAFcAVwBXAFcAVwBRAFcAVwBXAFcAVwBXAFEAUQBXAFcAVwBXABUAUQBHAEcAVwArACsAKwArACsAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAKwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAKwAlACUAVwBXAFcAVwAlACUAJQAlACUAJQAlACUAJQAlACsAKwArACsAKwArACsAKwArACsAKwArAFEAUQBRAFEAUQBRAFEAUQBRAFEAUQBRAFEAUQBRAFEAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQArAFcAVwBXAFcAVwBXAFcAVwBXAFcAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQBPAE8ATwBPAE8ATwBPAE8AJQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXACUAJQAlAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAEcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAKwArACsAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAADQATAA0AUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABLAEsASwBLAEsASwBLAEsASwBLAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAFAABAAEAAQABAAeAAQABAAEAAQABAAEAAQABAAEAAQAHgBQAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AUABQAAQABABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAeAA0ADQANAA0ADQArACsAKwArACsAKwArACsAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAFAAUABQAFAAUABQAFAAUABQAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AUAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgBQAB4AHgAeAB4AHgAeAFAAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAHgAeAB4AHgAeAB4AHgAeAB4AKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAeAB4AUABQAFAAUABQAFAAUABQAFAAUABQAAQAUABQAFAABABQAFAAUABQAAQAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABAAeAB4AHgAeAAQAKwArACsAUABQAFAAUABQAFAAHgAeABoAHgArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAADgAOABMAEwArACsAKwArACsAKwArACsABAAEAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABAAEACsAKwArACsAKwArACsAKwANAA0ASwBLAEsASwBLAEsASwBLAEsASwArACsAKwArACsAKwAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABABQAFAAUABQAFAAUAAeAB4AHgBQAA4AUABQAAQAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAA0ADQBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAKwArACsAKwArACsAKwArACsAKwArAB4AWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYAFgAWABYACsAKwArAAQAHgAeAB4AHgAeAB4ADQANAA0AHgAeAB4AHgArAFAASwBLAEsASwBLAEsASwBLAEsASwArACsAKwArAB4AHgBcAFwAXABcAFwAKgBcAFwAXABcAFwAXABcAFwAXABcAEsASwBLAEsASwBLAEsASwBLAEsAXABcAFwAXABcACsAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsAKwArACsAKwArACsAKwArAFAAUABQAAQAUABQAFAAUABQAFAAUABQAAQABAArACsASwBLAEsASwBLAEsASwBLAEsASwArACsAHgANAA0ADQBcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAKgAqACoAXAAqACoAKgBcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXAAqAFwAKgAqACoAXABcACoAKgBcAFwAXABcAFwAKgAqAFwAKgBcACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFwAXABcACoAKgBQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAA0ADQBQAFAAUAAEAAQAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUAArACsAUABQAFAAUABQAFAAKwArAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAHgAeACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQADQAEAAQAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAVABVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBUAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVAFUAVQBVACsAKwArACsAKwArACsAKwArACsAKwArAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAWQBZAFkAKwArACsAKwBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAWgBaAFoAKwArACsAKwAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYABgAGAAYAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXACUAJQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAJQAlACUAJQAlACUAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAKwArACsAKwArAFYABABWAFYAVgBWAFYAVgBWAFYAVgBWAB4AVgBWAFYAVgBWAFYAVgBWAFYAVgBWAFYAVgArAFYAVgBWAFYAVgArAFYAKwBWAFYAKwBWAFYAKwBWAFYAVgBWAFYAVgBWAFYAVgBWAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAEQAWAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUAAaAB4AKwArAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAGAARABEAGAAYABMAEwAWABEAFAArACsAKwArACsAKwAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACUAJQAlACUAJQAWABEAFgARABYAEQAWABEAFgARABYAEQAlACUAFgARACUAJQAlACUAJQAlACUAEQAlABEAKwAVABUAEwATACUAFgARABYAEQAWABEAJQAlACUAJQAlACUAJQAlACsAJQAbABoAJQArACsAKwArAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArAAcAKwATACUAJQAbABoAJQAlABYAEQAlACUAEQAlABEAJQBXAFcAVwBXAFcAVwBXAFcAVwBXABUAFQAlACUAJQATACUAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXABYAJQARACUAJQAlAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwAWACUAEQAlABYAEQARABYAEQARABUAVwBRAFEAUQBRAFEAUQBRAFEAUQBRAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAEcARwArACsAVwBXAFcAVwBXAFcAKwArAFcAVwBXAFcAVwBXACsAKwBXAFcAVwBXAFcAVwArACsAVwBXAFcAKwArACsAGgAbACUAJQAlABsAGwArAB4AHgAeAB4AHgAeAB4AKwArACsAKwArACsAKwArACsAKwAEAAQABAAQAB0AKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsADQANAA0AKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArAB4AHgAeAB4AHgAeAB4AHgAeAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgBQAFAAHgAeAB4AKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAAQAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAEAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAA0AUABQAFAAUAArACsAKwArAFAAUABQAFAAUABQAFAAUAANAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArACsAKwAeACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAKwArAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUAArACsAKwBQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwANAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAeAB4AUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUAArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArAA0AUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwAeAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAUABQAFAAUABQAAQABAAEACsABAAEACsAKwArACsAKwAEAAQABAAEAFAAUABQAFAAKwBQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArAAQABAAEACsAKwArACsABABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAA0ADQANAA0ADQANAA0ADQAeACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAeAFAAUABQAFAAUABQAFAAUAAeAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAArACsAKwArAFAAUABQAFAAUAANAA0ADQANAA0ADQAUACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsADQANAA0ADQANAA0ADQBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAB4AHgAeAB4AKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArAFAAUABQAFAAUABQAAQABAAEAAQAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUAArAAQABAANACsAKwBQAFAAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAAQABAAEAAQABAAEAAQABAAEAAQABABQAFAAUABQAB4AHgAeAB4AHgArACsAKwArACsAKwAEAAQABAAEAAQABAAEAA0ADQAeAB4AHgAeAB4AKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsABABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAQABAAEAAQABAAEAAQABAAEAAQABAAeAB4AHgANAA0ADQANACsAKwArACsAKwArACsAKwArACsAKwAeACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwArACsAKwBLAEsASwBLAEsASwBLAEsASwBLACsAKwArACsAKwArAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEACsASwBLAEsASwBLAEsASwBLAEsASwANAA0ADQANAFAABAAEAFAAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAeAA4AUAArACsAKwArACsAKwArACsAKwAEAFAAUABQAFAADQANAB4ADQAEAAQABAAEAB4ABAAEAEsASwBLAEsASwBLAEsASwBLAEsAUAAOAFAADQANAA0AKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQABAANAA0AHgANAA0AHgAEACsAUABQAFAAUABQAFAAUAArAFAAKwBQAFAAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAA0AKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsABAAEAAQABAArAFAAUABQAFAAUABQAFAAUAArACsAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAUABQACsAUABQAFAAUABQACsABAAEAFAABAAEAAQABAAEAAQABAArACsABAAEACsAKwAEAAQABAArACsAUAArACsAKwArACsAKwAEACsAKwArACsAKwBQAFAAUABQAFAABAAEACsAKwAEAAQABAAEAAQABAAEACsAKwArAAQABAAEAAQABAArACsAKwArACsAKwArACsAKwArACsABAAEAAQABAAEAAQABABQAFAAUABQAA0ADQANAA0AHgBLAEsASwBLAEsASwBLAEsASwBLAA0ADQArAB4ABABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAEAAQABAAEAFAAUAAeAFAAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAArACsABAAEAAQABAAEAAQABAAEAAQADgANAA0AEwATAB4AHgAeAA0ADQANAA0ADQANAA0ADQANAA0ADQANAA0ADQANAFAAUABQAFAABAAEACsAKwAEAA0ADQAeAFAAKwArACsAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAFAAKwArACsAKwArACsAKwBLAEsASwBLAEsASwBLAEsASwBLACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAXABcAFwAKwArACoAKgAqACoAKgAqACoAKgAqACoAKgAqACoAKgAqACsAKwArACsASwBLAEsASwBLAEsASwBLAEsASwBcAFwADQANAA0AKgBQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAeACsAKwArACsASwBLAEsASwBLAEsASwBLAEsASwBQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAKwArAFAAKwArAFAAUABQAFAAUABQAFAAUAArAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQAKwAEAAQAKwArAAQABAAEAAQAUAAEAFAABAAEAA0ADQANACsAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAArACsABAAEAAQABAAEAAQABABQAA4AUAAEACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAABAAEAAQABAAEAAQABAAEAAQABABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAFAABAAEAAQABAAOAB4ADQANAA0ADQAOAB4ABAArACsAKwArACsAKwArACsAUAAEAAQABAAEAAQABAAEAAQABAAEAAQAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAA0ADQANAFAADgAOAA4ADQANACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAEAAQABAAEACsABAAEAAQABAAEAAQABAAEAFAADQANAA0ADQANACsAKwArACsAKwArACsAKwArACsASwBLAEsASwBLAEsASwBLAEsASwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwAOABMAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAArAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQACsAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAArACsAKwAEACsABAAEACsABAAEAAQABAAEAAQABABQAAQAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAUABQAFAAUABQAFAAKwBQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQAKwAEAAQAKwAEAAQABAAEAAQAUAArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAABAAEAAQABAAeAB4AKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAB4AHgAeAB4AHgAeAB4AHgAaABoAGgAaAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAKwArACsAKwArACsAKwArACsAKwArAA0AUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsADQANAA0ADQANACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAASABIAEgAQwBDAEMAUABQAFAAUABDAFAAUABQAEgAQwBIAEMAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAASABDAEMAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwAJAAkACQAJAAkACQAJABYAEQArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABIAEMAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwANAA0AKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArAAQABAAEAAQABAANACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEAA0ADQANAB4AHgAeAB4AHgAeAFAAUABQAFAADQAeACsAKwArACsAKwArACsAKwArACsASwBLAEsASwBLAEsASwBLAEsASwArAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAANAA0AHgAeACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwAEAFAABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAKwArACsAKwArACsAKwAEAAQABAAEAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAARwBHABUARwAJACsAKwArACsAKwArACsAKwArACsAKwAEAAQAKwArACsAKwArACsAKwArACsAKwArACsAKwArAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXACsAKwArACsAKwArACsAKwBXAFcAVwBXAFcAVwBXAFcAVwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUQBRAFEAKwArACsAKwArACsAKwArACsAKwArACsAKwBRAFEAUQBRACsAKwArACsAKwArACsAKwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUAArACsAHgAEAAQADQAEAAQABAAEACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAKwArACsAKwArACsAKwArAB4AHgAeAB4AHgAeAB4AKwArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAAQABAAEAAQABAAeAB4AHgAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAB4AHgAEAAQABAAEAAQABAAEAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4ABAAEAAQABAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4ABAAEAAQAHgArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwArACsAKwArACsAKwArACsAKwArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAKwArACsAKwArACsAKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwBQAFAAKwArAFAAKwArAFAAUAArACsAUABQAFAAUAArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACsAUAArAFAAUABQAFAAUABQAFAAKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwBQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAHgAeAFAAUABQAFAAUAArAFAAKwArACsAUABQAFAAUABQAFAAUAArAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAHgBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgBQAFAAUABQAFAAUABQAFAAUABQAFAAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAB4AHgAeAB4AHgAeAB4AHgAeACsAKwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAEsASwBLAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAeAB4AHgAeAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAeAB4AHgAeAB4AHgAeAB4ABAAeAB4AHgAeAB4AHgAeAB4AHgAeAAQAHgAeAA0ADQANAA0AHgArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAEAAQABAAEAAQAKwAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAAQABAAEAAQABAAEAAQAKwAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAKwArAAQABAAEAAQABAAEAAQAKwAEAAQAKwAEAAQABAAEAAQAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwAEAAQABAAEAAQABAAEAFAAUABQAFAAUABQAFAAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwBQAB4AKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArABsAUABQAFAAUABQACsAKwBQAFAAUABQAFAAUABQAFAAUAAEAAQABAAEAAQABAAEACsAKwArACsAKwArACsAKwArAB4AHgAeAB4ABAAEAAQABAAEAAQABABQACsAKwArACsASwBLAEsASwBLAEsASwBLAEsASwArACsAKwArABYAFgArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAGgBQAFAAUAAaAFAAUABQAFAAKwArACsAKwArACsAKwArACsAKwArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAeAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQACsAKwBQAFAAUABQACsAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwBQAFAAKwBQACsAKwBQACsAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAKwBQACsAUAArACsAKwArACsAKwBQACsAKwArACsAUAArAFAAKwBQACsAUABQAFAAKwBQAFAAKwBQACsAKwBQACsAUAArAFAAKwBQACsAUAArAFAAUAArAFAAKwArAFAAUABQAFAAKwBQAFAAUABQAFAAUABQACsAUABQAFAAUAArAFAAUABQAFAAKwBQACsAUABQAFAAUABQAFAAUABQAFAAUAArAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAArACsAKwArACsAUABQAFAAKwBQAFAAUABQAFAAKwBQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwAeAB4AKwArACsAKwArACsAKwArACsAKwArACsAKwArAE8ATwBPAE8ATwBPAE8ATwBPAE8ATwBPAE8AJQAlACUAHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHgAeAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB4AHgAeACUAJQAlAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAdAB0AHQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQApACkAKQApACkAKQApACkAKQApACkAKQApACkAKQApACkAKQApACkAKQApACkAKQApACkAJQAlACUAJQAlACAAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAeAB4AJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlAB4AHgAlACUAJQAlACUAHgAlACUAJQAlACUAIAAgACAAJQAlACAAJQAlACAAIAAgACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACEAIQAhACEAIQAlACUAIAAgACUAJQAgACAAIAAgACAAIAAgACAAIAAgACAAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAJQAlACUAIAAlACUAJQAlACAAIAAgACUAIAAgACAAJQAlACUAJQAlACUAJQAgACUAIAAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAHgAlAB4AJQAeACUAJQAlACUAJQAgACUAJQAlACUAHgAlAB4AHgAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlAB4AHgAeAB4AHgAeAB4AJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAeAB4AHgAeAB4AHgAeAB4AHgAeACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACAAIAAlACUAJQAlACAAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACAAJQAlACUAJQAgACAAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAHgAeAB4AHgAeAB4AHgAeACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAeAB4AHgAeAB4AHgAlACUAJQAlACUAJQAlACAAIAAgACUAJQAlACAAIAAgACAAIAAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeABcAFwAXABUAFQAVAB4AHgAeAB4AJQAlACUAIAAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACAAIAAgACUAJQAlACUAJQAlACUAJQAlACAAJQAlACUAJQAlACUAJQAlACUAJQAlACAAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AJQAlACUAJQAlACUAJQAlACUAJQAlACUAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AJQAlACUAJQAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeACUAJQAlACUAJQAlACUAJQAeAB4AHgAeAB4AHgAeAB4AHgAeACUAJQAlACUAJQAlAB4AHgAeAB4AHgAeAB4AHgAlACUAJQAlACUAJQAlACUAHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAgACUAJQAgACUAJQAlACUAJQAlACUAJQAgACAAIAAgACAAIAAgACAAJQAlACUAJQAlACUAIAAlACUAJQAlACUAJQAlACUAJQAgACAAIAAgACAAIAAgACAAIAAgACUAJQAgACAAIAAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAgACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACAAIAAlACAAIAAlACAAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAgACAAIAAlACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAJQAlAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AKwAeAB4AHgAeAB4AHgAeAB4AHgAeAB4AHgArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAEsASwBLAEsASwBLAEsASwBLAEsAKwArACsAKwArACsAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAKwArAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXACUAJQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwAlACUAJQAlACUAJQAlACUAJQAlACUAVwBXACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQBXAFcAVwBXAFcAVwBXAFcAVwBXAFcAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAJQAlACUAKwAEACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArACsAKwArAA==";
-      LETTER_NUMBER_MODIFIER = 50;
-      BK = 1;
-      CR$1 = 2;
-      LF$1 = 3;
-      CM = 4;
-      NL = 5;
-      WJ = 7;
-      ZW = 8;
-      GL = 9;
-      SP = 10;
-      ZWJ$1 = 11;
-      B2 = 12;
-      BA = 13;
-      BB = 14;
-      HY = 15;
-      CB = 16;
-      CL = 17;
-      CP = 18;
-      EX = 19;
-      IN = 20;
-      NS = 21;
-      OP = 22;
-      QU = 23;
-      IS = 24;
-      NU = 25;
-      PO = 26;
-      PR = 27;
-      SY = 28;
-      AI = 29;
-      AL = 30;
-      CJ = 31;
-      EB = 32;
-      EM = 33;
-      H2 = 34;
-      H3 = 35;
-      HL = 36;
-      ID = 37;
-      JL = 38;
-      JV = 39;
-      JT = 40;
-      RI$1 = 41;
-      SA = 42;
-      XX = 43;
-      ea_OP = [9001, 65288];
-      BREAK_MANDATORY = "!";
-      BREAK_NOT_ALLOWED$1 = "\xD7";
-      BREAK_ALLOWED$1 = "\xF7";
-      UnicodeTrie$1 = createTrieFromBase64$1(base64$1);
-      ALPHABETICS = [AL, HL];
-      HARD_LINE_BREAKS = [BK, CR$1, LF$1, NL];
-      SPACE$1 = [SP, ZW];
-      PREFIX_POSTFIX = [PR, PO];
-      LINE_BREAKS = HARD_LINE_BREAKS.concat(SPACE$1);
-      KOREAN_SYLLABLE_BLOCK = [JL, JV, JT, H2, H3];
-      HYPHEN = [HY, BA];
-      codePointsToCharacterClasses = function(codePoints, lineBreak2) {
-        if (lineBreak2 === void 0) {
-          lineBreak2 = "strict";
-        }
-        var types = [];
-        var indices = [];
-        var categories = [];
-        codePoints.forEach(function(codePoint, index) {
-          var classType = UnicodeTrie$1.get(codePoint);
-          if (classType > LETTER_NUMBER_MODIFIER) {
-            categories.push(true);
-            classType -= LETTER_NUMBER_MODIFIER;
-          } else {
-            categories.push(false);
-          }
-          if (["normal", "auto", "loose"].indexOf(lineBreak2) !== -1) {
-            if ([8208, 8211, 12316, 12448].indexOf(codePoint) !== -1) {
-              indices.push(index);
-              return types.push(CB);
-            }
-          }
-          if (classType === CM || classType === ZWJ$1) {
-            if (index === 0) {
-              indices.push(index);
-              return types.push(AL);
-            }
-            var prev = types[index - 1];
-            if (LINE_BREAKS.indexOf(prev) === -1) {
-              indices.push(indices[index - 1]);
-              return types.push(prev);
-            }
-            indices.push(index);
-            return types.push(AL);
-          }
-          indices.push(index);
-          if (classType === CJ) {
-            return types.push(lineBreak2 === "strict" ? NS : ID);
-          }
-          if (classType === SA) {
-            return types.push(AL);
-          }
-          if (classType === AI) {
-            return types.push(AL);
-          }
-          if (classType === XX) {
-            if (codePoint >= 131072 && codePoint <= 196605 || codePoint >= 196608 && codePoint <= 262141) {
-              return types.push(ID);
-            } else {
-              return types.push(AL);
-            }
-          }
-          types.push(classType);
-        });
-        return [indices, types, categories];
-      };
-      isAdjacentWithSpaceIgnored = function(a2, b, currentIndex, classTypes) {
-        var current = classTypes[currentIndex];
-        if (Array.isArray(a2) ? a2.indexOf(current) !== -1 : a2 === current) {
-          var i = currentIndex;
-          while (i <= classTypes.length) {
-            i++;
-            var next = classTypes[i];
-            if (next === b) {
-              return true;
-            }
-            if (next !== SP) {
-              break;
-            }
-          }
-        }
-        if (current === SP) {
-          var i = currentIndex;
-          while (i > 0) {
-            i--;
-            var prev = classTypes[i];
-            if (Array.isArray(a2) ? a2.indexOf(prev) !== -1 : a2 === prev) {
-              var n = currentIndex;
-              while (n <= classTypes.length) {
-                n++;
-                var next = classTypes[n];
-                if (next === b) {
-                  return true;
-                }
-                if (next !== SP) {
-                  break;
-                }
-              }
-            }
-            if (prev !== SP) {
-              break;
-            }
-          }
-        }
-        return false;
-      };
-      previousNonSpaceClassType = function(currentIndex, classTypes) {
-        var i = currentIndex;
-        while (i >= 0) {
-          var type = classTypes[i];
-          if (type === SP) {
-            i--;
-          } else {
-            return type;
-          }
-        }
-        return 0;
-      };
-      _lineBreakAtIndex = function(codePoints, classTypes, indicies, index, forbiddenBreaks) {
-        if (indicies[index] === 0) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        var currentIndex = index - 1;
-        if (Array.isArray(forbiddenBreaks) && forbiddenBreaks[currentIndex] === true) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        var beforeIndex = currentIndex - 1;
-        var afterIndex = currentIndex + 1;
-        var current = classTypes[currentIndex];
-        var before = beforeIndex >= 0 ? classTypes[beforeIndex] : 0;
-        var next = classTypes[afterIndex];
-        if (current === CR$1 && next === LF$1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (HARD_LINE_BREAKS.indexOf(current) !== -1) {
-          return BREAK_MANDATORY;
-        }
-        if (HARD_LINE_BREAKS.indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (SPACE$1.indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (previousNonSpaceClassType(currentIndex, classTypes) === ZW) {
-          return BREAK_ALLOWED$1;
-        }
-        if (UnicodeTrie$1.get(codePoints[currentIndex]) === ZWJ$1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if ((current === EB || current === EM) && UnicodeTrie$1.get(codePoints[afterIndex]) === ZWJ$1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === WJ || next === WJ) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === GL) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if ([SP, BA, HY].indexOf(current) === -1 && next === GL) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if ([CL, CP, EX, IS, SY].indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (previousNonSpaceClassType(currentIndex, classTypes) === OP) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (isAdjacentWithSpaceIgnored(QU, OP, currentIndex, classTypes)) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (isAdjacentWithSpaceIgnored([CL, CP], NS, currentIndex, classTypes)) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (isAdjacentWithSpaceIgnored(B2, B2, currentIndex, classTypes)) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === SP) {
-          return BREAK_ALLOWED$1;
-        }
-        if (current === QU || next === QU) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (next === CB || current === CB) {
-          return BREAK_ALLOWED$1;
-        }
-        if ([BA, HY, NS].indexOf(next) !== -1 || current === BB) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (before === HL && HYPHEN.indexOf(current) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === SY && next === HL) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (next === IN) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (ALPHABETICS.indexOf(next) !== -1 && current === NU || ALPHABETICS.indexOf(current) !== -1 && next === NU) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === PR && [ID, EB, EM].indexOf(next) !== -1 || [ID, EB, EM].indexOf(current) !== -1 && next === PO) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (ALPHABETICS.indexOf(current) !== -1 && PREFIX_POSTFIX.indexOf(next) !== -1 || PREFIX_POSTFIX.indexOf(current) !== -1 && ALPHABETICS.indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (
-          // (PR | PO) × ( OP | HY )? NU
-          [PR, PO].indexOf(current) !== -1 && (next === NU || [OP, HY].indexOf(next) !== -1 && classTypes[afterIndex + 1] === NU) || // ( OP | HY ) × NU
-          [OP, HY].indexOf(current) !== -1 && next === NU || // NU ×	(NU | SY | IS)
-          current === NU && [NU, SY, IS].indexOf(next) !== -1
-        ) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if ([NU, SY, IS, CL, CP].indexOf(next) !== -1) {
-          var prevIndex = currentIndex;
-          while (prevIndex >= 0) {
-            var type = classTypes[prevIndex];
-            if (type === NU) {
-              return BREAK_NOT_ALLOWED$1;
-            } else if ([SY, IS].indexOf(type) !== -1) {
-              prevIndex--;
-            } else {
-              break;
-            }
-          }
-        }
-        if ([PR, PO].indexOf(next) !== -1) {
-          var prevIndex = [CL, CP].indexOf(current) !== -1 ? beforeIndex : currentIndex;
-          while (prevIndex >= 0) {
-            var type = classTypes[prevIndex];
-            if (type === NU) {
-              return BREAK_NOT_ALLOWED$1;
-            } else if ([SY, IS].indexOf(type) !== -1) {
-              prevIndex--;
-            } else {
-              break;
-            }
-          }
-        }
-        if (JL === current && [JL, JV, H2, H3].indexOf(next) !== -1 || [JV, H2].indexOf(current) !== -1 && [JV, JT].indexOf(next) !== -1 || [JT, H3].indexOf(current) !== -1 && next === JT) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (KOREAN_SYLLABLE_BLOCK.indexOf(current) !== -1 && [IN, PO].indexOf(next) !== -1 || KOREAN_SYLLABLE_BLOCK.indexOf(next) !== -1 && current === PR) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (ALPHABETICS.indexOf(current) !== -1 && ALPHABETICS.indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === IS && ALPHABETICS.indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (ALPHABETICS.concat(NU).indexOf(current) !== -1 && next === OP && ea_OP.indexOf(codePoints[afterIndex]) === -1 || ALPHABETICS.concat(NU).indexOf(next) !== -1 && current === CP) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        if (current === RI$1 && next === RI$1) {
-          var i = indicies[currentIndex];
-          var count = 1;
-          while (i > 0) {
-            i--;
-            if (classTypes[i] === RI$1) {
-              count++;
-            } else {
-              break;
-            }
-          }
-          if (count % 2 !== 0) {
-            return BREAK_NOT_ALLOWED$1;
-          }
-        }
-        if (current === EB && next === EM) {
-          return BREAK_NOT_ALLOWED$1;
-        }
-        return BREAK_ALLOWED$1;
-      };
-      cssFormattedClasses = function(codePoints, options) {
-        if (!options) {
-          options = { lineBreak: "normal", wordBreak: "normal" };
-        }
-        var _a = codePointsToCharacterClasses(codePoints, options.lineBreak), indicies = _a[0], classTypes = _a[1], isLetterNumber = _a[2];
-        if (options.wordBreak === "break-all" || options.wordBreak === "break-word") {
-          classTypes = classTypes.map(function(type) {
-            return [NU, AL, SA].indexOf(type) !== -1 ? ID : type;
-          });
-        }
-        var forbiddenBreakpoints = options.wordBreak === "keep-all" ? isLetterNumber.map(function(letterNumber, i) {
-          return letterNumber && codePoints[i] >= 19968 && codePoints[i] <= 40959;
-        }) : void 0;
-        return [indicies, classTypes, forbiddenBreakpoints];
-      };
-      Break = /** @class */
-      (function() {
-        function Break2(codePoints, lineBreak2, start, end) {
-          this.codePoints = codePoints;
-          this.required = lineBreak2 === BREAK_MANDATORY;
-          this.start = start;
-          this.end = end;
-        }
-        Break2.prototype.slice = function() {
-          return fromCodePoint$1.apply(void 0, this.codePoints.slice(this.start, this.end));
-        };
-        return Break2;
-      })();
-      LineBreaker = function(str, options) {
-        var codePoints = toCodePoints$1(str);
-        var _a = cssFormattedClasses(codePoints, options), indicies = _a[0], classTypes = _a[1], forbiddenBreakpoints = _a[2];
-        var length = codePoints.length;
-        var lastEnd = 0;
-        var nextIndex = 0;
-        return {
-          next: function() {
-            if (nextIndex >= length) {
-              return { done: true, value: null };
-            }
-            var lineBreak2 = BREAK_NOT_ALLOWED$1;
-            while (nextIndex < length && (lineBreak2 = _lineBreakAtIndex(codePoints, classTypes, indicies, ++nextIndex, forbiddenBreakpoints)) === BREAK_NOT_ALLOWED$1) {
-            }
-            if (lineBreak2 !== BREAK_NOT_ALLOWED$1 || nextIndex === length) {
-              var value = new Break(codePoints, lineBreak2, lastEnd, nextIndex);
-              lastEnd = nextIndex;
-              return { value, done: false };
-            }
-            return { done: true, value: null };
-          }
-        };
-      };
-      FLAG_UNRESTRICTED = 1 << 0;
-      FLAG_ID = 1 << 1;
-      FLAG_INTEGER = 1 << 2;
-      FLAG_NUMBER = 1 << 3;
-      LINE_FEED = 10;
-      SOLIDUS = 47;
-      REVERSE_SOLIDUS = 92;
-      CHARACTER_TABULATION = 9;
-      SPACE = 32;
-      QUOTATION_MARK = 34;
-      EQUALS_SIGN = 61;
-      NUMBER_SIGN = 35;
-      DOLLAR_SIGN = 36;
-      PERCENTAGE_SIGN = 37;
-      APOSTROPHE = 39;
-      LEFT_PARENTHESIS = 40;
-      RIGHT_PARENTHESIS = 41;
-      LOW_LINE = 95;
-      HYPHEN_MINUS = 45;
-      EXCLAMATION_MARK = 33;
-      LESS_THAN_SIGN = 60;
-      GREATER_THAN_SIGN = 62;
-      COMMERCIAL_AT = 64;
-      LEFT_SQUARE_BRACKET = 91;
-      RIGHT_SQUARE_BRACKET = 93;
-      CIRCUMFLEX_ACCENT = 61;
-      LEFT_CURLY_BRACKET = 123;
-      QUESTION_MARK = 63;
-      RIGHT_CURLY_BRACKET = 125;
-      VERTICAL_LINE = 124;
-      TILDE = 126;
-      CONTROL = 128;
-      REPLACEMENT_CHARACTER = 65533;
-      ASTERISK = 42;
-      PLUS_SIGN = 43;
-      COMMA = 44;
-      COLON = 58;
-      SEMICOLON = 59;
-      FULL_STOP = 46;
-      NULL = 0;
-      BACKSPACE = 8;
-      LINE_TABULATION = 11;
-      SHIFT_OUT = 14;
-      INFORMATION_SEPARATOR_ONE = 31;
-      DELETE = 127;
-      EOF = -1;
-      ZERO = 48;
-      a = 97;
-      e = 101;
-      f = 102;
-      u = 117;
-      z = 122;
-      A = 65;
-      E = 69;
-      F = 70;
-      U = 85;
-      Z = 90;
-      isDigit = function(codePoint) {
-        return codePoint >= ZERO && codePoint <= 57;
-      };
-      isSurrogateCodePoint = function(codePoint) {
-        return codePoint >= 55296 && codePoint <= 57343;
-      };
-      isHex = function(codePoint) {
-        return isDigit(codePoint) || codePoint >= A && codePoint <= F || codePoint >= a && codePoint <= f;
-      };
-      isLowerCaseLetter = function(codePoint) {
-        return codePoint >= a && codePoint <= z;
-      };
-      isUpperCaseLetter = function(codePoint) {
-        return codePoint >= A && codePoint <= Z;
-      };
-      isLetter = function(codePoint) {
-        return isLowerCaseLetter(codePoint) || isUpperCaseLetter(codePoint);
-      };
-      isNonASCIICodePoint = function(codePoint) {
-        return codePoint >= CONTROL;
-      };
-      isWhiteSpace = function(codePoint) {
-        return codePoint === LINE_FEED || codePoint === CHARACTER_TABULATION || codePoint === SPACE;
-      };
-      isNameStartCodePoint = function(codePoint) {
-        return isLetter(codePoint) || isNonASCIICodePoint(codePoint) || codePoint === LOW_LINE;
-      };
-      isNameCodePoint = function(codePoint) {
-        return isNameStartCodePoint(codePoint) || isDigit(codePoint) || codePoint === HYPHEN_MINUS;
-      };
-      isNonPrintableCodePoint = function(codePoint) {
-        return codePoint >= NULL && codePoint <= BACKSPACE || codePoint === LINE_TABULATION || codePoint >= SHIFT_OUT && codePoint <= INFORMATION_SEPARATOR_ONE || codePoint === DELETE;
-      };
-      isValidEscape = function(c1, c2) {
-        if (c1 !== REVERSE_SOLIDUS) {
-          return false;
-        }
-        return c2 !== LINE_FEED;
-      };
-      isIdentifierStart = function(c1, c2, c3) {
-        if (c1 === HYPHEN_MINUS) {
-          return isNameStartCodePoint(c2) || isValidEscape(c2, c3);
-        } else if (isNameStartCodePoint(c1)) {
-          return true;
-        } else if (c1 === REVERSE_SOLIDUS && isValidEscape(c1, c2)) {
-          return true;
-        }
-        return false;
-      };
-      isNumberStart = function(c1, c2, c3) {
-        if (c1 === PLUS_SIGN || c1 === HYPHEN_MINUS) {
-          if (isDigit(c2)) {
-            return true;
-          }
-          return c2 === FULL_STOP && isDigit(c3);
-        }
-        if (c1 === FULL_STOP) {
-          return isDigit(c2);
-        }
-        return isDigit(c1);
-      };
-      stringToNumber = function(codePoints) {
-        var c = 0;
-        var sign = 1;
-        if (codePoints[c] === PLUS_SIGN || codePoints[c] === HYPHEN_MINUS) {
-          if (codePoints[c] === HYPHEN_MINUS) {
-            sign = -1;
-          }
-          c++;
-        }
-        var integers = [];
-        while (isDigit(codePoints[c])) {
-          integers.push(codePoints[c++]);
-        }
-        var int = integers.length ? parseInt(fromCodePoint$1.apply(void 0, integers), 10) : 0;
-        if (codePoints[c] === FULL_STOP) {
-          c++;
-        }
-        var fraction = [];
-        while (isDigit(codePoints[c])) {
-          fraction.push(codePoints[c++]);
-        }
-        var fracd = fraction.length;
-        var frac = fracd ? parseInt(fromCodePoint$1.apply(void 0, fraction), 10) : 0;
-        if (codePoints[c] === E || codePoints[c] === e) {
-          c++;
-        }
-        var expsign = 1;
-        if (codePoints[c] === PLUS_SIGN || codePoints[c] === HYPHEN_MINUS) {
-          if (codePoints[c] === HYPHEN_MINUS) {
-            expsign = -1;
-          }
-          c++;
-        }
-        var exponent = [];
-        while (isDigit(codePoints[c])) {
-          exponent.push(codePoints[c++]);
-        }
-        var exp = exponent.length ? parseInt(fromCodePoint$1.apply(void 0, exponent), 10) : 0;
-        return sign * (int + frac * Math.pow(10, -fracd)) * Math.pow(10, expsign * exp);
-      };
-      LEFT_PARENTHESIS_TOKEN = {
-        type: 2
-        /* LEFT_PARENTHESIS_TOKEN */
-      };
-      RIGHT_PARENTHESIS_TOKEN = {
-        type: 3
-        /* RIGHT_PARENTHESIS_TOKEN */
-      };
-      COMMA_TOKEN = {
-        type: 4
-        /* COMMA_TOKEN */
-      };
-      SUFFIX_MATCH_TOKEN = {
-        type: 13
-        /* SUFFIX_MATCH_TOKEN */
-      };
-      PREFIX_MATCH_TOKEN = {
-        type: 8
-        /* PREFIX_MATCH_TOKEN */
-      };
-      COLUMN_TOKEN = {
-        type: 21
-        /* COLUMN_TOKEN */
-      };
-      DASH_MATCH_TOKEN = {
-        type: 9
-        /* DASH_MATCH_TOKEN */
-      };
-      INCLUDE_MATCH_TOKEN = {
-        type: 10
-        /* INCLUDE_MATCH_TOKEN */
-      };
-      LEFT_CURLY_BRACKET_TOKEN = {
-        type: 11
-        /* LEFT_CURLY_BRACKET_TOKEN */
-      };
-      RIGHT_CURLY_BRACKET_TOKEN = {
-        type: 12
-        /* RIGHT_CURLY_BRACKET_TOKEN */
-      };
-      SUBSTRING_MATCH_TOKEN = {
-        type: 14
-        /* SUBSTRING_MATCH_TOKEN */
-      };
-      BAD_URL_TOKEN = {
-        type: 23
-        /* BAD_URL_TOKEN */
-      };
-      BAD_STRING_TOKEN = {
-        type: 1
-        /* BAD_STRING_TOKEN */
-      };
-      CDO_TOKEN = {
-        type: 25
-        /* CDO_TOKEN */
-      };
-      CDC_TOKEN = {
-        type: 24
-        /* CDC_TOKEN */
-      };
-      COLON_TOKEN = {
-        type: 26
-        /* COLON_TOKEN */
-      };
-      SEMICOLON_TOKEN = {
-        type: 27
-        /* SEMICOLON_TOKEN */
-      };
-      LEFT_SQUARE_BRACKET_TOKEN = {
-        type: 28
-        /* LEFT_SQUARE_BRACKET_TOKEN */
-      };
-      RIGHT_SQUARE_BRACKET_TOKEN = {
-        type: 29
-        /* RIGHT_SQUARE_BRACKET_TOKEN */
-      };
-      WHITESPACE_TOKEN = {
-        type: 31
-        /* WHITESPACE_TOKEN */
-      };
-      EOF_TOKEN = {
-        type: 32
-        /* EOF_TOKEN */
-      };
-      Tokenizer = /** @class */
-      (function() {
-        function Tokenizer2() {
-          this._value = [];
-        }
-        Tokenizer2.prototype.write = function(chunk) {
-          this._value = this._value.concat(toCodePoints$1(chunk));
-        };
-        Tokenizer2.prototype.read = function() {
-          var tokens = [];
-          var token = this.consumeToken();
-          while (token !== EOF_TOKEN) {
-            tokens.push(token);
-            token = this.consumeToken();
-          }
-          return tokens;
-        };
-        Tokenizer2.prototype.consumeToken = function() {
-          var codePoint = this.consumeCodePoint();
-          switch (codePoint) {
-            case QUOTATION_MARK:
-              return this.consumeStringToken(QUOTATION_MARK);
-            case NUMBER_SIGN:
-              var c1 = this.peekCodePoint(0);
-              var c2 = this.peekCodePoint(1);
-              var c3 = this.peekCodePoint(2);
-              if (isNameCodePoint(c1) || isValidEscape(c2, c3)) {
-                var flags = isIdentifierStart(c1, c2, c3) ? FLAG_ID : FLAG_UNRESTRICTED;
-                var value = this.consumeName();
-                return { type: 5, value, flags };
-              }
-              break;
-            case DOLLAR_SIGN:
-              if (this.peekCodePoint(0) === EQUALS_SIGN) {
-                this.consumeCodePoint();
-                return SUFFIX_MATCH_TOKEN;
-              }
-              break;
-            case APOSTROPHE:
-              return this.consumeStringToken(APOSTROPHE);
-            case LEFT_PARENTHESIS:
-              return LEFT_PARENTHESIS_TOKEN;
-            case RIGHT_PARENTHESIS:
-              return RIGHT_PARENTHESIS_TOKEN;
-            case ASTERISK:
-              if (this.peekCodePoint(0) === EQUALS_SIGN) {
-                this.consumeCodePoint();
-                return SUBSTRING_MATCH_TOKEN;
-              }
-              break;
-            case PLUS_SIGN:
-              if (isNumberStart(codePoint, this.peekCodePoint(0), this.peekCodePoint(1))) {
-                this.reconsumeCodePoint(codePoint);
-                return this.consumeNumericToken();
-              }
-              break;
-            case COMMA:
-              return COMMA_TOKEN;
-            case HYPHEN_MINUS:
-              var e1 = codePoint;
-              var e2 = this.peekCodePoint(0);
-              var e3 = this.peekCodePoint(1);
-              if (isNumberStart(e1, e2, e3)) {
-                this.reconsumeCodePoint(codePoint);
-                return this.consumeNumericToken();
-              }
-              if (isIdentifierStart(e1, e2, e3)) {
-                this.reconsumeCodePoint(codePoint);
-                return this.consumeIdentLikeToken();
-              }
-              if (e2 === HYPHEN_MINUS && e3 === GREATER_THAN_SIGN) {
-                this.consumeCodePoint();
-                this.consumeCodePoint();
-                return CDC_TOKEN;
-              }
-              break;
-            case FULL_STOP:
-              if (isNumberStart(codePoint, this.peekCodePoint(0), this.peekCodePoint(1))) {
-                this.reconsumeCodePoint(codePoint);
-                return this.consumeNumericToken();
-              }
-              break;
-            case SOLIDUS:
-              if (this.peekCodePoint(0) === ASTERISK) {
-                this.consumeCodePoint();
-                while (true) {
-                  var c = this.consumeCodePoint();
-                  if (c === ASTERISK) {
-                    c = this.consumeCodePoint();
-                    if (c === SOLIDUS) {
-                      return this.consumeToken();
-                    }
-                  }
-                  if (c === EOF) {
-                    return this.consumeToken();
-                  }
-                }
-              }
-              break;
-            case COLON:
-              return COLON_TOKEN;
-            case SEMICOLON:
-              return SEMICOLON_TOKEN;
-            case LESS_THAN_SIGN:
-              if (this.peekCodePoint(0) === EXCLAMATION_MARK && this.peekCodePoint(1) === HYPHEN_MINUS && this.peekCodePoint(2) === HYPHEN_MINUS) {
-                this.consumeCodePoint();
-                this.consumeCodePoint();
-                return CDO_TOKEN;
-              }
-              break;
-            case COMMERCIAL_AT:
-              var a1 = this.peekCodePoint(0);
-              var a2 = this.peekCodePoint(1);
-              var a3 = this.peekCodePoint(2);
-              if (isIdentifierStart(a1, a2, a3)) {
-                var value = this.consumeName();
-                return { type: 7, value };
-              }
-              break;
-            case LEFT_SQUARE_BRACKET:
-              return LEFT_SQUARE_BRACKET_TOKEN;
-            case REVERSE_SOLIDUS:
-              if (isValidEscape(codePoint, this.peekCodePoint(0))) {
-                this.reconsumeCodePoint(codePoint);
-                return this.consumeIdentLikeToken();
-              }
-              break;
-            case RIGHT_SQUARE_BRACKET:
-              return RIGHT_SQUARE_BRACKET_TOKEN;
-            case CIRCUMFLEX_ACCENT:
-              if (this.peekCodePoint(0) === EQUALS_SIGN) {
-                this.consumeCodePoint();
-                return PREFIX_MATCH_TOKEN;
-              }
-              break;
-            case LEFT_CURLY_BRACKET:
-              return LEFT_CURLY_BRACKET_TOKEN;
-            case RIGHT_CURLY_BRACKET:
-              return RIGHT_CURLY_BRACKET_TOKEN;
-            case u:
-            case U:
-              var u1 = this.peekCodePoint(0);
-              var u2 = this.peekCodePoint(1);
-              if (u1 === PLUS_SIGN && (isHex(u2) || u2 === QUESTION_MARK)) {
-                this.consumeCodePoint();
-                this.consumeUnicodeRangeToken();
-              }
-              this.reconsumeCodePoint(codePoint);
-              return this.consumeIdentLikeToken();
-            case VERTICAL_LINE:
-              if (this.peekCodePoint(0) === EQUALS_SIGN) {
-                this.consumeCodePoint();
-                return DASH_MATCH_TOKEN;
-              }
-              if (this.peekCodePoint(0) === VERTICAL_LINE) {
-                this.consumeCodePoint();
-                return COLUMN_TOKEN;
-              }
-              break;
-            case TILDE:
-              if (this.peekCodePoint(0) === EQUALS_SIGN) {
-                this.consumeCodePoint();
-                return INCLUDE_MATCH_TOKEN;
-              }
-              break;
-            case EOF:
-              return EOF_TOKEN;
-          }
-          if (isWhiteSpace(codePoint)) {
-            this.consumeWhiteSpace();
-            return WHITESPACE_TOKEN;
-          }
-          if (isDigit(codePoint)) {
-            this.reconsumeCodePoint(codePoint);
-            return this.consumeNumericToken();
-          }
-          if (isNameStartCodePoint(codePoint)) {
-            this.reconsumeCodePoint(codePoint);
-            return this.consumeIdentLikeToken();
-          }
-          return { type: 6, value: fromCodePoint$1(codePoint) };
-        };
-        Tokenizer2.prototype.consumeCodePoint = function() {
-          var value = this._value.shift();
-          return typeof value === "undefined" ? -1 : value;
-        };
-        Tokenizer2.prototype.reconsumeCodePoint = function(codePoint) {
-          this._value.unshift(codePoint);
-        };
-        Tokenizer2.prototype.peekCodePoint = function(delta) {
-          if (delta >= this._value.length) {
-            return -1;
-          }
-          return this._value[delta];
-        };
-        Tokenizer2.prototype.consumeUnicodeRangeToken = function() {
-          var digits = [];
-          var codePoint = this.consumeCodePoint();
-          while (isHex(codePoint) && digits.length < 6) {
-            digits.push(codePoint);
-            codePoint = this.consumeCodePoint();
-          }
-          var questionMarks = false;
-          while (codePoint === QUESTION_MARK && digits.length < 6) {
-            digits.push(codePoint);
-            codePoint = this.consumeCodePoint();
-            questionMarks = true;
-          }
-          if (questionMarks) {
-            var start_1 = parseInt(fromCodePoint$1.apply(void 0, digits.map(function(digit) {
-              return digit === QUESTION_MARK ? ZERO : digit;
-            })), 16);
-            var end = parseInt(fromCodePoint$1.apply(void 0, digits.map(function(digit) {
-              return digit === QUESTION_MARK ? F : digit;
-            })), 16);
-            return { type: 30, start: start_1, end };
-          }
-          var start = parseInt(fromCodePoint$1.apply(void 0, digits), 16);
-          if (this.peekCodePoint(0) === HYPHEN_MINUS && isHex(this.peekCodePoint(1))) {
-            this.consumeCodePoint();
-            codePoint = this.consumeCodePoint();
-            var endDigits = [];
-            while (isHex(codePoint) && endDigits.length < 6) {
-              endDigits.push(codePoint);
-              codePoint = this.consumeCodePoint();
-            }
-            var end = parseInt(fromCodePoint$1.apply(void 0, endDigits), 16);
-            return { type: 30, start, end };
-          } else {
-            return { type: 30, start, end: start };
-          }
-        };
-        Tokenizer2.prototype.consumeIdentLikeToken = function() {
-          var value = this.consumeName();
-          if (value.toLowerCase() === "url" && this.peekCodePoint(0) === LEFT_PARENTHESIS) {
-            this.consumeCodePoint();
-            return this.consumeUrlToken();
-          } else if (this.peekCodePoint(0) === LEFT_PARENTHESIS) {
-            this.consumeCodePoint();
-            return { type: 19, value };
-          }
-          return { type: 20, value };
-        };
-        Tokenizer2.prototype.consumeUrlToken = function() {
-          var value = [];
-          this.consumeWhiteSpace();
-          if (this.peekCodePoint(0) === EOF) {
-            return { type: 22, value: "" };
-          }
-          var next = this.peekCodePoint(0);
-          if (next === APOSTROPHE || next === QUOTATION_MARK) {
-            var stringToken = this.consumeStringToken(this.consumeCodePoint());
-            if (stringToken.type === 0) {
-              this.consumeWhiteSpace();
-              if (this.peekCodePoint(0) === EOF || this.peekCodePoint(0) === RIGHT_PARENTHESIS) {
-                this.consumeCodePoint();
-                return { type: 22, value: stringToken.value };
-              }
-            }
-            this.consumeBadUrlRemnants();
-            return BAD_URL_TOKEN;
-          }
-          while (true) {
-            var codePoint = this.consumeCodePoint();
-            if (codePoint === EOF || codePoint === RIGHT_PARENTHESIS) {
-              return { type: 22, value: fromCodePoint$1.apply(void 0, value) };
-            } else if (isWhiteSpace(codePoint)) {
-              this.consumeWhiteSpace();
-              if (this.peekCodePoint(0) === EOF || this.peekCodePoint(0) === RIGHT_PARENTHESIS) {
-                this.consumeCodePoint();
-                return { type: 22, value: fromCodePoint$1.apply(void 0, value) };
-              }
-              this.consumeBadUrlRemnants();
-              return BAD_URL_TOKEN;
-            } else if (codePoint === QUOTATION_MARK || codePoint === APOSTROPHE || codePoint === LEFT_PARENTHESIS || isNonPrintableCodePoint(codePoint)) {
-              this.consumeBadUrlRemnants();
-              return BAD_URL_TOKEN;
-            } else if (codePoint === REVERSE_SOLIDUS) {
-              if (isValidEscape(codePoint, this.peekCodePoint(0))) {
-                value.push(this.consumeEscapedCodePoint());
-              } else {
-                this.consumeBadUrlRemnants();
-                return BAD_URL_TOKEN;
-              }
-            } else {
-              value.push(codePoint);
-            }
-          }
-        };
-        Tokenizer2.prototype.consumeWhiteSpace = function() {
-          while (isWhiteSpace(this.peekCodePoint(0))) {
-            this.consumeCodePoint();
-          }
-        };
-        Tokenizer2.prototype.consumeBadUrlRemnants = function() {
-          while (true) {
-            var codePoint = this.consumeCodePoint();
-            if (codePoint === RIGHT_PARENTHESIS || codePoint === EOF) {
-              return;
-            }
-            if (isValidEscape(codePoint, this.peekCodePoint(0))) {
-              this.consumeEscapedCodePoint();
-            }
-          }
-        };
-        Tokenizer2.prototype.consumeStringSlice = function(count) {
-          var SLICE_STACK_SIZE = 5e4;
-          var value = "";
-          while (count > 0) {
-            var amount = Math.min(SLICE_STACK_SIZE, count);
-            value += fromCodePoint$1.apply(void 0, this._value.splice(0, amount));
-            count -= amount;
-          }
-          this._value.shift();
-          return value;
-        };
-        Tokenizer2.prototype.consumeStringToken = function(endingCodePoint) {
-          var value = "";
-          var i = 0;
-          do {
-            var codePoint = this._value[i];
-            if (codePoint === EOF || codePoint === void 0 || codePoint === endingCodePoint) {
-              value += this.consumeStringSlice(i);
-              return { type: 0, value };
-            }
-            if (codePoint === LINE_FEED) {
-              this._value.splice(0, i);
-              return BAD_STRING_TOKEN;
-            }
-            if (codePoint === REVERSE_SOLIDUS) {
-              var next = this._value[i + 1];
-              if (next !== EOF && next !== void 0) {
-                if (next === LINE_FEED) {
-                  value += this.consumeStringSlice(i);
-                  i = -1;
-                  this._value.shift();
-                } else if (isValidEscape(codePoint, next)) {
-                  value += this.consumeStringSlice(i);
-                  value += fromCodePoint$1(this.consumeEscapedCodePoint());
-                  i = -1;
-                }
-              }
-            }
-            i++;
-          } while (true);
-        };
-        Tokenizer2.prototype.consumeNumber = function() {
-          var repr = [];
-          var type = FLAG_INTEGER;
-          var c1 = this.peekCodePoint(0);
-          if (c1 === PLUS_SIGN || c1 === HYPHEN_MINUS) {
-            repr.push(this.consumeCodePoint());
-          }
-          while (isDigit(this.peekCodePoint(0))) {
-            repr.push(this.consumeCodePoint());
-          }
-          c1 = this.peekCodePoint(0);
-          var c2 = this.peekCodePoint(1);
-          if (c1 === FULL_STOP && isDigit(c2)) {
-            repr.push(this.consumeCodePoint(), this.consumeCodePoint());
-            type = FLAG_NUMBER;
-            while (isDigit(this.peekCodePoint(0))) {
-              repr.push(this.consumeCodePoint());
-            }
-          }
-          c1 = this.peekCodePoint(0);
-          c2 = this.peekCodePoint(1);
-          var c3 = this.peekCodePoint(2);
-          if ((c1 === E || c1 === e) && ((c2 === PLUS_SIGN || c2 === HYPHEN_MINUS) && isDigit(c3) || isDigit(c2))) {
-            repr.push(this.consumeCodePoint(), this.consumeCodePoint());
-            type = FLAG_NUMBER;
-            while (isDigit(this.peekCodePoint(0))) {
-              repr.push(this.consumeCodePoint());
-            }
-          }
-          return [stringToNumber(repr), type];
-        };
-        Tokenizer2.prototype.consumeNumericToken = function() {
-          var _a = this.consumeNumber(), number = _a[0], flags = _a[1];
-          var c1 = this.peekCodePoint(0);
-          var c2 = this.peekCodePoint(1);
-          var c3 = this.peekCodePoint(2);
-          if (isIdentifierStart(c1, c2, c3)) {
-            var unit = this.consumeName();
-            return { type: 15, number, flags, unit };
-          }
-          if (c1 === PERCENTAGE_SIGN) {
-            this.consumeCodePoint();
-            return { type: 16, number, flags };
-          }
-          return { type: 17, number, flags };
-        };
-        Tokenizer2.prototype.consumeEscapedCodePoint = function() {
-          var codePoint = this.consumeCodePoint();
-          if (isHex(codePoint)) {
-            var hex = fromCodePoint$1(codePoint);
-            while (isHex(this.peekCodePoint(0)) && hex.length < 6) {
-              hex += fromCodePoint$1(this.consumeCodePoint());
-            }
-            if (isWhiteSpace(this.peekCodePoint(0))) {
-              this.consumeCodePoint();
-            }
-            var hexCodePoint = parseInt(hex, 16);
-            if (hexCodePoint === 0 || isSurrogateCodePoint(hexCodePoint) || hexCodePoint > 1114111) {
-              return REPLACEMENT_CHARACTER;
-            }
-            return hexCodePoint;
-          }
-          if (codePoint === EOF) {
-            return REPLACEMENT_CHARACTER;
-          }
-          return codePoint;
-        };
-        Tokenizer2.prototype.consumeName = function() {
-          var result = "";
-          while (true) {
-            var codePoint = this.consumeCodePoint();
-            if (isNameCodePoint(codePoint)) {
-              result += fromCodePoint$1(codePoint);
-            } else if (isValidEscape(codePoint, this.peekCodePoint(0))) {
-              result += fromCodePoint$1(this.consumeEscapedCodePoint());
-            } else {
-              this.reconsumeCodePoint(codePoint);
-              return result;
-            }
-          }
-        };
-        return Tokenizer2;
-      })();
-      Parser = /** @class */
-      (function() {
-        function Parser2(tokens) {
-          this._tokens = tokens;
-        }
-        Parser2.create = function(value) {
-          var tokenizer = new Tokenizer();
-          tokenizer.write(value);
-          return new Parser2(tokenizer.read());
-        };
-        Parser2.parseValue = function(value) {
-          return Parser2.create(value).parseComponentValue();
-        };
-        Parser2.parseValues = function(value) {
-          return Parser2.create(value).parseComponentValues();
-        };
-        Parser2.prototype.parseComponentValue = function() {
-          var token = this.consumeToken();
-          while (token.type === 31) {
-            token = this.consumeToken();
-          }
-          if (token.type === 32) {
-            throw new SyntaxError("Error parsing CSS component value, unexpected EOF");
-          }
-          this.reconsumeToken(token);
-          var value = this.consumeComponentValue();
-          do {
-            token = this.consumeToken();
-          } while (token.type === 31);
-          if (token.type === 32) {
-            return value;
-          }
-          throw new SyntaxError("Error parsing CSS component value, multiple values found when expecting only one");
-        };
-        Parser2.prototype.parseComponentValues = function() {
-          var values = [];
-          while (true) {
-            var value = this.consumeComponentValue();
-            if (value.type === 32) {
-              return values;
-            }
-            values.push(value);
-            values.push();
-          }
-        };
-        Parser2.prototype.consumeComponentValue = function() {
-          var token = this.consumeToken();
-          switch (token.type) {
-            case 11:
-            case 28:
-            case 2:
-              return this.consumeSimpleBlock(token.type);
-            case 19:
-              return this.consumeFunction(token);
-          }
-          return token;
-        };
-        Parser2.prototype.consumeSimpleBlock = function(type) {
-          var block = { type, values: [] };
-          var token = this.consumeToken();
-          while (true) {
-            if (token.type === 32 || isEndingTokenFor(token, type)) {
-              return block;
-            }
-            this.reconsumeToken(token);
-            block.values.push(this.consumeComponentValue());
-            token = this.consumeToken();
-          }
-        };
-        Parser2.prototype.consumeFunction = function(functionToken) {
-          var cssFunction = {
-            name: functionToken.value,
-            values: [],
-            type: 18
-            /* FUNCTION */
-          };
-          while (true) {
-            var token = this.consumeToken();
-            if (token.type === 32 || token.type === 3) {
-              return cssFunction;
-            }
-            this.reconsumeToken(token);
-            cssFunction.values.push(this.consumeComponentValue());
-          }
-        };
-        Parser2.prototype.consumeToken = function() {
-          var token = this._tokens.shift();
-          return typeof token === "undefined" ? EOF_TOKEN : token;
-        };
-        Parser2.prototype.reconsumeToken = function(token) {
-          this._tokens.unshift(token);
-        };
-        return Parser2;
-      })();
-      isDimensionToken = function(token) {
-        return token.type === 15;
-      };
-      isNumberToken = function(token) {
-        return token.type === 17;
-      };
-      isIdentToken = function(token) {
-        return token.type === 20;
-      };
-      isStringToken = function(token) {
-        return token.type === 0;
-      };
-      isIdentWithValue = function(token, value) {
-        return isIdentToken(token) && token.value === value;
-      };
-      nonWhiteSpace = function(token) {
-        return token.type !== 31;
-      };
-      nonFunctionArgSeparator = function(token) {
-        return token.type !== 31 && token.type !== 4;
-      };
-      parseFunctionArgs = function(tokens) {
-        var args = [];
-        var arg = [];
-        tokens.forEach(function(token) {
-          if (token.type === 4) {
-            if (arg.length === 0) {
-              throw new Error("Error parsing function args, zero tokens for arg");
-            }
-            args.push(arg);
-            arg = [];
-            return;
-          }
-          if (token.type !== 31) {
-            arg.push(token);
-          }
-        });
-        if (arg.length) {
-          args.push(arg);
-        }
-        return args;
-      };
-      isEndingTokenFor = function(token, type) {
-        if (type === 11 && token.type === 12) {
-          return true;
-        }
-        if (type === 28 && token.type === 29) {
-          return true;
-        }
-        return type === 2 && token.type === 3;
-      };
-      isLength = function(token) {
-        return token.type === 17 || token.type === 15;
-      };
-      isLengthPercentage = function(token) {
-        return token.type === 16 || isLength(token);
-      };
-      parseLengthPercentageTuple = function(tokens) {
-        return tokens.length > 1 ? [tokens[0], tokens[1]] : [tokens[0]];
-      };
-      ZERO_LENGTH = {
-        type: 17,
-        number: 0,
-        flags: FLAG_INTEGER
-      };
-      FIFTY_PERCENT = {
-        type: 16,
-        number: 50,
-        flags: FLAG_INTEGER
-      };
-      HUNDRED_PERCENT = {
-        type: 16,
-        number: 100,
-        flags: FLAG_INTEGER
-      };
-      getAbsoluteValueForTuple = function(tuple, width, height) {
-        var x = tuple[0], y = tuple[1];
-        return [getAbsoluteValue(x, width), getAbsoluteValue(typeof y !== "undefined" ? y : x, height)];
-      };
-      getAbsoluteValue = function(token, parent) {
-        if (token.type === 16) {
-          return token.number / 100 * parent;
-        }
-        if (isDimensionToken(token)) {
-          switch (token.unit) {
-            case "rem":
-            case "em":
-              return 16 * token.number;
-            // TODO use correct font-size
-            case "px":
-            default:
-              return token.number;
-          }
-        }
-        return token.number;
-      };
-      DEG = "deg";
-      GRAD = "grad";
-      RAD = "rad";
-      TURN = "turn";
-      angle = {
-        name: "angle",
-        parse: function(_context2, value) {
-          if (value.type === 15) {
-            switch (value.unit) {
-              case DEG:
-                return Math.PI * value.number / 180;
-              case GRAD:
-                return Math.PI / 200 * value.number;
-              case RAD:
-                return value.number;
-              case TURN:
-                return Math.PI * 2 * value.number;
-            }
-          }
-          throw new Error("Unsupported angle type");
-        }
-      };
-      isAngle = function(value) {
-        if (value.type === 15) {
-          if (value.unit === DEG || value.unit === GRAD || value.unit === RAD || value.unit === TURN) {
-            return true;
-          }
-        }
-        return false;
-      };
-      parseNamedSide = function(tokens) {
-        var sideOrCorner = tokens.filter(isIdentToken).map(function(ident) {
-          return ident.value;
-        }).join(" ");
-        switch (sideOrCorner) {
-          case "to bottom right":
-          case "to right bottom":
-          case "left top":
-          case "top left":
-            return [ZERO_LENGTH, ZERO_LENGTH];
-          case "to top":
-          case "bottom":
-            return deg(0);
-          case "to bottom left":
-          case "to left bottom":
-          case "right top":
-          case "top right":
-            return [ZERO_LENGTH, HUNDRED_PERCENT];
-          case "to right":
-          case "left":
-            return deg(90);
-          case "to top left":
-          case "to left top":
-          case "right bottom":
-          case "bottom right":
-            return [HUNDRED_PERCENT, HUNDRED_PERCENT];
-          case "to bottom":
-          case "top":
-            return deg(180);
-          case "to top right":
-          case "to right top":
-          case "left bottom":
-          case "bottom left":
-            return [HUNDRED_PERCENT, ZERO_LENGTH];
-          case "to left":
-          case "right":
-            return deg(270);
-        }
-        return 0;
-      };
-      deg = function(deg2) {
-        return Math.PI * deg2 / 180;
-      };
-      color$1 = {
-        name: "color",
-        parse: function(context2, value) {
-          if (value.type === 18) {
-            var colorFunction = SUPPORTED_COLOR_FUNCTIONS[value.name];
-            if (typeof colorFunction === "undefined") {
-              throw new Error('Attempting to parse an unsupported color function "' + value.name + '"');
-            }
-            return colorFunction(context2, value.values);
-          }
-          if (value.type === 5) {
-            if (value.value.length === 3) {
-              var r = value.value.substring(0, 1);
-              var g = value.value.substring(1, 2);
-              var b = value.value.substring(2, 3);
-              return pack(parseInt(r + r, 16), parseInt(g + g, 16), parseInt(b + b, 16), 1);
-            }
-            if (value.value.length === 4) {
-              var r = value.value.substring(0, 1);
-              var g = value.value.substring(1, 2);
-              var b = value.value.substring(2, 3);
-              var a2 = value.value.substring(3, 4);
-              return pack(parseInt(r + r, 16), parseInt(g + g, 16), parseInt(b + b, 16), parseInt(a2 + a2, 16) / 255);
-            }
-            if (value.value.length === 6) {
-              var r = value.value.substring(0, 2);
-              var g = value.value.substring(2, 4);
-              var b = value.value.substring(4, 6);
-              return pack(parseInt(r, 16), parseInt(g, 16), parseInt(b, 16), 1);
-            }
-            if (value.value.length === 8) {
-              var r = value.value.substring(0, 2);
-              var g = value.value.substring(2, 4);
-              var b = value.value.substring(4, 6);
-              var a2 = value.value.substring(6, 8);
-              return pack(parseInt(r, 16), parseInt(g, 16), parseInt(b, 16), parseInt(a2, 16) / 255);
-            }
-          }
-          if (value.type === 20) {
-            var namedColor = COLORS[value.value.toUpperCase()];
-            if (typeof namedColor !== "undefined") {
-              return namedColor;
-            }
-          }
-          return COLORS.TRANSPARENT;
-        }
-      };
-      isTransparent = function(color2) {
-        return (255 & color2) === 0;
-      };
-      asString = function(color2) {
-        var alpha = 255 & color2;
-        var blue = 255 & color2 >> 8;
-        var green = 255 & color2 >> 16;
-        var red = 255 & color2 >> 24;
-        return alpha < 255 ? "rgba(" + red + "," + green + "," + blue + "," + alpha / 255 + ")" : "rgb(" + red + "," + green + "," + blue + ")";
-      };
-      pack = function(r, g, b, a2) {
-        return (r << 24 | g << 16 | b << 8 | Math.round(a2 * 255) << 0) >>> 0;
-      };
-      getTokenColorValue = function(token, i) {
-        if (token.type === 17) {
-          return token.number;
-        }
-        if (token.type === 16) {
-          var max = i === 3 ? 1 : 255;
-          return i === 3 ? token.number / 100 * max : Math.round(token.number / 100 * max);
-        }
-        return 0;
-      };
-      rgb = function(_context2, args) {
-        var tokens = args.filter(nonFunctionArgSeparator);
-        if (tokens.length === 3) {
-          var _a = tokens.map(getTokenColorValue), r = _a[0], g = _a[1], b = _a[2];
-          return pack(r, g, b, 1);
-        }
-        if (tokens.length === 4) {
-          var _b = tokens.map(getTokenColorValue), r = _b[0], g = _b[1], b = _b[2], a2 = _b[3];
-          return pack(r, g, b, a2);
-        }
-        return 0;
-      };
-      hsl = function(context2, args) {
-        var tokens = args.filter(nonFunctionArgSeparator);
-        var hue = tokens[0], saturation = tokens[1], lightness = tokens[2], alpha = tokens[3];
-        var h = (hue.type === 17 ? deg(hue.number) : angle.parse(context2, hue)) / (Math.PI * 2);
-        var s = isLengthPercentage(saturation) ? saturation.number / 100 : 0;
-        var l = isLengthPercentage(lightness) ? lightness.number / 100 : 0;
-        var a2 = typeof alpha !== "undefined" && isLengthPercentage(alpha) ? getAbsoluteValue(alpha, 1) : 1;
-        if (s === 0) {
-          return pack(l * 255, l * 255, l * 255, 1);
-        }
-        var t2 = l <= 0.5 ? l * (s + 1) : l + s - l * s;
-        var t1 = l * 2 - t2;
-        var r = hue2rgb(t1, t2, h + 1 / 3);
-        var g = hue2rgb(t1, t2, h);
-        var b = hue2rgb(t1, t2, h - 1 / 3);
-        return pack(r * 255, g * 255, b * 255, a2);
-      };
-      SUPPORTED_COLOR_FUNCTIONS = {
-        hsl,
-        hsla: hsl,
-        rgb,
-        rgba: rgb
-      };
-      parseColor = function(context2, value) {
-        return color$1.parse(context2, Parser.create(value).parseComponentValue());
-      };
-      COLORS = {
-        ALICEBLUE: 4042850303,
-        ANTIQUEWHITE: 4209760255,
-        AQUA: 16777215,
-        AQUAMARINE: 2147472639,
-        AZURE: 4043309055,
-        BEIGE: 4126530815,
-        BISQUE: 4293182719,
-        BLACK: 255,
-        BLANCHEDALMOND: 4293643775,
-        BLUE: 65535,
-        BLUEVIOLET: 2318131967,
-        BROWN: 2771004159,
-        BURLYWOOD: 3736635391,
-        CADETBLUE: 1604231423,
-        CHARTREUSE: 2147418367,
-        CHOCOLATE: 3530104575,
-        CORAL: 4286533887,
-        CORNFLOWERBLUE: 1687547391,
-        CORNSILK: 4294499583,
-        CRIMSON: 3692313855,
-        CYAN: 16777215,
-        DARKBLUE: 35839,
-        DARKCYAN: 9145343,
-        DARKGOLDENROD: 3095837695,
-        DARKGRAY: 2846468607,
-        DARKGREEN: 6553855,
-        DARKGREY: 2846468607,
-        DARKKHAKI: 3182914559,
-        DARKMAGENTA: 2332068863,
-        DARKOLIVEGREEN: 1433087999,
-        DARKORANGE: 4287365375,
-        DARKORCHID: 2570243327,
-        DARKRED: 2332033279,
-        DARKSALMON: 3918953215,
-        DARKSEAGREEN: 2411499519,
-        DARKSLATEBLUE: 1211993087,
-        DARKSLATEGRAY: 793726975,
-        DARKSLATEGREY: 793726975,
-        DARKTURQUOISE: 13554175,
-        DARKVIOLET: 2483082239,
-        DEEPPINK: 4279538687,
-        DEEPSKYBLUE: 12582911,
-        DIMGRAY: 1768516095,
-        DIMGREY: 1768516095,
-        DODGERBLUE: 512819199,
-        FIREBRICK: 2988581631,
-        FLORALWHITE: 4294635775,
-        FORESTGREEN: 579543807,
-        FUCHSIA: 4278255615,
-        GAINSBORO: 3705462015,
-        GHOSTWHITE: 4177068031,
-        GOLD: 4292280575,
-        GOLDENROD: 3668254975,
-        GRAY: 2155905279,
-        GREEN: 8388863,
-        GREENYELLOW: 2919182335,
-        GREY: 2155905279,
-        HONEYDEW: 4043305215,
-        HOTPINK: 4285117695,
-        INDIANRED: 3445382399,
-        INDIGO: 1258324735,
-        IVORY: 4294963455,
-        KHAKI: 4041641215,
-        LAVENDER: 3873897215,
-        LAVENDERBLUSH: 4293981695,
-        LAWNGREEN: 2096890111,
-        LEMONCHIFFON: 4294626815,
-        LIGHTBLUE: 2916673279,
-        LIGHTCORAL: 4034953471,
-        LIGHTCYAN: 3774873599,
-        LIGHTGOLDENRODYELLOW: 4210742015,
-        LIGHTGRAY: 3553874943,
-        LIGHTGREEN: 2431553791,
-        LIGHTGREY: 3553874943,
-        LIGHTPINK: 4290167295,
-        LIGHTSALMON: 4288707327,
-        LIGHTSEAGREEN: 548580095,
-        LIGHTSKYBLUE: 2278488831,
-        LIGHTSLATEGRAY: 2005441023,
-        LIGHTSLATEGREY: 2005441023,
-        LIGHTSTEELBLUE: 2965692159,
-        LIGHTYELLOW: 4294959359,
-        LIME: 16711935,
-        LIMEGREEN: 852308735,
-        LINEN: 4210091775,
-        MAGENTA: 4278255615,
-        MAROON: 2147483903,
-        MEDIUMAQUAMARINE: 1724754687,
-        MEDIUMBLUE: 52735,
-        MEDIUMORCHID: 3126187007,
-        MEDIUMPURPLE: 2473647103,
-        MEDIUMSEAGREEN: 1018393087,
-        MEDIUMSLATEBLUE: 2070474495,
-        MEDIUMSPRINGGREEN: 16423679,
-        MEDIUMTURQUOISE: 1221709055,
-        MEDIUMVIOLETRED: 3340076543,
-        MIDNIGHTBLUE: 421097727,
-        MINTCREAM: 4127193855,
-        MISTYROSE: 4293190143,
-        MOCCASIN: 4293178879,
-        NAVAJOWHITE: 4292783615,
-        NAVY: 33023,
-        OLDLACE: 4260751103,
-        OLIVE: 2155872511,
-        OLIVEDRAB: 1804477439,
-        ORANGE: 4289003775,
-        ORANGERED: 4282712319,
-        ORCHID: 3664828159,
-        PALEGOLDENROD: 4008225535,
-        PALEGREEN: 2566625535,
-        PALETURQUOISE: 2951671551,
-        PALEVIOLETRED: 3681588223,
-        PAPAYAWHIP: 4293907967,
-        PEACHPUFF: 4292524543,
-        PERU: 3448061951,
-        PINK: 4290825215,
-        PLUM: 3718307327,
-        POWDERBLUE: 2967529215,
-        PURPLE: 2147516671,
-        REBECCAPURPLE: 1714657791,
-        RED: 4278190335,
-        ROSYBROWN: 3163525119,
-        ROYALBLUE: 1097458175,
-        SADDLEBROWN: 2336560127,
-        SALMON: 4202722047,
-        SANDYBROWN: 4104413439,
-        SEAGREEN: 780883967,
-        SEASHELL: 4294307583,
-        SIENNA: 2689740287,
-        SILVER: 3233857791,
-        SKYBLUE: 2278484991,
-        SLATEBLUE: 1784335871,
-        SLATEGRAY: 1887473919,
-        SLATEGREY: 1887473919,
-        SNOW: 4294638335,
-        SPRINGGREEN: 16744447,
-        STEELBLUE: 1182971135,
-        TAN: 3535047935,
-        TEAL: 8421631,
-        THISTLE: 3636451583,
-        TOMATO: 4284696575,
-        TRANSPARENT: 0,
-        TURQUOISE: 1088475391,
-        VIOLET: 4001558271,
-        WHEAT: 4125012991,
-        WHITE: 4294967295,
-        WHITESMOKE: 4126537215,
-        YELLOW: 4294902015,
-        YELLOWGREEN: 2597139199
-      };
-      backgroundClip = {
-        name: "background-clip",
-        initialValue: "border-box",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return tokens.map(function(token) {
-            if (isIdentToken(token)) {
-              switch (token.value) {
-                case "padding-box":
-                  return 1;
-                case "content-box":
-                  return 2;
-              }
-            }
-            return 0;
-          });
-        }
-      };
-      backgroundColor = {
-        name: "background-color",
-        initialValue: "transparent",
-        prefix: false,
-        type: 3,
-        format: "color"
-      };
-      parseColorStop = function(context2, args) {
-        var color2 = color$1.parse(context2, args[0]);
-        var stop = args[1];
-        return stop && isLengthPercentage(stop) ? { color: color2, stop } : { color: color2, stop: null };
-      };
-      processColorStops = function(stops, lineLength) {
-        var first = stops[0];
-        var last = stops[stops.length - 1];
-        if (first.stop === null) {
-          first.stop = ZERO_LENGTH;
-        }
-        if (last.stop === null) {
-          last.stop = HUNDRED_PERCENT;
-        }
-        var processStops = [];
-        var previous = 0;
-        for (var i = 0; i < stops.length; i++) {
-          var stop_1 = stops[i].stop;
-          if (stop_1 !== null) {
-            var absoluteValue = getAbsoluteValue(stop_1, lineLength);
-            if (absoluteValue > previous) {
-              processStops.push(absoluteValue);
-            } else {
-              processStops.push(previous);
-            }
-            previous = absoluteValue;
-          } else {
-            processStops.push(null);
-          }
-        }
-        var gapBegin = null;
-        for (var i = 0; i < processStops.length; i++) {
-          var stop_2 = processStops[i];
-          if (stop_2 === null) {
-            if (gapBegin === null) {
-              gapBegin = i;
-            }
-          } else if (gapBegin !== null) {
-            var gapLength = i - gapBegin;
-            var beforeGap = processStops[gapBegin - 1];
-            var gapValue = (stop_2 - beforeGap) / (gapLength + 1);
-            for (var g = 1; g <= gapLength; g++) {
-              processStops[gapBegin + g - 1] = gapValue * g;
-            }
-            gapBegin = null;
-          }
-        }
-        return stops.map(function(_a, i2) {
-          var color2 = _a.color;
-          return { color: color2, stop: Math.max(Math.min(1, processStops[i2] / lineLength), 0) };
-        });
-      };
-      getAngleFromCorner = function(corner, width, height) {
-        var centerX = width / 2;
-        var centerY = height / 2;
-        var x = getAbsoluteValue(corner[0], width) - centerX;
-        var y = centerY - getAbsoluteValue(corner[1], height);
-        return (Math.atan2(y, x) + Math.PI * 2) % (Math.PI * 2);
-      };
-      calculateGradientDirection = function(angle2, width, height) {
-        var radian = typeof angle2 === "number" ? angle2 : getAngleFromCorner(angle2, width, height);
-        var lineLength = Math.abs(width * Math.sin(radian)) + Math.abs(height * Math.cos(radian));
-        var halfWidth = width / 2;
-        var halfHeight = height / 2;
-        var halfLineLength = lineLength / 2;
-        var yDiff = Math.sin(radian - Math.PI / 2) * halfLineLength;
-        var xDiff = Math.cos(radian - Math.PI / 2) * halfLineLength;
-        return [lineLength, halfWidth - xDiff, halfWidth + xDiff, halfHeight - yDiff, halfHeight + yDiff];
-      };
-      distance = function(a2, b) {
-        return Math.sqrt(a2 * a2 + b * b);
-      };
-      findCorner = function(width, height, x, y, closest) {
-        var corners = [
-          [0, 0],
-          [0, height],
-          [width, 0],
-          [width, height]
-        ];
-        return corners.reduce(function(stat, corner) {
-          var cx = corner[0], cy = corner[1];
-          var d = distance(x - cx, y - cy);
-          if (closest ? d < stat.optimumDistance : d > stat.optimumDistance) {
-            return {
-              optimumCorner: corner,
-              optimumDistance: d
-            };
-          }
-          return stat;
-        }, {
-          optimumDistance: closest ? Infinity : -Infinity,
-          optimumCorner: null
-        }).optimumCorner;
-      };
-      calculateRadius = function(gradient, x, y, width, height) {
-        var rx = 0;
-        var ry = 0;
-        switch (gradient.size) {
-          case 0:
-            if (gradient.shape === 0) {
-              rx = ry = Math.min(Math.abs(x), Math.abs(x - width), Math.abs(y), Math.abs(y - height));
-            } else if (gradient.shape === 1) {
-              rx = Math.min(Math.abs(x), Math.abs(x - width));
-              ry = Math.min(Math.abs(y), Math.abs(y - height));
-            }
-            break;
-          case 2:
-            if (gradient.shape === 0) {
-              rx = ry = Math.min(distance(x, y), distance(x, y - height), distance(x - width, y), distance(x - width, y - height));
-            } else if (gradient.shape === 1) {
-              var c = Math.min(Math.abs(y), Math.abs(y - height)) / Math.min(Math.abs(x), Math.abs(x - width));
-              var _a = findCorner(width, height, x, y, true), cx = _a[0], cy = _a[1];
-              rx = distance(cx - x, (cy - y) / c);
-              ry = c * rx;
-            }
-            break;
-          case 1:
-            if (gradient.shape === 0) {
-              rx = ry = Math.max(Math.abs(x), Math.abs(x - width), Math.abs(y), Math.abs(y - height));
-            } else if (gradient.shape === 1) {
-              rx = Math.max(Math.abs(x), Math.abs(x - width));
-              ry = Math.max(Math.abs(y), Math.abs(y - height));
-            }
-            break;
-          case 3:
-            if (gradient.shape === 0) {
-              rx = ry = Math.max(distance(x, y), distance(x, y - height), distance(x - width, y), distance(x - width, y - height));
-            } else if (gradient.shape === 1) {
-              var c = Math.max(Math.abs(y), Math.abs(y - height)) / Math.max(Math.abs(x), Math.abs(x - width));
-              var _b = findCorner(width, height, x, y, false), cx = _b[0], cy = _b[1];
-              rx = distance(cx - x, (cy - y) / c);
-              ry = c * rx;
-            }
-            break;
-        }
-        if (Array.isArray(gradient.size)) {
-          rx = getAbsoluteValue(gradient.size[0], width);
-          ry = gradient.size.length === 2 ? getAbsoluteValue(gradient.size[1], height) : rx;
-        }
-        return [rx, ry];
-      };
-      linearGradient = function(context2, tokens) {
-        var angle$1 = deg(180);
-        var stops = [];
-        parseFunctionArgs(tokens).forEach(function(arg, i) {
-          if (i === 0) {
-            var firstToken = arg[0];
-            if (firstToken.type === 20 && firstToken.value === "to") {
-              angle$1 = parseNamedSide(arg);
-              return;
-            } else if (isAngle(firstToken)) {
-              angle$1 = angle.parse(context2, firstToken);
-              return;
-            }
-          }
-          var colorStop = parseColorStop(context2, arg);
-          stops.push(colorStop);
-        });
-        return {
-          angle: angle$1,
-          stops,
-          type: 1
-          /* LINEAR_GRADIENT */
-        };
-      };
-      prefixLinearGradient = function(context2, tokens) {
-        var angle$1 = deg(180);
-        var stops = [];
-        parseFunctionArgs(tokens).forEach(function(arg, i) {
-          if (i === 0) {
-            var firstToken = arg[0];
-            if (firstToken.type === 20 && ["top", "left", "right", "bottom"].indexOf(firstToken.value) !== -1) {
-              angle$1 = parseNamedSide(arg);
-              return;
-            } else if (isAngle(firstToken)) {
-              angle$1 = (angle.parse(context2, firstToken) + deg(270)) % deg(360);
-              return;
-            }
-          }
-          var colorStop = parseColorStop(context2, arg);
-          stops.push(colorStop);
-        });
-        return {
-          angle: angle$1,
-          stops,
-          type: 1
-          /* LINEAR_GRADIENT */
-        };
-      };
-      webkitGradient = function(context2, tokens) {
-        var angle2 = deg(180);
-        var stops = [];
-        var type = 1;
-        var shape = 0;
-        var size = 3;
-        var position2 = [];
-        parseFunctionArgs(tokens).forEach(function(arg, i) {
-          var firstToken = arg[0];
-          if (i === 0) {
-            if (isIdentToken(firstToken) && firstToken.value === "linear") {
-              type = 1;
-              return;
-            } else if (isIdentToken(firstToken) && firstToken.value === "radial") {
-              type = 2;
-              return;
-            }
-          }
-          if (firstToken.type === 18) {
-            if (firstToken.name === "from") {
-              var color2 = color$1.parse(context2, firstToken.values[0]);
-              stops.push({ stop: ZERO_LENGTH, color: color2 });
-            } else if (firstToken.name === "to") {
-              var color2 = color$1.parse(context2, firstToken.values[0]);
-              stops.push({ stop: HUNDRED_PERCENT, color: color2 });
-            } else if (firstToken.name === "color-stop") {
-              var values = firstToken.values.filter(nonFunctionArgSeparator);
-              if (values.length === 2) {
-                var color2 = color$1.parse(context2, values[1]);
-                var stop_1 = values[0];
-                if (isNumberToken(stop_1)) {
-                  stops.push({
-                    stop: { type: 16, number: stop_1.number * 100, flags: stop_1.flags },
-                    color: color2
-                  });
-                }
-              }
-            }
-          }
-        });
-        return type === 1 ? {
-          angle: (angle2 + deg(180)) % deg(360),
-          stops,
-          type
-        } : { size, shape, stops, position: position2, type };
-      };
-      CLOSEST_SIDE = "closest-side";
-      FARTHEST_SIDE = "farthest-side";
-      CLOSEST_CORNER = "closest-corner";
-      FARTHEST_CORNER = "farthest-corner";
-      CIRCLE = "circle";
-      ELLIPSE = "ellipse";
-      COVER = "cover";
-      CONTAIN = "contain";
-      radialGradient = function(context2, tokens) {
-        var shape = 0;
-        var size = 3;
-        var stops = [];
-        var position2 = [];
-        parseFunctionArgs(tokens).forEach(function(arg, i) {
-          var isColorStop = true;
-          if (i === 0) {
-            var isAtPosition_1 = false;
-            isColorStop = arg.reduce(function(acc, token) {
-              if (isAtPosition_1) {
-                if (isIdentToken(token)) {
-                  switch (token.value) {
-                    case "center":
-                      position2.push(FIFTY_PERCENT);
-                      return acc;
-                    case "top":
-                    case "left":
-                      position2.push(ZERO_LENGTH);
-                      return acc;
-                    case "right":
-                    case "bottom":
-                      position2.push(HUNDRED_PERCENT);
-                      return acc;
-                  }
-                } else if (isLengthPercentage(token) || isLength(token)) {
-                  position2.push(token);
-                }
-              } else if (isIdentToken(token)) {
-                switch (token.value) {
-                  case CIRCLE:
-                    shape = 0;
-                    return false;
-                  case ELLIPSE:
-                    shape = 1;
-                    return false;
-                  case "at":
-                    isAtPosition_1 = true;
-                    return false;
-                  case CLOSEST_SIDE:
-                    size = 0;
-                    return false;
-                  case COVER:
-                  case FARTHEST_SIDE:
-                    size = 1;
-                    return false;
-                  case CONTAIN:
-                  case CLOSEST_CORNER:
-                    size = 2;
-                    return false;
-                  case FARTHEST_CORNER:
-                    size = 3;
-                    return false;
-                }
-              } else if (isLength(token) || isLengthPercentage(token)) {
-                if (!Array.isArray(size)) {
-                  size = [];
-                }
-                size.push(token);
-                return false;
-              }
-              return acc;
-            }, isColorStop);
-          }
-          if (isColorStop) {
-            var colorStop = parseColorStop(context2, arg);
-            stops.push(colorStop);
-          }
-        });
-        return {
-          size,
-          shape,
-          stops,
-          position: position2,
-          type: 2
-          /* RADIAL_GRADIENT */
-        };
-      };
-      prefixRadialGradient = function(context2, tokens) {
-        var shape = 0;
-        var size = 3;
-        var stops = [];
-        var position2 = [];
-        parseFunctionArgs(tokens).forEach(function(arg, i) {
-          var isColorStop = true;
-          if (i === 0) {
-            isColorStop = arg.reduce(function(acc, token) {
-              if (isIdentToken(token)) {
-                switch (token.value) {
-                  case "center":
-                    position2.push(FIFTY_PERCENT);
-                    return false;
-                  case "top":
-                  case "left":
-                    position2.push(ZERO_LENGTH);
-                    return false;
-                  case "right":
-                  case "bottom":
-                    position2.push(HUNDRED_PERCENT);
-                    return false;
-                }
-              } else if (isLengthPercentage(token) || isLength(token)) {
-                position2.push(token);
-                return false;
-              }
-              return acc;
-            }, isColorStop);
-          } else if (i === 1) {
-            isColorStop = arg.reduce(function(acc, token) {
-              if (isIdentToken(token)) {
-                switch (token.value) {
-                  case CIRCLE:
-                    shape = 0;
-                    return false;
-                  case ELLIPSE:
-                    shape = 1;
-                    return false;
-                  case CONTAIN:
-                  case CLOSEST_SIDE:
-                    size = 0;
-                    return false;
-                  case FARTHEST_SIDE:
-                    size = 1;
-                    return false;
-                  case CLOSEST_CORNER:
-                    size = 2;
-                    return false;
-                  case COVER:
-                  case FARTHEST_CORNER:
-                    size = 3;
-                    return false;
-                }
-              } else if (isLength(token) || isLengthPercentage(token)) {
-                if (!Array.isArray(size)) {
-                  size = [];
-                }
-                size.push(token);
-                return false;
-              }
-              return acc;
-            }, isColorStop);
-          }
-          if (isColorStop) {
-            var colorStop = parseColorStop(context2, arg);
-            stops.push(colorStop);
-          }
-        });
-        return {
-          size,
-          shape,
-          stops,
-          position: position2,
-          type: 2
-          /* RADIAL_GRADIENT */
-        };
-      };
-      isLinearGradient = function(background) {
-        return background.type === 1;
-      };
-      isRadialGradient = function(background) {
-        return background.type === 2;
-      };
-      image = {
-        name: "image",
-        parse: function(context2, value) {
-          if (value.type === 22) {
-            var image_1 = {
-              url: value.value,
-              type: 0
-              /* URL */
-            };
-            context2.cache.addImage(value.value);
-            return image_1;
-          }
-          if (value.type === 18) {
-            var imageFunction = SUPPORTED_IMAGE_FUNCTIONS[value.name];
-            if (typeof imageFunction === "undefined") {
-              throw new Error('Attempting to parse an unsupported image function "' + value.name + '"');
-            }
-            return imageFunction(context2, value.values);
-          }
-          throw new Error("Unsupported image type " + value.type);
-        }
-      };
-      SUPPORTED_IMAGE_FUNCTIONS = {
-        "linear-gradient": linearGradient,
-        "-moz-linear-gradient": prefixLinearGradient,
-        "-ms-linear-gradient": prefixLinearGradient,
-        "-o-linear-gradient": prefixLinearGradient,
-        "-webkit-linear-gradient": prefixLinearGradient,
-        "radial-gradient": radialGradient,
-        "-moz-radial-gradient": prefixRadialGradient,
-        "-ms-radial-gradient": prefixRadialGradient,
-        "-o-radial-gradient": prefixRadialGradient,
-        "-webkit-radial-gradient": prefixRadialGradient,
-        "-webkit-gradient": webkitGradient
-      };
-      backgroundImage = {
-        name: "background-image",
-        initialValue: "none",
-        type: 1,
-        prefix: false,
-        parse: function(context2, tokens) {
-          if (tokens.length === 0) {
-            return [];
-          }
-          var first = tokens[0];
-          if (first.type === 20 && first.value === "none") {
-            return [];
-          }
-          return tokens.filter(function(value) {
-            return nonFunctionArgSeparator(value) && isSupportedImage(value);
-          }).map(function(value) {
-            return image.parse(context2, value);
-          });
-        }
-      };
-      backgroundOrigin = {
-        name: "background-origin",
-        initialValue: "border-box",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return tokens.map(function(token) {
-            if (isIdentToken(token)) {
-              switch (token.value) {
-                case "padding-box":
-                  return 1;
-                case "content-box":
-                  return 2;
-              }
-            }
-            return 0;
-          });
-        }
-      };
-      backgroundPosition = {
-        name: "background-position",
-        initialValue: "0% 0%",
-        type: 1,
-        prefix: false,
-        parse: function(_context2, tokens) {
-          return parseFunctionArgs(tokens).map(function(values) {
-            return values.filter(isLengthPercentage);
-          }).map(parseLengthPercentageTuple);
-        }
-      };
-      backgroundRepeat = {
-        name: "background-repeat",
-        initialValue: "repeat",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return parseFunctionArgs(tokens).map(function(values) {
-            return values.filter(isIdentToken).map(function(token) {
-              return token.value;
-            }).join(" ");
-          }).map(parseBackgroundRepeat);
-        }
-      };
-      parseBackgroundRepeat = function(value) {
-        switch (value) {
-          case "no-repeat":
-            return 1;
-          case "repeat-x":
-          case "repeat no-repeat":
-            return 2;
-          case "repeat-y":
-          case "no-repeat repeat":
-            return 3;
-          case "repeat":
-          default:
-            return 0;
-        }
-      };
-      (function(BACKGROUND_SIZE2) {
-        BACKGROUND_SIZE2["AUTO"] = "auto";
-        BACKGROUND_SIZE2["CONTAIN"] = "contain";
-        BACKGROUND_SIZE2["COVER"] = "cover";
-      })(BACKGROUND_SIZE || (BACKGROUND_SIZE = {}));
-      backgroundSize = {
-        name: "background-size",
-        initialValue: "0",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return parseFunctionArgs(tokens).map(function(values) {
-            return values.filter(isBackgroundSizeInfoToken);
-          });
-        }
-      };
-      isBackgroundSizeInfoToken = function(value) {
-        return isIdentToken(value) || isLengthPercentage(value);
-      };
-      borderColorForSide = function(side) {
-        return {
-          name: "border-" + side + "-color",
-          initialValue: "transparent",
-          prefix: false,
-          type: 3,
-          format: "color"
-        };
-      };
-      borderTopColor = borderColorForSide("top");
-      borderRightColor = borderColorForSide("right");
-      borderBottomColor = borderColorForSide("bottom");
-      borderLeftColor = borderColorForSide("left");
-      borderRadiusForSide = function(side) {
-        return {
-          name: "border-radius-" + side,
-          initialValue: "0 0",
-          prefix: false,
-          type: 1,
-          parse: function(_context2, tokens) {
-            return parseLengthPercentageTuple(tokens.filter(isLengthPercentage));
-          }
-        };
-      };
-      borderTopLeftRadius = borderRadiusForSide("top-left");
-      borderTopRightRadius = borderRadiusForSide("top-right");
-      borderBottomRightRadius = borderRadiusForSide("bottom-right");
-      borderBottomLeftRadius = borderRadiusForSide("bottom-left");
-      borderStyleForSide = function(side) {
-        return {
-          name: "border-" + side + "-style",
-          initialValue: "solid",
-          prefix: false,
-          type: 2,
-          parse: function(_context2, style) {
-            switch (style) {
-              case "none":
-                return 0;
-              case "dashed":
-                return 2;
-              case "dotted":
-                return 3;
-              case "double":
-                return 4;
-            }
-            return 1;
-          }
-        };
-      };
-      borderTopStyle = borderStyleForSide("top");
-      borderRightStyle = borderStyleForSide("right");
-      borderBottomStyle = borderStyleForSide("bottom");
-      borderLeftStyle = borderStyleForSide("left");
-      borderWidthForSide = function(side) {
-        return {
-          name: "border-" + side + "-width",
-          initialValue: "0",
-          type: 0,
-          prefix: false,
-          parse: function(_context2, token) {
-            if (isDimensionToken(token)) {
-              return token.number;
-            }
-            return 0;
-          }
-        };
-      };
-      borderTopWidth = borderWidthForSide("top");
-      borderRightWidth = borderWidthForSide("right");
-      borderBottomWidth = borderWidthForSide("bottom");
-      borderLeftWidth = borderWidthForSide("left");
-      color = {
-        name: "color",
-        initialValue: "transparent",
-        prefix: false,
-        type: 3,
-        format: "color"
-      };
-      direction = {
-        name: "direction",
-        initialValue: "ltr",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, direction2) {
-          switch (direction2) {
-            case "rtl":
-              return 1;
-            case "ltr":
-            default:
-              return 0;
-          }
-        }
-      };
-      display = {
-        name: "display",
-        initialValue: "inline-block",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return tokens.filter(isIdentToken).reduce(
-            function(bit, token) {
-              return bit | parseDisplayValue(token.value);
-            },
-            0
-            /* NONE */
-          );
-        }
-      };
-      parseDisplayValue = function(display2) {
-        switch (display2) {
-          case "block":
-          case "-webkit-box":
-            return 2;
-          case "inline":
-            return 4;
-          case "run-in":
-            return 8;
-          case "flow":
-            return 16;
-          case "flow-root":
-            return 32;
-          case "table":
-            return 64;
-          case "flex":
-          case "-webkit-flex":
-            return 128;
-          case "grid":
-          case "-ms-grid":
-            return 256;
-          case "ruby":
-            return 512;
-          case "subgrid":
-            return 1024;
-          case "list-item":
-            return 2048;
-          case "table-row-group":
-            return 4096;
-          case "table-header-group":
-            return 8192;
-          case "table-footer-group":
-            return 16384;
-          case "table-row":
-            return 32768;
-          case "table-cell":
-            return 65536;
-          case "table-column-group":
-            return 131072;
-          case "table-column":
-            return 262144;
-          case "table-caption":
-            return 524288;
-          case "ruby-base":
-            return 1048576;
-          case "ruby-text":
-            return 2097152;
-          case "ruby-base-container":
-            return 4194304;
-          case "ruby-text-container":
-            return 8388608;
-          case "contents":
-            return 16777216;
-          case "inline-block":
-            return 33554432;
-          case "inline-list-item":
-            return 67108864;
-          case "inline-table":
-            return 134217728;
-          case "inline-flex":
-            return 268435456;
-          case "inline-grid":
-            return 536870912;
-        }
-        return 0;
-      };
-      float = {
-        name: "float",
-        initialValue: "none",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, float2) {
-          switch (float2) {
-            case "left":
-              return 1;
-            case "right":
-              return 2;
-            case "inline-start":
-              return 3;
-            case "inline-end":
-              return 4;
-          }
-          return 0;
-        }
-      };
-      letterSpacing = {
-        name: "letter-spacing",
-        initialValue: "0",
-        prefix: false,
-        type: 0,
-        parse: function(_context2, token) {
-          if (token.type === 20 && token.value === "normal") {
-            return 0;
-          }
-          if (token.type === 17) {
-            return token.number;
-          }
-          if (token.type === 15) {
-            return token.number;
-          }
-          return 0;
-        }
-      };
-      (function(LINE_BREAK2) {
-        LINE_BREAK2["NORMAL"] = "normal";
-        LINE_BREAK2["STRICT"] = "strict";
-      })(LINE_BREAK || (LINE_BREAK = {}));
-      lineBreak = {
-        name: "line-break",
-        initialValue: "normal",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, lineBreak2) {
-          switch (lineBreak2) {
-            case "strict":
-              return LINE_BREAK.STRICT;
-            case "normal":
-            default:
-              return LINE_BREAK.NORMAL;
-          }
-        }
-      };
-      lineHeight = {
-        name: "line-height",
-        initialValue: "normal",
-        prefix: false,
-        type: 4
-        /* TOKEN_VALUE */
-      };
-      computeLineHeight = function(token, fontSize2) {
-        if (isIdentToken(token) && token.value === "normal") {
-          return 1.2 * fontSize2;
-        } else if (token.type === 17) {
-          return fontSize2 * token.number;
-        } else if (isLengthPercentage(token)) {
-          return getAbsoluteValue(token, fontSize2);
-        }
-        return fontSize2;
-      };
-      listStyleImage = {
-        name: "list-style-image",
-        initialValue: "none",
-        type: 0,
-        prefix: false,
-        parse: function(context2, token) {
-          if (token.type === 20 && token.value === "none") {
-            return null;
-          }
-          return image.parse(context2, token);
-        }
-      };
-      listStylePosition = {
-        name: "list-style-position",
-        initialValue: "outside",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, position2) {
-          switch (position2) {
-            case "inside":
-              return 0;
-            case "outside":
-            default:
-              return 1;
-          }
-        }
-      };
-      listStyleType = {
-        name: "list-style-type",
-        initialValue: "none",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, type) {
-          switch (type) {
-            case "disc":
-              return 0;
-            case "circle":
-              return 1;
-            case "square":
-              return 2;
-            case "decimal":
-              return 3;
-            case "cjk-decimal":
-              return 4;
-            case "decimal-leading-zero":
-              return 5;
-            case "lower-roman":
-              return 6;
-            case "upper-roman":
-              return 7;
-            case "lower-greek":
-              return 8;
-            case "lower-alpha":
-              return 9;
-            case "upper-alpha":
-              return 10;
-            case "arabic-indic":
-              return 11;
-            case "armenian":
-              return 12;
-            case "bengali":
-              return 13;
-            case "cambodian":
-              return 14;
-            case "cjk-earthly-branch":
-              return 15;
-            case "cjk-heavenly-stem":
-              return 16;
-            case "cjk-ideographic":
-              return 17;
-            case "devanagari":
-              return 18;
-            case "ethiopic-numeric":
-              return 19;
-            case "georgian":
-              return 20;
-            case "gujarati":
-              return 21;
-            case "gurmukhi":
-              return 22;
-            case "hebrew":
-              return 22;
-            case "hiragana":
-              return 23;
-            case "hiragana-iroha":
-              return 24;
-            case "japanese-formal":
-              return 25;
-            case "japanese-informal":
-              return 26;
-            case "kannada":
-              return 27;
-            case "katakana":
-              return 28;
-            case "katakana-iroha":
-              return 29;
-            case "khmer":
-              return 30;
-            case "korean-hangul-formal":
-              return 31;
-            case "korean-hanja-formal":
-              return 32;
-            case "korean-hanja-informal":
-              return 33;
-            case "lao":
-              return 34;
-            case "lower-armenian":
-              return 35;
-            case "malayalam":
-              return 36;
-            case "mongolian":
-              return 37;
-            case "myanmar":
-              return 38;
-            case "oriya":
-              return 39;
-            case "persian":
-              return 40;
-            case "simp-chinese-formal":
-              return 41;
-            case "simp-chinese-informal":
-              return 42;
-            case "tamil":
-              return 43;
-            case "telugu":
-              return 44;
-            case "thai":
-              return 45;
-            case "tibetan":
-              return 46;
-            case "trad-chinese-formal":
-              return 47;
-            case "trad-chinese-informal":
-              return 48;
-            case "upper-armenian":
-              return 49;
-            case "disclosure-open":
-              return 50;
-            case "disclosure-closed":
-              return 51;
-            case "none":
-            default:
-              return -1;
-          }
-        }
-      };
-      marginForSide = function(side) {
-        return {
-          name: "margin-" + side,
-          initialValue: "0",
-          prefix: false,
-          type: 4
-          /* TOKEN_VALUE */
-        };
-      };
-      marginTop = marginForSide("top");
-      marginRight = marginForSide("right");
-      marginBottom = marginForSide("bottom");
-      marginLeft = marginForSide("left");
-      overflow = {
-        name: "overflow",
-        initialValue: "visible",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return tokens.filter(isIdentToken).map(function(overflow2) {
-            switch (overflow2.value) {
-              case "hidden":
-                return 1;
-              case "scroll":
-                return 2;
-              case "clip":
-                return 3;
-              case "auto":
-                return 4;
-              case "visible":
-              default:
-                return 0;
-            }
-          });
-        }
-      };
-      overflowWrap = {
-        name: "overflow-wrap",
-        initialValue: "normal",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, overflow2) {
-          switch (overflow2) {
-            case "break-word":
-              return "break-word";
-            case "normal":
-            default:
-              return "normal";
-          }
-        }
-      };
-      paddingForSide = function(side) {
-        return {
-          name: "padding-" + side,
-          initialValue: "0",
-          prefix: false,
-          type: 3,
-          format: "length-percentage"
-        };
-      };
-      paddingTop = paddingForSide("top");
-      paddingRight = paddingForSide("right");
-      paddingBottom = paddingForSide("bottom");
-      paddingLeft = paddingForSide("left");
-      textAlign = {
-        name: "text-align",
-        initialValue: "left",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, textAlign2) {
-          switch (textAlign2) {
-            case "right":
-              return 2;
-            case "center":
-            case "justify":
-              return 1;
-            case "left":
-            default:
-              return 0;
-          }
-        }
-      };
-      position = {
-        name: "position",
-        initialValue: "static",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, position2) {
-          switch (position2) {
-            case "relative":
-              return 1;
-            case "absolute":
-              return 2;
-            case "fixed":
-              return 3;
-            case "sticky":
-              return 4;
-          }
-          return 0;
-        }
-      };
-      textShadow = {
-        name: "text-shadow",
-        initialValue: "none",
-        type: 1,
-        prefix: false,
-        parse: function(context2, tokens) {
-          if (tokens.length === 1 && isIdentWithValue(tokens[0], "none")) {
-            return [];
-          }
-          return parseFunctionArgs(tokens).map(function(values) {
-            var shadow = {
-              color: COLORS.TRANSPARENT,
-              offsetX: ZERO_LENGTH,
-              offsetY: ZERO_LENGTH,
-              blur: ZERO_LENGTH
-            };
-            var c = 0;
-            for (var i = 0; i < values.length; i++) {
-              var token = values[i];
-              if (isLength(token)) {
-                if (c === 0) {
-                  shadow.offsetX = token;
-                } else if (c === 1) {
-                  shadow.offsetY = token;
-                } else {
-                  shadow.blur = token;
-                }
-                c++;
-              } else {
-                shadow.color = color$1.parse(context2, token);
-              }
-            }
-            return shadow;
-          });
-        }
-      };
-      textTransform = {
-        name: "text-transform",
-        initialValue: "none",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, textTransform2) {
-          switch (textTransform2) {
-            case "uppercase":
-              return 2;
-            case "lowercase":
-              return 1;
-            case "capitalize":
-              return 3;
-          }
-          return 0;
-        }
-      };
-      transform$1 = {
-        name: "transform",
-        initialValue: "none",
-        prefix: true,
-        type: 0,
-        parse: function(_context2, token) {
-          if (token.type === 20 && token.value === "none") {
-            return null;
-          }
-          if (token.type === 18) {
-            var transformFunction = SUPPORTED_TRANSFORM_FUNCTIONS[token.name];
-            if (typeof transformFunction === "undefined") {
-              throw new Error('Attempting to parse an unsupported transform function "' + token.name + '"');
-            }
-            return transformFunction(token.values);
-          }
-          return null;
-        }
-      };
-      matrix = function(args) {
-        var values = args.filter(function(arg) {
-          return arg.type === 17;
-        }).map(function(arg) {
-          return arg.number;
-        });
-        return values.length === 6 ? values : null;
-      };
-      matrix3d = function(args) {
-        var values = args.filter(function(arg) {
-          return arg.type === 17;
-        }).map(function(arg) {
-          return arg.number;
-        });
-        var a1 = values[0], b1 = values[1];
-        values[2];
-        values[3];
-        var a2 = values[4], b2 = values[5];
-        values[6];
-        values[7];
-        values[8];
-        values[9];
-        values[10];
-        values[11];
-        var a4 = values[12], b4 = values[13];
-        values[14];
-        values[15];
-        return values.length === 16 ? [a1, b1, a2, b2, a4, b4] : null;
-      };
-      SUPPORTED_TRANSFORM_FUNCTIONS = {
-        matrix,
-        matrix3d
-      };
-      DEFAULT_VALUE = {
-        type: 16,
-        number: 50,
-        flags: FLAG_INTEGER
-      };
-      DEFAULT = [DEFAULT_VALUE, DEFAULT_VALUE];
-      transformOrigin = {
-        name: "transform-origin",
-        initialValue: "50% 50%",
-        prefix: true,
-        type: 1,
-        parse: function(_context2, tokens) {
-          var origins = tokens.filter(isLengthPercentage);
-          if (origins.length !== 2) {
-            return DEFAULT;
-          }
-          return [origins[0], origins[1]];
-        }
-      };
-      visibility = {
-        name: "visible",
-        initialValue: "none",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, visibility2) {
-          switch (visibility2) {
-            case "hidden":
-              return 1;
-            case "collapse":
-              return 2;
-            case "visible":
-            default:
-              return 0;
-          }
-        }
-      };
-      (function(WORD_BREAK2) {
-        WORD_BREAK2["NORMAL"] = "normal";
-        WORD_BREAK2["BREAK_ALL"] = "break-all";
-        WORD_BREAK2["KEEP_ALL"] = "keep-all";
-      })(WORD_BREAK || (WORD_BREAK = {}));
-      wordBreak = {
-        name: "word-break",
-        initialValue: "normal",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, wordBreak2) {
-          switch (wordBreak2) {
-            case "break-all":
-              return WORD_BREAK.BREAK_ALL;
-            case "keep-all":
-              return WORD_BREAK.KEEP_ALL;
-            case "normal":
-            default:
-              return WORD_BREAK.NORMAL;
-          }
-        }
-      };
-      zIndex = {
-        name: "z-index",
-        initialValue: "auto",
-        prefix: false,
-        type: 0,
-        parse: function(_context2, token) {
-          if (token.type === 20) {
-            return { auto: true, order: 0 };
-          }
-          if (isNumberToken(token)) {
-            return { auto: false, order: token.number };
-          }
-          throw new Error("Invalid z-index number parsed");
-        }
-      };
-      time = {
-        name: "time",
-        parse: function(_context2, value) {
-          if (value.type === 15) {
-            switch (value.unit.toLowerCase()) {
-              case "s":
-                return 1e3 * value.number;
-              case "ms":
-                return value.number;
-            }
-          }
-          throw new Error("Unsupported time type");
-        }
-      };
-      opacity = {
-        name: "opacity",
-        initialValue: "1",
-        type: 0,
-        prefix: false,
-        parse: function(_context2, token) {
-          if (isNumberToken(token)) {
-            return token.number;
-          }
-          return 1;
-        }
-      };
-      textDecorationColor = {
-        name: "text-decoration-color",
-        initialValue: "transparent",
-        prefix: false,
-        type: 3,
-        format: "color"
-      };
-      textDecorationLine = {
-        name: "text-decoration-line",
-        initialValue: "none",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          return tokens.filter(isIdentToken).map(function(token) {
-            switch (token.value) {
-              case "underline":
-                return 1;
-              case "overline":
-                return 2;
-              case "line-through":
-                return 3;
-              case "none":
-                return 4;
-            }
-            return 0;
-          }).filter(function(line) {
-            return line !== 0;
-          });
-        }
-      };
-      fontFamily = {
-        name: "font-family",
-        initialValue: "",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          var accumulator = [];
-          var results = [];
-          tokens.forEach(function(token) {
-            switch (token.type) {
-              case 20:
-              case 0:
-                accumulator.push(token.value);
-                break;
-              case 17:
-                accumulator.push(token.number.toString());
-                break;
-              case 4:
-                results.push(accumulator.join(" "));
-                accumulator.length = 0;
-                break;
-            }
-          });
-          if (accumulator.length) {
-            results.push(accumulator.join(" "));
-          }
-          return results.map(function(result) {
-            return result.indexOf(" ") === -1 ? result : "'" + result + "'";
-          });
-        }
-      };
-      fontSize = {
-        name: "font-size",
-        initialValue: "0",
-        prefix: false,
-        type: 3,
-        format: "length"
-      };
-      fontWeight = {
-        name: "font-weight",
-        initialValue: "normal",
-        type: 0,
-        prefix: false,
-        parse: function(_context2, token) {
-          if (isNumberToken(token)) {
-            return token.number;
-          }
-          if (isIdentToken(token)) {
-            switch (token.value) {
-              case "bold":
-                return 700;
-              case "normal":
-              default:
-                return 400;
-            }
-          }
-          return 400;
-        }
-      };
-      fontVariant = {
-        name: "font-variant",
-        initialValue: "none",
-        type: 1,
-        prefix: false,
-        parse: function(_context2, tokens) {
-          return tokens.filter(isIdentToken).map(function(token) {
-            return token.value;
-          });
-        }
-      };
-      fontStyle = {
-        name: "font-style",
-        initialValue: "normal",
-        prefix: false,
-        type: 2,
-        parse: function(_context2, overflow2) {
-          switch (overflow2) {
-            case "oblique":
-              return "oblique";
-            case "italic":
-              return "italic";
-            case "normal":
-            default:
-              return "normal";
-          }
-        }
-      };
-      contains = function(bit, value) {
-        return (bit & value) !== 0;
-      };
-      content = {
-        name: "content",
-        initialValue: "none",
-        type: 1,
-        prefix: false,
-        parse: function(_context2, tokens) {
-          if (tokens.length === 0) {
-            return [];
-          }
-          var first = tokens[0];
-          if (first.type === 20 && first.value === "none") {
-            return [];
-          }
-          return tokens;
-        }
-      };
-      counterIncrement = {
-        name: "counter-increment",
-        initialValue: "none",
-        prefix: true,
-        type: 1,
-        parse: function(_context2, tokens) {
-          if (tokens.length === 0) {
-            return null;
-          }
-          var first = tokens[0];
-          if (first.type === 20 && first.value === "none") {
-            return null;
-          }
-          var increments = [];
-          var filtered = tokens.filter(nonWhiteSpace);
-          for (var i = 0; i < filtered.length; i++) {
-            var counter = filtered[i];
-            var next = filtered[i + 1];
-            if (counter.type === 20) {
-              var increment = next && isNumberToken(next) ? next.number : 1;
-              increments.push({ counter: counter.value, increment });
-            }
-          }
-          return increments;
-        }
-      };
-      counterReset = {
-        name: "counter-reset",
-        initialValue: "none",
-        prefix: true,
-        type: 1,
-        parse: function(_context2, tokens) {
-          if (tokens.length === 0) {
-            return [];
-          }
-          var resets = [];
-          var filtered = tokens.filter(nonWhiteSpace);
-          for (var i = 0; i < filtered.length; i++) {
-            var counter = filtered[i];
-            var next = filtered[i + 1];
-            if (isIdentToken(counter) && counter.value !== "none") {
-              var reset = next && isNumberToken(next) ? next.number : 0;
-              resets.push({ counter: counter.value, reset });
-            }
-          }
-          return resets;
-        }
-      };
-      duration = {
-        name: "duration",
-        initialValue: "0s",
-        prefix: false,
-        type: 1,
-        parse: function(context2, tokens) {
-          return tokens.filter(isDimensionToken).map(function(token) {
-            return time.parse(context2, token);
-          });
-        }
-      };
-      quotes = {
-        name: "quotes",
-        initialValue: "none",
-        prefix: true,
-        type: 1,
-        parse: function(_context2, tokens) {
-          if (tokens.length === 0) {
-            return null;
-          }
-          var first = tokens[0];
-          if (first.type === 20 && first.value === "none") {
-            return null;
-          }
-          var quotes2 = [];
-          var filtered = tokens.filter(isStringToken);
-          if (filtered.length % 2 !== 0) {
-            return null;
-          }
-          for (var i = 0; i < filtered.length; i += 2) {
-            var open_1 = filtered[i].value;
-            var close_1 = filtered[i + 1].value;
-            quotes2.push({ open: open_1, close: close_1 });
-          }
-          return quotes2;
-        }
-      };
-      getQuote = function(quotes2, depth, open) {
-        if (!quotes2) {
-          return "";
-        }
-        var quote = quotes2[Math.min(depth, quotes2.length - 1)];
-        if (!quote) {
-          return "";
-        }
-        return open ? quote.open : quote.close;
-      };
-      boxShadow = {
-        name: "box-shadow",
-        initialValue: "none",
-        type: 1,
-        prefix: false,
-        parse: function(context2, tokens) {
-          if (tokens.length === 1 && isIdentWithValue(tokens[0], "none")) {
-            return [];
-          }
-          return parseFunctionArgs(tokens).map(function(values) {
-            var shadow = {
-              color: 255,
-              offsetX: ZERO_LENGTH,
-              offsetY: ZERO_LENGTH,
-              blur: ZERO_LENGTH,
-              spread: ZERO_LENGTH,
-              inset: false
-            };
-            var c = 0;
-            for (var i = 0; i < values.length; i++) {
-              var token = values[i];
-              if (isIdentWithValue(token, "inset")) {
-                shadow.inset = true;
-              } else if (isLength(token)) {
-                if (c === 0) {
-                  shadow.offsetX = token;
-                } else if (c === 1) {
-                  shadow.offsetY = token;
-                } else if (c === 2) {
-                  shadow.blur = token;
-                } else {
-                  shadow.spread = token;
-                }
-                c++;
-              } else {
-                shadow.color = color$1.parse(context2, token);
-              }
-            }
-            return shadow;
-          });
-        }
-      };
-      paintOrder = {
-        name: "paint-order",
-        initialValue: "normal",
-        prefix: false,
-        type: 1,
-        parse: function(_context2, tokens) {
-          var DEFAULT_VALUE2 = [
-            0,
-            1,
-            2
-            /* MARKERS */
-          ];
-          var layers = [];
-          tokens.filter(isIdentToken).forEach(function(token) {
-            switch (token.value) {
-              case "stroke":
-                layers.push(
-                  1
-                  /* STROKE */
-                );
-                break;
-              case "fill":
-                layers.push(
-                  0
-                  /* FILL */
-                );
-                break;
-              case "markers":
-                layers.push(
-                  2
-                  /* MARKERS */
-                );
-                break;
-            }
-          });
-          DEFAULT_VALUE2.forEach(function(value) {
-            if (layers.indexOf(value) === -1) {
-              layers.push(value);
-            }
-          });
-          return layers;
-        }
-      };
-      webkitTextStrokeColor = {
-        name: "-webkit-text-stroke-color",
-        initialValue: "currentcolor",
-        prefix: false,
-        type: 3,
-        format: "color"
-      };
-      webkitTextStrokeWidth = {
-        name: "-webkit-text-stroke-width",
-        initialValue: "0",
-        type: 0,
-        prefix: false,
-        parse: function(_context2, token) {
-          if (isDimensionToken(token)) {
-            return token.number;
-          }
-          return 0;
-        }
-      };
-      CSSParsedDeclaration = /** @class */
-      (function() {
-        function CSSParsedDeclaration2(context2, declaration) {
-          var _a, _b;
-          this.animationDuration = parse(context2, duration, declaration.animationDuration);
-          this.backgroundClip = parse(context2, backgroundClip, declaration.backgroundClip);
-          this.backgroundColor = parse(context2, backgroundColor, declaration.backgroundColor);
-          this.backgroundImage = parse(context2, backgroundImage, declaration.backgroundImage);
-          this.backgroundOrigin = parse(context2, backgroundOrigin, declaration.backgroundOrigin);
-          this.backgroundPosition = parse(context2, backgroundPosition, declaration.backgroundPosition);
-          this.backgroundRepeat = parse(context2, backgroundRepeat, declaration.backgroundRepeat);
-          this.backgroundSize = parse(context2, backgroundSize, declaration.backgroundSize);
-          this.borderTopColor = parse(context2, borderTopColor, declaration.borderTopColor);
-          this.borderRightColor = parse(context2, borderRightColor, declaration.borderRightColor);
-          this.borderBottomColor = parse(context2, borderBottomColor, declaration.borderBottomColor);
-          this.borderLeftColor = parse(context2, borderLeftColor, declaration.borderLeftColor);
-          this.borderTopLeftRadius = parse(context2, borderTopLeftRadius, declaration.borderTopLeftRadius);
-          this.borderTopRightRadius = parse(context2, borderTopRightRadius, declaration.borderTopRightRadius);
-          this.borderBottomRightRadius = parse(context2, borderBottomRightRadius, declaration.borderBottomRightRadius);
-          this.borderBottomLeftRadius = parse(context2, borderBottomLeftRadius, declaration.borderBottomLeftRadius);
-          this.borderTopStyle = parse(context2, borderTopStyle, declaration.borderTopStyle);
-          this.borderRightStyle = parse(context2, borderRightStyle, declaration.borderRightStyle);
-          this.borderBottomStyle = parse(context2, borderBottomStyle, declaration.borderBottomStyle);
-          this.borderLeftStyle = parse(context2, borderLeftStyle, declaration.borderLeftStyle);
-          this.borderTopWidth = parse(context2, borderTopWidth, declaration.borderTopWidth);
-          this.borderRightWidth = parse(context2, borderRightWidth, declaration.borderRightWidth);
-          this.borderBottomWidth = parse(context2, borderBottomWidth, declaration.borderBottomWidth);
-          this.borderLeftWidth = parse(context2, borderLeftWidth, declaration.borderLeftWidth);
-          this.boxShadow = parse(context2, boxShadow, declaration.boxShadow);
-          this.color = parse(context2, color, declaration.color);
-          this.direction = parse(context2, direction, declaration.direction);
-          this.display = parse(context2, display, declaration.display);
-          this.float = parse(context2, float, declaration.cssFloat);
-          this.fontFamily = parse(context2, fontFamily, declaration.fontFamily);
-          this.fontSize = parse(context2, fontSize, declaration.fontSize);
-          this.fontStyle = parse(context2, fontStyle, declaration.fontStyle);
-          this.fontVariant = parse(context2, fontVariant, declaration.fontVariant);
-          this.fontWeight = parse(context2, fontWeight, declaration.fontWeight);
-          this.letterSpacing = parse(context2, letterSpacing, declaration.letterSpacing);
-          this.lineBreak = parse(context2, lineBreak, declaration.lineBreak);
-          this.lineHeight = parse(context2, lineHeight, declaration.lineHeight);
-          this.listStyleImage = parse(context2, listStyleImage, declaration.listStyleImage);
-          this.listStylePosition = parse(context2, listStylePosition, declaration.listStylePosition);
-          this.listStyleType = parse(context2, listStyleType, declaration.listStyleType);
-          this.marginTop = parse(context2, marginTop, declaration.marginTop);
-          this.marginRight = parse(context2, marginRight, declaration.marginRight);
-          this.marginBottom = parse(context2, marginBottom, declaration.marginBottom);
-          this.marginLeft = parse(context2, marginLeft, declaration.marginLeft);
-          this.opacity = parse(context2, opacity, declaration.opacity);
-          var overflowTuple = parse(context2, overflow, declaration.overflow);
-          this.overflowX = overflowTuple[0];
-          this.overflowY = overflowTuple[overflowTuple.length > 1 ? 1 : 0];
-          this.overflowWrap = parse(context2, overflowWrap, declaration.overflowWrap);
-          this.paddingTop = parse(context2, paddingTop, declaration.paddingTop);
-          this.paddingRight = parse(context2, paddingRight, declaration.paddingRight);
-          this.paddingBottom = parse(context2, paddingBottom, declaration.paddingBottom);
-          this.paddingLeft = parse(context2, paddingLeft, declaration.paddingLeft);
-          this.paintOrder = parse(context2, paintOrder, declaration.paintOrder);
-          this.position = parse(context2, position, declaration.position);
-          this.textAlign = parse(context2, textAlign, declaration.textAlign);
-          this.textDecorationColor = parse(context2, textDecorationColor, (_a = declaration.textDecorationColor) !== null && _a !== void 0 ? _a : declaration.color);
-          this.textDecorationLine = parse(context2, textDecorationLine, (_b = declaration.textDecorationLine) !== null && _b !== void 0 ? _b : declaration.textDecoration);
-          this.textShadow = parse(context2, textShadow, declaration.textShadow);
-          this.textTransform = parse(context2, textTransform, declaration.textTransform);
-          this.transform = parse(context2, transform$1, declaration.transform);
-          this.transformOrigin = parse(context2, transformOrigin, declaration.transformOrigin);
-          this.visibility = parse(context2, visibility, declaration.visibility);
-          this.webkitTextStrokeColor = parse(context2, webkitTextStrokeColor, declaration.webkitTextStrokeColor);
-          this.webkitTextStrokeWidth = parse(context2, webkitTextStrokeWidth, declaration.webkitTextStrokeWidth);
-          this.wordBreak = parse(context2, wordBreak, declaration.wordBreak);
-          this.zIndex = parse(context2, zIndex, declaration.zIndex);
-        }
-        CSSParsedDeclaration2.prototype.isVisible = function() {
-          return this.display > 0 && this.opacity > 0 && this.visibility === 0;
-        };
-        CSSParsedDeclaration2.prototype.isTransparent = function() {
-          return isTransparent(this.backgroundColor);
-        };
-        CSSParsedDeclaration2.prototype.isTransformed = function() {
-          return this.transform !== null;
-        };
-        CSSParsedDeclaration2.prototype.isPositioned = function() {
-          return this.position !== 0;
-        };
-        CSSParsedDeclaration2.prototype.isPositionedWithZIndex = function() {
-          return this.isPositioned() && !this.zIndex.auto;
-        };
-        CSSParsedDeclaration2.prototype.isFloating = function() {
-          return this.float !== 0;
-        };
-        CSSParsedDeclaration2.prototype.isInlineLevel = function() {
-          return contains(
-            this.display,
-            4
-            /* INLINE */
-          ) || contains(
-            this.display,
-            33554432
-            /* INLINE_BLOCK */
-          ) || contains(
-            this.display,
-            268435456
-            /* INLINE_FLEX */
-          ) || contains(
-            this.display,
-            536870912
-            /* INLINE_GRID */
-          ) || contains(
-            this.display,
-            67108864
-            /* INLINE_LIST_ITEM */
-          ) || contains(
-            this.display,
-            134217728
-            /* INLINE_TABLE */
-          );
-        };
-        return CSSParsedDeclaration2;
-      })();
-      CSSParsedPseudoDeclaration = /** @class */
-      /* @__PURE__ */ (function() {
-        function CSSParsedPseudoDeclaration2(context2, declaration) {
-          this.content = parse(context2, content, declaration.content);
-          this.quotes = parse(context2, quotes, declaration.quotes);
-        }
-        return CSSParsedPseudoDeclaration2;
-      })();
-      CSSParsedCounterDeclaration = /** @class */
-      /* @__PURE__ */ (function() {
-        function CSSParsedCounterDeclaration2(context2, declaration) {
-          this.counterIncrement = parse(context2, counterIncrement, declaration.counterIncrement);
-          this.counterReset = parse(context2, counterReset, declaration.counterReset);
-        }
-        return CSSParsedCounterDeclaration2;
-      })();
-      parse = function(context2, descriptor, style) {
-        var tokenizer = new Tokenizer();
-        var value = style !== null && typeof style !== "undefined" ? style.toString() : descriptor.initialValue;
-        tokenizer.write(value);
-        var parser = new Parser(tokenizer.read());
-        switch (descriptor.type) {
-          case 2:
-            var token = parser.parseComponentValue();
-            return descriptor.parse(context2, isIdentToken(token) ? token.value : descriptor.initialValue);
-          case 0:
-            return descriptor.parse(context2, parser.parseComponentValue());
-          case 1:
-            return descriptor.parse(context2, parser.parseComponentValues());
-          case 4:
-            return parser.parseComponentValue();
-          case 3:
-            switch (descriptor.format) {
-              case "angle":
-                return angle.parse(context2, parser.parseComponentValue());
-              case "color":
-                return color$1.parse(context2, parser.parseComponentValue());
-              case "image":
-                return image.parse(context2, parser.parseComponentValue());
-              case "length":
-                var length_1 = parser.parseComponentValue();
-                return isLength(length_1) ? length_1 : ZERO_LENGTH;
-              case "length-percentage":
-                var value_1 = parser.parseComponentValue();
-                return isLengthPercentage(value_1) ? value_1 : ZERO_LENGTH;
-              case "time":
-                return time.parse(context2, parser.parseComponentValue());
-            }
-            break;
-        }
-      };
-      elementDebuggerAttribute = "data-html2canvas-debug";
-      getElementDebugType = function(element) {
-        var attribute = element.getAttribute(elementDebuggerAttribute);
-        switch (attribute) {
-          case "all":
-            return 1;
-          case "clone":
-            return 2;
-          case "parse":
-            return 3;
-          case "render":
-            return 4;
-          default:
-            return 0;
-        }
-      };
-      isDebugging = function(element, type) {
-        var elementType = getElementDebugType(element);
-        return elementType === 1 || type === elementType;
-      };
-      ElementContainer = /** @class */
-      /* @__PURE__ */ (function() {
-        function ElementContainer2(context2, element) {
-          this.context = context2;
-          this.textNodes = [];
-          this.elements = [];
-          this.flags = 0;
-          if (isDebugging(
-            element,
-            3
-            /* PARSE */
-          )) {
-            debugger;
-          }
-          this.styles = new CSSParsedDeclaration(context2, window.getComputedStyle(element, null));
-          if (isHTMLElementNode(element)) {
-            if (this.styles.animationDuration.some(function(duration2) {
-              return duration2 > 0;
-            })) {
-              element.style.animationDuration = "0s";
-            }
-            if (this.styles.transform !== null) {
-              element.style.transform = "none";
-            }
-          }
-          this.bounds = parseBounds(this.context, element);
-          if (isDebugging(
-            element,
-            4
-            /* RENDER */
-          )) {
-            this.flags |= 16;
-          }
-        }
-        return ElementContainer2;
-      })();
-      base64 = "AAAAAAAAAAAAEA4AGBkAAFAaAAACAAAAAAAIABAAGAAwADgACAAQAAgAEAAIABAACAAQAAgAEAAIABAACAAQAAgAEAAIABAAQABIAEQATAAIABAACAAQAAgAEAAIABAAVABcAAgAEAAIABAACAAQAGAAaABwAHgAgACIAI4AlgAIABAAmwCjAKgAsAC2AL4AvQDFAMoA0gBPAVYBWgEIAAgACACMANoAYgFkAWwBdAF8AX0BhQGNAZUBlgGeAaMBlQGWAasBswF8AbsBwwF0AcsBYwHTAQgA2wG/AOMBdAF8AekB8QF0AfkB+wHiAHQBfAEIAAMC5gQIAAsCEgIIAAgAFgIeAggAIgIpAggAMQI5AkACygEIAAgASAJQAlgCYAIIAAgACAAKBQoFCgUTBRMFGQUrBSsFCAAIAAgACAAIAAgACAAIAAgACABdAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACABoAmgCrwGvAQgAbgJ2AggAHgEIAAgACADnAXsCCAAIAAgAgwIIAAgACAAIAAgACACKAggAkQKZAggAPADJAAgAoQKkAqwCsgK6AsICCADJAggA0AIIAAgACAAIANYC3gIIAAgACAAIAAgACABAAOYCCAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAkASoB+QIEAAgACAA8AEMCCABCBQgACABJBVAFCAAIAAgACAAIAAgACAAIAAgACABTBVoFCAAIAFoFCABfBWUFCAAIAAgACAAIAAgAbQUIAAgACAAIAAgACABzBXsFfQWFBYoFigWKBZEFigWKBYoFmAWfBaYFrgWxBbkFCAAIAAgACAAIAAgACAAIAAgACAAIAMEFCAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAMgFCADQBQgACAAIAAgACAAIAAgACAAIAAgACAAIAO4CCAAIAAgAiQAIAAgACABAAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAD0AggACAD8AggACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIANYFCAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAMDvwAIAAgAJAIIAAgACAAIAAgACAAIAAgACwMTAwgACAB9BOsEGwMjAwgAKwMyAwsFYgE3A/MEPwMIAEUDTQNRAwgAWQOsAGEDCAAIAAgACAAIAAgACABpAzQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFOgU0BTUFNgU3BTgFOQU6BTQFNQU2BTcFOAU5BToFNAU1BTYFNwU4BTkFIQUoBSwFCAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACABtAwgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACABMAEwACAAIAAgACAAIABgACAAIAAgACAC/AAgACAAyAQgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACACAAIAAwAAgACAAIAAgACAAIAAgACAAIAAAARABIAAgACAAIABQASAAIAAgAIABwAEAAjgCIABsAqAC2AL0AigDQAtwC+IJIQqVAZUBWQqVAZUBlQGVAZUBlQGrC5UBlQGVAZUBlQGVAZUBlQGVAXsKlQGVAbAK6wsrDGUMpQzlDJUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAZUBlQGVAfAKAAuZA64AtwCJALoC6ADwAAgAuACgA/oEpgO6AqsD+AAIAAgAswMIAAgACAAIAIkAuwP5AfsBwwPLAwgACAAIAAgACADRA9kDCAAIAOED6QMIAAgACAAIAAgACADuA/YDCAAIAP4DyQAIAAgABgQIAAgAXQAOBAgACAAIAAgACAAIABMECAAIAAgACAAIAAgACAD8AAQBCAAIAAgAGgQiBCoECAExBAgAEAEIAAgACAAIAAgACAAIAAgACAAIAAgACAA4BAgACABABEYECAAIAAgATAQYAQgAVAQIAAgACAAIAAgACAAIAAgACAAIAFoECAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgAOQEIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAB+BAcACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAEABhgSMBAgACAAIAAgAlAQIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAwAEAAQABAADAAMAAwADAAQABAAEAAQABAAEAAQABHATAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgAdQMIAAgACAAIAAgACAAIAMkACAAIAAgAfQMIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACACFA4kDCAAIAAgACAAIAOcBCAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAIcDCAAIAAgACAAIAAgACAAIAAgACAAIAJEDCAAIAAgACADFAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACABgBAgAZgQIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgAbAQCBXIECAAIAHkECAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACABAAJwEQACjBKoEsgQIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAC6BMIECAAIAAgACAAIAAgACABmBAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgAxwQIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAGYECAAIAAgAzgQIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgAigWKBYoFigWKBYoFigWKBd0FXwUIAOIF6gXxBYoF3gT5BQAGCAaKBYoFigWKBYoFigWKBYoFigWKBYoFigXWBIoFigWKBYoFigWKBYoFigWKBYsFEAaKBYoFigWKBYoFigWKBRQGCACKBYoFigWKBQgACAAIANEECAAIABgGigUgBggAJgYIAC4GMwaKBYoF0wQ3Bj4GigWKBYoFigWKBYoFigWKBYoFigWKBYoFigUIAAgACAAIAAgACAAIAAgAigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWKBYoFigWLBf///////wQABAAEAAQABAAEAAQABAAEAAQAAwAEAAQAAgAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAQADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAUAAAAFAAUAAAAFAAUAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAEAAQABAAEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUAAQAAAAUABQAFAAUABQAFAAAAAAAFAAUAAAAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAFAAUAAQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABwAFAAUABQAFAAAABwAHAAcAAAAHAAcABwAFAAEAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABwAFAAUABQAFAAcABwAFAAUAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAAAAQABAAAAAAAAAAAAAAAFAAUABQAFAAAABwAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAHAAcABwAHAAcAAAAHAAcAAAAAAAUABQAHAAUAAQAHAAEABwAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABwABAAUABQAFAAUAAAAAAAAAAAAAAAEAAQABAAEAAQABAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABwAFAAUAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUAAQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABQANAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQABAAEAAQABAAEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAEAAQABAAEAAQABAAEAAQABAAEAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAQABAAEAAQABAAEAAQABAAAAAAAAAAAAAAAAAAAAAAABQAHAAUABQAFAAAAAAAAAAcABQAFAAUABQAFAAQABAAEAAQABAAEAAQABAAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAEAAQABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUAAAAFAAUABQAFAAUAAAAFAAUABQAAAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAAAAAAAAAAAAUABQAFAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAHAAUAAAAHAAcABwAFAAUABQAFAAUABQAFAAUABwAHAAcABwAFAAcABwAAAAUABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABwAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAUABwAHAAUABQAFAAUAAAAAAAcABwAAAAAABwAHAAUAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAABQAFAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAABwAHAAcABQAFAAAAAAAAAAAABQAFAAAAAAAFAAUABQAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAFAAUABQAFAAUAAAAFAAUABwAAAAcABwAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAFAAUABwAFAAUABQAFAAAAAAAHAAcAAAAAAAcABwAFAAAAAAAAAAAAAAAAAAAABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAcABwAAAAAAAAAHAAcABwAAAAcABwAHAAUAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAABQAHAAcABwAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABwAHAAcABwAAAAUABQAFAAAABQAFAAUABQAAAAAAAAAAAAAAAAAAAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAcABQAHAAcABQAHAAcAAAAFAAcABwAAAAcABwAFAAUAAAAAAAAAAAAAAAAAAAAFAAUAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAcABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAUABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAFAAcABwAFAAUABQAAAAUAAAAHAAcABwAHAAcABwAHAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAHAAUABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAABwAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAUAAAAFAAAAAAAAAAAABwAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABwAFAAUABQAFAAUAAAAFAAUAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABwAFAAUABQAFAAUABQAAAAUABQAHAAcABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABQAFAAAAAAAAAAAABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAcABQAFAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAHAAUABQAFAAUABQAFAAUABwAHAAcABwAHAAcABwAHAAUABwAHAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABwAHAAcABwAFAAUABwAHAAcAAAAAAAAAAAAHAAcABQAHAAcABwAHAAcABwAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAcABwAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABQAHAAUABQAFAAUABQAFAAUAAAAFAAAABQAAAAAABQAFAAUABQAFAAUABQAFAAcABwAHAAcABwAHAAUABQAFAAUABQAFAAUABQAFAAUAAAAAAAUABQAFAAUABQAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABwAFAAcABwAHAAcABwAFAAcABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAUABQAFAAUABwAHAAUABQAHAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAcABQAFAAcABwAHAAUABwAFAAUABQAHAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAcABwAHAAcABwAHAAUABQAFAAUABQAFAAUABQAHAAcABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUAAAAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAcABQAFAAUABQAFAAUABQAAAAAAAAAAAAUAAAAAAAAAAAAAAAAABQAAAAAABwAFAAUAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAAABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUAAAAFAAUABQAFAAUABQAFAAUABQAFAAAAAAAAAAAABQAAAAAAAAAFAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAUABQAHAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABwAHAAcABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAUABQAFAAUABQAHAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAcABwAFAAUABQAFAAcABwAFAAUABwAHAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAFAAcABwAFAAUABwAHAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAFAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAFAAUABQAAAAAABQAFAAAAAAAAAAAAAAAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABQAFAAcABwAAAAAAAAAAAAAABwAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABwAFAAcABwAFAAcABwAAAAcABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAAAAAAAAAAAAAAAAAFAAUABQAAAAUABQAAAAAAAAAAAAAABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABQAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABwAFAAUABQAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAcABQAFAAUABQAFAAUABQAFAAUABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABwAFAAUABQAHAAcABQAHAAUABQAAAAAAAAAAAAAAAAAFAAAABwAHAAcABQAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABwAHAAcABwAAAAAABwAHAAAAAAAHAAcABwAAAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAAAAAAFAAUABQAFAAUABQAFAAAAAAAAAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABwAFAAUABQAFAAUABQAFAAUABwAHAAUABQAFAAcABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAHAAcABQAFAAUABQAFAAUABwAFAAcABwAFAAcABQAFAAcABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAHAAcABQAFAAUABQAAAAAABwAHAAcABwAFAAUABwAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABwAHAAUABQAFAAUABQAFAAUABQAHAAcABQAHAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABwAFAAcABwAFAAUABQAFAAUABQAHAAUAAAAAAAAAAAAAAAAAAAAAAAcABwAFAAUABQAFAAcABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABwAFAAUABQAFAAUABQAFAAUABQAHAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABwAFAAUABQAFAAAAAAAFAAUABwAHAAcABwAFAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABwAHAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABQAFAAUABQAFAAUABQAAAAUABQAFAAUABQAFAAcABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUAAAAHAAUABQAFAAUABQAFAAUABwAFAAUABwAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUAAAAAAAAABQAAAAUABQAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAAcABwAHAAcAAAAFAAUAAAAHAAcABQAHAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABwAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAAAAAAAAAAAAAAAAAAABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAAAAUABQAFAAAAAAAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAAAAAAAAAAABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUABQAFAAUABQAAAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABQAAAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAFAAUABQAAAAAABQAFAAUABQAFAAUABQAAAAUABQAAAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFAAUABQAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQAFAAUABQAFAAUABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAFAAUABQAFAAUADgAOAA4ADgAOAA4ADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPAA8ADwAPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAcABwAHAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAgACAAIAAAAAAAAAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAMAAwADAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkAAAAAAAAAAAAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAKAAoACgAAAAAAAAAAAAsADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwACwAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAMAAwADAAAAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4ADgAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAA4ADgAOAA4ADgAOAA4ADgAOAAAAAAAAAAAADgAOAA4AAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAA4ADgAAAA4ADgAOAA4ADgAOAAAADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4AAAAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4AAAAAAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAAAA4AAAAOAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAAAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAADgAAAAAAAAAAAA4AAAAOAAAAAAAAAAAADgAOAA4AAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAOAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4ADgAOAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAADgAOAA4ADgAOAA4ADgAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAAAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAA4ADgAOAA4ADgAOAA4ADgAOAAAADgAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4AAAAAAAAAAAAAAAAADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAA4ADgAOAA4ADgAOAAAAAAAAAAAAAAAAAAAAAAAAAAAADgAOAA4ADgAOAA4AAAAAAAAAAAAAAAAAAAAAAA4ADgAOAA4ADgAOAA4ADgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4AAAAOAA4ADgAOAA4ADgAAAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4ADgAOAA4AAAAAAAAAAAA=";
-      chars$1 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      lookup$1 = typeof Uint8Array === "undefined" ? [] : new Uint8Array(256);
-      for (i$1 = 0; i$1 < chars$1.length; i$1++) {
-        lookup$1[chars$1.charCodeAt(i$1)] = i$1;
-      }
-      decode = function(base642) {
-        var bufferLength = base642.length * 0.75, len = base642.length, i, p = 0, encoded1, encoded2, encoded3, encoded4;
-        if (base642[base642.length - 1] === "=") {
-          bufferLength--;
-          if (base642[base642.length - 2] === "=") {
-            bufferLength--;
-          }
-        }
-        var buffer = typeof ArrayBuffer !== "undefined" && typeof Uint8Array !== "undefined" && typeof Uint8Array.prototype.slice !== "undefined" ? new ArrayBuffer(bufferLength) : new Array(bufferLength);
-        var bytes = Array.isArray(buffer) ? buffer : new Uint8Array(buffer);
-        for (i = 0; i < len; i += 4) {
-          encoded1 = lookup$1[base642.charCodeAt(i)];
-          encoded2 = lookup$1[base642.charCodeAt(i + 1)];
-          encoded3 = lookup$1[base642.charCodeAt(i + 2)];
-          encoded4 = lookup$1[base642.charCodeAt(i + 3)];
-          bytes[p++] = encoded1 << 2 | encoded2 >> 4;
-          bytes[p++] = (encoded2 & 15) << 4 | encoded3 >> 2;
-          bytes[p++] = (encoded3 & 3) << 6 | encoded4 & 63;
-        }
-        return buffer;
-      };
-      polyUint16Array = function(buffer) {
-        var length = buffer.length;
-        var bytes = [];
-        for (var i = 0; i < length; i += 2) {
-          bytes.push(buffer[i + 1] << 8 | buffer[i]);
-        }
-        return bytes;
-      };
-      polyUint32Array = function(buffer) {
-        var length = buffer.length;
-        var bytes = [];
-        for (var i = 0; i < length; i += 4) {
-          bytes.push(buffer[i + 3] << 24 | buffer[i + 2] << 16 | buffer[i + 1] << 8 | buffer[i]);
-        }
-        return bytes;
-      };
-      UTRIE2_SHIFT_2 = 5;
-      UTRIE2_SHIFT_1 = 6 + 5;
-      UTRIE2_INDEX_SHIFT = 2;
-      UTRIE2_SHIFT_1_2 = UTRIE2_SHIFT_1 - UTRIE2_SHIFT_2;
-      UTRIE2_LSCP_INDEX_2_OFFSET = 65536 >> UTRIE2_SHIFT_2;
-      UTRIE2_DATA_BLOCK_LENGTH = 1 << UTRIE2_SHIFT_2;
-      UTRIE2_DATA_MASK = UTRIE2_DATA_BLOCK_LENGTH - 1;
-      UTRIE2_LSCP_INDEX_2_LENGTH = 1024 >> UTRIE2_SHIFT_2;
-      UTRIE2_INDEX_2_BMP_LENGTH = UTRIE2_LSCP_INDEX_2_OFFSET + UTRIE2_LSCP_INDEX_2_LENGTH;
-      UTRIE2_UTF8_2B_INDEX_2_OFFSET = UTRIE2_INDEX_2_BMP_LENGTH;
-      UTRIE2_UTF8_2B_INDEX_2_LENGTH = 2048 >> 6;
-      UTRIE2_INDEX_1_OFFSET = UTRIE2_UTF8_2B_INDEX_2_OFFSET + UTRIE2_UTF8_2B_INDEX_2_LENGTH;
-      UTRIE2_OMITTED_BMP_INDEX_1_LENGTH = 65536 >> UTRIE2_SHIFT_1;
-      UTRIE2_INDEX_2_BLOCK_LENGTH = 1 << UTRIE2_SHIFT_1_2;
-      UTRIE2_INDEX_2_MASK = UTRIE2_INDEX_2_BLOCK_LENGTH - 1;
-      slice16 = function(view, start, end) {
-        if (view.slice) {
-          return view.slice(start, end);
-        }
-        return new Uint16Array(Array.prototype.slice.call(view, start, end));
-      };
-      slice32 = function(view, start, end) {
-        if (view.slice) {
-          return view.slice(start, end);
-        }
-        return new Uint32Array(Array.prototype.slice.call(view, start, end));
-      };
-      createTrieFromBase64 = function(base642, _byteLength) {
-        var buffer = decode(base642);
-        var view32 = Array.isArray(buffer) ? polyUint32Array(buffer) : new Uint32Array(buffer);
-        var view16 = Array.isArray(buffer) ? polyUint16Array(buffer) : new Uint16Array(buffer);
-        var headerLength = 24;
-        var index = slice16(view16, headerLength / 2, view32[4] / 2);
-        var data = view32[5] === 2 ? slice16(view16, (headerLength + view32[4]) / 2) : slice32(view32, Math.ceil((headerLength + view32[4]) / 4));
-        return new Trie(view32[0], view32[1], view32[2], view32[3], index, data);
-      };
-      Trie = /** @class */
-      (function() {
-        function Trie2(initialValue, errorValue, highStart, highValueIndex, index, data) {
-          this.initialValue = initialValue;
-          this.errorValue = errorValue;
-          this.highStart = highStart;
-          this.highValueIndex = highValueIndex;
-          this.index = index;
-          this.data = data;
-        }
-        Trie2.prototype.get = function(codePoint) {
-          var ix;
-          if (codePoint >= 0) {
-            if (codePoint < 55296 || codePoint > 56319 && codePoint <= 65535) {
-              ix = this.index[codePoint >> UTRIE2_SHIFT_2];
-              ix = (ix << UTRIE2_INDEX_SHIFT) + (codePoint & UTRIE2_DATA_MASK);
-              return this.data[ix];
-            }
-            if (codePoint <= 65535) {
-              ix = this.index[UTRIE2_LSCP_INDEX_2_OFFSET + (codePoint - 55296 >> UTRIE2_SHIFT_2)];
-              ix = (ix << UTRIE2_INDEX_SHIFT) + (codePoint & UTRIE2_DATA_MASK);
-              return this.data[ix];
-            }
-            if (codePoint < this.highStart) {
-              ix = UTRIE2_INDEX_1_OFFSET - UTRIE2_OMITTED_BMP_INDEX_1_LENGTH + (codePoint >> UTRIE2_SHIFT_1);
-              ix = this.index[ix];
-              ix += codePoint >> UTRIE2_SHIFT_2 & UTRIE2_INDEX_2_MASK;
-              ix = this.index[ix];
-              ix = (ix << UTRIE2_INDEX_SHIFT) + (codePoint & UTRIE2_DATA_MASK);
-              return this.data[ix];
-            }
-            if (codePoint <= 1114111) {
-              return this.data[this.highValueIndex];
-            }
-          }
-          return this.errorValue;
-        };
-        return Trie2;
-      })();
-      chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      lookup = typeof Uint8Array === "undefined" ? [] : new Uint8Array(256);
-      for (i = 0; i < chars.length; i++) {
-        lookup[chars.charCodeAt(i)] = i;
-      }
-      Prepend = 1;
-      CR = 2;
-      LF = 3;
-      Control = 4;
-      Extend = 5;
-      SpacingMark = 7;
-      L = 8;
-      V = 9;
-      T = 10;
-      LV = 11;
-      LVT = 12;
-      ZWJ = 13;
-      Extended_Pictographic = 14;
-      RI = 15;
-      toCodePoints = function(str) {
-        var codePoints = [];
-        var i = 0;
-        var length = str.length;
-        while (i < length) {
-          var value = str.charCodeAt(i++);
-          if (value >= 55296 && value <= 56319 && i < length) {
-            var extra = str.charCodeAt(i++);
-            if ((extra & 64512) === 56320) {
-              codePoints.push(((value & 1023) << 10) + (extra & 1023) + 65536);
-            } else {
-              codePoints.push(value);
-              i--;
-            }
-          } else {
-            codePoints.push(value);
-          }
-        }
-        return codePoints;
-      };
-      fromCodePoint = function() {
-        var codePoints = [];
-        for (var _i = 0; _i < arguments.length; _i++) {
-          codePoints[_i] = arguments[_i];
-        }
-        if (String.fromCodePoint) {
-          return String.fromCodePoint.apply(String, codePoints);
-        }
-        var length = codePoints.length;
-        if (!length) {
-          return "";
-        }
-        var codeUnits = [];
-        var index = -1;
-        var result = "";
-        while (++index < length) {
-          var codePoint = codePoints[index];
-          if (codePoint <= 65535) {
-            codeUnits.push(codePoint);
-          } else {
-            codePoint -= 65536;
-            codeUnits.push((codePoint >> 10) + 55296, codePoint % 1024 + 56320);
-          }
-          if (index + 1 === length || codeUnits.length > 16384) {
-            result += String.fromCharCode.apply(String, codeUnits);
-            codeUnits.length = 0;
-          }
-        }
-        return result;
-      };
-      UnicodeTrie = createTrieFromBase64(base64);
-      BREAK_NOT_ALLOWED = "\xD7";
-      BREAK_ALLOWED = "\xF7";
-      codePointToClass = function(codePoint) {
-        return UnicodeTrie.get(codePoint);
-      };
-      _graphemeBreakAtIndex = function(_codePoints, classTypes, index) {
-        var prevIndex = index - 2;
-        var prev = classTypes[prevIndex];
-        var current = classTypes[index - 1];
-        var next = classTypes[index];
-        if (current === CR && next === LF) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if (current === CR || current === LF || current === Control) {
-          return BREAK_ALLOWED;
-        }
-        if (next === CR || next === LF || next === Control) {
-          return BREAK_ALLOWED;
-        }
-        if (current === L && [L, V, LV, LVT].indexOf(next) !== -1) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if ((current === LV || current === V) && (next === V || next === T)) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if ((current === LVT || current === T) && next === T) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if (next === ZWJ || next === Extend) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if (next === SpacingMark) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if (current === Prepend) {
-          return BREAK_NOT_ALLOWED;
-        }
-        if (current === ZWJ && next === Extended_Pictographic) {
-          while (prev === Extend) {
-            prev = classTypes[--prevIndex];
-          }
-          if (prev === Extended_Pictographic) {
-            return BREAK_NOT_ALLOWED;
-          }
-        }
-        if (current === RI && next === RI) {
-          var countRI = 0;
-          while (prev === RI) {
-            countRI++;
-            prev = classTypes[--prevIndex];
-          }
-          if (countRI % 2 === 0) {
-            return BREAK_NOT_ALLOWED;
-          }
-        }
-        return BREAK_ALLOWED;
-      };
-      GraphemeBreaker = function(str) {
-        var codePoints = toCodePoints(str);
-        var length = codePoints.length;
-        var index = 0;
-        var lastEnd = 0;
-        var classTypes = codePoints.map(codePointToClass);
-        return {
-          next: function() {
-            if (index >= length) {
-              return { done: true, value: null };
-            }
-            var graphemeBreak = BREAK_NOT_ALLOWED;
-            while (index < length && (graphemeBreak = _graphemeBreakAtIndex(codePoints, classTypes, ++index)) === BREAK_NOT_ALLOWED) {
-            }
-            if (graphemeBreak !== BREAK_NOT_ALLOWED || index === length) {
-              var value = fromCodePoint.apply(null, codePoints.slice(lastEnd, index));
-              lastEnd = index;
-              return { value, done: false };
-            }
-            return { done: true, value: null };
-          }
-        };
-      };
-      splitGraphemes = function(str) {
-        var breaker = GraphemeBreaker(str);
-        var graphemes = [];
-        var bk;
-        while (!(bk = breaker.next()).done) {
-          if (bk.value) {
-            graphemes.push(bk.value.slice());
-          }
-        }
-        return graphemes;
-      };
-      testRangeBounds = function(document2) {
-        var TEST_HEIGHT = 123;
-        if (document2.createRange) {
-          var range = document2.createRange();
-          if (range.getBoundingClientRect) {
-            var testElement = document2.createElement("boundtest");
-            testElement.style.height = TEST_HEIGHT + "px";
-            testElement.style.display = "block";
-            document2.body.appendChild(testElement);
-            range.selectNode(testElement);
-            var rangeBounds = range.getBoundingClientRect();
-            var rangeHeight = Math.round(rangeBounds.height);
-            document2.body.removeChild(testElement);
-            if (rangeHeight === TEST_HEIGHT) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-      testIOSLineBreak = function(document2) {
-        var testElement = document2.createElement("boundtest");
-        testElement.style.width = "50px";
-        testElement.style.display = "block";
-        testElement.style.fontSize = "12px";
-        testElement.style.letterSpacing = "0px";
-        testElement.style.wordSpacing = "0px";
-        document2.body.appendChild(testElement);
-        var range = document2.createRange();
-        testElement.innerHTML = typeof "".repeat === "function" ? "&#128104;".repeat(10) : "";
-        var node = testElement.firstChild;
-        var textList = toCodePoints$1(node.data).map(function(i) {
-          return fromCodePoint$1(i);
-        });
-        var offset = 0;
-        var prev = {};
-        var supports = textList.every(function(text, i) {
-          range.setStart(node, offset);
-          range.setEnd(node, offset + text.length);
-          var rect = range.getBoundingClientRect();
-          offset += text.length;
-          var boundAhead = rect.x > prev.x || rect.y > prev.y;
-          prev = rect;
-          if (i === 0) {
-            return true;
-          }
-          return boundAhead;
-        });
-        document2.body.removeChild(testElement);
-        return supports;
-      };
-      testCORS = function() {
-        return typeof new Image().crossOrigin !== "undefined";
-      };
-      testResponseType = function() {
-        return typeof new XMLHttpRequest().responseType === "string";
-      };
-      testSVG = function(document2) {
-        var img = new Image();
-        var canvas = document2.createElement("canvas");
-        var ctx = canvas.getContext("2d");
-        if (!ctx) {
-          return false;
-        }
-        img.src = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'></svg>";
-        try {
-          ctx.drawImage(img, 0, 0);
-          canvas.toDataURL();
-        } catch (e2) {
-          return false;
-        }
-        return true;
-      };
-      isGreenPixel = function(data) {
-        return data[0] === 0 && data[1] === 255 && data[2] === 0 && data[3] === 255;
-      };
-      testForeignObject = function(document2) {
-        var canvas = document2.createElement("canvas");
-        var size = 100;
-        canvas.width = size;
-        canvas.height = size;
-        var ctx = canvas.getContext("2d");
-        if (!ctx) {
-          return Promise.reject(false);
-        }
-        ctx.fillStyle = "rgb(0, 255, 0)";
-        ctx.fillRect(0, 0, size, size);
-        var img = new Image();
-        var greenImageSrc = canvas.toDataURL();
-        img.src = greenImageSrc;
-        var svg = createForeignObjectSVG(size, size, 0, 0, img);
-        ctx.fillStyle = "red";
-        ctx.fillRect(0, 0, size, size);
-        return loadSerializedSVG$1(svg).then(function(img2) {
-          ctx.drawImage(img2, 0, 0);
-          var data = ctx.getImageData(0, 0, size, size).data;
-          ctx.fillStyle = "red";
-          ctx.fillRect(0, 0, size, size);
-          var node = document2.createElement("div");
-          node.style.backgroundImage = "url(" + greenImageSrc + ")";
-          node.style.height = size + "px";
-          return isGreenPixel(data) ? loadSerializedSVG$1(createForeignObjectSVG(size, size, 0, 0, node)) : Promise.reject(false);
-        }).then(function(img2) {
-          ctx.drawImage(img2, 0, 0);
-          return isGreenPixel(ctx.getImageData(0, 0, size, size).data);
-        }).catch(function() {
-          return false;
-        });
-      };
-      createForeignObjectSVG = function(width, height, x, y, node) {
-        var xmlns = "http://www.w3.org/2000/svg";
-        var svg = document.createElementNS(xmlns, "svg");
-        var foreignObject = document.createElementNS(xmlns, "foreignObject");
-        svg.setAttributeNS(null, "width", width.toString());
-        svg.setAttributeNS(null, "height", height.toString());
-        foreignObject.setAttributeNS(null, "width", "100%");
-        foreignObject.setAttributeNS(null, "height", "100%");
-        foreignObject.setAttributeNS(null, "x", x.toString());
-        foreignObject.setAttributeNS(null, "y", y.toString());
-        foreignObject.setAttributeNS(null, "externalResourcesRequired", "true");
-        svg.appendChild(foreignObject);
-        foreignObject.appendChild(node);
-        return svg;
-      };
-      loadSerializedSVG$1 = function(svg) {
-        return new Promise(function(resolve, reject) {
-          var img = new Image();
-          img.onload = function() {
-            return resolve(img);
-          };
-          img.onerror = reject;
-          img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
-        });
-      };
-      FEATURES = {
-        get SUPPORT_RANGE_BOUNDS() {
-          var value = testRangeBounds(document);
-          Object.defineProperty(FEATURES, "SUPPORT_RANGE_BOUNDS", { value });
-          return value;
-        },
-        get SUPPORT_WORD_BREAKING() {
-          var value = FEATURES.SUPPORT_RANGE_BOUNDS && testIOSLineBreak(document);
-          Object.defineProperty(FEATURES, "SUPPORT_WORD_BREAKING", { value });
-          return value;
-        },
-        get SUPPORT_SVG_DRAWING() {
-          var value = testSVG(document);
-          Object.defineProperty(FEATURES, "SUPPORT_SVG_DRAWING", { value });
-          return value;
-        },
-        get SUPPORT_FOREIGNOBJECT_DRAWING() {
-          var value = typeof Array.from === "function" && typeof window.fetch === "function" ? testForeignObject(document) : Promise.resolve(false);
-          Object.defineProperty(FEATURES, "SUPPORT_FOREIGNOBJECT_DRAWING", { value });
-          return value;
-        },
-        get SUPPORT_CORS_IMAGES() {
-          var value = testCORS();
-          Object.defineProperty(FEATURES, "SUPPORT_CORS_IMAGES", { value });
-          return value;
-        },
-        get SUPPORT_RESPONSE_TYPE() {
-          var value = testResponseType();
-          Object.defineProperty(FEATURES, "SUPPORT_RESPONSE_TYPE", { value });
-          return value;
-        },
-        get SUPPORT_CORS_XHR() {
-          var value = "withCredentials" in new XMLHttpRequest();
-          Object.defineProperty(FEATURES, "SUPPORT_CORS_XHR", { value });
-          return value;
-        },
-        get SUPPORT_NATIVE_TEXT_SEGMENTATION() {
-          var value = !!(typeof Intl !== "undefined" && Intl.Segmenter);
-          Object.defineProperty(FEATURES, "SUPPORT_NATIVE_TEXT_SEGMENTATION", { value });
-          return value;
-        }
-      };
-      TextBounds = /** @class */
-      /* @__PURE__ */ (function() {
-        function TextBounds2(text, bounds) {
-          this.text = text;
-          this.bounds = bounds;
-        }
-        return TextBounds2;
-      })();
-      parseTextBounds = function(context2, value, styles, node) {
-        var textList = breakText(value, styles);
-        var textBounds = [];
-        var offset = 0;
-        textList.forEach(function(text) {
-          if (styles.textDecorationLine.length || text.trim().length > 0) {
-            if (FEATURES.SUPPORT_RANGE_BOUNDS) {
-              var clientRects = createRange(node, offset, text.length).getClientRects();
-              if (clientRects.length > 1) {
-                var subSegments = segmentGraphemes(text);
-                var subOffset_1 = 0;
-                subSegments.forEach(function(subSegment) {
-                  textBounds.push(new TextBounds(subSegment, Bounds.fromDOMRectList(context2, createRange(node, subOffset_1 + offset, subSegment.length).getClientRects())));
-                  subOffset_1 += subSegment.length;
-                });
-              } else {
-                textBounds.push(new TextBounds(text, Bounds.fromDOMRectList(context2, clientRects)));
-              }
-            } else {
-              var replacementNode = node.splitText(text.length);
-              textBounds.push(new TextBounds(text, getWrapperBounds(context2, node)));
-              node = replacementNode;
-            }
-          } else if (!FEATURES.SUPPORT_RANGE_BOUNDS) {
-            node = node.splitText(text.length);
-          }
-          offset += text.length;
-        });
-        return textBounds;
-      };
-      getWrapperBounds = function(context2, node) {
-        var ownerDocument = node.ownerDocument;
-        if (ownerDocument) {
-          var wrapper = ownerDocument.createElement("html2canvaswrapper");
-          wrapper.appendChild(node.cloneNode(true));
-          var parentNode = node.parentNode;
-          if (parentNode) {
-            parentNode.replaceChild(wrapper, node);
-            var bounds = parseBounds(context2, wrapper);
-            if (wrapper.firstChild) {
-              parentNode.replaceChild(wrapper.firstChild, wrapper);
-            }
-            return bounds;
-          }
-        }
-        return Bounds.EMPTY;
-      };
-      createRange = function(node, offset, length) {
-        var ownerDocument = node.ownerDocument;
-        if (!ownerDocument) {
-          throw new Error("Node has no owner document");
-        }
-        var range = ownerDocument.createRange();
-        range.setStart(node, offset);
-        range.setEnd(node, offset + length);
-        return range;
-      };
-      segmentGraphemes = function(value) {
-        if (FEATURES.SUPPORT_NATIVE_TEXT_SEGMENTATION) {
-          var segmenter = new Intl.Segmenter(void 0, { granularity: "grapheme" });
-          return Array.from(segmenter.segment(value)).map(function(segment) {
-            return segment.segment;
-          });
-        }
-        return splitGraphemes(value);
-      };
-      segmentWords = function(value, styles) {
-        if (FEATURES.SUPPORT_NATIVE_TEXT_SEGMENTATION) {
-          var segmenter = new Intl.Segmenter(void 0, {
-            granularity: "word"
-          });
-          return Array.from(segmenter.segment(value)).map(function(segment) {
-            return segment.segment;
-          });
-        }
-        return breakWords(value, styles);
-      };
-      breakText = function(value, styles) {
-        return styles.letterSpacing !== 0 ? segmentGraphemes(value) : segmentWords(value, styles);
-      };
-      wordSeparators = [32, 160, 4961, 65792, 65793, 4153, 4241];
-      breakWords = function(str, styles) {
-        var breaker = LineBreaker(str, {
-          lineBreak: styles.lineBreak,
-          wordBreak: styles.overflowWrap === "break-word" ? "break-word" : styles.wordBreak
-        });
-        var words = [];
-        var bk;
-        var _loop_1 = function() {
-          if (bk.value) {
-            var value = bk.value.slice();
-            var codePoints = toCodePoints$1(value);
-            var word_1 = "";
-            codePoints.forEach(function(codePoint) {
-              if (wordSeparators.indexOf(codePoint) === -1) {
-                word_1 += fromCodePoint$1(codePoint);
-              } else {
-                if (word_1.length) {
-                  words.push(word_1);
-                }
-                words.push(fromCodePoint$1(codePoint));
-                word_1 = "";
-              }
-            });
-            if (word_1.length) {
-              words.push(word_1);
-            }
-          }
-        };
-        while (!(bk = breaker.next()).done) {
-          _loop_1();
-        }
-        return words;
-      };
-      TextContainer = /** @class */
-      /* @__PURE__ */ (function() {
-        function TextContainer2(context2, node, styles) {
-          this.text = transform(node.data, styles.textTransform);
-          this.textBounds = parseTextBounds(context2, this.text, styles, node);
-        }
-        return TextContainer2;
-      })();
-      transform = function(text, transform2) {
-        switch (transform2) {
-          case 1:
-            return text.toLowerCase();
-          case 3:
-            return text.replace(CAPITALIZE, capitalize);
-          case 2:
-            return text.toUpperCase();
-          default:
-            return text;
-        }
-      };
-      CAPITALIZE = /(^|\s|:|-|\(|\))([a-z])/g;
-      capitalize = function(m, p1, p2) {
-        if (m.length > 0) {
-          return p1 + p2.toUpperCase();
-        }
-        return m;
-      };
-      ImageElementContainer = /** @class */
-      (function(_super) {
-        __extends(ImageElementContainer2, _super);
-        function ImageElementContainer2(context2, img) {
-          var _this = _super.call(this, context2, img) || this;
-          _this.src = img.currentSrc || img.src;
-          _this.intrinsicWidth = img.naturalWidth;
-          _this.intrinsicHeight = img.naturalHeight;
-          _this.context.cache.addImage(_this.src);
-          return _this;
-        }
-        return ImageElementContainer2;
-      })(ElementContainer);
-      CanvasElementContainer = /** @class */
-      (function(_super) {
-        __extends(CanvasElementContainer2, _super);
-        function CanvasElementContainer2(context2, canvas) {
-          var _this = _super.call(this, context2, canvas) || this;
-          _this.canvas = canvas;
-          _this.intrinsicWidth = canvas.width;
-          _this.intrinsicHeight = canvas.height;
-          return _this;
-        }
-        return CanvasElementContainer2;
-      })(ElementContainer);
-      SVGElementContainer = /** @class */
-      (function(_super) {
-        __extends(SVGElementContainer2, _super);
-        function SVGElementContainer2(context2, img) {
-          var _this = _super.call(this, context2, img) || this;
-          var s = new XMLSerializer();
-          var bounds = parseBounds(context2, img);
-          img.setAttribute("width", bounds.width + "px");
-          img.setAttribute("height", bounds.height + "px");
-          _this.svg = "data:image/svg+xml," + encodeURIComponent(s.serializeToString(img));
-          _this.intrinsicWidth = img.width.baseVal.value;
-          _this.intrinsicHeight = img.height.baseVal.value;
-          _this.context.cache.addImage(_this.svg);
-          return _this;
-        }
-        return SVGElementContainer2;
-      })(ElementContainer);
-      LIElementContainer = /** @class */
-      (function(_super) {
-        __extends(LIElementContainer2, _super);
-        function LIElementContainer2(context2, element) {
-          var _this = _super.call(this, context2, element) || this;
-          _this.value = element.value;
-          return _this;
-        }
-        return LIElementContainer2;
-      })(ElementContainer);
-      OLElementContainer = /** @class */
-      (function(_super) {
-        __extends(OLElementContainer2, _super);
-        function OLElementContainer2(context2, element) {
-          var _this = _super.call(this, context2, element) || this;
-          _this.start = element.start;
-          _this.reversed = typeof element.reversed === "boolean" && element.reversed === true;
-          return _this;
-        }
-        return OLElementContainer2;
-      })(ElementContainer);
-      CHECKBOX_BORDER_RADIUS = [
-        {
-          type: 15,
-          flags: 0,
-          unit: "px",
-          number: 3
-        }
-      ];
-      RADIO_BORDER_RADIUS = [
-        {
-          type: 16,
-          flags: 0,
-          number: 50
-        }
-      ];
-      reformatInputBounds = function(bounds) {
-        if (bounds.width > bounds.height) {
-          return new Bounds(bounds.left + (bounds.width - bounds.height) / 2, bounds.top, bounds.height, bounds.height);
-        } else if (bounds.width < bounds.height) {
-          return new Bounds(bounds.left, bounds.top + (bounds.height - bounds.width) / 2, bounds.width, bounds.width);
-        }
-        return bounds;
-      };
-      getInputValue = function(node) {
-        var value = node.type === PASSWORD ? new Array(node.value.length + 1).join("\u2022") : node.value;
-        return value.length === 0 ? node.placeholder || "" : value;
-      };
-      CHECKBOX = "checkbox";
-      RADIO = "radio";
-      PASSWORD = "password";
-      INPUT_COLOR = 707406591;
-      InputElementContainer = /** @class */
-      (function(_super) {
-        __extends(InputElementContainer2, _super);
-        function InputElementContainer2(context2, input) {
-          var _this = _super.call(this, context2, input) || this;
-          _this.type = input.type.toLowerCase();
-          _this.checked = input.checked;
-          _this.value = getInputValue(input);
-          if (_this.type === CHECKBOX || _this.type === RADIO) {
-            _this.styles.backgroundColor = 3739148031;
-            _this.styles.borderTopColor = _this.styles.borderRightColor = _this.styles.borderBottomColor = _this.styles.borderLeftColor = 2779096575;
-            _this.styles.borderTopWidth = _this.styles.borderRightWidth = _this.styles.borderBottomWidth = _this.styles.borderLeftWidth = 1;
-            _this.styles.borderTopStyle = _this.styles.borderRightStyle = _this.styles.borderBottomStyle = _this.styles.borderLeftStyle = 1;
-            _this.styles.backgroundClip = [
-              0
-              /* BORDER_BOX */
-            ];
-            _this.styles.backgroundOrigin = [
-              0
-              /* BORDER_BOX */
-            ];
-            _this.bounds = reformatInputBounds(_this.bounds);
-          }
-          switch (_this.type) {
-            case CHECKBOX:
-              _this.styles.borderTopRightRadius = _this.styles.borderTopLeftRadius = _this.styles.borderBottomRightRadius = _this.styles.borderBottomLeftRadius = CHECKBOX_BORDER_RADIUS;
-              break;
-            case RADIO:
-              _this.styles.borderTopRightRadius = _this.styles.borderTopLeftRadius = _this.styles.borderBottomRightRadius = _this.styles.borderBottomLeftRadius = RADIO_BORDER_RADIUS;
-              break;
-          }
-          return _this;
-        }
-        return InputElementContainer2;
-      })(ElementContainer);
-      SelectElementContainer = /** @class */
-      (function(_super) {
-        __extends(SelectElementContainer2, _super);
-        function SelectElementContainer2(context2, element) {
-          var _this = _super.call(this, context2, element) || this;
-          var option = element.options[element.selectedIndex || 0];
-          _this.value = option ? option.text || "" : "";
-          return _this;
-        }
-        return SelectElementContainer2;
-      })(ElementContainer);
-      TextareaElementContainer = /** @class */
-      (function(_super) {
-        __extends(TextareaElementContainer2, _super);
-        function TextareaElementContainer2(context2, element) {
-          var _this = _super.call(this, context2, element) || this;
-          _this.value = element.value;
-          return _this;
-        }
-        return TextareaElementContainer2;
-      })(ElementContainer);
-      IFrameElementContainer = /** @class */
-      (function(_super) {
-        __extends(IFrameElementContainer2, _super);
-        function IFrameElementContainer2(context2, iframe) {
-          var _this = _super.call(this, context2, iframe) || this;
-          _this.src = iframe.src;
-          _this.width = parseInt(iframe.width, 10) || 0;
-          _this.height = parseInt(iframe.height, 10) || 0;
-          _this.backgroundColor = _this.styles.backgroundColor;
-          try {
-            if (iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.documentElement) {
-              _this.tree = parseTree(context2, iframe.contentWindow.document.documentElement);
-              var documentBackgroundColor = iframe.contentWindow.document.documentElement ? parseColor(context2, getComputedStyle(iframe.contentWindow.document.documentElement).backgroundColor) : COLORS.TRANSPARENT;
-              var bodyBackgroundColor = iframe.contentWindow.document.body ? parseColor(context2, getComputedStyle(iframe.contentWindow.document.body).backgroundColor) : COLORS.TRANSPARENT;
-              _this.backgroundColor = isTransparent(documentBackgroundColor) ? isTransparent(bodyBackgroundColor) ? _this.styles.backgroundColor : bodyBackgroundColor : documentBackgroundColor;
-            }
-          } catch (e2) {
-          }
-          return _this;
-        }
-        return IFrameElementContainer2;
-      })(ElementContainer);
-      LIST_OWNERS = ["OL", "UL", "MENU"];
-      parseNodeTree = function(context2, node, parent, root) {
-        for (var childNode = node.firstChild, nextNode = void 0; childNode; childNode = nextNode) {
-          nextNode = childNode.nextSibling;
-          if (isTextNode(childNode) && childNode.data.trim().length > 0) {
-            parent.textNodes.push(new TextContainer(context2, childNode, parent.styles));
-          } else if (isElementNode(childNode)) {
-            if (isSlotElement(childNode) && childNode.assignedNodes) {
-              childNode.assignedNodes().forEach(function(childNode2) {
-                return parseNodeTree(context2, childNode2, parent, root);
-              });
-            } else {
-              var container = createContainer(context2, childNode);
-              if (container.styles.isVisible()) {
-                if (createsRealStackingContext(childNode, container, root)) {
-                  container.flags |= 4;
-                } else if (createsStackingContext(container.styles)) {
-                  container.flags |= 2;
-                }
-                if (LIST_OWNERS.indexOf(childNode.tagName) !== -1) {
-                  container.flags |= 8;
-                }
-                parent.elements.push(container);
-                childNode.slot;
-                if (childNode.shadowRoot) {
-                  parseNodeTree(context2, childNode.shadowRoot, container, root);
-                } else if (!isTextareaElement(childNode) && !isSVGElement(childNode) && !isSelectElement(childNode)) {
-                  parseNodeTree(context2, childNode, container, root);
-                }
-              }
-            }
-          }
-        }
-      };
-      createContainer = function(context2, element) {
-        if (isImageElement(element)) {
-          return new ImageElementContainer(context2, element);
-        }
-        if (isCanvasElement(element)) {
-          return new CanvasElementContainer(context2, element);
-        }
-        if (isSVGElement(element)) {
-          return new SVGElementContainer(context2, element);
-        }
-        if (isLIElement(element)) {
-          return new LIElementContainer(context2, element);
-        }
-        if (isOLElement(element)) {
-          return new OLElementContainer(context2, element);
-        }
-        if (isInputElement(element)) {
-          return new InputElementContainer(context2, element);
-        }
-        if (isSelectElement(element)) {
-          return new SelectElementContainer(context2, element);
-        }
-        if (isTextareaElement(element)) {
-          return new TextareaElementContainer(context2, element);
-        }
-        if (isIFrameElement(element)) {
-          return new IFrameElementContainer(context2, element);
-        }
-        return new ElementContainer(context2, element);
-      };
-      parseTree = function(context2, element) {
-        var container = createContainer(context2, element);
-        container.flags |= 4;
-        parseNodeTree(context2, element, container, container);
-        return container;
-      };
-      createsRealStackingContext = function(node, container, root) {
-        return container.styles.isPositionedWithZIndex() || container.styles.opacity < 1 || container.styles.isTransformed() || isBodyElement(node) && root.styles.isTransparent();
-      };
-      createsStackingContext = function(styles) {
-        return styles.isPositioned() || styles.isFloating();
-      };
-      isTextNode = function(node) {
-        return node.nodeType === Node.TEXT_NODE;
-      };
-      isElementNode = function(node) {
-        return node.nodeType === Node.ELEMENT_NODE;
-      };
-      isHTMLElementNode = function(node) {
-        return isElementNode(node) && typeof node.style !== "undefined" && !isSVGElementNode(node);
-      };
-      isSVGElementNode = function(element) {
-        return typeof element.className === "object";
-      };
-      isLIElement = function(node) {
-        return node.tagName === "LI";
-      };
-      isOLElement = function(node) {
-        return node.tagName === "OL";
-      };
-      isInputElement = function(node) {
-        return node.tagName === "INPUT";
-      };
-      isHTMLElement = function(node) {
-        return node.tagName === "HTML";
-      };
-      isSVGElement = function(node) {
-        return node.tagName === "svg";
-      };
-      isBodyElement = function(node) {
-        return node.tagName === "BODY";
-      };
-      isCanvasElement = function(node) {
-        return node.tagName === "CANVAS";
-      };
-      isVideoElement = function(node) {
-        return node.tagName === "VIDEO";
-      };
-      isImageElement = function(node) {
-        return node.tagName === "IMG";
-      };
-      isIFrameElement = function(node) {
-        return node.tagName === "IFRAME";
-      };
-      isStyleElement = function(node) {
-        return node.tagName === "STYLE";
-      };
-      isScriptElement = function(node) {
-        return node.tagName === "SCRIPT";
-      };
-      isTextareaElement = function(node) {
-        return node.tagName === "TEXTAREA";
-      };
-      isSelectElement = function(node) {
-        return node.tagName === "SELECT";
-      };
-      isSlotElement = function(node) {
-        return node.tagName === "SLOT";
-      };
-      isCustomElement = function(node) {
-        return node.tagName.indexOf("-") > 0;
-      };
-      CounterState = /** @class */
-      (function() {
-        function CounterState2() {
-          this.counters = {};
-        }
-        CounterState2.prototype.getCounterValue = function(name) {
-          var counter = this.counters[name];
-          if (counter && counter.length) {
-            return counter[counter.length - 1];
-          }
-          return 1;
-        };
-        CounterState2.prototype.getCounterValues = function(name) {
-          var counter = this.counters[name];
-          return counter ? counter : [];
-        };
-        CounterState2.prototype.pop = function(counters) {
-          var _this = this;
-          counters.forEach(function(counter) {
-            return _this.counters[counter].pop();
-          });
-        };
-        CounterState2.prototype.parse = function(style) {
-          var _this = this;
-          var counterIncrement2 = style.counterIncrement;
-          var counterReset2 = style.counterReset;
-          var canReset = true;
-          if (counterIncrement2 !== null) {
-            counterIncrement2.forEach(function(entry) {
-              var counter = _this.counters[entry.counter];
-              if (counter && entry.increment !== 0) {
-                canReset = false;
-                if (!counter.length) {
-                  counter.push(1);
-                }
-                counter[Math.max(0, counter.length - 1)] += entry.increment;
-              }
-            });
-          }
-          var counterNames = [];
-          if (canReset) {
-            counterReset2.forEach(function(entry) {
-              var counter = _this.counters[entry.counter];
-              counterNames.push(entry.counter);
-              if (!counter) {
-                counter = _this.counters[entry.counter] = [];
-              }
-              counter.push(entry.reset);
-            });
-          }
-          return counterNames;
-        };
-        return CounterState2;
-      })();
-      ROMAN_UPPER = {
-        integers: [1e3, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1],
-        values: ["M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"]
-      };
-      ARMENIAN = {
-        integers: [
-          9e3,
-          8e3,
-          7e3,
-          6e3,
-          5e3,
-          4e3,
-          3e3,
-          2e3,
-          1e3,
-          900,
-          800,
-          700,
-          600,
-          500,
-          400,
-          300,
-          200,
-          100,
-          90,
-          80,
-          70,
-          60,
-          50,
-          40,
-          30,
-          20,
-          10,
-          9,
-          8,
-          7,
-          6,
-          5,
-          4,
-          3,
-          2,
-          1
-        ],
-        values: [
-          "\u0554",
-          "\u0553",
-          "\u0552",
-          "\u0551",
-          "\u0550",
-          "\u054F",
-          "\u054E",
-          "\u054D",
-          "\u054C",
-          "\u054B",
-          "\u054A",
-          "\u0549",
-          "\u0548",
-          "\u0547",
-          "\u0546",
-          "\u0545",
-          "\u0544",
-          "\u0543",
-          "\u0542",
-          "\u0541",
-          "\u0540",
-          "\u053F",
-          "\u053E",
-          "\u053D",
-          "\u053C",
-          "\u053B",
-          "\u053A",
-          "\u0539",
-          "\u0538",
-          "\u0537",
-          "\u0536",
-          "\u0535",
-          "\u0534",
-          "\u0533",
-          "\u0532",
-          "\u0531"
-        ]
-      };
-      HEBREW = {
-        integers: [
-          1e4,
-          9e3,
-          8e3,
-          7e3,
-          6e3,
-          5e3,
-          4e3,
-          3e3,
-          2e3,
-          1e3,
-          400,
-          300,
-          200,
-          100,
-          90,
-          80,
-          70,
-          60,
-          50,
-          40,
-          30,
-          20,
-          19,
-          18,
-          17,
-          16,
-          15,
-          10,
-          9,
-          8,
-          7,
-          6,
-          5,
-          4,
-          3,
-          2,
-          1
-        ],
-        values: [
-          "\u05D9\u05F3",
-          "\u05D8\u05F3",
-          "\u05D7\u05F3",
-          "\u05D6\u05F3",
-          "\u05D5\u05F3",
-          "\u05D4\u05F3",
-          "\u05D3\u05F3",
-          "\u05D2\u05F3",
-          "\u05D1\u05F3",
-          "\u05D0\u05F3",
-          "\u05EA",
-          "\u05E9",
-          "\u05E8",
-          "\u05E7",
-          "\u05E6",
-          "\u05E4",
-          "\u05E2",
-          "\u05E1",
-          "\u05E0",
-          "\u05DE",
-          "\u05DC",
-          "\u05DB",
-          "\u05D9\u05D8",
-          "\u05D9\u05D7",
-          "\u05D9\u05D6",
-          "\u05D8\u05D6",
-          "\u05D8\u05D5",
-          "\u05D9",
-          "\u05D8",
-          "\u05D7",
-          "\u05D6",
-          "\u05D5",
-          "\u05D4",
-          "\u05D3",
-          "\u05D2",
-          "\u05D1",
-          "\u05D0"
-        ]
-      };
-      GEORGIAN = {
-        integers: [
-          1e4,
-          9e3,
-          8e3,
-          7e3,
-          6e3,
-          5e3,
-          4e3,
-          3e3,
-          2e3,
-          1e3,
-          900,
-          800,
-          700,
-          600,
-          500,
-          400,
-          300,
-          200,
-          100,
-          90,
-          80,
-          70,
-          60,
-          50,
-          40,
-          30,
-          20,
-          10,
-          9,
-          8,
-          7,
-          6,
-          5,
-          4,
-          3,
-          2,
-          1
-        ],
-        values: [
-          "\u10F5",
-          "\u10F0",
-          "\u10EF",
-          "\u10F4",
-          "\u10EE",
-          "\u10ED",
-          "\u10EC",
-          "\u10EB",
-          "\u10EA",
-          "\u10E9",
-          "\u10E8",
-          "\u10E7",
-          "\u10E6",
-          "\u10E5",
-          "\u10E4",
-          "\u10F3",
-          "\u10E2",
-          "\u10E1",
-          "\u10E0",
-          "\u10DF",
-          "\u10DE",
-          "\u10DD",
-          "\u10F2",
-          "\u10DC",
-          "\u10DB",
-          "\u10DA",
-          "\u10D9",
-          "\u10D8",
-          "\u10D7",
-          "\u10F1",
-          "\u10D6",
-          "\u10D5",
-          "\u10D4",
-          "\u10D3",
-          "\u10D2",
-          "\u10D1",
-          "\u10D0"
-        ]
-      };
-      createAdditiveCounter = function(value, min, max, symbols, fallback, suffix) {
-        if (value < min || value > max) {
-          return createCounterText(value, fallback, suffix.length > 0);
-        }
-        return symbols.integers.reduce(function(string, integer, index) {
-          while (value >= integer) {
-            value -= integer;
-            string += symbols.values[index];
-          }
-          return string;
-        }, "") + suffix;
-      };
-      createCounterStyleWithSymbolResolver = function(value, codePointRangeLength, isNumeric, resolver) {
-        var string = "";
-        do {
-          if (!isNumeric) {
-            value--;
-          }
-          string = resolver(value) + string;
-          value /= codePointRangeLength;
-        } while (value * codePointRangeLength >= codePointRangeLength);
-        return string;
-      };
-      createCounterStyleFromRange = function(value, codePointRangeStart, codePointRangeEnd, isNumeric, suffix) {
-        var codePointRangeLength = codePointRangeEnd - codePointRangeStart + 1;
-        return (value < 0 ? "-" : "") + (createCounterStyleWithSymbolResolver(Math.abs(value), codePointRangeLength, isNumeric, function(codePoint) {
-          return fromCodePoint$1(Math.floor(codePoint % codePointRangeLength) + codePointRangeStart);
-        }) + suffix);
-      };
-      createCounterStyleFromSymbols = function(value, symbols, suffix) {
-        if (suffix === void 0) {
-          suffix = ". ";
-        }
-        var codePointRangeLength = symbols.length;
-        return createCounterStyleWithSymbolResolver(Math.abs(value), codePointRangeLength, false, function(codePoint) {
-          return symbols[Math.floor(codePoint % codePointRangeLength)];
-        }) + suffix;
-      };
-      CJK_ZEROS = 1 << 0;
-      CJK_TEN_COEFFICIENTS = 1 << 1;
-      CJK_TEN_HIGH_COEFFICIENTS = 1 << 2;
-      CJK_HUNDRED_COEFFICIENTS = 1 << 3;
-      createCJKCounter = function(value, numbers, multipliers, negativeSign, suffix, flags) {
-        if (value < -9999 || value > 9999) {
-          return createCounterText(value, 4, suffix.length > 0);
-        }
-        var tmp = Math.abs(value);
-        var string = suffix;
-        if (tmp === 0) {
-          return numbers[0] + string;
-        }
-        for (var digit = 0; tmp > 0 && digit <= 4; digit++) {
-          var coefficient = tmp % 10;
-          if (coefficient === 0 && contains(flags, CJK_ZEROS) && string !== "") {
-            string = numbers[coefficient] + string;
-          } else if (coefficient > 1 || coefficient === 1 && digit === 0 || coefficient === 1 && digit === 1 && contains(flags, CJK_TEN_COEFFICIENTS) || coefficient === 1 && digit === 1 && contains(flags, CJK_TEN_HIGH_COEFFICIENTS) && value > 100 || coefficient === 1 && digit > 1 && contains(flags, CJK_HUNDRED_COEFFICIENTS)) {
-            string = numbers[coefficient] + (digit > 0 ? multipliers[digit - 1] : "") + string;
-          } else if (coefficient === 1 && digit > 0) {
-            string = multipliers[digit - 1] + string;
-          }
-          tmp = Math.floor(tmp / 10);
-        }
-        return (value < 0 ? negativeSign : "") + string;
-      };
-      CHINESE_INFORMAL_MULTIPLIERS = "\u5341\u767E\u5343\u842C";
-      CHINESE_FORMAL_MULTIPLIERS = "\u62FE\u4F70\u4EDF\u842C";
-      JAPANESE_NEGATIVE = "\u30DE\u30A4\u30CA\u30B9";
-      KOREAN_NEGATIVE = "\uB9C8\uC774\uB108\uC2A4";
-      createCounterText = function(value, type, appendSuffix) {
-        var defaultSuffix = appendSuffix ? ". " : "";
-        var cjkSuffix = appendSuffix ? "\u3001" : "";
-        var koreanSuffix = appendSuffix ? ", " : "";
-        var spaceSuffix = appendSuffix ? " " : "";
-        switch (type) {
-          case 0:
-            return "\u2022" + spaceSuffix;
-          case 1:
-            return "\u25E6" + spaceSuffix;
-          case 2:
-            return "\u25FE" + spaceSuffix;
-          case 5:
-            var string = createCounterStyleFromRange(value, 48, 57, true, defaultSuffix);
-            return string.length < 4 ? "0" + string : string;
-          case 4:
-            return createCounterStyleFromSymbols(value, "\u3007\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D", cjkSuffix);
-          case 6:
-            return createAdditiveCounter(value, 1, 3999, ROMAN_UPPER, 3, defaultSuffix).toLowerCase();
-          case 7:
-            return createAdditiveCounter(value, 1, 3999, ROMAN_UPPER, 3, defaultSuffix);
-          case 8:
-            return createCounterStyleFromRange(value, 945, 969, false, defaultSuffix);
-          case 9:
-            return createCounterStyleFromRange(value, 97, 122, false, defaultSuffix);
-          case 10:
-            return createCounterStyleFromRange(value, 65, 90, false, defaultSuffix);
-          case 11:
-            return createCounterStyleFromRange(value, 1632, 1641, true, defaultSuffix);
-          case 12:
-          case 49:
-            return createAdditiveCounter(value, 1, 9999, ARMENIAN, 3, defaultSuffix);
-          case 35:
-            return createAdditiveCounter(value, 1, 9999, ARMENIAN, 3, defaultSuffix).toLowerCase();
-          case 13:
-            return createCounterStyleFromRange(value, 2534, 2543, true, defaultSuffix);
-          case 14:
-          case 30:
-            return createCounterStyleFromRange(value, 6112, 6121, true, defaultSuffix);
-          case 15:
-            return createCounterStyleFromSymbols(value, "\u5B50\u4E11\u5BC5\u536F\u8FB0\u5DF3\u5348\u672A\u7533\u9149\u620C\u4EA5", cjkSuffix);
-          case 16:
-            return createCounterStyleFromSymbols(value, "\u7532\u4E59\u4E19\u4E01\u620A\u5DF1\u5E9A\u8F9B\u58EC\u7678", cjkSuffix);
-          case 17:
-          case 48:
-            return createCJKCounter(value, "\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D", CHINESE_INFORMAL_MULTIPLIERS, "\u8CA0", cjkSuffix, CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS | CJK_HUNDRED_COEFFICIENTS);
-          case 47:
-            return createCJKCounter(value, "\u96F6\u58F9\u8CB3\u53C3\u8086\u4F0D\u9678\u67D2\u634C\u7396", CHINESE_FORMAL_MULTIPLIERS, "\u8CA0", cjkSuffix, CJK_ZEROS | CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS | CJK_HUNDRED_COEFFICIENTS);
-          case 42:
-            return createCJKCounter(value, "\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D", CHINESE_INFORMAL_MULTIPLIERS, "\u8D1F", cjkSuffix, CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS | CJK_HUNDRED_COEFFICIENTS);
-          case 41:
-            return createCJKCounter(value, "\u96F6\u58F9\u8D30\u53C1\u8086\u4F0D\u9646\u67D2\u634C\u7396", CHINESE_FORMAL_MULTIPLIERS, "\u8D1F", cjkSuffix, CJK_ZEROS | CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS | CJK_HUNDRED_COEFFICIENTS);
-          case 26:
-            return createCJKCounter(value, "\u3007\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D", "\u5341\u767E\u5343\u4E07", JAPANESE_NEGATIVE, cjkSuffix, 0);
-          case 25:
-            return createCJKCounter(value, "\u96F6\u58F1\u5F10\u53C2\u56DB\u4F0D\u516D\u4E03\u516B\u4E5D", "\u62FE\u767E\u5343\u4E07", JAPANESE_NEGATIVE, cjkSuffix, CJK_ZEROS | CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS);
-          case 31:
-            return createCJKCounter(value, "\uC601\uC77C\uC774\uC0BC\uC0AC\uC624\uC721\uCE60\uD314\uAD6C", "\uC2ED\uBC31\uCC9C\uB9CC", KOREAN_NEGATIVE, koreanSuffix, CJK_ZEROS | CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS);
-          case 33:
-            return createCJKCounter(value, "\u96F6\u4E00\u4E8C\u4E09\u56DB\u4E94\u516D\u4E03\u516B\u4E5D", "\u5341\u767E\u5343\u842C", KOREAN_NEGATIVE, koreanSuffix, 0);
-          case 32:
-            return createCJKCounter(value, "\u96F6\u58F9\u8CB3\u53C3\u56DB\u4E94\u516D\u4E03\u516B\u4E5D", "\u62FE\u767E\u5343", KOREAN_NEGATIVE, koreanSuffix, CJK_ZEROS | CJK_TEN_COEFFICIENTS | CJK_TEN_HIGH_COEFFICIENTS);
-          case 18:
-            return createCounterStyleFromRange(value, 2406, 2415, true, defaultSuffix);
-          case 20:
-            return createAdditiveCounter(value, 1, 19999, GEORGIAN, 3, defaultSuffix);
-          case 21:
-            return createCounterStyleFromRange(value, 2790, 2799, true, defaultSuffix);
-          case 22:
-            return createCounterStyleFromRange(value, 2662, 2671, true, defaultSuffix);
-          case 22:
-            return createAdditiveCounter(value, 1, 10999, HEBREW, 3, defaultSuffix);
-          case 23:
-            return createCounterStyleFromSymbols(value, "\u3042\u3044\u3046\u3048\u304A\u304B\u304D\u304F\u3051\u3053\u3055\u3057\u3059\u305B\u305D\u305F\u3061\u3064\u3066\u3068\u306A\u306B\u306C\u306D\u306E\u306F\u3072\u3075\u3078\u307B\u307E\u307F\u3080\u3081\u3082\u3084\u3086\u3088\u3089\u308A\u308B\u308C\u308D\u308F\u3090\u3091\u3092\u3093");
-          case 24:
-            return createCounterStyleFromSymbols(value, "\u3044\u308D\u306F\u306B\u307B\u3078\u3068\u3061\u308A\u306C\u308B\u3092\u308F\u304B\u3088\u305F\u308C\u305D\u3064\u306D\u306A\u3089\u3080\u3046\u3090\u306E\u304A\u304F\u3084\u307E\u3051\u3075\u3053\u3048\u3066\u3042\u3055\u304D\u3086\u3081\u307F\u3057\u3091\u3072\u3082\u305B\u3059");
-          case 27:
-            return createCounterStyleFromRange(value, 3302, 3311, true, defaultSuffix);
-          case 28:
-            return createCounterStyleFromSymbols(value, "\u30A2\u30A4\u30A6\u30A8\u30AA\u30AB\u30AD\u30AF\u30B1\u30B3\u30B5\u30B7\u30B9\u30BB\u30BD\u30BF\u30C1\u30C4\u30C6\u30C8\u30CA\u30CB\u30CC\u30CD\u30CE\u30CF\u30D2\u30D5\u30D8\u30DB\u30DE\u30DF\u30E0\u30E1\u30E2\u30E4\u30E6\u30E8\u30E9\u30EA\u30EB\u30EC\u30ED\u30EF\u30F0\u30F1\u30F2\u30F3", cjkSuffix);
-          case 29:
-            return createCounterStyleFromSymbols(value, "\u30A4\u30ED\u30CF\u30CB\u30DB\u30D8\u30C8\u30C1\u30EA\u30CC\u30EB\u30F2\u30EF\u30AB\u30E8\u30BF\u30EC\u30BD\u30C4\u30CD\u30CA\u30E9\u30E0\u30A6\u30F0\u30CE\u30AA\u30AF\u30E4\u30DE\u30B1\u30D5\u30B3\u30A8\u30C6\u30A2\u30B5\u30AD\u30E6\u30E1\u30DF\u30B7\u30F1\u30D2\u30E2\u30BB\u30B9", cjkSuffix);
-          case 34:
-            return createCounterStyleFromRange(value, 3792, 3801, true, defaultSuffix);
-          case 37:
-            return createCounterStyleFromRange(value, 6160, 6169, true, defaultSuffix);
-          case 38:
-            return createCounterStyleFromRange(value, 4160, 4169, true, defaultSuffix);
-          case 39:
-            return createCounterStyleFromRange(value, 2918, 2927, true, defaultSuffix);
-          case 40:
-            return createCounterStyleFromRange(value, 1776, 1785, true, defaultSuffix);
-          case 43:
-            return createCounterStyleFromRange(value, 3046, 3055, true, defaultSuffix);
-          case 44:
-            return createCounterStyleFromRange(value, 3174, 3183, true, defaultSuffix);
-          case 45:
-            return createCounterStyleFromRange(value, 3664, 3673, true, defaultSuffix);
-          case 46:
-            return createCounterStyleFromRange(value, 3872, 3881, true, defaultSuffix);
-          case 3:
-          default:
-            return createCounterStyleFromRange(value, 48, 57, true, defaultSuffix);
-        }
-      };
-      IGNORE_ATTRIBUTE = "data-html2canvas-ignore";
-      DocumentCloner = /** @class */
-      (function() {
-        function DocumentCloner2(context2, element, options) {
-          this.context = context2;
-          this.options = options;
-          this.scrolledElements = [];
-          this.referenceElement = element;
-          this.counters = new CounterState();
-          this.quoteDepth = 0;
-          if (!element.ownerDocument) {
-            throw new Error("Cloned element does not have an owner document");
-          }
-          this.documentElement = this.cloneNode(element.ownerDocument.documentElement, false);
-        }
-        DocumentCloner2.prototype.toIFrame = function(ownerDocument, windowSize) {
-          var _this = this;
-          var iframe = createIFrameContainer(ownerDocument, windowSize);
-          if (!iframe.contentWindow) {
-            return Promise.reject("Unable to find iframe window");
-          }
-          var scrollX = ownerDocument.defaultView.pageXOffset;
-          var scrollY = ownerDocument.defaultView.pageYOffset;
-          var cloneWindow = iframe.contentWindow;
-          var documentClone = cloneWindow.document;
-          var iframeLoad = iframeLoader(iframe).then(function() {
-            return __awaiter(_this, void 0, void 0, function() {
-              var onclone, referenceElement;
-              return __generator(this, function(_a) {
-                switch (_a.label) {
-                  case 0:
-                    this.scrolledElements.forEach(restoreNodeScroll);
-                    if (cloneWindow) {
-                      cloneWindow.scrollTo(windowSize.left, windowSize.top);
-                      if (/(iPad|iPhone|iPod)/g.test(navigator.userAgent) && (cloneWindow.scrollY !== windowSize.top || cloneWindow.scrollX !== windowSize.left)) {
-                        this.context.logger.warn("Unable to restore scroll position for cloned document");
-                        this.context.windowBounds = this.context.windowBounds.add(cloneWindow.scrollX - windowSize.left, cloneWindow.scrollY - windowSize.top, 0, 0);
-                      }
-                    }
-                    onclone = this.options.onclone;
-                    referenceElement = this.clonedReferenceElement;
-                    if (typeof referenceElement === "undefined") {
-                      return [2, Promise.reject("Error finding the " + this.referenceElement.nodeName + " in the cloned document")];
-                    }
-                    if (!(documentClone.fonts && documentClone.fonts.ready)) return [3, 2];
-                    return [4, documentClone.fonts.ready];
-                  case 1:
-                    _a.sent();
-                    _a.label = 2;
-                  case 2:
-                    if (!/(AppleWebKit)/g.test(navigator.userAgent)) return [3, 4];
-                    return [4, imagesReady(documentClone)];
-                  case 3:
-                    _a.sent();
-                    _a.label = 4;
-                  case 4:
-                    if (typeof onclone === "function") {
-                      return [2, Promise.resolve().then(function() {
-                        return onclone(documentClone, referenceElement);
-                      }).then(function() {
-                        return iframe;
-                      })];
-                    }
-                    return [2, iframe];
-                }
-              });
-            });
-          });
-          documentClone.open();
-          documentClone.write(serializeDoctype(document.doctype) + "<html></html>");
-          restoreOwnerScroll(this.referenceElement.ownerDocument, scrollX, scrollY);
-          documentClone.replaceChild(documentClone.adoptNode(this.documentElement), documentClone.documentElement);
-          documentClone.close();
-          return iframeLoad;
-        };
-        DocumentCloner2.prototype.createElementClone = function(node) {
-          if (isDebugging(
-            node,
-            2
-            /* CLONE */
-          )) {
-            debugger;
-          }
-          if (isCanvasElement(node)) {
-            return this.createCanvasClone(node);
-          }
-          if (isVideoElement(node)) {
-            return this.createVideoClone(node);
-          }
-          if (isStyleElement(node)) {
-            return this.createStyleClone(node);
-          }
-          var clone = node.cloneNode(false);
-          if (isImageElement(clone)) {
-            if (isImageElement(node) && node.currentSrc && node.currentSrc !== node.src) {
-              clone.src = node.currentSrc;
-              clone.srcset = "";
-            }
-            if (clone.loading === "lazy") {
-              clone.loading = "eager";
-            }
-          }
-          if (isCustomElement(clone)) {
-            return this.createCustomElementClone(clone);
-          }
-          return clone;
-        };
-        DocumentCloner2.prototype.createCustomElementClone = function(node) {
-          var clone = document.createElement("html2canvascustomelement");
-          copyCSSStyles(node.style, clone);
-          return clone;
-        };
-        DocumentCloner2.prototype.createStyleClone = function(node) {
-          try {
-            var sheet = node.sheet;
-            if (sheet && sheet.cssRules) {
-              var css = [].slice.call(sheet.cssRules, 0).reduce(function(css2, rule) {
-                if (rule && typeof rule.cssText === "string") {
-                  return css2 + rule.cssText;
-                }
-                return css2;
-              }, "");
-              var style = node.cloneNode(false);
-              style.textContent = css;
-              return style;
-            }
-          } catch (e2) {
-            this.context.logger.error("Unable to access cssRules property", e2);
-            if (e2.name !== "SecurityError") {
-              throw e2;
-            }
-          }
-          return node.cloneNode(false);
-        };
-        DocumentCloner2.prototype.createCanvasClone = function(canvas) {
-          var _a;
-          if (this.options.inlineImages && canvas.ownerDocument) {
-            var img = canvas.ownerDocument.createElement("img");
-            try {
-              img.src = canvas.toDataURL();
-              return img;
-            } catch (e2) {
-              this.context.logger.info("Unable to inline canvas contents, canvas is tainted", canvas);
-            }
-          }
-          var clonedCanvas = canvas.cloneNode(false);
-          try {
-            clonedCanvas.width = canvas.width;
-            clonedCanvas.height = canvas.height;
-            var ctx = canvas.getContext("2d");
-            var clonedCtx = clonedCanvas.getContext("2d");
-            if (clonedCtx) {
-              if (!this.options.allowTaint && ctx) {
-                clonedCtx.putImageData(ctx.getImageData(0, 0, canvas.width, canvas.height), 0, 0);
-              } else {
-                var gl = (_a = canvas.getContext("webgl2")) !== null && _a !== void 0 ? _a : canvas.getContext("webgl");
-                if (gl) {
-                  var attribs = gl.getContextAttributes();
-                  if ((attribs === null || attribs === void 0 ? void 0 : attribs.preserveDrawingBuffer) === false) {
-                    this.context.logger.warn("Unable to clone WebGL context as it has preserveDrawingBuffer=false", canvas);
-                  }
-                }
-                clonedCtx.drawImage(canvas, 0, 0);
-              }
-            }
-            return clonedCanvas;
-          } catch (e2) {
-            this.context.logger.info("Unable to clone canvas as it is tainted", canvas);
-          }
-          return clonedCanvas;
-        };
-        DocumentCloner2.prototype.createVideoClone = function(video) {
-          var canvas = video.ownerDocument.createElement("canvas");
-          canvas.width = video.offsetWidth;
-          canvas.height = video.offsetHeight;
-          var ctx = canvas.getContext("2d");
-          try {
-            if (ctx) {
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              if (!this.options.allowTaint) {
-                ctx.getImageData(0, 0, canvas.width, canvas.height);
-              }
-            }
-            return canvas;
-          } catch (e2) {
-            this.context.logger.info("Unable to clone video as it is tainted", video);
-          }
-          var blankCanvas = video.ownerDocument.createElement("canvas");
-          blankCanvas.width = video.offsetWidth;
-          blankCanvas.height = video.offsetHeight;
-          return blankCanvas;
-        };
-        DocumentCloner2.prototype.appendChildNode = function(clone, child, copyStyles) {
-          if (!isElementNode(child) || !isScriptElement(child) && !child.hasAttribute(IGNORE_ATTRIBUTE) && (typeof this.options.ignoreElements !== "function" || !this.options.ignoreElements(child))) {
-            if (!this.options.copyStyles || !isElementNode(child) || !isStyleElement(child)) {
-              clone.appendChild(this.cloneNode(child, copyStyles));
-            }
-          }
-        };
-        DocumentCloner2.prototype.cloneChildNodes = function(node, clone, copyStyles) {
-          var _this = this;
-          for (var child = node.shadowRoot ? node.shadowRoot.firstChild : node.firstChild; child; child = child.nextSibling) {
-            if (isElementNode(child) && isSlotElement(child) && typeof child.assignedNodes === "function") {
-              var assignedNodes = child.assignedNodes();
-              if (assignedNodes.length) {
-                assignedNodes.forEach(function(assignedNode) {
-                  return _this.appendChildNode(clone, assignedNode, copyStyles);
-                });
-              }
-            } else {
-              this.appendChildNode(clone, child, copyStyles);
-            }
-          }
-        };
-        DocumentCloner2.prototype.cloneNode = function(node, copyStyles) {
-          if (isTextNode(node)) {
-            return document.createTextNode(node.data);
-          }
-          if (!node.ownerDocument) {
-            return node.cloneNode(false);
-          }
-          var window2 = node.ownerDocument.defaultView;
-          if (window2 && isElementNode(node) && (isHTMLElementNode(node) || isSVGElementNode(node))) {
-            var clone = this.createElementClone(node);
-            clone.style.transitionProperty = "none";
-            var style = window2.getComputedStyle(node);
-            var styleBefore = window2.getComputedStyle(node, ":before");
-            var styleAfter = window2.getComputedStyle(node, ":after");
-            if (this.referenceElement === node && isHTMLElementNode(clone)) {
-              this.clonedReferenceElement = clone;
-            }
-            if (isBodyElement(clone)) {
-              createPseudoHideStyles(clone);
-            }
-            var counters = this.counters.parse(new CSSParsedCounterDeclaration(this.context, style));
-            var before = this.resolvePseudoContent(node, clone, styleBefore, PseudoElementType.BEFORE);
-            if (isCustomElement(node)) {
-              copyStyles = true;
-            }
-            if (!isVideoElement(node)) {
-              this.cloneChildNodes(node, clone, copyStyles);
-            }
-            if (before) {
-              clone.insertBefore(before, clone.firstChild);
-            }
-            var after = this.resolvePseudoContent(node, clone, styleAfter, PseudoElementType.AFTER);
-            if (after) {
-              clone.appendChild(after);
-            }
-            this.counters.pop(counters);
-            if (style && (this.options.copyStyles || isSVGElementNode(node)) && !isIFrameElement(node) || copyStyles) {
-              copyCSSStyles(style, clone);
-            }
-            if (node.scrollTop !== 0 || node.scrollLeft !== 0) {
-              this.scrolledElements.push([clone, node.scrollLeft, node.scrollTop]);
-            }
-            if ((isTextareaElement(node) || isSelectElement(node)) && (isTextareaElement(clone) || isSelectElement(clone))) {
-              clone.value = node.value;
-            }
-            return clone;
-          }
-          return node.cloneNode(false);
-        };
-        DocumentCloner2.prototype.resolvePseudoContent = function(node, clone, style, pseudoElt) {
-          var _this = this;
-          if (!style) {
-            return;
-          }
-          var value = style.content;
-          var document2 = clone.ownerDocument;
-          if (!document2 || !value || value === "none" || value === "-moz-alt-content" || style.display === "none") {
-            return;
-          }
-          this.counters.parse(new CSSParsedCounterDeclaration(this.context, style));
-          var declaration = new CSSParsedPseudoDeclaration(this.context, style);
-          var anonymousReplacedElement = document2.createElement("html2canvaspseudoelement");
-          copyCSSStyles(style, anonymousReplacedElement);
-          declaration.content.forEach(function(token) {
-            if (token.type === 0) {
-              anonymousReplacedElement.appendChild(document2.createTextNode(token.value));
-            } else if (token.type === 22) {
-              var img = document2.createElement("img");
-              img.src = token.value;
-              img.style.opacity = "1";
-              anonymousReplacedElement.appendChild(img);
-            } else if (token.type === 18) {
-              if (token.name === "attr") {
-                var attr = token.values.filter(isIdentToken);
-                if (attr.length) {
-                  anonymousReplacedElement.appendChild(document2.createTextNode(node.getAttribute(attr[0].value) || ""));
-                }
-              } else if (token.name === "counter") {
-                var _a = token.values.filter(nonFunctionArgSeparator), counter = _a[0], counterStyle = _a[1];
-                if (counter && isIdentToken(counter)) {
-                  var counterState = _this.counters.getCounterValue(counter.value);
-                  var counterType = counterStyle && isIdentToken(counterStyle) ? listStyleType.parse(_this.context, counterStyle.value) : 3;
-                  anonymousReplacedElement.appendChild(document2.createTextNode(createCounterText(counterState, counterType, false)));
-                }
-              } else if (token.name === "counters") {
-                var _b = token.values.filter(nonFunctionArgSeparator), counter = _b[0], delim = _b[1], counterStyle = _b[2];
-                if (counter && isIdentToken(counter)) {
-                  var counterStates = _this.counters.getCounterValues(counter.value);
-                  var counterType_1 = counterStyle && isIdentToken(counterStyle) ? listStyleType.parse(_this.context, counterStyle.value) : 3;
-                  var separator = delim && delim.type === 0 ? delim.value : "";
-                  var text = counterStates.map(function(value2) {
-                    return createCounterText(value2, counterType_1, false);
-                  }).join(separator);
-                  anonymousReplacedElement.appendChild(document2.createTextNode(text));
-                }
-              } else ;
-            } else if (token.type === 20) {
-              switch (token.value) {
-                case "open-quote":
-                  anonymousReplacedElement.appendChild(document2.createTextNode(getQuote(declaration.quotes, _this.quoteDepth++, true)));
-                  break;
-                case "close-quote":
-                  anonymousReplacedElement.appendChild(document2.createTextNode(getQuote(declaration.quotes, --_this.quoteDepth, false)));
-                  break;
-                default:
-                  anonymousReplacedElement.appendChild(document2.createTextNode(token.value));
-              }
-            }
-          });
-          anonymousReplacedElement.className = PSEUDO_HIDE_ELEMENT_CLASS_BEFORE + " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
-          var newClassName = pseudoElt === PseudoElementType.BEFORE ? " " + PSEUDO_HIDE_ELEMENT_CLASS_BEFORE : " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
-          if (isSVGElementNode(clone)) {
-            clone.className.baseValue += newClassName;
-          } else {
-            clone.className += newClassName;
-          }
-          return anonymousReplacedElement;
-        };
-        DocumentCloner2.destroy = function(container) {
-          if (container.parentNode) {
-            container.parentNode.removeChild(container);
-            return true;
-          }
-          return false;
-        };
-        return DocumentCloner2;
-      })();
-      (function(PseudoElementType2) {
-        PseudoElementType2[PseudoElementType2["BEFORE"] = 0] = "BEFORE";
-        PseudoElementType2[PseudoElementType2["AFTER"] = 1] = "AFTER";
-      })(PseudoElementType || (PseudoElementType = {}));
-      createIFrameContainer = function(ownerDocument, bounds) {
-        var cloneIframeContainer = ownerDocument.createElement("iframe");
-        cloneIframeContainer.className = "html2canvas-container";
-        cloneIframeContainer.style.visibility = "hidden";
-        cloneIframeContainer.style.position = "fixed";
-        cloneIframeContainer.style.left = "-10000px";
-        cloneIframeContainer.style.top = "0px";
-        cloneIframeContainer.style.border = "0";
-        cloneIframeContainer.width = bounds.width.toString();
-        cloneIframeContainer.height = bounds.height.toString();
-        cloneIframeContainer.scrolling = "no";
-        cloneIframeContainer.setAttribute(IGNORE_ATTRIBUTE, "true");
-        ownerDocument.body.appendChild(cloneIframeContainer);
-        return cloneIframeContainer;
-      };
-      imageReady = function(img) {
-        return new Promise(function(resolve) {
-          if (img.complete) {
-            resolve();
-            return;
-          }
-          if (!img.src) {
-            resolve();
-            return;
-          }
-          img.onload = resolve;
-          img.onerror = resolve;
-        });
-      };
-      imagesReady = function(document2) {
-        return Promise.all([].slice.call(document2.images, 0).map(imageReady));
-      };
-      iframeLoader = function(iframe) {
-        return new Promise(function(resolve, reject) {
-          var cloneWindow = iframe.contentWindow;
-          if (!cloneWindow) {
-            return reject("No window assigned for iframe");
-          }
-          var documentClone = cloneWindow.document;
-          cloneWindow.onload = iframe.onload = function() {
-            cloneWindow.onload = iframe.onload = null;
-            var interval = setInterval(function() {
-              if (documentClone.body.childNodes.length > 0 && documentClone.readyState === "complete") {
-                clearInterval(interval);
-                resolve(iframe);
-              }
-            }, 50);
-          };
-        });
-      };
-      ignoredStyleProperties = [
-        "all",
-        "d",
-        "content"
-        // Safari shows pseudoelements if content is set
-      ];
-      copyCSSStyles = function(style, target) {
-        for (var i = style.length - 1; i >= 0; i--) {
-          var property = style.item(i);
-          if (ignoredStyleProperties.indexOf(property) === -1) {
-            target.style.setProperty(property, style.getPropertyValue(property));
-          }
-        }
-        return target;
-      };
-      serializeDoctype = function(doctype) {
-        var str = "";
-        if (doctype) {
-          str += "<!DOCTYPE ";
-          if (doctype.name) {
-            str += doctype.name;
-          }
-          if (doctype.internalSubset) {
-            str += doctype.internalSubset;
-          }
-          if (doctype.publicId) {
-            str += '"' + doctype.publicId + '"';
-          }
-          if (doctype.systemId) {
-            str += '"' + doctype.systemId + '"';
-          }
-          str += ">";
-        }
-        return str;
-      };
-      restoreOwnerScroll = function(ownerDocument, x, y) {
-        if (ownerDocument && ownerDocument.defaultView && (x !== ownerDocument.defaultView.pageXOffset || y !== ownerDocument.defaultView.pageYOffset)) {
-          ownerDocument.defaultView.scrollTo(x, y);
-        }
-      };
-      restoreNodeScroll = function(_a) {
-        var element = _a[0], x = _a[1], y = _a[2];
-        element.scrollLeft = x;
-        element.scrollTop = y;
-      };
-      PSEUDO_BEFORE = ":before";
-      PSEUDO_AFTER = ":after";
-      PSEUDO_HIDE_ELEMENT_CLASS_BEFORE = "___html2canvas___pseudoelement_before";
-      PSEUDO_HIDE_ELEMENT_CLASS_AFTER = "___html2canvas___pseudoelement_after";
-      PSEUDO_HIDE_ELEMENT_STYLE = '{\n    content: "" !important;\n    display: none !important;\n}';
-      createPseudoHideStyles = function(body) {
-        createStyles(body, "." + PSEUDO_HIDE_ELEMENT_CLASS_BEFORE + PSEUDO_BEFORE + PSEUDO_HIDE_ELEMENT_STYLE + "\n         ." + PSEUDO_HIDE_ELEMENT_CLASS_AFTER + PSEUDO_AFTER + PSEUDO_HIDE_ELEMENT_STYLE);
-      };
-      createStyles = function(body, styles) {
-        var document2 = body.ownerDocument;
-        if (document2) {
-          var style = document2.createElement("style");
-          style.textContent = styles;
-          body.appendChild(style);
-        }
-      };
-      CacheStorage = /** @class */
-      (function() {
-        function CacheStorage2() {
-        }
-        CacheStorage2.getOrigin = function(url) {
-          var link = CacheStorage2._link;
-          if (!link) {
-            return "about:blank";
-          }
-          link.href = url;
-          link.href = link.href;
-          return link.protocol + link.hostname + link.port;
-        };
-        CacheStorage2.isSameOrigin = function(src) {
-          return CacheStorage2.getOrigin(src) === CacheStorage2._origin;
-        };
-        CacheStorage2.setContext = function(window2) {
-          CacheStorage2._link = window2.document.createElement("a");
-          CacheStorage2._origin = CacheStorage2.getOrigin(window2.location.href);
-        };
-        CacheStorage2._origin = "about:blank";
-        return CacheStorage2;
-      })();
-      Cache = /** @class */
-      (function() {
-        function Cache2(context2, _options) {
-          this.context = context2;
-          this._options = _options;
-          this._cache = {};
-        }
-        Cache2.prototype.addImage = function(src) {
-          var result = Promise.resolve();
-          if (this.has(src)) {
-            return result;
-          }
-          if (isBlobImage(src) || isRenderable(src)) {
-            (this._cache[src] = this.loadImage(src)).catch(function() {
-            });
-            return result;
-          }
-          return result;
-        };
-        Cache2.prototype.match = function(src) {
-          return this._cache[src];
-        };
-        Cache2.prototype.loadImage = function(key) {
-          return __awaiter(this, void 0, void 0, function() {
-            var isSameOrigin, useCORS, useProxy, src;
-            var _this = this;
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  isSameOrigin = CacheStorage.isSameOrigin(key);
-                  useCORS = !isInlineImage(key) && this._options.useCORS === true && FEATURES.SUPPORT_CORS_IMAGES && !isSameOrigin;
-                  useProxy = !isInlineImage(key) && !isSameOrigin && !isBlobImage(key) && typeof this._options.proxy === "string" && FEATURES.SUPPORT_CORS_XHR && !useCORS;
-                  if (!isSameOrigin && this._options.allowTaint === false && !isInlineImage(key) && !isBlobImage(key) && !useProxy && !useCORS) {
-                    return [
-                      2
-                      /*return*/
-                    ];
-                  }
-                  src = key;
-                  if (!useProxy) return [3, 2];
-                  return [4, this.proxy(src)];
-                case 1:
-                  src = _a.sent();
-                  _a.label = 2;
-                case 2:
-                  this.context.logger.debug("Added image " + key.substring(0, 256));
-                  return [4, new Promise(function(resolve, reject) {
-                    var img = new Image();
-                    img.onload = function() {
-                      return resolve(img);
-                    };
-                    img.onerror = reject;
-                    if (isInlineBase64Image(src) || useCORS) {
-                      img.crossOrigin = "anonymous";
-                    }
-                    img.src = src;
-                    if (img.complete === true) {
-                      setTimeout(function() {
-                        return resolve(img);
-                      }, 500);
-                    }
-                    if (_this._options.imageTimeout > 0) {
-                      setTimeout(function() {
-                        return reject("Timed out (" + _this._options.imageTimeout + "ms) loading image");
-                      }, _this._options.imageTimeout);
-                    }
-                  })];
-                case 3:
-                  return [2, _a.sent()];
-              }
-            });
-          });
-        };
-        Cache2.prototype.has = function(key) {
-          return typeof this._cache[key] !== "undefined";
-        };
-        Cache2.prototype.keys = function() {
-          return Promise.resolve(Object.keys(this._cache));
-        };
-        Cache2.prototype.proxy = function(src) {
-          var _this = this;
-          var proxy = this._options.proxy;
-          if (!proxy) {
-            throw new Error("No proxy defined");
-          }
-          var key = src.substring(0, 256);
-          return new Promise(function(resolve, reject) {
-            var responseType = FEATURES.SUPPORT_RESPONSE_TYPE ? "blob" : "text";
-            var xhr = new XMLHttpRequest();
-            xhr.onload = function() {
-              if (xhr.status === 200) {
-                if (responseType === "text") {
-                  resolve(xhr.response);
-                } else {
-                  var reader_1 = new FileReader();
-                  reader_1.addEventListener("load", function() {
-                    return resolve(reader_1.result);
-                  }, false);
-                  reader_1.addEventListener("error", function(e2) {
-                    return reject(e2);
-                  }, false);
-                  reader_1.readAsDataURL(xhr.response);
-                }
-              } else {
-                reject("Failed to proxy resource " + key + " with status code " + xhr.status);
-              }
-            };
-            xhr.onerror = reject;
-            var queryString = proxy.indexOf("?") > -1 ? "&" : "?";
-            xhr.open("GET", "" + proxy + queryString + "url=" + encodeURIComponent(src) + "&responseType=" + responseType);
-            if (responseType !== "text" && xhr instanceof XMLHttpRequest) {
-              xhr.responseType = responseType;
-            }
-            if (_this._options.imageTimeout) {
-              var timeout_1 = _this._options.imageTimeout;
-              xhr.timeout = timeout_1;
-              xhr.ontimeout = function() {
-                return reject("Timed out (" + timeout_1 + "ms) proxying " + key);
-              };
-            }
-            xhr.send();
-          });
-        };
-        return Cache2;
-      })();
-      INLINE_SVG = /^data:image\/svg\+xml/i;
-      INLINE_BASE64 = /^data:image\/.*;base64,/i;
-      INLINE_IMG = /^data:image\/.*/i;
-      isRenderable = function(src) {
-        return FEATURES.SUPPORT_SVG_DRAWING || !isSVG(src);
-      };
-      isInlineImage = function(src) {
-        return INLINE_IMG.test(src);
-      };
-      isInlineBase64Image = function(src) {
-        return INLINE_BASE64.test(src);
-      };
-      isBlobImage = function(src) {
-        return src.substr(0, 4) === "blob";
-      };
-      isSVG = function(src) {
-        return src.substr(-3).toLowerCase() === "svg" || INLINE_SVG.test(src);
-      };
-      Vector = /** @class */
-      (function() {
-        function Vector2(x, y) {
-          this.type = 0;
-          this.x = x;
-          this.y = y;
-        }
-        Vector2.prototype.add = function(deltaX, deltaY) {
-          return new Vector2(this.x + deltaX, this.y + deltaY);
-        };
-        return Vector2;
-      })();
-      lerp = function(a2, b, t) {
-        return new Vector(a2.x + (b.x - a2.x) * t, a2.y + (b.y - a2.y) * t);
-      };
-      BezierCurve = /** @class */
-      (function() {
-        function BezierCurve2(start, startControl, endControl, end) {
-          this.type = 1;
-          this.start = start;
-          this.startControl = startControl;
-          this.endControl = endControl;
-          this.end = end;
-        }
-        BezierCurve2.prototype.subdivide = function(t, firstHalf) {
-          var ab = lerp(this.start, this.startControl, t);
-          var bc = lerp(this.startControl, this.endControl, t);
-          var cd = lerp(this.endControl, this.end, t);
-          var abbc = lerp(ab, bc, t);
-          var bccd = lerp(bc, cd, t);
-          var dest = lerp(abbc, bccd, t);
-          return firstHalf ? new BezierCurve2(this.start, ab, abbc, dest) : new BezierCurve2(dest, bccd, cd, this.end);
-        };
-        BezierCurve2.prototype.add = function(deltaX, deltaY) {
-          return new BezierCurve2(this.start.add(deltaX, deltaY), this.startControl.add(deltaX, deltaY), this.endControl.add(deltaX, deltaY), this.end.add(deltaX, deltaY));
-        };
-        BezierCurve2.prototype.reverse = function() {
-          return new BezierCurve2(this.end, this.endControl, this.startControl, this.start);
-        };
-        return BezierCurve2;
-      })();
-      isBezierCurve = function(path) {
-        return path.type === 1;
-      };
-      BoundCurves = /** @class */
-      /* @__PURE__ */ (function() {
-        function BoundCurves2(element) {
-          var styles = element.styles;
-          var bounds = element.bounds;
-          var _a = getAbsoluteValueForTuple(styles.borderTopLeftRadius, bounds.width, bounds.height), tlh = _a[0], tlv = _a[1];
-          var _b = getAbsoluteValueForTuple(styles.borderTopRightRadius, bounds.width, bounds.height), trh = _b[0], trv = _b[1];
-          var _c = getAbsoluteValueForTuple(styles.borderBottomRightRadius, bounds.width, bounds.height), brh = _c[0], brv = _c[1];
-          var _d = getAbsoluteValueForTuple(styles.borderBottomLeftRadius, bounds.width, bounds.height), blh = _d[0], blv = _d[1];
-          var factors = [];
-          factors.push((tlh + trh) / bounds.width);
-          factors.push((blh + brh) / bounds.width);
-          factors.push((tlv + blv) / bounds.height);
-          factors.push((trv + brv) / bounds.height);
-          var maxFactor = Math.max.apply(Math, factors);
-          if (maxFactor > 1) {
-            tlh /= maxFactor;
-            tlv /= maxFactor;
-            trh /= maxFactor;
-            trv /= maxFactor;
-            brh /= maxFactor;
-            brv /= maxFactor;
-            blh /= maxFactor;
-            blv /= maxFactor;
-          }
-          var topWidth = bounds.width - trh;
-          var rightHeight = bounds.height - brv;
-          var bottomWidth = bounds.width - brh;
-          var leftHeight = bounds.height - blv;
-          var borderTopWidth2 = styles.borderTopWidth;
-          var borderRightWidth2 = styles.borderRightWidth;
-          var borderBottomWidth2 = styles.borderBottomWidth;
-          var borderLeftWidth2 = styles.borderLeftWidth;
-          var paddingTop2 = getAbsoluteValue(styles.paddingTop, element.bounds.width);
-          var paddingRight2 = getAbsoluteValue(styles.paddingRight, element.bounds.width);
-          var paddingBottom2 = getAbsoluteValue(styles.paddingBottom, element.bounds.width);
-          var paddingLeft2 = getAbsoluteValue(styles.paddingLeft, element.bounds.width);
-          this.topLeftBorderDoubleOuterBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 / 3, bounds.top + borderTopWidth2 / 3, tlh - borderLeftWidth2 / 3, tlv - borderTopWidth2 / 3, CORNER.TOP_LEFT) : new Vector(bounds.left + borderLeftWidth2 / 3, bounds.top + borderTopWidth2 / 3);
-          this.topRightBorderDoubleOuterBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + topWidth, bounds.top + borderTopWidth2 / 3, trh - borderRightWidth2 / 3, trv - borderTopWidth2 / 3, CORNER.TOP_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2 / 3, bounds.top + borderTopWidth2 / 3);
-          this.bottomRightBorderDoubleOuterBox = brh > 0 || brv > 0 ? getCurvePoints(bounds.left + bottomWidth, bounds.top + rightHeight, brh - borderRightWidth2 / 3, brv - borderBottomWidth2 / 3, CORNER.BOTTOM_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2 / 3, bounds.top + bounds.height - borderBottomWidth2 / 3);
-          this.bottomLeftBorderDoubleOuterBox = blh > 0 || blv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 / 3, bounds.top + leftHeight, blh - borderLeftWidth2 / 3, blv - borderBottomWidth2 / 3, CORNER.BOTTOM_LEFT) : new Vector(bounds.left + borderLeftWidth2 / 3, bounds.top + bounds.height - borderBottomWidth2 / 3);
-          this.topLeftBorderDoubleInnerBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 * 2 / 3, bounds.top + borderTopWidth2 * 2 / 3, tlh - borderLeftWidth2 * 2 / 3, tlv - borderTopWidth2 * 2 / 3, CORNER.TOP_LEFT) : new Vector(bounds.left + borderLeftWidth2 * 2 / 3, bounds.top + borderTopWidth2 * 2 / 3);
-          this.topRightBorderDoubleInnerBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + topWidth, bounds.top + borderTopWidth2 * 2 / 3, trh - borderRightWidth2 * 2 / 3, trv - borderTopWidth2 * 2 / 3, CORNER.TOP_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2 * 2 / 3, bounds.top + borderTopWidth2 * 2 / 3);
-          this.bottomRightBorderDoubleInnerBox = brh > 0 || brv > 0 ? getCurvePoints(bounds.left + bottomWidth, bounds.top + rightHeight, brh - borderRightWidth2 * 2 / 3, brv - borderBottomWidth2 * 2 / 3, CORNER.BOTTOM_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2 * 2 / 3, bounds.top + bounds.height - borderBottomWidth2 * 2 / 3);
-          this.bottomLeftBorderDoubleInnerBox = blh > 0 || blv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 * 2 / 3, bounds.top + leftHeight, blh - borderLeftWidth2 * 2 / 3, blv - borderBottomWidth2 * 2 / 3, CORNER.BOTTOM_LEFT) : new Vector(bounds.left + borderLeftWidth2 * 2 / 3, bounds.top + bounds.height - borderBottomWidth2 * 2 / 3);
-          this.topLeftBorderStroke = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 / 2, bounds.top + borderTopWidth2 / 2, tlh - borderLeftWidth2 / 2, tlv - borderTopWidth2 / 2, CORNER.TOP_LEFT) : new Vector(bounds.left + borderLeftWidth2 / 2, bounds.top + borderTopWidth2 / 2);
-          this.topRightBorderStroke = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + topWidth, bounds.top + borderTopWidth2 / 2, trh - borderRightWidth2 / 2, trv - borderTopWidth2 / 2, CORNER.TOP_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2 / 2, bounds.top + borderTopWidth2 / 2);
-          this.bottomRightBorderStroke = brh > 0 || brv > 0 ? getCurvePoints(bounds.left + bottomWidth, bounds.top + rightHeight, brh - borderRightWidth2 / 2, brv - borderBottomWidth2 / 2, CORNER.BOTTOM_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2 / 2, bounds.top + bounds.height - borderBottomWidth2 / 2);
-          this.bottomLeftBorderStroke = blh > 0 || blv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 / 2, bounds.top + leftHeight, blh - borderLeftWidth2 / 2, blv - borderBottomWidth2 / 2, CORNER.BOTTOM_LEFT) : new Vector(bounds.left + borderLeftWidth2 / 2, bounds.top + bounds.height - borderBottomWidth2 / 2);
-          this.topLeftBorderBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left, bounds.top, tlh, tlv, CORNER.TOP_LEFT) : new Vector(bounds.left, bounds.top);
-          this.topRightBorderBox = trh > 0 || trv > 0 ? getCurvePoints(bounds.left + topWidth, bounds.top, trh, trv, CORNER.TOP_RIGHT) : new Vector(bounds.left + bounds.width, bounds.top);
-          this.bottomRightBorderBox = brh > 0 || brv > 0 ? getCurvePoints(bounds.left + bottomWidth, bounds.top + rightHeight, brh, brv, CORNER.BOTTOM_RIGHT) : new Vector(bounds.left + bounds.width, bounds.top + bounds.height);
-          this.bottomLeftBorderBox = blh > 0 || blv > 0 ? getCurvePoints(bounds.left, bounds.top + leftHeight, blh, blv, CORNER.BOTTOM_LEFT) : new Vector(bounds.left, bounds.top + bounds.height);
-          this.topLeftPaddingBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2, bounds.top + borderTopWidth2, Math.max(0, tlh - borderLeftWidth2), Math.max(0, tlv - borderTopWidth2), CORNER.TOP_LEFT) : new Vector(bounds.left + borderLeftWidth2, bounds.top + borderTopWidth2);
-          this.topRightPaddingBox = trh > 0 || trv > 0 ? getCurvePoints(bounds.left + Math.min(topWidth, bounds.width - borderRightWidth2), bounds.top + borderTopWidth2, topWidth > bounds.width + borderRightWidth2 ? 0 : Math.max(0, trh - borderRightWidth2), Math.max(0, trv - borderTopWidth2), CORNER.TOP_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2, bounds.top + borderTopWidth2);
-          this.bottomRightPaddingBox = brh > 0 || brv > 0 ? getCurvePoints(bounds.left + Math.min(bottomWidth, bounds.width - borderLeftWidth2), bounds.top + Math.min(rightHeight, bounds.height - borderBottomWidth2), Math.max(0, brh - borderRightWidth2), Math.max(0, brv - borderBottomWidth2), CORNER.BOTTOM_RIGHT) : new Vector(bounds.left + bounds.width - borderRightWidth2, bounds.top + bounds.height - borderBottomWidth2);
-          this.bottomLeftPaddingBox = blh > 0 || blv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2, bounds.top + Math.min(leftHeight, bounds.height - borderBottomWidth2), Math.max(0, blh - borderLeftWidth2), Math.max(0, blv - borderBottomWidth2), CORNER.BOTTOM_LEFT) : new Vector(bounds.left + borderLeftWidth2, bounds.top + bounds.height - borderBottomWidth2);
-          this.topLeftContentBox = tlh > 0 || tlv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 + paddingLeft2, bounds.top + borderTopWidth2 + paddingTop2, Math.max(0, tlh - (borderLeftWidth2 + paddingLeft2)), Math.max(0, tlv - (borderTopWidth2 + paddingTop2)), CORNER.TOP_LEFT) : new Vector(bounds.left + borderLeftWidth2 + paddingLeft2, bounds.top + borderTopWidth2 + paddingTop2);
-          this.topRightContentBox = trh > 0 || trv > 0 ? getCurvePoints(bounds.left + Math.min(topWidth, bounds.width + borderLeftWidth2 + paddingLeft2), bounds.top + borderTopWidth2 + paddingTop2, topWidth > bounds.width + borderLeftWidth2 + paddingLeft2 ? 0 : trh - borderLeftWidth2 + paddingLeft2, trv - (borderTopWidth2 + paddingTop2), CORNER.TOP_RIGHT) : new Vector(bounds.left + bounds.width - (borderRightWidth2 + paddingRight2), bounds.top + borderTopWidth2 + paddingTop2);
-          this.bottomRightContentBox = brh > 0 || brv > 0 ? getCurvePoints(bounds.left + Math.min(bottomWidth, bounds.width - (borderLeftWidth2 + paddingLeft2)), bounds.top + Math.min(rightHeight, bounds.height + borderTopWidth2 + paddingTop2), Math.max(0, brh - (borderRightWidth2 + paddingRight2)), brv - (borderBottomWidth2 + paddingBottom2), CORNER.BOTTOM_RIGHT) : new Vector(bounds.left + bounds.width - (borderRightWidth2 + paddingRight2), bounds.top + bounds.height - (borderBottomWidth2 + paddingBottom2));
-          this.bottomLeftContentBox = blh > 0 || blv > 0 ? getCurvePoints(bounds.left + borderLeftWidth2 + paddingLeft2, bounds.top + leftHeight, Math.max(0, blh - (borderLeftWidth2 + paddingLeft2)), blv - (borderBottomWidth2 + paddingBottom2), CORNER.BOTTOM_LEFT) : new Vector(bounds.left + borderLeftWidth2 + paddingLeft2, bounds.top + bounds.height - (borderBottomWidth2 + paddingBottom2));
-        }
-        return BoundCurves2;
-      })();
-      (function(CORNER2) {
-        CORNER2[CORNER2["TOP_LEFT"] = 0] = "TOP_LEFT";
-        CORNER2[CORNER2["TOP_RIGHT"] = 1] = "TOP_RIGHT";
-        CORNER2[CORNER2["BOTTOM_RIGHT"] = 2] = "BOTTOM_RIGHT";
-        CORNER2[CORNER2["BOTTOM_LEFT"] = 3] = "BOTTOM_LEFT";
-      })(CORNER || (CORNER = {}));
-      getCurvePoints = function(x, y, r1, r2, position2) {
-        var kappa = 4 * ((Math.sqrt(2) - 1) / 3);
-        var ox = r1 * kappa;
-        var oy = r2 * kappa;
-        var xm = x + r1;
-        var ym = y + r2;
-        switch (position2) {
-          case CORNER.TOP_LEFT:
-            return new BezierCurve(new Vector(x, ym), new Vector(x, ym - oy), new Vector(xm - ox, y), new Vector(xm, y));
-          case CORNER.TOP_RIGHT:
-            return new BezierCurve(new Vector(x, y), new Vector(x + ox, y), new Vector(xm, ym - oy), new Vector(xm, ym));
-          case CORNER.BOTTOM_RIGHT:
-            return new BezierCurve(new Vector(xm, y), new Vector(xm, y + oy), new Vector(x + ox, ym), new Vector(x, ym));
-          case CORNER.BOTTOM_LEFT:
-          default:
-            return new BezierCurve(new Vector(xm, ym), new Vector(xm - ox, ym), new Vector(x, y + oy), new Vector(x, y));
-        }
-      };
-      calculateBorderBoxPath = function(curves) {
-        return [curves.topLeftBorderBox, curves.topRightBorderBox, curves.bottomRightBorderBox, curves.bottomLeftBorderBox];
-      };
-      calculateContentBoxPath = function(curves) {
-        return [
-          curves.topLeftContentBox,
-          curves.topRightContentBox,
-          curves.bottomRightContentBox,
-          curves.bottomLeftContentBox
-        ];
-      };
-      calculatePaddingBoxPath = function(curves) {
-        return [
-          curves.topLeftPaddingBox,
-          curves.topRightPaddingBox,
-          curves.bottomRightPaddingBox,
-          curves.bottomLeftPaddingBox
-        ];
-      };
-      TransformEffect = /** @class */
-      /* @__PURE__ */ (function() {
-        function TransformEffect2(offsetX, offsetY, matrix2) {
-          this.offsetX = offsetX;
-          this.offsetY = offsetY;
-          this.matrix = matrix2;
-          this.type = 0;
-          this.target = 2 | 4;
-        }
-        return TransformEffect2;
-      })();
-      ClipEffect = /** @class */
-      /* @__PURE__ */ (function() {
-        function ClipEffect2(path, target) {
-          this.path = path;
-          this.target = target;
-          this.type = 1;
-        }
-        return ClipEffect2;
-      })();
-      OpacityEffect = /** @class */
-      /* @__PURE__ */ (function() {
-        function OpacityEffect2(opacity2) {
-          this.opacity = opacity2;
-          this.type = 2;
-          this.target = 2 | 4;
-        }
-        return OpacityEffect2;
-      })();
-      isTransformEffect = function(effect) {
-        return effect.type === 0;
-      };
-      isClipEffect = function(effect) {
-        return effect.type === 1;
-      };
-      isOpacityEffect = function(effect) {
-        return effect.type === 2;
-      };
-      equalPath = function(a2, b) {
-        if (a2.length === b.length) {
-          return a2.some(function(v, i) {
-            return v === b[i];
-          });
-        }
-        return false;
-      };
-      transformPath = function(path, deltaX, deltaY, deltaW, deltaH) {
-        return path.map(function(point, index) {
-          switch (index) {
-            case 0:
-              return point.add(deltaX, deltaY);
-            case 1:
-              return point.add(deltaX + deltaW, deltaY);
-            case 2:
-              return point.add(deltaX + deltaW, deltaY + deltaH);
-            case 3:
-              return point.add(deltaX, deltaY + deltaH);
-          }
-          return point;
-        });
-      };
-      StackingContext = /** @class */
-      /* @__PURE__ */ (function() {
-        function StackingContext2(container) {
-          this.element = container;
-          this.inlineLevel = [];
-          this.nonInlineLevel = [];
-          this.negativeZIndex = [];
-          this.zeroOrAutoZIndexOrTransformedOrOpacity = [];
-          this.positiveZIndex = [];
-          this.nonPositionedFloats = [];
-          this.nonPositionedInlineLevel = [];
-        }
-        return StackingContext2;
-      })();
-      ElementPaint = /** @class */
-      (function() {
-        function ElementPaint2(container, parent) {
-          this.container = container;
-          this.parent = parent;
-          this.effects = [];
-          this.curves = new BoundCurves(this.container);
-          if (this.container.styles.opacity < 1) {
-            this.effects.push(new OpacityEffect(this.container.styles.opacity));
-          }
-          if (this.container.styles.transform !== null) {
-            var offsetX = this.container.bounds.left + this.container.styles.transformOrigin[0].number;
-            var offsetY = this.container.bounds.top + this.container.styles.transformOrigin[1].number;
-            var matrix2 = this.container.styles.transform;
-            this.effects.push(new TransformEffect(offsetX, offsetY, matrix2));
-          }
-          if (this.container.styles.overflowX !== 0) {
-            var borderBox = calculateBorderBoxPath(this.curves);
-            var paddingBox2 = calculatePaddingBoxPath(this.curves);
-            if (equalPath(borderBox, paddingBox2)) {
-              this.effects.push(new ClipEffect(
-                borderBox,
-                2 | 4
-                /* CONTENT */
-              ));
-            } else {
-              this.effects.push(new ClipEffect(
-                borderBox,
-                2
-                /* BACKGROUND_BORDERS */
-              ));
-              this.effects.push(new ClipEffect(
-                paddingBox2,
-                4
-                /* CONTENT */
-              ));
-            }
-          }
-        }
-        ElementPaint2.prototype.getEffects = function(target) {
-          var inFlow = [
-            2,
-            3
-            /* FIXED */
-          ].indexOf(this.container.styles.position) === -1;
-          var parent = this.parent;
-          var effects = this.effects.slice(0);
-          while (parent) {
-            var croplessEffects = parent.effects.filter(function(effect) {
-              return !isClipEffect(effect);
-            });
-            if (inFlow || parent.container.styles.position !== 0 || !parent.parent) {
-              effects.unshift.apply(effects, croplessEffects);
-              inFlow = [
-                2,
-                3
-                /* FIXED */
-              ].indexOf(parent.container.styles.position) === -1;
-              if (parent.container.styles.overflowX !== 0) {
-                var borderBox = calculateBorderBoxPath(parent.curves);
-                var paddingBox2 = calculatePaddingBoxPath(parent.curves);
-                if (!equalPath(borderBox, paddingBox2)) {
-                  effects.unshift(new ClipEffect(
-                    paddingBox2,
-                    2 | 4
-                    /* CONTENT */
-                  ));
-                }
-              }
-            } else {
-              effects.unshift.apply(effects, croplessEffects);
-            }
-            parent = parent.parent;
-          }
-          return effects.filter(function(effect) {
-            return contains(effect.target, target);
-          });
-        };
-        return ElementPaint2;
-      })();
-      parseStackTree = function(parent, stackingContext, realStackingContext, listItems) {
-        parent.container.elements.forEach(function(child) {
-          var treatAsRealStackingContext = contains(
-            child.flags,
-            4
-            /* CREATES_REAL_STACKING_CONTEXT */
-          );
-          var createsStackingContext2 = contains(
-            child.flags,
-            2
-            /* CREATES_STACKING_CONTEXT */
-          );
-          var paintContainer = new ElementPaint(child, parent);
-          if (contains(
-            child.styles.display,
-            2048
-            /* LIST_ITEM */
-          )) {
-            listItems.push(paintContainer);
-          }
-          var listOwnerItems = contains(
-            child.flags,
-            8
-            /* IS_LIST_OWNER */
-          ) ? [] : listItems;
-          if (treatAsRealStackingContext || createsStackingContext2) {
-            var parentStack = treatAsRealStackingContext || child.styles.isPositioned() ? realStackingContext : stackingContext;
-            var stack = new StackingContext(paintContainer);
-            if (child.styles.isPositioned() || child.styles.opacity < 1 || child.styles.isTransformed()) {
-              var order_1 = child.styles.zIndex.order;
-              if (order_1 < 0) {
-                var index_1 = 0;
-                parentStack.negativeZIndex.some(function(current, i) {
-                  if (order_1 > current.element.container.styles.zIndex.order) {
-                    index_1 = i;
-                    return false;
-                  } else if (index_1 > 0) {
-                    return true;
-                  }
-                  return false;
-                });
-                parentStack.negativeZIndex.splice(index_1, 0, stack);
-              } else if (order_1 > 0) {
-                var index_2 = 0;
-                parentStack.positiveZIndex.some(function(current, i) {
-                  if (order_1 >= current.element.container.styles.zIndex.order) {
-                    index_2 = i + 1;
-                    return false;
-                  } else if (index_2 > 0) {
-                    return true;
-                  }
-                  return false;
-                });
-                parentStack.positiveZIndex.splice(index_2, 0, stack);
-              } else {
-                parentStack.zeroOrAutoZIndexOrTransformedOrOpacity.push(stack);
-              }
-            } else {
-              if (child.styles.isFloating()) {
-                parentStack.nonPositionedFloats.push(stack);
-              } else {
-                parentStack.nonPositionedInlineLevel.push(stack);
-              }
-            }
-            parseStackTree(paintContainer, stack, treatAsRealStackingContext ? stack : realStackingContext, listOwnerItems);
-          } else {
-            if (child.styles.isInlineLevel()) {
-              stackingContext.inlineLevel.push(paintContainer);
-            } else {
-              stackingContext.nonInlineLevel.push(paintContainer);
-            }
-            parseStackTree(paintContainer, stackingContext, realStackingContext, listOwnerItems);
-          }
-          if (contains(
-            child.flags,
-            8
-            /* IS_LIST_OWNER */
-          )) {
-            processListItems(child, listOwnerItems);
-          }
-        });
-      };
-      processListItems = function(owner, elements) {
-        var numbering = owner instanceof OLElementContainer ? owner.start : 1;
-        var reversed = owner instanceof OLElementContainer ? owner.reversed : false;
-        for (var i = 0; i < elements.length; i++) {
-          var item = elements[i];
-          if (item.container instanceof LIElementContainer && typeof item.container.value === "number" && item.container.value !== 0) {
-            numbering = item.container.value;
-          }
-          item.listValue = createCounterText(numbering, item.container.styles.listStyleType, true);
-          numbering += reversed ? -1 : 1;
-        }
-      };
-      parseStackingContexts = function(container) {
-        var paintContainer = new ElementPaint(container, null);
-        var root = new StackingContext(paintContainer);
-        var listItems = [];
-        parseStackTree(paintContainer, root, root, listItems);
-        processListItems(paintContainer.container, listItems);
-        return root;
-      };
-      parsePathForBorder = function(curves, borderSide) {
-        switch (borderSide) {
-          case 0:
-            return createPathFromCurves(curves.topLeftBorderBox, curves.topLeftPaddingBox, curves.topRightBorderBox, curves.topRightPaddingBox);
-          case 1:
-            return createPathFromCurves(curves.topRightBorderBox, curves.topRightPaddingBox, curves.bottomRightBorderBox, curves.bottomRightPaddingBox);
-          case 2:
-            return createPathFromCurves(curves.bottomRightBorderBox, curves.bottomRightPaddingBox, curves.bottomLeftBorderBox, curves.bottomLeftPaddingBox);
-          case 3:
-          default:
-            return createPathFromCurves(curves.bottomLeftBorderBox, curves.bottomLeftPaddingBox, curves.topLeftBorderBox, curves.topLeftPaddingBox);
-        }
-      };
-      parsePathForBorderDoubleOuter = function(curves, borderSide) {
-        switch (borderSide) {
-          case 0:
-            return createPathFromCurves(curves.topLeftBorderBox, curves.topLeftBorderDoubleOuterBox, curves.topRightBorderBox, curves.topRightBorderDoubleOuterBox);
-          case 1:
-            return createPathFromCurves(curves.topRightBorderBox, curves.topRightBorderDoubleOuterBox, curves.bottomRightBorderBox, curves.bottomRightBorderDoubleOuterBox);
-          case 2:
-            return createPathFromCurves(curves.bottomRightBorderBox, curves.bottomRightBorderDoubleOuterBox, curves.bottomLeftBorderBox, curves.bottomLeftBorderDoubleOuterBox);
-          case 3:
-          default:
-            return createPathFromCurves(curves.bottomLeftBorderBox, curves.bottomLeftBorderDoubleOuterBox, curves.topLeftBorderBox, curves.topLeftBorderDoubleOuterBox);
-        }
-      };
-      parsePathForBorderDoubleInner = function(curves, borderSide) {
-        switch (borderSide) {
-          case 0:
-            return createPathFromCurves(curves.topLeftBorderDoubleInnerBox, curves.topLeftPaddingBox, curves.topRightBorderDoubleInnerBox, curves.topRightPaddingBox);
-          case 1:
-            return createPathFromCurves(curves.topRightBorderDoubleInnerBox, curves.topRightPaddingBox, curves.bottomRightBorderDoubleInnerBox, curves.bottomRightPaddingBox);
-          case 2:
-            return createPathFromCurves(curves.bottomRightBorderDoubleInnerBox, curves.bottomRightPaddingBox, curves.bottomLeftBorderDoubleInnerBox, curves.bottomLeftPaddingBox);
-          case 3:
-          default:
-            return createPathFromCurves(curves.bottomLeftBorderDoubleInnerBox, curves.bottomLeftPaddingBox, curves.topLeftBorderDoubleInnerBox, curves.topLeftPaddingBox);
-        }
-      };
-      parsePathForBorderStroke = function(curves, borderSide) {
-        switch (borderSide) {
-          case 0:
-            return createStrokePathFromCurves(curves.topLeftBorderStroke, curves.topRightBorderStroke);
-          case 1:
-            return createStrokePathFromCurves(curves.topRightBorderStroke, curves.bottomRightBorderStroke);
-          case 2:
-            return createStrokePathFromCurves(curves.bottomRightBorderStroke, curves.bottomLeftBorderStroke);
-          case 3:
-          default:
-            return createStrokePathFromCurves(curves.bottomLeftBorderStroke, curves.topLeftBorderStroke);
-        }
-      };
-      createStrokePathFromCurves = function(outer1, outer2) {
-        var path = [];
-        if (isBezierCurve(outer1)) {
-          path.push(outer1.subdivide(0.5, false));
-        } else {
-          path.push(outer1);
-        }
-        if (isBezierCurve(outer2)) {
-          path.push(outer2.subdivide(0.5, true));
-        } else {
-          path.push(outer2);
-        }
-        return path;
-      };
-      createPathFromCurves = function(outer1, inner1, outer2, inner2) {
-        var path = [];
-        if (isBezierCurve(outer1)) {
-          path.push(outer1.subdivide(0.5, false));
-        } else {
-          path.push(outer1);
-        }
-        if (isBezierCurve(outer2)) {
-          path.push(outer2.subdivide(0.5, true));
-        } else {
-          path.push(outer2);
-        }
-        if (isBezierCurve(inner2)) {
-          path.push(inner2.subdivide(0.5, true).reverse());
-        } else {
-          path.push(inner2);
-        }
-        if (isBezierCurve(inner1)) {
-          path.push(inner1.subdivide(0.5, false).reverse());
-        } else {
-          path.push(inner1);
-        }
-        return path;
-      };
-      paddingBox = function(element) {
-        var bounds = element.bounds;
-        var styles = element.styles;
-        return bounds.add(styles.borderLeftWidth, styles.borderTopWidth, -(styles.borderRightWidth + styles.borderLeftWidth), -(styles.borderTopWidth + styles.borderBottomWidth));
-      };
-      contentBox = function(element) {
-        var styles = element.styles;
-        var bounds = element.bounds;
-        var paddingLeft2 = getAbsoluteValue(styles.paddingLeft, bounds.width);
-        var paddingRight2 = getAbsoluteValue(styles.paddingRight, bounds.width);
-        var paddingTop2 = getAbsoluteValue(styles.paddingTop, bounds.width);
-        var paddingBottom2 = getAbsoluteValue(styles.paddingBottom, bounds.width);
-        return bounds.add(paddingLeft2 + styles.borderLeftWidth, paddingTop2 + styles.borderTopWidth, -(styles.borderRightWidth + styles.borderLeftWidth + paddingLeft2 + paddingRight2), -(styles.borderTopWidth + styles.borderBottomWidth + paddingTop2 + paddingBottom2));
-      };
-      calculateBackgroundPositioningArea = function(backgroundOrigin2, element) {
-        if (backgroundOrigin2 === 0) {
-          return element.bounds;
-        }
-        if (backgroundOrigin2 === 2) {
-          return contentBox(element);
-        }
-        return paddingBox(element);
-      };
-      calculateBackgroundPaintingArea = function(backgroundClip2, element) {
-        if (backgroundClip2 === 0) {
-          return element.bounds;
-        }
-        if (backgroundClip2 === 2) {
-          return contentBox(element);
-        }
-        return paddingBox(element);
-      };
-      calculateBackgroundRendering = function(container, index, intrinsicSize) {
-        var backgroundPositioningArea = calculateBackgroundPositioningArea(getBackgroundValueForIndex(container.styles.backgroundOrigin, index), container);
-        var backgroundPaintingArea = calculateBackgroundPaintingArea(getBackgroundValueForIndex(container.styles.backgroundClip, index), container);
-        var backgroundImageSize = calculateBackgroundSize(getBackgroundValueForIndex(container.styles.backgroundSize, index), intrinsicSize, backgroundPositioningArea);
-        var sizeWidth = backgroundImageSize[0], sizeHeight = backgroundImageSize[1];
-        var position2 = getAbsoluteValueForTuple(getBackgroundValueForIndex(container.styles.backgroundPosition, index), backgroundPositioningArea.width - sizeWidth, backgroundPositioningArea.height - sizeHeight);
-        var path = calculateBackgroundRepeatPath(getBackgroundValueForIndex(container.styles.backgroundRepeat, index), position2, backgroundImageSize, backgroundPositioningArea, backgroundPaintingArea);
-        var offsetX = Math.round(backgroundPositioningArea.left + position2[0]);
-        var offsetY = Math.round(backgroundPositioningArea.top + position2[1]);
-        return [path, offsetX, offsetY, sizeWidth, sizeHeight];
-      };
-      isAuto = function(token) {
-        return isIdentToken(token) && token.value === BACKGROUND_SIZE.AUTO;
-      };
-      hasIntrinsicValue = function(value) {
-        return typeof value === "number";
-      };
-      calculateBackgroundSize = function(size, _a, bounds) {
-        var intrinsicWidth = _a[0], intrinsicHeight = _a[1], intrinsicProportion = _a[2];
-        var first = size[0], second = size[1];
-        if (!first) {
-          return [0, 0];
-        }
-        if (isLengthPercentage(first) && second && isLengthPercentage(second)) {
-          return [getAbsoluteValue(first, bounds.width), getAbsoluteValue(second, bounds.height)];
-        }
-        var hasIntrinsicProportion = hasIntrinsicValue(intrinsicProportion);
-        if (isIdentToken(first) && (first.value === BACKGROUND_SIZE.CONTAIN || first.value === BACKGROUND_SIZE.COVER)) {
-          if (hasIntrinsicValue(intrinsicProportion)) {
-            var targetRatio = bounds.width / bounds.height;
-            return targetRatio < intrinsicProportion !== (first.value === BACKGROUND_SIZE.COVER) ? [bounds.width, bounds.width / intrinsicProportion] : [bounds.height * intrinsicProportion, bounds.height];
-          }
-          return [bounds.width, bounds.height];
-        }
-        var hasIntrinsicWidth = hasIntrinsicValue(intrinsicWidth);
-        var hasIntrinsicHeight = hasIntrinsicValue(intrinsicHeight);
-        var hasIntrinsicDimensions = hasIntrinsicWidth || hasIntrinsicHeight;
-        if (isAuto(first) && (!second || isAuto(second))) {
-          if (hasIntrinsicWidth && hasIntrinsicHeight) {
-            return [intrinsicWidth, intrinsicHeight];
-          }
-          if (!hasIntrinsicProportion && !hasIntrinsicDimensions) {
-            return [bounds.width, bounds.height];
-          }
-          if (hasIntrinsicDimensions && hasIntrinsicProportion) {
-            var width_1 = hasIntrinsicWidth ? intrinsicWidth : intrinsicHeight * intrinsicProportion;
-            var height_1 = hasIntrinsicHeight ? intrinsicHeight : intrinsicWidth / intrinsicProportion;
-            return [width_1, height_1];
-          }
-          var width_2 = hasIntrinsicWidth ? intrinsicWidth : bounds.width;
-          var height_2 = hasIntrinsicHeight ? intrinsicHeight : bounds.height;
-          return [width_2, height_2];
-        }
-        if (hasIntrinsicProportion) {
-          var width_3 = 0;
-          var height_3 = 0;
-          if (isLengthPercentage(first)) {
-            width_3 = getAbsoluteValue(first, bounds.width);
-          } else if (isLengthPercentage(second)) {
-            height_3 = getAbsoluteValue(second, bounds.height);
-          }
-          if (isAuto(first)) {
-            width_3 = height_3 * intrinsicProportion;
-          } else if (!second || isAuto(second)) {
-            height_3 = width_3 / intrinsicProportion;
-          }
-          return [width_3, height_3];
-        }
-        var width = null;
-        var height = null;
-        if (isLengthPercentage(first)) {
-          width = getAbsoluteValue(first, bounds.width);
-        } else if (second && isLengthPercentage(second)) {
-          height = getAbsoluteValue(second, bounds.height);
-        }
-        if (width !== null && (!second || isAuto(second))) {
-          height = hasIntrinsicWidth && hasIntrinsicHeight ? width / intrinsicWidth * intrinsicHeight : bounds.height;
-        }
-        if (height !== null && isAuto(first)) {
-          width = hasIntrinsicWidth && hasIntrinsicHeight ? height / intrinsicHeight * intrinsicWidth : bounds.width;
-        }
-        if (width !== null && height !== null) {
-          return [width, height];
-        }
-        throw new Error("Unable to calculate background-size for element");
-      };
-      getBackgroundValueForIndex = function(values, index) {
-        var value = values[index];
-        if (typeof value === "undefined") {
-          return values[0];
-        }
-        return value;
-      };
-      calculateBackgroundRepeatPath = function(repeat, _a, _b, backgroundPositioningArea, backgroundPaintingArea) {
-        var x = _a[0], y = _a[1];
-        var width = _b[0], height = _b[1];
-        switch (repeat) {
-          case 2:
-            return [
-              new Vector(Math.round(backgroundPositioningArea.left), Math.round(backgroundPositioningArea.top + y)),
-              new Vector(Math.round(backgroundPositioningArea.left + backgroundPositioningArea.width), Math.round(backgroundPositioningArea.top + y)),
-              new Vector(Math.round(backgroundPositioningArea.left + backgroundPositioningArea.width), Math.round(height + backgroundPositioningArea.top + y)),
-              new Vector(Math.round(backgroundPositioningArea.left), Math.round(height + backgroundPositioningArea.top + y))
-            ];
-          case 3:
-            return [
-              new Vector(Math.round(backgroundPositioningArea.left + x), Math.round(backgroundPositioningArea.top)),
-              new Vector(Math.round(backgroundPositioningArea.left + x + width), Math.round(backgroundPositioningArea.top)),
-              new Vector(Math.round(backgroundPositioningArea.left + x + width), Math.round(backgroundPositioningArea.height + backgroundPositioningArea.top)),
-              new Vector(Math.round(backgroundPositioningArea.left + x), Math.round(backgroundPositioningArea.height + backgroundPositioningArea.top))
-            ];
-          case 1:
-            return [
-              new Vector(Math.round(backgroundPositioningArea.left + x), Math.round(backgroundPositioningArea.top + y)),
-              new Vector(Math.round(backgroundPositioningArea.left + x + width), Math.round(backgroundPositioningArea.top + y)),
-              new Vector(Math.round(backgroundPositioningArea.left + x + width), Math.round(backgroundPositioningArea.top + y + height)),
-              new Vector(Math.round(backgroundPositioningArea.left + x), Math.round(backgroundPositioningArea.top + y + height))
-            ];
-          default:
-            return [
-              new Vector(Math.round(backgroundPaintingArea.left), Math.round(backgroundPaintingArea.top)),
-              new Vector(Math.round(backgroundPaintingArea.left + backgroundPaintingArea.width), Math.round(backgroundPaintingArea.top)),
-              new Vector(Math.round(backgroundPaintingArea.left + backgroundPaintingArea.width), Math.round(backgroundPaintingArea.height + backgroundPaintingArea.top)),
-              new Vector(Math.round(backgroundPaintingArea.left), Math.round(backgroundPaintingArea.height + backgroundPaintingArea.top))
-            ];
-        }
-      };
-      SMALL_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-      SAMPLE_TEXT = "Hidden Text";
-      FontMetrics = /** @class */
-      (function() {
-        function FontMetrics2(document2) {
-          this._data = {};
-          this._document = document2;
-        }
-        FontMetrics2.prototype.parseMetrics = function(fontFamily2, fontSize2) {
-          var container = this._document.createElement("div");
-          var img = this._document.createElement("img");
-          var span = this._document.createElement("span");
-          var body = this._document.body;
-          container.style.visibility = "hidden";
-          container.style.fontFamily = fontFamily2;
-          container.style.fontSize = fontSize2;
-          container.style.margin = "0";
-          container.style.padding = "0";
-          container.style.whiteSpace = "nowrap";
-          body.appendChild(container);
-          img.src = SMALL_IMAGE;
-          img.width = 1;
-          img.height = 1;
-          img.style.margin = "0";
-          img.style.padding = "0";
-          img.style.verticalAlign = "baseline";
-          span.style.fontFamily = fontFamily2;
-          span.style.fontSize = fontSize2;
-          span.style.margin = "0";
-          span.style.padding = "0";
-          span.appendChild(this._document.createTextNode(SAMPLE_TEXT));
-          container.appendChild(span);
-          container.appendChild(img);
-          var baseline = img.offsetTop - span.offsetTop + 2;
-          container.removeChild(span);
-          container.appendChild(this._document.createTextNode(SAMPLE_TEXT));
-          container.style.lineHeight = "normal";
-          img.style.verticalAlign = "super";
-          var middle = img.offsetTop - container.offsetTop + 2;
-          body.removeChild(container);
-          return { baseline, middle };
-        };
-        FontMetrics2.prototype.getMetrics = function(fontFamily2, fontSize2) {
-          var key = fontFamily2 + " " + fontSize2;
-          if (typeof this._data[key] === "undefined") {
-            this._data[key] = this.parseMetrics(fontFamily2, fontSize2);
-          }
-          return this._data[key];
-        };
-        return FontMetrics2;
-      })();
-      Renderer = /** @class */
-      /* @__PURE__ */ (function() {
-        function Renderer2(context2, options) {
-          this.context = context2;
-          this.options = options;
-        }
-        return Renderer2;
-      })();
-      MASK_OFFSET = 1e4;
-      CanvasRenderer = /** @class */
-      (function(_super) {
-        __extends(CanvasRenderer2, _super);
-        function CanvasRenderer2(context2, options) {
-          var _this = _super.call(this, context2, options) || this;
-          _this._activeEffects = [];
-          _this.canvas = options.canvas ? options.canvas : document.createElement("canvas");
-          _this.ctx = _this.canvas.getContext("2d");
-          if (!options.canvas) {
-            _this.canvas.width = Math.floor(options.width * options.scale);
-            _this.canvas.height = Math.floor(options.height * options.scale);
-            _this.canvas.style.width = options.width + "px";
-            _this.canvas.style.height = options.height + "px";
-          }
-          _this.fontMetrics = new FontMetrics(document);
-          _this.ctx.scale(_this.options.scale, _this.options.scale);
-          _this.ctx.translate(-options.x, -options.y);
-          _this.ctx.textBaseline = "bottom";
-          _this._activeEffects = [];
-          _this.context.logger.debug("Canvas renderer initialized (" + options.width + "x" + options.height + ") with scale " + options.scale);
-          return _this;
-        }
-        CanvasRenderer2.prototype.applyEffects = function(effects) {
-          var _this = this;
-          while (this._activeEffects.length) {
-            this.popEffect();
-          }
-          effects.forEach(function(effect) {
-            return _this.applyEffect(effect);
-          });
-        };
-        CanvasRenderer2.prototype.applyEffect = function(effect) {
-          this.ctx.save();
-          if (isOpacityEffect(effect)) {
-            this.ctx.globalAlpha = effect.opacity;
-          }
-          if (isTransformEffect(effect)) {
-            this.ctx.translate(effect.offsetX, effect.offsetY);
-            this.ctx.transform(effect.matrix[0], effect.matrix[1], effect.matrix[2], effect.matrix[3], effect.matrix[4], effect.matrix[5]);
-            this.ctx.translate(-effect.offsetX, -effect.offsetY);
-          }
-          if (isClipEffect(effect)) {
-            this.path(effect.path);
-            this.ctx.clip();
-          }
-          this._activeEffects.push(effect);
-        };
-        CanvasRenderer2.prototype.popEffect = function() {
-          this._activeEffects.pop();
-          this.ctx.restore();
-        };
-        CanvasRenderer2.prototype.renderStack = function(stack) {
-          return __awaiter(this, void 0, void 0, function() {
-            var styles;
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  styles = stack.element.container.styles;
-                  if (!styles.isVisible()) return [3, 2];
-                  return [4, this.renderStackContent(stack)];
-                case 1:
-                  _a.sent();
-                  _a.label = 2;
-                case 2:
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderNode = function(paint) {
-          return __awaiter(this, void 0, void 0, function() {
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  if (contains(
-                    paint.container.flags,
-                    16
-                    /* DEBUG_RENDER */
-                  )) {
-                    debugger;
-                  }
-                  if (!paint.container.styles.isVisible()) return [3, 3];
-                  return [4, this.renderNodeBackgroundAndBorders(paint)];
-                case 1:
-                  _a.sent();
-                  return [4, this.renderNodeContent(paint)];
-                case 2:
-                  _a.sent();
-                  _a.label = 3;
-                case 3:
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderTextWithLetterSpacing = function(text, letterSpacing2, baseline) {
-          var _this = this;
-          if (letterSpacing2 === 0) {
-            this.ctx.fillText(text.text, text.bounds.left, text.bounds.top + baseline);
-          } else {
-            var letters = segmentGraphemes(text.text);
-            letters.reduce(function(left, letter) {
-              _this.ctx.fillText(letter, left, text.bounds.top + baseline);
-              return left + _this.ctx.measureText(letter).width;
-            }, text.bounds.left);
-          }
-        };
-        CanvasRenderer2.prototype.createFontStyle = function(styles) {
-          var fontVariant2 = styles.fontVariant.filter(function(variant) {
-            return variant === "normal" || variant === "small-caps";
-          }).join("");
-          var fontFamily2 = fixIOSSystemFonts(styles.fontFamily).join(", ");
-          var fontSize2 = isDimensionToken(styles.fontSize) ? "" + styles.fontSize.number + styles.fontSize.unit : styles.fontSize.number + "px";
-          return [
-            [styles.fontStyle, fontVariant2, styles.fontWeight, fontSize2, fontFamily2].join(" "),
-            fontFamily2,
-            fontSize2
-          ];
-        };
-        CanvasRenderer2.prototype.renderTextNode = function(text, styles) {
-          return __awaiter(this, void 0, void 0, function() {
-            var _a, font, fontFamily2, fontSize2, _b, baseline, middle, paintOrder2;
-            var _this = this;
-            return __generator(this, function(_c) {
-              _a = this.createFontStyle(styles), font = _a[0], fontFamily2 = _a[1], fontSize2 = _a[2];
-              this.ctx.font = font;
-              this.ctx.direction = styles.direction === 1 ? "rtl" : "ltr";
-              this.ctx.textAlign = "left";
-              this.ctx.textBaseline = "alphabetic";
-              _b = this.fontMetrics.getMetrics(fontFamily2, fontSize2), baseline = _b.baseline, middle = _b.middle;
-              paintOrder2 = styles.paintOrder;
-              text.textBounds.forEach(function(text2) {
-                paintOrder2.forEach(function(paintOrderLayer) {
-                  switch (paintOrderLayer) {
-                    case 0:
-                      _this.ctx.fillStyle = asString(styles.color);
-                      _this.renderTextWithLetterSpacing(text2, styles.letterSpacing, baseline);
-                      var textShadows = styles.textShadow;
-                      if (textShadows.length && text2.text.trim().length) {
-                        textShadows.slice(0).reverse().forEach(function(textShadow2) {
-                          _this.ctx.shadowColor = asString(textShadow2.color);
-                          _this.ctx.shadowOffsetX = textShadow2.offsetX.number * _this.options.scale;
-                          _this.ctx.shadowOffsetY = textShadow2.offsetY.number * _this.options.scale;
-                          _this.ctx.shadowBlur = textShadow2.blur.number;
-                          _this.renderTextWithLetterSpacing(text2, styles.letterSpacing, baseline);
-                        });
-                        _this.ctx.shadowColor = "";
-                        _this.ctx.shadowOffsetX = 0;
-                        _this.ctx.shadowOffsetY = 0;
-                        _this.ctx.shadowBlur = 0;
-                      }
-                      if (styles.textDecorationLine.length) {
-                        _this.ctx.fillStyle = asString(styles.textDecorationColor || styles.color);
-                        styles.textDecorationLine.forEach(function(textDecorationLine2) {
-                          switch (textDecorationLine2) {
-                            case 1:
-                              _this.ctx.fillRect(text2.bounds.left, Math.round(text2.bounds.top + baseline), text2.bounds.width, 1);
-                              break;
-                            case 2:
-                              _this.ctx.fillRect(text2.bounds.left, Math.round(text2.bounds.top), text2.bounds.width, 1);
-                              break;
-                            case 3:
-                              _this.ctx.fillRect(text2.bounds.left, Math.ceil(text2.bounds.top + middle), text2.bounds.width, 1);
-                              break;
-                          }
-                        });
-                      }
-                      break;
-                    case 1:
-                      if (styles.webkitTextStrokeWidth && text2.text.trim().length) {
-                        _this.ctx.strokeStyle = asString(styles.webkitTextStrokeColor);
-                        _this.ctx.lineWidth = styles.webkitTextStrokeWidth;
-                        _this.ctx.lineJoin = !!window.chrome ? "miter" : "round";
-                        _this.ctx.strokeText(text2.text, text2.bounds.left, text2.bounds.top + baseline);
-                      }
-                      _this.ctx.strokeStyle = "";
-                      _this.ctx.lineWidth = 0;
-                      _this.ctx.lineJoin = "miter";
-                      break;
-                  }
-                });
-              });
-              return [
-                2
-                /*return*/
-              ];
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderReplacedElement = function(container, curves, image2) {
-          if (image2 && container.intrinsicWidth > 0 && container.intrinsicHeight > 0) {
-            var box = contentBox(container);
-            var path = calculatePaddingBoxPath(curves);
-            this.path(path);
-            this.ctx.save();
-            this.ctx.clip();
-            this.ctx.drawImage(image2, 0, 0, container.intrinsicWidth, container.intrinsicHeight, box.left, box.top, box.width, box.height);
-            this.ctx.restore();
-          }
-        };
-        CanvasRenderer2.prototype.renderNodeContent = function(paint) {
-          return __awaiter(this, void 0, void 0, function() {
-            var container, curves, styles, _i, _a, child, image2, image2, iframeRenderer, canvas, size, _b, fontFamily2, fontSize2, baseline, bounds, x, textBounds, img, image2, url, fontFamily2, bounds;
-            return __generator(this, function(_c) {
-              switch (_c.label) {
-                case 0:
-                  this.applyEffects(paint.getEffects(
-                    4
-                    /* CONTENT */
-                  ));
-                  container = paint.container;
-                  curves = paint.curves;
-                  styles = container.styles;
-                  _i = 0, _a = container.textNodes;
-                  _c.label = 1;
-                case 1:
-                  if (!(_i < _a.length)) return [3, 4];
-                  child = _a[_i];
-                  return [4, this.renderTextNode(child, styles)];
-                case 2:
-                  _c.sent();
-                  _c.label = 3;
-                case 3:
-                  _i++;
-                  return [3, 1];
-                case 4:
-                  if (!(container instanceof ImageElementContainer)) return [3, 8];
-                  _c.label = 5;
-                case 5:
-                  _c.trys.push([5, 7, , 8]);
-                  return [4, this.context.cache.match(container.src)];
-                case 6:
-                  image2 = _c.sent();
-                  this.renderReplacedElement(container, curves, image2);
-                  return [3, 8];
-                case 7:
-                  _c.sent();
-                  this.context.logger.error("Error loading image " + container.src);
-                  return [3, 8];
-                case 8:
-                  if (container instanceof CanvasElementContainer) {
-                    this.renderReplacedElement(container, curves, container.canvas);
-                  }
-                  if (!(container instanceof SVGElementContainer)) return [3, 12];
-                  _c.label = 9;
-                case 9:
-                  _c.trys.push([9, 11, , 12]);
-                  return [4, this.context.cache.match(container.svg)];
-                case 10:
-                  image2 = _c.sent();
-                  this.renderReplacedElement(container, curves, image2);
-                  return [3, 12];
-                case 11:
-                  _c.sent();
-                  this.context.logger.error("Error loading svg " + container.svg.substring(0, 255));
-                  return [3, 12];
-                case 12:
-                  if (!(container instanceof IFrameElementContainer && container.tree)) return [3, 14];
-                  iframeRenderer = new CanvasRenderer2(this.context, {
-                    scale: this.options.scale,
-                    backgroundColor: container.backgroundColor,
-                    x: 0,
-                    y: 0,
-                    width: container.width,
-                    height: container.height
-                  });
-                  return [4, iframeRenderer.render(container.tree)];
-                case 13:
-                  canvas = _c.sent();
-                  if (container.width && container.height) {
-                    this.ctx.drawImage(canvas, 0, 0, container.width, container.height, container.bounds.left, container.bounds.top, container.bounds.width, container.bounds.height);
-                  }
-                  _c.label = 14;
-                case 14:
-                  if (container instanceof InputElementContainer) {
-                    size = Math.min(container.bounds.width, container.bounds.height);
-                    if (container.type === CHECKBOX) {
-                      if (container.checked) {
-                        this.ctx.save();
-                        this.path([
-                          new Vector(container.bounds.left + size * 0.39363, container.bounds.top + size * 0.79),
-                          new Vector(container.bounds.left + size * 0.16, container.bounds.top + size * 0.5549),
-                          new Vector(container.bounds.left + size * 0.27347, container.bounds.top + size * 0.44071),
-                          new Vector(container.bounds.left + size * 0.39694, container.bounds.top + size * 0.5649),
-                          new Vector(container.bounds.left + size * 0.72983, container.bounds.top + size * 0.23),
-                          new Vector(container.bounds.left + size * 0.84, container.bounds.top + size * 0.34085),
-                          new Vector(container.bounds.left + size * 0.39363, container.bounds.top + size * 0.79)
-                        ]);
-                        this.ctx.fillStyle = asString(INPUT_COLOR);
-                        this.ctx.fill();
-                        this.ctx.restore();
-                      }
-                    } else if (container.type === RADIO) {
-                      if (container.checked) {
-                        this.ctx.save();
-                        this.ctx.beginPath();
-                        this.ctx.arc(container.bounds.left + size / 2, container.bounds.top + size / 2, size / 4, 0, Math.PI * 2, true);
-                        this.ctx.fillStyle = asString(INPUT_COLOR);
-                        this.ctx.fill();
-                        this.ctx.restore();
-                      }
-                    }
-                  }
-                  if (isTextInputElement(container) && container.value.length) {
-                    _b = this.createFontStyle(styles), fontFamily2 = _b[0], fontSize2 = _b[1];
-                    baseline = this.fontMetrics.getMetrics(fontFamily2, fontSize2).baseline;
-                    this.ctx.font = fontFamily2;
-                    this.ctx.fillStyle = asString(styles.color);
-                    this.ctx.textBaseline = "alphabetic";
-                    this.ctx.textAlign = canvasTextAlign(container.styles.textAlign);
-                    bounds = contentBox(container);
-                    x = 0;
-                    switch (container.styles.textAlign) {
-                      case 1:
-                        x += bounds.width / 2;
-                        break;
-                      case 2:
-                        x += bounds.width;
-                        break;
-                    }
-                    textBounds = bounds.add(x, 0, 0, -bounds.height / 2 + 1);
-                    this.ctx.save();
-                    this.path([
-                      new Vector(bounds.left, bounds.top),
-                      new Vector(bounds.left + bounds.width, bounds.top),
-                      new Vector(bounds.left + bounds.width, bounds.top + bounds.height),
-                      new Vector(bounds.left, bounds.top + bounds.height)
-                    ]);
-                    this.ctx.clip();
-                    this.renderTextWithLetterSpacing(new TextBounds(container.value, textBounds), styles.letterSpacing, baseline);
-                    this.ctx.restore();
-                    this.ctx.textBaseline = "alphabetic";
-                    this.ctx.textAlign = "left";
-                  }
-                  if (!contains(
-                    container.styles.display,
-                    2048
-                    /* LIST_ITEM */
-                  )) return [3, 20];
-                  if (!(container.styles.listStyleImage !== null)) return [3, 19];
-                  img = container.styles.listStyleImage;
-                  if (!(img.type === 0)) return [3, 18];
-                  image2 = void 0;
-                  url = img.url;
-                  _c.label = 15;
-                case 15:
-                  _c.trys.push([15, 17, , 18]);
-                  return [4, this.context.cache.match(url)];
-                case 16:
-                  image2 = _c.sent();
-                  this.ctx.drawImage(image2, container.bounds.left - (image2.width + 10), container.bounds.top);
-                  return [3, 18];
-                case 17:
-                  _c.sent();
-                  this.context.logger.error("Error loading list-style-image " + url);
-                  return [3, 18];
-                case 18:
-                  return [3, 20];
-                case 19:
-                  if (paint.listValue && container.styles.listStyleType !== -1) {
-                    fontFamily2 = this.createFontStyle(styles)[0];
-                    this.ctx.font = fontFamily2;
-                    this.ctx.fillStyle = asString(styles.color);
-                    this.ctx.textBaseline = "middle";
-                    this.ctx.textAlign = "right";
-                    bounds = new Bounds(container.bounds.left, container.bounds.top + getAbsoluteValue(container.styles.paddingTop, container.bounds.width), container.bounds.width, computeLineHeight(styles.lineHeight, styles.fontSize.number) / 2 + 1);
-                    this.renderTextWithLetterSpacing(new TextBounds(paint.listValue, bounds), styles.letterSpacing, computeLineHeight(styles.lineHeight, styles.fontSize.number) / 2 + 2);
-                    this.ctx.textBaseline = "bottom";
-                    this.ctx.textAlign = "left";
-                  }
-                  _c.label = 20;
-                case 20:
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderStackContent = function(stack) {
-          return __awaiter(this, void 0, void 0, function() {
-            var _i, _a, child, _b, _c, child, _d, _e, child, _f, _g, child, _h, _j, child, _k, _l, child, _m, _o, child;
-            return __generator(this, function(_p) {
-              switch (_p.label) {
-                case 0:
-                  if (contains(
-                    stack.element.container.flags,
-                    16
-                    /* DEBUG_RENDER */
-                  )) {
-                    debugger;
-                  }
-                  return [4, this.renderNodeBackgroundAndBorders(stack.element)];
-                case 1:
-                  _p.sent();
-                  _i = 0, _a = stack.negativeZIndex;
-                  _p.label = 2;
-                case 2:
-                  if (!(_i < _a.length)) return [3, 5];
-                  child = _a[_i];
-                  return [4, this.renderStack(child)];
-                case 3:
-                  _p.sent();
-                  _p.label = 4;
-                case 4:
-                  _i++;
-                  return [3, 2];
-                case 5:
-                  return [4, this.renderNodeContent(stack.element)];
-                case 6:
-                  _p.sent();
-                  _b = 0, _c = stack.nonInlineLevel;
-                  _p.label = 7;
-                case 7:
-                  if (!(_b < _c.length)) return [3, 10];
-                  child = _c[_b];
-                  return [4, this.renderNode(child)];
-                case 8:
-                  _p.sent();
-                  _p.label = 9;
-                case 9:
-                  _b++;
-                  return [3, 7];
-                case 10:
-                  _d = 0, _e = stack.nonPositionedFloats;
-                  _p.label = 11;
-                case 11:
-                  if (!(_d < _e.length)) return [3, 14];
-                  child = _e[_d];
-                  return [4, this.renderStack(child)];
-                case 12:
-                  _p.sent();
-                  _p.label = 13;
-                case 13:
-                  _d++;
-                  return [3, 11];
-                case 14:
-                  _f = 0, _g = stack.nonPositionedInlineLevel;
-                  _p.label = 15;
-                case 15:
-                  if (!(_f < _g.length)) return [3, 18];
-                  child = _g[_f];
-                  return [4, this.renderStack(child)];
-                case 16:
-                  _p.sent();
-                  _p.label = 17;
-                case 17:
-                  _f++;
-                  return [3, 15];
-                case 18:
-                  _h = 0, _j = stack.inlineLevel;
-                  _p.label = 19;
-                case 19:
-                  if (!(_h < _j.length)) return [3, 22];
-                  child = _j[_h];
-                  return [4, this.renderNode(child)];
-                case 20:
-                  _p.sent();
-                  _p.label = 21;
-                case 21:
-                  _h++;
-                  return [3, 19];
-                case 22:
-                  _k = 0, _l = stack.zeroOrAutoZIndexOrTransformedOrOpacity;
-                  _p.label = 23;
-                case 23:
-                  if (!(_k < _l.length)) return [3, 26];
-                  child = _l[_k];
-                  return [4, this.renderStack(child)];
-                case 24:
-                  _p.sent();
-                  _p.label = 25;
-                case 25:
-                  _k++;
-                  return [3, 23];
-                case 26:
-                  _m = 0, _o = stack.positiveZIndex;
-                  _p.label = 27;
-                case 27:
-                  if (!(_m < _o.length)) return [3, 30];
-                  child = _o[_m];
-                  return [4, this.renderStack(child)];
-                case 28:
-                  _p.sent();
-                  _p.label = 29;
-                case 29:
-                  _m++;
-                  return [3, 27];
-                case 30:
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.mask = function(paths) {
-          this.ctx.beginPath();
-          this.ctx.moveTo(0, 0);
-          this.ctx.lineTo(this.canvas.width, 0);
-          this.ctx.lineTo(this.canvas.width, this.canvas.height);
-          this.ctx.lineTo(0, this.canvas.height);
-          this.ctx.lineTo(0, 0);
-          this.formatPath(paths.slice(0).reverse());
-          this.ctx.closePath();
-        };
-        CanvasRenderer2.prototype.path = function(paths) {
-          this.ctx.beginPath();
-          this.formatPath(paths);
-          this.ctx.closePath();
-        };
-        CanvasRenderer2.prototype.formatPath = function(paths) {
-          var _this = this;
-          paths.forEach(function(point, index) {
-            var start = isBezierCurve(point) ? point.start : point;
-            if (index === 0) {
-              _this.ctx.moveTo(start.x, start.y);
-            } else {
-              _this.ctx.lineTo(start.x, start.y);
-            }
-            if (isBezierCurve(point)) {
-              _this.ctx.bezierCurveTo(point.startControl.x, point.startControl.y, point.endControl.x, point.endControl.y, point.end.x, point.end.y);
-            }
-          });
-        };
-        CanvasRenderer2.prototype.renderRepeat = function(path, pattern, offsetX, offsetY) {
-          this.path(path);
-          this.ctx.fillStyle = pattern;
-          this.ctx.translate(offsetX, offsetY);
-          this.ctx.fill();
-          this.ctx.translate(-offsetX, -offsetY);
-        };
-        CanvasRenderer2.prototype.resizeImage = function(image2, width, height) {
-          var _a;
-          if (image2.width === width && image2.height === height) {
-            return image2;
-          }
-          var ownerDocument = (_a = this.canvas.ownerDocument) !== null && _a !== void 0 ? _a : document;
-          var canvas = ownerDocument.createElement("canvas");
-          canvas.width = Math.max(1, width);
-          canvas.height = Math.max(1, height);
-          var ctx = canvas.getContext("2d");
-          ctx.drawImage(image2, 0, 0, image2.width, image2.height, 0, 0, width, height);
-          return canvas;
-        };
-        CanvasRenderer2.prototype.renderBackgroundImage = function(container) {
-          return __awaiter(this, void 0, void 0, function() {
-            var index, _loop_1, this_1, _i, _a, backgroundImage2;
-            return __generator(this, function(_b) {
-              switch (_b.label) {
-                case 0:
-                  index = container.styles.backgroundImage.length - 1;
-                  _loop_1 = function(backgroundImage3) {
-                    var image2, url, _c, path, x, y, width, height, pattern, _d, path, x, y, width, height, _e, lineLength, x0, x1, y0, y1, canvas, ctx, gradient_1, pattern, _f, path, left, top_1, width, height, position2, x, y, _g, rx, ry, radialGradient_1, midX, midY, f2, invF;
-                    return __generator(this, function(_h) {
-                      switch (_h.label) {
-                        case 0:
-                          if (!(backgroundImage3.type === 0)) return [3, 5];
-                          image2 = void 0;
-                          url = backgroundImage3.url;
-                          _h.label = 1;
-                        case 1:
-                          _h.trys.push([1, 3, , 4]);
-                          return [4, this_1.context.cache.match(url)];
-                        case 2:
-                          image2 = _h.sent();
-                          return [3, 4];
-                        case 3:
-                          _h.sent();
-                          this_1.context.logger.error("Error loading background-image " + url);
-                          return [3, 4];
-                        case 4:
-                          if (image2) {
-                            _c = calculateBackgroundRendering(container, index, [
-                              image2.width,
-                              image2.height,
-                              image2.width / image2.height
-                            ]), path = _c[0], x = _c[1], y = _c[2], width = _c[3], height = _c[4];
-                            pattern = this_1.ctx.createPattern(this_1.resizeImage(image2, width, height), "repeat");
-                            this_1.renderRepeat(path, pattern, x, y);
-                          }
-                          return [3, 6];
-                        case 5:
-                          if (isLinearGradient(backgroundImage3)) {
-                            _d = calculateBackgroundRendering(container, index, [null, null, null]), path = _d[0], x = _d[1], y = _d[2], width = _d[3], height = _d[4];
-                            _e = calculateGradientDirection(backgroundImage3.angle, width, height), lineLength = _e[0], x0 = _e[1], x1 = _e[2], y0 = _e[3], y1 = _e[4];
-                            canvas = document.createElement("canvas");
-                            canvas.width = width;
-                            canvas.height = height;
-                            ctx = canvas.getContext("2d");
-                            gradient_1 = ctx.createLinearGradient(x0, y0, x1, y1);
-                            processColorStops(backgroundImage3.stops, lineLength).forEach(function(colorStop) {
-                              return gradient_1.addColorStop(colorStop.stop, asString(colorStop.color));
-                            });
-                            ctx.fillStyle = gradient_1;
-                            ctx.fillRect(0, 0, width, height);
-                            if (width > 0 && height > 0) {
-                              pattern = this_1.ctx.createPattern(canvas, "repeat");
-                              this_1.renderRepeat(path, pattern, x, y);
-                            }
-                          } else if (isRadialGradient(backgroundImage3)) {
-                            _f = calculateBackgroundRendering(container, index, [
-                              null,
-                              null,
-                              null
-                            ]), path = _f[0], left = _f[1], top_1 = _f[2], width = _f[3], height = _f[4];
-                            position2 = backgroundImage3.position.length === 0 ? [FIFTY_PERCENT] : backgroundImage3.position;
-                            x = getAbsoluteValue(position2[0], width);
-                            y = getAbsoluteValue(position2[position2.length - 1], height);
-                            _g = calculateRadius(backgroundImage3, x, y, width, height), rx = _g[0], ry = _g[1];
-                            if (rx > 0 && ry > 0) {
-                              radialGradient_1 = this_1.ctx.createRadialGradient(left + x, top_1 + y, 0, left + x, top_1 + y, rx);
-                              processColorStops(backgroundImage3.stops, rx * 2).forEach(function(colorStop) {
-                                return radialGradient_1.addColorStop(colorStop.stop, asString(colorStop.color));
-                              });
-                              this_1.path(path);
-                              this_1.ctx.fillStyle = radialGradient_1;
-                              if (rx !== ry) {
-                                midX = container.bounds.left + 0.5 * container.bounds.width;
-                                midY = container.bounds.top + 0.5 * container.bounds.height;
-                                f2 = ry / rx;
-                                invF = 1 / f2;
-                                this_1.ctx.save();
-                                this_1.ctx.translate(midX, midY);
-                                this_1.ctx.transform(1, 0, 0, f2, 0, 0);
-                                this_1.ctx.translate(-midX, -midY);
-                                this_1.ctx.fillRect(left, invF * (top_1 - midY) + midY, width, height * invF);
-                                this_1.ctx.restore();
-                              } else {
-                                this_1.ctx.fill();
-                              }
-                            }
-                          }
-                          _h.label = 6;
-                        case 6:
-                          index--;
-                          return [
-                            2
-                            /*return*/
-                          ];
-                      }
-                    });
-                  };
-                  this_1 = this;
-                  _i = 0, _a = container.styles.backgroundImage.slice(0).reverse();
-                  _b.label = 1;
-                case 1:
-                  if (!(_i < _a.length)) return [3, 4];
-                  backgroundImage2 = _a[_i];
-                  return [5, _loop_1(backgroundImage2)];
-                case 2:
-                  _b.sent();
-                  _b.label = 3;
-                case 3:
-                  _i++;
-                  return [3, 1];
-                case 4:
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderSolidBorder = function(color2, side, curvePoints) {
-          return __awaiter(this, void 0, void 0, function() {
-            return __generator(this, function(_a) {
-              this.path(parsePathForBorder(curvePoints, side));
-              this.ctx.fillStyle = asString(color2);
-              this.ctx.fill();
-              return [
-                2
-                /*return*/
-              ];
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderDoubleBorder = function(color2, width, side, curvePoints) {
-          return __awaiter(this, void 0, void 0, function() {
-            var outerPaths, innerPaths;
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  if (!(width < 3)) return [3, 2];
-                  return [4, this.renderSolidBorder(color2, side, curvePoints)];
-                case 1:
-                  _a.sent();
-                  return [
-                    2
-                    /*return*/
-                  ];
-                case 2:
-                  outerPaths = parsePathForBorderDoubleOuter(curvePoints, side);
-                  this.path(outerPaths);
-                  this.ctx.fillStyle = asString(color2);
-                  this.ctx.fill();
-                  innerPaths = parsePathForBorderDoubleInner(curvePoints, side);
-                  this.path(innerPaths);
-                  this.ctx.fill();
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderNodeBackgroundAndBorders = function(paint) {
-          return __awaiter(this, void 0, void 0, function() {
-            var styles, hasBackground, borders, backgroundPaintingArea, side, _i, borders_1, border;
-            var _this = this;
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  this.applyEffects(paint.getEffects(
-                    2
-                    /* BACKGROUND_BORDERS */
-                  ));
-                  styles = paint.container.styles;
-                  hasBackground = !isTransparent(styles.backgroundColor) || styles.backgroundImage.length;
-                  borders = [
-                    { style: styles.borderTopStyle, color: styles.borderTopColor, width: styles.borderTopWidth },
-                    { style: styles.borderRightStyle, color: styles.borderRightColor, width: styles.borderRightWidth },
-                    { style: styles.borderBottomStyle, color: styles.borderBottomColor, width: styles.borderBottomWidth },
-                    { style: styles.borderLeftStyle, color: styles.borderLeftColor, width: styles.borderLeftWidth }
-                  ];
-                  backgroundPaintingArea = calculateBackgroundCurvedPaintingArea(getBackgroundValueForIndex(styles.backgroundClip, 0), paint.curves);
-                  if (!(hasBackground || styles.boxShadow.length)) return [3, 2];
-                  this.ctx.save();
-                  this.path(backgroundPaintingArea);
-                  this.ctx.clip();
-                  if (!isTransparent(styles.backgroundColor)) {
-                    this.ctx.fillStyle = asString(styles.backgroundColor);
-                    this.ctx.fill();
-                  }
-                  return [4, this.renderBackgroundImage(paint.container)];
-                case 1:
-                  _a.sent();
-                  this.ctx.restore();
-                  styles.boxShadow.slice(0).reverse().forEach(function(shadow) {
-                    _this.ctx.save();
-                    var borderBoxArea = calculateBorderBoxPath(paint.curves);
-                    var maskOffset = shadow.inset ? 0 : MASK_OFFSET;
-                    var shadowPaintingArea = transformPath(borderBoxArea, -maskOffset + (shadow.inset ? 1 : -1) * shadow.spread.number, (shadow.inset ? 1 : -1) * shadow.spread.number, shadow.spread.number * (shadow.inset ? -2 : 2), shadow.spread.number * (shadow.inset ? -2 : 2));
-                    if (shadow.inset) {
-                      _this.path(borderBoxArea);
-                      _this.ctx.clip();
-                      _this.mask(shadowPaintingArea);
-                    } else {
-                      _this.mask(borderBoxArea);
-                      _this.ctx.clip();
-                      _this.path(shadowPaintingArea);
-                    }
-                    _this.ctx.shadowOffsetX = shadow.offsetX.number + maskOffset;
-                    _this.ctx.shadowOffsetY = shadow.offsetY.number;
-                    _this.ctx.shadowColor = asString(shadow.color);
-                    _this.ctx.shadowBlur = shadow.blur.number;
-                    _this.ctx.fillStyle = shadow.inset ? asString(shadow.color) : "rgba(0,0,0,1)";
-                    _this.ctx.fill();
-                    _this.ctx.restore();
-                  });
-                  _a.label = 2;
-                case 2:
-                  side = 0;
-                  _i = 0, borders_1 = borders;
-                  _a.label = 3;
-                case 3:
-                  if (!(_i < borders_1.length)) return [3, 13];
-                  border = borders_1[_i];
-                  if (!(border.style !== 0 && !isTransparent(border.color) && border.width > 0)) return [3, 11];
-                  if (!(border.style === 2)) return [3, 5];
-                  return [4, this.renderDashedDottedBorder(
-                    border.color,
-                    border.width,
-                    side,
-                    paint.curves,
-                    2
-                    /* DASHED */
-                  )];
-                case 4:
-                  _a.sent();
-                  return [3, 11];
-                case 5:
-                  if (!(border.style === 3)) return [3, 7];
-                  return [4, this.renderDashedDottedBorder(
-                    border.color,
-                    border.width,
-                    side,
-                    paint.curves,
-                    3
-                    /* DOTTED */
-                  )];
-                case 6:
-                  _a.sent();
-                  return [3, 11];
-                case 7:
-                  if (!(border.style === 4)) return [3, 9];
-                  return [4, this.renderDoubleBorder(border.color, border.width, side, paint.curves)];
-                case 8:
-                  _a.sent();
-                  return [3, 11];
-                case 9:
-                  return [4, this.renderSolidBorder(border.color, side, paint.curves)];
-                case 10:
-                  _a.sent();
-                  _a.label = 11;
-                case 11:
-                  side++;
-                  _a.label = 12;
-                case 12:
-                  _i++;
-                  return [3, 3];
-                case 13:
-                  return [
-                    2
-                    /*return*/
-                  ];
-              }
-            });
-          });
-        };
-        CanvasRenderer2.prototype.renderDashedDottedBorder = function(color2, width, side, curvePoints, style) {
-          return __awaiter(this, void 0, void 0, function() {
-            var strokePaths, boxPaths, startX, startY, endX, endY, length, dashLength, spaceLength, useLineDash, multiplier, numberOfDashes, minSpace, maxSpace, path1, path2, path1, path2;
-            return __generator(this, function(_a) {
-              this.ctx.save();
-              strokePaths = parsePathForBorderStroke(curvePoints, side);
-              boxPaths = parsePathForBorder(curvePoints, side);
-              if (style === 2) {
-                this.path(boxPaths);
-                this.ctx.clip();
-              }
-              if (isBezierCurve(boxPaths[0])) {
-                startX = boxPaths[0].start.x;
-                startY = boxPaths[0].start.y;
-              } else {
-                startX = boxPaths[0].x;
-                startY = boxPaths[0].y;
-              }
-              if (isBezierCurve(boxPaths[1])) {
-                endX = boxPaths[1].end.x;
-                endY = boxPaths[1].end.y;
-              } else {
-                endX = boxPaths[1].x;
-                endY = boxPaths[1].y;
-              }
-              if (side === 0 || side === 2) {
-                length = Math.abs(startX - endX);
-              } else {
-                length = Math.abs(startY - endY);
-              }
-              this.ctx.beginPath();
-              if (style === 3) {
-                this.formatPath(strokePaths);
-              } else {
-                this.formatPath(boxPaths.slice(0, 2));
-              }
-              dashLength = width < 3 ? width * 3 : width * 2;
-              spaceLength = width < 3 ? width * 2 : width;
-              if (style === 3) {
-                dashLength = width;
-                spaceLength = width;
-              }
-              useLineDash = true;
-              if (length <= dashLength * 2) {
-                useLineDash = false;
-              } else if (length <= dashLength * 2 + spaceLength) {
-                multiplier = length / (2 * dashLength + spaceLength);
-                dashLength *= multiplier;
-                spaceLength *= multiplier;
-              } else {
-                numberOfDashes = Math.floor((length + spaceLength) / (dashLength + spaceLength));
-                minSpace = (length - numberOfDashes * dashLength) / (numberOfDashes - 1);
-                maxSpace = (length - (numberOfDashes + 1) * dashLength) / numberOfDashes;
-                spaceLength = maxSpace <= 0 || Math.abs(spaceLength - minSpace) < Math.abs(spaceLength - maxSpace) ? minSpace : maxSpace;
-              }
-              if (useLineDash) {
-                if (style === 3) {
-                  this.ctx.setLineDash([0, dashLength + spaceLength]);
-                } else {
-                  this.ctx.setLineDash([dashLength, spaceLength]);
-                }
-              }
-              if (style === 3) {
-                this.ctx.lineCap = "round";
-                this.ctx.lineWidth = width;
-              } else {
-                this.ctx.lineWidth = width * 2 + 1.1;
-              }
-              this.ctx.strokeStyle = asString(color2);
-              this.ctx.stroke();
-              this.ctx.setLineDash([]);
-              if (style === 2) {
-                if (isBezierCurve(boxPaths[0])) {
-                  path1 = boxPaths[3];
-                  path2 = boxPaths[0];
-                  this.ctx.beginPath();
-                  this.formatPath([new Vector(path1.end.x, path1.end.y), new Vector(path2.start.x, path2.start.y)]);
-                  this.ctx.stroke();
-                }
-                if (isBezierCurve(boxPaths[1])) {
-                  path1 = boxPaths[1];
-                  path2 = boxPaths[2];
-                  this.ctx.beginPath();
-                  this.formatPath([new Vector(path1.end.x, path1.end.y), new Vector(path2.start.x, path2.start.y)]);
-                  this.ctx.stroke();
-                }
-              }
-              this.ctx.restore();
-              return [
-                2
-                /*return*/
-              ];
-            });
-          });
-        };
-        CanvasRenderer2.prototype.render = function(element) {
-          return __awaiter(this, void 0, void 0, function() {
-            var stack;
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  if (this.options.backgroundColor) {
-                    this.ctx.fillStyle = asString(this.options.backgroundColor);
-                    this.ctx.fillRect(this.options.x, this.options.y, this.options.width, this.options.height);
-                  }
-                  stack = parseStackingContexts(element);
-                  return [4, this.renderStack(stack)];
-                case 1:
-                  _a.sent();
-                  this.applyEffects([]);
-                  return [2, this.canvas];
-              }
-            });
-          });
-        };
-        return CanvasRenderer2;
-      })(Renderer);
-      isTextInputElement = function(container) {
-        if (container instanceof TextareaElementContainer) {
-          return true;
-        } else if (container instanceof SelectElementContainer) {
-          return true;
-        } else if (container instanceof InputElementContainer && container.type !== RADIO && container.type !== CHECKBOX) {
-          return true;
-        }
-        return false;
-      };
-      calculateBackgroundCurvedPaintingArea = function(clip, curves) {
-        switch (clip) {
-          case 0:
-            return calculateBorderBoxPath(curves);
-          case 2:
-            return calculateContentBoxPath(curves);
-          case 1:
-          default:
-            return calculatePaddingBoxPath(curves);
-        }
-      };
-      canvasTextAlign = function(textAlign2) {
-        switch (textAlign2) {
-          case 1:
-            return "center";
-          case 2:
-            return "right";
-          case 0:
-          default:
-            return "left";
-        }
-      };
-      iOSBrokenFonts = ["-apple-system", "system-ui"];
-      fixIOSSystemFonts = function(fontFamilies) {
-        return /iPhone OS 15_(0|1)/.test(window.navigator.userAgent) ? fontFamilies.filter(function(fontFamily2) {
-          return iOSBrokenFonts.indexOf(fontFamily2) === -1;
-        }) : fontFamilies;
-      };
-      ForeignObjectRenderer = /** @class */
-      (function(_super) {
-        __extends(ForeignObjectRenderer2, _super);
-        function ForeignObjectRenderer2(context2, options) {
-          var _this = _super.call(this, context2, options) || this;
-          _this.canvas = options.canvas ? options.canvas : document.createElement("canvas");
-          _this.ctx = _this.canvas.getContext("2d");
-          _this.options = options;
-          _this.canvas.width = Math.floor(options.width * options.scale);
-          _this.canvas.height = Math.floor(options.height * options.scale);
-          _this.canvas.style.width = options.width + "px";
-          _this.canvas.style.height = options.height + "px";
-          _this.ctx.scale(_this.options.scale, _this.options.scale);
-          _this.ctx.translate(-options.x, -options.y);
-          _this.context.logger.debug("EXPERIMENTAL ForeignObject renderer initialized (" + options.width + "x" + options.height + " at " + options.x + "," + options.y + ") with scale " + options.scale);
-          return _this;
-        }
-        ForeignObjectRenderer2.prototype.render = function(element) {
-          return __awaiter(this, void 0, void 0, function() {
-            var svg, img;
-            return __generator(this, function(_a) {
-              switch (_a.label) {
-                case 0:
-                  svg = createForeignObjectSVG(this.options.width * this.options.scale, this.options.height * this.options.scale, this.options.scale, this.options.scale, element);
-                  return [4, loadSerializedSVG(svg)];
-                case 1:
-                  img = _a.sent();
-                  if (this.options.backgroundColor) {
-                    this.ctx.fillStyle = asString(this.options.backgroundColor);
-                    this.ctx.fillRect(0, 0, this.options.width * this.options.scale, this.options.height * this.options.scale);
-                  }
-                  this.ctx.drawImage(img, -this.options.x * this.options.scale, -this.options.y * this.options.scale);
-                  return [2, this.canvas];
-              }
-            });
-          });
-        };
-        return ForeignObjectRenderer2;
-      })(Renderer);
-      loadSerializedSVG = function(svg) {
-        return new Promise(function(resolve, reject) {
-          var img = new Image();
-          img.onload = function() {
-            resolve(img);
-          };
-          img.onerror = reject;
-          img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
-        });
-      };
-      Logger = /** @class */
-      (function() {
-        function Logger2(_a) {
-          var id = _a.id, enabled = _a.enabled;
-          this.id = id;
-          this.enabled = enabled;
-          this.start = Date.now();
-        }
-        Logger2.prototype.debug = function() {
-          var args = [];
-          for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-          }
-          if (this.enabled) {
-            if (typeof window !== "undefined" && window.console && typeof console.debug === "function") {
-              console.debug.apply(console, __spreadArray([this.id, this.getTime() + "ms"], args));
-            } else {
-              this.info.apply(this, args);
-            }
-          }
-        };
-        Logger2.prototype.getTime = function() {
-          return Date.now() - this.start;
-        };
-        Logger2.prototype.info = function() {
-          var args = [];
-          for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-          }
-          if (this.enabled) {
-            if (typeof window !== "undefined" && window.console && typeof console.info === "function") {
-              console.info.apply(console, __spreadArray([this.id, this.getTime() + "ms"], args));
-            }
-          }
-        };
-        Logger2.prototype.warn = function() {
-          var args = [];
-          for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-          }
-          if (this.enabled) {
-            if (typeof window !== "undefined" && window.console && typeof console.warn === "function") {
-              console.warn.apply(console, __spreadArray([this.id, this.getTime() + "ms"], args));
-            } else {
-              this.info.apply(this, args);
-            }
-          }
-        };
-        Logger2.prototype.error = function() {
-          var args = [];
-          for (var _i = 0; _i < arguments.length; _i++) {
-            args[_i] = arguments[_i];
-          }
-          if (this.enabled) {
-            if (typeof window !== "undefined" && window.console && typeof console.error === "function") {
-              console.error.apply(console, __spreadArray([this.id, this.getTime() + "ms"], args));
-            } else {
-              this.info.apply(this, args);
-            }
-          }
-        };
-        Logger2.instances = {};
-        return Logger2;
-      })();
-      Context = /** @class */
-      (function() {
-        function Context2(options, windowBounds) {
-          var _a;
-          this.windowBounds = windowBounds;
-          this.instanceName = "#" + Context2.instanceCount++;
-          this.logger = new Logger({ id: this.instanceName, enabled: options.logging });
-          this.cache = (_a = options.cache) !== null && _a !== void 0 ? _a : new Cache(this, options);
-        }
-        Context2.instanceCount = 1;
-        return Context2;
-      })();
-      html2canvas = function(element, options) {
-        if (options === void 0) {
-          options = {};
-        }
-        return renderElement(element, options);
-      };
-      if (typeof window !== "undefined") {
-        CacheStorage.setContext(window);
-      }
-      renderElement = function(element, opts) {
-        return __awaiter(void 0, void 0, void 0, function() {
-          var ownerDocument, defaultView, resourceOptions, contextOptions, windowOptions, windowBounds, context2, foreignObjectRendering, cloneOptions, documentCloner, clonedElement, container, _a, width, height, left, top, backgroundColor2, renderOptions, canvas, renderer, root, renderer;
-          var _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
-          return __generator(this, function(_u) {
-            switch (_u.label) {
-              case 0:
-                if (!element || typeof element !== "object") {
-                  return [2, Promise.reject("Invalid element provided as first argument")];
-                }
-                ownerDocument = element.ownerDocument;
-                if (!ownerDocument) {
-                  throw new Error("Element is not attached to a Document");
-                }
-                defaultView = ownerDocument.defaultView;
-                if (!defaultView) {
-                  throw new Error("Document is not attached to a Window");
-                }
-                resourceOptions = {
-                  allowTaint: (_b = opts.allowTaint) !== null && _b !== void 0 ? _b : false,
-                  imageTimeout: (_c = opts.imageTimeout) !== null && _c !== void 0 ? _c : 15e3,
-                  proxy: opts.proxy,
-                  useCORS: (_d = opts.useCORS) !== null && _d !== void 0 ? _d : false
-                };
-                contextOptions = __assign({ logging: (_e = opts.logging) !== null && _e !== void 0 ? _e : true, cache: opts.cache }, resourceOptions);
-                windowOptions = {
-                  windowWidth: (_f = opts.windowWidth) !== null && _f !== void 0 ? _f : defaultView.innerWidth,
-                  windowHeight: (_g = opts.windowHeight) !== null && _g !== void 0 ? _g : defaultView.innerHeight,
-                  scrollX: (_h = opts.scrollX) !== null && _h !== void 0 ? _h : defaultView.pageXOffset,
-                  scrollY: (_j = opts.scrollY) !== null && _j !== void 0 ? _j : defaultView.pageYOffset
-                };
-                windowBounds = new Bounds(windowOptions.scrollX, windowOptions.scrollY, windowOptions.windowWidth, windowOptions.windowHeight);
-                context2 = new Context(contextOptions, windowBounds);
-                foreignObjectRendering = (_k = opts.foreignObjectRendering) !== null && _k !== void 0 ? _k : false;
-                cloneOptions = {
-                  allowTaint: (_l = opts.allowTaint) !== null && _l !== void 0 ? _l : false,
-                  onclone: opts.onclone,
-                  ignoreElements: opts.ignoreElements,
-                  inlineImages: foreignObjectRendering,
-                  copyStyles: foreignObjectRendering
-                };
-                context2.logger.debug("Starting document clone with size " + windowBounds.width + "x" + windowBounds.height + " scrolled to " + -windowBounds.left + "," + -windowBounds.top);
-                documentCloner = new DocumentCloner(context2, element, cloneOptions);
-                clonedElement = documentCloner.clonedReferenceElement;
-                if (!clonedElement) {
-                  return [2, Promise.reject("Unable to find element in cloned iframe")];
-                }
-                return [4, documentCloner.toIFrame(ownerDocument, windowBounds)];
-              case 1:
-                container = _u.sent();
-                _a = isBodyElement(clonedElement) || isHTMLElement(clonedElement) ? parseDocumentSize(clonedElement.ownerDocument) : parseBounds(context2, clonedElement), width = _a.width, height = _a.height, left = _a.left, top = _a.top;
-                backgroundColor2 = parseBackgroundColor(context2, clonedElement, opts.backgroundColor);
-                renderOptions = {
-                  canvas: opts.canvas,
-                  backgroundColor: backgroundColor2,
-                  scale: (_o = (_m = opts.scale) !== null && _m !== void 0 ? _m : defaultView.devicePixelRatio) !== null && _o !== void 0 ? _o : 1,
-                  x: ((_p = opts.x) !== null && _p !== void 0 ? _p : 0) + left,
-                  y: ((_q = opts.y) !== null && _q !== void 0 ? _q : 0) + top,
-                  width: (_r = opts.width) !== null && _r !== void 0 ? _r : Math.ceil(width),
-                  height: (_s = opts.height) !== null && _s !== void 0 ? _s : Math.ceil(height)
-                };
-                if (!foreignObjectRendering) return [3, 3];
-                context2.logger.debug("Document cloned, using foreign object rendering");
-                renderer = new ForeignObjectRenderer(context2, renderOptions);
-                return [4, renderer.render(clonedElement)];
-              case 2:
-                canvas = _u.sent();
-                return [3, 5];
-              case 3:
-                context2.logger.debug("Document cloned, element located at " + left + "," + top + " with size " + width + "x" + height + " using computed rendering");
-                context2.logger.debug("Starting DOM parsing");
-                root = parseTree(context2, clonedElement);
-                if (backgroundColor2 === root.styles.backgroundColor) {
-                  root.styles.backgroundColor = COLORS.TRANSPARENT;
-                }
-                context2.logger.debug("Starting renderer for element at " + renderOptions.x + "," + renderOptions.y + " with size " + renderOptions.width + "x" + renderOptions.height);
-                renderer = new CanvasRenderer(context2, renderOptions);
-                return [4, renderer.render(root)];
-              case 4:
-                canvas = _u.sent();
-                _u.label = 5;
-              case 5:
-                if ((_t = opts.removeContainer) !== null && _t !== void 0 ? _t : true) {
-                  if (!DocumentCloner.destroy(container)) {
-                    context2.logger.error("Cannot detach cloned iframe as it is not in the DOM anymore");
-                  }
-                }
-                context2.logger.debug("Finished rendering");
-                return [2, canvas];
-            }
-          });
-        });
-      };
-      parseBackgroundColor = function(context2, element, backgroundColorOverride) {
-        var ownerDocument = element.ownerDocument;
-        var documentBackgroundColor = ownerDocument.documentElement ? parseColor(context2, getComputedStyle(ownerDocument.documentElement).backgroundColor) : COLORS.TRANSPARENT;
-        var bodyBackgroundColor = ownerDocument.body ? parseColor(context2, getComputedStyle(ownerDocument.body).backgroundColor) : COLORS.TRANSPARENT;
-        var defaultBackgroundColor = typeof backgroundColorOverride === "string" ? parseColor(context2, backgroundColorOverride) : backgroundColorOverride === null ? COLORS.TRANSPARENT : 4294967295;
-        return element === ownerDocument.documentElement ? isTransparent(documentBackgroundColor) ? isTransparent(bodyBackgroundColor) ? defaultBackgroundColor : bodyBackgroundColor : documentBackgroundColor : defaultBackgroundColor;
-      };
-      html2canvas_esm_default = html2canvas;
+      html2canvas_default = null;
     }
   });
 
@@ -8107,7 +417,7 @@ var TraceBugModule = (() => {
   }
   function loadHtml2Canvas() {
     if (_html2canvasPromise) return _html2canvasPromise;
-    _html2canvasPromise = Promise.resolve().then(() => (init_html2canvas_esm(), html2canvas_esm_exports)).then((mod) => {
+    _html2canvasPromise = Promise.resolve().then(() => (init_html2canvas(), html2canvas_exports)).then((mod) => {
       const fn = mod.default || mod;
       return typeof fn === "function" ? fn : null;
     }).catch(() => null);
@@ -8123,10 +433,10 @@ var TraceBugModule = (() => {
   }
   function captureViaExtension() {
     return new Promise((resolve) => {
-      const handler = (e2) => {
+      const handler = (e) => {
         var _a;
         window.removeEventListener("tracebug-ext-screenshot-result", handler);
-        const dataUrl = (_a = e2.detail) == null ? void 0 : _a.dataUrl;
+        const dataUrl = (_a = e.detail) == null ? void 0 : _a.dataUrl;
         resolve(dataUrl || null);
       };
       window.addEventListener("tracebug-ext-screenshot-result", handler);
@@ -8335,12 +645,12 @@ var TraceBugModule = (() => {
     downloadDataUrl(dataUrl, filename);
   }
   function downloadDataUrl(dataUrl, filename) {
-    const a2 = document.createElement("a");
-    a2.href = dataUrl;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
   function sanitizeFilename(str) {
     return str.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 50);
@@ -8413,7 +723,7 @@ var TraceBugModule = (() => {
     drawArrowToBox(ctx, canvas.width, canvas.height, ringX, ringY, ringW, ringH, scaleX);
     try {
       return canvas.toDataURL("image/png", 0.85);
-    } catch (e2) {
+    } catch (e) {
       return null;
     }
   }
@@ -8457,12 +767,12 @@ var TraceBugModule = (() => {
     ctx.moveTo(startX, startY);
     ctx.lineTo(endX, endY);
     ctx.stroke();
-    const angle2 = Math.atan2(endY - startY, endX - startX);
+    const angle = Math.atan2(endY - startY, endX - startX);
     const head = 14 * scale;
     ctx.beginPath();
     ctx.moveTo(endX, endY);
-    ctx.lineTo(endX - head * Math.cos(angle2 - Math.PI / 6), endY - head * Math.sin(angle2 - Math.PI / 6));
-    ctx.lineTo(endX - head * Math.cos(angle2 + Math.PI / 6), endY - head * Math.sin(angle2 + Math.PI / 6));
+    ctx.lineTo(endX - head * Math.cos(angle - Math.PI / 6), endY - head * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(endX - head * Math.cos(angle + Math.PI / 6), endY - head * Math.sin(angle + Math.PI / 6));
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -8494,7 +804,7 @@ var TraceBugModule = (() => {
       if (_networkFailures.length > NETWORK_FAILURE_LIMIT) {
         _networkFailures.splice(0, _networkFailures.length - NETWORK_FAILURE_LIMIT);
       }
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function getNetworkFailures() {
@@ -8521,7 +831,7 @@ var TraceBugModule = (() => {
         return part;
       }).join("&");
       return `${base}?${redacted}${hash}`;
-    } catch (e2) {
+    } catch (e) {
       return url;
     }
   }
@@ -8533,7 +843,7 @@ var TraceBugModule = (() => {
         try {
           const text = await response.text();
           return typeof text === "string" ? text.slice(0, RESPONSE_SNIPPET_CHARS) : "";
-        } catch (e2) {
+        } catch (e) {
           return "";
         }
       }
@@ -8551,10 +861,10 @@ var TraceBugModule = (() => {
       }
       try {
         await reader.cancel();
-      } catch (e2) {
+      } catch (e) {
       }
       return collected.slice(0, RESPONSE_SNIPPET_CHARS);
-    } catch (e2) {
+    } catch (e) {
       return "";
     }
   }
@@ -8588,9 +898,9 @@ var TraceBugModule = (() => {
     return false;
   }
   function collectClicks(emit) {
-    const handler = (e2) => {
+    const handler = (e) => {
       try {
-        const t = e2.target;
+        const t = e.target;
         if (!t || isTraceBugElement(t)) return;
         const tag = t.tagName.toLowerCase();
         const data = {
@@ -8621,12 +931,12 @@ var TraceBugModule = (() => {
         }
         try {
           el.selector = buildSelector(t);
-        } catch (e3) {
+        } catch (e2) {
         }
         try {
           const r = t.getBoundingClientRect();
           el.boundingBox = { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
-        } catch (e3) {
+        } catch (e2) {
         }
         emit("click", data);
       } catch (err) {
@@ -8667,9 +977,9 @@ var TraceBugModule = (() => {
   }
   function collectInputs(emit) {
     const timers = /* @__PURE__ */ new Map();
-    const handler = (e2) => {
+    const handler = (e) => {
       try {
-        const t = e2.target;
+        const t = e.target;
         if (!t || !("value" in t) || isTraceBugElement(t)) return;
         if (t.tagName.toLowerCase() === "select") return;
         const prev = timers.get(t);
@@ -8716,9 +1026,9 @@ var TraceBugModule = (() => {
     };
   }
   function collectSelectChanges(emit) {
-    const handler = (e2) => {
+    const handler = (e) => {
       try {
-        const t = e2.target;
+        const t = e.target;
         if (!t || t.tagName.toLowerCase() !== "select" || isTraceBugElement(t)) return;
         const selectedOption = t.options[t.selectedIndex];
         emit("select_change", {
@@ -8740,9 +1050,9 @@ var TraceBugModule = (() => {
     return () => document.removeEventListener("change", handler, { capture: true });
   }
   function collectFormSubmits(emit) {
-    const handler = (e2) => {
+    const handler = (e) => {
       try {
-        const form = e2.target;
+        const form = e.target;
         if (!form || form.tagName.toLowerCase() !== "form" || isTraceBugElement(form)) return;
         const formData = {};
         const elements = form.elements;
@@ -8806,12 +1116,12 @@ var TraceBugModule = (() => {
           method = input.method || "GET";
         }
         if (init == null ? void 0 : init.method) method = init.method;
-      } catch (e2) {
+      } catch (e) {
       }
       const start = Date.now();
       try {
         if (url && isInternalUrl(url)) return originalFetch.call(window, input, init);
-      } catch (e2) {
+      } catch (e) {
       }
       const safeUrl = sanitizeUrl(url).slice(0, 500);
       try {
@@ -8820,7 +1130,7 @@ var TraceBugModule = (() => {
           emit("api_request", {
             request: { url: safeUrl, method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start }
           });
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           if (response.status >= 400 || response.status === 0) {
@@ -8843,7 +1153,7 @@ var TraceBugModule = (() => {
               });
             });
           }
-        } catch (e2) {
+        } catch (e) {
         }
         return response;
       } catch (err) {
@@ -8851,7 +1161,7 @@ var TraceBugModule = (() => {
           emit("api_request", {
             request: { url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start }
           });
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           pushNetworkFailure({
@@ -8861,7 +1171,7 @@ var TraceBugModule = (() => {
             response: ((_a = err == null ? void 0 : err.message) == null ? void 0 : _a.slice(0, RESPONSE_SNIPPET_CHARS)) || "",
             timestamp: Date.now()
           });
-        } catch (e2) {
+        } catch (e) {
         }
         throw err;
       }
@@ -8878,7 +1188,7 @@ var TraceBugModule = (() => {
     OrigXHR.prototype.open = function(method, url, ...rest) {
       try {
         xhrMeta.set(this, { method, url: typeof url === "string" ? url : url.toString() });
-      } catch (e2) {
+      } catch (e) {
       }
       return origOpen.apply(this, [method, url, ...rest]);
     };
@@ -8894,7 +1204,7 @@ var TraceBugModule = (() => {
         xhr.addEventListener("loadend", function() {
           try {
             emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } });
-          } catch (e2) {
+          } catch (e) {
           }
           try {
             if (xhr.status >= 400 || xhr.status === 0) {
@@ -8904,7 +1214,7 @@ var TraceBugModule = (() => {
                 if (!BINARY_CONTENT_TYPE_RE.test(ct)) {
                   body2 = typeof xhr.responseText === "string" ? xhr.responseText : "";
                 }
-              } catch (e2) {
+              } catch (e) {
               }
               pushNetworkFailure({
                 url: safeUrl,
@@ -8914,13 +1224,13 @@ var TraceBugModule = (() => {
                 timestamp: Date.now()
               });
             }
-          } catch (e2) {
+          } catch (e) {
           }
         });
         xhr.addEventListener("error", function() {
           try {
             emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start } });
-          } catch (e2) {
+          } catch (e) {
           }
           try {
             pushNetworkFailure({
@@ -8930,7 +1240,7 @@ var TraceBugModule = (() => {
               response: "",
               timestamp: Date.now()
             });
-          } catch (e2) {
+          } catch (e) {
           }
         });
       } catch (err) {
@@ -8943,37 +1253,37 @@ var TraceBugModule = (() => {
       OrigXHR.prototype.send = origSend;
     };
   }
-  function _emitPerfEntry(emit, e2) {
-    if (!e2 || !e2.name) return;
+  function _emitPerfEntry(emit, e) {
+    if (!e || !e.name) return;
     try {
-      if (isInternalUrl(e2.name)) return;
-    } catch (e3) {
+      if (isInternalUrl(e.name)) return;
+    } catch (e2) {
     }
-    if (typeof e2.name === "string" && e2.name.indexOf("tracebug") !== -1) return;
-    const key = `${e2.name}|${Math.round(e2.startTime)}`;
+    if (typeof e.name === "string" && e.name.indexOf("tracebug") !== -1) return;
+    const key = `${e.name}|${Math.round(e.startTime)}`;
     if (_perfSeen.has(key)) return;
     _perfSeen.add(key);
     const navStart = typeof performance.timeOrigin === "number" ? performance.timeOrigin : Date.now();
-    const initiator = e2.initiatorType || "";
-    const method = (e2.method || "GET").toUpperCase();
-    const status = e2.responseStatus || 0;
-    const url = sanitizeUrl(e2.name).slice(0, 500);
-    const timestamp = Math.round(navStart + e2.startTime);
-    const durationMs = Math.round(e2.duration || 0);
+    const initiator = e.initiatorType || "";
+    const method = (e.method || "GET").toUpperCase();
+    const status = e.responseStatus || 0;
+    const url = sanitizeUrl(e.name).slice(0, 500);
+    const timestamp = Math.round(navStart + e.startTime);
+    const durationMs = Math.round(e.duration || 0);
     try {
       emit("api_request", {
         request: { url, method, statusCode: status, durationMs, initiatorType: initiator },
         _ts: timestamp
       });
-    } catch (e3) {
+    } catch (e2) {
     }
   }
   function drainPerformanceNetwork(emit) {
     if (typeof performance === "undefined") return;
     try {
       const entries = performance.getEntriesByType("resource");
-      for (const e2 of entries) _emitPerfEntry(emit, e2);
-    } catch (e2) {
+      for (const e of entries) _emitPerfEntry(emit, e);
+    } catch (e) {
     }
   }
   function collectPerformanceNetwork(emit) {
@@ -8985,17 +1295,17 @@ var TraceBugModule = (() => {
     let observer = null;
     try {
       observer = new PerformanceObserver((list) => {
-        for (const e2 of list.getEntries()) {
-          _emitPerfEntry(emit, e2);
+        for (const e of list.getEntries()) {
+          _emitPerfEntry(emit, e);
         }
       });
       observer.observe({ type: "resource", buffered: false });
-    } catch (e2) {
+    } catch (e) {
     }
     return () => {
       try {
         observer == null ? void 0 : observer.disconnect();
-      } catch (e2) {
+      } catch (e) {
       }
     };
   }
@@ -9012,22 +1322,22 @@ var TraceBugModule = (() => {
             column: col
           }
         });
-      } catch (e2) {
+      } catch (e) {
       }
       if (prevOnError) {
         try {
           prevOnError(msg, source, line, col, error);
-        } catch (e2) {
+        } catch (e) {
         }
       }
     };
-    const onRejection = (e2) => {
+    const onRejection = (e) => {
       var _a, _b;
       try {
         emit("unhandled_rejection", {
-          error: { message: ((_a = e2.reason) == null ? void 0 : _a.message) || String(e2.reason), stack: (_b = e2.reason) == null ? void 0 : _b.stack }
+          error: { message: ((_a = e.reason) == null ? void 0 : _a.message) || String(e.reason), stack: (_b = e.reason) == null ? void 0 : _b.stack }
         });
-      } catch (e3) {
+      } catch (e2) {
       }
     };
     window.addEventListener("unhandledrejection", onRejection);
@@ -9047,9 +1357,9 @@ var TraceBugModule = (() => {
       _insideEmit = true;
       try {
         emit("console_error", {
-          error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
+          error: { message: args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ") }
         });
-      } catch (e2) {
+      } catch (e) {
       } finally {
         _insideEmit = false;
       }
@@ -9070,9 +1380,9 @@ var TraceBugModule = (() => {
       _inside = true;
       try {
         emit("console_warn", {
-          error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
+          error: { message: args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ") }
         });
-      } catch (e2) {
+      } catch (e) {
       } finally {
         _inside = false;
       }
@@ -9095,9 +1405,9 @@ var TraceBugModule = (() => {
       _count++;
       try {
         emit("console_log", {
-          error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
+          error: { message: args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ") }
         });
-      } catch (e2) {
+      } catch (e) {
       } finally {
         _inside = false;
       }
@@ -9224,7 +1534,7 @@ var TraceBugModule = (() => {
     let len = 0;
     try {
       len = area.length;
-    } catch (e2) {
+    } catch (e) {
       return { entries, truncated: 0 };
     }
     for (let i = 0; i < len; i++) {
@@ -9234,7 +1544,7 @@ var TraceBugModule = (() => {
         key = area.key(i);
         if (key == null) continue;
         value = (_a = area.getItem(key)) != null ? _a : "";
-      } catch (e2) {
+      } catch (e) {
         continue;
       }
       if (entries.length >= MAX_ENTRIES_PER_AREA) {
@@ -9263,13 +1573,13 @@ var TraceBugModule = (() => {
       const ls = readArea(window.localStorage);
       snapshot.local = ls.entries;
       if (ls.truncated > 0) snapshot.localTruncated = ls.truncated;
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       const ss = readArea(window.sessionStorage);
       snapshot.session = ss.entries;
       if (ss.truncated > 0) snapshot.sessionTruncated = ss.truncated;
-    } catch (e2) {
+    } catch (e) {
     }
     return snapshot;
   }
@@ -9343,7 +1653,7 @@ var TraceBugModule = (() => {
       if (isRecording) {
         try {
           recognition.start();
-        } catch (e2) {
+        } catch (e) {
           isRecording = false;
           onStatusChange == null ? void 0 : onStatusChange("stopped");
         }
@@ -9369,7 +1679,7 @@ var TraceBugModule = (() => {
       try {
         recognition.onend = null;
         recognition.stop();
-      } catch (e2) {
+      } catch (e) {
       }
       recognition = null;
     }
@@ -9555,7 +1865,7 @@ var TraceBugModule = (() => {
       try {
         const recording = await stopVideoRecording();
         _onAutoStop == null ? void 0 : _onAutoStop(recording);
-      } catch (e2) {
+      } catch (e) {
         _onAutoStop == null ? void 0 : _onAutoStop(null);
       }
     }, MAX_CLOUD_RECORDING_S * 1e3);
@@ -9596,7 +1906,7 @@ var TraceBugModule = (() => {
     if (_recorder && _recorder.state === "recording") {
       try {
         _recorder.pause();
-      } catch (e2) {
+      } catch (e) {
       }
     }
   }
@@ -9608,7 +1918,7 @@ var TraceBugModule = (() => {
     if (_recorder && _recorder.state === "paused") {
       try {
         _recorder.resume();
-      } catch (e2) {
+      } catch (e) {
       }
     }
   }
@@ -9696,7 +2006,7 @@ var TraceBugModule = (() => {
     if (_lastRecording) {
       try {
         URL.revokeObjectURL(_lastRecording.url);
-      } catch (e2) {
+      } catch (e) {
       }
       _lastRecording = null;
     }
@@ -9709,7 +2019,7 @@ var TraceBugModule = (() => {
       if (_recorder && _recorder.state !== "inactive") {
         try {
           _recorder.stop();
-        } catch (e2) {
+        } catch (e) {
         }
       }
       _stream == null ? void 0 : _stream.getTracks().forEach((t) => t.stop());
@@ -9727,12 +2037,12 @@ var TraceBugModule = (() => {
     _pausedMs = 0;
   }
   function downloadVideoRecording(recording, filename = "tracebug-recording.webm") {
-    const a2 = document.createElement("a");
-    a2.href = recording.url;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
+    const a = document.createElement("a");
+    a.href = recording.url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
   async function restoreFromOffscreenIfActive() {
     if (!isExtensionContext2()) return false;
@@ -9758,15 +2068,15 @@ var TraceBugModule = (() => {
         return recording;
       }
       return null;
-    } catch (e2) {
+    } catch (e) {
       return null;
     }
   }
   function wireAutoStopListener() {
     if (_autoStopWired || typeof window === "undefined") return;
     _autoStopWired = true;
-    window.addEventListener("tracebug-rec-auto-stopped", async (e2) => {
-      const detail = e2.detail;
+    window.addEventListener("tracebug-rec-auto-stopped", async (e) => {
+      const detail = e.detail;
       const recRaw = detail == null ? void 0 : detail.recording;
       let recording = recRaw ? hydrateRecording(recRaw) : null;
       if (!isUsableRecording(recording)) {
@@ -9774,7 +2084,7 @@ var TraceBugModule = (() => {
           const raw = await rpcCall("tb:rec:last-recording").catch(() => null);
           const pulled = raw ? hydrateRecording(raw) : null;
           if (isUsableRecording(pulled)) recording = pulled;
-        } catch (e3) {
+        } catch (e2) {
         }
       }
       if (recording && isUsableRecording(recording)) revokeAndStash(recording);
@@ -9788,8 +2098,8 @@ var TraceBugModule = (() => {
   function wireStartedListener() {
     if (_startedWired || typeof window === "undefined") return;
     _startedWired = true;
-    window.addEventListener("tracebug-rec-started", (e2) => {
-      const d = e2.detail || {};
+    window.addEventListener("tracebug-rec-started", (e) => {
+      const d = e.detail || {};
       if (!_active) {
         _active = true;
         _startedAt = typeof d.startedAt === "number" ? d.startedAt : Date.now();
@@ -9851,7 +2161,7 @@ var TraceBugModule = (() => {
       try {
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         micStream.getAudioTracks().forEach((t) => displayStream.addTrack(t));
-      } catch (e2) {
+      } catch (e) {
       }
     }
     _stream = displayStream;
@@ -9869,8 +2179,8 @@ var TraceBugModule = (() => {
       _onStatus == null ? void 0 : _onStatus("error", (err == null ? void 0 : err.message) || "MediaRecorder could not be created.");
       return false;
     }
-    _recorder.ondataavailable = (e2) => {
-      if (e2.data && e2.data.size > 0) _chunks.push(e2.data);
+    _recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) _chunks.push(e.data);
     };
     displayStream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", async () => {
@@ -9878,7 +2188,7 @@ var TraceBugModule = (() => {
         try {
           const recording = await stopVideoRecording();
           _onAutoStop == null ? void 0 : _onAutoStop(recording);
-        } catch (e2) {
+        } catch (e) {
           _onAutoStop == null ? void 0 : _onAutoStop(null);
         }
       });
@@ -9912,7 +2222,7 @@ var TraceBugModule = (() => {
         let dataUrl;
         try {
           dataUrl = await blobToDataUrl(blob);
-        } catch (e2) {
+        } catch (e) {
           dataUrl = void 0;
         }
         const recording = {
@@ -9936,7 +2246,7 @@ var TraceBugModule = (() => {
       };
       try {
         recorder.stop();
-      } catch (e2) {
+      } catch (e) {
         resolve(null);
       }
     });
@@ -9960,15 +2270,15 @@ var TraceBugModule = (() => {
       const mimeType = _mimeType || "video/webm";
       const commentsCopy = _comments.slice();
       const originalOnData = recorder.ondataavailable;
-      const flushOnce = async (e2) => {
-        if (originalOnData) originalOnData.call(recorder, e2);
+      const flushOnce = async (e) => {
+        if (originalOnData) originalOnData.call(recorder, e);
         recorder.ondataavailable = originalOnData;
         const blob = new Blob(_chunks.slice(), { type: mimeType });
         const url = URL.createObjectURL(blob);
         let dataUrl;
         try {
           dataUrl = await blobToDataUrl(blob);
-        } catch (e3) {
+        } catch (e2) {
           dataUrl = void 0;
         }
         const recording = {
@@ -9989,7 +2299,7 @@ var TraceBugModule = (() => {
       recorder.ondataavailable = flushOnce;
       try {
         recorder.requestData();
-      } catch (e2) {
+      } catch (e) {
         recorder.ondataavailable = originalOnData;
         resolve(null);
       }
@@ -9998,29 +2308,29 @@ var TraceBugModule = (() => {
   function installInPageReloadGuards() {
     if (_reloadGuardsInstalled) return;
     _reloadGuardsInstalled = true;
-    window.addEventListener("beforeunload", (e2) => {
+    window.addEventListener("beforeunload", (e) => {
       if (!_active || isExtensionContext2()) return;
-      e2.preventDefault();
-      e2.returnValue = "Recording in progress. Reload anyway? (Your video will be auto-saved.)";
+      e.preventDefault();
+      e.returnValue = "Recording in progress. Reload anyway? (Your video will be auto-saved.)";
     });
     window.addEventListener("pagehide", () => {
       if (!_active || isExtensionContext2()) return;
       if (!_recorder || _recorder.state === "inactive") return;
       try {
         _recorder.requestData();
-      } catch (e2) {
+      } catch (e) {
       }
       try {
         const blob = new Blob(_chunks.slice(), { type: _mimeType || "video/webm" });
         const url = URL.createObjectURL(blob);
         const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
-        const a2 = document.createElement("a");
-        a2.href = url;
-        a2.download = `tracebug-recording-interrupted-${stamp}.webm`;
-        document.body.appendChild(a2);
-        a2.click();
-        document.body.removeChild(a2);
-      } catch (e2) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `tracebug-recording-interrupted-${stamp}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (e) {
       }
     });
   }
@@ -10045,7 +2355,7 @@ var TraceBugModule = (() => {
     if (_lastRecording && _lastRecording.url !== recording.url) {
       try {
         URL.revokeObjectURL(_lastRecording.url);
-      } catch (e2) {
+      } catch (e) {
       }
     }
     _lastRecording = recording;
@@ -10097,8 +2407,8 @@ var TraceBugModule = (() => {
   function rpcCall(type, data, timeoutMs = 6e4) {
     return new Promise((resolve, reject) => {
       const id = `tb_rpc_${++_rpcCounter}_${Date.now().toString(36)}`;
-      const handler = (e2) => {
-        const detail = e2.detail;
+      const handler = (e) => {
+        const detail = e.detail;
         if (!detail || detail.id !== id) return;
         window.removeEventListener("tracebug-rec-response", handler);
         clearTimeout(timer);
@@ -10168,7 +2478,7 @@ var TraceBugModule = (() => {
     if (typeof label !== "string" || !label.trim()) return;
     try {
       _emit("mark", { label: label.slice(0, 200), payload: sanitizePayload(payload) });
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function assertCondition(condition, message) {
@@ -10177,15 +2487,15 @@ var TraceBugModule = (() => {
     let stack = "";
     try {
       stack = new Error(msg).stack || "";
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       _emit == null ? void 0 : _emit("console_error", { error: { message: msg, stack } });
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       _processError == null ? void 0 : _processError(msg, stack);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function context(values) {
@@ -10209,7 +2519,7 @@ var TraceBugModule = (() => {
     try {
       JSON.stringify(payload);
       return payload;
-    } catch (e2) {
+    } catch (e) {
       return void 0;
     }
   }
@@ -10668,9 +2978,9 @@ var TraceBugModule = (() => {
   function generateBugTitle(session) {
     var _a;
     const events = session.events;
-    const errorEvents = events.filter((e2) => e2.type === "error" || e2.type === "unhandled_rejection");
+    const errorEvents = events.filter((e) => e.type === "error" || e.type === "unhandled_rejection");
     const userActions = events.filter(
-      (e2) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e2.type)
+      (e) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e.type)
     );
     if (errorEvents.length === 0) {
       return generateFlowTitle(userActions, events);
@@ -10694,7 +3004,7 @@ var TraceBugModule = (() => {
   }
   function generateFlowSummary(events) {
     const userActions = events.filter(
-      (e2) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e2.type)
+      (e) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e.type)
     );
     if (userActions.length === 0) return "No user interactions recorded";
     const parts = [];
@@ -10705,9 +3015,9 @@ var TraceBugModule = (() => {
   }
   function generateFlowTitle(userActions, allEvents) {
     const failedApis = allEvents.filter(
-      (e2) => {
+      (e) => {
         var _a, _b;
-        return e2.type === "api_request" && (((_a = e2.data.request) == null ? void 0 : _a.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0);
+        return e.type === "api_request" && (((_a = e.data.request) == null ? void 0 : _a.statusCode) >= 400 || ((_b = e.data.request) == null ? void 0 : _b.statusCode) === 0);
       }
     );
     if (failedApis.length > 0) {
@@ -10718,7 +3028,7 @@ var TraceBugModule = (() => {
     }
     if (userActions.length === 0) return "Empty Session \u2014 No User Interactions";
     const lastActions = userActions.slice(-3);
-    const parts = lastActions.map((a2) => describeAction(a2));
+    const parts = lastActions.map((a) => describeAction(a));
     return `Session: ${parts.join(" \u2192 ")}`;
   }
   function getActionContext(event) {
@@ -10729,22 +3039,22 @@ var TraceBugModule = (() => {
         const el = event.data.element;
         const text = ((_a = el == null ? void 0 : el.text) == null ? void 0 : _a.trim()) || (el == null ? void 0 : el.ariaLabel) || "";
         if (text && text.length < 40) return `"${text}" Action`;
-        if (el == null ? void 0 : el.id) return `${capitalize2(el.id.replace(/[-_]/g, " "))} Action`;
+        if (el == null ? void 0 : el.id) return `${capitalize(el.id.replace(/[-_]/g, " "))} Action`;
         return "Button Click";
       }
       case "input": {
         const name = ((_b = event.data.element) == null ? void 0 : _b.name) || ((_c = event.data.element) == null ? void 0 : _c.id) || "";
-        return name ? `${capitalize2(name.replace(/[-_]/g, " "))} Input` : "Form Input";
+        return name ? `${capitalize(name.replace(/[-_]/g, " "))} Input` : "Form Input";
       }
       case "select_change": {
         const name = ((_d = event.data.element) == null ? void 0 : _d.name) || "";
         const value = ((_e = event.data.element) == null ? void 0 : _e.selectedText) || "";
-        if (name && value) return `Setting ${capitalize2(name)} to "${value}"`;
+        if (name && value) return `Setting ${capitalize(name)} to "${value}"`;
         return "Dropdown Selection";
       }
       case "form_submit": {
         const formId = ((_f = event.data.form) == null ? void 0 : _f.id) || "";
-        return formId ? `${capitalize2(formId.replace(/[-_]/g, " "))} Submission` : "Form Submission";
+        return formId ? `${capitalize(formId.replace(/[-_]/g, " "))} Submission` : "Form Submission";
       }
       case "route_change":
         return `Navigation to ${friendlyPage(event.data.to || "")}`;
@@ -10797,9 +3107,9 @@ var TraceBugModule = (() => {
   function friendlyPage(path) {
     if (!path || path === "/") return "Home Page";
     const parts = path.split("/").filter(Boolean);
-    return parts.map((p) => capitalize2(p)).join(" ") + " Page";
+    return parts.map((p) => capitalize(p)).join(" ") + " Page";
   }
-  function capitalize2(str) {
+  function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
   function truncate(str, len) {
@@ -10809,7 +3119,7 @@ var TraceBugModule = (() => {
     if (!url) return "";
     try {
       return new URL(url, window.location.origin).pathname;
-    } catch (e2) {
+    } catch (e) {
       return url.slice(0, 40);
     }
   }
@@ -10823,7 +3133,7 @@ var TraceBugModule = (() => {
   function buildTimeline(events) {
     var _a, _b;
     if (events.length === 0) return [];
-    const ordered = [...events].sort((a2, b) => a2.timestamp - b.timestamp);
+    const ordered = [...events].sort((a, b) => a.timestamp - b.timestamp);
     const startTs = ordered[0].timestamp;
     const timeline = [];
     let lastDescription = "";
@@ -10897,7 +3207,7 @@ var TraceBugModule = (() => {
         if (payload && Object.keys(payload).length > 0) {
           try {
             return `\u{1F4CC} ${label} ${JSON.stringify(payload).slice(0, 60)}`;
-          } catch (e2) {
+          } catch (e) {
           }
         }
         return `\u{1F4CC} ${label}`;
@@ -10917,7 +3227,7 @@ var TraceBugModule = (() => {
     if (!url) return "";
     try {
       return new URL(url, window.location.origin).pathname.slice(0, 40);
-    } catch (e2) {
+    } catch (e) {
       return (url || "").slice(0, 40);
     }
   }
@@ -10960,7 +3270,7 @@ var TraceBugModule = (() => {
       if (!url) return "";
       if (url.startsWith("/")) return url;
       return new URL(url).pathname || url;
-    } catch (e2) {
+    } catch (e) {
       return url;
     }
   }
@@ -11017,9 +3327,9 @@ var TraceBugModule = (() => {
     if (el.id) return cleanText(humanizeIdentifier(el.id));
     return "";
   }
-  function extractFormTarget(f2) {
-    const action = String(f2.action || "");
-    const id = String(f2.id || "");
+  function extractFormTarget(f) {
+    const action = String(f.action || "");
+    const id = String(f.id || "");
     const hay = `${id} ${action}`.toLowerCase();
     if (/login|signin|sign-in/.test(hay)) return "Login";
     if (/signup|register|sign-up/.test(hay)) return "Signup";
@@ -11031,9 +3341,9 @@ var TraceBugModule = (() => {
     if (id) return cleanText(humanizeIdentifier(id));
     return "";
   }
-  function countFilledFields(f2) {
-    const fields = f2.fields && typeof f2.fields === "object" ? f2.fields : {};
-    const total = typeof f2.fieldCount === "number" ? f2.fieldCount : Object.keys(fields).length;
+  function countFilledFields(f) {
+    const fields = f.fields && typeof f.fields === "object" ? f.fields : {};
+    const total = typeof f.fieldCount === "number" ? f.fieldCount : Object.keys(fields).length;
     let filled = 0;
     for (const v of Object.values(fields)) {
       if (v && String(v).trim() && v !== "[REDACTED]") filled += 1;
@@ -11062,9 +3372,9 @@ var TraceBugModule = (() => {
     var _a, _b, _c, _d;
     const map = /* @__PURE__ */ new Map();
     for (let i = 0; i < events.length; i++) {
-      const e2 = events[i];
-      if (e2.type !== "click") continue;
-      const sel = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || "";
+      const e = events[i];
+      if (e.type !== "click") continue;
+      const sel = ((_b = (_a = e.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || "";
       if (!sel) continue;
       let count = 1;
       for (let j = i - 1; j >= 0 && events[i].timestamp - events[j].timestamp <= RAGE_WINDOW_MS; j--) {
@@ -11083,10 +3393,10 @@ var TraceBugModule = (() => {
     }
     let lastInputIdx = -1;
     for (let i = 0; i < events.length; i++) {
-      const e2 = events[i];
-      if (e2.type === "input") lastInputIdx = i;
-      else if (e2.type === "form_submit") lastInputIdx = -1;
-      else if (e2.type === "route_change" && lastInputIdx !== -1) {
+      const e = events[i];
+      if (e.type === "input") lastInputIdx = i;
+      else if (e.type === "form_submit") lastInputIdx = -1;
+      else if (e.type === "route_change" && lastInputIdx !== -1) {
         if (!map.has(lastInputIdx)) map.set(lastInputIdx, "abandon");
         lastInputIdx = -1;
       }
@@ -11101,12 +3411,12 @@ var TraceBugModule = (() => {
     const sliced = events.slice(offset);
     const chips = [];
     for (let i = 0; i < sliced.length; i++) {
-      const e2 = sliced[i];
+      const e = sliced[i];
       const origIdx = offset + i;
       const frust = frustration.get(origIdx);
-      switch (e2.type) {
+      switch (e.type) {
         case "click": {
-          const el = ((_a = e2.data) == null ? void 0 : _a.element) || {};
+          const el = ((_a = e.data) == null ? void 0 : _a.element) || {};
           const picked = pickAttrs(el);
           chips.push({
             verb: "Clicked",
@@ -11115,12 +3425,12 @@ var TraceBugModule = (() => {
             nounLabel: nounForTag(String(el.tag || "")),
             element: { tag: String(el.tag || "element"), attrs: picked.attrs, moreCount: picked.moreCount },
             frustration: frust,
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
         case "input": {
-          const el = ((_b = e2.data) == null ? void 0 : _b.element) || {};
+          const el = ((_b = e.data) == null ? void 0 : _b.element) || {};
           const inputType = String(el.type || "text");
           const fieldName = extractFieldTarget(el);
           const picked = pickAttrs(el);
@@ -11131,7 +3441,7 @@ var TraceBugModule = (() => {
               target: fieldName || void 0,
               element: { tag: "input", attrs: picked.attrs, moreCount: picked.moreCount },
               frustration: frust,
-              timestamp: e2.timestamp
+              timestamp: e.timestamp
             });
             break;
           }
@@ -11146,12 +3456,12 @@ var TraceBugModule = (() => {
             detail,
             frustration: frust,
             isError: invalid || void 0,
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
         case "select_change": {
-          const el = ((_c = e2.data) == null ? void 0 : _c.element) || {};
+          const el = ((_c = e.data) == null ? void 0 : _c.element) || {};
           const picked = pickAttrs(el);
           chips.push({
             verb: "Selected",
@@ -11160,18 +3470,18 @@ var TraceBugModule = (() => {
             element: { tag: "select", attrs: picked.attrs, moreCount: picked.moreCount },
             detail: el.selectedText ? `"${truncate2(String(el.selectedText), MAX_DETAIL_LEN - 2)}"` : void 0,
             frustration: frust,
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
         case "form_submit": {
-          const f2 = ((_d = e2.data) == null ? void 0 : _d.form) || {};
-          const target = extractFormTarget(f2);
-          const { filled, total } = countFilledFields(f2);
+          const f = ((_d = e.data) == null ? void 0 : _d.form) || {};
+          const target = extractFormTarget(f);
+          const { filled, total } = countFilledFields(f);
           const attrs = [];
-          if (f2.id) attrs.push({ name: "id", value: String(f2.id) });
-          if (f2.method) attrs.push({ name: "method", value: String(f2.method).toUpperCase() });
-          if (f2.action) attrs.push({ name: "action", value: truncate2(String(f2.action), MAX_VALUE_LEN2) });
+          if (f.id) attrs.push({ name: "id", value: String(f.id) });
+          if (f.method) attrs.push({ name: "method", value: String(f.method).toUpperCase() });
+          if (f.action) attrs.push({ name: "action", value: truncate2(String(f.action), MAX_VALUE_LEN2) });
           chips.push({
             verb: "Submitted",
             kind: "submit",
@@ -11179,30 +3489,30 @@ var TraceBugModule = (() => {
             nounLabel: "form",
             element: { tag: "form", attrs, moreCount: 0 },
             detail: total > 0 ? `${filled} of ${total} field${total === 1 ? "" : "s"} filled` : void 0,
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
         case "route_change": {
-          const from = friendlyPagePath(String(((_e = e2.data) == null ? void 0 : _e.from) || ""));
-          const to = friendlyPagePath(String(((_f = e2.data) == null ? void 0 : _f.to) || ""));
+          const from = friendlyPagePath(String(((_e = e.data) == null ? void 0 : _e.from) || ""));
+          const to = friendlyPagePath(String(((_f = e.data) == null ? void 0 : _f.to) || ""));
           chips.push({
             verb: "Navigated",
             kind: "navigate",
             detail: from ? `${from} \u2192 ${to}` : to,
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
         case "api_request": {
-          const r = ((_g = e2.data) == null ? void 0 : _g.request) || {};
+          const r = ((_g = e.data) == null ? void 0 : _g.request) || {};
           const status = Number(r.statusCode || 0);
           const isError = status === 0 || status >= 400;
           chips.push({
             verb: isError ? "Request failed" : "Request",
             kind: "api",
             detail: `${String(r.method || "GET").toUpperCase()} ${truncate2(String(r.url || ""), MAX_DETAIL_LEN)} \u2192 ${status === 0 ? "ERR" : status}`,
-            timestamp: e2.timestamp,
+            timestamp: e.timestamp,
             isError
           });
           break;
@@ -11210,33 +3520,33 @@ var TraceBugModule = (() => {
         case "error":
         case "console_error":
         case "unhandled_rejection": {
-          const msg = String(((_h = e2.data) == null ? void 0 : _h.message) || ((_i = e2.data) == null ? void 0 : _i.error) || "Runtime error");
+          const msg = String(((_h = e.data) == null ? void 0 : _h.message) || ((_i = e.data) == null ? void 0 : _i.error) || "Runtime error");
           chips.push({
             verb: "Error",
             kind: "error",
             detail: truncate2(msg, MAX_DETAIL_LEN),
-            timestamp: e2.timestamp,
+            timestamp: e.timestamp,
             isError: true
           });
           break;
         }
         case "console_warn": {
-          const msg = String(((_j = e2.data) == null ? void 0 : _j.message) || "Warning");
+          const msg = String(((_j = e.data) == null ? void 0 : _j.message) || "Warning");
           chips.push({
             verb: "Warning",
             kind: "error",
             detail: truncate2(msg, MAX_DETAIL_LEN),
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
         case "mark": {
-          const label = String(((_k = e2.data) == null ? void 0 : _k.label) || "Mark");
+          const label = String(((_k = e.data) == null ? void 0 : _k.label) || "Mark");
           chips.push({
             verb: "Mark",
             kind: "mark",
             detail: truncate2(label, MAX_DETAIL_LEN),
-            timestamp: e2.timestamp
+            timestamp: e.timestamp
           });
           break;
         }
@@ -11293,16 +3603,16 @@ var TraceBugModule = (() => {
       steps = result.reproSteps;
     }
     const seenErrors = /* @__PURE__ */ new Set();
-    const consoleErrors = events.filter((e2) => ["error", "unhandled_rejection", "console_error"].includes(e2.type)).map((e2) => {
+    const consoleErrors = events.filter((e) => ["error", "unhandled_rejection", "console_error"].includes(e.type)).map((e) => {
       var _a2, _b2;
       return {
-        message: ((_a2 = e2.data.error) == null ? void 0 : _a2.message) || "",
-        stack: (_b2 = e2.data.error) == null ? void 0 : _b2.stack,
-        timestamp: e2.timestamp
+        message: ((_a2 = e.data.error) == null ? void 0 : _a2.message) || "",
+        stack: (_b2 = e.data.error) == null ? void 0 : _b2.stack,
+        timestamp: e.timestamp
       };
-    }).filter((e2) => {
-      if (seenErrors.has(e2.message)) return false;
-      seenErrors.add(e2.message);
+    }).filter((e) => {
+      if (seenErrors.has(e.message)) return false;
+      seenErrors.add(e.message);
       return true;
     });
     const levelMap = {
@@ -11312,23 +3622,23 @@ var TraceBugModule = (() => {
       "console_warn": "warn",
       "console_log": "log"
     };
-    const consoleLogs = events.filter((e2) => e2.type in levelMap).map((e2) => {
+    const consoleLogs = events.filter((e) => e.type in levelMap).map((e) => {
       var _a2, _b2;
       return {
-        level: levelMap[e2.type],
-        message: ((_a2 = e2.data.error) == null ? void 0 : _a2.message) || "",
-        stack: (_b2 = e2.data.error) == null ? void 0 : _b2.stack,
-        timestamp: e2.timestamp
+        level: levelMap[e.type],
+        message: ((_a2 = e.data.error) == null ? void 0 : _a2.message) || "",
+        stack: (_b2 = e.data.error) == null ? void 0 : _b2.stack,
+        timestamp: e.timestamp
       };
-    }).filter((e2) => !!e2.message);
-    const networkRequests = events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
+    }).filter((e) => !!e.message);
+    const networkRequests = events.filter((e) => e.type === "api_request" && e.data.request).map((e) => {
       var _a2, _b2, _c2, _d2;
       return {
-        method: ((_a2 = e2.data.request) == null ? void 0 : _a2.method) || "GET",
-        url: ((_b2 = e2.data.request) == null ? void 0 : _b2.url) || "",
-        status: ((_c2 = e2.data.request) == null ? void 0 : _c2.statusCode) || 0,
-        duration: ((_d2 = e2.data.request) == null ? void 0 : _d2.durationMs) || 0,
-        timestamp: e2.timestamp
+        method: ((_a2 = e.data.request) == null ? void 0 : _a2.method) || "GET",
+        url: ((_b2 = e.data.request) == null ? void 0 : _b2.url) || "",
+        status: ((_c2 = e.data.request) == null ? void 0 : _c2.statusCode) || 0,
+        duration: ((_d2 = e.data.request) == null ? void 0 : _d2.durationMs) || 0,
+        timestamp: e.timestamp
       };
     });
     const sessionStart = (_c = (_b = events[0]) == null ? void 0 : _b.timestamp) != null ? _c : captureTs || session.createdAt || 0;
@@ -11417,9 +3727,9 @@ var TraceBugModule = (() => {
   }
   function trimStaleEvents(events, anchorTs, lookbackMs = 30 * 60 * 1e3) {
     if (events.length === 0) return events;
-    const anchor = anchorTs > 0 ? anchorTs : Math.max(...events.map((e2) => e2.timestamp));
+    const anchor = anchorTs > 0 ? anchorTs : Math.max(...events.map((e) => e.timestamp));
     const cutoff = anchor - lookbackMs;
-    return events.filter((e2) => e2.timestamp >= cutoff);
+    return events.filter((e) => e.timestamp >= cutoff);
   }
   function generateSmartSummary(report) {
     var _a, _b, _c, _d;
@@ -11461,16 +3771,16 @@ var TraceBugModule = (() => {
   function shortPath(url) {
     if (!url) return "";
     try {
-      const u2 = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost");
-      return u2.pathname || url.slice(0, 40);
-    } catch (e2) {
+      const u = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+      return u.pathname || url.slice(0, 40);
+    } catch (e) {
       return url.length > 40 ? url.slice(0, 40) + "\u2026" : url;
     }
   }
   function safePath(url) {
     try {
       return new URL(url).pathname || "/";
-    } catch (e2) {
+    } catch (e) {
       return url;
     }
   }
@@ -11578,13 +3888,13 @@ var TraceBugModule = (() => {
   }
   function determineSeverity(report) {
     const hasCriticalError = report.consoleErrors.some(
-      (e2) => /TypeError|ReferenceError|SyntaxError/i.test(e2.message)
+      (e) => /TypeError|ReferenceError|SyntaxError/i.test(e.message)
     );
     if (hasCriticalError) return "critical";
     const hasServerError = report.networkErrors.some((r) => r.status >= 500);
     if (hasServerError) return "high";
     if (report.networkErrors.length > 0) return "medium";
-    if (report.annotations.some((a2) => a2.severity === "critical" || a2.severity === "major")) return "medium";
+    if (report.annotations.some((a) => a.severity === "critical" || a.severity === "major")) return "medium";
     if (report.consoleErrors.length > 0) return "low";
     return "low";
   }
@@ -11794,7 +4104,7 @@ var TraceBugModule = (() => {
       md += `
 `;
     }
-    const hasTesterResult = report.annotations.some((a2) => a2.actual);
+    const hasTesterResult = report.annotations.some((a) => a.actual);
     if (!hasTesterResult && report.consoleErrors.length > 0) {
       md += `### Error
 
@@ -11908,7 +4218,7 @@ ${(req.response || "").replace(/```/g, "` ` `")}
 `;
     }
     const significantTimeline = report.timeline.filter(
-      (e2) => e2.type !== "api_request" || e2.isError
+      (e) => e.type !== "api_request" || e.isError
     );
     if (significantTimeline.length > 0) {
       md += `<details>
@@ -12021,7 +4331,7 @@ ${report.steps}
       desc += `
 `;
     }
-    const hasTesterResult = report.annotations.some((a2) => a2.actual);
+    const hasTesterResult = report.annotations.some((a) => a.actual);
     if (!hasTesterResult && report.consoleErrors.length > 0) {
       desc += `h3. Actual Result
 Application throws error:
@@ -12119,7 +4429,7 @@ Application throws error:
 `;
     }
     const significantTimeline = report.timeline.filter(
-      (e2) => e2.type !== "api_request" || e2.isError
+      (e) => e.type !== "api_request" || e.isError
     );
     if (significantTimeline.length > 0) {
       desc += `h3. Session Timeline
@@ -12443,12 +4753,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   function downloadAsHtml(html, filename) {
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    const a2 = document.createElement("a");
-    a2.href = url;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
   function escapeHtml(str) {
@@ -12469,7 +4779,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     _drawRegions.push(region);
   }
   function removeAnnotationById(id) {
-    _elementAnnotations = _elementAnnotations.filter((a2) => a2.id !== id);
+    _elementAnnotations = _elementAnnotations.filter((a) => a.id !== id);
     _drawRegions = _drawRegions.filter((r) => r.id !== id);
   }
   function getElementAnnotations() {
@@ -12504,13 +4814,13 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       lines.push("## Element Annotations");
       lines.push("");
       for (let i = 0; i < _elementAnnotations.length; i++) {
-        const a2 = _elementAnnotations[i];
-        const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
-        const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
-        lines.push(`### ${i + 1}. [${intentLabel.toUpperCase()}] \`${a2.selector.slice(0, 60)}\` (${sevLabel})`);
-        lines.push(`- **Element:** \`<${a2.tagName}>\` "${a2.innerText.slice(0, 80)}"`);
-        lines.push(`- **Comment:** ${a2.comment}`);
-        lines.push(`- **Page:** ${a2.page}`);
+        const a = _elementAnnotations[i];
+        const intentLabel = a.intent.charAt(0).toUpperCase() + a.intent.slice(1);
+        const sevLabel = a.severity.charAt(0).toUpperCase() + a.severity.slice(1);
+        lines.push(`### ${i + 1}. [${intentLabel.toUpperCase()}] \`${a.selector.slice(0, 60)}\` (${sevLabel})`);
+        lines.push(`- **Element:** \`<${a.tagName}>\` "${a.innerText.slice(0, 80)}"`);
+        lines.push(`- **Comment:** ${a.comment}`);
+        lines.push(`- **Page:** ${a.page}`);
         lines.push("");
       }
     }
@@ -12533,7 +4843,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     try {
       await navigator.clipboard.writeText(text);
       return true;
-    } catch (e2) {
+    } catch (e) {
       const ta = document.createElement("textarea");
       ta.value = text;
       ta.style.cssText = "position:fixed;left:-9999px";
@@ -12542,7 +4852,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       try {
         document.execCommand("copy");
         return true;
-      } catch (e3) {
+      } catch (e2) {
         return false;
       } finally {
         ta.remove();
@@ -12568,12 +4878,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       key: parts[parts.length - 1] || ""
     };
   }
-  function matchesShortcut(e2, shortcut) {
+  function matchesShortcut(e, shortcut) {
     if (!shortcut) return false;
     const s = parseShortcut(shortcut);
-    const mod = e2.ctrlKey || e2.metaKey;
-    const key = (e2.key || "").toLowerCase();
-    return mod === s.mod && e2.shiftKey === s.shift && e2.altKey === s.alt && key === s.key;
+    const mod = e.ctrlKey || e.metaKey;
+    const key = (e.key || "").toLowerCase();
+    return mod === s.mod && e.shiftKey === s.shift && e.altKey === s.alt && key === s.key;
   }
   function escapeHtml2(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -12631,8 +4941,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   `;
     document.head.appendChild(styleTag);
     root.appendChild(_modeBanner);
-    _modeBanner.querySelector("#tracebug-annotate-exit").addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    _modeBanner.querySelector("#tracebug-annotate-exit").addEventListener("click", (e) => {
+      e.stopPropagation();
       deactivateElementAnnotateMode();
     });
     _highlightOverlay = document.createElement("div");
@@ -12650,15 +4960,15 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     const savedScrollX = window.scrollX;
     document.documentElement.style.setProperty("overflow", "hidden", "important");
     document.body.style.setProperty("overflow", "hidden", "important");
-    const preventScroll = (e2) => {
-      e2.preventDefault();
+    const preventScroll = (e) => {
+      e.preventDefault();
     };
     window.addEventListener("wheel", preventScroll, { passive: false, capture: true });
     window.addEventListener("touchmove", preventScroll, { passive: false, capture: true });
-    const onMouseMove = (e2) => {
+    const onMouseMove = (e) => {
       if (!_active2 || !_highlightOverlay) return;
       if (_popover) return;
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      const el = document.elementFromPoint(e.clientX, e.clientY);
       if (!el || _isOurElement(el)) {
         _highlightOverlay.style.display = "none";
         document.body.style.cursor = "default";
@@ -12672,24 +4982,24 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _highlightOverlay.style.width = rect.width + "px";
       _highlightOverlay.style.height = rect.height + "px";
     };
-    const onClick = (e2) => {
+    const onClick = (e) => {
       if (!_active2) return;
-      const target = e2.target;
+      const target = e.target;
       if (target && _isOurElement(target)) return;
       if (_popover) {
         _popover.remove();
         _popover = null;
-        e2.preventDefault();
-        e2.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
         return;
       }
-      e2.preventDefault();
-      e2.stopPropagation();
-      e2.stopImmediatePropagation();
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const el = document.elementFromPoint(e.clientX, e.clientY);
       if (!el || _isOurElement(el)) return;
       const selector = _computeSelector(el);
-      if (e2.shiftKey) {
+      if (e.shiftKey) {
         if (!_selectedElements.has(selector)) {
           _counter++;
           _selectedElements.set(selector, { element: el, rect: el.getBoundingClientRect(), index: _counter });
@@ -12704,19 +5014,19 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         _showFeedbackPopover(el, root);
       }
     };
-    const onContext = (e2) => {
+    const onContext = (e) => {
       if (!_active2) return;
       if (_selectedElements.size > 0) {
-        e2.preventDefault();
+        e.preventDefault();
         const firstEntry = _selectedElements.values().next().value;
         if (firstEntry) {
           _showFeedbackPopover(firstEntry.element, root);
         }
       }
     };
-    const onKeyDown = (e2) => {
-      if (e2.key === "Escape") {
-        e2.preventDefault();
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
         if (_popover) {
           _popover.remove();
           _popover = null;
@@ -12768,10 +5078,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     _persistentBadges = [];
     const annotations = getElementAnnotations();
     const page = window.location.pathname;
-    const pageAnnotations = annotations.filter((a2) => a2.page === page);
+    const pageAnnotations = annotations.filter((a) => a.page === page);
     for (let i = 0; i < pageAnnotations.length; i++) {
-      const a2 = pageAnnotations[i];
-      const el = document.querySelector(a2.selector);
+      const a = pageAnnotations[i];
+      const el = document.querySelector(a.selector);
       if (!el) continue;
       const rect = el.getBoundingClientRect();
       const outline = document.createElement("div");
@@ -12780,19 +5090,19 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       position: fixed; z-index: 2147483644; pointer-events: none;
       left: ${rect.left - 2}px; top: ${rect.top - 2}px;
       width: ${rect.width + 4}px; height: ${rect.height + 4}px;
-      border: 2px dashed ${_intentColor(a2.intent)}80;
+      border: 2px dashed ${_intentColor(a.intent)}80;
       border-radius: 3px;
     `;
       root.appendChild(outline);
       _persistentBadges.push(outline);
       const badge = document.createElement("div");
       badge.dataset.tracebug = "annotation-badge";
-      badge.title = `Click to view: ${a2.intent.toUpperCase()} \u2014 ${a2.comment.slice(0, 60)}`;
+      badge.title = `Click to view: ${a.intent.toUpperCase()} \u2014 ${a.comment.slice(0, 60)}`;
       badge.style.cssText = `
       position: fixed; z-index: 2147483645; pointer-events: auto; cursor: pointer;
       left: ${rect.right - 10}px; top: ${rect.top - 10}px;
       width: 20px; height: 20px; border-radius: 50%;
-      background: ${_intentColor(a2.intent)}; color: #fff;
+      background: ${_intentColor(a.intent)}; color: #fff;
       font-size: 10px; font-weight: 700; font-family: system-ui, sans-serif;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 1px 6px rgba(0,0,0,0.4);
@@ -12805,9 +5115,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       badge.addEventListener("mouseleave", () => {
         badge.style.transform = "scale(1)";
       });
-      badge.addEventListener("click", (e2) => {
-        e2.stopPropagation();
-        _showBadgePopover(a2, badge, root);
+      badge.addEventListener("click", (e) => {
+        e.stopPropagation();
+        _showBadgePopover(a, badge, root);
       });
       root.appendChild(badge);
       _persistentBadges.push(badge);
@@ -12821,11 +5131,11 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     _persistentBadges.forEach((b) => b.remove());
     _persistentBadges = [];
   }
-  function _showBadgePopover(a2, badge, root) {
+  function _showBadgePopover(a, badge, root) {
     const existing = document.getElementById("tracebug-badge-popover");
     if (existing) existing.remove();
-    const intentColor = _intentColor(a2.intent);
-    const sevColor = a2.severity === "critical" ? "#ef4444" : a2.severity === "major" ? "#f97316" : a2.severity === "minor" ? "#3b82f6" : "#888";
+    const intentColor = _intentColor(a.intent);
+    const sevColor = a.severity === "critical" ? "#ef4444" : a.severity === "major" ? "#f97316" : a.severity === "minor" ? "#3b82f6" : "#888";
     const badgeRect = badge.getBoundingClientRect();
     const popover = document.createElement("div");
     popover.id = "tracebug-badge-popover";
@@ -12848,8 +5158,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     animation: tracebug-tooltip-in 0.15s ease;
   `;
-    const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
-    const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
+    const intentLabel = a.intent.charAt(0).toUpperCase() + a.intent.slice(1);
+    const sevLabel = a.severity.charAt(0).toUpperCase() + a.severity.slice(1);
     const header = document.createElement("div");
     header.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:10px";
     const intentBadge = document.createElement("span");
@@ -12866,7 +5176,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     header.append(intentBadge, sevBadge, closeBtn);
     const commentEl = document.createElement("div");
     commentEl.style.cssText = "font-size:13px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5;word-break:break-word";
-    commentEl.textContent = a2.comment;
+    commentEl.textContent = a.comment;
     popover.append(header, commentEl);
     root.appendChild(popover);
     popover.querySelector('[data-action="close"]').addEventListener("click", () => popover.remove());
@@ -13054,8 +5364,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     let selectedIntent = "fix";
     const intentBtns = popover.querySelectorAll("#tracebug-intent-btns button");
     intentBtns.forEach((btn) => {
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         selectedIntent = btn.dataset.intent;
         intentBtns.forEach((b) => {
           const intent = b.dataset.intent;
@@ -13063,14 +5373,14 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         });
       });
     });
-    popover.querySelector("#tracebug-ann-cancel").addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    popover.querySelector("#tracebug-ann-cancel").addEventListener("click", (e) => {
+      e.stopPropagation();
       popover.remove();
       _popover = null;
       _clearSelections();
     });
-    popover.querySelector("#tracebug-ann-save").addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    popover.querySelector("#tracebug-ann-save").addEventListener("click", (e) => {
+      e.stopPropagation();
       const severity = popover.querySelector("#tracebug-sev-select").value;
       const comment = commentEl.value.trim();
       if (!comment) {
@@ -13104,13 +5414,13 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _refreshPersistentBadges(root);
       if (_onUpdate) _onUpdate();
     });
-    popover.addEventListener("click", (e2) => e2.stopPropagation());
-    popover.addEventListener("mousedown", (e2) => e2.stopPropagation());
+    popover.addEventListener("click", (e) => e.stopPropagation());
+    popover.addEventListener("mousedown", (e) => e.stopPropagation());
   }
   function _intentBtnStyle(intent, active) {
-    const color2 = _intentColor(intent);
+    const color = _intentColor(intent);
     if (active) {
-      return `background:${color2}33;color:${color2};border:1px solid ${color2};border-radius:var(--tb-radius-md, 8px);padding:6px 11px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.15s;`;
+      return `background:${color}33;color:${color};border:1px solid ${color};border-radius:var(--tb-radius-md, 8px);padding:6px 11px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.15s;`;
     }
     return `background:#ffffff06;color:#999;border:1px solid #33333366;border-radius:var(--tb-radius-md, 8px);padding:6px 11px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 0.15s;`;
   }
@@ -13190,11 +5500,11 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       for (const s of ephemerals) {
         const ttl = s.expiresAt - now;
         if (ttl <= 0) continue;
-        const opacity2 = Math.min(1, ttl / 600) * 0.85;
+        const opacity = Math.min(1, ttl / 600) * 0.85;
         if (s.shape === "pen" && s.points) {
-          _drawPath(ctx, s.color, s.points, opacity2);
+          _drawPath(ctx, s.color, s.points, opacity);
         } else {
-          _drawShape(ctx, s.shape, s.color, s.x, s.y, s.w, s.h, opacity2);
+          _drawShape(ctx, s.shape, s.color, s.x, s.y, s.w, s.h, opacity);
         }
       }
       if (preview) {
@@ -13221,16 +5531,16 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       };
       rafId = requestAnimationFrame(tick);
     };
-    const toCanvasCoords = (e2) => {
+    const toCanvasCoords = (e) => {
       const rect = canvas.getBoundingClientRect();
-      return { x: e2.clientX - rect.left, y: e2.clientY - rect.top };
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
-    const onMouseDown = (e2) => {
+    const onMouseDown = (e) => {
       var _a, _b;
       if (!_active3) return;
-      if ((_a = e2.target) == null ? void 0 : _a.closest("#tracebug-draw-toolbar")) return;
-      if ((_b = e2.target) == null ? void 0 : _b.closest("[data-tracebug='draw-comment-input']")) return;
-      const p = toCanvasCoords(e2);
+      if ((_a = e.target) == null ? void 0 : _a.closest("#tracebug-draw-toolbar")) return;
+      if ((_b = e.target) == null ? void 0 : _b.closest("[data-tracebug='draw-comment-input']")) return;
+      const p = toCanvasCoords(e);
       startX = p.x;
       startY = p.y;
       isDrawing = true;
@@ -13238,9 +5548,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         penPoints = [{ x: startX, y: startY }];
       }
     };
-    const onMouseMove = (e2) => {
+    const onMouseMove = (e) => {
       if (!isDrawing || !_active3) return;
-      const p = toCanvasCoords(e2);
+      const p = toCanvasCoords(e);
       if (_currentShape === "pen") {
         penPoints.push({ x: p.x, y: p.y });
         redrawAll({ shape: "pen", color: _currentColor, x: 0, y: 0, w: 0, h: 0, points: penPoints });
@@ -13248,10 +5558,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         redrawAll({ shape: _currentShape, color: _currentColor, x: startX, y: startY, w: p.x - startX, h: p.y - startY });
       }
     };
-    const onMouseUp = (e2) => {
+    const onMouseUp = (e) => {
       if (!isDrawing || !_active3) return;
       isDrawing = false;
-      const p = toCanvasCoords(e2);
+      const p = toCanvasCoords(e);
       const endX = p.x;
       const endY = p.y;
       const w = endX - startX;
@@ -13330,9 +5640,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       }
       _showCommentInput(normX, normY, normW, normH, root, ctx, docW, docH);
     };
-    const onKeyDown = (e2) => {
-      if (e2.key === "Escape") {
-        e2.preventDefault();
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
         deactivateDrawMode();
       }
     };
@@ -13370,20 +5680,20 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _onDeactivate2 = null;
     };
   }
-  function _emitDrawMark(shape, color2, extra) {
+  function _emitDrawMark(shape, color, extra) {
     try {
       const tb = window.TraceBug;
       if (tb && typeof tb.mark === "function") {
-        tb.mark(`Drew ${shape}`, { shape, color: color2, ...extra });
+        tb.mark(`Drew ${shape}`, { shape, color, ...extra });
       }
-    } catch (e2) {
+    } catch (e) {
     }
   }
-  function _drawPath(ctx, color2, points, opacity2) {
+  function _drawPath(ctx, color, points, opacity) {
     if (points.length < 2) return;
     ctx.save();
-    ctx.globalAlpha = opacity2;
-    ctx.strokeStyle = color2;
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -13439,8 +5749,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       btn.setAttribute("aria-label", s.label);
       btn.innerHTML = s.icon;
       btn.style.cssText = _toolBtnStyle(s.shape === _currentShape);
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         _currentShape = s.shape;
         bar.querySelectorAll("[data-tracebug='draw-tool-btn']").forEach((b) => {
           b.style.cssText = _toolBtnStyle(b.dataset.shape === _currentShape);
@@ -13449,7 +5759,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       bar.appendChild(btn);
     }
     bar.appendChild(_sep());
-    for (const c of COLORS2) {
+    for (const c of COLORS) {
       const btn = document.createElement("button");
       btn.dataset.tracebug = "draw-color-btn";
       btn.dataset.color = c.value;
@@ -13460,8 +5770,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       border: 2px solid ${c.value === _currentColor ? "#fff" : "transparent"};
       box-shadow: ${c.value === _currentColor ? "0 0 0 2px rgba(255,255,255,0.3)" : "none"};
     `;
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         _currentColor = c.value;
         bar.querySelectorAll("[data-tracebug='draw-color-btn']").forEach((b) => {
           const isActive = b.dataset.color === _currentColor;
@@ -13492,8 +5802,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       doneBtn.style.color = "var(--tb-text-muted, #888)";
       doneBtn.style.borderColor = "var(--tb-border, #2a2a3e)";
     });
-    doneBtn.addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    doneBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       deactivateDrawMode();
     });
     bar.appendChild(doneBtn);
@@ -13505,13 +5815,13 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     d.style.cssText = "width:1px;height:18px;background:var(--tb-border, #2a2a3e);margin:0 4px;flex-shrink:0";
     return d;
   }
-  function _drawShape(ctx, shape, color2, x, y, w, h, fillOpacity) {
+  function _drawShape(ctx, shape, color, x, y, w, h, fillOpacity) {
     if (shape === "pen") return;
-    ctx.strokeStyle = color2;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     if (shape === "rect") {
       ctx.globalAlpha = fillOpacity;
-      ctx.fillStyle = color2;
+      ctx.fillStyle = color;
       ctx.fillRect(x, y, w, h);
       ctx.globalAlpha = 1;
       ctx.strokeRect(x, y, w, h);
@@ -13543,7 +5853,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       ctx.beginPath();
       ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
       ctx.globalAlpha = fillOpacity;
-      ctx.fillStyle = color2;
+      ctx.fillStyle = color;
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.stroke();
@@ -13658,6 +5968,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       const region = {
         id: `dr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         timestamp: Date.now(),
+        // save() runs only for region shapes — pen strokes have their own path and
+        // never reach here — so _currentShape is always a DrawRegion["shape"].
         shape: _currentShape,
         x,
         y,
@@ -13674,18 +5986,18 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _redrawAllRegions(ctx, canvasW, canvasH);
       if (_onUpdate2) _onUpdate2();
     };
-    saveBtn.addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    saveBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       save(textInput.value.trim());
     });
-    skipBtn.addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    skipBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       save("");
     });
-    textInput.addEventListener("keydown", (e2) => {
-      e2.stopPropagation();
-      if (e2.key === "Enter") save(textInput.value.trim());
-      if (e2.key === "Escape") {
+    textInput.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") save(textInput.value.trim());
+      if (e.key === "Escape") {
         input.remove();
         _redrawAllRegions(ctx, canvasW, canvasH);
       }
@@ -13698,7 +6010,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     }
     return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
   }
-  var _active3, _cleanup2, _currentShape, _currentColor, _onUpdate2, _onDeactivate2, COLORS2, MAX_CANVAS_DIM;
+  var _active3, _cleanup2, _currentShape, _currentColor, _onUpdate2, _onDeactivate2, COLORS, MAX_CANVAS_DIM;
   var init_draw_mode = __esm({
     "src/draw-mode.ts"() {
       "use strict";
@@ -13709,7 +6021,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _currentColor = "#7C5CFF";
       _onUpdate2 = null;
       _onDeactivate2 = null;
-      COLORS2 = [
+      COLORS = [
         { value: "#7C5CFF", label: "Purple" },
         { value: "#ef4444", label: "Red" },
         { value: "#eab308", label: "Yellow" },
@@ -13761,20 +6073,20 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       overlay.appendChild(hint);
       document.body.appendChild(overlay);
       let sx = 0, sy = 0, dragging = false;
-      const onDown = (e2) => {
+      const onDown = (e) => {
         dragging = true;
-        sx = e2.clientX;
-        sy = e2.clientY;
+        sx = e.clientX;
+        sy = e.clientY;
         sel.style.left = `${sx}px`;
         sel.style.top = `${sy}px`;
         sel.style.width = "0px";
         sel.style.height = "0px";
         sel.style.display = "block";
       };
-      const onMove = (e2) => {
+      const onMove = (e) => {
         if (!dragging) return;
-        const x = Math.min(sx, e2.clientX), y = Math.min(sy, e2.clientY);
-        const w = Math.abs(e2.clientX - sx), h = Math.abs(e2.clientY - sy);
+        const x = Math.min(sx, e.clientX), y = Math.min(sy, e.clientY);
+        const w = Math.abs(e.clientX - sx), h = Math.abs(e.clientY - sy);
         Object.assign(sel.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
       };
       const cleanup = () => {
@@ -13784,21 +6096,21 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         document.removeEventListener("keydown", onKey, true);
         overlay.remove();
       };
-      const onKey = (e2) => {
-        if (e2.key === "Escape") {
-          e2.stopPropagation();
+      const onKey = (e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
           cleanup();
           resolve(null);
         }
       };
-      const onUp = async (e2) => {
+      const onUp = async (e) => {
         if (!dragging) return;
         dragging = false;
         const rect = {
-          x: Math.min(sx, e2.clientX),
-          y: Math.min(sy, e2.clientY),
-          w: Math.abs(e2.clientX - sx),
-          h: Math.abs(e2.clientY - sy)
+          x: Math.min(sx, e.clientX),
+          y: Math.min(sy, e.clientY),
+          w: Math.abs(e.clientX - sx),
+          h: Math.abs(e.clientY - sy)
         };
         cleanup();
         if (rect.w < 5 || rect.h < 5) {
@@ -13806,6 +6118,16 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
           return;
         }
         try {
+          if (isExtensionContext()) {
+            const full2 = await captureScreenshot(null);
+            const cropped2 = await cropDataUrl(full2.dataUrl, rect);
+            full2.dataUrl = cropped2;
+            full2.width = rect.w;
+            full2.height = rect.h;
+            full2.filename = full2.filename.replace(/\.png$/, "_region.png");
+            resolve(full2);
+            return;
+          }
           const renderer = await loadHtml2CanvasShared();
           if (renderer) {
             const docX = window.scrollX + rect.x;
@@ -13902,7 +6224,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         const result = await new Promise((resolve) => {
           try {
             c.storage.local.get(STORAGE_KEY, (r) => resolve(r || {}));
-          } catch (e2) {
+          } catch (e) {
             resolve({});
           }
         });
@@ -13912,12 +6234,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
           return _cached;
         }
       }
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       const v = localStorage.getItem(STORAGE_KEY);
       if (v === "premium" || v === "free") _cached = v;
-    } catch (e2) {
+    } catch (e) {
     }
     return _cached;
   }
@@ -13938,16 +6260,16 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         await new Promise((resolve) => {
           try {
             c.storage.local.set({ [STORAGE_KEY]: plan }, () => resolve());
-          } catch (e2) {
+          } catch (e) {
             resolve();
           }
         });
       }
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       localStorage.setItem(STORAGE_KEY, plan);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   var STORAGE_KEY, PLANS_LIVE, FREE_LIMITS, _cached, _hydrated;
@@ -14027,14 +6349,14 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       close();
       try {
         window.dispatchEvent(new CustomEvent("tracebug-plan-changed"));
-      } catch (e2) {
+      } catch (e) {
       }
     });
-    overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) close();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
     });
-    const escHandler = (e2) => {
-      if (e2.key === "Escape") {
+    const escHandler = (e) => {
+      if (e.key === "Escape") {
         close();
         document.removeEventListener("keydown", escHandler);
       }
@@ -14058,7 +6380,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     var _a, _b, _c;
     _injectStyles();
     container.innerHTML = "";
-    const timeline = options.timeline.slice().sort((a2, b) => a2.timestamp - b.timestamp);
+    const timeline = options.timeline.slice().sort((a, b) => a.timestamp - b.timestamp);
     if (timeline.length === 0) {
       container.innerHTML = `<div class="tb-rs-empty">No events recorded yet.</div>`;
       return { seek: () => {
@@ -14066,7 +6388,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         container.innerHTML = "";
       } };
     }
-    const screenshots2 = (options.screenshots || []).slice().sort((a2, b) => a2.timestamp - b.timestamp);
+    const screenshots2 = (options.screenshots || []).slice().sort((a, b) => a.timestamp - b.timestamp);
     const allTs = [];
     for (const t of timeline) allTs.push(t.timestamp);
     for (const s of screenshots2) allTs.push(s.timestamp);
@@ -14094,9 +6416,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     playBtn.setAttribute("aria-label", "Play / pause (Space)");
     playBtn.title = "Play (Space)";
     playBtn.textContent = "\u25B6";
-    const time2 = document.createElement("span");
-    time2.className = "tb-rs-time";
-    time2.textContent = `00:00 / ${formatElapsed2(span)}`;
+    const time = document.createElement("span");
+    time.className = "tb-rs-time";
+    time.textContent = `00:00 / ${formatElapsed2(span)}`;
     const speedSel = document.createElement("select");
     speedSel.className = "tb-rs-speed";
     speedSel.setAttribute("aria-label", "Playback speed");
@@ -14122,7 +6444,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     helpBtn.setAttribute("aria-label", "Keyboard shortcuts");
     helpBtn.addEventListener("click", () => _toggleHelpOverlay(root));
     header.appendChild(playBtn);
-    header.appendChild(time2);
+    header.appendChild(time);
     header.appendChild(speedSel);
     header.appendChild(jumpBtn);
     header.appendChild(helpBtn);
@@ -14178,10 +6500,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       if (timeline.length === 0) return void 0;
       let best = timeline[0];
       let bestDelta = Math.abs(best.timestamp - ts);
-      for (const e2 of timeline) {
-        const d = Math.abs(e2.timestamp - ts);
+      for (const e of timeline) {
+        const d = Math.abs(e.timestamp - ts);
         if (d < bestDelta) {
-          best = e2;
+          best = e;
           bestDelta = d;
         }
       }
@@ -14191,7 +6513,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       const p = pct(currentTs, startedAt, span);
       handle.style.left = `${p}%`;
       fill.style.width = `${p}%`;
-      time2.textContent = fmtTime(currentTs);
+      time.textContent = fmtTime(currentTs);
     };
     const seek = (ts, opts) => {
       var _a2;
@@ -14207,7 +6529,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         try {
           const vidStart = options.videoEl.dataset.tbStartTs ? Number(options.videoEl.dataset.tbStartTs) : startedAt;
           options.videoEl.currentTime = Math.max(0, (currentTs - vidStart) / 1e3);
-        } catch (e2) {
+        } catch (e) {
         }
       }
       (_a2 = options.onSeek) == null ? void 0 : _a2.call(options, currentTs, marker);
@@ -14219,15 +6541,15 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       return startedAt + ratio * span;
     };
-    const onPointerDown = (e2) => {
+    const onPointerDown = (e) => {
       dragging = true;
-      track.setPointerCapture(e2.pointerId);
-      seek(trackToTs(e2.clientX), { snap: false });
+      track.setPointerCapture(e.pointerId);
+      seek(trackToTs(e.clientX), { snap: false });
     };
-    const onPointerMove = (e2) => {
+    const onPointerMove = (e) => {
       var _a2;
-      if (dragging) seek(trackToTs(e2.clientX), { snap: false });
-      const target = e2.target;
+      if (dragging) seek(trackToTs(e.clientX), { snap: false });
+      const target = e.target;
       if (!dragging && ((_a2 = target == null ? void 0 : target.classList) == null ? void 0 : _a2.contains("tb-rs-marker"))) {
         tooltip.textContent = target.dataset.desc || "";
         tooltip.style.left = target.style.left;
@@ -14236,12 +6558,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         tooltip.style.opacity = "0";
       }
     };
-    const onPointerUp = (e2) => {
+    const onPointerUp = (e) => {
       if (!dragging) return;
       dragging = false;
       try {
-        track.releasePointerCapture(e2.pointerId);
-      } catch (e3) {
+        track.releasePointerCapture(e.pointerId);
+      } catch (e2) {
       }
       seek(currentTs, { snap: true });
     };
@@ -14251,8 +6573,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     track.addEventListener("pointerleave", () => {
       tooltip.style.opacity = "0";
     });
-    markersLayer.addEventListener("click", (e2) => {
-      const target = e2.target;
+    markersLayer.addEventListener("click", (e) => {
+      const target = e.target;
       if (!target.classList.contains("tb-rs-marker")) return;
       const ts = Number(target.dataset.ts);
       if (!Number.isNaN(ts)) seek(ts, { snap: true });
@@ -14263,7 +6585,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     if (chipDefs.length > 0) {
       const chipLayer = document.createElement("div");
       chipLayer.className = "tb-rs-chips";
-      chipDefs.sort((a2, b) => a2.ts - b.ts);
+      chipDefs.sort((a, b) => a.ts - b.ts);
       for (const c of chipDefs) {
         const meta = CHIP_META[c.kind] || CHIP_META.note;
         const chip = document.createElement("button");
@@ -14342,7 +6664,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
             visitedErrors.add(em.timestamp);
             try {
               v.pause();
-            } catch (e2) {
+            } catch (e) {
             }
             _flashErrorPause(root, em);
             break;
@@ -14357,7 +6679,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
           try {
             v.removeEventListener("timeupdate", videoTickHandler);
             v.removeEventListener("pause", stopPlay);
-          } catch (e2) {
+          } catch (e) {
           }
           videoTickHandler = null;
           playEvents();
@@ -14369,7 +6691,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         stopPlay();
         if (options.videoEl) try {
           options.videoEl.pause();
-        } catch (e2) {
+        } catch (e) {
         }
         ;
         return;
@@ -14421,48 +6743,48 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       hoverEl.style.left = left + "px";
       hoverEl.style.bottom = rootRect.bottom - rect.top + 6 + "px";
     };
-    track.addEventListener("mousemove", (e2) => showHoverThumb(e2.clientX));
+    track.addEventListener("mousemove", (e) => showHoverThumb(e.clientX));
     track.addEventListener("mouseleave", () => {
       if (hoverEl) hoverEl.style.display = "none";
     });
-    const onKey = (e2) => {
-      if (e2.key === " " || e2.code === "Space") {
-        e2.preventDefault();
+    const onKey = (e) => {
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
         togglePlay();
         return;
       }
-      if (e2.key === "ArrowLeft" || e2.key === "ArrowRight") {
-        e2.preventDefault();
-        const delta = e2.key === "ArrowRight" ? 5e3 : -5e3;
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const delta = e.key === "ArrowRight" ? 5e3 : -5e3;
         visitedErrors.clear();
         seek(currentTs + delta, { snap: false });
         return;
       }
-      if (e2.key === "ArrowUp" || e2.key === "ArrowDown") {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         if (errorMarkers.length === 0) return;
-        e2.preventDefault();
+        e.preventDefault();
         const errIdx = errorMarkers.findIndex((m) => m.timestamp >= currentTs);
         let nextErr;
-        if (e2.key === "ArrowDown") nextErr = Math.min(errorMarkers.length - 1, (errIdx < 0 ? errorMarkers.length : errIdx) + (errIdx === -1 ? -1 : 1));
+        if (e.key === "ArrowDown") nextErr = Math.min(errorMarkers.length - 1, (errIdx < 0 ? errorMarkers.length : errIdx) + (errIdx === -1 ? -1 : 1));
         else nextErr = Math.max(0, (errIdx > 0 ? errIdx : errorMarkers.length) - 1);
         seek(errorMarkers[nextErr].timestamp, { snap: false });
         return;
       }
-      if (e2.key === "0") {
-        e2.preventDefault();
+      if (e.key === "0") {
+        e.preventDefault();
         visitedErrors.clear();
         seek(startedAt, { snap: false });
         return;
       }
-      if (e2.key === "1" || e2.key === "2" || e2.key === "3") {
-        e2.preventDefault();
-        const pct2 = Number(e2.key) * 0.25;
+      if (e.key === "1" || e.key === "2" || e.key === "3") {
+        e.preventDefault();
+        const pct2 = Number(e.key) * 0.25;
         visitedErrors.clear();
         seek(startedAt + span * pct2, { snap: false });
         return;
       }
-      if (e2.key === "?") {
-        e2.preventDefault();
+      if (e.key === "?") {
+        e.preventDefault();
         _toggleHelpOverlay(root);
       }
     };
@@ -14510,7 +6832,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     setTimeout(() => {
       try {
         toast.remove();
-      } catch (e2) {
+      } catch (e) {
       }
     }, 2500);
   }
@@ -14539,8 +6861,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   `;
     root.appendChild(overlay);
     (_a = overlay.querySelector(".tb-rs-help-close")) == null ? void 0 : _a.addEventListener("click", () => overlay.remove());
-    overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) overlay.remove();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
     });
   }
   function _injectStyles() {
@@ -14874,8 +7196,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     del.type = "button";
     del.textContent = "\u2715";
     del.title = "Remove this blur";
-    del.addEventListener("click", (e2) => {
-      e2.stopPropagation();
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
       box.remove();
       const i = _events.findIndex((ev) => ev.id === evtId);
       if (i >= 0) _events.splice(i, 1);
@@ -14900,43 +7222,43 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     document.body.appendChild(overlay);
     let startX = 0, startY = 0, drawing = false;
     let rubber = null;
-    const onDown = (e2) => {
+    const onDown = (e) => {
       var _a;
-      if ((_a = e2.target.classList) == null ? void 0 : _a.contains("tb-blur-x")) return;
+      if ((_a = e.target.classList) == null ? void 0 : _a.contains("tb-blur-x")) return;
       drawing = true;
-      startX = e2.clientX;
-      startY = e2.clientY;
+      startX = e.clientX;
+      startY = e.clientY;
       rubber = document.createElement("div");
       rubber.className = "tb-blur-rubber";
       overlay.appendChild(rubber);
-      overlay.setPointerCapture(e2.pointerId);
-      e2.preventDefault();
+      overlay.setPointerCapture(e.pointerId);
+      e.preventDefault();
     };
-    const onMove = (e2) => {
+    const onMove = (e) => {
       if (!drawing || !rubber) return;
-      const x = Math.min(startX, e2.clientX), y = Math.min(startY, e2.clientY);
-      const w = Math.abs(e2.clientX - startX), h = Math.abs(e2.clientY - startY);
+      const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
+      const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
       rubber.style.setProperty("left", x + "px", "important");
       rubber.style.setProperty("top", y + "px", "important");
       rubber.style.setProperty("width", w + "px", "important");
       rubber.style.setProperty("height", h + "px", "important");
     };
-    const onUp = (e2) => {
+    const onUp = (e) => {
       if (!drawing) return;
       drawing = false;
-      const x = Math.min(startX, e2.clientX), y = Math.min(startY, e2.clientY);
-      const w = Math.abs(e2.clientX - startX), h = Math.abs(e2.clientY - startY);
+      const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
+      const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
       rubber == null ? void 0 : rubber.remove();
       rubber = null;
       try {
-        overlay.releasePointerCapture(e2.pointerId);
-      } catch (e3) {
+        overlay.releasePointerCapture(e.pointerId);
+      } catch (e2) {
       }
       _addBox(x, y, w, h);
     };
-    const onKey = (e2) => {
-      if (e2.key === "Escape") {
-        e2.preventDefault();
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
         deactivateBlurMode();
       }
     };
@@ -15010,6 +7332,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     </div>
     <div id="scrubber"></div>
     <div class="tb-vss-meta" id="ssmeta"></div>
+    <div id="ss-gallery" class="tb-vss-gallery" style="display:none"></div>
     <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
       <img id="hover-thumb-img" alt="" />
       <div id="hover-thumb-time"></div>
@@ -15395,6 +7718,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 :root[data-compact="1"] .tb-vright { display: none !important; }
 :root[data-compact="1"] .tb-vpreview img,
 :root[data-compact="1"] .tb-vpreview video { max-height: 75vh; }
+
+/* \u2500\u2500 Screenshot gallery (shown when there's no video) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+.tb-vss-gallery { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.tb-vss-thumb { position: relative; padding: 0; border: 2px solid var(--tb-border); border-radius: var(--tb-radius-sm); overflow: hidden; cursor: pointer; background: var(--tb-bg); width: 150px; height: 96px; transition: border-color .12s, transform .12s; }
+.tb-vss-thumb:hover { transform: translateY(-1px); }
+.tb-vss-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tb-vss-thumb span { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.72); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 4px; }
+.tb-vss-thumb.active { border-color: var(--tb-accent, #7C5CFF); }
 
 /* \u2500\u2500 Hover thumbnail on scrubber \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 .tb-vhover-thumb { position: fixed; pointer-events: none; z-index: 50; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 4px; box-shadow: var(--tb-shadow-md); }
@@ -15895,10 +8226,43 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   } else if (screenshots.length > 0) {
     img.src = screenshots[0].dataUrl;
+    img.style.display = "block";
     ssMeta.textContent = screenshots[0].filename + " \xB7 " + new Date(screenshots[0].timestamp).toLocaleTimeString();
   } else {
     img.style.display = "none";
     emptyMsg.style.display = "block";
+  }
+
+  // Screenshot gallery \u2014 with no video, show ALL screenshots as clickable
+  // thumbnails and hide the scrubber. For a screenshots-only report the
+  // timeline just spans the minutes between captures, which isn't useful;
+  // the user wants to browse the shots. Clicking a thumb shows it full-size.
+  var ssGallery = document.getElementById("ss-gallery");
+  if (!hasVideo && screenshots.length > 0 && ssGallery) {
+    for (var gi = 0; gi < screenshots.length; gi++) {
+      (function (s, idx) {
+        var t = document.createElement("button");
+        t.className = "tb-vss-thumb" + (idx === 0 ? " active" : "");
+        t.type = "button";
+        var im = document.createElement("img");
+        im.src = s.dataUrl; im.alt = "Screenshot " + (idx + 1);
+        var num = document.createElement("span");
+        num.textContent = String(idx + 1);
+        t.appendChild(im); t.appendChild(num);
+        t.addEventListener("click", function () {
+          img.src = s.dataUrl;
+          img.style.display = "block";
+          if (ssMeta) ssMeta.textContent = s.filename + " \xB7 " + new Date(s.timestamp).toLocaleTimeString();
+          var all = ssGallery.querySelectorAll(".tb-vss-thumb");
+          for (var k = 0; k < all.length; k++) all[k].classList.remove("active");
+          t.classList.add("active");
+        });
+        ssGallery.appendChild(t);
+      })(screenshots[gi], gi);
+    }
+    ssGallery.style.display = "flex";
+    var scEl = document.getElementById("scrubber");
+    if (scEl) scEl.style.display = "none";
   }
 
   // Decode the base64 data URL into a Blob URL only when the user actually
@@ -16434,8 +8798,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     function pushStorageRows(label, entries, droppedAtCapture) {
       if (!entries || entries.length === 0) return;
       const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
-      for (const e2 of shown) {
-        info.push({ k: `${label} \xB7 ${e2.key}`, v: e2.redacted ? `\u{1F512} ${e2.value}` : e2.value, i: "\u{1F5C4}" });
+      for (const e of shown) {
+        info.push({ k: `${label} \xB7 ${e.key}`, v: e.redacted ? `\u{1F512} ${e.value}` : e.value, i: "\u{1F5C4}" });
       }
       const hiddenForDisplay = entries.length - shown.length;
       const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
@@ -16468,21 +8832,21 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       })),
       video: videoPayload,
       info,
-      consoleErrors: report.consoleErrors.map((e2) => ({
-        message: e2.message,
-        stack: e2.stack,
-        timestamp: e2.timestamp
+      consoleErrors: report.consoleErrors.map((e) => ({
+        message: e.message,
+        stack: e.stack,
+        timestamp: e.timestamp
       })),
       consoleLogs: report.consoleLogs ? report.consoleLogs.slice() : void 0,
       networkErrors: report.networkErrors.slice(),
       networkRequests: (report.networkRequests || report.networkErrors).slice(),
       actions: report.sessionSteps.slice(),
       actionChips: (report.actionChips || []).slice(),
-      annotations: (report.annotations || []).map((a2) => ({
-        severity: a2.severity,
-        text: a2.text,
-        expected: a2.expected,
-        actual: a2.actual
+      annotations: (report.annotations || []).map((a) => ({
+        severity: a.severity,
+        text: a.text,
+        expected: a.expected,
+        actual: a.actual
       })),
       rootCauseHint: report.rootCause ? {
         hint: report.rootCause.hint,
@@ -16498,30 +8862,30 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     return `tracebug-replay-${sessionId.slice(0, 8)}-${stamp}.html`;
   }
   function triggerDownload(url, filename) {
-    const a2 = document.createElement("a");
-    a2.href = url;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     setTimeout(() => {
       try {
         URL.revokeObjectURL(url);
-      } catch (e2) {
+      } catch (e) {
       }
     }, 3e4);
   }
   function formatEnv(report) {
-    const e2 = report.environment;
-    if (!e2) return "";
-    return `${e2.browser} ${e2.browserVersion} \xB7 ${e2.os} \xB7 ${e2.viewport}`;
+    const e = report.environment;
+    if (!e) return "";
+    return `${e.browser} ${e.browserVersion} \xB7 ${e.os} \xB7 ${e.viewport}`;
   }
   function estimateDuration(session, report) {
     if (report.video && report.video.durationMs > 0) {
       return report.video.durationMs;
     }
     const tss = [];
-    for (const e2 of session.events) tss.push(e2.timestamp);
+    for (const e of session.events) tss.push(e.timestamp);
     for (const s of report.screenshots) tss.push(s.timestamp);
     if (tss.length === 0) return 0;
     const span = Math.max(...tss) - Math.min(...tss);
@@ -16540,7 +8904,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         reader.readAsDataURL(blob);
         reader.onloadend = () => resolve(restore(typeof reader.result === "string" ? reader.result : ""));
       });
-    } catch (e2) {
+    } catch (e) {
       return null;
     }
   }
@@ -16562,18 +8926,18 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (typeof url !== "string" || url.length === 0) return url;
     try {
       const isAbs = /^[a-z][a-z0-9+.-]*:/i.test(url);
-      const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
+      const u = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
       let changed = false;
-      u2.searchParams.forEach((_v, k) => {
+      u.searchParams.forEach((_v, k) => {
         if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) {
-          u2.searchParams.set(k, REDACTED);
+          u.searchParams.set(k, REDACTED);
           changed = true;
         }
       });
       if (!changed) return sanitizeText(url);
-      const out = isAbs ? u2.toString() : u2.pathname + u2.search + u2.hash;
+      const out = isAbs ? u.toString() : u.pathname + u.search + u.hash;
       return sanitizeText(out);
-    } catch (e2) {
+    } catch (e) {
       return sanitizeText(url);
     }
   }
@@ -16587,42 +8951,42 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     var _a;
     const out = structuredClone(report);
     if (out.consoleErrors) {
-      out.consoleErrors = out.consoleErrors.map((e2) => {
+      out.consoleErrors = out.consoleErrors.map((e) => {
         var _a2;
         return {
-          ...e2,
-          message: sanitizeText(e2.message),
-          stack: sanitizeText((_a2 = e2.stack) != null ? _a2 : void 0)
+          ...e,
+          message: sanitizeText(e.message),
+          stack: sanitizeText((_a2 = e.stack) != null ? _a2 : void 0)
         };
       });
     }
     if (out.consoleLogs) {
-      out.consoleLogs = out.consoleLogs.map((e2) => {
+      out.consoleLogs = out.consoleLogs.map((e) => {
         var _a2;
         return {
-          ...e2,
-          message: sanitizeText(e2.message),
-          stack: sanitizeText((_a2 = e2.stack) != null ? _a2 : void 0)
+          ...e,
+          message: sanitizeText(e.message),
+          stack: sanitizeText((_a2 = e.stack) != null ? _a2 : void 0)
         };
       });
     }
     if (out.networkErrors) {
-      out.networkErrors = out.networkErrors.map((e2) => {
+      out.networkErrors = out.networkErrors.map((e) => {
         var _a2;
         return {
-          ...e2,
-          url: sanitizeUrl2(e2.url),
-          response: sanitizeText((_a2 = e2.response) != null ? _a2 : void 0)
+          ...e,
+          url: sanitizeUrl2(e.url),
+          response: sanitizeText((_a2 = e.response) != null ? _a2 : void 0)
         };
       });
     }
     if (out.networkRequests) {
-      out.networkRequests = out.networkRequests.map((e2) => {
+      out.networkRequests = out.networkRequests.map((e) => {
         var _a2;
         return {
-          ...e2,
-          url: sanitizeUrl2(e2.url),
-          response: sanitizeText((_a2 = e2.response) != null ? _a2 : void 0)
+          ...e,
+          url: sanitizeUrl2(e.url),
+          response: sanitizeText((_a2 = e.response) != null ? _a2 : void 0)
         };
       });
     }
@@ -16641,7 +9005,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       });
     }
     if (out.storage) {
-      const scrub = (entries) => entries.map((e2) => ({ ...e2, value: sanitizeText(e2.value) }));
+      const scrub = (entries) => entries.map((e) => ({ ...e, value: sanitizeText(e.value) }));
       out.storage.local = scrub(out.storage.local || []);
       out.storage.session = scrub(out.storage.session || []);
     }
@@ -16765,10 +9129,10 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
             iframe.style.opacity = "0";
             iframe.title = "TraceBug auth bridge";
             this.iframe = iframe;
-            const onReady = (e2) => {
+            const onReady = (e) => {
               var _a;
-              if (e2.origin !== this.origin) return;
-              if (((_a = e2.data) == null ? void 0 : _a.type) === "tracebug:bridge-ready") {
+              if (e.origin !== this.origin) return;
+              if (((_a = e.data) == null ? void 0 : _a.type) === "tracebug:bridge-ready") {
                 window.removeEventListener("message", onReady);
                 resolve();
               }
@@ -16778,9 +9142,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           });
           return this.readyPromise;
         }
-        onMessage(e2) {
-          if (e2.origin !== this.origin) return;
-          const d = e2.data;
+        onMessage(e) {
+          if (e.origin !== this.origin) return;
+          const d = e.data;
           if (!d || typeof d !== "object") return;
           if (d.type === "tracebug:auth-changed") {
             const authed = !!d.authed;
@@ -16917,7 +9281,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       try {
         const dataUrl = await captureVideoFrame(report.video.dataUrl);
         if (dataUrl) return dataUrl;
-      } catch (e2) {
+      } catch (e) {
       }
     }
     if (report.screenshots && report.screenshots.length > 0) {
@@ -16925,7 +9289,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       if (src && src.startsWith("data:")) {
         try {
           return await downscaleImage(src);
-        } catch (e2) {
+        } catch (e) {
           return null;
         }
       }
@@ -16943,7 +9307,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         try {
           video.removeAttribute("src");
           video.load();
-        } catch (e2) {
+        } catch (e) {
         }
       };
       let settled = false;
@@ -16958,7 +9322,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         const target = Math.min(1, Math.max(0, (video.duration || 0) * 0.1));
         try {
           video.currentTime = target;
-        } catch (e2) {
+        } catch (e) {
           finish(null);
         }
       };
@@ -16977,7 +9341,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           ctx.drawImage(video, sx, sy, sw, sh, 0, 0, THUMB_W, THUMB_H);
           clearTimeout(timer);
           finish(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
-        } catch (e2) {
+        } catch (e) {
           clearTimeout(timer);
           finish(null);
         }
@@ -17001,7 +9365,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           const { sx, sy, sw, sh } = fitCover(img.naturalWidth, img.naturalHeight);
           ctx.drawImage(img, sx, sy, sw, sh, 0, 0, THUMB_W, THUMB_H);
           resolve(canvas.toDataURL("image/jpeg", THUMB_QUALITY));
-        } catch (e2) {
+        } catch (e) {
           resolve(null);
         }
       };
@@ -17067,7 +9431,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     let thumbnail = null;
     try {
       thumbnail = await generateThumbnail(safe);
-    } catch (e2) {
+    } catch (e) {
       thumbnail = null;
     }
     const bridge = getBridge(cloudEndpoint);
@@ -17140,10 +9504,10 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (dedupedConsole.length > 0) {
       lines.push(`
 ## Console errors (${dedupedConsole.length}${(((_b = report.consoleErrors) == null ? void 0 : _b.length) || 0) > dedupedConsole.length ? `, of ${report.consoleErrors.length} total \u2014 dedup'd` : ""})`);
-      dedupedConsole.forEach((e2, i) => {
-        lines.push(`${i + 1}. ${truncate3(e2.message, MAX_LINE)}`);
-        if (e2.stack) {
-          const stackLines = String(e2.stack).split("\n").slice(0, 4).map((l) => `   ${truncate3(l.trim(), MAX_LINE)}`).join("\n");
+      dedupedConsole.forEach((e, i) => {
+        lines.push(`${i + 1}. ${truncate3(e.message, MAX_LINE)}`);
+        if (e.stack) {
+          const stackLines = String(e.stack).split("\n").slice(0, 4).map((l) => `   ${truncate3(l.trim(), MAX_LINE)}`).join("\n");
           if (stackLines) lines.push(stackLines);
         }
       });
@@ -17156,9 +9520,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 ## Network`);
       if (failures.length > 0) {
         lines.push(`**Failures:**`);
-        failures.forEach((f2) => {
-          const responseBit = f2.response ? ` \u2014 ${truncate3(f2.response, 120).replace(/\n/g, " ")}` : "";
-          lines.push(`- ${f2.method} ${truncate3(f2.url, 120)} \u2192 ${f2.status}${responseBit}`);
+        failures.forEach((f) => {
+          const responseBit = f.response ? ` \u2014 ${truncate3(f.response, 120).replace(/\n/g, " ")}` : "";
+          lines.push(`- ${f.method} ${truncate3(f.url, 120)} \u2192 ${f.status}${responseBit}`);
         });
       }
       if (recentSuccess.length > 0) {
@@ -17172,8 +9536,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (actions.length > 0) {
       lines.push(`
 ## Last ${actions.length} user actions`);
-      actions.forEach((a2, i) => {
-        lines.push(`${i + 1}. ${truncate3(a2, MAX_LINE)}`);
+      actions.forEach((a, i) => {
+        lines.push(`${i + 1}. ${truncate3(a, MAX_LINE)}`);
       });
     }
     const ctxBits = [];
@@ -17380,9 +9744,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         overlay.remove();
         resolve(result);
       }
-      card.addEventListener("click", (e2) => {
+      card.addEventListener("click", (e) => {
         var _a2;
-        const tgt = e2.target;
+        const tgt = e.target;
         const tile = tgt.closest(".tb-trim-tile");
         if (tile) {
           const id = tile.dataset.id || "";
@@ -17400,11 +9764,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           close(chosen);
         }
       });
-      overlay.addEventListener("click", (e2) => {
-        if (e2.target === overlay) close(null);
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) close(null);
       });
-      const onKey = (e2) => {
-        if (e2.key === "Escape") {
+      const onKey = (e) => {
+        if (e.key === "Escape") {
           document.removeEventListener("keydown", onKey);
           close(null);
         }
@@ -17786,14 +10150,14 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     try {
       const v = localStorage.getItem(THEME_PREF_KEY);
       if (v === "light" || v === "dark" || v === "auto") return v;
-    } catch (e2) {
+    } catch (e) {
     }
     return "auto";
   }
   function _saveThemePref(mode) {
     try {
       localStorage.setItem(THEME_PREF_KEY, mode);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function _themeIcon() {
@@ -17831,9 +10195,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (!getLastVideoRecording()) {
         await restoreLastRecordingFromOffscreen();
       }
-    } catch (e2) {
+    } catch (e) {
     }
-    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const currentSession = (options == null ? void 0 : options.sessionId) ? sessions.find((s) => s.sessionId === options.sessionId) || sessions[0] || null : sessions[0] || null;
     const screenshots2 = getScreenshots();
     const draft = _loadDraft();
@@ -17845,7 +10209,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     if (currentSession) {
       try {
         report = buildReport(currentSession);
-      } catch (e2) {
+      } catch (e) {
       }
     }
     const severity = (_c = report == null ? void 0 : report.severity) != null ? _c : "low";
@@ -17882,7 +10246,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           return `- ${n.method} ${n.url.slice(0, 60)} \u2192 ${status}${snippet}`;
         });
       }
-    } catch (e2) {
+    } catch (e) {
     }
     const lines = [];
     if (rootCauseLine) {
@@ -18151,10 +10515,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       }
       const extraMarkers = [];
       try {
-        for (const a2 of getElementAnnotations()) extraMarkers.push({ timestamp: a2.timestamp, kind: "annotation", label: a2.comment ? `Note: ${a2.comment.slice(0, 40)}` : "Annotation added" });
+        for (const a of getElementAnnotations()) extraMarkers.push({ timestamp: a.timestamp, kind: "annotation", label: a.comment ? `Note: ${a.comment.slice(0, 40)}` : "Annotation added" });
         for (const d of getDrawRegions()) extraMarkers.push({ timestamp: d.timestamp, kind: d.shape === "redact" ? "blur" : "annotation", label: d.shape === "redact" ? "Redaction added" : "Marking added" });
         for (const b of getBlurEvents()) extraMarkers.push({ timestamp: b.timestamp, kind: "blur", label: "Blur added" });
-      } catch (e2) {
+      } catch (e) {
       }
       _scrubberCtl = mountReplayScrubber(scrubberHost, {
         timeline: data.timeline,
@@ -18182,8 +10546,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       });
     }
     const conPanelForClicks = modal.querySelector('[data-panel="console"]');
-    conPanelForClicks == null ? void 0 : conPanelForClicks.addEventListener("click", (e2) => {
-      const row = e2.target.closest(".tb-qb-feed-row");
+    conPanelForClicks == null ? void 0 : conPanelForClicks.addEventListener("click", (e) => {
+      const row = e.target.closest(".tb-qb-feed-row");
       if (!row || !_scrubberCtl) return;
       const ts = Number(row.dataset.ts);
       if (!Number.isFinite(ts)) return;
@@ -18215,17 +10579,17 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (k) document.removeEventListener("keydown", k);
     };
     modal.querySelector('[data-action="close"]').addEventListener("click", close);
-    overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) close();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
     });
     (_p = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _p.addEventListener("click", () => {
       _cycleTheme();
       const btn = modal.querySelector('[data-action="theme-toggle"]');
       if (btn) btn.innerHTML = _themeIcon();
     });
-    (_q = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _q.addEventListener("change", (e2) => {
+    (_q = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _q.addEventListener("change", (e) => {
       var _a2, _b2;
-      const val = e2.target.value;
+      const val = e.target.value;
       const sid = (_a2 = data.currentSession) == null ? void 0 : _a2.sessionId;
       if (sid) setSessionPriority(sid, val);
       if (data.report) data.report.priority = val;
@@ -18240,8 +10604,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     };
     (_r = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _r.addEventListener("click", () => toggleHelp());
     (_s = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _s.addEventListener("click", () => toggleHelp(false));
-    helpEl == null ? void 0 : helpEl.addEventListener("click", (e2) => {
-      if (e2.target === helpEl) toggleHelp(false);
+    helpEl == null ? void 0 : helpEl.addEventListener("click", (e) => {
+      if (e.target === helpEl) toggleHelp(false);
     });
     const isTypingTarget = (t) => {
       if (!t || !t.tagName) return false;
@@ -18253,47 +10617,47 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (btn) btn.click();
     };
     const TAB_ORDER = ["info", "actions", "console", "network", "ai", "annotations"];
-    const modalKeyHandler = (e2) => {
+    const modalKeyHandler = (e) => {
       if (helpEl && helpEl.style.display !== "none") {
-        if (e2.key === "Escape" || e2.key === "?") {
-          e2.preventDefault();
+        if (e.key === "Escape" || e.key === "?") {
+          e.preventDefault();
           toggleHelp(false);
         }
         return;
       }
-      if (isTypingTarget(e2.target)) return;
-      if (e2.key === "?" || e2.shiftKey && e2.key === "/") {
-        e2.preventDefault();
+      if (isTypingTarget(e.target)) return;
+      if (e.key === "?" || e.shiftKey && e.key === "/") {
+        e.preventDefault();
         toggleHelp(true);
         return;
       }
-      if (e2.key === "t" || e2.key === "T") {
-        e2.preventDefault();
+      if (e.key === "t" || e.key === "T") {
+        e.preventDefault();
         _cycleTheme();
         const btn = modal.querySelector('[data-action="theme-toggle"]');
         if (btn) btn.innerHTML = _themeIcon();
         return;
       }
-      const n = parseInt(e2.key, 10);
+      const n = parseInt(e.key, 10);
       if (!isNaN(n) && n >= 1 && n <= TAB_ORDER.length) {
-        e2.preventDefault();
+        e.preventDefault();
         switchTab(TAB_ORDER[n - 1]);
         return;
       }
-      if (e2.key === " " || e2.code === "Space" || e2.key === "ArrowLeft" || e2.key === "ArrowRight" || e2.key === "ArrowUp" || e2.key === "ArrowDown") {
+      if (e.key === " " || e.code === "Space" || e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
         const scrubberRoot = modal.querySelector(".tb-rs-root");
         if (scrubberRoot && document.activeElement !== scrubberRoot) {
           scrubberRoot.focus();
-          const cloned = new KeyboardEvent("keydown", { key: e2.key, code: e2.code, bubbles: true });
+          const cloned = new KeyboardEvent("keydown", { key: e.key, code: e.code, bubbles: true });
           scrubberRoot.dispatchEvent(cloned);
-          e2.preventDefault();
+          e.preventDefault();
         }
       }
     };
     document.addEventListener("keydown", modalKeyHandler);
     overlay.__tbModalKey = modalKeyHandler;
-    const escHandler = (e2) => {
-      if (e2.key === "Escape") close();
+    const escHandler = (e) => {
+      if (e.key === "Escape") close();
     };
     document.addEventListener("keydown", escHandler);
     overlay.__tbEscKey = escHandler;
@@ -18301,7 +10665,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     if (openGhBtn && _githubRepo) {
       openGhBtn.addEventListener("click", () => {
         const { title, description } = getDraft();
-        const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+        const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
         const session = sessions[0];
         const report = session ? buildReport(session) : null;
         if (!report) {
@@ -18347,7 +10711,7 @@ ${report.steps}` });
         return;
       }
       const { title, description } = getDraft();
-      const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
       const session = sessions[0];
       let text = `Summary: ${title}
 
@@ -18381,13 +10745,13 @@ ${description}`;
         moreMenu.dataset.open = open ? "true" : "false";
         moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
       };
-      moreBtn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+      moreBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         setMoreOpen(moreMenu.dataset.open !== "true");
       });
       moreMenu.addEventListener("click", () => setMoreOpen(false));
-      modal.addEventListener("click", (e2) => {
-        if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
+      modal.addEventListener("click", (e) => {
+        if (moreMenu.dataset.open === "true" && !moreMenu.contains(e.target) && e.target !== moreBtn) setMoreOpen(false);
       });
     }
     (_t = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _t.addEventListener("click", async () => {
@@ -18399,7 +10763,7 @@ ${description}`;
       try {
         try {
           await restoreLastRecordingFromOffscreen();
-        } catch (e2) {
+        } catch (e) {
         }
         const report = buildReport(data.currentSession);
         const result = await exportSessionAsHtml(data.currentSession, report);
@@ -18444,7 +10808,7 @@ ${description}`;
       try {
         try {
           await restoreLastRecordingFromOffscreen();
-        } catch (e2) {
+        } catch (e) {
         }
         const bridge = getBridge(_cloudEndpoint);
         const auth = await bridge.checkAuth();
@@ -18476,14 +10840,14 @@ ${description}`;
         );
         try {
           await navigator.clipboard.writeText(result.shareUrl);
-        } catch (e2) {
+        } catch (e) {
         }
         const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 Link copied \xB7 ${sizeMb} MB \xB7 Opening\u2026`, root);
         resetBtn();
         try {
           window.open(result.shareUrl, "_blank", "noopener,noreferrer");
-        } catch (e2) {
+        } catch (e) {
         }
         return;
       } catch (err) {
@@ -18503,7 +10867,7 @@ ${description}`;
         }
       }
     });
-    (_u = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _u.addEventListener("click", (e2) => {
+    (_u = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _u.addEventListener("click", (e) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root);
         return;
@@ -18515,14 +10879,14 @@ ${description}`;
         try {
           navigator.clipboard.writeText(prompt);
           copied = true;
-        } catch (e3) {
+        } catch (e2) {
         }
         const sizeKb = (prompt.length / 1024).toFixed(1);
         showToast(
           copied ? `\u2713 AI prompt copied \xB7 ${sizeKb} KB \xB7 pick an AI \u2193` : `AI prompt ready \xB7 pick an AI \u2193`,
           root
         );
-        showAIPromptPopover(e2.currentTarget, prompt, root);
+        showAIPromptPopover(e.currentTarget, prompt, root);
       } catch (err) {
         console.warn("[TraceBug] AI prompt generation failed:", err);
         showToast("AI prompt failed \u2014 check console", root);
@@ -18606,7 +10970,7 @@ ${description}`;
     }
     modal.querySelector('[data-action="linear"]').addEventListener("click", () => {
       const { title, description } = getDraft();
-      const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
       const session = sessions[0];
       const r = session ? buildReport(session) : null;
       if (!r) {
@@ -18632,7 +10996,7 @@ ${r.steps}` });
     });
     modal.querySelector('[data-action="slack"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
-      const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
       const session = sessions[0];
       const r = session ? buildReport(session) : null;
       if (!r) {
@@ -18684,8 +11048,8 @@ ${r.steps}` });
       }
     });
     modal.querySelectorAll("[data-delete-screenshot]").forEach((btn) => {
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const id = btn.dataset.deleteScreenshot;
         if (!id) return;
         removeScreenshot(id);
@@ -18707,7 +11071,7 @@ ${r.steps}` });
       let captured = null;
       try {
         captured = await captureRegionScreenshot();
-      } catch (e2) {
+      } catch (e) {
       } finally {
         modal.style.display = prevModal;
         overlay.style.display = prevOverlay;
@@ -18726,7 +11090,7 @@ ${r.steps}` });
       if (!v.paused) {
         try {
           v.pause();
-        } catch (e2) {
+        } catch (e) {
         }
       }
       if (!v.videoWidth || !v.videoHeight) {
@@ -18758,7 +11122,7 @@ ${r.steps}` });
         showToast(`\u2713 Frame at ${mm}:${ss2} added`, root);
         refreshQuickBugCapture(root).catch(() => {
         });
-      } catch (e2) {
+      } catch (e) {
         showToast("Couldn't grab that frame", root);
       }
     });
@@ -18799,7 +11163,7 @@ ${r.steps}` });
     return `tracebug-recording-${stamp}.${ext}`;
   }
   function _buildGitHubMarkdown(title, description, screenshot) {
-    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0];
     if (session) {
       const report = buildReport(session);
@@ -18826,7 +11190,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         await navigator.clipboard.writeText(text);
         return true;
       }
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       const ta = document.createElement("textarea");
@@ -18837,7 +11201,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const ok = document.execCommand("copy");
       document.body.removeChild(ta);
       return ok;
-    } catch (e2) {
+    } catch (e) {
       return false;
     }
   }
@@ -18848,26 +11212,26 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const draft = JSON.parse(raw);
       if (Date.now() - draft.timestamp > 36e5) return null;
       return draft;
-    } catch (e2) {
+    } catch (e) {
       return null;
     }
   }
   function _saveDraft(draft) {
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function _clearDraft() {
     try {
       localStorage.removeItem(DRAFT_KEY);
-    } catch (e2) {
+    } catch (e) {
     }
   }
   function _getElementAnnotationCount() {
     try {
       return getElementAnnotations().length + getDrawRegions().length;
-    } catch (e2) {
+    } catch (e) {
       return 0;
     }
   }
@@ -18939,8 +11303,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (!entries || entries.length === 0) return;
         rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
         const shown = entries.slice(0, 20);
-        for (const e2 of shown) {
-          rows.push(_kvRow(e2.key, e2.redacted ? `\u{1F512} ${e2.value}` : e2.value, "\u{1F5C4}"));
+        for (const e of shown) {
+          rows.push(_kvRow(e.key, e.redacted ? `\u{1F512} ${e.value}` : e.value, "\u{1F5C4}"));
         }
         if (entries.length > shown.length) {
           rows.push(_kvRow("\u2026", `+${entries.length - shown.length} more`, "\u{1F5C4}"));
@@ -19041,15 +11405,15 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       });
     }
     if (!((_e = report.consoleLogs) == null ? void 0 : _e.length) && ((_f = report.consoleErrors) == null ? void 0 : _f.length)) {
-      for (const e2 of report.consoleErrors) {
+      for (const e of report.consoleErrors) {
         feed.push({
-          timestamp: e2.timestamp,
-          elapsedMs: e2.timestamp - startTs,
+          timestamp: e.timestamp,
+          elapsedMs: e.timestamp - startTs,
           cat: "console",
           level: "error",
           icon: CON_ICONS.console,
-          message: e2.message,
-          stack: e2.stack
+          message: e.message,
+          stack: e.stack
         });
       }
     }
@@ -19073,7 +11437,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         message: "Video stopped"
       });
     }
-    feed.sort((a2, b) => a2.timestamp - b.timestamp);
+    feed.sort((a, b) => a.timestamp - b.timestamp);
     return feed;
   }
   function _buildConsoleTab(report) {
@@ -19082,21 +11446,21 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       return `<div class="tb-qb-empty">No console output recorded this session</div>`;
     }
     const counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
-    for (const e2 of feed) counts[e2.cat] = (counts[e2.cat] || 0) + 1;
+    for (const e of feed) counts[e.cat] = (counts[e.cat] || 0) + 1;
     const pill = (key, label) => {
       const c = counts[key] || 0;
       if (key !== "all" && c === 0) return "";
       return `<button class="tb-qb-feed-pill${key === "all" ? " tb-qb-feed-pill-active" : ""}" data-cat="${key}">${label}${c > 0 ? `<span class="tb-qb-feed-pill-n">${c}</span>` : ""}</button>`;
     };
-    const rows = feed.map((e2) => {
-      const hay = `${e2.message} ${e2.detail || ""} ${e2.stack || ""}`.toLowerCase();
-      const isErr = e2.cat === "network-error" || e2.level === "error";
-      const stackHtml = e2.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml2(e2.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
-      return `<div class="tb-qb-feed-row tb-qb-feed-${e2.cat}${isErr ? " tb-qb-feed-err" : ""}${e2.level ? " tb-qb-feed-lvl-" + e2.level : ""}" data-cat="${e2.cat}" data-level="${e2.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e2.timestamp}" data-search="${escapeHtml2(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
-      <span class="tb-qb-feed-time">${_formatFeedElapsed(e2.elapsedMs)}</span>
-      <span class="tb-qb-feed-icon" aria-hidden="true">${e2.icon}</span>
+    const rows = feed.map((e) => {
+      const hay = `${e.message} ${e.detail || ""} ${e.stack || ""}`.toLowerCase();
+      const isErr = e.cat === "network-error" || e.level === "error";
+      const stackHtml = e.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml2(e.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
+      return `<div class="tb-qb-feed-row tb-qb-feed-${e.cat}${isErr ? " tb-qb-feed-err" : ""}${e.level ? " tb-qb-feed-lvl-" + e.level : ""}" data-cat="${e.cat}" data-level="${e.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e.timestamp}" data-search="${escapeHtml2(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
+      <span class="tb-qb-feed-time">${_formatFeedElapsed(e.elapsedMs)}</span>
+      <span class="tb-qb-feed-icon" aria-hidden="true">${e.icon}</span>
       <span class="tb-qb-feed-body">
-        <span class="tb-qb-feed-msg">${escapeHtml2(e2.message)}</span>
+        <span class="tb-qb-feed-msg">${escapeHtml2(e.message)}</span>
         ${stackHtml}
       </span>
     </div>`;
@@ -19123,7 +11487,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     let pathname = url;
     try {
       pathname = new URL(url, "http://_").pathname;
-    } catch (e2) {
+    } catch (e) {
     }
     const ext = (pathname.toLowerCase().split(".").pop() || "").split("?")[0];
     if (["js", "mjs", "cjs"].includes(ext)) return "js";
@@ -19136,16 +11500,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function _extractDomain(url) {
     try {
       return new URL(url, "http://_").hostname;
-    } catch (e2) {
+    } catch (e) {
     }
     return "";
   }
   function _shortName(url) {
     try {
-      const u2 = new URL(url, "http://_");
-      const parts = u2.pathname.split("/").filter(Boolean);
-      return parts[parts.length - 1] || u2.hostname;
-    } catch (e2) {
+      const u = new URL(url, "http://_");
+      const parts = u.pathname.split("/").filter(Boolean);
+      return parts[parts.length - 1] || u.hostname;
+    } catch (e) {
       return url.split("/").filter(Boolean).pop() || url;
     }
   }
@@ -19248,9 +11612,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   </div>`;
   }
   function _renderElementPreview(el) {
-    const attrsHtml = el.attrs.map((a2) => {
-      if (a2.value === "") return `<span class="tb-qb-el-attr-name">${escapeHtml2(a2.name)}</span>`;
-      return `<span class="tb-qb-el-attr-name">${escapeHtml2(a2.name)}</span>=<span class="tb-qb-el-attr-val">"${escapeHtml2(a2.value)}"</span>`;
+    const attrsHtml = el.attrs.map((a) => {
+      if (a.value === "") return `<span class="tb-qb-el-attr-name">${escapeHtml2(a.name)}</span>`;
+      return `<span class="tb-qb-el-attr-name">${escapeHtml2(a.name)}</span>=<span class="tb-qb-el-attr-val">"${escapeHtml2(a.value)}"</span>`;
     }).join(" ");
     const more = el.moreCount > 0 ? ` <span class="tb-qb-el-more">+${el.moreCount} more</span>` : "";
     return `<span class="tb-qb-el">&lt;<span class="tb-qb-el-tag">${escapeHtml2(el.tag)}</span>${attrsHtml ? " " : ""}${attrsHtml}${more}&gt;</span>`;
@@ -19260,7 +11624,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const hasKey = (() => {
       try {
         return !!localStorage.getItem("tracebug_ai_key");
-      } catch (e2) {
+      } catch (e) {
         return false;
       }
     })();
@@ -19293,33 +11657,33 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     let regions = [];
     try {
       els = getElementAnnotations();
-    } catch (e2) {
+    } catch (e) {
     }
     try {
       regions = getDrawRegions();
-    } catch (e2) {
+    } catch (e) {
     }
     if (sessAnn.length === 0 && els.length === 0 && regions.length === 0) {
       return `<div class="tb-qb-empty">No notes yet \u2014 use the toolbar to add annotations, comments, or draw markup</div>`;
     }
     const sessHtml = sessAnn.length > 0 ? `
     <div class="tb-qb-sec-head">Comments (${sessAnn.length})</div>
-    ${sessAnn.map((a2) => `
-      <div class="tb-qb-note tb-qb-note-${a2.severity}">
-        <div class="tb-qb-note-sev">${escapeHtml2(a2.severity)}</div>
-        <div class="tb-qb-note-text">${escapeHtml2(a2.text || "")}</div>
-        ${a2.expected ? `<div class="tb-qb-note-line"><strong>Expected:</strong> ${escapeHtml2(a2.expected)}</div>` : ""}
-        ${a2.actual ? `<div class="tb-qb-note-line"><strong>Actual:</strong> ${escapeHtml2(a2.actual)}</div>` : ""}
+    ${sessAnn.map((a) => `
+      <div class="tb-qb-note tb-qb-note-${a.severity}">
+        <div class="tb-qb-note-sev">${escapeHtml2(a.severity)}</div>
+        <div class="tb-qb-note-text">${escapeHtml2(a.text || "")}</div>
+        ${a.expected ? `<div class="tb-qb-note-line"><strong>Expected:</strong> ${escapeHtml2(a.expected)}</div>` : ""}
+        ${a.actual ? `<div class="tb-qb-note-line"><strong>Actual:</strong> ${escapeHtml2(a.actual)}</div>` : ""}
       </div>
     `).join("")}
   ` : "";
     const elHtml = els.length > 0 ? `
     <div class="tb-qb-sec-head">Element markup (${els.length})</div>
-    ${els.map((e2) => `
-      <div class="tb-qb-note tb-qb-note-${e2.severity}">
-        <div class="tb-qb-note-sev">${escapeHtml2(e2.intent)} \xB7 ${escapeHtml2(e2.severity)}</div>
-        <div class="tb-qb-note-text">${escapeHtml2(e2.comment || "")}</div>
-        <div class="tb-qb-note-line"><code>${escapeHtml2(e2.selector)}</code> \u2014 ${escapeHtml2((e2.innerText || "").slice(0, 60))}</div>
+    ${els.map((e) => `
+      <div class="tb-qb-note tb-qb-note-${e.severity}">
+        <div class="tb-qb-note-sev">${escapeHtml2(e.intent)} \xB7 ${escapeHtml2(e.severity)}</div>
+        <div class="tb-qb-note-text">${escapeHtml2(e.comment || "")}</div>
+        <div class="tb-qb-note-line"><code>${escapeHtml2(e.selector)}</code> \u2014 ${escapeHtml2((e.innerText || "").slice(0, 60))}</div>
       </div>
     `).join("")}
   ` : "";
@@ -19752,9 +12116,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         b.style.filter = "";
       });
     });
-    overlay.addEventListener("click", (e2) => {
+    overlay.addEventListener("click", (e) => {
       var _a2;
-      const target = e2.target;
+      const target = e.target;
       const action = (_a2 = target.closest("[data-ai-action]")) == null ? void 0 : _a2.getAttribute("data-ai-action");
       if (action === "claude") {
         openInClaude(prompt);
@@ -19765,7 +12129,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       } else if (action === "copy") {
         try {
           navigator.clipboard.writeText(prompt);
-        } catch (e3) {
+        } catch (e2) {
         }
         const btn = target.closest("button");
         if (btn) {
@@ -19776,8 +12140,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       } else if (action === "close" || target === overlay) close();
     });
-    const onKey = (e2) => {
-      if (e2.key === "Escape") close();
+    const onKey = (e) => {
+      if (e.key === "Escape") close();
     };
     function close() {
       overlay.remove();
@@ -19790,7 +12154,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       var _a;
       try {
         if (localStorage.getItem(CONSENT_KEY) === "ack") return resolve(true);
-      } catch (e2) {
+      } catch (e) {
       }
       (_a = document.getElementById("tb-share-consent")) == null ? void 0 : _a.remove();
       const overlay = document.createElement("div");
@@ -19860,7 +12224,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           if (dontShow) {
             try {
               localStorage.setItem(CONSENT_KEY, "ack");
-            } catch (e2) {
+            } catch (e) {
             }
           }
         }
@@ -19868,17 +12232,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         document.removeEventListener("keydown", onKey);
         resolve(ok);
       };
-      card.addEventListener("click", (e2) => {
+      card.addEventListener("click", (e) => {
         var _a2;
-        const act = (_a2 = e2.target.closest("[data-act]")) == null ? void 0 : _a2.getAttribute("data-act");
+        const act = (_a2 = e.target.closest("[data-act]")) == null ? void 0 : _a2.getAttribute("data-act");
         if (act === "continue") finish(true);
         else if (act === "cancel") finish(false);
       });
-      overlay.addEventListener("click", (e2) => {
-        if (e2.target === overlay) finish(false);
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) finish(false);
       });
-      const onKey = (e2) => {
-        if (e2.key === "Escape") finish(false);
+      const onKey = (e) => {
+        if (e.key === "Escape") finish(false);
       };
       document.addEventListener("keydown", onKey);
       void root;
@@ -20061,33 +12425,33 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }, 500);
     if (gripEl) {
       let startX = 0, startY = 0, hudX = 0, hudY = 0, dragging = false;
-      const onDown = (e2) => {
+      const onDown = (e) => {
         dragging = true;
         hud.setAttribute("data-tb-dragging", "1");
-        gripEl.setPointerCapture(e2.pointerId);
+        gripEl.setPointerCapture(e.pointerId);
         const rect = hud.getBoundingClientRect();
         hudX = rect.left;
         hudY = rect.top;
-        startX = e2.clientX;
-        startY = e2.clientY;
-        e2.preventDefault();
+        startX = e.clientX;
+        startY = e.clientY;
+        e.preventDefault();
       };
-      const onMove = (e2) => {
+      const onMove = (e) => {
         if (!dragging) return;
-        const nx = Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, hudX + (e2.clientX - startX)));
-        const ny = Math.max(4, Math.min(window.innerHeight - hud.offsetHeight - 4, hudY + (e2.clientY - startY)));
+        const nx = Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, hudX + (e.clientX - startX)));
+        const ny = Math.max(4, Math.min(window.innerHeight - hud.offsetHeight - 4, hudY + (e.clientY - startY)));
         hud.style.setProperty("left", nx + "px", "important");
         hud.style.setProperty("top", ny + "px", "important");
         hud.style.setProperty("bottom", "auto", "important");
         hud.style.setProperty("transform", "none", "important");
       };
-      const onUp = (e2) => {
+      const onUp = (e) => {
         if (!dragging) return;
         dragging = false;
         hud.removeAttribute("data-tb-dragging");
         try {
-          gripEl.releasePointerCapture(e2.pointerId);
-        } catch (e3) {
+          gripEl.releasePointerCapture(e.pointerId);
+        } catch (e2) {
         }
       };
       gripEl.addEventListener("pointerdown", onDown);
@@ -20137,7 +12501,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       try {
         await captureScreenshot(null);
         flashRecordingHUD();
-      } catch (e2) {
+      } catch (e) {
       }
       shotBtn.dataset.busy = "";
     });
@@ -20150,7 +12514,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (isDrawModeActive()) {
         try {
           deactivateDrawMode();
-        } catch (e2) {
+        } catch (e) {
         }
         if (annotateBtn) annotateBtn.dataset.active = "";
       }
@@ -20163,7 +12527,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (isDrawModeActive()) {
         try {
           deactivateDrawMode();
-        } catch (e2) {
+        } catch (e) {
         }
       }
       _onStopRequested == null ? void 0 : _onStopRequested();
@@ -20187,13 +12551,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (isDrawModeActive()) {
       try {
         deactivateDrawMode();
-      } catch (e2) {
+      } catch (e) {
       }
     }
     if (isBlurModeActive()) {
       try {
         deactivateBlurMode();
-      } catch (e2) {
+      } catch (e) {
       }
     }
     removeAllBlurBoxes();
@@ -20238,15 +12602,15 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function setRenderPanel(fn) {
     _renderPanel = fn;
   }
-  function mountCompactToolbar(root, panel, showToast3, renderAnnotationList2, position2 = "right", shortcuts) {
+  function mountCompactToolbar(root, panel, showToast3, renderAnnotationList2, position = "right", shortcuts) {
     _panelEl = panel;
-    _position = position2;
+    _position = position;
     _isMobile = window.innerWidth < 768;
     const toolbar = document.createElement("div");
     toolbar.id = TOOLBAR_ID;
     toolbar.dataset.tracebug = "compact-toolbar";
     _toolbar = toolbar;
-    _applyToolbarPosition(toolbar, position2);
+    _applyToolbarPosition(toolbar, position);
     const dragCleanup = _initDrag(toolbar);
     void panel;
     const _checkLimit = () => {
@@ -20273,14 +12637,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (!_checkLimit()) return;
         showToast3("Capturing\u2026", root);
         try {
-          const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+          const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
           const lastEvent = ((_a = sessions[0]) == null ? void 0 : _a.events[sessions[0].events.length - 1]) || null;
           await captureScreenshot(lastEvent);
           const n = getScreenshots().length;
           const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
           showToast3(`\u2713 Screenshot ${n}${cap} added to ticket`, root);
           await _openOrRefreshTicket(root);
-        } catch (e2) {
+        } catch (e) {
           showToast3("Screenshot failed", root);
         }
       },
@@ -20301,7 +12665,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
           showToast3(`\u2713 Region ${n}${cap} added to ticket`, root);
           await _openOrRefreshTicket(root);
-        } catch (e2) {
+        } catch (e) {
           showToast3("Region screenshot failed", root);
         }
       },
@@ -20332,7 +12696,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
             _toolbar == null ? void 0 : _toolbar.remove();
             _panelEl == null ? void 0 : _panelEl.remove();
           }
-        } catch (e2) {
+        } catch (e) {
           _toolbar == null ? void 0 : _toolbar.remove();
         }
       },
@@ -20356,14 +12720,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     window.addEventListener("resize", resizeHandler);
     const annotateShortcut = (shortcuts == null ? void 0 : shortcuts.annotate) || "ctrl+shift+a";
     const drawShortcut = (shortcuts == null ? void 0 : shortcuts.draw) || "ctrl+shift+d";
-    const keyHandler = (e2) => {
+    const keyHandler = (e) => {
       var _a, _b;
-      if (matchesShortcut(e2, annotateShortcut)) {
-        e2.preventDefault();
+      if (matchesShortcut(e, annotateShortcut)) {
+        e.preventDefault();
         (_a = toolbar.querySelector("#tracebug-toolbar-annotate-btn")) == null ? void 0 : _a.click();
       }
-      if (matchesShortcut(e2, drawShortcut)) {
-        e2.preventDefault();
+      if (matchesShortcut(e, drawShortcut)) {
+        e.preventDefault();
         (_b = toolbar.querySelector("#tracebug-toolbar-draw-btn")) == null ? void 0 : _b.click();
       }
     };
@@ -20568,18 +12932,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         document.removeEventListener("mousedown", onOutside, true);
         resolve(value);
       };
-      const onKey = (e2) => {
-        if (e2.key === "Escape") {
-          e2.preventDefault();
+      const onKey = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
           finish(null);
         }
-        if (e2.key === "Enter") {
-          e2.preventDefault();
+        if (e.key === "Enter") {
+          e.preventDefault();
           finish({ surface, withMicrophone: micEl.checked });
         }
       };
-      const onOutside = (e2) => {
-        if (!pop.contains(e2.target)) finish(null);
+      const onOutside = (e) => {
+        if (!pop.contains(e.target)) finish(null);
       };
       cancelEl.addEventListener("click", () => finish(null));
       startEl.addEventListener("click", () => finish({ surface, withMicrophone: micEl.checked }));
@@ -20599,15 +12963,15 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       console.warn("[TraceBug] Failed to open ticket after capture:", err);
     }
   }
-  function _applyToolbarPosition(toolbar, position2) {
+  function _applyToolbarPosition(toolbar, position) {
     let savedPos = null;
     try {
       const raw = localStorage.getItem(DRAG_POS_KEY);
       if (raw) savedPos = JSON.parse(raw);
-    } catch (e2) {
+    } catch (e) {
     }
-    const isBottom = position2 === "bottom-right" || position2 === "bottom-left";
-    const isLeft = position2 === "left" || position2 === "bottom-left";
+    const isBottom = position === "bottom-right" || position === "bottom-left";
+    const isLeft = position === "left" || position === "bottom-left";
     if (savedPos) {
       toolbar.style.cssText = `
       position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
@@ -20644,23 +13008,23 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     let startLeft = 0;
     let startTop = 0;
     let hasMoved = false;
-    const onMouseDown = (e2) => {
-      if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
+    const onMouseDown = (e) => {
+      if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
       isDragging = true;
       hasMoved = false;
-      startX = e2.clientX;
-      startY = e2.clientY;
+      startX = e.clientX;
+      startY = e.clientY;
       const rect = toolbar.getBoundingClientRect();
       startLeft = rect.left;
       startTop = rect.top;
       toolbar.style.cursor = "grabbing";
       toolbar.style.transition = "none";
-      e2.preventDefault();
+      e.preventDefault();
     };
-    const onMouseMove = (e2) => {
+    const onMouseMove = (e) => {
       if (!isDragging) return;
-      const dx = e2.clientX - startX;
-      const dy = e2.clientY - startY;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
       if (!hasMoved) return;
       const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
@@ -20681,13 +13045,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
             x: parseInt(toolbar.style.left),
             y: parseInt(toolbar.style.top)
           }));
-        } catch (e2) {
+        } catch (e) {
         }
       }
     };
-    const onTouchStart = (e2) => {
-      if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
-      const touch = e2.touches[0];
+    const onTouchStart = (e) => {
+      if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
+      const touch = e.touches[0];
       isDragging = true;
       hasMoved = false;
       startX = touch.clientX;
@@ -20697,9 +13061,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       startTop = rect.top;
       toolbar.style.transition = "none";
     };
-    const onTouchMove = (e2) => {
+    const onTouchMove = (e) => {
       if (!isDragging) return;
-      const touch = e2.touches[0];
+      const touch = e.touches[0];
       const dx = touch.clientX - startX;
       const dy = touch.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
@@ -20721,7 +13085,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
             x: parseInt(toolbar.style.left),
             y: parseInt(toolbar.style.top)
           }));
-        } catch (e2) {
+        } catch (e) {
         }
       }
     };
@@ -20816,7 +13180,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function isComplete() {
     try {
       return localStorage.getItem(STORAGE_KEY2) === "true";
-    } catch (e2) {
+    } catch (e) {
       return false;
     }
   }
@@ -20982,9 +13346,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     showAnnotationBadges(root);
     addLogoPulse();
     const screenshotShortcut = (shortcuts == null ? void 0 : shortcuts.screenshot) || "ctrl+shift+s";
-    const keyHandler = async (e2) => {
-      if (matchesShortcut(e2, "ctrl+shift+b")) {
-        e2.preventDefault();
+    const keyHandler = async (e) => {
+      if (matchesShortcut(e, "ctrl+shift+b")) {
+        e.preventDefault();
         if (!isQuickBugOpen()) {
           showQuickBugCapture(root).catch((err) => {
             console.warn("[TraceBug] Quick bug capture failed:", err);
@@ -20993,9 +13357,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
         return;
       }
-      if (matchesShortcut(e2, screenshotShortcut)) {
-        e2.preventDefault();
-        const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+      if (matchesShortcut(e, screenshotShortcut)) {
+        e.preventDefault();
+        const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
         const currentSession = sessions[0];
         const lastEvent = (currentSession == null ? void 0 : currentSession.events[currentSession.events.length - 1]) || null;
         showToast2("Capturing screenshot...", root);
@@ -21003,7 +13367,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           const ss = await captureScreenshot(lastEvent);
           showToast2(`Screenshot: ${ss.filename}`, root);
           showAnnotationEditor(ss, root);
-        } catch (e3) {
+        } catch (e2) {
           showToast2("Screenshot failed", root);
         }
       }
@@ -21019,7 +13383,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     };
   }
   function renderPanel(panel) {
-    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const errorSessions = sessions.filter((s) => s.errorMessage);
     const allSessions = sessions;
     panel.innerHTML = `
@@ -21040,33 +13404,33 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <style>@keyframes bt-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }</style>
     <div id="bt-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
   `;
-    const content2 = panel.querySelector("#bt-content");
+    const content = panel.querySelector("#bt-content");
     panel.querySelector("#bt-refresh").addEventListener("click", () => renderPanel(panel));
     panel.querySelector("#bt-clear").addEventListener("click", () => {
       if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
         try {
           clearAllSessions();
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           clearScreenshots();
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           clearVoiceTranscripts();
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           clearAllAnnotations();
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           clearAnnotationBadges();
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           clearNetworkFailures();
-        } catch (e2) {
+        } catch (e) {
         }
         renderPanel(panel);
       }
@@ -21075,7 +13439,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (_onToggleRecording2) _onToggleRecording2();
     });
     if (allSessions.length === 0) {
-      content2.innerHTML = `
+      content.innerHTML = `
       <div style="text-align:center;padding:60px 20px;color:var(--tb-text-muted, #555)">
         <div style="font-size:36px;margin-bottom:12px">\u{1F50D}</div>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif)">No sessions recorded yet.</div>
@@ -21103,11 +13467,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <option value="healthy">Healthy</option>
     </select>
   `;
-    content2.innerHTML = "";
-    content2.appendChild(filterBar);
+    content.innerHTML = "";
+    content.appendChild(filterBar);
     const sessionsContainer = document.createElement("div");
     sessionsContainer.id = "bt-sessions-list";
-    content2.appendChild(sessionsContainer);
+    content.appendChild(sessionsContainer);
     function renderFilteredSessions(filter, search) {
       sessionsContainer.innerHTML = "";
       let filtered = allSessions;
@@ -21120,9 +13484,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           if (s.sessionId.toLowerCase().includes(q)) return true;
           if (s.errorMessage && s.errorMessage.toLowerCase().includes(q)) return true;
           if (s.reproSteps && s.reproSteps.toLowerCase().includes(q)) return true;
-          for (const e2 of s.events) {
-            if (e2.page && e2.page.toLowerCase().includes(q)) return true;
-            const d = e2.data || {};
+          for (const e of s.events) {
+            if (e.page && e.page.toLowerCase().includes(q)) return true;
+            const d = e.data || {};
             const el = d.element || {};
             if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
             if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
@@ -21141,14 +13505,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     }
     renderFilteredSessions("all", "");
-    content2.querySelector("#bt-search").addEventListener("input", (e2) => {
-      const search = e2.target.value;
-      const filter = content2.querySelector("#bt-filter").value;
+    content.querySelector("#bt-search").addEventListener("input", (e) => {
+      const search = e.target.value;
+      const filter = content.querySelector("#bt-filter").value;
       renderFilteredSessions(filter, search);
     });
-    content2.querySelector("#bt-filter").addEventListener("change", (e2) => {
-      const filter = e2.target.value;
-      const search = content2.querySelector("#bt-search").value;
+    content.querySelector("#bt-filter").addEventListener("change", (e) => {
+      const filter = e.target.value;
+      const search = content.querySelector("#bt-search").value;
       renderFilteredSessions(filter, search);
     });
   }
@@ -21168,7 +13532,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     } else if (lastEvent) {
       preview = describeEvent(lastEvent).slice(0, 60);
     }
-    const pages = [...new Set(session.events.map((e2) => e2.page))];
+    const pages = [...new Set(session.events.map((e) => e.page))];
     const sessionName = pages.length > 0 ? _pageName(pages[0]) + " Session" : "Session";
     card.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -21209,19 +13573,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   }
   function renderSessionDetail(panel, session) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
-    const content2 = panel.querySelector("#bt-content");
+    const content = panel.querySelector("#bt-content");
     const s = session;
     const problems = [];
-    const apiEvents = s.events.filter((e2) => e2.type === "api_request");
-    const errorEvents = s.events.filter((e2) => ["error", "unhandled_rejection"].includes(e2.type));
-    const consoleErrors = s.events.filter((e2) => e2.type === "console_error");
-    const failedApis = apiEvents.filter((e2) => {
+    const apiEvents = s.events.filter((e) => e.type === "api_request");
+    const errorEvents = s.events.filter((e) => ["error", "unhandled_rejection"].includes(e.type));
+    const consoleErrors = s.events.filter((e) => e.type === "console_error");
+    const failedApis = apiEvents.filter((e) => {
       var _a2, _b2;
-      return ((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b2 = e2.data.request) == null ? void 0 : _b2.statusCode) === 0;
+      return ((_a2 = e.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b2 = e.data.request) == null ? void 0 : _b2.statusCode) === 0;
     });
-    const slowApis = apiEvents.filter((e2) => {
+    const slowApis = apiEvents.filter((e) => {
       var _a2;
-      return ((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) > 3e3;
+      return ((_a2 = e.data.request) == null ? void 0 : _a2.durationMs) > 3e3;
     });
     for (const ev of errorEvents) {
       const errType = getErrorType(((_a = ev.data.error) == null ? void 0 : _a.message) || "");
@@ -21248,15 +13612,15 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const firstTs = s.events.length > 0 ? s.events[0].timestamp : s.createdAt;
     const lastTs = s.events.length > 0 ? s.events[s.events.length - 1].timestamp : s.createdAt;
     const sessionDur = lastTs - firstTs;
-    const avgApiTime = apiEvents.length > 0 ? Math.round(apiEvents.reduce((sum, e2) => {
+    const avgApiTime = apiEvents.length > 0 ? Math.round(apiEvents.reduce((sum, e) => {
       var _a2;
-      return sum + (((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) || 0);
+      return sum + (((_a2 = e.data.request) == null ? void 0 : _a2.durationMs) || 0);
     }, 0) / apiEvents.length) : 0;
-    const maxApiTime = apiEvents.length > 0 ? Math.max(...apiEvents.map((e2) => {
+    const maxApiTime = apiEvents.length > 0 ? Math.max(...apiEvents.map((e) => {
       var _a2;
-      return ((_a2 = e2.data.request) == null ? void 0 : _a2.durationMs) || 0;
+      return ((_a2 = e.data.request) == null ? void 0 : _a2.durationMs) || 0;
     })) : 0;
-    const pagesVisited = new Set(s.events.map((e2) => e2.page)).size;
+    const pagesVisited = new Set(s.events.map((e) => e.page)).size;
     const bugTitle = generateBugTitle(s) || "Session Details";
     const severityBadge2 = problems.some((p) => p.severity === "critical") ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#7f1d1d;color:#fca5a5">Critical</span>` : problems.length > 0 ? `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#78350f;color:var(--tb-warning, #fbbf24)">Warning</span>` : `<span style="font-size:9px;padding:2px 8px;border-radius:10px;background:#14532d;color:#4ade80">Healthy</span>`;
     const hasErrors = errorEvents.length > 0 || s.errorMessage;
@@ -21567,17 +13931,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o) => escapeHtml4(o)).join(", ")}</div>`;
         }
       } else if (ev.type === "form_submit") {
-        const f2 = ev.data.form;
-        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${(f2 == null ? void 0 : f2.id) ? `"<span style="color:#fb923c">${escapeHtml4(f2.id)}</span>"` : ""}</div>`;
-        if ((f2 == null ? void 0 : f2.fields) && Object.keys(f2.fields).length > 0) {
+        const f = ev.data.form;
+        html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Submitted form ${(f == null ? void 0 : f.id) ? `"<span style="color:#fb923c">${escapeHtml4(f.id)}</span>"` : ""}</div>`;
+        if ((f == null ? void 0 : f.fields) && Object.keys(f.fields).length > 0) {
           html += `<div style="margin-top:4px;background:#1a150544;padding:6px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid var(--tb-border, #2a2a3e)">`;
-          for (const [key, val] of Object.entries(f2.fields)) {
+          for (const [key, val] of Object.entries(f.fields)) {
             html += `<div style="font-size:10px;margin-bottom:2px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> <span style="color:var(--tb-warning, #fbbf24)">${escapeHtml4(String(val).slice(0, 80))}</span></div>`;
           }
           html += `</div>`;
         }
-        if (f2 == null ? void 0 : f2.method) {
-          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml4(String(f2.method).toUpperCase())} ${f2.action ? `\u2192 ${escapeHtml4(f2.action.slice(0, 60))}` : ""}</div>`;
+        if (f == null ? void 0 : f.method) {
+          html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:2px">${escapeHtml4(String(f.method).toUpperCase())} ${f.action ? `\u2192 ${escapeHtml4(f.action.slice(0, 60))}` : ""}</div>`;
         }
       } else if (ev.type === "route_change") {
         html += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px">
@@ -21625,8 +13989,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <button id="bt-delete" style="${smallBtnStyle("#ef4444")}font-size:11px;width:100%;padding:10px">\u{1F5D1} Delete This Session</button>
   </div>`;
     html += `</div>`;
-    content2.innerHTML = html;
-    const tabs = content2.querySelectorAll(".bt-tab");
+    content.innerHTML = html;
+    const tabs = content.querySelectorAll(".bt-tab");
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
         tabs.forEach((t) => {
@@ -21635,13 +13999,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         });
         tab.style.cssText = _tabBtnStyle(true);
         tab.classList.add("bt-tab-active");
-        content2.querySelectorAll(".bt-tab-content").forEach((c) => c.style.display = "none");
-        const target = content2.querySelector(`#bt-tab-${tab.dataset.tab}`);
+        content.querySelectorAll(".bt-tab-content").forEach((c) => c.style.display = "none");
+        const target = content.querySelector(`#bt-tab-${tab.dataset.tab}`);
         if (target) target.style.display = "block";
       });
     });
-    content2.querySelector("#bt-back").addEventListener("click", () => renderPanel(panel));
-    const copyBtn = content2.querySelector("#bt-copy");
+    content.querySelector("#bt-back").addEventListener("click", () => renderPanel(panel));
+    const copyBtn = content.querySelector("#bt-copy");
     if (copyBtn) {
       copyBtn.addEventListener("click", () => {
         const text = `Reproduction Steps:
@@ -21656,14 +14020,14 @@ ${s.errorSummary || ""}`;
         });
       });
     }
-    content2.querySelector("#bt-download-json").addEventListener("click", () => {
+    content.querySelector("#bt-download-json").addEventListener("click", () => {
       downloadFile(
         `tracebug-${s.sessionId.slice(0, 8)}.json`,
         JSON.stringify(s, null, 2),
         "application/json"
       );
     });
-    content2.querySelector("#bt-download-txt").addEventListener("click", () => {
+    content.querySelector("#bt-download-txt").addEventListener("click", () => {
       const report = buildTextReport(s, problems, apiEvents, sessionDur);
       downloadFile(
         `tracebug-report-${s.sessionId.slice(0, 8)}.txt`,
@@ -21671,7 +14035,7 @@ ${s.errorSummary || ""}`;
         "text/plain"
       );
     });
-    content2.querySelector("#bt-download-html").addEventListener("click", () => {
+    content.querySelector("#bt-download-html").addEventListener("click", () => {
       const htmlReport = buildHtmlReport(s, problems, apiEvents, sessionDur);
       downloadFile(
         `tracebug-report-${s.sessionId.slice(0, 8)}.html`,
@@ -21679,7 +14043,7 @@ ${s.errorSummary || ""}`;
         "text/html"
       );
     });
-    const copyReportBtn = content2.querySelector("#bt-copy-report");
+    const copyReportBtn = content.querySelector("#bt-copy-report");
     if (copyReportBtn) {
       copyReportBtn.addEventListener("click", () => {
         const report = buildTextReport(s, problems, apiEvents, sessionDur);
@@ -21689,13 +14053,13 @@ ${s.errorSummary || ""}`;
         });
       });
     }
-    content2.querySelector("#bt-delete").addEventListener("click", () => {
+    content.querySelector("#bt-delete").addEventListener("click", () => {
       if (confirm("Delete this session?")) {
         deleteSession(session.sessionId);
         renderPanel(panel);
       }
     });
-    const ssBtn = content2.querySelector("#bt-screenshot");
+    const ssBtn = content.querySelector("#bt-screenshot");
     if (ssBtn) {
       ssBtn.addEventListener("click", async () => {
         ssBtn.textContent = "\u{1F4F8} Capturing...";
@@ -21708,7 +14072,7 @@ ${s.errorSummary || ""}`;
           }, 3e3);
           const root = document.getElementById("tracebug-root");
           if (root) showAnnotationEditor(ss, root);
-        } catch (e2) {
+        } catch (e) {
           ssBtn.textContent = "\u2717 Failed";
           setTimeout(() => {
             ssBtn.textContent = "\u{1F4F8} Screenshot";
@@ -21716,13 +14080,13 @@ ${s.errorSummary || ""}`;
         }
       });
     }
-    const noteBtn = content2.querySelector("#bt-add-note");
+    const noteBtn = content.querySelector("#bt-add-note");
     if (noteBtn) {
       noteBtn.addEventListener("click", () => {
         showNoteDialog(s.sessionId, panel, session);
       });
     }
-    const ghBtn = content2.querySelector("#bt-github-issue");
+    const ghBtn = content.querySelector("#bt-github-issue");
     if (ghBtn) {
       ghBtn.addEventListener("click", () => {
         const report = buildReport(session);
@@ -21738,7 +14102,7 @@ ${s.errorSummary || ""}`;
         });
       });
     }
-    const jiraBtn = content2.querySelector("#bt-jira-ticket");
+    const jiraBtn = content.querySelector("#bt-jira-ticket");
     if (jiraBtn) {
       jiraBtn.addEventListener("click", () => {
         const report = buildReport(session);
@@ -21759,14 +14123,14 @@ ${ticket.description}`;
         });
       });
     }
-    const pdfBtn = content2.querySelector("#bt-download-pdf");
+    const pdfBtn = content.querySelector("#bt-download-pdf");
     if (pdfBtn) {
       pdfBtn.addEventListener("click", () => {
         const report = buildReport(session);
         generatePdfReport(report);
       });
     }
-    const voiceBtn = content2.querySelector("#bt-voice-note");
+    const voiceBtn = content.querySelector("#bt-voice-note");
     if (voiceBtn) {
       voiceBtn.addEventListener("click", () => {
         showVoiceDialog(s.sessionId, panel, session);
@@ -22000,8 +14364,8 @@ ${s.errorSummary}
 ${"-".repeat(40)}
 `;
     for (const ev of s.events) {
-      const time2 = new Date(ev.timestamp).toLocaleTimeString();
-      report += `[${time2}] ${ev.type.toUpperCase()} on ${ev.page}
+      const time = new Date(ev.timestamp).toLocaleTimeString();
+      report += `[${time}] ${ev.type.toUpperCase()} on ${ev.page}
 `;
       report += `  ${describeEventForReport(ev)}
 `;
@@ -22057,7 +14421,7 @@ ${"-".repeat(40)}
     <div class="stat-grid">
       <div class="stat"><div class="stat-label">Duration</div><div class="stat-value">${formatDuration(sessionDur)}</div></div>
       <div class="stat"><div class="stat-label">Events</div><div class="stat-value">${s.events.length}</div></div>
-      <div class="stat"><div class="stat-label">Pages</div><div class="stat-value">${new Set(s.events.map((e2) => e2.page)).size}</div></div>
+      <div class="stat"><div class="stat-label">Pages</div><div class="stat-value">${new Set(s.events.map((e) => e.page)).size}</div></div>
       <div class="stat"><div class="stat-label">API Calls</div><div class="stat-value">${apiEvents.length}</div></div>
     </div>
   </div>`;
@@ -22133,11 +14497,11 @@ ${"-".repeat(40)}
         return s;
       }
       case "form_submit": {
-        const f2 = ev.data.form;
-        let s = `Submitted form ${(f2 == null ? void 0 : f2.id) ? `"${escapeHtml4(f2.id)}"` : ""}`;
-        if (f2 == null ? void 0 : f2.fields) {
+        const f = ev.data.form;
+        let s = `Submitted form ${(f == null ? void 0 : f.id) ? `"${escapeHtml4(f.id)}"` : ""}`;
+        if (f == null ? void 0 : f.fields) {
           s += `<div style="margin-top:4px">`;
-          for (const [key, val] of Object.entries(f2.fields)) {
+          for (const [key, val] of Object.entries(f.fields)) {
             s += `<div style="font-size:10px"><span style="color:var(--tb-text-muted, #888)">${escapeHtml4(key)}:</span> ${escapeHtml4(String(val).slice(0, 80))}</div>`;
           }
           s += `</div>`;
@@ -22180,10 +14544,10 @@ ${"-".repeat(40)}
         return `Selected "${(sel == null ? void 0 : sel.selectedText) || (sel == null ? void 0 : sel.value)}" from "${(sel == null ? void 0 : sel.name) || "dropdown"}" dropdown`;
       }
       case "form_submit": {
-        const f2 = ev.data.form;
-        let s = `Submitted form "${(f2 == null ? void 0 : f2.id) || ""}" (${f2 == null ? void 0 : f2.fieldCount} fields)`;
-        if (f2 == null ? void 0 : f2.fields) {
-          const entries = Object.entries(f2.fields);
+        const f = ev.data.form;
+        let s = `Submitted form "${(f == null ? void 0 : f.id) || ""}" (${f == null ? void 0 : f.fieldCount} fields)`;
+        if (f == null ? void 0 : f.fields) {
+          const entries = Object.entries(f.fields);
           if (entries.length > 0) s += ` \u2014 ` + entries.map(([k, v]) => `${k}="${String(v).slice(0, 40)}"`).join(", ");
         }
         return s;
@@ -22203,15 +14567,15 @@ ${"-".repeat(40)}
         return JSON.stringify(ev.data).slice(0, 100);
     }
   }
-  function downloadFile(filename, content2, mimeType) {
-    const blob = new Blob([content2], { type: mimeType });
+  function downloadFile(filename, content, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
-    const a2 = document.createElement("a");
-    a2.href = url;
-    a2.download = filename;
-    document.body.appendChild(a2);
-    a2.click();
-    document.body.removeChild(a2);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
   function getStatusColor(code) {
@@ -22307,8 +14671,8 @@ ${"-".repeat(40)}
   function escapeHtml4(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  function smallBtnStyle(color2) {
-    return `background:${color2}22;color:${color2};border:1px solid ${color2}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
+  function smallBtnStyle(color) {
+    return `background:${color}22;color:${color};border:1px solid ${color}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
   }
   function _tabBtnStyle(active) {
     return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7C5CFF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
@@ -22336,7 +14700,7 @@ ${"-".repeat(40)}
     </div>
     <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
   `;
-    const content2 = panel.querySelector("#bt-ann-list-content");
+    const content = panel.querySelector("#bt-ann-list-content");
     if (total > 0) {
       (_a = panel.querySelector("#bt-ann-screenshot")) == null ? void 0 : _a.addEventListener("click", async () => {
         const btn = panel.querySelector("#bt-ann-screenshot");
@@ -22347,7 +14711,7 @@ ${"-".repeat(40)}
           const root = document.getElementById("tracebug-root");
           if (root) showToast2(`Saved: ${ss.filename}`, root);
           btn.textContent = "\u{1F4F8} Save";
-        } catch (e2) {
+        } catch (e) {
           btn.textContent = "Failed";
           setTimeout(() => {
             btn.textContent = "\u{1F4F8} Save";
@@ -22395,7 +14759,7 @@ ${"-".repeat(40)}
       });
     }
     if (total === 0) {
-      content2.innerHTML = `
+      content.innerHTML = `
       <div style="text-align:center;padding:48px 24px;color:var(--tb-text-muted, #666)">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
           <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
@@ -22417,23 +14781,23 @@ ${"-".repeat(40)}
     if (elAnnotations.length > 0) {
       html += `<div style="font-size:11px;color:#7C5CFF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7C5CFF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
       for (let i = 0; i < elAnnotations.length; i++) {
-        const a2 = elAnnotations[i];
-        const intentColor = _getIntentColor(a2.intent);
-        const sevColor = a2.severity === "critical" ? "#ef4444" : a2.severity === "major" ? "#f97316" : a2.severity === "minor" ? "#3b82f6" : "#888";
-        const ago = timeAgo(a2.timestamp);
+        const a = elAnnotations[i];
+        const intentColor = _getIntentColor(a.intent);
+        const sevColor = a.severity === "critical" ? "#ef4444" : a.severity === "major" ? "#f97316" : a.severity === "minor" ? "#3b82f6" : "#888";
+        const ago = timeAgo(a.timestamp);
         html += `<div style="border:1px solid var(--tb-border, #2a2a3e);border-radius:10px;padding:12px;margin-bottom:8px;background:var(--tb-bg-primary, #12121f);transition:border-color 0.2s" onmouseenter="this.style.borderColor='#3a3a5e'" onmouseleave="this.style.borderColor='#2a2a3e'">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <span style="width:22px;height:22px;border-radius:50%;background:${intentColor};color:var(--tb-text-primary, #fff);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</span>
-          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a2.intent}</span>
-          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${sevColor}15;color:${sevColor};font-weight:500">${a2.severity}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase">${a.intent}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:var(--tb-radius-sm, 4px);background:${sevColor}15;color:${sevColor};font-weight:500">${a.severity}</span>
           <span style="font-size:10px;color:var(--tb-text-muted, #555);margin-left:auto">${ago}</span>
-          <button class="bt-ann-delete" data-id="${a2.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this annotation">Delete</button>
+          <button class="bt-ann-delete" data-id="${a.id}" style="background:var(--tb-error, #ef4444)15;border:1px solid #ef444433;color:var(--tb-error, #ef4444);cursor:pointer;font-size:11px;padding:3px 8px;border-radius:var(--tb-radius-sm, 4px);font-family:var(--tb-font-family, inherit)" title="Delete this annotation">Delete</button>
         </div>
         <div style="font-size:11px;color:#777;margin-bottom:6px">
-          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml4(a2.tagName)}&gt;</span>
-          ${a2.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml4(a2.innerText.slice(0, 40))}"</span>` : ""}
+          <span style="background:#1e1e32;padding:1px 6px;border-radius:3px;font-family:monospace;font-size:10px">&lt;${escapeHtml4(a.tagName)}&gt;</span>
+          ${a.innerText ? `<span style="color:#999;margin-left:4px">"${escapeHtml4(a.innerText.slice(0, 40))}"</span>` : ""}
         </div>
-        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml4(a2.comment)}</div>
+        <div style="font-size:12px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5">${escapeHtml4(a.comment)}</div>
       </div>`;
       }
     }
@@ -22468,18 +14832,18 @@ ${"-".repeat(40)}
       </div>`;
       }
     }
-    content2.innerHTML = html;
-    content2.querySelectorAll(".bt-ss-download").forEach((btn) => {
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+    content.innerHTML = html;
+    content.querySelectorAll(".bt-ss-download").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const id = btn.dataset.id || "";
         const ss = screenshotsList.find((s) => s.id === id);
         if (ss) downloadScreenshot(ss.dataUrl, ss.filename);
       });
     });
-    content2.querySelectorAll(".bt-ann-delete").forEach((btn) => {
-      btn.addEventListener("click", (e2) => {
-        e2.stopPropagation();
+    content.querySelectorAll(".bt-ann-delete").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const id = btn.dataset.id || "";
         removeAnnotationById(id);
         const root = document.getElementById("tracebug-root");
@@ -22611,8 +14975,8 @@ ${"-".repeat(40)}
     };
     img.src = screenshot.dataUrl;
     overlay.querySelector("#bt-ann-cancel").addEventListener("click", () => overlay.remove());
-    const escHandler = (e2) => {
-      if (e2.key === "Escape") {
+    const escHandler = (e) => {
+      if (e.key === "Escape") {
         overlay.remove();
         document.removeEventListener("keydown", escHandler);
       }
@@ -22634,48 +14998,48 @@ ${"-".repeat(40)}
         drawAction(ctx, action);
       }
     }
-    function drawAction(c, a2) {
-      c.strokeStyle = a2.color;
-      c.fillStyle = a2.color;
+    function drawAction(c, a) {
+      c.strokeStyle = a.color;
+      c.fillStyle = a.color;
       c.lineWidth = 2.5;
-      if (a2.type === "pen" && a2.points && a2.points.length > 0) {
+      if (a.type === "pen" && a.points && a.points.length > 0) {
         c.lineCap = "round";
         c.lineJoin = "round";
         c.lineWidth = 3;
         c.beginPath();
-        c.moveTo(a2.points[0].x, a2.points[0].y);
-        for (let i = 1; i < a2.points.length; i++) {
-          c.lineTo(a2.points[i].x, a2.points[i].y);
+        c.moveTo(a.points[0].x, a.points[0].y);
+        for (let i = 1; i < a.points.length; i++) {
+          c.lineTo(a.points[i].x, a.points[i].y);
         }
         c.stroke();
         return;
       }
-      if (a2.type === "rect") {
-        const w = a2.endX - a2.startX;
-        const h = a2.endY - a2.startY;
+      if (a.type === "rect") {
+        const w = a.endX - a.startX;
+        const h = a.endY - a.startY;
         c.globalAlpha = 0.15;
-        c.fillRect(a2.startX, a2.startY, w, h);
+        c.fillRect(a.startX, a.startY, w, h);
         c.globalAlpha = 1;
-        c.strokeRect(a2.startX, a2.startY, w, h);
-      } else if (a2.type === "arrow") {
-        drawArrow(c, a2.startX, a2.startY, a2.endX, a2.endY, a2.color);
-      } else if (a2.type === "text" && a2.text) {
+        c.strokeRect(a.startX, a.startY, w, h);
+      } else if (a.type === "arrow") {
+        drawArrow(c, a.startX, a.startY, a.endX, a.endY, a.color);
+      } else if (a.type === "text" && a.text) {
         c.font = "bold 14px system-ui, sans-serif";
-        const metrics = c.measureText(a2.text);
+        const metrics = c.measureText(a.text);
         const padding = 4;
         c.globalAlpha = 0.85;
         c.fillStyle = "#000";
-        c.fillRect(a2.startX - padding, a2.startY - 16, metrics.width + padding * 2, 22);
+        c.fillRect(a.startX - padding, a.startY - 16, metrics.width + padding * 2, 22);
         c.globalAlpha = 1;
-        c.fillStyle = a2.color;
-        c.fillText(a2.text, a2.startX, a2.startY);
+        c.fillStyle = a.color;
+        c.fillText(a.text, a.startX, a.startY);
       }
     }
-    function drawArrow(c, x1, y1, x2, y2, color2) {
+    function drawArrow(c, x1, y1, x2, y2, color) {
       const headLen = 12;
-      const angle2 = Math.atan2(y2 - y1, x2 - x1);
-      c.strokeStyle = color2;
-      c.fillStyle = color2;
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      c.strokeStyle = color;
+      c.fillStyle = color;
       c.lineWidth = 2.5;
       c.beginPath();
       c.moveTo(x1, y1);
@@ -22683,8 +15047,8 @@ ${"-".repeat(40)}
       c.stroke();
       c.beginPath();
       c.moveTo(x2, y2);
-      c.lineTo(x2 - headLen * Math.cos(angle2 - Math.PI / 6), y2 - headLen * Math.sin(angle2 - Math.PI / 6));
-      c.lineTo(x2 - headLen * Math.cos(angle2 + Math.PI / 6), y2 - headLen * Math.sin(angle2 + Math.PI / 6));
+      c.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+      c.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
       c.closePath();
       c.fill();
     }
@@ -22751,11 +15115,11 @@ ${"-".repeat(40)}
       wrap.appendChild(input);
       setTimeout(() => input.focus(), 0);
     }
-    canvas.addEventListener("mousedown", (e2) => {
+    canvas.addEventListener("mousedown", (e) => {
       if (activeTextInput) return;
       const rect = canvas.getBoundingClientRect();
-      startX = e2.clientX - rect.left;
-      startY = e2.clientY - rect.top;
+      startX = e.clientX - rect.left;
+      startY = e.clientY - rect.top;
       if (currentTool === "text") {
         spawnTextInput(startX, startY);
         return;
@@ -22767,11 +15131,11 @@ ${"-".repeat(40)}
       }
       isDrawing = true;
     });
-    canvas.addEventListener("mousemove", (e2) => {
+    canvas.addEventListener("mousemove", (e) => {
       if (!isDrawing) return;
       const rect = canvas.getBoundingClientRect();
-      const curX = e2.clientX - rect.left;
-      const curY = e2.clientY - rect.top;
+      const curX = e.clientX - rect.left;
+      const curY = e.clientY - rect.top;
       if (currentTool === "pen") {
         const last = currentStroke[currentStroke.length - 1];
         if (!last || Math.hypot(curX - last.x, curY - last.y) > 1.5) {
@@ -22785,12 +15149,12 @@ ${"-".repeat(40)}
       const preview = { type: currentTool, color: currentColor, startX, startY, endX: curX, endY: curY };
       drawAction(ctx, preview);
     });
-    canvas.addEventListener("mouseup", (e2) => {
+    canvas.addEventListener("mouseup", (e) => {
       if (!isDrawing) return;
       isDrawing = false;
       const rect = canvas.getBoundingClientRect();
-      const endX = e2.clientX - rect.left;
-      const endY = e2.clientY - rect.top;
+      const endX = e.clientX - rect.left;
+      const endY = e.clientY - rect.top;
       if (currentTool === "pen") {
         if (currentStroke.length >= 2) {
           const first = currentStroke[0];
@@ -22831,7 +15195,7 @@ ${"-".repeat(40)}
             width: screenshot.width,
             height: screenshot.height
           });
-        } catch (e2) {
+        } catch (e) {
         }
       }
       showToast2(`\u2713 Annotations saved to ${screenshot.filename}`, root);
@@ -22839,12 +15203,12 @@ ${"-".repeat(40)}
     });
     overlay.querySelector("#bt-ann-download").addEventListener("click", () => {
       const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
-      const a2 = document.createElement("a");
-      a2.href = merged;
-      a2.download = screenshot.filename;
-      document.body.appendChild(a2);
-      a2.click();
-      document.body.removeChild(a2);
+      const a = document.createElement("a");
+      a.href = merged;
+      a.download = screenshot.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
       showToast2(`\u2713 Downloaded: ${screenshot.filename}`, root);
     });
   }
@@ -23062,7 +15426,7 @@ ${"-".repeat(40)}
         const buf = new TextEncoder().encode(input);
         const hash = await crypto.subtle.digest("SHA-1", buf);
         return bufferToHex(hash).slice(0, 16);
-      } catch (e2) {
+      } catch (e) {
       }
     }
     return djb2(input).toString(16).padStart(8, "0");
@@ -23108,20 +15472,20 @@ ${"-".repeat(40)}
     if (!session) return [];
     const groups = /* @__PURE__ */ new Map();
     for (let i = 0; i < session.events.length; i++) {
-      const e2 = session.events[i];
-      if (e2.type !== "error" && e2.type !== "unhandled_rejection" && e2.type !== "console_error") continue;
-      const message = ((_a = e2.data.error) == null ? void 0 : _a.message) || e2.data.message || "";
+      const e = session.events[i];
+      if (e.type !== "error" && e.type !== "unhandled_rejection" && e.type !== "console_error") continue;
+      const message = ((_a = e.data.error) == null ? void 0 : _a.message) || e.data.message || "";
       if (!message) continue;
-      const stack = ((_b = e2.data.error) == null ? void 0 : _b.stack) || "";
-      const page = e2.page || (typeof window !== "undefined" ? window.location.pathname : "");
+      const stack = ((_b = e.data.error) == null ? void 0 : _b.stack) || "";
+      const page = e.page || (typeof window !== "undefined" ? window.location.pathname : "");
       const fp = await computeFingerprint(message, stack, page);
       const precedingAction = describePrecedingAction(session.events, i);
       const existing = groups.get(fp);
       if (existing) {
         existing.issue.occurrences = (existing.issue.occurrences || 1) + 1;
-        existing.issue.lastSeenAt = e2.timestamp;
+        existing.issue.lastSeenAt = e.timestamp;
         if (existing.samples.length < MAX_CONTEXT_SAMPLES) {
-          existing.samples.push({ timestamp: e2.timestamp, precedingAction });
+          existing.samples.push({ timestamp: e.timestamp, precedingAction });
         }
         continue;
       }
@@ -23135,13 +15499,13 @@ ${"-".repeat(40)}
 
 First frame: ${firstFrame}` : message,
         page,
-        detectedAt: e2.timestamp,
+        detectedAt: e.timestamp,
         fingerprint: fp,
         occurrences: 1,
-        firstSeenAt: e2.timestamp,
-        lastSeenAt: e2.timestamp
+        firstSeenAt: e.timestamp,
+        lastSeenAt: e.timestamp
       };
-      groups.set(fp, { issue, samples: [{ timestamp: e2.timestamp, precedingAction }] });
+      groups.set(fp, { issue, samples: [{ timestamp: e.timestamp, precedingAction }] });
     }
     const out = [];
     for (const g of groups.values()) {
@@ -23157,18 +15521,18 @@ First frame: ${firstFrame}` : message,
   function describePrecedingAction(events, i) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     for (let j = i - 1; j >= 0; j--) {
-      const e2 = events[j];
-      if (e2.type === "click") {
-        const t = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.text) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.ariaLabel) || ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.tag) || "element";
+      const e = events[j];
+      if (e.type === "click") {
+        const t = ((_b = (_a = e.data) == null ? void 0 : _a.element) == null ? void 0 : _b.text) || ((_d = (_c = e.data) == null ? void 0 : _c.element) == null ? void 0 : _d.ariaLabel) || ((_f = (_e = e.data) == null ? void 0 : _e.element) == null ? void 0 : _f.tag) || "element";
         return `clicked "${String(t).slice(0, 40)}"`;
       }
-      if (e2.type === "input") {
-        const n = ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.name) || ((_j = (_i = e2.data) == null ? void 0 : _i.element) == null ? void 0 : _j.id) || "field";
+      if (e.type === "input") {
+        const n = ((_h = (_g = e.data) == null ? void 0 : _g.element) == null ? void 0 : _h.name) || ((_j = (_i = e.data) == null ? void 0 : _i.element) == null ? void 0 : _j.id) || "field";
         return `typed in ${n}`;
       }
-      if (e2.type === "select_change") return "selected an option";
-      if (e2.type === "form_submit") return "submitted a form";
-      if (e2.type === "route_change") return `navigated to ${((_k = e2.data) == null ? void 0 : _k.to) || "page"}`;
+      if (e.type === "select_change") return "selected an option";
+      if (e.type === "form_submit") return "submitted a form";
+      if (e.type === "route_change") return `navigated to ${((_k = e.data) == null ? void 0 : _k.to) || "page"}`;
     }
     return void 0;
   }
@@ -23176,15 +15540,15 @@ First frame: ${firstFrame}` : message,
     if (!session) return [];
     const issues = [];
     const buffer = getNetworkFailures();
-    for (const e2 of session.events) {
-      if (e2.type !== "api_request") continue;
-      const req = e2.data.request;
+    for (const e of session.events) {
+      if (e.type !== "api_request") continue;
+      const req = e.data.request;
       if (!req) continue;
       const status = req.statusCode || 0;
       if (status >= 200 && status < 400) continue;
       if (status === 0 && req.method === "HEAD") continue;
       const match = buffer.find(
-        (b) => b.url === req.url && b.method === req.method && b.status === status && Math.abs(b.timestamp - e2.timestamp) < 5e3
+        (b) => b.url === req.url && b.method === req.method && b.status === status && Math.abs(b.timestamp - e.timestamp) < 5e3
       );
       const snippet = (match == null ? void 0 : match.response) ? `
 
@@ -23196,8 +15560,8 @@ Response: ${match.response.slice(0, 160)}` : "";
         title: `${req.method} ${truncatePath(req.url)} \u2192 ${status === 0 ? "Network Error" : status}`,
         description: `Request failed in ${req.durationMs || 0}ms.${snippet}`,
         url: req.url,
-        page: e2.page || window.location.pathname,
-        detectedAt: e2.timestamp
+        page: e.page || window.location.pathname,
+        detectedAt: e.timestamp
       });
     }
     return issues;
@@ -23205,33 +15569,33 @@ Response: ${match.response.slice(0, 160)}` : "";
   async function detectSlowApis(session) {
     if (!session) return [];
     const issues = [];
-    for (const e2 of session.events) {
-      if (e2.type !== "api_request") continue;
-      const req = e2.data.request;
+    for (const e of session.events) {
+      if (e.type !== "api_request") continue;
+      const req = e.data.request;
       if (!req) continue;
       const status = req.statusCode || 0;
       if (status < 200 || status >= 400) continue;
-      const duration2 = req.durationMs || 0;
-      if (duration2 < SLOW_API_MS) continue;
+      const duration = req.durationMs || 0;
+      if (duration < SLOW_API_MS) continue;
       issues.push({
         id: makeIssueId("slow-api"),
         detector: "slow-api",
-        severity: duration2 > 5e3 ? "serious" : "moderate",
-        title: `Slow API: ${req.method} ${truncatePath(req.url)} (${duration2}ms)`,
-        description: `This request took ${(duration2 / 1e3).toFixed(1)}s \u2014 over the ${SLOW_API_MS / 1e3}s threshold. Slow APIs are a common UX complaint and a leading cause of perceived bugs ("the page is frozen").`,
+        severity: duration > 5e3 ? "serious" : "moderate",
+        title: `Slow API: ${req.method} ${truncatePath(req.url)} (${duration}ms)`,
+        description: `This request took ${(duration / 1e3).toFixed(1)}s \u2014 over the ${SLOW_API_MS / 1e3}s threshold. Slow APIs are a common UX complaint and a leading cause of perceived bugs ("the page is frozen").`,
         url: req.url,
-        page: e2.page || window.location.pathname,
-        detectedAt: e2.timestamp
+        page: e.page || window.location.pathname,
+        detectedAt: e.timestamp
       });
     }
     return issues;
   }
   function truncatePath(url) {
     try {
-      const u2 = new URL(url, window.location.origin);
-      const p = u2.pathname.length > 50 ? u2.pathname.slice(0, 47) + "\u2026" : u2.pathname;
+      const u = new URL(url, window.location.origin);
+      const p = u.pathname.length > 50 ? u.pathname.slice(0, 47) + "\u2026" : u.pathname;
       return p;
-    } catch (e2) {
+    } catch (e) {
       return url.length > 50 ? url.slice(0, 47) + "\u2026" : url;
     }
   }
@@ -23323,44 +15687,44 @@ Response: ${match.response.slice(0, 160)}` : "";
             return "function" == typeof t;
           }
         }
-        function _defineProperty(e2, r, t) {
-          return (r = _toPropertyKey(r)) in e2 ? Object.defineProperty(e2, r, {
+        function _defineProperty(e, r, t) {
+          return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
             value: t,
             enumerable: true,
             configurable: true,
             writable: true
-          }) : e2[r] = t, e2;
+          }) : e[r] = t, e;
         }
-        function _construct(t, e2, r) {
+        function _construct(t, e, r) {
           if (_isNativeReflectConstruct()) {
             return Reflect.construct.apply(null, arguments);
           }
           var o = [null];
-          o.push.apply(o, e2);
+          o.push.apply(o, e);
           var p = new (t.bind.apply(t, o))();
           return r && _setPrototypeOf(p, r.prototype), p;
         }
-        function _objectWithoutProperties(e2, t) {
-          if (null == e2) {
+        function _objectWithoutProperties(e, t) {
+          if (null == e) {
             return {};
           }
-          var o, r, i = _objectWithoutPropertiesLoose(e2, t);
+          var o, r, i = _objectWithoutPropertiesLoose(e, t);
           if (Object.getOwnPropertySymbols) {
-            var n = Object.getOwnPropertySymbols(e2);
+            var n = Object.getOwnPropertySymbols(e);
             for (r = 0; r < n.length; r++) {
-              o = n[r], -1 === t.indexOf(o) && {}.propertyIsEnumerable.call(e2, o) && (i[o] = e2[o]);
+              o = n[r], -1 === t.indexOf(o) && {}.propertyIsEnumerable.call(e, o) && (i[o] = e[o]);
             }
           }
           return i;
         }
-        function _objectWithoutPropertiesLoose(r, e2) {
+        function _objectWithoutPropertiesLoose(r, e) {
           if (null == r) {
             return {};
           }
           var t = {};
           for (var n in r) {
             if ({}.hasOwnProperty.call(r, n)) {
-              if (-1 !== e2.indexOf(n)) {
+              if (-1 !== e.indexOf(n)) {
                 continue;
               }
               t[n] = r[n];
@@ -23368,23 +15732,23 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           return t;
         }
-        function _callSuper(t, o, e2) {
-          return o = _getPrototypeOf(o), _possibleConstructorReturn(t, _isNativeReflectConstruct() ? Reflect.construct(o, e2 || [], _getPrototypeOf(t).constructor) : o.apply(t, e2));
+        function _callSuper(t, o, e) {
+          return o = _getPrototypeOf(o), _possibleConstructorReturn(t, _isNativeReflectConstruct() ? Reflect.construct(o, e || [], _getPrototypeOf(t).constructor) : o.apply(t, e));
         }
-        function _possibleConstructorReturn(t, e2) {
-          if (e2 && ("object" == _typeof(e2) || "function" == typeof e2)) {
-            return e2;
+        function _possibleConstructorReturn(t, e) {
+          if (e && ("object" == _typeof(e) || "function" == typeof e)) {
+            return e;
           }
-          if (void 0 !== e2) {
+          if (void 0 !== e) {
             throw new TypeError("Derived constructors may only return object or undefined");
           }
           return _assertThisInitialized(t);
         }
-        function _assertThisInitialized(e2) {
-          if (void 0 === e2) {
+        function _assertThisInitialized(e) {
+          if (void 0 === e) {
             throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
           }
-          return e2;
+          return e;
         }
         function _isNativeReflectConstruct() {
           try {
@@ -23401,11 +15765,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             return t2.__proto__ || Object.getPrototypeOf(t2);
           }, _getPrototypeOf(t);
         }
-        function _inherits(t, e2) {
-          if ("function" != typeof e2 && null !== e2) {
+        function _inherits(t, e) {
+          if ("function" != typeof e && null !== e) {
             throw new TypeError("Super expression must either be null or a function");
           }
-          t.prototype = Object.create(e2 && e2.prototype, {
+          t.prototype = Object.create(e && e.prototype, {
             constructor: {
               value: t,
               writable: true,
@@ -23413,17 +15777,17 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
           }), Object.defineProperty(t, "prototype", {
             writable: false
-          }), e2 && _setPrototypeOf(t, e2);
+          }), e && _setPrototypeOf(t, e);
         }
-        function _setPrototypeOf(t, e2) {
-          return _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t2, e3) {
-            return t2.__proto__ = e3, t2;
-          }, _setPrototypeOf(t, e2);
+        function _setPrototypeOf(t, e) {
+          return _setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(t2, e2) {
+            return t2.__proto__ = e2, t2;
+          }, _setPrototypeOf(t, e);
         }
         function _extends() {
           return _extends = Object.assign ? Object.assign.bind() : function(n) {
-            for (var e2 = 1; e2 < arguments.length; e2++) {
-              var t = arguments[e2];
+            for (var e = 1; e < arguments.length; e++) {
+              var t = arguments[e];
               for (var r in t) {
                 ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]);
               }
@@ -23447,31 +15811,31 @@ Response: ${match.response.slice(0, 160)}` : "";
             return _arrayLikeToArray(r);
           }
         }
-        function _classPrivateFieldInitSpec(e2, t, a2) {
-          _checkPrivateRedeclaration(e2, t), t.set(e2, a2);
+        function _classPrivateFieldInitSpec(e, t, a) {
+          _checkPrivateRedeclaration(e, t), t.set(e, a);
         }
-        function _classPrivateMethodInitSpec(e2, a2) {
-          _checkPrivateRedeclaration(e2, a2), a2.add(e2);
+        function _classPrivateMethodInitSpec(e, a) {
+          _checkPrivateRedeclaration(e, a), a.add(e);
         }
-        function _checkPrivateRedeclaration(e2, t) {
-          if (t.has(e2)) {
+        function _checkPrivateRedeclaration(e, t) {
+          if (t.has(e)) {
             throw new TypeError("Cannot initialize the same private elements twice on an object");
           }
         }
-        function _classPrivateFieldGet(s, a2) {
-          return s.get(_assertClassBrand(s, a2));
+        function _classPrivateFieldGet(s, a) {
+          return s.get(_assertClassBrand(s, a));
         }
-        function _classPrivateFieldSet(s, a2, r) {
-          return s.set(_assertClassBrand(s, a2), r), r;
+        function _classPrivateFieldSet(s, a, r) {
+          return s.set(_assertClassBrand(s, a), r), r;
         }
-        function _assertClassBrand(e2, t, n) {
-          if ("function" == typeof e2 ? e2 === t : e2.has(t)) {
+        function _assertClassBrand(e, t, n) {
+          if ("function" == typeof e ? e === t : e.has(t)) {
             return arguments.length < 3 ? t : n;
           }
           throw new TypeError("Private element is not present on this object");
         }
-        function _slicedToArray(r, e2) {
-          return _arrayWithHoles(r) || _iterableToArrayLimit(r, e2) || _unsupportedIterableToArray(r, e2) || _nonIterableRest();
+        function _slicedToArray(r, e) {
+          return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest();
         }
         function _nonIterableRest() {
           throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
@@ -23479,22 +15843,22 @@ Response: ${match.response.slice(0, 160)}` : "";
         function _iterableToArrayLimit(r, l) {
           var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
           if (null != t) {
-            var e2, n, i, u2, a2 = [], f2 = true, o = false;
+            var e, n, i, u, a = [], f = true, o = false;
             try {
               if (i = (t = t.call(r)).next, 0 === l) {
                 if (Object(t) !== t) {
                   return;
                 }
-                f2 = false;
+                f = false;
               } else {
-                for (; !(f2 = (e2 = i.call(t)).done) && (a2.push(e2.value), a2.length !== l); f2 = true) {
+                for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = true) {
                 }
               }
             } catch (r2) {
               o = true, n = r2;
             } finally {
               try {
-                if (!f2 && null != t["return"] && (u2 = t["return"](), Object(u2) !== u2)) {
+                if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) {
                   return;
                 }
               } finally {
@@ -23503,7 +15867,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               }
             }
-            return a2;
+            return a;
           }
         }
         function _arrayWithHoles(r) {
@@ -23511,21 +15875,21 @@ Response: ${match.response.slice(0, 160)}` : "";
             return r;
           }
         }
-        function _classCallCheck(a2, n) {
-          if (!(a2 instanceof n)) {
+        function _classCallCheck(a, n) {
+          if (!(a instanceof n)) {
             throw new TypeError("Cannot call a class as a function");
           }
         }
-        function _defineProperties(e2, r) {
+        function _defineProperties(e, r) {
           for (var t = 0; t < r.length; t++) {
             var o = r[t];
-            o.enumerable = o.enumerable || false, o.configurable = true, "value" in o && (o.writable = true), Object.defineProperty(e2, _toPropertyKey(o.key), o);
+            o.enumerable = o.enumerable || false, o.configurable = true, "value" in o && (o.writable = true), Object.defineProperty(e, _toPropertyKey(o.key), o);
           }
         }
-        function _createClass(e2, r, t) {
-          return r && _defineProperties(e2.prototype, r), t && _defineProperties(e2, t), Object.defineProperty(e2, "prototype", {
+        function _createClass(e, r, t) {
+          return r && _defineProperties(e.prototype, r), t && _defineProperties(e, t), Object.defineProperty(e, "prototype", {
             writable: false
-          }), e2;
+          }), e;
         }
         function _toPropertyKey(t) {
           var i = _toPrimitive(t, "string");
@@ -23535,9 +15899,9 @@ Response: ${match.response.slice(0, 160)}` : "";
           if ("object" != _typeof(t) || !t) {
             return t;
           }
-          var e2 = t[Symbol.toPrimitive];
-          if (void 0 !== e2) {
-            var i = e2.call(t, r || "default");
+          var e = t[Symbol.toPrimitive];
+          if (void 0 !== e) {
+            var i = e.call(t, r || "default");
             if ("object" != _typeof(i)) {
               return i;
             }
@@ -23545,15 +15909,15 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           return ("string" === r ? String : Number)(t);
         }
-        function _createForOfIteratorHelper(r, e2) {
+        function _createForOfIteratorHelper(r, e) {
           var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
           if (!t) {
-            if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e2 && r && "number" == typeof r.length) {
+            if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && "number" == typeof r.length) {
               t && (r = t);
-              var _n = 0, F2 = function F3() {
+              var _n = 0, F = function F2() {
               };
               return {
-                s: F2,
+                s: F,
                 n: function n() {
                   return _n >= r.length ? {
                     done: true
@@ -23562,50 +15926,50 @@ Response: ${match.response.slice(0, 160)}` : "";
                     value: r[_n++]
                   };
                 },
-                e: function e3(r2) {
+                e: function e2(r2) {
                   throw r2;
                 },
-                f: F2
+                f: F
               };
             }
             throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
           }
-          var o, a2 = true, u2 = false;
+          var o, a = true, u = false;
           return {
             s: function s() {
               t = t.call(r);
             },
             n: function n() {
               var r2 = t.next();
-              return a2 = r2.done, r2;
+              return a = r2.done, r2;
             },
-            e: function e3(r2) {
-              u2 = true, o = r2;
+            e: function e2(r2) {
+              u = true, o = r2;
             },
-            f: function f2() {
+            f: function f() {
               try {
-                a2 || null == t["return"] || t["return"]();
+                a || null == t["return"] || t["return"]();
               } finally {
-                if (u2) {
+                if (u) {
                   throw o;
                 }
               }
             }
           };
         }
-        function _unsupportedIterableToArray(r, a2) {
+        function _unsupportedIterableToArray(r, a) {
           if (r) {
             if ("string" == typeof r) {
-              return _arrayLikeToArray(r, a2);
+              return _arrayLikeToArray(r, a);
             }
             var t = {}.toString.call(r).slice(8, -1);
-            return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a2) : void 0;
+            return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0;
           }
         }
-        function _arrayLikeToArray(r, a2) {
-          (null == a2 || a2 > r.length) && (a2 = r.length);
-          for (var e2 = 0, n = Array(a2); e2 < a2; e2++) {
-            n[e2] = r[e2];
+        function _arrayLikeToArray(r, a) {
+          (null == a || a > r.length) && (a = r.length);
+          for (var e = 0, n = Array(a); e < a; e++) {
+            n[e] = r[e];
           }
           return n;
         }
@@ -23793,7 +16157,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   var vertx = Function("return this")().require("vertx");
                   vertxNext = vertx.runOnLoop || vertx.runOnContext;
                   return useVertxTimer();
-                } catch (e2) {
+                } catch (e) {
                   return useSetTimeout();
                 }
               }
@@ -23850,8 +16214,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               function tryThen(then$$1, value, fulfillmentHandler, rejectionHandler) {
                 try {
                   then$$1.call(value, fulfillmentHandler, rejectionHandler);
-                } catch (e2) {
-                  return e2;
+                } catch (e) {
+                  return e;
                 }
               }
               function handleForeignThenable(promise, thenable, then$$1) {
@@ -23980,9 +16344,9 @@ Response: ${match.response.slice(0, 160)}` : "";
                 if (hasCallback) {
                   try {
                     value = callback(detail);
-                  } catch (e2) {
+                  } catch (e) {
                     succeeded = false;
-                    error = e2;
+                    error = e;
                   }
                   if (promise === value) {
                     reject(promise, cannotReturnOwn());
@@ -24009,8 +16373,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                   }, function rejectPromise(reason) {
                     reject(promise, reason);
                   });
-                } catch (e2) {
-                  reject(promise, e2);
+                } catch (e) {
+                  reject(promise, e);
                 }
               }
               var id2 = 0;
@@ -24064,9 +16428,9 @@ Response: ${match.response.slice(0, 160)}` : "";
                     var didError = false;
                     try {
                       _then = entry.then;
-                    } catch (e2) {
+                    } catch (e) {
                       didError = true;
-                      error = e2;
+                      error = e;
                     }
                     if (_then === then && entry._state !== PENDING) {
                       this._settledAt(entry._state, i2, entry._result);
@@ -24192,7 +16556,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 } else {
                   try {
                     local = Function("return this")();
-                  } catch (e2) {
+                  } catch (e) {
                     throw new Error("polyfill failed because global object is unavailable in this environment");
                   }
                 }
@@ -24201,7 +16565,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   var promiseToString = null;
                   try {
                     promiseToString = Object.prototype.toString.call(P.resolve());
-                  } catch (e2) {
+                  } catch (e) {
                   }
                   if (promiseToString === "[object Promise]" && !P.cast) {
                     return;
@@ -24267,7 +16631,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               try {
                 Object.defineProperty({}, "x", {});
                 return true;
-              } catch (e2) {
+              } catch (e) {
                 return false;
               }
             })()) {
@@ -24376,7 +16740,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             function packIEEE754(v, ebits, fbits) {
               var bias = (1 << ebits - 1) - 1;
-              var s, e2, f2, i2, bits, str2, bytes;
+              var s, e, f, i2, bits, str2, bytes;
               function roundToEven(n2) {
                 var w = floor(n2);
                 var fl = n2 - w;
@@ -24389,47 +16753,47 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return w % 2 ? w + 1 : w;
               }
               if (v !== v) {
-                e2 = (1 << ebits) - 1;
-                f2 = pow(2, fbits - 1);
+                e = (1 << ebits) - 1;
+                f = pow(2, fbits - 1);
                 s = 0;
               } else if (v === Infinity || v === -Infinity) {
-                e2 = (1 << ebits) - 1;
-                f2 = 0;
+                e = (1 << ebits) - 1;
+                f = 0;
                 s = v < 0 ? 1 : 0;
               } else if (v === 0) {
-                e2 = 0;
-                f2 = 0;
+                e = 0;
+                f = 0;
                 s = 1 / v === -Infinity ? 1 : 0;
               } else {
                 s = v < 0;
                 v = abs(v);
                 if (v >= pow(2, 1 - bias)) {
-                  e2 = min(floor(log2(v) / LN2), 1023);
-                  f2 = roundToEven(v / pow(2, e2) * pow(2, fbits));
-                  if (f2 / pow(2, fbits) >= 2) {
-                    e2 = e2 + 1;
-                    f2 = 1;
+                  e = min(floor(log2(v) / LN2), 1023);
+                  f = roundToEven(v / pow(2, e) * pow(2, fbits));
+                  if (f / pow(2, fbits) >= 2) {
+                    e = e + 1;
+                    f = 1;
                   }
-                  if (e2 > bias) {
-                    e2 = (1 << ebits) - 1;
-                    f2 = 0;
+                  if (e > bias) {
+                    e = (1 << ebits) - 1;
+                    f = 0;
                   } else {
-                    e2 = e2 + bias;
-                    f2 = f2 - pow(2, fbits);
+                    e = e + bias;
+                    f = f - pow(2, fbits);
                   }
                 } else {
-                  e2 = 0;
-                  f2 = roundToEven(v / pow(2, 1 - bias - fbits));
+                  e = 0;
+                  f = roundToEven(v / pow(2, 1 - bias - fbits));
                 }
               }
               bits = [];
               for (i2 = fbits; i2; i2 -= 1) {
-                bits.push(f2 % 2 ? 1 : 0);
-                f2 = floor(f2 / 2);
+                bits.push(f % 2 ? 1 : 0);
+                f = floor(f / 2);
               }
               for (i2 = ebits; i2; i2 -= 1) {
-                bits.push(e2 % 2 ? 1 : 0);
-                e2 = floor(e2 / 2);
+                bits.push(e % 2 ? 1 : 0);
+                e = floor(e / 2);
               }
               bits.push(s ? 1 : 0);
               bits.reverse();
@@ -24442,7 +16806,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               return bytes;
             }
             function unpackIEEE754(bytes, ebits, fbits) {
-              var bits = [], i2, j, b2, str2, bias, s, e2, f2;
+              var bits = [], i2, j, b2, str2, bias, s, e, f;
               for (i2 = bytes.length; i2; i2 -= 1) {
                 b2 = bytes[i2 - 1];
                 for (j = 8; j; j -= 1) {
@@ -24454,14 +16818,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               str2 = bits.join("");
               bias = (1 << ebits - 1) - 1;
               s = parseInt(str2.substring(0, 1), 2) ? -1 : 1;
-              e2 = parseInt(str2.substring(1, 1 + ebits), 2);
-              f2 = parseInt(str2.substring(1 + ebits), 2);
-              if (e2 === (1 << ebits) - 1) {
-                return f2 === 0 ? s * Infinity : NaN;
-              } else if (e2 > 0) {
-                return s * pow(2, e2 - bias) * (1 + f2 / pow(2, fbits));
-              } else if (f2 !== 0) {
-                return s * pow(2, -(bias - 1)) * (f2 / pow(2, fbits));
+              e = parseInt(str2.substring(1, 1 + ebits), 2);
+              f = parseInt(str2.substring(1 + ebits), 2);
+              if (e === (1 << ebits) - 1) {
+                return f === 0 ? s * Infinity : NaN;
+              } else if (e > 0) {
+                return s * pow(2, e - bias) * (1 + f / pow(2, fbits));
+              } else if (f !== 0) {
+                return s * pow(2, -(bias - 1)) * (f / pow(2, fbits));
               }
               return s < 0 ? -0 : 0;
             }
@@ -24478,7 +16842,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               return packIEEE754(v, 8, 23);
             }
             (function() {
-              function ArrayBuffer2(length) {
+              function ArrayBuffer(length) {
                 length = ECMAScript.ToInt32(length);
                 if (length < 0) {
                   throw new RangeError("ArrayBuffer size is not a small enough positive integer");
@@ -24492,10 +16856,10 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
                 configureProperties(this);
               }
-              exports2.ArrayBuffer = exports2.ArrayBuffer || ArrayBuffer2;
+              exports2.ArrayBuffer = exports2.ArrayBuffer || ArrayBuffer;
               function ArrayBufferView() {
               }
-              function makeConstructor(bytesPerElement, pack2, unpack) {
+              function makeConstructor(bytesPerElement, pack, unpack) {
                 var _ctor;
                 _ctor = function ctor(buffer, byteOffset, length) {
                   var array, sequence, i2, s;
@@ -24505,28 +16869,28 @@ Response: ${match.response.slice(0, 160)}` : "";
                       throw new RangeError("ArrayBufferView size is not a small enough positive integer");
                     }
                     this.byteLength = this.length * this.BYTES_PER_ELEMENT;
-                    this.buffer = new ArrayBuffer2(this.byteLength);
+                    this.buffer = new ArrayBuffer(this.byteLength);
                     this.byteOffset = 0;
                   } else if (_typeof(arguments[0]) === "object" && arguments[0].constructor === _ctor) {
                     array = arguments[0];
                     this.length = array.length;
                     this.byteLength = this.length * this.BYTES_PER_ELEMENT;
-                    this.buffer = new ArrayBuffer2(this.byteLength);
+                    this.buffer = new ArrayBuffer(this.byteLength);
                     this.byteOffset = 0;
                     for (i2 = 0; i2 < this.length; i2 += 1) {
                       this._setter(i2, array._getter(i2));
                     }
-                  } else if (_typeof(arguments[0]) === "object" && !(arguments[0] instanceof ArrayBuffer2 || ECMAScript.Class(arguments[0]) === "ArrayBuffer")) {
+                  } else if (_typeof(arguments[0]) === "object" && !(arguments[0] instanceof ArrayBuffer || ECMAScript.Class(arguments[0]) === "ArrayBuffer")) {
                     sequence = arguments[0];
                     this.length = ECMAScript.ToUint32(sequence.length);
                     this.byteLength = this.length * this.BYTES_PER_ELEMENT;
-                    this.buffer = new ArrayBuffer2(this.byteLength);
+                    this.buffer = new ArrayBuffer(this.byteLength);
                     this.byteOffset = 0;
                     for (i2 = 0; i2 < this.length; i2 += 1) {
                       s = sequence[i2];
                       this._setter(i2, Number(s));
                     }
-                  } else if (_typeof(arguments[0]) === "object" && (arguments[0] instanceof ArrayBuffer2 || ECMAScript.Class(arguments[0]) === "ArrayBuffer")) {
+                  } else if (_typeof(arguments[0]) === "object" && (arguments[0] instanceof ArrayBuffer || ECMAScript.Class(arguments[0]) === "ArrayBuffer")) {
                     this.buffer = buffer;
                     this.byteOffset = ECMAScript.ToUint32(byteOffset);
                     if (this.byteOffset > this.buffer.byteLength) {
@@ -24557,7 +16921,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 };
                 _ctor.prototype = new ArrayBufferView();
                 _ctor.prototype.BYTES_PER_ELEMENT = bytesPerElement;
-                _ctor.prototype._pack = pack2;
+                _ctor.prototype._pack = pack;
                 _ctor.prototype._unpack = unpack;
                 _ctor.BYTES_PER_ELEMENT = bytesPerElement;
                 _ctor.prototype._getter = function(index) {
@@ -24659,7 +17023,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               var Uint8Array2 = makeConstructor(1, packU8, unpackU8);
               var Uint8ClampedArray2 = makeConstructor(1, packU8Clamped, unpackU8);
               var Int16Array = makeConstructor(2, packI16, unpackI16);
-              var Uint16Array2 = makeConstructor(2, packU16, unpackU16);
+              var Uint16Array = makeConstructor(2, packU16, unpackU16);
               var Int32Array = makeConstructor(4, packI32, unpackI32);
               var Uint32Array3 = makeConstructor(4, packU32, unpackU32);
               var Float32Array = makeConstructor(4, packF32, unpackF32);
@@ -24668,7 +17032,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               exports2.Uint8Array = exports2.Uint8Array || Uint8Array2;
               exports2.Uint8ClampedArray = exports2.Uint8ClampedArray || Uint8ClampedArray2;
               exports2.Int16Array = exports2.Int16Array || Int16Array;
-              exports2.Uint16Array = exports2.Uint16Array || Uint16Array2;
+              exports2.Uint16Array = exports2.Uint16Array || Uint16Array;
               exports2.Int32Array = exports2.Int32Array || Int32Array;
               exports2.Uint32Array = exports2.Uint32Array || Uint32Array3;
               exports2.Float32Array = exports2.Float32Array || Float32Array;
@@ -24768,7 +17132,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   return Object.defineProperty({}, "x", {
                     value: 1
                   }).x === 1;
-                } catch (e2) {
+                } catch (e) {
                 }
               })();
               var defineProperty = function defineProperty2(object, name, value) {
@@ -24962,8 +17326,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var NASHORN_BUG = getOwnPropertyDescriptor && !$propertyIsEnumerable.call({
               1: 2
             }, 1);
-            exports2.f = NASHORN_BUG ? function propertyIsEnumerable(V2) {
-              var descriptor = getOwnPropertyDescriptor(this, V2);
+            exports2.f = NASHORN_BUG ? function propertyIsEnumerable(V) {
+              var descriptor = getOwnPropertyDescriptor(this, V);
               return !!descriptor && descriptor.enumerable;
             } : $propertyIsEnumerable;
           });
@@ -25133,8 +17497,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             "use strict";
             var aCallable = require_a_callable();
             var isNullOrUndefined = require_is_null_or_undefined();
-            module2.exports = function(V2, P) {
-              var func = V2[P];
+            module2.exports = function(V, P) {
+              var func = V[P];
               return isNullOrUndefined(func) ? void 0 : aCallable(func);
             };
           });
@@ -25463,17 +17827,17 @@ Response: ${match.response.slice(0, 160)}` : "";
             var hasOwn2 = require_has_own_property();
             require_shared_store();
             var wrapConstructor = function wrapConstructor2(NativeConstructor) {
-              var _Wrapper = function Wrapper(a22, b2, c4) {
+              var _Wrapper = function Wrapper(a2, b2, c4) {
                 if (this instanceof _Wrapper) {
                   switch (arguments.length) {
                     case 0:
                       return new NativeConstructor();
                     case 1:
-                      return new NativeConstructor(a22);
+                      return new NativeConstructor(a2);
                     case 2:
-                      return new NativeConstructor(a22, b2);
+                      return new NativeConstructor(a2, b2);
                   }
-                  return new NativeConstructor(a22, b2, c4);
+                  return new NativeConstructor(a2, b2, c4);
                 }
                 return apply(NativeConstructor, this, arguments);
               };
@@ -25572,10 +17936,10 @@ Response: ${match.response.slice(0, 160)}` : "";
             "use strict";
             var fails = require_fails();
             module2.exports = !fails(function() {
-              function F2() {
+              function F() {
               }
-              F2.prototype.constructor = null;
-              return Object.getPrototypeOf(new F2()) !== F2.prototype;
+              F.prototype.constructor = null;
+              return Object.getPrototypeOf(new F()) !== F.prototype;
             });
           });
           var require_object_get_prototype_of = __commonJS2(function(exports2, module2) {
@@ -25840,14 +18204,14 @@ Response: ${match.response.slice(0, 160)}` : "";
             var createMethod = function createMethod2(CONVERT_TO_STRING) {
               return function($this, pos) {
                 var S = toString(requireObjectCoercible($this));
-                var position2 = toIntegerOrInfinity(pos);
+                var position = toIntegerOrInfinity(pos);
                 var size = S.length;
                 var first, second;
-                if (position2 < 0 || position2 >= size) {
+                if (position < 0 || position >= size) {
                   return CONVERT_TO_STRING ? "" : void 0;
                 }
-                first = charCodeAt(S, position2);
-                return first < 55296 || first > 56319 || position2 + 1 === size || (second = charCodeAt(S, position2 + 1)) < 56320 || second > 57343 ? CONVERT_TO_STRING ? charAt(S, position2) : first : CONVERT_TO_STRING ? stringSlice(S, position2, position2 + 2) : (first - 55296 << 10) + (second - 56320) + 65536;
+                first = charCodeAt(S, position);
+                return first < 55296 || first > 56319 || position + 1 === size || (second = charCodeAt(S, position + 1)) < 56320 || second > 57343 ? CONVERT_TO_STRING ? charAt(S, position) : first : CONVERT_TO_STRING ? stringSlice(S, position, position + 2) : (first - 55296 << 10) + (second - 56320) + 65536;
               };
             };
             module2.exports = {
@@ -25995,8 +18359,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var IE_PROTO = sharedKey("IE_PROTO");
             var EmptyConstructor = function EmptyConstructor2() {
             };
-            var scriptTag = function scriptTag2(content2) {
-              return LT + SCRIPT + GT + content2 + LT + "/" + SCRIPT + GT;
+            var scriptTag = function scriptTag2(content) {
+              return LT + SCRIPT + GT + content + LT + "/" + SCRIPT + GT;
             };
             var NullProtoObjectViaActiveX = function NullProtoObjectViaActiveX2(activeXDocument2) {
               activeXDocument2.write(scriptTag(""));
@@ -26246,10 +18610,10 @@ Response: ${match.response.slice(0, 160)}` : "";
             var returnThis = function returnThis2() {
               return this;
             };
-            module2.exports = function(Iterable, NAME, IteratorConstructor, next, DEFAULT2, IS_SET, FORCED) {
+            module2.exports = function(Iterable, NAME, IteratorConstructor, next, DEFAULT, IS_SET, FORCED) {
               createIteratorConstructor(IteratorConstructor, NAME, next);
               var getIterationMethod = function getIterationMethod2(KIND) {
-                if (KIND === DEFAULT2 && defaultIterator) {
+                if (KIND === DEFAULT && defaultIterator) {
                   return defaultIterator;
                 }
                 if (!BUGGY_SAFARI_ITERATORS && KIND && KIND in IterablePrototype) {
@@ -26276,8 +18640,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               var TO_STRING_TAG = NAME + " Iterator";
               var INCORRECT_VALUES_NAME = false;
               var IterablePrototype = Iterable.prototype;
-              var nativeIterator = IterablePrototype[ITERATOR] || IterablePrototype["@@iterator"] || DEFAULT2 && IterablePrototype[DEFAULT2];
-              var defaultIterator = !BUGGY_SAFARI_ITERATORS && nativeIterator || getIterationMethod(DEFAULT2);
+              var nativeIterator = IterablePrototype[ITERATOR] || IterablePrototype["@@iterator"] || DEFAULT && IterablePrototype[DEFAULT];
+              var defaultIterator = !BUGGY_SAFARI_ITERATORS && nativeIterator || getIterationMethod(DEFAULT);
               var anyNativeIterator = NAME === "Array" ? IterablePrototype.entries || nativeIterator : nativeIterator;
               var CurrentIteratorPrototype, methods, KEY;
               if (anyNativeIterator) {
@@ -26296,7 +18660,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   }
                 }
               }
-              if (PROPER_FUNCTION_NAME && DEFAULT2 === VALUES && nativeIterator && nativeIterator.name !== VALUES) {
+              if (PROPER_FUNCTION_NAME && DEFAULT === VALUES && nativeIterator && nativeIterator.name !== VALUES) {
                 if (!IS_PURE && CONFIGURABLE_FUNCTION_NAME) {
                   createNonEnumerableProperty(IterablePrototype, "name", VALUES);
                 } else {
@@ -26306,7 +18670,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   };
                 }
               }
-              if (DEFAULT2) {
+              if (DEFAULT) {
                 methods = {
                   values: getIterationMethod(VALUES),
                   keys: IS_SET ? defaultIterator : getIterationMethod(KEYS),
@@ -26328,7 +18692,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               if ((!IS_PURE || FORCED) && IterablePrototype[ITERATOR] !== defaultIterator) {
                 defineBuiltIn(IterablePrototype, ITERATOR, defaultIterator, {
-                  name: DEFAULT2
+                  name: DEFAULT
                 });
               }
               Iterators[NAME] = defaultIterator;
@@ -26710,10 +19074,10 @@ Response: ${match.response.slice(0, 160)}` : "";
               return c4 >= "a" && c4 <= "z" || c4 >= "A" && c4 <= "Z" || c4 >= "0" && c4 <= "9" || c4 === "-" || c4 === "_";
             }
             exports2.isIdent = isIdent;
-            function isHex2(c4) {
+            function isHex(c4) {
               return c4 >= "a" && c4 <= "f" || c4 >= "A" && c4 <= "F" || c4 >= "0" && c4 <= "9";
             }
-            exports2.isHex = isHex2;
+            exports2.isHex = isHex;
             function escapeIdentifier(s) {
               var len = s.length;
               var result = "";
@@ -27354,7 +19718,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   });
                   __magic__.globalThis = __magic__;
                   delete Object.prototype.__magic__;
-                } catch (e2) {
+                } catch (e) {
                   window2.globalThis = (function() {
                     if (typeof self !== "undefined") {
                       return self;
@@ -27478,11 +19842,11 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
                 try {
                   return new Function(c4.varname, str2);
-                } catch (e2) {
+                } catch (e) {
                   if (typeof console !== "undefined") {
                     console.log("Could not create a template function: " + str2);
                   }
-                  throw e2;
+                  throw e;
                 }
               };
               doT2.compile = function(tmpl, def) {
@@ -27672,7 +20036,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               try {
                 Object.keys("primitive");
                 return true;
-              } catch (e2) {
+              } catch (e) {
                 return false;
               }
             };
@@ -27700,9 +20064,9 @@ Response: ${match.response.slice(0, 160)}` : "";
               assign = function assign2(key2) {
                 try {
                   dest[key2] = src[key2];
-                } catch (e2) {
+                } catch (e) {
                   if (!error) {
-                    error = e2;
+                    error = e;
                   }
                 }
               };
@@ -27770,16 +20134,16 @@ Response: ${match.response.slice(0, 160)}` : "";
               getOwnPropertyNames(sourceObject).forEach(function(name) {
                 try {
                   defineProperty(target, name, getOwnPropertyDescriptor(source, name));
-                } catch (e2) {
-                  error = e2;
+                } catch (e) {
+                  error = e;
                 }
               });
               if (typeof getOwnPropertySymbols === "function") {
                 getOwnPropertySymbols(sourceObject).forEach(function(symbol) {
                   try {
                     defineProperty(target, symbol, getOwnPropertyDescriptor(source, symbol));
-                  } catch (e2) {
-                    error = e2;
+                  } catch (e) {
+                    error = e;
                   }
                 });
               }
@@ -27963,7 +20327,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             var normalizeOpts = require_normalize_options();
             var contains3 = require_contains();
             var d2 = module2.exports = function(dscr, value) {
-              var c4, e2, w, options, desc;
+              var c4, e, w, options, desc;
               if (arguments.length < 2 || typeof dscr !== "string") {
                 options = value;
                 value = dscr;
@@ -27973,22 +20337,22 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               if (isValue(dscr)) {
                 c4 = contains3.call(dscr, "c");
-                e2 = contains3.call(dscr, "e");
+                e = contains3.call(dscr, "e");
                 w = contains3.call(dscr, "w");
               } else {
                 c4 = w = true;
-                e2 = false;
+                e = false;
               }
               desc = {
                 value,
                 configurable: c4,
-                enumerable: e2,
+                enumerable: e,
                 writable: w
               };
               return !options ? desc : assign(normalizeOpts(options), desc);
             };
             d2.gs = function(dscr, get2, set2) {
-              var c4, e2, options, desc;
+              var c4, e, options, desc;
               if (typeof dscr !== "string") {
                 options = set2;
                 set2 = get2;
@@ -28010,16 +20374,16 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               if (isValue(dscr)) {
                 c4 = contains3.call(dscr, "c");
-                e2 = contains3.call(dscr, "e");
+                e = contains3.call(dscr, "e");
               } else {
                 c4 = true;
-                e2 = false;
+                e = false;
               }
               desc = {
                 get: get2,
                 set: set2,
                 configurable: c4,
-                enumerable: e2
+                enumerable: e
               };
               return !options ? desc : assign(normalizeOpts(options), desc);
             };
@@ -28240,7 +20604,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               symbol = Symbol2("test symbol");
               try {
                 String(symbol);
-              } catch (e2) {
+              } catch (e) {
                 return false;
               }
               if (!validTypes[_typeof(Symbol2.iterator)]) {
@@ -28476,7 +20840,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             };
             var defineProperty = Object.defineProperty;
             module2.exports = function(arrayLike) {
-              var mapFn = arguments[1], thisArg = arguments[2], Context22, i2, j, arr, length, code, iterator, result, getIterator, value;
+              var mapFn = arguments[1], thisArg = arguments[2], Context2, i2, j, arr, length, code, iterator, result, getIterator, value;
               arrayLike = Object(validValue(arrayLike));
               if (isValue(mapFn)) {
                 callable(mapFn);
@@ -28502,19 +20866,19 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
                 arr = [];
               } else {
-                Context22 = this;
+                Context2 = this;
               }
               if (!isArray(arrayLike)) {
                 if ((getIterator = arrayLike[iteratorSymbol]) !== void 0) {
                   iterator = callable(getIterator).call(arrayLike);
-                  if (Context22) {
-                    arr = new Context22();
+                  if (Context2) {
+                    arr = new Context2();
                   }
                   result = iterator.next();
                   i2 = 0;
                   while (!result.done) {
                     value = mapFn ? call.call(mapFn, thisArg, result.value, i2) : result.value;
-                    if (Context22) {
+                    if (Context2) {
                       desc.value = value;
                       defineProperty(arr, i2, desc);
                     } else {
@@ -28526,8 +20890,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                   length = i2;
                 } else if (isString2(arrayLike)) {
                   length = arrayLike.length;
-                  if (Context22) {
-                    arr = new Context22();
+                  if (Context2) {
+                    arr = new Context2();
                   }
                   for (i2 = 0, j = 0; i2 < length; ++i2) {
                     value = arrayLike[i2];
@@ -28538,7 +20902,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                       }
                     }
                     value = mapFn ? call.call(mapFn, thisArg, value, j) : value;
-                    if (Context22) {
+                    if (Context2) {
                       desc.value = value;
                       defineProperty(arr, j, desc);
                     } else {
@@ -28551,12 +20915,12 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               if (length === void 0) {
                 length = toPosInt(arrayLike.length);
-                if (Context22) {
-                  arr = new Context22(length);
+                if (Context2) {
+                  arr = new Context2(length);
                 }
                 for (i2 = 0; i2 < length; ++i2) {
                   value = mapFn ? call.call(mapFn, thisArg, arrayLike[i2], i2) : arrayLike[i2];
-                  if (Context22) {
+                  if (Context2) {
                     desc.value = value;
                     defineProperty(arr, i2, desc);
                   } else {
@@ -28564,7 +20928,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   }
                 }
               }
-              if (Context22) {
+              if (Context2) {
                 desc.value = null;
                 arr.length = length;
               }
@@ -29451,7 +21815,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   return stringifiable.toString();
                 }
                 return String(stringifiable);
-              } catch (e2) {
+              } catch (e) {
                 throw new TypeError("Passed argument cannot be stringifed");
               }
             };
@@ -29473,7 +21837,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   return value.toString();
                 }
                 return String(value);
-              } catch (e2) {
+              } catch (e) {
                 return "<Non-coercible to string value>";
               }
             };
@@ -30097,7 +22461,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             collectResultsFromFrames: function collectResultsFromFrames() {
               return _collectResultsFromFrames;
             },
-            contains: function contains3() {
+            contains: function contains() {
               return _contains;
             },
             convertSelector: function convertSelector() {
@@ -30389,14 +22753,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             });
             var priorities = {
-              all: nodeResult.all.reduce(function(a22, b2) {
-                return Math.max(a22, b2.priority);
+              all: nodeResult.all.reduce(function(a2, b2) {
+                return Math.max(a2, b2.priority);
               }, 0),
-              none: nodeResult.none.reduce(function(a22, b2) {
-                return Math.max(a22, b2.priority);
+              none: nodeResult.none.reduce(function(a2, b2) {
+                return Math.max(a2, b2.priority);
               }, 0),
-              any: nodeResult.any.reduce(function(a22, b2) {
-                return Math.min(a22, b2.priority);
+              any: nodeResult.any.reduce(function(a2, b2) {
+                return Math.min(a2, b2.priority);
               }, 4) % 4
             };
             nodeResult.priority = Math.max(priorities.all, priorities.none, priorities.any);
@@ -30902,10 +23266,10 @@ Response: ${match.response.slice(0, 160)}` : "";
             return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26D3\uFE0F?(?:\u200D\uD83D\uDCA5)?|\u26F9(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF43\uDF45-\uDF4A\uDF4C-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDF44(?:\u200D\uD83D\uDFEB)?|\uDF4B(?:\u200D\uD83D\uDFE9)?|\uDFC3(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E-\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4\uDEB5](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE41\uDE43\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED8\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC08(?:\u200D\u2B1B)?|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC26(?:\u200D(?:\u2B1B|\uD83D\uDD25))?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFC-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFE])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFE])))?))?|\uDD75(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?|\uDE42(?:\u200D[\u2194\u2195]\uFE0F?)?|\uDEB6(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3C-\uDD3E\uDDB8\uDDB9\uDDCD\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE8A\uDE8E-\uDEC2\uDEC6\uDEC8\uDECD-\uDEDC\uDEDF-\uDEEA\uDEEF]|\uDDCE(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1|\uDDD1\u200D\uD83E\uDDD2(?:\u200D\uD83E\uDDD2)?|\uDDD2(?:\u200D\uD83E\uDDD2)?))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
           };
           var import_memoizee = __toModule(require_memoizee());
-          function multiplyMatrices(A2, B) {
-            var m3 = A2.length;
-            if (!Array.isArray(A2[0])) {
-              A2 = [A2];
+          function multiplyMatrices(A, B) {
+            var m3 = A.length;
+            if (!Array.isArray(A[0])) {
+              A = [A];
             }
             if (!Array.isArray(B[0])) {
               B = B.map(function(x) {
@@ -30918,7 +23282,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return x[i2];
               });
             });
-            var product = A2.map(function(row) {
+            var product = A.map(function(row) {
               return B_cols.map(function(col) {
                 var ret = 0;
                 if (!Array.isArray(row)) {
@@ -31502,8 +23866,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               if (options.toXYZ_M && options.fromXYZ_M) {
                 var _options$toBase, _options$fromBase;
-                (_options$toBase = options.toBase) !== null && _options$toBase !== void 0 ? _options$toBase : options.toBase = function(rgb2) {
-                  var xyz = multiplyMatrices(options.toXYZ_M, rgb2);
+                (_options$toBase = options.toBase) !== null && _options$toBase !== void 0 ? _options$toBase : options.toBase = function(rgb) {
+                  var xyz = multiplyMatrices(options.toXYZ_M, rgb);
                   if (_this.white !== _this.base.white) {
                     xyz = adapt$1(_this.white, _this.base.white, xyz);
                   }
@@ -31520,7 +23884,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             _inherits(RGBColorSpace2, _ColorSpace3);
             return _createClass(RGBColorSpace2);
           })(ColorSpace);
-          function parse2(str2) {
+          function parse(str2) {
             var _String;
             var env = {
               str: (_String = String(str2)) === null || _String === void 0 ? void 0 : _String.trim()
@@ -31647,11 +24011,11 @@ Response: ${match.response.slice(0, 160)}` : "";
                     if (format.test && !format.test(env.str)) {
                       continue;
                     }
-                    var color3 = format.parse(env.str);
-                    if (color3) {
+                    var color2 = format.parse(env.str);
+                    if (color2) {
                       var _color$alpha;
-                      (_color$alpha = color3.alpha) !== null && _color$alpha !== void 0 ? _color$alpha : color3.alpha = 1;
-                      return color3;
+                      (_color$alpha = color2.alpha) !== null && _color$alpha !== void 0 ? _color$alpha : color2.alpha = 1;
+                      return color2;
                     }
                   }
                 }
@@ -31663,53 +24027,53 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             throw new TypeError("Could not parse ".concat(str2, " as a color. Missing a plugin?"));
           }
-          function getColor(color3) {
-            if (!color3) {
+          function getColor(color2) {
+            if (!color2) {
               throw new TypeError("Empty color reference");
             }
-            if (isString(color3)) {
-              color3 = parse2(color3);
+            if (isString(color2)) {
+              color2 = parse(color2);
             }
-            var space2 = color3.space || color3.spaceId;
+            var space2 = color2.space || color2.spaceId;
             if (!(space2 instanceof ColorSpace)) {
-              color3.space = ColorSpace.get(space2);
+              color2.space = ColorSpace.get(space2);
             }
-            if (color3.alpha === void 0) {
-              color3.alpha = 1;
+            if (color2.alpha === void 0) {
+              color2.alpha = 1;
             }
-            return color3;
+            return color2;
           }
-          function getAll(color3, space2) {
+          function getAll(color2, space2) {
             space2 = ColorSpace.get(space2);
-            return space2.from(color3);
+            return space2.from(color2);
           }
-          function get(color3, prop) {
-            var _ColorSpace$resolveCo = ColorSpace.resolveCoord(prop, color3.space), space2 = _ColorSpace$resolveCo.space, index = _ColorSpace$resolveCo.index;
-            var coords2 = getAll(color3, space2);
+          function get(color2, prop) {
+            var _ColorSpace$resolveCo = ColorSpace.resolveCoord(prop, color2.space), space2 = _ColorSpace$resolveCo.space, index = _ColorSpace$resolveCo.index;
+            var coords2 = getAll(color2, space2);
             return coords2[index];
           }
-          function setAll(color3, space2, coords2) {
+          function setAll(color2, space2, coords2) {
             space2 = ColorSpace.get(space2);
-            color3.coords = space2.to(color3.space, coords2);
-            return color3;
+            color2.coords = space2.to(color2.space, coords2);
+            return color2;
           }
-          function set(color3, prop, value) {
-            color3 = getColor(color3);
+          function set(color2, prop, value) {
+            color2 = getColor(color2);
             if (arguments.length === 2 && type(arguments[1]) === "object") {
               var object = arguments[1];
               for (var p2 in object) {
-                set(color3, p2, object[p2]);
+                set(color2, p2, object[p2]);
               }
             } else {
               if (typeof value === "function") {
-                value = value(get(color3, prop));
+                value = value(get(color2, prop));
               }
-              var _ColorSpace$resolveCo2 = ColorSpace.resolveCoord(prop, color3.space), space2 = _ColorSpace$resolveCo2.space, index = _ColorSpace$resolveCo2.index;
-              var coords2 = getAll(color3, space2);
+              var _ColorSpace$resolveCo2 = ColorSpace.resolveCoord(prop, color2.space), space2 = _ColorSpace$resolveCo2.space, index = _ColorSpace$resolveCo2.index;
+              var coords2 = getAll(color2, space2);
               coords2[index] = value;
-              setAll(color3, space2, coords2);
+              setAll(color2, space2, coords2);
             }
-            return color3;
+            return color2;
           }
           var XYZ_D50 = new ColorSpace({
             id: "xyz-d50",
@@ -31751,17 +24115,17 @@ Response: ${match.response.slice(0, 160)}` : "";
               var xyz = XYZ.map(function(value, i2) {
                 return value / white$1[i2];
               });
-              var f2 = xyz.map(function(value) {
+              var f = xyz.map(function(value) {
                 return value > \u03B5$3 ? Math.cbrt(value) : (\u03BA$1 * value + 16) / 116;
               });
-              return [116 * f2[1] - 16, 500 * (f2[0] - f2[1]), 200 * (f2[1] - f2[2])];
+              return [116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])];
             },
             toBase: function toBase(Lab) {
-              var f2 = [];
-              f2[1] = (Lab[0] + 16) / 116;
-              f2[0] = Lab[1] / 500 + f2[1];
-              f2[2] = f2[1] - Lab[2] / 200;
-              var xyz = [f2[0] > \u03B53$1 ? Math.pow(f2[0], 3) : (116 * f2[0] - 16) / \u03BA$1, Lab[0] > 8 ? Math.pow((Lab[0] + 16) / 116, 3) : Lab[0] / \u03BA$1, f2[2] > \u03B53$1 ? Math.pow(f2[2], 3) : (116 * f2[2] - 16) / \u03BA$1];
+              var f = [];
+              f[1] = (Lab[0] + 16) / 116;
+              f[0] = Lab[1] / 500 + f[1];
+              f[2] = f[1] - Lab[2] / 200;
+              var xyz = [f[0] > \u03B53$1 ? Math.pow(f[0], 3) : (116 * f[0] - 16) / \u03BA$1, Lab[0] > 8 ? Math.pow((Lab[0] + 16) / 116, 3) : Lab[0] / \u03BA$1, f[2] > \u03B53$1 ? Math.pow(f[2], 3) : (116 * f[2] - 16) / \u03BA$1];
               return xyz.map(function(value, i2) {
                 return value * white$1[i2];
               });
@@ -31772,18 +24136,18 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }
           });
-          function constrain(angle2) {
-            return (angle2 % 360 + 360) % 360;
+          function constrain(angle) {
+            return (angle % 360 + 360) % 360;
           }
           function adjust(arc, angles) {
             if (arc === "raw") {
               return angles;
             }
-            var _angles$map = angles.map(constrain), _angles$map2 = _slicedToArray(_angles$map, 2), a1 = _angles$map2[0], a22 = _angles$map2[1];
-            var angleDiff = a22 - a1;
+            var _angles$map = angles.map(constrain), _angles$map2 = _slicedToArray(_angles$map, 2), a1 = _angles$map2[0], a2 = _angles$map2[1];
+            var angleDiff = a2 - a1;
             if (arc === "increasing") {
               if (angleDiff < 0) {
-                a22 += 360;
+                a2 += 360;
               }
             } else if (arc === "decreasing") {
               if (angleDiff > 0) {
@@ -31792,7 +24156,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             } else if (arc === "longer") {
               if (-180 < angleDiff && angleDiff < 180) {
                 if (angleDiff > 0) {
-                  a22 += 360;
+                  a2 += 360;
                 } else {
                   a1 += 360;
                 }
@@ -31801,10 +24165,10 @@ Response: ${match.response.slice(0, 160)}` : "";
               if (angleDiff > 180) {
                 a1 += 360;
               } else if (angleDiff < -180) {
-                a22 += 360;
+                a2 += 360;
               }
             }
-            return [a1, a22];
+            return [a1, a2];
           }
           var lch = new ColorSpace({
             id: "lch",
@@ -31826,15 +24190,15 @@ Response: ${match.response.slice(0, 160)}` : "";
             },
             base: lab,
             fromBase: function fromBase(Lab) {
-              var _Lab = _slicedToArray(Lab, 3), L2 = _Lab[0], a22 = _Lab[1], b2 = _Lab[2];
+              var _Lab = _slicedToArray(Lab, 3), L = _Lab[0], a2 = _Lab[1], b2 = _Lab[2];
               var hue;
               var \u03B52 = 0.02;
-              if (Math.abs(a22) < \u03B52 && Math.abs(b2) < \u03B52) {
+              if (Math.abs(a2) < \u03B52 && Math.abs(b2) < \u03B52) {
                 hue = NaN;
               } else {
-                hue = Math.atan2(b2, a22) * 180 / Math.PI;
+                hue = Math.atan2(b2, a2) * 180 / Math.PI;
               }
-              return [L2, Math.sqrt(Math.pow(a22, 2) + Math.pow(b2, 2)), constrain(hue)];
+              return [L, Math.sqrt(Math.pow(a2, 2) + Math.pow(b2, 2)), constrain(hue)];
             },
             toBase: function toBase(LCH) {
               var _LCH = _slicedToArray(LCH, 3), Lightness = _LCH[0], Chroma = _LCH[1], Hue = _LCH[2];
@@ -31856,12 +24220,12 @@ Response: ${match.response.slice(0, 160)}` : "";
           var \u03C0$1 = Math.PI;
           var r2d = 180 / \u03C0$1;
           var d2r$1 = \u03C0$1 / 180;
-          function deltaE2000(color3, sample) {
+          function deltaE2000(color2, sample) {
             var _ref9 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, _ref9$kL = _ref9.kL, kL = _ref9$kL === void 0 ? 1 : _ref9$kL, _ref9$kC = _ref9.kC, kC = _ref9$kC === void 0 ? 1 : _ref9$kC, _ref9$kH = _ref9.kH, kH = _ref9$kH === void 0 ? 1 : _ref9$kH;
-            var _lab$from = lab.from(color3), _lab$from2 = _slicedToArray(_lab$from, 3), L1 = _lab$from2[0], a1 = _lab$from2[1], b1 = _lab$from2[2];
+            var _lab$from = lab.from(color2), _lab$from2 = _slicedToArray(_lab$from, 3), L1 = _lab$from2[0], a1 = _lab$from2[1], b1 = _lab$from2[2];
             var C1 = lch.from(lab, [L1, a1, b1])[1];
-            var _lab$from3 = lab.from(sample), _lab$from4 = _slicedToArray(_lab$from3, 3), L2 = _lab$from4[0], a22 = _lab$from4[1], b2 = _lab$from4[2];
-            var C2 = lch.from(lab, [L2, a22, b2])[1];
+            var _lab$from3 = lab.from(sample), _lab$from4 = _slicedToArray(_lab$from3, 3), L2 = _lab$from4[0], a2 = _lab$from4[1], b2 = _lab$from4[2];
+            var C2 = lch.from(lab, [L2, a2, b2])[1];
             if (C1 < 0) {
               C1 = 0;
             }
@@ -31872,7 +24236,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             var C7 = Math.pow(Cbar, 7);
             var G = 0.5 * (1 - Math.sqrt(C7 / (C7 + Gfactor)));
             var adash1 = (1 + G) * a1;
-            var adash2 = (1 + G) * a22;
+            var adash2 = (1 + G) * a2;
             var Cdash1 = Math.sqrt(Math.pow(adash1, 2) + Math.pow(b1, 2));
             var Cdash2 = Math.sqrt(Math.pow(adash2, 2) + Math.pow(b2, 2));
             var h1 = adash1 === 0 && b1 === 0 ? 0 : Math.atan2(b1, adash1);
@@ -31919,12 +24283,12 @@ Response: ${match.response.slice(0, 160)}` : "";
             var lsq = Math.pow(Ldash - 50, 2);
             var SL = 1 + 0.015 * lsq / Math.sqrt(20 + lsq);
             var SC = 1 + 0.045 * Cdash;
-            var T2 = 1;
-            T2 -= 0.17 * Math.cos((hdash - 30) * d2r$1);
-            T2 += 0.24 * Math.cos(2 * hdash * d2r$1);
-            T2 += 0.32 * Math.cos((3 * hdash + 6) * d2r$1);
-            T2 -= 0.2 * Math.cos((4 * hdash - 63) * d2r$1);
-            var SH = 1 + 0.015 * Cdash * T2;
+            var T = 1;
+            T -= 0.17 * Math.cos((hdash - 30) * d2r$1);
+            T += 0.24 * Math.cos(2 * hdash * d2r$1);
+            T += 0.32 * Math.cos((3 * hdash + 6) * d2r$1);
+            T -= 0.2 * Math.cos((4 * hdash - 63) * d2r$1);
+            var SH = 1 + 0.015 * Cdash * T;
             var \u0394\u03B8 = 30 * Math.exp(-1 * Math.pow((hdash - 275) / 25, 2));
             var RC = 2 * Math.sqrt(Cdash7 / (Cdash7 + Gfactor));
             var RT = -1 * Math.sin(2 * \u0394\u03B8 * d2r$1) * RC;
@@ -31935,44 +24299,44 @@ Response: ${match.response.slice(0, 160)}` : "";
             return Math.sqrt(dE);
           }
           var \u03B5$2 = 75e-6;
-          function inGamut(color3) {
-            var space2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : color3.space;
+          function inGamut(color2) {
+            var space2 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : color2.space;
             var _ref0 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, _ref0$epsilon = _ref0.epsilon, epsilon = _ref0$epsilon === void 0 ? \u03B5$2 : _ref0$epsilon;
-            color3 = getColor(color3);
+            color2 = getColor(color2);
             space2 = ColorSpace.get(space2);
-            var coords2 = color3.coords;
-            if (space2 !== color3.space) {
-              coords2 = space2.from(color3);
+            var coords2 = color2.coords;
+            if (space2 !== color2.space) {
+              coords2 = space2.from(color2);
             }
             return space2.inGamut(coords2, {
               epsilon
             });
           }
-          function clone(color3) {
+          function clone(color2) {
             return {
-              space: color3.space,
-              coords: color3.coords.slice(),
-              alpha: color3.alpha
+              space: color2.space,
+              coords: color2.coords.slice(),
+              alpha: color2.alpha
             };
           }
-          function toGamut(color3) {
-            var _ref1 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}, _ref1$method = _ref1.method, method = _ref1$method === void 0 ? defaults.gamut_mapping : _ref1$method, _ref1$space = _ref1.space, space2 = _ref1$space === void 0 ? color3.space : _ref1$space;
+          function toGamut(color2) {
+            var _ref1 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}, _ref1$method = _ref1.method, method = _ref1$method === void 0 ? defaults.gamut_mapping : _ref1$method, _ref1$space = _ref1.space, space2 = _ref1$space === void 0 ? color2.space : _ref1$space;
             if (isString(arguments[1])) {
               space2 = arguments[1];
             }
             space2 = ColorSpace.get(space2);
-            if (inGamut(color3, space2, {
+            if (inGamut(color2, space2, {
               epsilon: 0
             })) {
-              return color3;
+              return color2;
             }
-            var spaceColor = to(color3, space2);
-            if (method !== "clip" && !inGamut(color3, space2)) {
+            var spaceColor = to(color2, space2);
+            if (method !== "clip" && !inGamut(color2, space2)) {
               var clipped = toGamut(clone(spaceColor), {
                 method: "clip",
                 space: space2
               });
-              if (deltaE2000(color3, clipped) > 2) {
+              if (deltaE2000(color2, clipped) > 2) {
                 var coordMeta = ColorSpace.resolveCoord(method);
                 var mapSpace = coordMeta.space;
                 var coordId = coordMeta.id;
@@ -32018,22 +24382,22 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return c4;
               });
             }
-            if (space2 !== color3.space) {
-              spaceColor = to(spaceColor, color3.space);
+            if (space2 !== color2.space) {
+              spaceColor = to(spaceColor, color2.space);
             }
-            color3.coords = spaceColor.coords;
-            return color3;
+            color2.coords = spaceColor.coords;
+            return color2;
           }
           toGamut.returns = "color";
-          function to(color3, space2) {
+          function to(color2, space2) {
             var _ref10 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, inGamut2 = _ref10.inGamut;
-            color3 = getColor(color3);
+            color2 = getColor(color2);
             space2 = ColorSpace.get(space2);
-            var coords2 = space2.from(color3);
+            var coords2 = space2.from(color2);
             var ret = {
               space: space2,
               coords: coords2,
-              alpha: color3.alpha
+              alpha: color2.alpha
             };
             if (inGamut2) {
               ret = toGamut(ret);
@@ -32041,26 +24405,26 @@ Response: ${match.response.slice(0, 160)}` : "";
             return ret;
           }
           to.returns = "color";
-          function serialize(color3) {
+          function serialize(color2) {
             var _ref12, _color$space$getForma;
             var _ref11 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var _ref11$precision = _ref11.precision, precision = _ref11$precision === void 0 ? defaults.precision : _ref11$precision, _ref11$format = _ref11.format, format = _ref11$format === void 0 ? "default" : _ref11$format, _ref11$inGamut = _ref11.inGamut, inGamut$1 = _ref11$inGamut === void 0 ? true : _ref11$inGamut, customOptions = _objectWithoutProperties(_ref11, _excluded);
             var ret;
-            color3 = getColor(color3);
+            color2 = getColor(color2);
             var formatId = format;
-            format = (_ref12 = (_color$space$getForma = color3.space.getFormat(format)) !== null && _color$space$getForma !== void 0 ? _color$space$getForma : color3.space.getFormat("default")) !== null && _ref12 !== void 0 ? _ref12 : ColorSpace.DEFAULT_FORMAT;
+            format = (_ref12 = (_color$space$getForma = color2.space.getFormat(format)) !== null && _color$space$getForma !== void 0 ? _color$space$getForma : color2.space.getFormat("default")) !== null && _ref12 !== void 0 ? _ref12 : ColorSpace.DEFAULT_FORMAT;
             inGamut$1 || (inGamut$1 = format.toGamut);
-            var coords2 = color3.coords;
+            var coords2 = color2.coords;
             coords2 = coords2.map(function(c4) {
               return c4 ? c4 : 0;
             });
-            if (inGamut$1 && !inGamut(color3)) {
-              coords2 = toGamut(clone(color3), inGamut$1 === true ? void 0 : inGamut$1).coords;
+            if (inGamut$1 && !inGamut(color2)) {
+              coords2 = toGamut(clone(color2), inGamut$1 === true ? void 0 : inGamut$1).coords;
             }
             if (format.type === "custom") {
               customOptions.precision = precision;
               if (format.serialize) {
-                ret = format.serialize(coords2, color3.alpha, customOptions);
+                ret = format.serialize(coords2, color2.alpha, customOptions);
               } else {
                 throw new TypeError("format ".concat(formatId, " can only be used to parse colors, not for serialization"));
               }
@@ -32078,14 +24442,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               var args = _toConsumableArray(coords2);
               if (name === "color") {
                 var _format$ids;
-                var cssId = format.id || ((_format$ids = format.ids) === null || _format$ids === void 0 ? void 0 : _format$ids[0]) || color3.space.id;
+                var cssId = format.id || ((_format$ids = format.ids) === null || _format$ids === void 0 ? void 0 : _format$ids[0]) || color2.space.id;
                 args.unshift(cssId);
               }
-              var alpha = color3.alpha;
+              var alpha = color2.alpha;
               if (precision !== null) {
                 alpha = toPrecision(alpha, precision);
               }
-              var strAlpha = color3.alpha < 1 && !format.noAlpha ? "".concat(format.commas ? "," : " /", " ").concat(alpha) : "";
+              var strAlpha = color2.alpha < 1 && !format.noAlpha ? "".concat(format.commas ? "," : " /", " ").concat(alpha) : "";
               ret = "".concat(name, "(").concat(args.join(format.commas ? ", " : " ")).concat(strAlpha, ")");
             }
             return ret;
@@ -32305,8 +24669,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             id: "srgb",
             name: "sRGB",
             base: sRGBLinear,
-            fromBase: function fromBase(rgb2) {
-              return rgb2.map(function(val) {
+            fromBase: function fromBase(rgb) {
+              return rgb.map(function(val) {
                 var sign = val < 0 ? -1 : 1;
                 var abs = val * sign;
                 if (abs > 31308e-7) {
@@ -32315,8 +24679,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return 12.92 * val;
               });
             },
-            toBase: function toBase(rgb2) {
-              return rgb2.map(function(val) {
+            toBase: function toBase(rgb) {
+              return rgb.map(function(val) {
                 var sign = val < 0 ? -1 : 1;
                 var abs = val * sign;
                 if (abs < 0.04045) {
@@ -32428,38 +24792,38 @@ Response: ${match.response.slice(0, 160)}` : "";
             for (var _i4 = 0, _arr = [lab, REC2020, P3]; _i4 < _arr.length; _i4++) {
               var space = _arr[_i4];
               var coords = space.getMinCoords();
-              var color2 = {
+              var color = {
                 space,
                 coords,
                 alpha: 1
               };
-              var str = serialize(color2);
+              var str = serialize(color);
               if (CSS.supports("color", str)) {
                 defaults.display_space = space;
                 break;
               }
             }
           }
-          function _display(color3) {
+          function _display(color2) {
             var _CSS2;
             var _ref14 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {};
             var _ref14$space = _ref14.space, space2 = _ref14$space === void 0 ? defaults.display_space : _ref14$space, options = _objectWithoutProperties(_ref14, _excluded2);
-            var ret = serialize(color3, options);
+            var ret = serialize(color2, options);
             if (typeof CSS === "undefined" || (_CSS2 = CSS) !== null && _CSS2 !== void 0 && _CSS2.supports("color", ret) || !defaults.display_space) {
               ret = new String(ret);
-              ret.color = color3;
+              ret.color = color2;
             } else {
-              var fallbackColor = to(color3, space2);
+              var fallbackColor = to(color2, space2);
               ret = new String(serialize(fallbackColor, options));
               ret.color = fallbackColor;
             }
             return ret;
           }
-          function distance2(color1, color22) {
+          function distance(color1, color2) {
             var space2 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : "lab";
             space2 = ColorSpace.get(space2);
             var coords1 = space2.from(color1);
-            var coords2 = space2.from(color22);
+            var coords2 = space2.from(color2);
             return Math.sqrt(coords1.reduce(function(acc, c12, i2) {
               var c22 = coords2[i2];
               if (isNaN(c12) || isNaN(c22)) {
@@ -32468,18 +24832,18 @@ Response: ${match.response.slice(0, 160)}` : "";
               return acc + Math.pow(c22 - c12, 2);
             }, 0));
           }
-          function equals(color1, color22) {
+          function equals(color1, color2) {
             color1 = getColor(color1);
-            color22 = getColor(color22);
-            return color1.space === color22.space && color1.alpha === color22.alpha && color1.coords.every(function(c4, i2) {
-              return c4 === color22.coords[i2];
+            color2 = getColor(color2);
+            return color1.space === color2.space && color1.alpha === color2.alpha && color1.coords.every(function(c4, i2) {
+              return c4 === color2.coords[i2];
             });
           }
-          function getLuminance(color3) {
-            return get(color3, [XYZ_D65, "y"]);
+          function getLuminance(color2) {
+            return get(color2, [XYZ_D65, "y"]);
           }
-          function setLuminance(color3, value) {
-            set(color3, [XYZ_D65, "y"], value);
+          function setLuminance(color2, value) {
+            set(color2, [XYZ_D65, "y"], value);
           }
           function register$2(Color3) {
             Object.defineProperty(Color3.prototype, "luminance", {
@@ -32497,11 +24861,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             setLuminance,
             register: register$2
           });
-          function contrastWCAG21(color1, color22) {
+          function contrastWCAG21(color1, color2) {
             color1 = getColor(color1);
-            color22 = getColor(color22);
+            color2 = getColor(color2);
             var Y1 = Math.max(getLuminance(color1), 0);
-            var Y2 = Math.max(getLuminance(color22), 0);
+            var Y2 = Math.max(getLuminance(color2), 0);
             if (Y2 > Y1) {
               var _ref15 = [Y2, Y1];
               Y1 = _ref15[0];
@@ -32573,11 +24937,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return Sapc * 100;
           }
-          function contrastMichelson(color1, color22) {
+          function contrastMichelson(color1, color2) {
             color1 = getColor(color1);
-            color22 = getColor(color22);
+            color2 = getColor(color2);
             var Y1 = Math.max(getLuminance(color1), 0);
-            var Y2 = Math.max(getLuminance(color22), 0);
+            var Y2 = Math.max(getLuminance(color2), 0);
             if (Y2 > Y1) {
               var _ref16 = [Y2, Y1];
               Y1 = _ref16[0];
@@ -32587,11 +24951,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             return denom === 0 ? 0 : (Y1 - Y2) / denom;
           }
           var max = 5e4;
-          function contrastWeber(color1, color22) {
+          function contrastWeber(color1, color2) {
             color1 = getColor(color1);
-            color22 = getColor(color22);
+            color2 = getColor(color2);
             var Y1 = Math.max(getLuminance(color1), 0);
-            var Y2 = Math.max(getLuminance(color22), 0);
+            var Y2 = Math.max(getLuminance(color2), 0);
             if (Y2 > Y1) {
               var _ref17 = [Y2, Y1];
               Y1 = _ref17[0];
@@ -32599,11 +24963,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return Y2 === 0 ? max : (Y1 - Y2) / Y2;
           }
-          function contrastLstar(color1, color22) {
+          function contrastLstar(color1, color2) {
             color1 = getColor(color1);
-            color22 = getColor(color22);
+            color2 = getColor(color2);
             var L1 = get(color1, [lab, "l"]);
-            var L2 = get(color22, [lab, "l"]);
+            var L2 = get(color2, [lab, "l"]);
             return Math.abs(L1 - L2);
           }
           var \u03B5$1 = 216 / 24389;
@@ -32631,17 +24995,17 @@ Response: ${match.response.slice(0, 160)}` : "";
               var xyz = XYZ.map(function(value, i2) {
                 return value / white[i2];
               });
-              var f2 = xyz.map(function(value) {
+              var f = xyz.map(function(value) {
                 return value > \u03B5$1 ? Math.cbrt(value) : (\u03BA * value + 16) / 116;
               });
-              return [116 * f2[1] - 16, 500 * (f2[0] - f2[1]), 200 * (f2[1] - f2[2])];
+              return [116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])];
             },
             toBase: function toBase(Lab) {
-              var f2 = [];
-              f2[1] = (Lab[0] + 16) / 116;
-              f2[0] = Lab[1] / 500 + f2[1];
-              f2[2] = f2[1] - Lab[2] / 200;
-              var xyz = [f2[0] > \u03B53 ? Math.pow(f2[0], 3) : (116 * f2[0] - 16) / \u03BA, Lab[0] > 8 ? Math.pow((Lab[0] + 16) / 116, 3) : Lab[0] / \u03BA, f2[2] > \u03B53 ? Math.pow(f2[2], 3) : (116 * f2[2] - 16) / \u03BA];
+              var f = [];
+              f[1] = (Lab[0] + 16) / 116;
+              f[0] = Lab[1] / 500 + f[1];
+              f[2] = f[1] - Lab[2] / 200;
+              var xyz = [f[0] > \u03B53 ? Math.pow(f[0], 3) : (116 * f[0] - 16) / \u03BA, Lab[0] > 8 ? Math.pow((Lab[0] + 16) / 116, 3) : Lab[0] / \u03BA, f[2] > \u03B53 ? Math.pow(f[2], 3) : (116 * f[2] - 16) / \u03BA];
               return xyz.map(function(value, i2) {
                 return value * white[i2];
               });
@@ -32653,11 +25017,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
           });
           var phi = Math.pow(5, 0.5) * 0.5 + 0.5;
-          function contrastDeltaPhi(color1, color22) {
+          function contrastDeltaPhi(color1, color2) {
             color1 = getColor(color1);
-            color22 = getColor(color22);
+            color2 = getColor(color2);
             var Lstr1 = get(color1, [lab_d65, "l"]);
-            var Lstr2 = get(color22, [lab_d65, "l"]);
+            var Lstr2 = get(color2, [lab_d65, "l"]);
             var deltaPhiStar = Math.abs(Math.pow(Lstr1, phi) - Math.pow(Lstr2, phi));
             var contrast2 = Math.pow(deltaPhiStar, 1 / phi) * Math.SQRT2 - 40;
             return contrast2 < 7.5 ? 0 : contrast2;
@@ -32680,28 +25044,28 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             var _o = o, algorithm = _o.algorithm, rest = _objectWithoutProperties(_o, _excluded3);
             if (!algorithm) {
-              var algorithms = Object.keys(contrastMethods).map(function(a23) {
-                return a23.replace(/^contrast/, "");
+              var algorithms = Object.keys(contrastMethods).map(function(a22) {
+                return a22.replace(/^contrast/, "");
               }).join(", ");
               throw new TypeError("contrast() function needs a contrast algorithm. Please specify one of: ".concat(algorithms));
             }
             background = getColor(background);
             foreground = getColor(foreground);
-            for (var a22 in contrastMethods) {
-              if ("contrast" + algorithm.toLowerCase() === a22.toLowerCase()) {
-                return contrastMethods[a22](background, foreground, rest);
+            for (var a2 in contrastMethods) {
+              if ("contrast" + algorithm.toLowerCase() === a2.toLowerCase()) {
+                return contrastMethods[a2](background, foreground, rest);
               }
             }
             throw new TypeError("Unknown contrast algorithm: ".concat(algorithm));
           }
-          function uv(color3) {
-            var _getAll = getAll(color3, XYZ_D65), _getAll2 = _slicedToArray(_getAll, 3), X = _getAll2[0], Y = _getAll2[1], Z2 = _getAll2[2];
-            var denom = X + 15 * Y + 3 * Z2;
+          function uv(color2) {
+            var _getAll = getAll(color2, XYZ_D65), _getAll2 = _slicedToArray(_getAll, 3), X = _getAll2[0], Y = _getAll2[1], Z = _getAll2[2];
+            var denom = X + 15 * Y + 3 * Z;
             return [4 * X / denom, 9 * Y / denom];
           }
-          function xy(color3) {
-            var _getAll3 = getAll(color3, XYZ_D65), _getAll4 = _slicedToArray(_getAll3, 3), X = _getAll4[0], Y = _getAll4[1], Z2 = _getAll4[2];
-            var sum = X + Y + Z2;
+          function xy(color2) {
+            var _getAll3 = getAll(color2, XYZ_D65), _getAll4 = _slicedToArray(_getAll3, 3), X = _getAll4[0], Y = _getAll4[1], Z = _getAll4[2];
+            var sum = X + Y + Z;
             return [X / sum, Y / sum];
           }
           function register$1(Color3) {
@@ -32722,17 +25086,17 @@ Response: ${match.response.slice(0, 160)}` : "";
             xy,
             register: register$1
           });
-          function deltaE76(color3, sample) {
-            return distance2(color3, sample, "lab");
+          function deltaE76(color2, sample) {
+            return distance(color2, sample, "lab");
           }
           var \u03C0 = Math.PI;
           var d2r = \u03C0 / 180;
-          function deltaECMC(color3, sample) {
+          function deltaECMC(color2, sample) {
             var _ref18 = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, _ref18$l = _ref18.l, l = _ref18$l === void 0 ? 2 : _ref18$l, _ref18$c = _ref18.c, c4 = _ref18$c === void 0 ? 1 : _ref18$c;
-            var _lab$from5 = lab.from(color3), _lab$from6 = _slicedToArray(_lab$from5, 3), L1 = _lab$from6[0], a1 = _lab$from6[1], b1 = _lab$from6[2];
+            var _lab$from5 = lab.from(color2), _lab$from6 = _slicedToArray(_lab$from5, 3), L1 = _lab$from6[0], a1 = _lab$from6[1], b1 = _lab$from6[2];
             var _lch$from = lch.from(lab, [L1, a1, b1]), _lch$from2 = _slicedToArray(_lch$from, 3), C1 = _lch$from2[1], H1 = _lch$from2[2];
-            var _lab$from7 = lab.from(sample), _lab$from8 = _slicedToArray(_lab$from7, 3), L2 = _lab$from8[0], a22 = _lab$from8[1], b2 = _lab$from8[2];
-            var C2 = lch.from(lab, [L2, a22, b2])[1];
+            var _lab$from7 = lab.from(sample), _lab$from8 = _slicedToArray(_lab$from7, 3), L2 = _lab$from8[0], a2 = _lab$from8[1], b2 = _lab$from8[2];
+            var C2 = lch.from(lab, [L2, a2, b2])[1];
             if (C1 < 0) {
               C1 = 0;
             }
@@ -32741,29 +25105,29 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             var \u0394L = L1 - L2;
             var \u0394C = C1 - C2;
-            var \u0394a = a1 - a22;
+            var \u0394a = a1 - a2;
             var \u0394b = b1 - b2;
-            var H22 = Math.pow(\u0394a, 2) + Math.pow(\u0394b, 2) - Math.pow(\u0394C, 2);
+            var H2 = Math.pow(\u0394a, 2) + Math.pow(\u0394b, 2) - Math.pow(\u0394C, 2);
             var SL = 0.511;
             if (L1 >= 16) {
               SL = 0.040975 * L1 / (1 + 0.01765 * L1);
             }
             var SC = 0.0638 * C1 / (1 + 0.0131 * C1) + 0.638;
-            var T2;
+            var T;
             if (Number.isNaN(H1)) {
               H1 = 0;
             }
             if (H1 >= 164 && H1 <= 345) {
-              T2 = 0.56 + Math.abs(0.2 * Math.cos((H1 + 168) * d2r));
+              T = 0.56 + Math.abs(0.2 * Math.cos((H1 + 168) * d2r));
             } else {
-              T2 = 0.36 + Math.abs(0.4 * Math.cos((H1 + 35) * d2r));
+              T = 0.36 + Math.abs(0.4 * Math.cos((H1 + 35) * d2r));
             }
             var C4 = Math.pow(C1, 4);
-            var F2 = Math.sqrt(C4 / (C4 + 1900));
-            var SH = SC * (F2 * T2 + 1 - F2);
+            var F = Math.sqrt(C4 / (C4 + 1900));
+            var SH = SC * (F * T + 1 - F);
             var dE = Math.pow(\u0394L / (l * SL), 2);
             dE += Math.pow(\u0394C / (c4 * SC), 2);
-            dE += H22 / Math.pow(SH, 2);
+            dE += H2 / Math.pow(SH, 2);
             return Math.sqrt(dE);
           }
           var Yw$1 = 203;
@@ -32897,8 +25261,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               color: {}
             }
           });
-          function deltaEJz(color3, sample) {
-            var _jzczhz$from = jzczhz.from(color3), _jzczhz$from2 = _slicedToArray(_jzczhz$from, 3), Jz1 = _jzczhz$from2[0], Cz1 = _jzczhz$from2[1], Hz1 = _jzczhz$from2[2];
+          function deltaEJz(color2, sample) {
+            var _jzczhz$from = jzczhz.from(color2), _jzczhz$from2 = _slicedToArray(_jzczhz$from, 3), Jz1 = _jzczhz$from2[0], Cz1 = _jzczhz$from2[1], Hz1 = _jzczhz$from2[2];
             var _jzczhz$from3 = jzczhz.from(sample), _jzczhz$from4 = _slicedToArray(_jzczhz$from3, 3), Jz2 = _jzczhz$from4[0], Cz2 = _jzczhz$from4[1], Hz2 = _jzczhz$from4[2];
             var \u0394J = Jz1 - Jz2;
             var \u0394C = Cz1 - Cz2;
@@ -32972,8 +25336,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             });
             return LMS;
           }
-          function deltaEITP(color3, sample) {
-            var _ictcp$from = ictcp.from(color3), _ictcp$from2 = _slicedToArray(_ictcp$from, 3), I1 = _ictcp$from2[0], T1 = _ictcp$from2[1], P1 = _ictcp$from2[2];
+          function deltaEITP(color2, sample) {
+            var _ictcp$from = ictcp.from(color2), _ictcp$from2 = _slicedToArray(_ictcp$from, 3), I1 = _ictcp$from2[0], T1 = _ictcp$from2[1], P1 = _ictcp$from2[2];
             var _ictcp$from3 = ictcp.from(sample), _ictcp$from4 = _slicedToArray(_ictcp$from3, 3), I2 = _ictcp$from4[0], T2 = _ictcp$from4[1], P2 = _ictcp$from4[2];
             return 720 * Math.sqrt(Math.pow(I1 - I2, 2) + 0.25 * Math.pow(T1 - T2, 2) + Math.pow(P1 - P2, 2));
           }
@@ -33018,11 +25382,11 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }
           });
-          function deltaEOK(color3, sample) {
-            var _OKLab$from = OKLab.from(color3), _OKLab$from2 = _slicedToArray(_OKLab$from, 3), L1 = _OKLab$from2[0], a1 = _OKLab$from2[1], b1 = _OKLab$from2[2];
-            var _OKLab$from3 = OKLab.from(sample), _OKLab$from4 = _slicedToArray(_OKLab$from3, 3), L2 = _OKLab$from4[0], a22 = _OKLab$from4[1], b2 = _OKLab$from4[2];
+          function deltaEOK(color2, sample) {
+            var _OKLab$from = OKLab.from(color2), _OKLab$from2 = _slicedToArray(_OKLab$from, 3), L1 = _OKLab$from2[0], a1 = _OKLab$from2[1], b1 = _OKLab$from2[2];
+            var _OKLab$from3 = OKLab.from(sample), _OKLab$from4 = _slicedToArray(_OKLab$from3, 3), L2 = _OKLab$from4[0], a2 = _OKLab$from4[1], b2 = _OKLab$from4[2];
             var \u0394L = L1 - L2;
-            var \u0394a = a1 - a22;
+            var \u0394a = a1 - a2;
             var \u0394b = b1 - b2;
             return Math.sqrt(Math.pow(\u0394L, 2) + Math.pow(\u0394a, 2) + Math.pow(\u0394b, 2));
           }
@@ -33052,19 +25416,19 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             throw new TypeError("Unknown deltaE method: ".concat(method));
           }
-          function lighten(color3) {
+          function lighten(color2) {
             var amount = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 0.25;
             var space2 = ColorSpace.get("oklch", "lch");
             var lightness = [space2, "l"];
-            return set(color3, lightness, function(l) {
+            return set(color2, lightness, function(l) {
               return l * (1 + amount);
             });
           }
-          function darken(color3) {
+          function darken(color2) {
             var amount = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : 0.25;
             var space2 = ColorSpace.get("oklch", "lch");
             var lightness = [space2, "l"];
-            return set(color3, lightness, function(l) {
+            return set(color2, lightness, function(l) {
               return l * (1 - amount);
             });
           }
@@ -33156,24 +25520,24 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               }
             }
-            ret = ret.map(function(a22) {
-              return a22.color;
+            ret = ret.map(function(a2) {
+              return a2.color;
             });
             return ret;
           }
-          function range(color1, color22) {
+          function range(color1, color2) {
             var options = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {};
             if (isRange(color1)) {
-              var r = color1, options2 = color22;
+              var r = color1, options2 = color2;
               return range.apply(void 0, _toConsumableArray(r.rangeArgs.colors).concat([_extends({}, r.rangeArgs.options, options2)]));
             }
             var space2 = options.space, outputSpace = options.outputSpace, progression = options.progression, premultiplied = options.premultiplied;
             color1 = getColor(color1);
-            color22 = getColor(color22);
+            color2 = getColor(color2);
             color1 = clone(color1);
-            color22 = clone(color22);
+            color2 = clone(color2);
             var rangeArgs = {
-              colors: [color1, color22],
+              colors: [color1, color2],
               options
             };
             if (space2) {
@@ -33183,35 +25547,35 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             outputSpace = outputSpace ? ColorSpace.get(outputSpace) : space2;
             color1 = to(color1, space2);
-            color22 = to(color22, space2);
+            color2 = to(color2, space2);
             color1 = toGamut(color1);
-            color22 = toGamut(color22);
+            color2 = toGamut(color2);
             if (space2.coords.h && space2.coords.h.type === "angle") {
               var arc = options.hue = options.hue || "shorter";
               var hue = [space2, "h"];
-              var _ref22 = [get(color1, hue), get(color22, hue)], \u03B81 = _ref22[0], \u03B82 = _ref22[1];
+              var _ref22 = [get(color1, hue), get(color2, hue)], \u03B81 = _ref22[0], \u03B82 = _ref22[1];
               var _adjust = adjust(arc, [\u03B81, \u03B82]);
               var _adjust2 = _slicedToArray(_adjust, 2);
               \u03B81 = _adjust2[0];
               \u03B82 = _adjust2[1];
               set(color1, hue, \u03B81);
-              set(color22, hue, \u03B82);
+              set(color2, hue, \u03B82);
             }
             if (premultiplied) {
               color1.coords = color1.coords.map(function(c4) {
                 return c4 * color1.alpha;
               });
-              color22.coords = color22.coords.map(function(c4) {
-                return c4 * color22.alpha;
+              color2.coords = color2.coords.map(function(c4) {
+                return c4 * color2.alpha;
               });
             }
             return Object.assign(function(p2) {
               p2 = progression ? progression(p2) : p2;
               var coords2 = color1.coords.map(function(start, i2) {
-                var end = color22.coords[i2];
+                var end = color2.coords[i2];
                 return interpolate(start, end, p2);
               });
-              var alpha = interpolate(color1.alpha, color22.alpha, p2);
+              var alpha = interpolate(color1.alpha, color2.alpha, p2);
               var ret = {
                 space: space2,
                 coords: coords2,
@@ -33272,10 +25636,10 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             },
             base: sRGB,
-            fromBase: function fromBase(rgb2) {
-              var max2 = Math.max.apply(Math, _toConsumableArray(rgb2));
-              var min = Math.min.apply(Math, _toConsumableArray(rgb2));
-              var _rgb = _slicedToArray(rgb2, 3), r = _rgb[0], g2 = _rgb[1], b2 = _rgb[2];
+            fromBase: function fromBase(rgb) {
+              var max2 = Math.max.apply(Math, _toConsumableArray(rgb));
+              var min = Math.min.apply(Math, _toConsumableArray(rgb));
+              var _rgb = _slicedToArray(rgb, 3), r = _rgb[0], g2 = _rgb[1], b2 = _rgb[2];
               var h = NaN, s = 0, l = (min + max2) / 2;
               var d2 = max2 - min;
               if (d2 !== 0) {
@@ -33294,20 +25658,20 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               return [h, s * 100, l * 100];
             },
-            toBase: function toBase(hsl2) {
-              var _hsl = _slicedToArray(hsl2, 3), h = _hsl[0], s = _hsl[1], l = _hsl[2];
+            toBase: function toBase(hsl) {
+              var _hsl = _slicedToArray(hsl, 3), h = _hsl[0], s = _hsl[1], l = _hsl[2];
               h = h % 360;
               if (h < 0) {
                 h += 360;
               }
               s /= 100;
               l /= 100;
-              function f2(n2) {
+              function f(n2) {
                 var k = (n2 + h / 30) % 12;
-                var a22 = s * Math.min(l, 1 - l);
-                return l - a22 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+                var a2 = s * Math.min(l, 1 - l);
+                return l - a2 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
               }
-              return [f2(0), f2(8), f2(4)];
+              return [f(0), f(8), f(4)];
             },
             formats: {
               hsl: {
@@ -33340,8 +25704,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             },
             base: HSL,
-            fromBase: function fromBase(hsl2) {
-              var _hsl2 = _slicedToArray(hsl2, 3), h = _hsl2[0], s = _hsl2[1], l = _hsl2[2];
+            fromBase: function fromBase(hsl) {
+              var _hsl2 = _slicedToArray(hsl, 3), h = _hsl2[0], s = _hsl2[1], l = _hsl2[2];
               s /= 100;
               l /= 100;
               var v = l + s * Math.min(l, 1 - l);
@@ -33485,27 +25849,27 @@ Response: ${match.response.slice(0, 160)}` : "";
             white: "D65",
             base: OKLab,
             fromBase: function fromBase(oklab) {
-              var _oklab = _slicedToArray(oklab, 3), L2 = _oklab[0], a22 = _oklab[1], b2 = _oklab[2];
+              var _oklab = _slicedToArray(oklab, 3), L = _oklab[0], a2 = _oklab[1], b2 = _oklab[2];
               var h;
               var \u03B52 = 2e-4;
-              if (Math.abs(a22) < \u03B52 && Math.abs(b2) < \u03B52) {
+              if (Math.abs(a2) < \u03B52 && Math.abs(b2) < \u03B52) {
                 h = NaN;
               } else {
-                h = Math.atan2(b2, a22) * 180 / Math.PI;
+                h = Math.atan2(b2, a2) * 180 / Math.PI;
               }
-              return [L2, Math.sqrt(Math.pow(a22, 2) + Math.pow(b2, 2)), constrain(h)];
+              return [L, Math.sqrt(Math.pow(a2, 2) + Math.pow(b2, 2)), constrain(h)];
             },
             toBase: function toBase(oklch2) {
-              var _oklch = _slicedToArray(oklch2, 3), L2 = _oklch[0], C = _oklch[1], h = _oklch[2];
-              var a22, b2;
+              var _oklch = _slicedToArray(oklch2, 3), L = _oklch[0], C = _oklch[1], h = _oklch[2];
+              var a2, b2;
               if (isNaN(h)) {
-                a22 = 0;
+                a2 = 0;
                 b2 = 0;
               } else {
-                a22 = C * Math.cos(h * Math.PI / 180);
+                a2 = C * Math.cos(h * Math.PI / 180);
                 b2 = C * Math.sin(h * Math.PI / 180);
               }
-              return [L2, a22, b2];
+              return [L, a2, b2];
             },
             formats: {
               oklch: {
@@ -33545,7 +25909,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }
           });
-          var a2 = 0.17883277;
+          var a = 0.17883277;
           var b = 0.28466892;
           var c = 0.55991073;
           var scale = 3.7743;
@@ -33560,7 +25924,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 if (val <= 0.5) {
                   return Math.pow(val, 2) / 3 * scale;
                 }
-                return Math.exp((val - c) / a2 + b) / 12 * scale;
+                return Math.exp((val - c) / a + b) / 12 * scale;
               });
             },
             fromBase: function fromBase(RGB) {
@@ -33569,7 +25933,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 if (val <= 1 / 12) {
                   return Math.sqrt(3 * val);
                 }
-                return a2 * Math.log(12 * val - b) + c;
+                return a * Math.log(12 * val - b) + c;
               });
             },
             formats: {
@@ -33746,18 +26110,18 @@ Response: ${match.response.slice(0, 160)}` : "";
               var _this2 = this;
               _classCallCheck(this, Color);
               _classPrivateFieldInitSpec(this, _space, void 0);
-              var color3;
+              var color2;
               for (var _len2 = arguments.length, args = new Array(_len2), _key2 = 0; _key2 < _len2; _key2++) {
                 args[_key2] = arguments[_key2];
               }
               if (args.length === 1) {
-                color3 = getColor(args[0]);
+                color2 = getColor(args[0]);
               }
               var space2, coords2, alpha;
-              if (color3) {
-                space2 = color3.space || color3.spaceId;
-                coords2 = color3.coords;
-                alpha = color3.alpha;
+              if (color2) {
+                space2 = color2.space || color2.spaceId;
+                coords2 = color2.coords;
+                alpha = color2.alpha;
               } else {
                 space2 = args[0];
                 coords2 = args[1];
@@ -33811,7 +26175,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }, {
               key: "display",
-              value: function display2() {
+              value: function display() {
                 for (var _len3 = arguments.length, args = new Array(_len3), _key3 = 0; _key3 < _len3; _key3++) {
                   args[_key3] = arguments[_key3];
                 }
@@ -33821,14 +26185,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }], [{
               key: "get",
-              value: function get2(color3) {
-                if (color3 instanceof _Color) {
-                  return color3;
+              value: function get2(color2) {
+                if (color2 instanceof _Color) {
+                  return color2;
                 }
                 for (var _len4 = arguments.length, args = new Array(_len4 > 1 ? _len4 - 1 : 0), _key4 = 1; _key4 < _len4; _key4++) {
                   args[_key4 - 1] = arguments[_key4];
                 }
-                return _construct(_Color, [color3].concat(args));
+                return _construct(_Color, [color2].concat(args));
               }
             }, {
               key: "defineFunction",
@@ -33840,12 +26204,12 @@ Response: ${match.response.slice(0, 160)}` : "";
                   if (returns === "color") {
                     ret = _Color.get(ret);
                   } else if (returns === "function<color>") {
-                    var f2 = ret;
+                    var f = ret;
                     ret = function ret2() {
-                      var ret22 = f2.apply(void 0, arguments);
+                      var ret22 = f.apply(void 0, arguments);
                       return _Color.get(ret22);
                     };
-                    Object.assign(ret, f2);
+                    Object.assign(ret, f);
                   } else if (returns === "array<color>") {
                     ret = ret.map(function(c4) {
                       return _Color.get(c4);
@@ -33894,7 +26258,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             equals,
             inGamut,
             toGamut,
-            distance: distance2,
+            distance,
             toString: serialize
           });
           Object.assign(_Color, {
@@ -33903,7 +26267,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             WHITES,
             Space: ColorSpace,
             spaces: ColorSpace.registry,
-            parse: parse2,
+            parse,
             defaults
           });
           for (var _i5 = 0, _Object$keys = Object.keys(spaces); _i5 < _Object$keys.length; _i5++) {
@@ -33938,7 +26302,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                     try {
                       ColorSpace.resolveCoord([space2, property]);
                       return true;
-                    } catch (e2) {
+                    } catch (e) {
                     }
                     return Reflect.has(obj, property);
                   },
@@ -34050,8 +26414,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return atnv;
           }
-          function countSort(a22, b2) {
-            return a22.count < b2.count ? -1 : a22.count === b2.count ? 0 : 1;
+          function countSort(a2, b2) {
+            return a2.count < b2.count ? -1 : a2.count === b2.count ? 0 : 1;
           }
           function filterAttributes(at) {
             return !ignoredAttributes.includes(at.name) && at.name.indexOf(":") === -1 && (!at.value || at.value.length < MAXATTRIBUTELENGTH);
@@ -34192,8 +26556,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               })) {
                 selector = getBaseSelector(elm);
               } else {
-                features.sort(function(a22, b2) {
-                  return a22.species !== b2.species && a22.species === "class" ? -1 : a22.species === b2.species ? 0 : 1;
+                features.sort(function(a2, b2) {
+                  return a2.species !== b2.species && a2.species === "class" ? -1 : a2.species === b2.species ? 0 : 1;
                 });
               }
             }
@@ -34798,8 +27162,8 @@ Response: ${match.response.slice(0, 160)}` : "";
           var closest_default = closest;
           function noop() {
           }
-          function funcGuard(f2) {
-            if (typeof f2 !== "function") {
+          function funcGuard(f) {
+            if (typeof f !== "function") {
               throw new TypeError("Queue methods require functions as arguments");
             }
           }
@@ -34810,8 +27174,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var completeQueue = noop;
             var complete = false;
             var err2;
-            var defaultFail = function defaultFail2(e2) {
-              err2 = e2;
+            var defaultFail = function defaultFail2(e) {
+              err2 = e;
               setTimeout(function() {
                 if (err2 !== void 0 && err2 !== null) {
                   log_default("Uncaught error (of queue)", err2);
@@ -34840,8 +27204,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 var task = tasks[started];
                 try {
                   task.call(null, createResolve(started), abort);
-                } catch (e2) {
-                  abort(e2);
+                } catch (e) {
+                  abort(e);
                 }
               }
             }
@@ -34925,7 +27289,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             _byteToHex[i] = (i + 256).toString(16).substr(1);
             _hexToByte[_byteToHex[i]] = i;
           }
-          function parse22(s, buf, offset) {
+          function parse2(s, buf, offset) {
             var i2 = buf && offset || 0, ii = 0;
             buf = buf || [];
             s.toLowerCase().replace(/[0-9a-f]{2}/g, function(oct) {
@@ -35006,7 +27370,7 @@ Response: ${match.response.slice(0, 160)}` : "";
           uuid = v4;
           uuid.v1 = v1;
           uuid.v4 = v4;
-          uuid.parse = parse22;
+          uuid.parse = parse2;
           uuid.unparse = unparse;
           uuid.BufferClass = BufferClass;
           axe._uuid = v1();
@@ -35832,8 +28196,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (!vNode) {
               return ancestors;
             }
-            var overflow2 = vNode.getComputedStylePropertyValue("overflow");
-            if (overflow2 === "hidden") {
+            var overflow = vNode.getComputedStylePropertyValue("overflow");
+            if (overflow === "hidden") {
               ancestors.push(vNode);
             }
             return ancestors.concat(getOverflowHiddenAncestors(vNode.parent));
@@ -35875,8 +28239,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (isAncestor) {
               return false;
             }
-            var position2 = vNode.getComputedStylePropertyValue("position");
-            if (position2 === "fixed") {
+            var position = vNode.getComputedStylePropertyValue("position");
+            if (position === "fixed") {
               return false;
             }
             var nodes = get_overflow_hidden_ancestors_default(vNode);
@@ -35885,7 +28249,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             var rect = vNode.boundingClientRect;
             return nodes.some(function(node) {
-              if (position2 === "absolute" && !hasPositionedAncestorBetween(vNode, node) && node.getComputedStylePropertyValue("position") === "static") {
+              if (position === "absolute" && !hasPositionedAncestorBetween(vNode, node) && node.getComputedStylePropertyValue("position") === "static") {
                 return false;
               }
               var nodeRect = node.boundingClientRect;
@@ -35899,8 +28263,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var matchesClip = vNode.getComputedStylePropertyValue("clip").match(clipRegex);
             var matchesClipPath = vNode.getComputedStylePropertyValue("clip-path").match(clipPathRegex);
             if (matchesClip && matchesClip.length === 5) {
-              var position2 = vNode.getComputedStylePropertyValue("position");
-              if (["fixed", "absolute"].includes(position2)) {
+              var position = vNode.getComputedStylePropertyValue("position");
+              if (["fixed", "absolute"].includes(position)) {
                 return matchesClip[3] - matchesClip[1] <= 0 && matchesClip[2] - matchesClip[4] <= 0;
               }
             }
@@ -36243,8 +28607,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                     return 0;
                   }
                   var closestPoint = getClosestPoint(targetCenter, rect);
-                  var distance22 = pointDistance(targetCenter, closestPoint);
-                  minDistance = Math.min(minDistance, distance22);
+                  var distance2 = pointDistance(targetCenter, closestPoint);
+                  minDistance = Math.min(minDistance, distance2);
                 }
               } catch (err2) {
                 _iterator8.e(err2);
@@ -36433,19 +28797,19 @@ Response: ${match.response.slice(0, 160)}` : "";
             return constants_default.gridSize;
           }
           function isStackingContext(vNode, parentVNode) {
-            var position2 = vNode.getComputedStylePropertyValue("position");
-            var zIndex2 = vNode.getComputedStylePropertyValue("z-index");
-            if (position2 === "fixed" || position2 === "sticky") {
+            var position = vNode.getComputedStylePropertyValue("position");
+            var zIndex = vNode.getComputedStylePropertyValue("z-index");
+            if (position === "fixed" || position === "sticky") {
               return true;
             }
-            if (zIndex2 !== "auto" && position2 !== "static") {
+            if (zIndex !== "auto" && position !== "static") {
               return true;
             }
             if (vNode.getComputedStylePropertyValue("opacity") !== "1") {
               return true;
             }
-            var transform2 = vNode.getComputedStylePropertyValue("-webkit-transform") || vNode.getComputedStylePropertyValue("-ms-transform") || vNode.getComputedStylePropertyValue("transform") || "none";
-            if (transform2 !== "none") {
+            var transform = vNode.getComputedStylePropertyValue("-webkit-transform") || vNode.getComputedStylePropertyValue("-ms-transform") || vNode.getComputedStylePropertyValue("transform") || "none";
+            if (transform !== "none") {
               return true;
             }
             var mixBlendMode = vNode.getComputedStylePropertyValue("mix-blend-mode");
@@ -36490,7 +28854,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (["layout", "paint", "strict", "content"].includes(contain)) {
               return true;
             }
-            if (zIndex2 !== "auto" && isFlexOrGridContainer(parentVNode)) {
+            if (zIndex !== "auto" && isFlexOrGridContainer(parentVNode)) {
               return true;
             }
             return false;
@@ -36527,9 +28891,9 @@ Response: ${match.response.slice(0, 160)}` : "";
             };
           }
           function getStackLevel(vNode, parentVNode) {
-            var zIndex2 = getRealZIndex(vNode, parentVNode);
-            if (!["auto", "0"].includes(zIndex2)) {
-              return parseInt(zIndex2);
+            var zIndex = getRealZIndex(vNode, parentVNode);
+            if (!["auto", "0"].includes(zIndex)) {
+              return parseInt(zIndex);
             }
             if (vNode.getComputedStylePropertyValue("position") !== "static") {
               return POSITION_LEVEL;
@@ -36543,8 +28907,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             return null;
           }
           function getRealZIndex(vNode, parentVNode) {
-            var position2 = vNode.getComputedStylePropertyValue("position");
-            if (position2 === "static" && !isFlexOrGridContainer(parentVNode)) {
+            var position = vNode.getComputedStylePropertyValue("position");
+            if (position === "static" && !isFlexOrGridContainer(parentVNode)) {
               return "auto";
             }
             return vNode.getComputedStylePropertyValue("z-index");
@@ -36645,21 +29009,21 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }]);
           })();
-          function loopNegativeIndexMatrix(matrix2, start, end, callback) {
+          function loopNegativeIndexMatrix(matrix, start, end, callback) {
             var _matrix$_negativeInde;
-            (_matrix$_negativeInde = matrix2._negativeIndex) !== null && _matrix$_negativeInde !== void 0 ? _matrix$_negativeInde : matrix2._negativeIndex = 0;
-            if (start < matrix2._negativeIndex) {
-              for (var _i0 = 0; _i0 < matrix2._negativeIndex - start; _i0++) {
-                matrix2.splice(0, 0, []);
+            (_matrix$_negativeInde = matrix._negativeIndex) !== null && _matrix$_negativeInde !== void 0 ? _matrix$_negativeInde : matrix._negativeIndex = 0;
+            if (start < matrix._negativeIndex) {
+              for (var _i0 = 0; _i0 < matrix._negativeIndex - start; _i0++) {
+                matrix.splice(0, 0, []);
               }
-              matrix2._negativeIndex = start;
+              matrix._negativeIndex = start;
             }
-            var startOffset = start - matrix2._negativeIndex;
-            var endOffset = end - matrix2._negativeIndex;
+            var startOffset = start - matrix._negativeIndex;
+            var endOffset = end - matrix._negativeIndex;
             for (var index = startOffset; index <= endOffset; index++) {
               var _index, _matrix$_index;
-              (_matrix$_index = matrix2[_index = index]) !== null && _matrix$_index !== void 0 ? _matrix$_index : matrix2[_index] = [];
-              callback(matrix2[index], index + matrix2._negativeIndex);
+              (_matrix$_index = matrix[_index = index]) !== null && _matrix$_index !== void 0 ? _matrix$_index : matrix[_index] = [];
+              callback(matrix[index], index + matrix._negativeIndex);
             }
           }
           function _getNodeGrid(node) {
@@ -36884,26 +29248,26 @@ Response: ${match.response.slice(0, 160)}` : "";
             return null;
           }
           var get_element_by_reference_default = getElementByReference;
-          function _visuallySort(a22, b2) {
+          function _visuallySort(a2, b2) {
             _createGrid();
-            var length = Math.max(a22._stackingOrder.length, b2._stackingOrder.length);
+            var length = Math.max(a2._stackingOrder.length, b2._stackingOrder.length);
             for (var _i10 = 0; _i10 < length; _i10++) {
               if (typeof b2._stackingOrder[_i10] === "undefined") {
                 return -1;
-              } else if (typeof a22._stackingOrder[_i10] === "undefined") {
+              } else if (typeof a2._stackingOrder[_i10] === "undefined") {
                 return 1;
               }
-              if (b2._stackingOrder[_i10].stackLevel > a22._stackingOrder[_i10].stackLevel) {
+              if (b2._stackingOrder[_i10].stackLevel > a2._stackingOrder[_i10].stackLevel) {
                 return 1;
               }
-              if (b2._stackingOrder[_i10].stackLevel < a22._stackingOrder[_i10].stackLevel) {
+              if (b2._stackingOrder[_i10].stackLevel < a2._stackingOrder[_i10].stackLevel) {
                 return -1;
               }
-              if (b2._stackingOrder[_i10].treeOrder !== a22._stackingOrder[_i10].treeOrder) {
-                return b2._stackingOrder[_i10].treeOrder - a22._stackingOrder[_i10].treeOrder;
+              if (b2._stackingOrder[_i10].treeOrder !== a2._stackingOrder[_i10].treeOrder) {
+                return b2._stackingOrder[_i10].treeOrder - a2._stackingOrder[_i10].treeOrder;
               }
             }
-            var aNode = a22.actualNode;
+            var aNode = a2.actualNode;
             var bNode = b2.actualNode;
             if (aNode.getRootNode && aNode.getRootNode() !== bNode.getRootNode()) {
               var boundaries = [];
@@ -36923,14 +29287,14 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return boundary.root === bNode.getRootNode();
               }).node;
               if (aNode === bNode) {
-                return a22.actualNode.getRootNode() !== aNode.getRootNode() ? -1 : 1;
+                return a2.actualNode.getRootNode() !== aNode.getRootNode() ? -1 : 1;
               }
             }
             var _window$Node = window2.Node, DOCUMENT_POSITION_FOLLOWING = _window$Node.DOCUMENT_POSITION_FOLLOWING, DOCUMENT_POSITION_CONTAINS = _window$Node.DOCUMENT_POSITION_CONTAINS, DOCUMENT_POSITION_CONTAINED_BY = _window$Node.DOCUMENT_POSITION_CONTAINED_BY;
             var docPosition = aNode.compareDocumentPosition(bNode);
             var DOMOrder = docPosition & DOCUMENT_POSITION_FOLLOWING ? 1 : -1;
             var isDescendant = docPosition & DOCUMENT_POSITION_CONTAINS || docPosition & DOCUMENT_POSITION_CONTAINED_BY;
-            var aPosition = getPositionOrder(a22);
+            var aPosition = getPositionOrder(a2);
             var bPosition = getPositionOrder(b2);
             if (aPosition === bPosition || isDescendant) {
               return DOMOrder;
@@ -39305,7 +31669,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             return !!(sanitize_default(arialabelledby_text_default(vNode)) || sanitize_default(_arialabelText(vNode)) || checkTitle && (vNode === null || vNode === void 0 ? void 0 : vNode.props.nodeType) === 1 && sanitize_default(vNode.attr("title")));
           }
           var implicitHtmlRoles = {
-            a: function a3(vNode) {
+            a: function a2(vNode) {
               return vNode.hasAttr("href") ? "link" : null;
             },
             area: function area(vNode) {
@@ -40107,14 +32471,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               return {};
             });
             var style = window2.getComputedStyle(textVNode.parent.actualNode);
-            var fontFamily2 = style.getPropertyValue("font-family");
-            if (!fonts[fontFamily2]) {
-              fonts[fontFamily2] = {
+            var fontFamily = style.getPropertyValue("font-family");
+            if (!fonts[fontFamily]) {
+              fonts[fontFamily] = {
                 occurrences: 0,
                 numLigatures: 0
               };
             }
-            var font = fonts[fontFamily2];
+            var font = fonts[fontFamily];
             if (font.occurrences >= occurrenceThreshold) {
               if (font.numLigatures / font.occurrences === 1) {
                 return true;
@@ -40123,9 +32487,9 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }
             font.occurrences++;
-            var fontSize2 = 30;
-            var fontStyle2 = "".concat(fontSize2, "px ").concat(fontFamily2);
-            canvasContext.font = fontStyle2;
+            var fontSize = 30;
+            var fontStyle = "".concat(fontSize, "px ").concat(fontFamily);
+            canvasContext.font = fontStyle;
             var firstChar = nodeValue.charAt(0);
             var width = canvasContext.measureText(firstChar).width;
             if (width === 0) {
@@ -40135,25 +32499,25 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (width < 30) {
               var diff = 30 / width;
               width *= diff;
-              fontSize2 *= diff;
-              fontStyle2 = "".concat(fontSize2, "px ").concat(fontFamily2);
+              fontSize *= diff;
+              fontStyle = "".concat(fontSize, "px ").concat(fontFamily);
             }
             canvas.width = width;
-            canvas.height = fontSize2;
-            canvasContext.font = fontStyle2;
+            canvas.height = fontSize;
+            canvasContext.font = fontStyle;
             canvasContext.textAlign = "left";
             canvasContext.textBaseline = "top";
             canvasContext.fillText(firstChar, 0, 0);
-            var compareData = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize2).data.buffer);
+            var compareData = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize).data.buffer);
             if (!compareData.some(function(pixel) {
               return pixel;
             })) {
               font.numLigatures++;
               return true;
             }
-            canvasContext.clearRect(0, 0, width, fontSize2);
+            canvasContext.clearRect(0, 0, width, fontSize);
             canvasContext.fillText(nodeValue, 0, 0);
-            var compareWith = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize2).data.buffer);
+            var compareWith = new Uint32Array(canvasContext.getImageData(0, 0, width, fontSize).data.buffer);
             var differences = compareData.reduce(function(diff2, pixel, i2) {
               if (pixel === 0 && compareWith[i2] === 0) {
                 return diff2;
@@ -40961,13 +33325,13 @@ Response: ${match.response.slice(0, 160)}` : "";
             }, {
               key: "parseString",
               value: function parseString(colorString) {
-                colorString = colorString.replace(hslRegex, function(match, angle2, unit) {
-                  var value = angle2 + unit;
+                colorString = colorString.replace(hslRegex, function(match, angle, unit) {
+                  var value = angle + unit;
                   switch (unit) {
                     case "rad":
-                      return match.replace(value, radToDeg(angle2));
+                      return match.replace(value, radToDeg(angle));
                     case "turn":
-                      return match.replace(value, turnToDeg(angle2));
+                      return match.replace(value, turnToDeg(angle));
                   }
                 });
                 try {
@@ -41028,8 +33392,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
             }, {
               key: "setLuminosity",
-              value: function setLuminosity(L2) {
-                var d2 = L2 - this.getLuminosity();
+              value: function setLuminosity(L) {
+                var d2 = L - this.getLuminosity();
                 return _assertClassBrand(_Class3_brand, this, _add).call(this, d2).clip();
               }
             }, {
@@ -41051,8 +33415,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                   name: "b",
                   value: C.b
                 }];
-                var _colorEntires$sort = colorEntires.sort(function(a22, b2) {
-                  return a22.value - b2.value;
+                var _colorEntires$sort = colorEntires.sort(function(a2, b2) {
+                  return a2.value - b2.value;
                 }), _colorEntires$sort2 = _slicedToArray(_colorEntires$sort, 3), Cmin = _colorEntires$sort2[0], Cmid = _colorEntires$sort2[1], Cmax = _colorEntires$sort2[2];
                 if (Cmax.value > Cmin.value) {
                   Cmid.value = (Cmid.value - Cmin.value) * s / (Cmax.value - Cmin.value);
@@ -41070,18 +33434,18 @@ Response: ${match.response.slice(0, 160)}` : "";
               key: "clip",
               value: function clip() {
                 var C = new _Color2(this);
-                var L2 = C.getLuminosity();
+                var L = C.getLuminosity();
                 var n2 = Math.min(C.r, C.g, C.b);
                 var x = Math.max(C.r, C.g, C.b);
                 if (n2 < 0) {
-                  C.r = L2 + (C.r - L2) * L2 / (L2 - n2);
-                  C.g = L2 + (C.g - L2) * L2 / (L2 - n2);
-                  C.b = L2 + (C.b - L2) * L2 / (L2 - n2);
+                  C.r = L + (C.r - L) * L / (L - n2);
+                  C.g = L + (C.g - L) * L / (L - n2);
+                  C.b = L + (C.b - L) * L / (L - n2);
                 }
                 if (x > 1) {
-                  C.r = L2 + (C.r - L2) * (1 - L2) / (x - L2);
-                  C.g = L2 + (C.g - L2) * (1 - L2) / (x - L2);
-                  C.b = L2 + (C.b - L2) * (1 - L2) / (x - L2);
+                  C.r = L + (C.r - L) * (1 - L) / (x - L);
+                  C.g = L + (C.g - L) * (1 - L) / (x - L);
+                  C.b = L + (C.b - L) * (1 - L) / (x - L);
                 }
                 return C;
               }
@@ -41108,8 +33472,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var bgColor = new color_default();
             bgColor.parseString(elmStyle.getPropertyValue("background-color"));
             if (bgColor.alpha !== 0) {
-              var opacity2 = elmStyle.getPropertyValue("opacity");
-              bgColor.alpha = bgColor.alpha * opacity2;
+              var opacity = elmStyle.getPropertyValue("opacity");
+              bgColor.alpha = bgColor.alpha * opacity;
             }
             return bgColor;
           }
@@ -41146,8 +33510,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var matchesClip = style.getPropertyValue("clip").match(clipRegex2);
             var matchesClipPath = style.getPropertyValue("clip-path").match(clipPathRegex2);
             if (matchesClip && matchesClip.length === 5) {
-              var position2 = style.getPropertyValue("position");
-              if (["fixed", "absolute"].includes(position2)) {
+              var position = style.getPropertyValue("position");
+              if (["fixed", "absolute"].includes(position)) {
                 return matchesClip[3] - matchesClip[1] <= 0 && matchesClip[2] - matchesClip[4] <= 0;
               }
             }
@@ -41301,7 +33665,7 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           function contains2(node, parent) {
             var style = window2.getComputedStyle(parent);
-            var overflow2 = style.getPropertyValue("overflow");
+            var overflow = style.getPropertyValue("overflow");
             if (style.getPropertyValue("display") === "inline") {
               return true;
             }
@@ -41313,11 +33677,11 @@ Response: ${match.response.slice(0, 160)}` : "";
               width: boundingRect.width,
               height: boundingRect.height
             };
-            if (["scroll", "auto"].includes(overflow2) || parent instanceof window2.HTMLHtmlElement) {
+            if (["scroll", "auto"].includes(overflow) || parent instanceof window2.HTMLHtmlElement) {
               rect.width = parent.scrollWidth;
               rect.height = parent.scrollHeight;
             }
-            if (clientRects.length === 1 && overflow2 === "hidden" && style.getPropertyValue("white-space") === "nowrap") {
+            if (clientRects.length === 1 && overflow === "hidden" && style.getPropertyValue("white-space") === "nowrap") {
               clientRects[0] = rect;
             }
             return clientRects.some(function(clientRect) {
@@ -41608,8 +33972,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (filter) {
               matchedNodes = matchedNodes.filter(filter);
             }
-            return matchedNodes.sort(function(a22, b2) {
-              return a22.nodeIndex - b2.nodeIndex;
+            return matchedNodes.sort(function(a2, b2) {
+              return a2.nodeIndex - b2.nodeIndex;
             });
           }
           function findMatchingNodes(expression, selectorMap, shadowId) {
@@ -41667,8 +34031,8 @@ Response: ${match.response.slice(0, 160)}` : "";
           function isGlobalSelector(expression) {
             return expression.tag === "*" && !expression.attributes && !expression.id && !expression.classes;
           }
-          function getSharedValues(a22, b2) {
-            return a22.filter(function(node) {
+          function getSharedValues(a2, b2) {
+            return a2.filter(function(node) {
               return b2.includes(node);
             });
           }
@@ -41993,12 +34357,12 @@ Response: ${match.response.slice(0, 160)}` : "";
               return {};
             }
             var navigator2 = win.navigator, innerHeight = win.innerHeight, innerWidth = win.innerWidth;
-            var _ref67 = getOrientation(win) || {}, angle2 = _ref67.angle, type2 = _ref67.type;
+            var _ref67 = getOrientation(win) || {}, angle = _ref67.angle, type2 = _ref67.type;
             return {
               userAgent: navigator2.userAgent,
               windowWidth: innerWidth,
               windowHeight: innerHeight,
-              orientationAngle: angle2,
+              orientationAngle: angle,
               orientationType: type2
             };
           }
@@ -42184,7 +34548,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               frameContext[type2].push(selectorArray);
             });
           }
-          function Context2(spec, flatTree) {
+          function Context(spec, flatTree) {
             var _spec, _spec2, _spec3, _spec4, _this5 = this;
             spec = clone2(spec);
             this.frames = [];
@@ -42250,7 +34614,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (options.iframes === false) {
               return [];
             }
-            var _Context = new Context2(context2), frames = _Context.frames;
+            var _Context = new Context(context2), frames = _Context.frames;
             return frames.map(function(_ref72) {
               var node = _ref72.node, frameContext = _objectWithoutProperties(_ref72, _excluded12);
               frameContext.initiator = false;
@@ -42568,7 +34932,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return false;
               }
               return true;
-            } catch (e2) {
+            } catch (e) {
               return false;
             }
           }
@@ -42658,8 +35022,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
                 try {
                   window2.performance.measure(measureName, startMark, endMark);
-                } catch (e2) {
-                  this._log(e2);
+                } catch (e) {
+                  this._log(e);
                 }
                 if (!keepMarks) {
                   this.clearMark(startMark, endMark);
@@ -43049,14 +35413,14 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (typeof options.preload === "boolean") {
               return config;
             }
-            var areRequestedAssetsValid = options.preload.assets.every(function(a22) {
-              return assets.includes(a22.toLowerCase());
+            var areRequestedAssetsValid = options.preload.assets.every(function(a2) {
+              return assets.includes(a2.toLowerCase());
             });
             if (!areRequestedAssetsValid) {
               throw new Error("Requested assets, not supported. Supported assets are: ".concat(assets.join(", "), "."));
             }
-            config.assets = unique_array_default(options.preload.assets.map(function(a22) {
-              return a22.toLowerCase();
+            config.assets = unique_array_default(options.preload.assets.map(function(a2) {
+              return a2.toLowerCase();
             }), []);
             if (options.preload.timeout && typeof options.preload.timeout === "number" && !isNaN(options.preload.timeout)) {
               config.timeout = options.preload.timeout;
@@ -43739,18 +36103,18 @@ Response: ${match.response.slice(0, 160)}` : "";
             return cells;
           }
           var get_all_cells_default = getAllCells;
-          function traverseForHeaders(headerType, position2, tableGrid) {
+          function traverseForHeaders(headerType, position, tableGrid) {
             var property = headerType === "row" ? "_rowHeaders" : "_colHeaders";
             var predicate = headerType === "row" ? is_row_header_default : is_column_header_default;
-            var startCell = tableGrid[position2.y][position2.x];
+            var startCell = tableGrid[position.y][position.x];
             var colspan = startCell.colSpan - 1;
             var rowspanAttr = startCell.getAttribute("rowspan");
             var rowspanValue = parseInt(rowspanAttr) === 0 || startCell.rowspan === 0 ? tableGrid.length : startCell.rowSpan;
             var rowspan = rowspanValue - 1;
-            var rowStart = position2.y + rowspan;
-            var colStart = position2.x + colspan;
-            var rowEnd = headerType === "row" ? position2.y : 0;
-            var colEnd = headerType === "row" ? 0 : position2.x;
+            var rowStart = position.y + rowspan;
+            var colStart = position.x + colspan;
+            var rowEnd = headerType === "row" ? position.y : 0;
+            var colEnd = headerType === "row" ? 0 : position.x;
             var headers;
             var cells = [];
             for (var row = rowStart; row >= rowEnd && !headers; row--) {
@@ -43786,9 +36150,9 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (!tableGrid) {
               tableGrid = to_grid_default(find_up_default(cell, "table"));
             }
-            var position2 = get_cell_position_default(cell, tableGrid);
-            var rowHeaders = traverseForHeaders("row", position2, tableGrid);
-            var colHeaders = traverseForHeaders("col", position2, tableGrid);
+            var position = get_cell_position_default(cell, tableGrid);
+            var rowHeaders = traverseForHeaders("row", position, tableGrid);
+            var colHeaders = traverseForHeaders("col", position, tableGrid);
             return [].concat(rowHeaders, colHeaders).reverse();
           }
           var get_headers_default = getHeaders;
@@ -43914,21 +36278,21 @@ Response: ${match.response.slice(0, 160)}` : "";
             return false;
           }
           var is_header_default = isHeader;
-          function traverseTable(dir, position2, tableGrid, callback) {
+          function traverseTable(dir, position, tableGrid, callback) {
             var result;
-            var cell = tableGrid[position2.y] ? tableGrid[position2.y][position2.x] : void 0;
+            var cell = tableGrid[position.y] ? tableGrid[position.y][position.x] : void 0;
             if (!cell) {
               return [];
             }
             if (typeof callback === "function") {
-              result = callback(cell, position2, tableGrid);
+              result = callback(cell, position, tableGrid);
               if (result === true) {
                 return [cell];
               }
             }
             result = traverseTable(dir, {
-              x: position2.x + dir.x,
-              y: position2.y + dir.y
+              x: position.x + dir.x,
+              y: position.y + dir.y
             }, tableGrid, callback);
             result.unshift(cell);
             return result;
@@ -45962,7 +38326,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             nodeName: ["abbr", "address", "canvas", "div", "p", "pre", "blockquote", "ins", "del", "output", "span", "table", "tbody", "thead", "tfoot", "td", "em", "strong", "small", "s", "cite", "q", "dfn", "abbr", "time", "code", "var", "samp", "kbd", "sub", "sup", "i", "b", "u", "mark", "ruby", "rt", "rp", "bdi", "bdo", "br", "wbr", "th", "tr"]
           }];
           lookupTable.evaluateRoleForElement = {
-            A: function A2(_ref87) {
+            A: function A(_ref87) {
               var node = _ref87.node, out = _ref87.out;
               if (node.namespaceURI === "http://www.w3.org/2000/svg") {
                 return true;
@@ -46500,8 +38864,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (absoluteValues) {
               return parsedValue;
             }
-            var fontSize2 = parseFloat(computedStyle.getPropertyValue("font-size"));
-            var value = Math.round(parsedValue / fontSize2 * 100) / 100;
+            var fontSize = parseFloat(computedStyle.getPropertyValue("font-size"));
+            var value = Math.round(parsedValue / fontSize * 100) / 100;
             if (isNaN(value)) {
               return cssPropValue;
             }
@@ -46642,8 +39006,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 return actualNode.nodeType === 1;
               }).map(function(vNode2) {
                 return findRegionlessElms(vNode2, options);
-              }).reduce(function(a22, b2) {
-                return a22.concat(b2);
+              }).reduce(function(a2, b2) {
+                return a2.concat(b2);
               }, []);
             }
           }
@@ -46784,8 +39148,8 @@ Response: ${match.response.slice(0, 160)}` : "";
           var validRedirectNumRegex = /^[0-9.]+$/;
           function metaRefreshEvaluate(node, options, virtualNode) {
             var _ref101 = options || {}, minDelay = _ref101.minDelay, maxDelay = _ref101.maxDelay;
-            var content2 = (virtualNode.attr("content") || "").trim();
-            var _content$split = content2.split(separatorRegex), _content$split2 = _slicedToArray(_content$split, 1), redirectStr = _content$split2[0];
+            var content = (virtualNode.attr("content") || "").trim();
+            var _content$split = content.split(separatorRegex), _content$split2 = _slicedToArray(_content$split, 1), redirectStr = _content$split2[0];
             if (!redirectStr.match(validRedirectNumRegex)) {
               return true;
             }
@@ -46813,7 +39177,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             aria: function aria() {
               return aria_exports;
             },
-            color: function color3() {
+            color: function color2() {
               return color_exports;
             },
             dom: function dom() {
@@ -47042,7 +39406,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             saturation: function saturation(Cb, Cs) {
               return Cb.setSaturation(Cs.getSaturation()).setLuminosity(Cb.getLuminosity());
             },
-            color: function color3(Cb, Cs) {
+            color: function color2(Cb, Cs) {
               return Cs.setLuminosity(Cb.getLuminosity());
             },
             luminosity: function luminosity(Cb, Cs) {
@@ -47085,8 +39449,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             var r = (1 - alpha) * bgColor.red + alpha * fgColor.red;
             var g2 = (1 - alpha) * bgColor.green + alpha * fgColor.green;
             var b2 = (1 - alpha) * bgColor.blue + alpha * fgColor.blue;
-            var a22 = fgColor.alpha + bgColor.alpha * (1 - fgColor.alpha);
-            return new color_default(r, g2, b2, a22);
+            var a2 = fgColor.alpha + bgColor.alpha * (1 - fgColor.alpha);
+            return new color_default(r, g2, b2, a2);
           }
           function _getBackgroundStack(node) {
             var stacks = get_text_element_stack_default(node).map(function(stack2) {
@@ -47124,18 +39488,18 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return bgNodes;
           }
-          function shallowArraysEqual(a22, b2) {
-            if (a22 === b2) {
+          function shallowArraysEqual(a2, b2) {
+            if (a2 === b2) {
               return true;
             }
-            if (a22 === null || b2 === null) {
+            if (a2 === null || b2 === null) {
               return false;
             }
-            if (a22.length !== b2.length) {
+            if (a2.length !== b2.length) {
               return false;
             }
-            for (var _i28 = 0; _i28 < a22.length; ++_i28) {
-              if (a22[_i28] !== b2[_i28]) {
+            for (var _i28 = 0; _i28 < a2.length; ++_i28) {
+              if (a2[_i28] !== b2[_i28]) {
                 return false;
               }
             }
@@ -47222,11 +39586,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return strokeColor;
           }
-          function _parseTextShadows(textShadow2) {
+          function _parseTextShadows(textShadow) {
             var current = {
               pixels: []
             };
-            var str2 = textShadow2.trim();
+            var str2 = textShadow.trim();
             var shadows = [current];
             if (!str2) {
               return [];
@@ -47235,16 +39599,16 @@ Response: ${match.response.slice(0, 160)}` : "";
               var colorMatch = str2.match(/^[a-z]+(\([^)]+\))?/i) || str2.match(/^#[0-9a-f]+/i);
               var pixelMatch = str2.match(/^([0-9.-]+)px/i) || str2.match(/^(0)/);
               if (colorMatch) {
-                assert_default(!current.colorStr, "Multiple colors identified in text-shadow: ".concat(textShadow2));
+                assert_default(!current.colorStr, "Multiple colors identified in text-shadow: ".concat(textShadow));
                 str2 = str2.replace(colorMatch[0], "").trim();
                 current.colorStr = colorMatch[0];
               } else if (pixelMatch) {
-                assert_default(current.pixels.length < 3, "Too many pixel units in text-shadow: ".concat(textShadow2));
+                assert_default(current.pixels.length < 3, "Too many pixel units in text-shadow: ".concat(textShadow));
                 str2 = str2.replace(pixelMatch[0], "").trim();
                 var pixelUnit = parseFloat((pixelMatch[1][0] === "." ? "0" : "") + pixelMatch[1]);
                 current.pixels.push(pixelUnit);
               } else if (str2[0] === ",") {
-                assert_default(current.pixels.length >= 2, "Missing pixel value in text-shadow: ".concat(textShadow2));
+                assert_default(current.pixels.length >= 2, "Missing pixel value in text-shadow: ".concat(textShadow));
                 current = {
                   pixels: []
                 };
@@ -47266,25 +39630,25 @@ Response: ${match.response.slice(0, 160)}` : "";
             var _ref108 = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}, minRatio = _ref108.minRatio, maxRatio = _ref108.maxRatio, ignoreEdgeCount = _ref108.ignoreEdgeCount;
             var shadowColors = [];
             var style = window2.getComputedStyle(node);
-            var textShadow2 = style.getPropertyValue("text-shadow");
-            if (textShadow2 === "none") {
+            var textShadow = style.getPropertyValue("text-shadow");
+            if (textShadow === "none") {
               return shadowColors;
             }
             var fontSizeStr = style.getPropertyValue("font-size");
-            var fontSize2 = parseInt(fontSizeStr);
-            assert_default(isNaN(fontSize2) === false, "Unable to determine font-size value ".concat(fontSizeStr));
+            var fontSize = parseInt(fontSizeStr);
+            assert_default(isNaN(fontSize) === false, "Unable to determine font-size value ".concat(fontSizeStr));
             var thinShadows = [];
-            var shadows = _parseTextShadows(textShadow2);
+            var shadows = _parseTextShadows(textShadow);
             var _iterator18 = _createForOfIteratorHelper(shadows), _step18;
             try {
               for (_iterator18.s(); !(_step18 = _iterator18.n()).done; ) {
                 var shadow = _step18.value;
                 var colorStr = shadow.colorStr || style.getPropertyValue("color");
                 var _shadow$pixels = _slicedToArray(shadow.pixels, 3), offsetX = _shadow$pixels[0], offsetY = _shadow$pixels[1], _shadow$pixels$ = _shadow$pixels[2], blurRadius = _shadow$pixels$ === void 0 ? 0 : _shadow$pixels$;
-                if (maxRatio && blurRadius >= fontSize2 * maxRatio) {
+                if (maxRatio && blurRadius >= fontSize * maxRatio) {
                   continue;
                 }
-                if (minRatio && blurRadius < fontSize2 * minRatio) {
+                if (minRatio && blurRadius < fontSize * minRatio) {
                   thinShadows.push({
                     colorStr,
                     pixels: shadow.pixels
@@ -47306,7 +39670,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                   offsetX,
                   offsetY,
                   blurRadius,
-                  fontSize: fontSize2
+                  fontSize
                 });
                 shadowColors.push(_color3);
               }
@@ -47327,20 +39691,20 @@ Response: ${match.response.slice(0, 160)}` : "";
             return shadowColors;
           }
           function textShadowColor(_ref109) {
-            var colorStr = _ref109.colorStr, offsetX = _ref109.offsetX, offsetY = _ref109.offsetY, blurRadius = _ref109.blurRadius, fontSize2 = _ref109.fontSize;
+            var colorStr = _ref109.colorStr, offsetX = _ref109.offsetX, offsetY = _ref109.offsetY, blurRadius = _ref109.blurRadius, fontSize = _ref109.fontSize;
             if (offsetX > blurRadius || offsetY > blurRadius) {
               return new color_default(0, 0, 0, 0);
             }
             var shadowColor = new color_default();
             shadowColor.parseString(colorStr);
-            shadowColor.alpha *= blurRadiusToAlpha(blurRadius, fontSize2);
+            shadowColor.alpha *= blurRadiusToAlpha(blurRadius, fontSize);
             return shadowColor;
           }
-          function blurRadiusToAlpha(blurRadius, fontSize2) {
+          function blurRadiusToAlpha(blurRadius, fontSize) {
             if (blurRadius === 0) {
               return 1;
             }
-            var relativeBlur = blurRadius / fontSize2;
+            var relativeBlur = blurRadius / fontSize;
             return 0.185 / (relativeBlur + 0.4);
           }
           function _getStackingContext(elm, elmStack) {
@@ -47382,10 +39746,10 @@ Response: ${match.response.slice(0, 160)}` : "";
           function _stackingContextToColor(context2) {
             var _context$descendants;
             if (!((_context$descendants = context2.descendants) !== null && _context$descendants !== void 0 && _context$descendants.length)) {
-              var color22 = context2.bgColor;
-              color22.alpha *= context2.opacity;
+              var color2 = context2.bgColor;
+              color2.alpha *= context2.opacity;
               return {
-                color: color22,
+                color: color2,
                 blendMode: context2.blendMode
               };
             }
@@ -47515,14 +39879,14 @@ Response: ${match.response.slice(0, 160)}` : "";
             var nodeRect = node.getBoundingClientRect();
             var right = nodeRect.right, bottom = nodeRect.bottom;
             var style = window2.getComputedStyle(node);
-            var overflow2 = style.getPropertyValue("overflow");
-            var paddingLeft2 = parseInt(style.getPropertyValue("padding-left"), 10);
-            var paddingRight2 = parseInt(style.getPropertyValue("padding-right"), 10);
-            var paddingTop2 = parseInt(style.getPropertyValue("padding-top"), 10);
-            var paddingBottom2 = parseInt(style.getPropertyValue("padding-bottom"), 10);
-            if (["scroll", "auto"].includes(overflow2) || node instanceof window2.HTMLHtmlElement) {
-              right = nodeRect.left + node.scrollWidth + paddingLeft2 + paddingRight2;
-              bottom = nodeRect.top + node.scrollHeight + paddingTop2 + paddingBottom2;
+            var overflow = style.getPropertyValue("overflow");
+            var paddingLeft = parseInt(style.getPropertyValue("padding-left"), 10);
+            var paddingRight = parseInt(style.getPropertyValue("padding-right"), 10);
+            var paddingTop = parseInt(style.getPropertyValue("padding-top"), 10);
+            var paddingBottom = parseInt(style.getPropertyValue("padding-bottom"), 10);
+            if (["scroll", "auto"].includes(overflow) || node instanceof window2.HTMLHtmlElement) {
+              right = nodeRect.left + node.scrollWidth + paddingLeft + paddingRight;
+              bottom = nodeRect.top + node.scrollHeight + paddingTop + paddingBottom;
             }
             return rects.every(function(rect) {
               return rect.top >= nodeRect.top && rect.bottom <= bottom && rect.left >= nodeRect.left && rect.right <= right;
@@ -47621,8 +39985,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (strokeWidth === 0) {
               return null;
             }
-            var fontSize2 = nodeStyle.getPropertyValue("font-size");
-            var relativeStrokeWidth = strokeWidth / parseFloat(fontSize2);
+            var fontSize = nodeStyle.getPropertyValue("font-size");
+            var relativeStrokeWidth = strokeWidth / parseFloat(fontSize);
             if (isNaN(relativeStrokeWidth) || relativeStrokeWidth < textStrokeEmMin) {
               return null;
             }
@@ -47677,9 +40041,9 @@ Response: ${match.response.slice(0, 160)}` : "";
               _iterator19.f();
             }
           }
-          function hasValidContrastRatio(bg, fg, fontSize2, isBold) {
+          function hasValidContrastRatio(bg, fg, fontSize, isBold) {
             var contrast2 = get_contrast_default(bg, fg);
-            var isSmallFont = isBold && Math.ceil(fontSize2 * 72) / 96 < 14 || !isBold && Math.ceil(fontSize2 * 72) / 96 < 18;
+            var isSmallFont = isBold && Math.ceil(fontSize * 72) / 96 < 14 || !isBold && Math.ceil(fontSize * 72) / 96 < 18;
             var expectedContrastRatio = isSmallFont ? 4.5 : 3;
             return {
               isValid: contrast2 > expectedContrastRatio,
@@ -47752,17 +40116,17 @@ Response: ${match.response.slice(0, 160)}` : "";
             return true;
           }
           var identical_links_same_purpose_evaluate_default = identicalLinksSamePurposeEvaluate;
-          function isIdenticalObject(a22, b2) {
-            if (!a22 || !b2) {
+          function isIdenticalObject(a2, b2) {
+            if (!a2 || !b2) {
               return false;
             }
-            var aProps = Object.getOwnPropertyNames(a22);
+            var aProps = Object.getOwnPropertyNames(a2);
             var bProps = Object.getOwnPropertyNames(b2);
             if (aProps.length !== bProps.length) {
               return false;
             }
             var result = aProps.every(function(propName) {
-              var aValue = a22[propName];
+              var aValue = a2[propName];
               var bValue = b2[propName];
               if (_typeof(aValue) !== _typeof(bValue)) {
                 return false;
@@ -48172,11 +40536,11 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           function metaViewportScaleEvaluate(node, options, virtualNode) {
             var _ref123 = options || {}, _ref123$scaleMinimum = _ref123.scaleMinimum, scaleMinimum = _ref123$scaleMinimum === void 0 ? 2 : _ref123$scaleMinimum, _ref123$lowerBound = _ref123.lowerBound, lowerBound = _ref123$lowerBound === void 0 ? false : _ref123$lowerBound;
-            var content2 = virtualNode.attr("content") || "";
-            if (!content2) {
+            var content = virtualNode.attr("content") || "";
+            if (!content) {
               return true;
             }
-            var result = content2.split(/[;,]/).reduce(function(out, item) {
+            var result = content.split(/[;,]/).reduce(function(out, item) {
               var contentValue = item.trim();
               if (!contentValue) {
                 return out;
@@ -48320,8 +40684,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 case "rotate3d":
                   var _transformFnValue$spl = transformFnValue.split(",").map(function(value) {
                     return value.trim();
-                  }), _transformFnValue$spl2 = _slicedToArray(_transformFnValue$spl, 4), z2 = _transformFnValue$spl2[2], angleWithUnit = _transformFnValue$spl2[3];
-                  if (parseInt(z2) === 0) {
+                  }), _transformFnValue$spl2 = _slicedToArray(_transformFnValue$spl, 4), z = _transformFnValue$spl2[2], angleWithUnit = _transformFnValue$spl2[3];
+                  if (parseInt(z) === 0) {
                     return;
                   }
                   return getAngleInDegrees(angleWithUnit);
@@ -48337,24 +40701,24 @@ Response: ${match.response.slice(0, 160)}` : "";
               if (!unit) {
                 return 0;
               }
-              var angle2 = parseFloat(angleWithUnit.replace(unit, ""));
+              var angle = parseFloat(angleWithUnit.replace(unit, ""));
               switch (unit) {
                 case "rad":
-                  return convertRadToDeg(angle2);
+                  return convertRadToDeg(angle);
                 case "grad":
-                  return convertGradToDeg(angle2);
+                  return convertGradToDeg(angle);
                 case "turn":
-                  return convertTurnToDeg(angle2);
+                  return convertTurnToDeg(angle);
                 case "deg":
                 default:
-                  return parseInt(angle2);
+                  return parseInt(angle);
               }
             }
             function getAngleInDegreesFromMatrixTransform(transformFnValue) {
               var values2 = transformFnValue.split(",");
               if (values2.length <= 6) {
-                var _values = _slicedToArray(values2, 2), a22 = _values[0], b3 = _values[1];
-                var radians = Math.atan2(parseFloat(b3), parseFloat(a22));
+                var _values = _slicedToArray(values2, 2), a2 = _values[0], b3 = _values[1];
+                var radians = Math.atan2(parseFloat(b3), parseFloat(a2));
                 return convertRadToDeg(radians);
               }
               var sinB = parseFloat(values2[8]);
@@ -48540,14 +40904,14 @@ Response: ${match.response.slice(0, 160)}` : "";
               badNodes: [],
               hasNonEmptyTextNode: false
             };
-            var content2 = virtualNode.children.reduce(function(vNodes, child) {
+            var content = virtualNode.children.reduce(function(vNodes, child) {
               var actualNode = child.actualNode;
               if (actualNode.nodeName.toUpperCase() === "DIV" && get_role_default(actualNode) === null) {
                 return vNodes.concat(child.children);
               }
               return vNodes.concat(child);
             }, []);
-            var result = content2.reduce(function(out, childNode) {
+            var result = content.reduce(function(out, childNode) {
               var actualNode = childNode.actualNode;
               var tagName = actualNode.nodeName.toUpperCase();
               if (actualNode.nodeType === 1 && _isVisibleToScreenReaders(actualNode)) {
@@ -49368,16 +41732,16 @@ Response: ${match.response.slice(0, 160)}` : "";
             for (var _i33 = 0, _arr3 = ["before", "after"]; _i33 < _arr3.length; _i33++) {
               var pseudo = _arr3[_i33];
               var style = window2.getComputedStyle(node, ":".concat(pseudo));
-              var content2 = style.getPropertyValue("content");
-              if (content2 !== "none") {
+              var content = style.getPropertyValue("content");
+              if (content !== "none") {
                 return true;
               }
             }
             return false;
           }
-          function getContrast2(color1, color22) {
+          function getContrast2(color1, color2) {
             var c1lum = color1.getRelativeLuminance();
-            var c2lum = color22.getRelativeLuminance();
+            var c2lum = color2.getRelativeLuminance();
             return (Math.max(c1lum, c2lum) + 0.05) / (Math.min(c1lum, c2lum) + 0.05);
           }
           var blockLike3 = ["block", "list-item", "table", "flex", "grid", "inline-block"];
@@ -49467,10 +41831,10 @@ Response: ${match.response.slice(0, 160)}` : "";
               return void 0;
             }
             var nodeStyle = window2.getComputedStyle(node);
-            var fontSize2 = parseFloat(nodeStyle.getPropertyValue("font-size"));
-            var fontWeight2 = nodeStyle.getPropertyValue("font-weight");
-            var bold = parseFloat(fontWeight2) >= boldValue || fontWeight2 === "bold";
-            var ptSize = Math.ceil(fontSize2 * 72) / 96;
+            var fontSize = parseFloat(nodeStyle.getPropertyValue("font-size"));
+            var fontWeight = nodeStyle.getPropertyValue("font-weight");
+            var bold = parseFloat(fontWeight) >= boldValue || fontWeight === "bold";
+            var ptSize = Math.ceil(fontSize * 72) / 96;
             var isSmallFont = bold && ptSize < boldTextPt || !bold && ptSize < largeTextPt;
             var _ref134 = isSmallFont ? contrastRatio.normal : contrastRatio.large, expected = _ref134.expected, minThreshold = _ref134.minThreshold, maxThreshold = _ref134.maxThreshold;
             var pseudoElm = findPseudoElement(virtualNode, {
@@ -49479,7 +41843,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             });
             if (pseudoElm) {
               this.data({
-                fontSize: "".concat((fontSize2 * 72 / 96).toFixed(1), "pt (").concat(fontSize2, "px)"),
+                fontSize: "".concat((fontSize * 72 / 96).toFixed(1), "pt (").concat(fontSize, "px)"),
                 fontWeight: bold ? "bold" : "normal",
                 messageKey: "pseudoContent",
                 expectedContrastRatio: expected + ":1"
@@ -49550,7 +41914,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               fgColor: fgColor ? fgColor.toHexString() : void 0,
               bgColor: bgColor ? bgColor.toHexString() : void 0,
               contrastRatio: truncatedResult,
-              fontSize: "".concat((fontSize2 * 72 / 96).toFixed(1), "pt (").concat(fontSize2, "px)"),
+              fontSize: "".concat((fontSize * 72 / 96).toFixed(1), "pt (").concat(fontSize, "px)"),
               fontWeight: bold ? "bold" : "normal",
               messageKey: missing,
               expectedContrastRatio: expected + ":1",
@@ -51227,11 +43591,11 @@ Response: ${match.response.slice(0, 160)}` : "";
               var result;
               try {
                 result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context2);
-              } catch (e2) {
+              } catch (e) {
                 if (node && node.actualNode) {
-                  e2.errorNode = node_serializer_default.toSpec(node);
+                  e.errorNode = node_serializer_default.toSpec(node);
                 }
-                reject(e2);
+                reject(e);
                 return;
               }
               if (!helper.isAsync) {
@@ -51257,11 +43621,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             var result;
             try {
               result = this.evaluate.call(helper, node.actualNode, checkOptions, node, context2);
-            } catch (e2) {
+            } catch (e) {
               if (node && node.actualNode) {
-                e2.errorNode = node_serializer_default.toSpec(node);
+                e.errorNode = node_serializer_default.toSpec(node);
               }
-              throw e2;
+              throw e;
             }
             checkResult.result = result;
             return checkResult;
@@ -51604,12 +43968,12 @@ Response: ${match.response.slice(0, 160)}` : "";
               return length > 0;
             });
             if (result.pageLevel && nodes.length) {
-              nodes = [nodes.reduce(function(a22, b2) {
-                if (a22) {
+              nodes = [nodes.reduce(function(a2, b2) {
+                if (a2) {
                   checkTypes2.forEach(function(type2) {
-                    a22[type2].push.apply(a22[type2], b2[type2]);
+                    a2[type2].push.apply(a2[type2], b2[type2]);
                   });
-                  return a22;
+                  return a2;
                 }
               })];
             }
@@ -52139,7 +44503,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               audit[method](collection[i2]);
             }
           }
-          var mergeCheckLocale = function mergeCheckLocale2(a22, b2) {
+          var mergeCheckLocale = function mergeCheckLocale2(a2, b2) {
             var pass = b2.pass, fail = b2.fail;
             if (typeof pass === "string" && dotRegex.test(pass)) {
               pass = import_dot["default"].compile(pass);
@@ -52147,15 +44511,15 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (typeof fail === "string" && dotRegex.test(fail)) {
               fail = import_dot["default"].compile(fail);
             }
-            return _extends({}, a22, {
+            return _extends({}, a2, {
               messages: {
-                pass: pass || a22.messages.pass,
-                fail: fail || a22.messages.fail,
-                incomplete: _typeof(a22.messages.incomplete) === "object" ? _extends({}, a22.messages.incomplete, b2.incomplete) : b2.incomplete
+                pass: pass || a2.messages.pass,
+                fail: fail || a2.messages.fail,
+                incomplete: _typeof(a2.messages.incomplete) === "object" ? _extends({}, a2.messages.incomplete, b2.incomplete) : b2.incomplete
               }
             });
           };
-          var mergeRuleLocale = function mergeRuleLocale2(a22, b2) {
+          var mergeRuleLocale = function mergeRuleLocale2(a2, b2) {
             var help = b2.help, description = b2.description;
             if (typeof help === "string" && dotRegex.test(help)) {
               help = import_dot["default"].compile(help);
@@ -52163,25 +44527,25 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (typeof description === "string" && dotRegex.test(description)) {
               description = import_dot["default"].compile(description);
             }
-            return _extends({}, a22, {
-              help: help || a22.help,
-              description: description || a22.description
+            return _extends({}, a2, {
+              help: help || a2.help,
+              description: description || a2.description
             });
           };
-          var mergeFailureMessage = function mergeFailureMessage2(a22, b2) {
+          var mergeFailureMessage = function mergeFailureMessage2(a2, b2) {
             var failureMessage = b2.failureMessage;
             if (typeof failureMessage === "string" && dotRegex.test(failureMessage)) {
               failureMessage = import_dot["default"].compile(failureMessage);
             }
-            return _extends({}, a22, {
-              failureMessage: failureMessage || a22.failureMessage
+            return _extends({}, a2, {
+              failureMessage: failureMessage || a2.failureMessage
             });
           };
-          var mergeFallbackMessage = function mergeFallbackMessage2(a22, b2) {
+          var mergeFallbackMessage = function mergeFallbackMessage2(a2, b2) {
             if (typeof b2 === "string" && dotRegex.test(b2)) {
               b2 = import_dot["default"].compile(b2);
             }
-            return b2 || a22;
+            return b2 || a2;
           };
           function getRulesToRun(rules, context2, options) {
             var base = {
@@ -52283,12 +44647,12 @@ Response: ${match.response.slice(0, 160)}` : "";
           var teardown_default = teardown;
           function runRules(context2, options, resolve, reject) {
             try {
-              context2 = new Context2(context2);
+              context2 = new Context(context2);
               axe._tree = context2.flatTree;
               axe._selectorData = _getSelectorData(context2.flatTree);
-            } catch (e2) {
+            } catch (e) {
               teardown_default();
-              return reject(e2);
+              return reject(e);
             }
             var q = queue_default();
             var audit = axe._audit;
@@ -52328,17 +44692,17 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
                 try {
                   resolve(results, teardown_default);
-                } catch (e2) {
+                } catch (e) {
                   teardown_default();
-                  log_default(e2);
+                  log_default(e);
                 }
-              } catch (e2) {
+              } catch (e) {
                 teardown_default();
-                reject(e2);
+                reject(e);
               }
-            })["catch"](function(e2) {
+            })["catch"](function(e) {
               teardown_default();
-              reject(e2);
+              reject(e);
             });
           }
           function load(audit) {
@@ -52501,8 +44865,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             try {
               assert_default(axe._audit, "No audit configured");
               assert_default(!axe._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
-            } catch (e2) {
-              return handleError(e2, callback);
+            } catch (e) {
+              return handleError(e, callback);
             }
             axe._running = true;
             if (options.performanceTimer) {
@@ -52520,8 +44884,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 teardown2();
                 try {
                   resolve(results);
-                } catch (e2) {
-                  axe.log(e2);
+                } catch (e) {
+                  axe.log(e);
                 }
               };
               var wrappedReject = function wrappedReject2(err2) {
@@ -52529,8 +44893,8 @@ Response: ${match.response.slice(0, 160)}` : "";
                 teardown2();
                 try {
                   reject(err2);
-                } catch (e2) {
-                  axe.log(e2);
+                } catch (e) {
+                  axe.log(e);
                 }
               };
               try {
@@ -52595,7 +44959,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             var _normalizeRunParams2 = normalizeRunParams(args), options = _normalizeRunParams2.options, context2 = _normalizeRunParams2.context;
             assert_default(axe._audit, "Axe is not configured. Audit is missing.");
             assert_default(!axe._running, "Axe is already running. Use `await axe.run()` to wait for the previous run to finish before starting a new run.");
-            var contextObj = new Context2(context2, axe._tree);
+            var contextObj = new Context(context2, axe._tree);
             axe._tree = contextObj.flatTree;
             axe._selectorData = _getSelectorData(contextObj.flatTree);
             axe._running = true;
@@ -52788,7 +45152,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               Audit: audit_default,
               CheckResult: check_result_default,
               Check: check_default,
-              Context: Context2,
+              Context,
               RuleResult: rule_result_default,
               Rule,
               metadataFunctionMap: metadata_function_map_default
@@ -56463,15 +48827,15 @@ First element: \`${exampleSnippet}\``,
     const out = [];
     const seenGroups = /* @__PURE__ */ new Set();
     for (let i = 0; i < events.length; i++) {
-      const e2 = events[i];
-      if (e2.type !== "click") continue;
-      const sel = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.testId) || "";
+      const e = events[i];
+      if (e.type !== "click") continue;
+      const sel = ((_b = (_a = e.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || ((_d = (_c = e.data) == null ? void 0 : _c.element) == null ? void 0 : _d.testId) || "";
       if (!sel) continue;
-      const cluster = [e2];
+      const cluster = [e];
       let j = i + 1;
       while (j < events.length) {
         const next = events[j];
-        if (next.timestamp - e2.timestamp > RAGE_WINDOW_MS2) break;
+        if (next.timestamp - e.timestamp > RAGE_WINDOW_MS2) break;
         if (isResponseEvent(next)) break;
         if (next.type === "click") {
           const nextSel = ((_f = (_e = next.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector) || ((_h = (_g = next.data) == null ? void 0 : _g.element) == null ? void 0 : _h.testId) || "";
@@ -56480,7 +48844,7 @@ First element: \`${exampleSnippet}\``,
         j++;
       }
       if (cluster.length >= RAGE_MIN_CLICKS2) {
-        const key = `${sel}@${e2.timestamp}`;
+        const key = `${sel}@${e.timestamp}`;
         if (seenGroups.has(key)) continue;
         seenGroups.add(key);
         const label = clickLabel2(cluster[0]);
@@ -56507,20 +48871,20 @@ First element: \`${exampleSnippet}\``,
     const out = [];
     const MAX = 5;
     for (let i = 0; i < events.length && out.length < MAX; i++) {
-      const e2 = events[i];
-      if (e2.type !== "click") continue;
+      const e = events[i];
+      if (e.type !== "click") continue;
       let responsive = false;
       for (let j = i + 1; j < events.length; j++) {
         const next = events[j];
-        if (next.timestamp - e2.timestamp > DEAD_RESPONSE_WINDOW_MS2) break;
+        if (next.timestamp - e.timestamp > DEAD_RESPONSE_WINDOW_MS2) break;
         if (isResponseEvent(next)) {
           responsive = true;
           break;
         }
       }
       if (responsive) continue;
-      const sel = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || "";
-      const label = clickLabel2(e2);
+      const sel = ((_b = (_a = e.data) == null ? void 0 : _a.element) == null ? void 0 : _b.selector) || "";
+      const label = clickLabel2(e);
       out.push({
         id: makeIssueId("frustration-dead"),
         detector: "frustration-dead",
@@ -56528,8 +48892,8 @@ First element: \`${exampleSnippet}\``,
         title: `Dead click on ${label}`,
         description: `Clicked but nothing happened within ${DEAD_RESPONSE_WINDOW_MS2}ms (no API call, navigation, or DOM input). The element may have an unbound handler, a swallowed event, or be visually clickable but disabled.`,
         selector: sel,
-        page: e2.page || page,
-        detectedAt: e2.timestamp
+        page: e.page || page,
+        detectedAt: e.timestamp
       });
     }
     return out;
@@ -56538,33 +48902,33 @@ First element: \`${exampleSnippet}\``,
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     const out = [];
     const formActivity = {};
-    for (const e2 of events) {
-      if (e2.type === "input") {
-        const formId = ((_b = (_a = e2.data) == null ? void 0 : _a.element) == null ? void 0 : _b.formId) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.formAction) || "_default";
+    for (const e of events) {
+      if (e.type === "input") {
+        const formId = ((_b = (_a = e.data) == null ? void 0 : _a.element) == null ? void 0 : _b.formId) || ((_d = (_c = e.data) == null ? void 0 : _c.element) == null ? void 0 : _d.formAction) || "_default";
         if (!formActivity[formId]) {
-          formActivity[formId] = { firstInputAt: e2.timestamp, fieldsSeen: /* @__PURE__ */ new Set(), lastInputAt: e2.timestamp, page: e2.page };
+          formActivity[formId] = { firstInputAt: e.timestamp, fieldsSeen: /* @__PURE__ */ new Set(), lastInputAt: e.timestamp, page: e.page };
         }
-        const name = ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.name) || ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.id) || "field";
+        const name = ((_f = (_e = e.data) == null ? void 0 : _e.element) == null ? void 0 : _f.name) || ((_h = (_g = e.data) == null ? void 0 : _g.element) == null ? void 0 : _h.id) || "field";
         formActivity[formId].fieldsSeen.add(name);
-        formActivity[formId].lastInputAt = e2.timestamp;
-      } else if (e2.type === "form_submit") {
-        const formId = ((_j = (_i = e2.data) == null ? void 0 : _i.form) == null ? void 0 : _j.id) || "_default";
+        formActivity[formId].lastInputAt = e.timestamp;
+      } else if (e.type === "form_submit") {
+        const formId = ((_j = (_i = e.data) == null ? void 0 : _i.form) == null ? void 0 : _j.id) || "_default";
         delete formActivity[formId];
-      } else if (e2.type === "route_change") {
+      } else if (e.type === "route_change") {
         for (const formId of Object.keys(formActivity)) {
-          const a2 = formActivity[formId];
-          if (e2.timestamp - a2.lastInputAt > ABANDON_WINDOW_MS) continue;
-          if (a2.fieldsSeen.size === 0) continue;
+          const a = formActivity[formId];
+          if (e.timestamp - a.lastInputAt > ABANDON_WINDOW_MS) continue;
+          if (a.fieldsSeen.size === 0) continue;
           out.push({
             id: makeIssueId("frustration-abandon"),
             detector: "frustration-abandon",
             severity: "moderate",
-            title: `Form abandoned on ${a2.page} (${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} filled)`,
-            description: `User typed into ${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} (${Array.from(a2.fieldsSeen).slice(0, 5).join(", ")}) and then navigated away without submitting. Likely a UX problem: the submit button is unclear, the form requires too much info, or it's failing silently.`,
-            page: a2.page,
-            detectedAt: a2.lastInputAt,
-            firstSeenAt: a2.firstInputAt,
-            lastSeenAt: a2.lastInputAt
+            title: `Form abandoned on ${a.page} (${a.fieldsSeen.size} field${a.fieldsSeen.size === 1 ? "" : "s"} filled)`,
+            description: `User typed into ${a.fieldsSeen.size} field${a.fieldsSeen.size === 1 ? "" : "s"} (${Array.from(a.fieldsSeen).slice(0, 5).join(", ")}) and then navigated away without submitting. Likely a UX problem: the submit button is unclear, the form requires too much info, or it's failing silently.`,
+            page: a.page,
+            detectedAt: a.lastInputAt,
+            firstSeenAt: a.firstInputAt,
+            lastSeenAt: a.lastInputAt
           });
           delete formActivity[formId];
         }
@@ -56577,27 +48941,27 @@ First element: \`${exampleSnippet}\``,
     const out = [];
     const seen = /* @__PURE__ */ new Set();
     for (let i = 0; i < events.length; i++) {
-      const e2 = events[i];
-      const isError = e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error";
+      const e = events[i];
+      const isError = e.type === "error" || e.type === "unhandled_rejection" || e.type === "console_error";
       if (!isError) continue;
       let click = null;
       for (let j = i - 1; j >= 0; j--) {
         const prev = events[j];
-        if (e2.timestamp - prev.timestamp > ERROR_CORRELATION_WINDOW_MS) break;
+        if (e.timestamp - prev.timestamp > ERROR_CORRELATION_WINDOW_MS) break;
         if (prev.type === "click") {
           click = prev;
           break;
         }
       }
       if (!click) continue;
-      const errMsg = ((_b = (_a = e2.data) == null ? void 0 : _a.error) == null ? void 0 : _b.message) || "";
+      const errMsg = ((_b = (_a = e.data) == null ? void 0 : _a.error) == null ? void 0 : _b.message) || "";
       if (!errMsg) continue;
       const key = `${errMsg}::${((_d = (_c = click.data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || ""}`;
       if (seen.has(key)) continue;
       seen.add(key);
       const label = clickLabel2(click);
       const truncMsg = errMsg.length > 60 ? errMsg.slice(0, 57) + "\u2026" : errMsg;
-      const delta = Math.round(e2.timestamp - click.timestamp);
+      const delta = Math.round(e.timestamp - click.timestamp);
       out.push({
         id: makeIssueId("frustration-error-correlated"),
         detector: "frustration-error-correlated",
@@ -56605,18 +48969,18 @@ First element: \`${exampleSnippet}\``,
         title: `Click on ${label} triggered: ${truncMsg}`,
         description: `An error fired ${delta}ms after the user clicked ${label}. This is almost certainly the offending interaction \u2014 the click handler threw, or its async path failed.`,
         selector: (_f = (_e = click.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector,
-        page: e2.page || page,
-        detectedAt: e2.timestamp
+        page: e.page || page,
+        detectedAt: e.timestamp
       });
     }
     return out;
   }
-  function isResponseEvent(e2) {
-    return e2.type === "api_request" || e2.type === "route_change" || e2.type === "input" || e2.type === "form_submit" || e2.type === "select_change";
+  function isResponseEvent(e) {
+    return e.type === "api_request" || e.type === "route_change" || e.type === "input" || e.type === "form_submit" || e.type === "select_change";
   }
-  function clickLabel2(e2) {
+  function clickLabel2(e) {
     var _a;
-    const el = (_a = e2.data) == null ? void 0 : _a.element;
+    const el = (_a = e.data) == null ? void 0 : _a.element;
     const raw = (el == null ? void 0 : el.text) || (el == null ? void 0 : el.ariaLabel) || (el == null ? void 0 : el.testId) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
     const trimmed = String(raw).replace(/\s+/g, " ").trim();
     return trimmed.length > 40 ? `"${trimmed.slice(0, 37)}\u2026"` : `"${trimmed}"`;
@@ -56641,7 +49005,7 @@ First element: \`${exampleSnippet}\``,
       return { issues, durationMs: 0, scannedAt: _lastScanAt };
     }
     const startedAt = Date.now();
-    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0] || null;
     const safeRun = (p) => p.catch((err) => {
       console.warn("[TraceBug] Detector failed:", err);
@@ -56657,10 +49021,10 @@ First element: \`${exampleSnippet}\``,
       safeRun(detectFrustration2(session))
     ]).then((results) => {
       const all = [].concat(...results);
-      all.sort((a2, b) => {
-        const sev = SEVERITY_ORDER[a2.severity] - SEVERITY_ORDER[b.severity];
+      all.sort((a, b) => {
+        const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
         if (sev !== 0) return sev;
-        return a2.detectedAt - b.detectedAt;
+        return a.detectedAt - b.detectedAt;
       });
       _issues = all;
       return all;
@@ -56812,16 +49176,16 @@ First element: \`${exampleSnippet}\``,
         } else if (action === "editor" && parsed) {
           try {
             window.location.href = `vscode://file/${parsed.absPath}:${parsed.line}`;
-          } catch (e2) {
+          } catch (e) {
           }
         }
       });
     });
     const auto = setTimeout(() => hideLiveBugCard(), 12e3);
     overlay.addEventListener("mouseenter", () => clearTimeout(auto));
-    const esc = (e2) => {
+    const esc = (e) => {
       var _a;
-      if (e2.key === "Escape" && _currentRoot === overlay) {
+      if (e.key === "Escape" && _currentRoot === overlay) {
         try {
           (_a = options.onDismiss) == null ? void 0 : _a.call(options);
         } finally {
@@ -56877,9 +49241,9 @@ First element: \`${exampleSnippet}\``,
   }
   async function fetchSourceLines(fileUrl) {
     try {
-      const u2 = new URL(fileUrl, window.location.origin);
-      if (u2.origin !== window.location.origin) return null;
-    } catch (e2) {
+      const u = new URL(fileUrl, window.location.origin);
+      if (u.origin !== window.location.origin) return null;
+    } catch (e) {
       return null;
     }
     if (_sourceCache.has(fileUrl)) return _sourceCache.get(fileUrl);
@@ -56892,7 +49256,7 @@ First element: \`${exampleSnippet}\``,
         const lines = text.split("\n");
         _sourceCache.set(fileUrl, lines);
         return lines;
-      } catch (e2) {
+      } catch (e) {
         return null;
       } finally {
         _sourceFetchInflight.delete(fileUrl);
@@ -57217,8 +49581,8 @@ First element: \`${exampleSnippet}\``,
       document.removeEventListener("keydown", escHandler);
     };
     panel.querySelector('[data-tb-issues="close"]').addEventListener("click", close);
-    overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) close();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
     });
     panel.querySelector('[data-tb-issues="rescan"]').addEventListener("click", async () => {
       const body = panel.querySelector('[data-tb-issues="body"]');
@@ -57228,8 +49592,8 @@ First element: \`${exampleSnippet}\``,
       await scan();
       _renderBody(getIssues());
     });
-    const escHandler = (e2) => {
-      if (e2.key === "Escape") close();
+    const escHandler = (e) => {
+      if (e.key === "Escape") close();
     };
     document.addEventListener("keydown", escHandler);
   }
@@ -57308,7 +49672,7 @@ First element: \`${exampleSnippet}\``,
     let el = null;
     try {
       el = document.querySelector(issue.selector);
-    } catch (e2) {
+    } catch (e) {
       el = null;
     }
     if (!el) return;
@@ -57628,11 +49992,11 @@ First element: \`${exampleSnippet}\``,
           if (saved === "light" || saved === "dark" || saved === "auto") {
             themeMode = saved;
           }
-        } catch (e2) {
+        } catch (e) {
         }
         try {
           injectTheme(themeMode);
-        } catch (e2) {
+        } catch (e) {
         }
         hydratePlan().catch(() => {
         });
@@ -57762,7 +50126,7 @@ First element: \`${exampleSnippet}\``,
       try {
         const env = captureEnvironment();
         saveEnvironment(id, env);
-      } catch (e2) {
+      } catch (e) {
       }
       try {
         const storedUser = localStorage.getItem("tracebug_user");
@@ -57775,7 +50139,7 @@ First element: \`${exampleSnippet}\``,
             localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
           }
         }
-      } catch (e2) {
+      } catch (e) {
       }
       updateRecordingState(true);
       emitHook("session:start", id);
@@ -57822,7 +50186,7 @@ First element: \`${exampleSnippet}\``,
         const fn = this._consoleCleanups.pop();
         try {
           fn && fn();
-        } catch (e2) {
+        } catch (e) {
         }
       }
     }
@@ -58000,7 +50364,7 @@ First element: \`${exampleSnippet}\``,
       var _a;
       try {
         this._endActiveSession();
-      } catch (e2) {
+      } catch (e) {
       }
       const ok = await startVideoRecording({
         mode: (_a = options == null ? void 0 : options.mode) != null ? _a : "rolling",
@@ -58011,7 +50375,7 @@ First element: \`${exampleSnippet}\``,
       if (!ok) return false;
       try {
         this._startActiveSession();
-      } catch (e2) {
+      } catch (e) {
       }
       const root = document.getElementById("tracebug-root");
       if (root) {
@@ -58045,7 +50409,7 @@ First element: \`${exampleSnippet}\``,
       hideRecordingHUD();
       try {
         this._endActiveSession();
-      } catch (e2) {
+      } catch (e) {
       }
       if ((_a = this.config) == null ? void 0 : _a.enableDashboard) {
         const root = document.getElementById("tracebug-root");
@@ -58331,7 +50695,7 @@ First element: \`${exampleSnippet}\``,
       const session = sessions.find((s) => s.sessionId === this.sessionId);
       if (!session) return 0;
       return session.events.filter(
-        (e2) => e2.type === "error" || e2.type === "unhandled_rejection"
+        (e) => e.type === "error" || e.type === "unhandled_rejection"
       ).length;
     }
     /** Export current session as JSON (for CI artifact upload) */
@@ -58352,7 +50716,7 @@ First element: \`${exampleSnippet}\``,
         try {
           const key = "tracebug_sessions";
           localStorage.setItem(key, JSON.stringify(sessions));
-        } catch (e2) {
+        } catch (e) {
         }
       }
     }
@@ -58371,21 +50735,21 @@ First element: \`${exampleSnippet}\``,
       const env = session.environment;
       const browser = env ? `${env.browser} ${env.browserVersion}` : "Unknown browser";
       const os = env ? env.os : "Unknown OS";
-      const actions = session.events.filter((e2) => ["click", "input", "select_change", "form_submit"].includes(e2.type)).slice(-5).map((e2) => {
+      const actions = session.events.filter((e) => ["click", "input", "select_change", "form_submit"].includes(e.type)).slice(-5).map((e) => {
         var _a2, _b, _c, _d, _e, _f;
-        if (e2.type === "click") return `clicking ${((_b = (_a2 = e2.data.element) == null ? void 0 : _a2.text) == null ? void 0 : _b.slice(0, 30)) || ((_c = e2.data.element) == null ? void 0 : _c.tag) || "element"}`;
-        if (e2.type === "input") return `typing in ${((_d = e2.data.element) == null ? void 0 : _d.name) || "field"}`;
-        if (e2.type === "select_change") return `selecting "${((_f = (_e = e2.data.element) == null ? void 0 : _e.selectedText) == null ? void 0 : _f.slice(0, 20)) || "option"}"`;
-        if (e2.type === "form_submit") return `submitting form`;
-        return e2.type;
+        if (e.type === "click") return `clicking ${((_b = (_a2 = e.data.element) == null ? void 0 : _a2.text) == null ? void 0 : _b.slice(0, 30)) || ((_c = e.data.element) == null ? void 0 : _c.tag) || "element"}`;
+        if (e.type === "input") return `typing in ${((_d = e.data.element) == null ? void 0 : _d.name) || "field"}`;
+        if (e.type === "select_change") return `selecting "${((_f = (_e = e.data.element) == null ? void 0 : _e.selectedText) == null ? void 0 : _f.slice(0, 20)) || "option"}"`;
+        if (e.type === "form_submit") return `submitting form`;
+        return e.type;
       });
       const flow = actions.length > 0 ? ` after ${actions.join(" \u2192 ")}` : "";
-      const failedApis = session.events.filter((e2) => {
+      const failedApis = session.events.filter((e) => {
         var _a2, _b;
-        return e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0);
-      }).slice(0, 1).map((e2) => {
+        return e.type === "api_request" && (((_a2 = e.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e.data.request) == null ? void 0 : _b.statusCode) === 0);
+      }).slice(0, 1).map((e) => {
         var _a2, _b, _c, _d, _e;
-        return `${(_a2 = e2.data.request) == null ? void 0 : _a2.method} ${(_d = (_c = (_b = e2.data.request) == null ? void 0 : _b.url) == null ? void 0 : _c.split("?")[0]) == null ? void 0 : _d.slice(-40)} returned ${(_e = e2.data.request) == null ? void 0 : _e.statusCode}`;
+        return `${(_a2 = e.data.request) == null ? void 0 : _a2.method} ${(_d = (_c = (_b = e.data.request) == null ? void 0 : _b.url) == null ? void 0 : _c.split("?")[0]) == null ? void 0 : _d.slice(-40)} returned ${(_e = e.data.request) == null ? void 0 : _e.statusCode}`;
       });
       const apiNote = failedApis.length > 0 ? ` ${failedApis[0]}.` : "";
       return `Bug on ${page} \u2014 ${error}${flow}.${apiNote} ${browser}, ${os}.`;
@@ -58436,7 +50800,7 @@ First element: \`${exampleSnippet}\``,
       }
       try {
         localStorage.setItem("tracebug_user", JSON.stringify(user));
-      } catch (e2) {
+      } catch (e) {
       }
       if (this.sessionId) {
         try {
@@ -58446,7 +50810,7 @@ First element: \`${exampleSnippet}\``,
             session.user = user;
             localStorage.setItem("tracebug_sessions", JSON.stringify(sessions));
           }
-        } catch (e2) {
+        } catch (e) {
         }
       }
     }
@@ -58455,7 +50819,7 @@ First element: \`${exampleSnippet}\``,
       try {
         const raw = localStorage.getItem("tracebug_user");
         return raw ? JSON.parse(raw) : null;
-      } catch (e2) {
+      } catch (e) {
         return null;
       }
     }
@@ -58463,7 +50827,7 @@ First element: \`${exampleSnippet}\``,
     clearUser() {
       try {
         localStorage.removeItem("tracebug_user");
-      } catch (e2) {
+      } catch (e) {
       }
     }
     // ── Private methods ─────────────────────────────────────────────────
@@ -58503,14 +50867,14 @@ First element: \`${exampleSnippet}\``,
           if (meta.DEV === true) return "development";
           if (meta.MODE) return meta.MODE;
         }
-      } catch (e2) {
+      } catch (e) {
       }
       try {
         const g = globalThis;
         if (typeof g.process !== "undefined" && ((_a = g.process.env) == null ? void 0 : _a.NODE_ENV)) {
           return g.process.env.NODE_ENV;
         }
-      } catch (e2) {
+      } catch (e) {
       }
       if (typeof window !== "undefined") {
         const host = window.location.hostname;
@@ -58603,23 +50967,23 @@ First element: \`${exampleSnippet}\``,
           const lastAction = (() => {
             var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
             try {
-              const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+              const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
               const events = ((_a2 = sessions[0]) == null ? void 0 : _a2.events) || [];
               for (let i = events.length - 1; i >= 0; i--) {
-                const e2 = events[i];
-                if (e2.type === "click") {
-                  const t = ((_c = (_b = e2.data) == null ? void 0 : _b.element) == null ? void 0 : _c.text) || ((_e = (_d = e2.data) == null ? void 0 : _d.element) == null ? void 0 : _e.ariaLabel) || ((_g = (_f = e2.data) == null ? void 0 : _f.element) == null ? void 0 : _g.tag) || "element";
+                const e = events[i];
+                if (e.type === "click") {
+                  const t = ((_c = (_b = e.data) == null ? void 0 : _b.element) == null ? void 0 : _c.text) || ((_e = (_d = e.data) == null ? void 0 : _d.element) == null ? void 0 : _e.ariaLabel) || ((_g = (_f = e.data) == null ? void 0 : _f.element) == null ? void 0 : _g.tag) || "element";
                   return `clicked "${String(t).slice(0, 40)}"`;
                 }
-                if (e2.type === "input") {
-                  const n = ((_i = (_h = e2.data) == null ? void 0 : _h.element) == null ? void 0 : _i.name) || ((_k = (_j = e2.data) == null ? void 0 : _j.element) == null ? void 0 : _k.id) || "field";
+                if (e.type === "input") {
+                  const n = ((_i = (_h = e.data) == null ? void 0 : _h.element) == null ? void 0 : _i.name) || ((_k = (_j = e.data) == null ? void 0 : _j.element) == null ? void 0 : _k.id) || "field";
                   return `typed in ${n}`;
                 }
-                if (e2.type === "select_change") return `selected an option`;
-                if (e2.type === "form_submit") return `submitted a form`;
-                if (e2.type === "route_change") return `navigated to ${((_l = e2.data) == null ? void 0 : _l.to) || "page"}`;
+                if (e.type === "select_change") return `selected an option`;
+                if (e.type === "form_submit") return `submitted a form`;
+                if (e.type === "route_change") return `navigated to ${((_l = e.data) == null ? void 0 : _l.to) || "page"}`;
               }
-            } catch (e2) {
+            } catch (e) {
             }
             return void 0;
           })();
@@ -58643,7 +51007,7 @@ First element: \`${exampleSnippet}\``,
             });
           }).catch(() => {
           });
-        } catch (e2) {
+        } catch (e) {
         }
       }, 200);
     }
@@ -58757,27 +51121,6 @@ First element: \`${exampleSnippet}\``,
   return __toCommonJS(src_exports);
 })();
 /*! Bundled license information:
-
-html2canvas/dist/html2canvas.esm.js:
-  (*!
-   * html2canvas 1.4.1 <https://html2canvas.hertzen.com>
-   * Copyright (c) 2022 Niklas von Hertzen <https://hertzen.com>
-   * Released under MIT License
-   *)
-  (*! *****************************************************************************
-  Copyright (c) Microsoft Corporation.
-  
-  Permission to use, copy, modify, and/or distribute this software for any
-  purpose with or without fee is hereby granted.
-  
-  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-  REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-  AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-  INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-  LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-  OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-  PERFORMANCE OF THIS SOFTWARE.
-  ***************************************************************************** *)
 
 axe-core/axe.js:
   (*! axe v4.11.4
