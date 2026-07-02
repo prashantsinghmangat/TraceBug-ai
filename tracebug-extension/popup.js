@@ -118,12 +118,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     themeBtn.textContent = themeIcon(next);
   });
 
-  // Cloud-share account state. Loaded in parallel with the tab check so the
-  // user sees account info even on chrome:// pages where bug capture is
-  // unavailable.
-  await loadCloudEndpoint();
-  wireAccountButtons();
-  void refreshAccount();
+  // PHASE2-CLOUD: cloud endpoint + account state disabled for Phase 1 offline release
+  // await loadCloudEndpoint();
+  // wireAccountButtons();
+  // void refreshAccount();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 

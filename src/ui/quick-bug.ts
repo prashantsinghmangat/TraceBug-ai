@@ -7,7 +7,7 @@ import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { isPremium } from "../plan";
 import { showUpgradeModal } from "./upgrade-modal";
-import { getAllSessions, setSessionPriority } from "../storage";
+import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved } from "../storage";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
 import { buildReport, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
@@ -21,9 +21,10 @@ import { escapeHtml } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
-import { shareSessionAsLink, DEFAULT_CLOUD_ENDPOINT, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
+// PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
+import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 import { generateAIPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
-import { getBridge } from "../auth/iframe-bridge";
+// PHASE2-CLOUD: import { getBridge } from "../auth/iframe-bridge";
 import { showScreenshotTrimModal } from "./screenshot-trim-modal";
 import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
 import { getElementAnnotations, getDrawRegions } from "../annotation-store";
@@ -38,7 +39,7 @@ export function setGithubRepo(repo: string | null): void { _githubRepo = repo; }
 // overridden at init time via TraceBug.init({ cloudEndpoint: ... }).
 let _cloudEndpoint: string = DEFAULT_CLOUD_ENDPOINT;
 export function setCloudEndpoint(endpoint: string | null | undefined): void {
-  _cloudEndpoint = (endpoint && endpoint.trim()) || DEFAULT_CLOUD_ENDPOINT;
+  _cloudEndpoint = resolveCloudEndpoint(endpoint);
 }
 
 const MODAL_ID = "tracebug-quick-bug-modal";
@@ -139,15 +140,20 @@ export async function showQuickBugCapture(
   // Grab session for auto-fill. If a specific sessionId is requested (e.g. user
   // clicked "View ticket" on an older session), pick that one; otherwise fall
   // back to the most recently updated session.
-  const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
+  const sessions = getCachedSessions().slice().sort((a, b) => b.updatedAt - a.updatedAt);
   const currentSession = options?.sessionId
     ? (sessions.find(s => s.sessionId === options.sessionId) || sessions[0] || null)
     : (sessions[0] || null);
-  // Only show screenshots the user EXPLICITLY captured — never auto-grab one.
-  // (Auto-capturing on open surprised users mid-recording with a stray frame.)
-  // Shots are added on demand: the toolbar/HUD camera, the "+ Add" button, or
-  // the "Take screenshot" button in the empty state below.
-  const screenshots: ScreenshotData[] = getScreenshots();
+  // _rawVideo is always the LAST recording. If we're opening an older session,
+  // suppress video so a newer session's recording doesn't bleed in.
+  const isHistoricalSession = !!(
+    options?.sessionId && sessions.length > 1 && sessions[0].sessionId !== currentSession?.sessionId
+  );
+  // For old sessions opened via "View tickets", use their stored screenshots;
+  // for the live session, use the current in-memory ones.
+  const screenshots: ScreenshotData[] = options?.sessionId && currentSession?.screenshots?.length
+    ? [...currentSession.screenshots].reverse()
+    : getScreenshots().slice().reverse();
 
   // Auto-fill title + description from session context
   const draft = _loadDraft();
@@ -169,7 +175,7 @@ export async function showQuickBugCapture(
   const severity: import("../types").BugSeverity = report?.severity ?? "low";
   const timeline: import("../types").TimelineEntry[] = report?.timeline ?? [];
 
-  _openModal(root, { title, description, screenshots, severity, timeline, currentSession, report });
+  _openModal(root, { title, description, screenshots, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession });
 }
 
 /** Download every screenshot in the ticket, one PNG per file. */
@@ -256,6 +262,7 @@ function _openModal(
     timeline: import("../types").TimelineEntry[];
     currentSession: StoredSession | null;
     report: import("../types").BugReport | null;
+    suppressVideo?: boolean;
   }
 ): void {
   _isOpen = true;
@@ -299,10 +306,13 @@ function _openModal(
   const ssCount = screenshots.length;
   const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
 
-  // Optional screen recording from this session (in-memory blob URL).
-  // Now rendered inline as the primary preview when present; the old
-  // `_buildVideoBlock` helper is dead but kept for reference.
-  const video = getLastVideoRecording();
+  // Optional screen recording — only show if it was recorded after this session
+  // started. Also suppressed for historical sessions (data.suppressVideo) since
+  // _rawVideo is always the LAST recording and would bleed into older tickets.
+  const _rawVideo = getLastVideoRecording();
+  const video = !data.suppressVideo && _rawVideo && data.currentSession && _rawVideo.startedAt >= (data.currentSession.createdAt || 0)
+    ? _rawVideo
+    : null;
 
   // Severity badge \u2014 colors match SEVERITY_COLORS in issues-panel.
   const sevColors: Record<string, { bg: string; fg: string; border: string }> = {
@@ -453,13 +463,20 @@ function _openModal(
     <!-- Footer: export actions -->
     <div class="tb-qb-footer">
       <div class="tb-qb-actions">
+        <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${data.currentSession?.saved ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
+          ${data.currentSession?.saved
+            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`
+            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
+        </button>
         <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">🤖 Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">📦 Export .html</button>
+        <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">🔗 Share link</button>
+        PHASE2-CLOUD -->
         <div class="tb-qb-more">
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
@@ -745,6 +762,21 @@ function _openModal(
     setTimeout(close, 300);
   });
 
+  // Save Ticket \u2014 marks this session as explicitly saved so it appears in the
+  // Saved Tickets list. Without saving, the list stays empty.
+  const saveTicketBtn = modal.querySelector<HTMLButtonElement>('[data-action="save-ticket"]');
+  if (saveTicketBtn) {
+    saveTicketBtn.addEventListener("click", () => {
+      const sid = data.currentSession?.sessionId;
+      if (!sid) return;
+      markSessionSaved(sid);
+      saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
+      saveTicketBtn.classList.add("tb-qb-btn-saved");
+      saveTicketBtn.disabled = true;
+      showToast("\u2713 Ticket saved \u2014 find it in the toolbar list", root);
+    });
+  }
+
   // Plain Text + Download Screenshots buttons were cut from v1 \u2014 devs paste
   // GitHub markdown anywhere; explicit screenshot downloads happen as part
   // of the GitHub/Jira export flow.
@@ -792,26 +824,16 @@ function _openModal(
     }
   });
 
-  // Share link \u2014 upload to cloud + copy URL + open viewer in new tab.
-  // Prompts magic-link sign-in via hidden iframe bridge when needed.
-  // Local capture is unaffected.
+  /* PHASE2-CLOUD: share link handler disabled for Phase 1 offline release
   const shareBtn = modal.querySelector<HTMLButtonElement>('[data-action="share-link"]');
   shareBtn?.addEventListener("click", async () => {
     if (!data.currentSession) {
       showToast("No session to share yet", root);
       return;
     }
-    if (shareBtn?.dataset.busy === "1") return; // ignore double-clicks
-
-    // One-time consent dialog. Sanitizer scrubs code-side content (tokens
-    // in logs / URLs / network) but cannot scrub screenshots or video pixels.
-    // The user is told this explicitly the first time they share, with a
-    // "don't show again" option once they've understood it.
+    if (shareBtn?.dataset.busy === "1") return;
     const consentOk = await _confirmShareConsent(root);
     if (!consentOk) return;
-
-    // Inline spinner + label swap so the user sees progress on the button
-    // itself, not just the bottom toast which can be missed.
     const originalHtml = shareBtn ? shareBtn.innerHTML : "";
     const setBtnState = (label: string) => {
       if (!shareBtn) return;
@@ -829,17 +851,14 @@ function _openModal(
       shareBtn.style.opacity = "";
       shareBtn.innerHTML = originalHtml;
     };
-    // One-time keyframes injection.
     if (!document.getElementById("tb-qb-spin-style")) {
       const s = document.createElement("style");
       s.id = "tb-qb-spin-style";
       s.textContent = "@keyframes tb-qb-spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(s);
     }
-
     try {
       try { await restoreLastRecordingFromOffscreen(); } catch {}
-
       const bridge = getBridge(_cloudEndpoint);
       const auth = await bridge.checkAuth();
       if (!auth.authed) {
@@ -847,15 +866,9 @@ function _openModal(
         showToast("Opening sign-in window\u2026", root);
         await bridge.signIn();
       }
-
-      // Step 1: bundle locally
       setBtnState("Bundling\u2026");
       showToast("Bundling report\u2026", root);
       const report = buildReport(data.currentSession);
-
-      // Step 1b: if too many screenshots, let the user pick which to keep.
-      // Pause the busy state while they decide so the spinner doesn't
-      // look frozen during what could be tens of seconds of deliberation.
       if (report.screenshots && report.screenshots.length > MAX_SCREENSHOTS_PER_SHARE) {
         resetBtn();
         const chosenIds = await showScreenshotTrimModal(report.screenshots, MAX_SCREENSHOTS_PER_SHARE, root);
@@ -867,17 +880,9 @@ function _openModal(
         report.screenshots = report.screenshots.filter((s) => chosenSet.has(s.id));
         setBtnState("Uploading\u2026");
       }
-
-      // Step 2: hand off to share flow (sanitize + uploadInit + PUT + complete)
       setBtnState("Uploading\u2026");
       showToast("Uploading to cloud\u2026", root);
-      const result = await shareSessionAsLink(
-        data.currentSession,
-        report,
-        { cloudEndpoint: _cloudEndpoint },
-      );
-
-      // Step 3: copy + open in new tab
+      const result = await shareSessionAsLink(data.currentSession, report, { cloudEndpoint: _cloudEndpoint });
       try { await navigator.clipboard.writeText(result.shareUrl); } catch {}
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`\u2713 Link copied \u00b7 ${sizeMb} MB \u00b7 Opening\u2026`, root);
@@ -901,6 +906,7 @@ function _openModal(
       }
     }
   });
+  PHASE2-CLOUD */
 
   // Fix with AI — generate a structured debug prompt, copy to clipboard,
   // and show a tiny popover with "Open in Claude / ChatGPT". No backend,
@@ -2079,6 +2085,10 @@ function _injectStyles(): void {
     /* "Fix with AI" — the highlight action. Gradient accent so it stands out. */
     #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(124,92,255,0.35); }
     #${MODAL_ID} .tb-qb-btn-ai:hover { filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
+    /* Save Ticket — prominent green CTA */
+    #${MODAL_ID} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-btn-save:hover { background:#15803d; border-color:transparent; transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
     #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; }
     #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent-hover); border-color:transparent; transform:translateY(-1px); }
@@ -2263,6 +2273,17 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
 // the share; true proceeds.
 const CONSENT_KEY = "tracebug_share_consent_v1";
 
+/**
+ * Mount a popup/dialog ABOVE the open ticket modal. The modal and these popups
+ * all use the max z-index, so a popup appended to document.body can lose to
+ * #tracebug-root's stacking context and render BEHIND the ticket. Appending it
+ * inside the modal overlay (last child, same stacking context) guarantees it
+ * paints on top. Falls back to body when no ticket is open.
+ */
+function _mountAboveModal(overlay: HTMLElement): void {
+  (document.getElementById(MODAL_ID) || document.body).appendChild(overlay);
+}
+
 function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
   return new Promise((resolve) => {
     try {
@@ -2332,7 +2353,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
       </div>
     `;
     overlay.appendChild(card);
-    document.body.appendChild(overlay);
+    _mountAboveModal(overlay);
 
     const finish = (ok: boolean) => {
       if (ok) {

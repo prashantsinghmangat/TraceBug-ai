@@ -135,14 +135,14 @@ let _cachedSessions: StoredSession[] | null = null;
 let _pendingFlush: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL_MS = 1000;
 
-function getCachedSessions(): StoredSession[] {
+export function getCachedSessions(): StoredSession[] {
   if (!_cachedSessions) {
     _cachedSessions = getAllSessions();
   }
   return _cachedSessions;
 }
 
-function scheduleFlush(): void {
+export function scheduleFlush(): void {
   if (_pendingFlush) return;
   _pendingFlush = setTimeout(() => {
     _pendingFlush = null;
@@ -253,7 +253,10 @@ export function updateSessionError(
 // ── Delete a single session ───────────────────────────────────────────────
 
 export function deleteSession(sessionId: string): void {
-  // Drop any pending flush first so it can't resurrect the deleted session
+  // Persist pending in-memory events first — reading straight from
+  // localStorage below would silently drop them for the surviving sessions.
+  // Then invalidate so a stale pending flush can't resurrect the deleted one.
+  flushPendingEvents();
   const remaining = getAllSessions().filter((s) => s.sessionId !== sessionId);
   invalidateCache();
   saveSessions(remaining);
@@ -293,6 +296,19 @@ export function setSessionPriority(sessionId: string, priority: BugPriority): vo
   session.priority = priority;
   session.updatedAt = Date.now();
   scheduleFlush();
+}
+
+// ── Mark session as explicitly saved by the user ─────────────────────────
+
+export function markSessionSaved(sessionId: string): void {
+  const sessions = getCachedSessions();
+  const session = sessions.find((s) => s.sessionId === sessionId);
+  if (!session) return;
+
+  session.saved = true;
+  session.updatedAt = Date.now();
+  // Flush immediately so the saved state survives page reloads.
+  flushPendingEvents();
 }
 
 // ── Clear everything ──────────────────────────────────────────────────────

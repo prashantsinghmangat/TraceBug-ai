@@ -7,6 +7,8 @@
 // Pattern: one singleton per (cloudEndpoint) per page. Lazy mount on first
 // call. Requests are correlated via requestId.
 
+import { resolveCloudEndpoint } from "../cloud-endpoint";
+
 interface PendingRequest {
   resolve: (data: any) => void;
   reject: (err: any) => void;
@@ -14,6 +16,7 @@ interface PendingRequest {
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+const BRIDGE_READY_TIMEOUT_MS = 20_000;
 const SIGN_IN_POLL_INTERVAL_MS = 1500;
 const SIGN_IN_TIMEOUT_MS = 3 * 60_000;
 
@@ -66,9 +69,12 @@ export class IframeBridge {
   private authChangeListeners = new Set<(authed: boolean) => void>();
   private origin: string;
   private boundOnMessage: (e: MessageEvent) => void;
+  private readyCleanup: (() => void) | null = null;
 
   constructor(cloudEndpoint: string) {
-    this.endpoint = cloudEndpoint.replace(/\/+$/, "");
+    // Enforce HTTPS (or localhost) here — every auth/upload path funnels
+    // through this class, so a bad endpoint can't reach postMessage/iframe.
+    this.endpoint = resolveCloudEndpoint(cloudEndpoint);
     this.origin = new URL(this.endpoint).origin;
     this.boundOnMessage = this.onMessage.bind(this);
   }
@@ -76,7 +82,7 @@ export class IframeBridge {
   // Mount iframe and resolve when it announces ready. Idempotent.
   ready(): Promise<void> {
     if (this.readyPromise) return this.readyPromise;
-    this.readyPromise = new Promise<void>((resolve) => {
+    this.readyPromise = new Promise<void>((resolve, reject) => {
       if (typeof window === "undefined" || typeof document === "undefined") {
         resolve(); // no-op in non-DOM contexts (e.g. SSR)
         return;
@@ -99,10 +105,26 @@ export class IframeBridge {
       const onReady = (e: MessageEvent) => {
         if (e.origin !== this.origin) return;
         if (e.data?.type === "tracebug:bridge-ready") {
-          window.removeEventListener("message", onReady);
+          cleanup();
           resolve();
         }
       };
+      // If the bridge never announces ready (offline, blocked iframe, bad
+      // deploy), give up: unmount, reset readyPromise so a later call can
+      // retry with a fresh iframe, and reject instead of hanging forever.
+      const timer = setTimeout(() => {
+        cleanup();
+        this.iframe?.remove();
+        this.iframe = null;
+        this.readyPromise = null;
+        reject(new Error("bridge failed to load — check cloudEndpoint and network"));
+      }, BRIDGE_READY_TIMEOUT_MS);
+      const cleanup = () => {
+        clearTimeout(timer);
+        window.removeEventListener("message", onReady);
+        this.readyCleanup = null;
+      };
+      this.readyCleanup = cleanup;
       window.addEventListener("message", onReady);
       document.documentElement.appendChild(iframe);
     });
@@ -232,6 +254,7 @@ export class IframeBridge {
   }
 
   destroy(): void {
+    this.readyCleanup?.();
     window.removeEventListener("message", this.boundOnMessage);
     this.iframe?.remove();
     this.iframe = null;

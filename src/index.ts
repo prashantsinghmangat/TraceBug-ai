@@ -33,16 +33,19 @@ import {
   setActiveSessionId,
   clearActiveSessionId,
   generateSessionId,
+  getOrCreateSession,
   appendEvent,
   updateSessionError,
   getAllSessions,
+  getCachedSessions,
+  scheduleFlush,
   addAnnotation,
   saveEnvironment,
   setSessionPriority,
   flushPendingEvents,
 } from "./storage";
 import { generateReproSteps } from "./repro-generator";
-import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers } from "./dashboard";
+import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers, setNewCaptureHandler } from "./dashboard";
 import {
   collectClicks,
   collectInputs,
@@ -72,6 +75,7 @@ import { generateJiraTicket } from "./jira-issue";
 import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
 import { shareSessionAsLink, ShareReportOptions, ShareLinkResult } from "./exporters/share-link";
 import { getBridge } from "./auth/iframe-bridge";
+import { resolveCloudEndpoint } from "./cloud-endpoint";
 import { generateBugTitle, generateFlowSummary } from "./title-generator";
 import { buildTimeline, formatTimelineText } from "./timeline-builder";
 import { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
@@ -397,6 +401,9 @@ class TraceBugSDK {
             () => this._startActiveSession(),
             () => this._endActiveSession(),
           );
+          // Each screenshot/region capture starts a fresh session so every
+          // toolbar click produces an independent ticket, not an accumulation.
+          setNewCaptureHandler(() => { try { this._startActiveSession(); } catch {} });
           this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
         } catch (err) {
           console.warn('[TraceBug] Dashboard mount failed:', err);
@@ -466,17 +473,83 @@ class TraceBugSDK {
    */
   private _startActiveSession(): void {
     if (this.sessionId) {
-      // Already armed — just make sure we're capturing.
-      this.recording = true;
-      updateRecordingState(true);
-      this._attachConsoleCollectors();
-      if (this._emit) drainPerformanceNetwork(this._emit);
-      return;
+      // Save current in-memory screenshots to the outgoing session before ending it
+      // so "View offline tickets" can show thumbnails for past sessions.
+      try {
+        const shots = getScreenshots();
+        if (shots.length > 0) {
+          const outSessions = getCachedSessions();
+          const outSession = outSessions.find(s => s.sessionId === this.sessionId);
+          if (outSession) {
+            outSession.screenshots = shots.slice(0, 5);
+            scheduleFlush();
+          }
+        }
+        this._endActiveSession();
+        // Close any open quick-bug modal so the new session can show its own
+        try {
+          const _tbModal = document.getElementById("tracebug-quick-bug-modal");
+          if (_tbModal) {
+            const _tbClose = _tbModal.querySelector('[data-action="close"]') as HTMLButtonElement | null;
+            if (_tbClose) _tbClose.click();
+          }
+        } catch (_e2) {}
+      } catch {}
+      // Fall through to create a fresh session below
     }
     const id = generateSessionId();
     this.sessionId = id;
     this.recording = true;
     setActiveSessionId(id);
+
+    // Persist the session record immediately into the shared cache so
+    // getAllSessions() returns it even before the first event fires.
+    // Using getCachedSessions() keeps us on the same array the pending-flush
+    // will write — avoids stale-cache overwrite when _endActiveSession() was
+    // just called above (which flushes but does NOT null the cache).
+    {
+      const sess = getCachedSessions();
+      if (!sess.find(s => s.sessionId === id)) {
+        sess.push({
+          sessionId: id,
+          projectId: this.config!.projectId,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          errorMessage: null,
+          errorStack: null,
+          reproSteps: null,
+          errorSummary: null,
+          events: [],
+          annotations: [],
+          environment: null,
+        });
+        scheduleFlush();
+      }
+    }
+
+    // Trim old sessions, but NEVER drop ones the user explicitly saved.
+    // Keep: every saved ticket (bounded to 20 so localStorage can't balloon)
+    // + the 2 most recent unsaved working sessions (current + previous).
+    // Without the saved-guard, saving a ticket then capturing twice more would
+    // silently purge the saved ticket — breaking the Saved Tickets list.
+    // Note: _lastRecording is NOT cleared — the session time check in _openModal
+    // prevents video bleed without triggering the slow restoreLastRecordingFromOffscreen RPC.
+    {
+      const all = getCachedSessions();
+      const savedKept = all
+        .filter(s => s.saved)
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .slice(0, 20);
+      const unsavedKept = all
+        .filter(s => !s.saved)
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        .slice(0, 2);
+      const kept = [...savedKept, ...unsavedKept];
+      if (kept.length < all.length) {
+        all.splice(0, all.length, ...kept);
+        scheduleFlush();
+      }
+    }
 
     // Drop the previous session's in-memory screenshots so they don't bleed
     // into this ticket. Clearing at session START (not end) is intentional —
@@ -564,7 +637,7 @@ class TraceBugSDK {
   private _detachConsoleCollectors(): void {
     while (this._consoleCleanups.length > 0) {
       const fn = this._consoleCleanups.pop();
-      try { fn && fn(); } catch {}
+      try { if (fn) fn(); } catch {}
     }
   }
 
@@ -575,17 +648,9 @@ class TraceBugSDK {
     console.info("[TraceBug] Recording paused.");
   }
 
-  /** Resume recording after a pause */
+  /** Resume recording — always starts a fresh session (saves the previous one first). */
   resumeRecording(): void {
-    if (!this.sessionId) {
-      // No active session — start one so the user has somewhere for events
-      // to land (Resume from a fully-stopped state behaves like Start).
-      this._startActiveSession();
-      return;
-    }
-    this.recording = true;
-    updateRecordingState(true);
-    console.info("[TraceBug] Recording resumed.");
+    this._startActiveSession();
   }
 
   /** Alias for resumeRecording — matches the start/stop mental model */
@@ -686,6 +751,12 @@ class TraceBugSDK {
       console.warn("[TraceBug] quickCapture requires the dashboard to be mounted.");
       return;
     }
+    // Open the modal for the CURRENT session. Do NOT start a fresh session here —
+    // the capture actions (startRecording / takeScreenshot / toolbar buttons)
+    // already arm a new session before this runs. Starting one here would call
+    // clearScreenshots() and wipe the shot the popup just captured (empty ticket).
+    // Only arm a session if somehow none exists (e.g. quickCapture called alone).
+    if (!this.sessionId) this._startActiveSession();
     const { showQuickBugCapture } = await import("./ui/quick-bug");
     return showQuickBugCapture(root);
   }
@@ -697,7 +768,7 @@ class TraceBugSDK {
    */
   openCloudDashboard(): void {
     if (typeof window === "undefined") return;
-    const base = (this.config?.cloudEndpoint || "https://tracebug.netlify.app").replace(/\/+$/, "");
+    const base = resolveCloudEndpoint(this.config?.cloudEndpoint);
     window.open(`${base}/dashboard`, "_blank", "noopener");
   }
 
@@ -794,20 +865,23 @@ class TraceBugSDK {
     // exactly the "old session, no console, no network" bug we saw.
     try { this._endActiveSession(); } catch {}
 
+    // Arm the session BEFORE awaiting the screen picker so session.createdAt
+    // is <= recording.startedAt. The time-guard in _openModal uses this
+    // ordering to verify the video belongs to this session (prevents an old
+    // recording from bleeding into a new screenshot-only ticket).
+    try { this._startActiveSession(); } catch {}
+
     const ok = await _startVideoRecording({
       mode: options?.mode ?? "rolling",
       surfaceMode: options?.surfaceMode,
       withMicrophone: options?.withMicrophone,
       onStatus: options?.onStatus,
     });
-    if (!ok) return false;
-
-    // Arm a fresh event session so clicks, network, console errors, action
-    // chips ALL flow into the same bug ticket as the video. Without this
-    // the recording captures pixels but emit() short-circuits, the lazy
-    // console.error hook never attaches, and the ticket modal shows an
-    // empty Info/Console/Network/Actions panel.
-    try { this._startActiveSession(); } catch {}
+    if (!ok) {
+      // User cancelled the screen picker — discard the empty session
+      try { this._endActiveSession(); } catch {}
+      return false;
+    }
 
     const root = document.getElementById("tracebug-root");
     if (root) {
@@ -995,26 +1069,26 @@ class TraceBugSDK {
    * Free, no plan gate.
    */
   async signIn() {
-    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const ep = resolveCloudEndpoint(this.config?.cloudEndpoint);
     return getBridge(ep).signIn();
   }
 
   /** Sign out of the cloud account (does not affect local capture). */
   async signOut(): Promise<void> {
-    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const ep = resolveCloudEndpoint(this.config?.cloudEndpoint);
     await getBridge(ep).signOut();
   }
 
   /** Current cloud user, or null if not signed in. */
   async getCurrentUser() {
-    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const ep = resolveCloudEndpoint(this.config?.cloudEndpoint);
     const r = await getBridge(ep).checkAuth();
     return r.user;
   }
 
   /** Current cloud quotas (video + screenshot share counts). */
   async getCloudQuotas() {
-    const ep = this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const ep = resolveCloudEndpoint(this.config?.cloudEndpoint);
     return getBridge(ep).getQuotas();
   }
 
@@ -1026,7 +1100,7 @@ class TraceBugSDK {
    * by this call — sharing to cloud is purely additive.
    */
   async shareReport(options?: ShareReportOptions): Promise<ShareLinkResult> {
-    const ep = options?.cloudEndpoint || this.config?.cloudEndpoint || "https://tracebug.netlify.app";
+    const ep = resolveCloudEndpoint(options?.cloudEndpoint || this.config?.cloudEndpoint);
     const bridge = getBridge(ep);
     const auth = await bridge.checkAuth();
     if (!auth.authed) await bridge.signIn();

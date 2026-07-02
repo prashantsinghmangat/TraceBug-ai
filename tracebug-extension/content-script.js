@@ -80,6 +80,13 @@ window.addEventListener("tracebug-request-screenshot", () => safeRun(() => {
   });
 }));
 
+// ── Turn-off bridge ─────────────────────────────────────────────────────────
+// The floating toolbar's ✕ ("Turn off TraceBug") dispatches this; tell the
+// background to stop re-injecting on navigation for this tab.
+window.addEventListener("tracebug-disable-tab", () => safeRun(() => {
+  safeSendMessage({ type: "TB_DISABLE_TAB" }, () => {});
+}));
+
 // ── Recording RPC bridge ───────────────────────────────────────────────────
 // ── Recording dataUrl transport ──────────────────────────────────────────
 // Background writes the recording into chrome.storage.local (it has the

@@ -154,6 +154,10 @@ export function getLastVideoRecording(): VideoRecording | null {
   return _lastRecording;
 }
 
+export function clearLastVideoRecording(): void {
+  _lastRecording = null;
+}
+
 // ── Pause / Resume ───────────────────────────────────────────────────────
 // Only the in-page transport supports pause/resume today — the extension's
 // MediaRecorder lives in the offscreen doc and would need an additional RPC

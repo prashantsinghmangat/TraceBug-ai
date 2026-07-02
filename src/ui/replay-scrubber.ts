@@ -435,7 +435,7 @@ export function mountReplayScrubber(
   };
 
   const togglePlay = () => {
-    if (isPlaying) { stopPlay(); if (options.videoEl) try { options.videoEl.pause(); } catch {} ; return; }
+    if (isPlaying) { stopPlay(); if (options.videoEl) try { options.videoEl.pause(); } catch {} return; }
     setPlayIcon(true);
     if (currentTs >= endedAt - 50) seek(startedAt, { snap: false });
     if (options.videoEl) playFromVideo();

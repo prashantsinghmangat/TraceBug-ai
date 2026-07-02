@@ -153,6 +153,10 @@ export interface StoredSession {
   /** Tester-assigned priority for this session's report. Persisted so it
    *  survives reloads; read by buildReport. Unset → derived from severity. */
   priority?: BugPriority;
+  /** Screenshots captured during this session — persisted so "View offline tickets" can show thumbnails. */
+  screenshots?: ScreenshotData[];
+  /** Set to true when the user explicitly clicks "Save Ticket". Only saved sessions appear in the Saved Tickets list. */
+  saved?: boolean;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────

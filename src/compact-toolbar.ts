@@ -13,7 +13,7 @@ import { captureScreenshot, getScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
 import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
-import { getAllSessions, clearAllSessions as clearAllSessionsFn } from "./storage";
+import { getAllSessions, clearAllSessions as clearAllSessionsFn, deleteSession } from "./storage";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
@@ -31,6 +31,7 @@ let _isRecording = true;
 let _onToggleRecording: (() => void) | null = null;
 let _onSessionStart: (() => void) | null = null;
 let _onSessionEnd: (() => void) | null = null;
+let _onNewCapture: (() => void) | null = null;
 let _renderPanel: ((panel: HTMLElement) => void) | null = null;
 let _panelEl: HTMLElement | null = null;
 let _panelOpen = false;
@@ -61,6 +62,11 @@ export function setSessionLifecycleHandlers(
 ): void {
   _onSessionStart = onStart;
   _onSessionEnd = onEnd;
+}
+
+/** Called by the SDK so every screenshot/capture button starts a fresh session. */
+export function setNewCaptureHandler(fn: () => void): void {
+  _onNewCapture = fn;
 }
 
 export function updateToolbarRecordingState(isRecording: boolean): void {
@@ -140,22 +146,17 @@ export function mountCompactToolbar(
   dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
   toolbar.appendChild(dragHandle);
 
-  // Screenshot button — adds to the active ticket; downloads happen on export.
-  // Auto-opens the bug ticket modal after capture so the user sees where the
-  // screenshot landed. If the modal is already open, just refreshes it.
+  // Screenshot button — each click starts a fresh ticket.
   toolbar.appendChild(_createToolbarBtn(
-    "Screenshot (Ctrl+Shift+S) — added to ticket",
+    "Screenshot (Ctrl+Shift+S) — new ticket",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="12" cy="12" r="3"/></svg>`,
     async () => {
       if (!_checkLimit()) return;
       showToast("Capturing…", root);
       try {
-        const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-        const lastEvent = sessions[0]?.events[sessions[0].events.length - 1] || null;
-        await captureScreenshot(lastEvent);
-        const n = getScreenshots().length;
-        const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
-        showToast(`✓ Screenshot ${n}${cap} added to ticket`, root);
+        try { _onNewCapture?.(); } catch {}
+        await captureScreenshot(null);
+        showToast("✓ Screenshot captured — review your ticket", root);
         await _openOrRefreshTicket(root);
       } catch {
         showToast("Screenshot failed", root);
@@ -164,18 +165,17 @@ export function mountCompactToolbar(
     "tracebug-toolbar-screenshot-btn"
   ));
 
-  // Region (snipping-tool) screenshot button — adds to the active ticket.
+  // Region (snipping-tool) screenshot — each click starts a fresh ticket.
   toolbar.appendChild(_createToolbarBtn(
-    "Region Screenshot — drag to select, added to ticket",
+    "Region Screenshot — drag to select, new ticket",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3"/><path d="M16 4h3a1 1 0 0 1 1 1v3"/><path d="M20 16v3a1 1 0 0 1-1 1h-3"/><path d="M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M9 9h6v6H9z"/></svg>`,
     async () => {
       if (!_checkLimit()) return;
       try {
+        try { _onNewCapture?.(); } catch {}
         const ss = await captureRegionScreenshot();
         if (!ss) { showToast("Cancelled", root); return; }
-        const n = getScreenshots().length;
-        const cap = isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`;
-        showToast(`✓ Region ${n}${cap} added to ticket`, root);
+        showToast("✓ Region captured — review your ticket", root);
         await _openOrRefreshTicket(root);
       } catch {
         showToast("Region screenshot failed", root);
@@ -204,12 +204,24 @@ export function mountCompactToolbar(
   }
   toolbar.appendChild(recordBtn);
 
+  // View saved tickets — opens the offline Saved Tickets popover.
+  toolbar.appendChild(_divider());
+  toolbar.appendChild(_createToolbarBtn(
+    "View saved tickets",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    () => { _showOfflineTicketList(root); },
+    "tracebug-toolbar-tickets-btn"
+  ));
+
   // Close — turn TraceBug off on this page. Re-open from the extension popup.
   toolbar.appendChild(_divider());
   toolbar.appendChild(_createToolbarBtn(
     "Turn off TraceBug on this page",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
     () => {
+      // Tell the extension background to stop re-injecting on navigation for
+      // this tab, then tear down the SDK on the page.
+      try { window.dispatchEvent(new CustomEvent("tracebug-disable-tab")); } catch {}
       try {
         const tb = (window as unknown as { TraceBug?: { destroy?: () => void } }).TraceBug;
         if (tb?.destroy) tb.destroy();
@@ -533,6 +545,133 @@ async function _openOrRefreshTicket(root: HTMLElement): Promise<void> {
   } catch (err) {
     console.warn("[TraceBug] Failed to open ticket after capture:", err);
   }
+}
+
+/**
+ * Offline "Saved Tickets" popover. Lists sessions the user explicitly saved
+ * (session.saved === true) with a thumbnail, event/shot counts, and Open /
+ * Delete actions. Purely offline — reads from localStorage via getAllSessions.
+ */
+function _showOfflineTicketList(root: HTMLElement): void {
+  const existing = root.querySelector('[data-tracebug="offline-tickets-pop"]');
+  if (existing) { existing.remove(); return; }
+
+  // Only sessions the user explicitly saved appear here.
+  const sessions = getAllSessions()
+    .filter(s => s.saved)
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 10);
+
+  const pop = document.createElement("div");
+  pop.dataset.tracebug = "offline-tickets-pop";
+  pop.style.cssText = [
+    "position:fixed", "right:16px", "top:80px", "width:290px",
+    "background:var(--tb-bg-secondary,#1a1a2e)",
+    "border:1px solid var(--tb-border-hover,#3a3a5e)",
+    "border-radius:12px", "padding:14px", "z-index:2147483646",
+    "font-family:var(--tb-font-family,system-ui,sans-serif)",
+    "font-size:12px", "color:var(--tb-text-primary,#e0e0e0)",
+    "box-shadow:0 12px 40px rgba(0,0,0,0.5)",
+  ].join(";");
+
+  const _fmtTime = (ts: number): string => {
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " · " +
+           d.toLocaleDateString([], { month: "short", day: "numeric" });
+  };
+
+  const hdr = document.createElement("div");
+  hdr.style.cssText = "font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center";
+  const hdrTitle = document.createElement("span");
+  hdrTitle.textContent = `Saved Tickets (${sessions.length})`;
+  const closeX = document.createElement("button");
+  closeX.textContent = "×";
+  closeX.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0";
+  closeX.addEventListener("click", () => pop.remove());
+  hdr.appendChild(hdrTitle);
+  hdr.appendChild(closeX);
+  pop.appendChild(hdr);
+
+  if (sessions.length === 0) {
+    const empty = document.createElement("div");
+    empty.style.cssText = "text-align:center;padding:16px 0;color:var(--tb-text-muted,#666);font-size:11px;line-height:1.6";
+    empty.innerHTML = "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.";
+    pop.appendChild(empty);
+  } else {
+    sessions.forEach((s) => {
+      const evCount = (s.events || []).length;
+      const ssArr = s.screenshots || [];
+      const card = document.createElement("div");
+      card.style.cssText = "display:flex;gap:8px;padding:8px;border-radius:8px;border:1px solid var(--tb-border,#2a2a3e);margin-bottom:8px;background:var(--tb-bg-primary,#12121f);align-items:center";
+
+      const thumb = document.createElement("div");
+      thumb.style.cssText = "width:54px;height:38px;border-radius:4px;overflow:hidden;flex-shrink:0;border:1px solid var(--tb-border,#2a2a3e);background:var(--tb-bg-primary,#0d0d1a);display:flex;align-items:center;justify-content:center";
+      if (ssArr.length > 0 && ssArr[0].dataUrl) {
+        const img = document.createElement("img");
+        img.src = ssArr[0].dataUrl;
+        img.style.cssText = "width:100%;height:100%;object-fit:cover";
+        thumb.appendChild(img);
+      } else {
+        thumb.style.fontSize = "20px";
+        thumb.textContent = "📋";
+      }
+      card.appendChild(thumb);
+
+      const info = document.createElement("div");
+      info.style.cssText = "flex:1;min-width:0";
+      const timeEl = document.createElement("div");
+      timeEl.style.cssText = "font-size:10px;color:var(--tb-text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+      timeEl.textContent = _fmtTime(s.updatedAt || s.createdAt || 0);
+      const statsEl = document.createElement("div");
+      statsEl.style.cssText = "font-size:11px;margin-top:3px;color:var(--tb-text-primary,#e0e0e0)";
+      const parts: string[] = [];
+      if (evCount > 0) parts.push(`${evCount} event${evCount !== 1 ? "s" : ""}`);
+      if (ssArr.length > 0) parts.push(`${ssArr.length} shot${ssArr.length !== 1 ? "s" : ""}`);
+      statsEl.textContent = parts.length > 0 ? parts.join(" · ") : "Empty session";
+      info.appendChild(timeEl);
+      info.appendChild(statsEl);
+      card.appendChild(info);
+
+      const actions = document.createElement("div");
+      actions.style.cssText = "display:flex;flex-direction:column;gap:4px;flex-shrink:0";
+      const openBtn = document.createElement("button");
+      openBtn.textContent = "Open";
+      openBtn.style.cssText = "background:var(--tb-accent,#7C5CFF);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap";
+      openBtn.addEventListener("click", () => {
+        pop.remove();
+        // Close any open modal first so the _isOpen guard doesn't block reopening.
+        const tbModal = document.getElementById("tracebug-quick-bug-modal");
+        if (tbModal) {
+          const tbClose = tbModal.querySelector('[data-action="close"]') as HTMLButtonElement | null;
+          if (tbClose) tbClose.click();
+        }
+        showQuickBugCapture(root, { sessionId: s.sessionId }).catch(() => {});
+      });
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "Delete";
+      delBtn.style.cssText = "background:transparent;color:var(--tb-error,#ef4444);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
+      delBtn.addEventListener("click", () => {
+        deleteSession(s.sessionId);
+        pop.remove();
+      });
+      actions.appendChild(openBtn);
+      actions.appendChild(delBtn);
+      card.appendChild(actions);
+      pop.appendChild(card);
+    });
+  }
+
+  root.appendChild(pop);
+  // Close when clicking anywhere outside the popover (but not the toolbar button).
+  setTimeout(() => {
+    const closeOnOutside = (e: MouseEvent) => {
+      if (!pop.contains(e.target as Node) && (e.target as HTMLElement)?.id !== "tracebug-toolbar-tickets-btn") {
+        pop.remove();
+        document.removeEventListener("mousedown", closeOnOutside);
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutside);
+  }, 0);
 }
 
 /**
