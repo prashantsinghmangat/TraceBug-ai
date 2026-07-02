@@ -14,9 +14,9 @@ import { generateBugTitle } from "./title-generator";
 import { captureEnvironment } from "./environment";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getAnnotationCount } from "./annotation-store";
-import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, ToolbarPosition } from "./compact-toolbar";
+import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
 
-export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers };
+export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setNewCaptureHandler };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showToast as _showToastModule } from "./ui/toast";
@@ -929,6 +929,9 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       navigator.clipboard.writeText(text).then(() => {
         (copyBtn as HTMLElement).textContent = "✓ Copied!";
         setTimeout(() => ((copyBtn as HTMLElement).textContent = "Copy"), 2000);
+      }).catch(() => {
+        (copyBtn as HTMLElement).textContent = "✗ Copy failed";
+        setTimeout(() => ((copyBtn as HTMLElement).textContent = "Copy"), 2000);
       });
     });
   }
@@ -969,6 +972,9 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
       const report = buildTextReport(s, problems, apiEvents, sessionDur);
       navigator.clipboard.writeText(report).then(() => {
         (copyReportBtn as HTMLElement).textContent = "✓ Copied!";
+        setTimeout(() => ((copyReportBtn as HTMLElement).textContent = "📋 Copy Full Report"), 2000);
+      }).catch(() => {
+        (copyReportBtn as HTMLElement).textContent = "✗ Copy failed";
         setTimeout(() => ((copyReportBtn as HTMLElement).textContent = "📋 Copy Full Report"), 2000);
       });
     });
@@ -1024,6 +1030,9 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
         if (report.screenshots.length > 0) {
           downloadAllScreenshots();
         }
+      }).catch(() => {
+        (ghBtn as HTMLElement).textContent = "✗ Copy failed";
+        setTimeout(() => { (ghBtn as HTMLElement).textContent = "🐙 GitHub Issue"; }, 2000);
       });
     });
   }
@@ -1042,6 +1051,9 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
         if (report.screenshots.length > 0) {
           downloadAllScreenshots();
         }
+      }).catch(() => {
+        (jiraBtn as HTMLElement).textContent = "✗ Copy failed";
+        setTimeout(() => { (jiraBtn as HTMLElement).textContent = "🎫 Jira Ticket"; }, 2000);
       });
     });
   }
@@ -1928,35 +1940,80 @@ function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement
   displayW = Math.round(displayW);
   displayH = Math.round(displayH);
 
-  // Toolbar
+  // Toolbar — grouped sections with proper dividers
   const toolbarHtml = `
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:var(--tb-bg-secondary, #16161f);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:14px;padding:9px 14px;box-shadow:0 12px 38px rgba(0,0,0,0.6);max-width:calc(100vw - 40px)">
-      <span style="color:var(--tb-text-secondary, #cbd5e1);font-size:11px;font-weight:600;letter-spacing:0.4px;margin-right:6px">ANNOTATE</span>
-      <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">✎ Pen</button>
-      <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">▭ Highlight</button>
-      <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">→ Arrow</button>
-      <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">T Text</button>
-      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
-      <button class="bt-ann-tool" data-tool="color-red" style="background:var(--tb-error, #ef4444);border:2px solid #ef4444;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-yellow" style="background:#eab308;border:2px solid #eab308;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-green" style="background:var(--tb-success, #22c55e);border:2px solid #22c55e;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <button class="bt-ann-tool" data-tool="color-blue" style="background:#3b82f6;border:2px solid #3b82f6;width:22px;height:22px;border-radius:50%;cursor:pointer;padding:0"></button>
-      <span style="color:var(--tb-text-muted, #333);margin:0 4px">|</span>
-      <button id="bt-ann-undo" style="${annActionBtnStyle()}">↩ Undo</button>
-      <button id="bt-ann-clear" style="${annActionBtnStyle()}">✕ Clear</button>
-      <div style="flex:1"></div>
-      <span style="color:var(--tb-text-muted, #555);font-size:10px">Ctrl+Shift+S</span>
+    <div style="display:flex;gap:0;margin-bottom:12px;align-items:center;background:#1a1a2e;border:1px solid #2e2e4a;border-radius:12px;padding:6px 10px;box-shadow:0 8px 32px rgba(0,0,0,0.55);max-width:calc(100vw - 40px);overflow:hidden">
+
+      <!-- Label -->
+      <span style="color:#6b7280;font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-right:10px;white-space:nowrap;padding-right:10px;border-right:1px solid #2e2e4a">Annotate</span>
+
+      <!-- Draw tools -->
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="bt-ann-tool" data-tool="pen" style="${annToolBtnStyle(true)}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Pen
+        </button>
+        <button class="bt-ann-tool" data-tool="rect" style="${annToolBtnStyle(false)}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Box
+        </button>
+        <button class="bt-ann-tool" data-tool="arrow" style="${annToolBtnStyle(false)}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>Arrow
+        </button>
+        <button class="bt-ann-tool" data-tool="text" style="${annToolBtnStyle(false)}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>Text
+        </button>
+      </div>
+
+      <!-- Divider -->
+      <div style="width:1px;height:24px;background:#2e2e4a;margin:0 10px;flex-shrink:0"></div>
+
+      <!-- Color swatches -->
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="bt-ann-tool" data-tool="color-red"    title="Red"    style="${annColorBtnStyle('#ef4444', true)}"></button>
+        <button class="bt-ann-tool" data-tool="color-yellow" title="Yellow" style="${annColorBtnStyle('#eab308', false)}"></button>
+        <button class="bt-ann-tool" data-tool="color-green"  title="Green"  style="${annColorBtnStyle('#22c55e', false)}"></button>
+        <button class="bt-ann-tool" data-tool="color-blue"   title="Blue"   style="${annColorBtnStyle('#3b82f6', false)}"></button>
+        <button class="bt-ann-tool" data-tool="color-white"  title="White"  style="${annColorBtnStyle('#ffffff', false)}"></button>
+      </div>
+
+      <!-- Divider -->
+      <div style="width:1px;height:24px;background:#2e2e4a;margin:0 10px;flex-shrink:0"></div>
+
+      <!-- History -->
+      <div style="display:flex;gap:4px;align-items:center">
+        <button id="bt-ann-undo" style="${annActionBtnStyle()}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>Undo
+        </button>
+        <button id="bt-ann-clear" style="${annActionBtnStyle()}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>Clear
+        </button>
+      </div>
+
+      <!-- Keyboard hint -->
+      <kbd style="margin-left:auto;color:#4b5563;font-size:9px;font-family:monospace;background:#0f0f1a;border:1px solid #2e2e4a;border-radius:4px;padding:2px 6px;white-space:nowrap;flex-shrink:0">Ctrl+Shift+S</kbd>
     </div>
   `;
 
-  // Bottom actions
+  // Bottom action bar — Cancel left · filename center · actions right
   const actionsHtml = `
-    <div style="display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:var(--tb-bg-secondary, #16161f);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:14px;padding:9px 14px;box-shadow:0 12px 38px rgba(0,0,0,0.6);max-width:calc(100vw - 40px)">
-      <button id="bt-ann-save" style="background:var(--tb-accent, #7C5CFF);color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:9px 22px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 4px 14px rgba(124,92,255,0.4)">✓ Save Annotated</button>
-      <button id="bt-ann-download" style="background:var(--tb-success, #22c55e)22;color:var(--tb-success, #22c55e);border:1px solid #22c55e44;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">↓ Download</button>
-      <button id="bt-ann-cancel" style="background:#66666622;color:var(--tb-text-muted, #888);border:1px solid #66666644;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Cancel</button>
-      <div style="flex:1"></div>
-      <span style="color:var(--tb-text-muted, #555);font-size:10px">${screenshot.filename}</span>
+    <div style="display:flex;gap:8px;margin-top:12px;align-items:center;background:#1a1a2e;border:1px solid #2e2e4a;border-radius:12px;padding:8px 12px;box-shadow:0 8px 32px rgba(0,0,0,0.55);max-width:calc(100vw - 40px);width:${displayW}px;box-sizing:border-box">
+
+      <!-- Cancel — left, destructive/ghost -->
+      <button id="bt-ann-cancel" style="background:transparent;color:#6b7280;border:1px solid #2e2e4a;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);white-space:nowrap;transition:all 0.15s" onmouseover="this.style.borderColor='#4b5563';this.style.color='#9ca3af'" onmouseout="this.style.borderColor='#2e2e4a';this.style.color='#6b7280'">✕ Cancel</button>
+
+      <!-- Filename — centered, flexible -->
+      <span style="flex:1;text-align:center;color:#4b5563;font-size:10px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${screenshot.filename}</span>
+
+      <!-- Download — ghost green -->
+      <button id="bt-ann-download" style="background:transparent;color:#22c55e;border:1px solid #22c55e44;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);white-space:nowrap;display:flex;align-items:center;gap:5px;transition:all 0.15s" onmouseover="this.style.background='#22c55e18'" onmouseout="this.style.background='transparent'">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </button>
+
+      <!-- Save — primary accent -->
+      <button id="bt-ann-save" style="background:var(--tb-accent, #7C5CFF);color:#fff;border:none;border-radius:8px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);white-space:nowrap;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(124,92,255,0.35);transition:all 0.15s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Save Annotated
+      </button>
     </div>
   `;
 
@@ -2096,17 +2153,18 @@ function initAnnotationCanvas(
     btn.addEventListener("click", () => {
       const tool = (btn as HTMLElement).dataset.tool || "";
       if (tool.startsWith("color-")) {
-        currentColor = getComputedStyle(btn as HTMLElement).backgroundColor;
-        // Update all color buttons border
+        const colorMap: Record<string, string> = {
+          "color-red": "#ef4444", "color-yellow": "#eab308",
+          "color-green": "#22c55e", "color-blue": "#3b82f6", "color-white": "#ffffff",
+        };
+        currentColor = colorMap[tool] || "#ef4444";
         overlay.querySelectorAll("[data-tool^='color-']").forEach(cb => {
-          (cb as HTMLElement).style.border = `2px solid ${getComputedStyle(cb as HTMLElement).backgroundColor}`;
+          const key = (cb as HTMLElement).dataset.tool || "";
+          (cb as HTMLElement).style.cssText = annColorBtnStyle(colorMap[key] || "#ef4444", key === tool);
         });
-        (btn as HTMLElement).style.border = `2px solid #fff`;
         return;
       }
       currentTool = tool as "rect" | "arrow" | "text" | "pen";
-      // Update active state — re-apply the full style so the selected tool is
-      // unmistakably highlighted (solid accent) and the rest stay readable.
       overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach(tb => {
         (tb as HTMLElement).style.cssText = annToolBtnStyle(false);
       });
@@ -2315,11 +2373,18 @@ function mergeAnnotations(baseDataUrl: string, annotationCanvas: HTMLCanvasEleme
 
 function annToolBtnStyle(active: boolean): string {
   if (active) {
-    return "background:var(--tb-accent, #7C5CFF);color:#fff;border:1px solid var(--tb-accent, #7C5CFF);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 10px rgba(124,92,255,0.45);";
+    return "background:#7C5CFF;color:#fff;border:1px solid #7C5CFF;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 8px rgba(124,92,255,0.4);display:inline-flex;align-items:center;";
   }
-  return "background:var(--tb-bg-elevated, #27272a);color:var(--tb-text-secondary, #cbd5e1);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);";
+  return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
+}
+
+function annColorBtnStyle(color: string, active: boolean): string {
+  const ring = active
+    ? `outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px ${color}44;`
+    : "";
+  return `background:${color};border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;${ring}`;
 }
 
 function annActionBtnStyle(): string {
-  return "background:var(--tb-bg-elevated, #27272a);color:var(--tb-text-secondary, #cbd5e1);border:1px solid var(--tb-border-hover, #3a3a5e);border-radius:7px;padding:6px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);";
+  return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
 }

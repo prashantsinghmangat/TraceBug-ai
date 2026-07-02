@@ -135,6 +135,13 @@
       // quickCapture() itself never auto-captures, so without this the ticket
       // opens empty.
       case "capture-now":
+        // Start a session BEFORE taking the screenshot so:
+        //   1. getAllSessions() is non-empty → Export .html / GitHub / Jira work
+        //   2. clearScreenshots() fires NOW (clean slate), not inside
+        //      quickCapture() after the screenshot was already stored.
+        if (window.TraceBug.startRecording) {
+          try { window.TraceBug.startRecording(); } catch (e) {}
+        }
         var openModal = function () {
           if (window.TraceBug.quickCapture) window.TraceBug.quickCapture();
         };
@@ -161,16 +168,13 @@
         }
         break;
 
-      // view-tickets: open the cloud dashboard (all tickets shared from the
-      // signed-in account). Falls back to the local toolbar panel only if the
-      // SDK build is too old to have openCloudDashboard.
+      // view-tickets: open the offline saved-tickets list from the floating toolbar.
       case "view-tickets":
-        if (window.TraceBug.openCloudDashboard) {
-          window.TraceBug.openCloudDashboard();
+        var ticketsBtn = document.getElementById("tracebug-toolbar-tickets-btn");
+        if (ticketsBtn) {
+          ticketsBtn.click();
         } else {
-          var panelBtn = document.getElementById("tracebug-toolbar-panel-btn");
-          if (panelBtn) panelBtn.click();
-          else showToast("Open the toolbar to view tickets");
+          showToast("Open the toolbar to view tickets");
         }
         break;
     }

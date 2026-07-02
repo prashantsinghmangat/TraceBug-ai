@@ -19,6 +19,10 @@
     "<all_urls>"
   ],
 
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+
   "background": {
     "service_worker": "background.js"
   },

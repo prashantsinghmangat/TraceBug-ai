@@ -13,7 +13,7 @@ const LINEAR_URL_BODY_LIMIT = 6000;
 
 export function generateLinearIssueUrl(report: BugReport): string {
   const rawTitle = report.title || "Bug report";
-  const title = rawTitle.match(/^[🔴🟠🟡🟢]/)
+  const title = rawTitle.match(/^[🔴🟠🟡🟢]/u)
     ? rawTitle
     : `${severityTitlePrefix(report.severity)}${rawTitle}`;
   let body = generateLinearIssue(report);
@@ -58,7 +58,7 @@ export function openLinearIssue(report: BugReport): boolean {
 export function generateLinearIssue(report: BugReport): string {
   const env = report.environment;
 
-  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/)
+  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/u)
     ? report.title
     : `${severityTitlePrefix(report.severity)}${report.title}`;
   let md = `## ${titleWithSeverity}\n\n`;

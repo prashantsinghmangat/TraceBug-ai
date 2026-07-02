@@ -32,7 +32,7 @@ export function generateGitHubIssueUrl(
   // Carry the severity emoji into the URL-prefill title so the issue lands
   // pre-triaged. Skip if the caller already added a leading emoji.
   const rawTitle = report.title || "Bug report";
-  const title = rawTitle.match(/^[🔴🟠🟡🟢]/)
+  const title = rawTitle.match(/^[🔴🟠🟡🟢]/u)
     ? rawTitle
     : `${severityTitlePrefix(report.severity)}${rawTitle}`;
   let body = generateGitHubIssue(report);
@@ -78,7 +78,7 @@ export function generateGitHubIssue(report: BugReport): string {
 
   // Title carries the severity emoji prefix (🔴 Critical · …) so triagers see
   // priority at a glance in the issue list.
-  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/)
+  const titleWithSeverity = report.title.match(/^[🔴🟠🟡🟢]/u)
     ? report.title
     : `${severityTitlePrefix(report.severity)}${report.title}`;
   let md = `## ${titleWithSeverity}\n\n`;

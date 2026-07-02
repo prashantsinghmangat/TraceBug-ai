@@ -7,6 +7,12 @@
 
 // Track which tabs have been injected (tab ID → true)
 const injectedTabs = new Set();
+// Tabs where the user has turned TraceBug ON. Unlike injectedTabs (current
+// injection state, wiped on every navigation), this persists across page loads
+// so the SDK + floating toolbar follow the user as they click around the site,
+// instead of vanishing on every navigation. Cleared on tab close or when the
+// user explicitly turns TraceBug off from the toolbar.
+const activeTabs = new Set();
 
 // The tab that's currently being screen-recorded by the offscreen document.
 // Set when tb:rec:start succeeds; cleared on tb:rec:stop or auto-stop. We
@@ -38,6 +44,9 @@ async function injectSDK(tabId) {
   // Prevent duplicate injection
   if (injectedTabs.has(tabId)) return;
   injectedTabs.add(tabId);
+  // Any injection means the user wants TraceBug here — keep it alive across
+  // navigations until they close the tab or turn it off.
+  activeTabs.add(tabId);
 
   try {
     // Inject content script (message bridge between extension and page)
@@ -110,13 +119,12 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   try {
     updateBadge(tabId);
 
-    // Re-inject the SDK ONLY if this tab is the one currently being
-    // recorded. The offscreen document still has an active MediaStream
-    // (recording survives page reloads), but the on-page HUD is gone after
-    // navigation. Re-injecting lets the SDK's _restoreVideoState() detect
-    // the active recording and re-mount the floating HUD. For every other
-    // tab we stay out of the page — tracking remains opt-in per action.
-    if (_recordingTabId === tabId) {
+    // Re-inject the SDK after navigation if the user turned TraceBug ON for
+    // this tab (activeTabs) or it's the tab being recorded. This keeps the
+    // floating toolbar + capture alive as the user clicks around the site,
+    // instead of vanishing on every navigation and forcing a re-open. Tabs
+    // the user never enabled stay untouched (tracking is opt-in per tab).
+    if (_recordingTabId === tabId || activeTabs.has(tabId)) {
       injectSDK(tabId).catch(() => {});
     }
   } catch {}
@@ -125,6 +133,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // Clean up when tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   injectedTabs.delete(tabId);
+  activeTabs.delete(tabId);
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
@@ -140,6 +149,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_STATE") {
     const tabId = message.tabId || sender?.tab?.id;
     sendResponse({ loaded: tabId ? injectedTabs.has(tabId) : false });
+    return false;
+  }
+
+  // User turned TraceBug OFF from the floating toolbar (✕). Forget the tab so
+  // it isn't re-injected on the next navigation.
+  if (message.type === "TB_DISABLE_TAB") {
+    const tabId = message.tabId || sender?.tab?.id;
+    if (tabId) {
+      activeTabs.delete(tabId);
+      injectedTabs.delete(tabId);
+      try { updateBadge(tabId); } catch {}
+    }
+    sendResponse({ ok: true });
     return false;
   }
 

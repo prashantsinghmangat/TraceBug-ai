@@ -98,6 +98,9 @@ export function removeScreenshot(id: string): boolean {
  *  doesn't go through the normal captureScreenshot() pipeline. */
 export function pushScreenshot(ss: ScreenshotData): void {
   screenshots.push(ss);
+  if (screenshots.length > MAX_SCREENSHOTS) {
+    screenshots.splice(0, screenshots.length - MAX_SCREENSHOTS);
+  }
 }
 
 /** Replace a screenshot's pixel data + filename (used by the annotation editor

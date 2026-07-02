@@ -84,6 +84,9 @@
     "url": "https://github.com/prashantsinghmangat/TraceBug-ai/issues"
   },
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^8.58.2",

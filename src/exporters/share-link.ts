@@ -8,8 +8,9 @@ import { buildReplayBlob } from "./html-replay";
 import { sanitizeReportForUpload } from "../sanitize/cloud-upload";
 import { getBridge } from "../auth/iframe-bridge";
 import { generateThumbnail } from "./thumbnail";
+import { resolveCloudEndpoint } from "../cloud-endpoint";
 
-export const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
+export { DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export const MAX_VIDEO_DURATION_S = 120;
 export const MAX_SCREENSHOTS_PER_SHARE = 5;
@@ -33,7 +34,7 @@ export async function shareSessionAsLink(
   report: BugReport,
   options?: ShareReportOptions,
 ): Promise<ShareLinkResult> {
-  const cloudEndpoint = options?.cloudEndpoint || DEFAULT_CLOUD_ENDPOINT;
+  const cloudEndpoint = resolveCloudEndpoint(options?.cloudEndpoint);
   const includeVideo = options?.includeVideo ?? !!report.video;
 
   // Sanitize first so the cap calculations and the uploaded HTML both see the
