@@ -286,7 +286,13 @@ async function captureViaCanvas(): Promise<string> {
   const canvas = document.createElement("canvas");
   canvas.width = 400;
   canvas.height = 200;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext("2d");
+  // getContext can return null under memory pressure / blocked canvas. This
+  // is already the fallback path, so degrade to a tiny valid PNG rather than
+  // throwing into the caller.
+  if (!ctx) {
+    try { return canvas.toDataURL("image/png"); } catch { return ""; }
+  }
   ctx.fillStyle = "#1a1a2e";
   ctx.fillRect(0, 0, 400, 200);
   ctx.fillStyle = "#e0e0e0";

@@ -22,6 +22,35 @@ const activeTabs = new Set();
 // UI while the offscreen document kept recording.
 let _recordingTabId = null;
 
+// ── MV3 durability ──────────────────────────────────────────────────────────
+// The service worker is terminated after ~30s idle and restarts with blank
+// module state. Without persistence, a worker restart mid-session wipes
+// activeTabs + _recordingTabId, so navigation stops re-injecting the SDK/HUD
+// even though the offscreen recording keeps running. chrome.storage.session is
+// in-memory, survives SW restarts, clears on browser close, and needs only the
+// already-declared "storage" permission — exactly the right store for this.
+const SESSION_STATE_KEY = "tb_sw_state_v1";
+function persistState() {
+  try {
+    chrome.storage.session.set({
+      [SESSION_STATE_KEY]: { activeTabs: [...activeTabs], recordingTabId: _recordingTabId },
+    });
+  } catch {}
+}
+// Rehydrate on every worker startup. Best-effort and racey against the first
+// event after wake, but navigation (the consumer of this state) fires well
+// after wake in practice, so the window is negligible.
+const _hydrated = (async () => {
+  try {
+    const got = await chrome.storage.session.get(SESSION_STATE_KEY);
+    const s = got && got[SESSION_STATE_KEY];
+    if (s) {
+      if (Array.isArray(s.activeTabs)) s.activeTabs.forEach((t) => activeTabs.add(t));
+      if (typeof s.recordingTabId === "number") _recordingTabId = s.recordingTabId;
+    }
+  } catch {}
+})();
+
 // ── Badge ───────────────────────────────────────────────────────────────────
 // Reflects whether the SDK is currently injected in this tab. Clears
 // automatically on reload (onUpdated wipes injectedTabs first), so the badge
@@ -29,9 +58,13 @@ let _recordingTabId = null;
 
 async function updateBadge(tabId /* , hostname */) {
   const loaded = injectedTabs.has(tabId);
+  // Await both calls — without await the returned promises reject outside the
+  // try/catch ("Uncaught (in promise) Error: No tab with id: …") whenever the
+  // tab closed between the event firing and the badge update (prerendered
+  // tabs, rapid tab churn).
   try {
-    chrome.action.setBadgeText({ tabId, text: loaded ? "ON" : "" });
-    chrome.action.setBadgeBackgroundColor({
+    await chrome.action.setBadgeText({ tabId, text: loaded ? "ON" : "" });
+    await chrome.action.setBadgeBackgroundColor({
       tabId,
       color: loaded ? "#22c55e" : "#6b7280",
     });
@@ -47,6 +80,7 @@ async function injectSDK(tabId) {
   // Any injection means the user wants TraceBug here — keep it alive across
   // navigations until they close the tab or turn it off.
   activeTabs.add(tabId);
+  persistState();
 
   try {
     // Inject content script (message bridge between extension and page)
@@ -111,6 +145,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Only act on full page load (not partial updates)
   if (changeInfo.status !== "complete" || !tab.url) return;
 
+  // Ensure persisted state (activeTabs / _recordingTabId) is rehydrated before
+  // we decide whether to re-inject — a cold worker wake could otherwise miss it.
+  await _hydrated;
+
   // A reload wipes the SDK from the page, so the injection-tracking set
   // must also forget the tab. The badge update right after will show the
   // user that TraceBug is no longer loaded for this tab.
@@ -134,6 +172,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   injectedTabs.delete(tabId);
   activeTabs.delete(tabId);
+  if (_recordingTabId === tabId) _recordingTabId = null;
+  persistState();
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
@@ -159,6 +199,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (tabId) {
       activeTabs.delete(tabId);
       injectedTabs.delete(tabId);
+      if (_recordingTabId === tabId) _recordingTabId = null;
+      persistState();
       try { updateBadge(tabId); } catch {}
     }
     sendResponse({ ok: true });
@@ -357,6 +399,7 @@ async function handleRecordingMessage(message, sender) {
   // a stop or when the auto-stop broadcast fans out.
   if (message.type === "tb:rec:start" && result && !result.error && result.ok !== false) {
     _recordingTabId = sender?.tab?.id || null;
+    persistState();
   }
 
   // Keep the offscreen alive after a stop so the page can re-request the
@@ -367,6 +410,7 @@ async function handleRecordingMessage(message, sender) {
   // The next tb:rec:start clears _lastBuiltRecording and reuses the doc.
   if (message.type === "tb:rec:stop" && result && !result.error) {
     _recordingTabId = null;
+    persistState();
   }
 
   return result;
@@ -379,6 +423,7 @@ async function forwardAutoStopToTabs(message) {
   const recordingTab = _recordingTabId;
   try {
     _recordingTabId = null;
+    persistState();
 
     // Make sure the SDK is loaded on the recording tab so the auto-stop
     // listener has somewhere to fire and the modal can mount. If the tab

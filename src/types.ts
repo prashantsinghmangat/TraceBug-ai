@@ -370,9 +370,12 @@ export interface StorageEntry {
 export interface StorageSnapshot {
   local: StorageEntry[];
   session: StorageEntry[];
+  /** Non-HttpOnly cookies visible to page JS (sensitive values redacted). */
+  cookies?: StorageEntry[];
   /** Entries dropped to stay under the capture cap (per area), if any. */
   localTruncated?: number;
   sessionTruncated?: number;
+  cookiesTruncated?: number;
 }
 
 export interface BugReport {

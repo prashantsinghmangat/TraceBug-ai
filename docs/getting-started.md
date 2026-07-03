@@ -50,8 +50,9 @@ After initialization, a **compact toolbar rail** appears on the right edge of yo
 | 📷 Camera | **Take screenshot** — added to the current ticket | `Ctrl+Shift+S` |
 | ⛶ Region | **Region screenshot** — drag to select an area | — |
 | ▶ Record | **Record** video + session — a quick preflight lets you pick *this tab* or *screen / window* and whether to include the microphone | — |
+| 📈 Track | **Track session** — events only, no video. Click to start capturing clicks / inputs / navigations / network / console; click again (■) to stop and open the ticket. Screenshots taken while tracking join the same ticket. Tickets file fine with events alone — no media required | — |
 
-Press **`Ctrl+Shift+B`** anywhere to open the **Quick Bug** ticket modal — auto-filled title, editable description, screenshots, the interactive replay scrubber, and one-click export (Open in GitHub · Export .html · Share link · plus Linear / Slack / Jira / AI under **More**).
+Press **`Ctrl+Shift+B`** anywhere to open the **Quick Bug** ticket modal — auto-filled title, editable description, screenshots, the interactive replay scrubber, and one-click export (Open in GitHub · Export .html · plus Linear / Slack / Jira / AI under **More**). A cloud **Share link** button is coming in a future release.
 
 While recording, a floating HUD (top-center) gives you **Stop · Pause · Mic · Screenshot · Pen · Blur**.
 
@@ -106,7 +107,7 @@ For more control:
 1. Use the app normally — TraceBug records everything silently
 2. Find a bug, then press **`Ctrl+Shift+B`** (or click 📷 Screenshot / ▶ Record on the toolbar)
 3. Review the auto-filled ticket — title, editable description, screenshots, and the interactive replay
-4. Click **Open in GitHub** (or **Export .html** / **Share link**, or pick Jira / Linear / Slack / Fix-with-AI under **More**)
+4. Click **Open in GitHub** (or **Export .html**, or pick Jira / Linear / Slack / Fix-with-AI under **More**)
 
 ### Annotations in reports
 

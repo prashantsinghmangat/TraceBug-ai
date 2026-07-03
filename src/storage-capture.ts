@@ -19,6 +19,10 @@ const SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]
 // Value shapes that are almost certainly credentials regardless of key name.
 const SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
 
+// TraceBug's own bookkeeping keys (sessions, drafts, toolbar position, theme).
+// They're about the SDK, not the app under test — pure noise in a bug report.
+const INTERNAL_KEY = /^tracebug[_-]/i;
+
 function maskValue(raw: string): string {
   if (!raw) return "";
   if (raw.length <= 8) return "[REDACTED]";
@@ -46,6 +50,7 @@ function readArea(area: Storage): { entries: StorageEntry[]; truncated: number }
     } catch {
       continue;
     }
+    if (INTERNAL_KEY.test(key)) continue;
     if (entries.length >= MAX_ENTRIES_PER_AREA) {
       truncated++;
       continue;
@@ -62,6 +67,38 @@ function readArea(area: Storage): { entries: StorageEntry[]; truncated: number }
       outValue = value;
     }
     entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
+  }
+  return { entries, truncated };
+}
+
+// Cookies visible to page JS (document.cookie never exposes HttpOnly ones —
+// which is exactly the boundary we want: HttpOnly cookies are auth material).
+function readCookies(): { entries: StorageEntry[]; truncated: number } {
+  const entries: StorageEntry[] = [];
+  let truncated = 0;
+  let raw = "";
+  try {
+    raw = document.cookie || "";
+  } catch {
+    return { entries, truncated };
+  }
+  if (!raw) return { entries, truncated };
+  for (const part of raw.split(/;\s*/)) {
+    const eq = part.indexOf("=");
+    if (eq <= 0) continue;
+    const key = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1);
+    if (INTERNAL_KEY.test(key)) continue;
+    if (entries.length >= MAX_ENTRIES_PER_AREA) {
+      truncated++;
+      continue;
+    }
+    const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+    if (sensitive) {
+      entries.push({ key, value: maskValue(value), redacted: true });
+    } else {
+      entries.push({ key, value: value.length > MAX_VALUE_LEN ? value.slice(0, MAX_VALUE_LEN) + "…" : value });
+    }
   }
   return { entries, truncated };
 }
@@ -87,6 +124,13 @@ export function captureStorageSnapshot(): StorageSnapshot {
     if (ss.truncated > 0) snapshot.sessionTruncated = ss.truncated;
   } catch {
     /* sessionStorage unavailable */
+  }
+  try {
+    const ck = readCookies();
+    if (ck.entries.length > 0) snapshot.cookies = ck.entries;
+    if (ck.truncated > 0) snapshot.cookiesTruncated = ck.truncated;
+  } catch {
+    /* cookies unavailable */
   }
   return snapshot;
 }

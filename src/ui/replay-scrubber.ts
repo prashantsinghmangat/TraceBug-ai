@@ -255,14 +255,19 @@ export function mountReplayScrubber(
     currentTs = next;
     renderHandle();
 
-    // Sync video time if attached.
+    // Sync video time if attached — but never cold-seek a video that hasn't
+    // played yet. MediaRecorder WebMs ship without seek cues, and seeking
+    // them before first play leaves Chrome displaying a black frame (the
+    // "can't see the video in the preview" bug). Once playback has started
+    // the stream is scanned and seeks render fine.
     if (options.videoEl) {
-      try {
-        const vidStart = options.videoEl.dataset.tbStartTs
-          ? Number(options.videoEl.dataset.tbStartTs)
-          : startedAt;
-        options.videoEl.currentTime = Math.max(0, (currentTs - vidStart) / 1000);
-      } catch {}
+      const v = options.videoEl;
+      if (v.played.length > 0 || !v.paused) {
+        try {
+          const vidStart = v.dataset.tbStartTs ? Number(v.dataset.tbStartTs) : startedAt;
+          v.currentTime = Math.max(0, (currentTs - vidStart) / 1000);
+        } catch {}
+      }
     }
 
     options.onSeek?.(currentTs, marker);

@@ -133,6 +133,10 @@ export function getOrCreateSession(
 
 let _cachedSessions: StoredSession[] | null = null;
 let _pendingFlush: ReturnType<typeof setTimeout> | null = null;
+// Only re-serialize when the cache actually changed since the last write.
+// saveSessions() does a full JSON.stringify of every session; without this
+// guard a burst of no-op flushes would repeat that whole cost for nothing.
+let _dirty = false;
 const FLUSH_INTERVAL_MS = 1000;
 
 export function getCachedSessions(): StoredSession[] {
@@ -143,16 +147,24 @@ export function getCachedSessions(): StoredSession[] {
 }
 
 export function scheduleFlush(): void {
+  // Every mutation routes through here, so this is the authoritative
+  // "something changed" signal — mark dirty before the early return.
+  _dirty = true;
   if (_pendingFlush) return;
   _pendingFlush = setTimeout(() => {
     _pendingFlush = null;
-    if (_cachedSessions) {
+    if (_cachedSessions && _dirty) {
       saveSessions(_cachedSessions);
+      _dirty = false;
     }
   }, FLUSH_INTERVAL_MS);
 }
 
-/** Flush any pending writes immediately (called on beforeunload / destroy) */
+/** Flush any pending writes immediately (called on beforeunload / destroy).
+ *  Unconditional by design: several callers mutate the cache directly and
+ *  then call this to persist NOW without going through scheduleFlush(), so it
+ *  must always write when a cache exists. The dirty guard is only for the
+ *  high-frequency scheduled path. */
 export function flushPendingEvents(): void {
   if (_pendingFlush) {
     clearTimeout(_pendingFlush);
@@ -160,6 +172,7 @@ export function flushPendingEvents(): void {
   }
   if (_cachedSessions) {
     saveSessions(_cachedSessions);
+    _dirty = false;
   }
 }
 
@@ -174,6 +187,7 @@ function invalidateCache(): void {
     _pendingFlush = null;
   }
   _cachedSessions = null;
+  _dirty = false;
 }
 
 // Flush on page unload so no events are lost

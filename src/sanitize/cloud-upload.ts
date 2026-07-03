@@ -95,10 +95,27 @@ function sanitizeText(s: string | undefined | null): string {
   return out;
 }
 
+/**
+ * Token-shape scrub for a single string — exported so capture-time code
+ * (network response snippets in collectors.ts) can share the exact same
+ * patterns. Applying it at capture means the modal, the local .html export,
+ * AND the cloud path all see scrubbed text; this pass here stays as
+ * defense-in-depth for everything else in the report.
+ */
+export function sanitizeTokenShapes(s: string): string {
+  return sanitizeText(s);
+}
+
 // Returns a new sanitized BugReport. The original object is not mutated, so
 // the local download / export-to-html path keeps the unsanitized version.
 export function sanitizeReportForUpload(report: BugReport): BugReport {
-  const out: BugReport = structuredClone(report);
+  // structuredClone is Safari 15.2+ / Firefox 94+. The JSON round-trip
+  // fallback is fine here: BugReport is plain data (no Dates/Maps/Blobs —
+  // video carries dataUrl strings, not Blob refs, through this path).
+  const out: BugReport =
+    typeof structuredClone === "function"
+      ? structuredClone(report)
+      : (JSON.parse(JSON.stringify(report)) as BugReport);
 
   if (out.consoleErrors) {
     out.consoleErrors = out.consoleErrors.map((e) => ({
@@ -146,6 +163,7 @@ export function sanitizeReportForUpload(report: BugReport): BugReport {
       entries.map((e) => ({ ...e, value: sanitizeText(e.value) }));
     out.storage.local = scrub(out.storage.local || []);
     out.storage.session = scrub(out.storage.session || []);
+    if (out.storage.cookies) out.storage.cookies = scrub(out.storage.cookies);
   }
   if (out.environment?.url) out.environment.url = sanitizeUrl(out.environment.url);
   if (out.context && typeof out.context === "object") {

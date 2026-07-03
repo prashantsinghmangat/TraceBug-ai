@@ -154,10 +154,17 @@ export function mountCompactToolbar(
       if (!_checkLimit()) return;
       showToast("Capturing…", root);
       try {
-        try { _onNewCapture?.(); } catch {}
+        // While session tracking is on, screenshots join the tracked session
+        // instead of resetting to a fresh ticket, and the modal stays closed
+        // until the user stops tracking.
+        if (!_isTracking) { try { _onNewCapture?.(); } catch {} }
         await captureScreenshot(null);
-        showToast("✓ Screenshot captured — review your ticket", root);
-        await _openOrRefreshTicket(root);
+        if (_isTracking) {
+          showToast("✓ Screenshot added to tracked session", root);
+        } else {
+          showToast("✓ Screenshot captured — review your ticket", root);
+          await _openOrRefreshTicket(root);
+        }
       } catch {
         showToast("Screenshot failed", root);
       }
@@ -172,11 +179,15 @@ export function mountCompactToolbar(
     async () => {
       if (!_checkLimit()) return;
       try {
-        try { _onNewCapture?.(); } catch {}
+        if (!_isTracking) { try { _onNewCapture?.(); } catch {} }
         const ss = await captureRegionScreenshot();
         if (!ss) { showToast("Cancelled", root); return; }
-        showToast("✓ Region captured — review your ticket", root);
-        await _openOrRefreshTicket(root);
+        if (_isTracking) {
+          showToast("✓ Region added to tracked session", root);
+        } else {
+          showToast("✓ Region captured — review your ticket", root);
+          await _openOrRefreshTicket(root);
+        }
       } catch {
         showToast("Region screenshot failed", root);
       }
@@ -203,6 +214,19 @@ export function mountCompactToolbar(
     recordBtn.title = "Screen recording not supported in this browser";
   }
   toolbar.appendChild(recordBtn);
+
+  // Track session — event-only capture (no video, no screenshots required).
+  // Click to arm a session; every click/input/navigation/API call/console
+  // line flows into it. Click again to stop and open the ticket modal, where
+  // media can be added optionally. Tickets file fine with events alone.
+  const trackBtn = _createToolbarBtn(
+    "Track session (events only, no video)",
+    _trackIconSvg(false),
+    () => { _toggleSessionTracking(root, trackBtn, showToast).catch(() => {}); },
+    "tracebug-toolbar-track-btn"
+  );
+  _trackBtn = trackBtn;
+  toolbar.appendChild(trackBtn);
 
   // View saved tickets — opens the offline Saved Tickets popover.
   toolbar.appendChild(_divider());
@@ -284,6 +308,8 @@ export function mountCompactToolbar(
     const settingsCard = document.getElementById(SETTINGS_ID);
     settingsCard?.remove();
     _toolbar = null;
+    _isTracking = false;
+    _trackBtn = null;
   };
 }
 
@@ -328,6 +354,69 @@ function _divider(): HTMLElement {
   d.dataset.tracebug = "toolbar-divider";
   d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
   return d;
+}
+
+// ── Session tracking (events only, no video) ────────────────────────────
+
+let _isTracking = false;
+let _trackBtn: HTMLElement | null = null;
+
+// Activity-pulse icon (idle) / green stop square (tracking).
+function _trackIconSvg(active: boolean): string {
+  if (active) {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-success, #22c55e)" stroke="var(--tb-success, #22c55e)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+  }
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`;
+}
+
+/** Reset the track button to idle — used when video recording takes over the
+ *  session (its start flow ends any armed session, tracked ones included). */
+function _resetTrackingState(): void {
+  if (!_isTracking) return;
+  _isTracking = false;
+  if (_trackBtn) {
+    _trackBtn.innerHTML = _trackIconSvg(false);
+    _trackBtn.classList.remove("tb-active");
+    _trackBtn.style.color = "var(--tb-btn-text, #aaa)";
+    _trackBtn.title = "Track session (events only, no video)";
+  }
+}
+
+async function _toggleSessionTracking(
+  root: HTMLElement,
+  btn: HTMLElement,
+  showToast: (msg: string, root: HTMLElement) => void,
+): Promise<void> {
+  if (_isTracking) {
+    // Stop → finalize the session, then open the ticket for review. The
+    // ticket is valid with events alone; screenshots can be added from the
+    // modal ("Add page shot") if wanted.
+    _isTracking = false;
+    btn.innerHTML = _trackIconSvg(false);
+    btn.classList.remove("tb-active");
+    btn.style.color = "var(--tb-btn-text, #aaa)";
+    btn.title = "Track session (events only, no video)";
+    try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
+    try {
+      if (!isQuickBugOpen()) await showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open ticket after session tracking:", err);
+    }
+    return;
+  }
+
+  if (isVideoRecording()) {
+    showToast("Recording already tracks the session — hit Stop to file its ticket", root);
+    return;
+  }
+
+  _isTracking = true;
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+  btn.innerHTML = _trackIconSvg(true);
+  btn.classList.add("tb-active");
+  btn.style.color = "var(--tb-success, #22c55e)";
+  btn.title = "Stop tracking & file ticket";
+  showToast("Tracking session — click ■ again to stop & file a ticket", root);
 }
 
 // ── Record icon + toggle ────────────────────────────────────────────────
@@ -385,6 +474,17 @@ async function _toggleRecording(
   const choice = await _showRecordPreflight(root, btn);
   if (!choice) return; // dismissed — don't surface a scary "cancelled" toast
 
+  // Recording owns the session from here — flip the track button back to
+  // idle so it doesn't show a stale "tracking" state over the new session.
+  _resetTrackingState();
+
+  // Arm the session BEFORE capture starts. The offscreen document stamps the
+  // recording's startedAt the moment capture begins — with the old order
+  // (session armed after the start RPC resolved) createdAt landed later than
+  // startedAt, and the ticket modal's "video belongs to this session" check
+  // suppressed the video the user just recorded.
+  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+
   const ok = await startVideoRecording({
     mode: "rolling",
     surfaceMode: choice.surface,
@@ -402,11 +502,12 @@ async function _toggleRecording(
     // mounted the HUD, so bail quietly instead of showing a false toast.
     await new Promise((r) => setTimeout(r, 400));
     if (isVideoRecording()) return;
+    // Cancelled — release the session armed above so the dashboard doesn't
+    // accumulate an empty ticket.
+    try { _onSessionEnd?.(); } catch {}
     showToast("Recording cancelled", root);
     return;
   }
-
-  try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
 
   btn.innerHTML = _recordIconSvg(true);
   btn.classList.add("tb-active");

@@ -285,7 +285,10 @@ export function activateDrawMode(
   canvas.addEventListener("mouseup", onMouseUp);
   document.addEventListener("keydown", onKeyDown, { capture: true });
 
-  const resizeObserver = new ResizeObserver(() => {
+  // ResizeObserver is Safari 13.1+ / Firefox 69+ — fall back to window
+  // resize events so draw mode still works (canvas just won't track
+  // content-driven height changes) instead of throwing on older browsers.
+  const onCanvasResize = () => {
     const newW = Math.min(document.documentElement.scrollWidth, MAX_CANVAS_DIM);
     const newH = Math.min(document.documentElement.scrollHeight, MAX_CANVAS_DIM);
     if (canvas.width !== newW || canvas.height !== newH) {
@@ -295,8 +298,14 @@ export function activateDrawMode(
       canvas.style.height = newH + "px";
       _redrawAllRegions(ctx, newW, newH);
     }
-  });
-  resizeObserver.observe(document.body);
+  };
+  let resizeObserver: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(onCanvasResize);
+    resizeObserver.observe(document.body);
+  } else {
+    window.addEventListener("resize", onCanvasResize);
+  }
 
   _cleanup = () => {
     _active = false;
@@ -305,7 +314,8 @@ export function activateDrawMode(
     canvas.removeEventListener("mousemove", onMouseMove);
     canvas.removeEventListener("mouseup", onMouseUp);
     document.removeEventListener("keydown", onKeyDown, { capture: true });
-    resizeObserver.disconnect();
+    if (resizeObserver) resizeObserver.disconnect();
+    else window.removeEventListener("resize", onCanvasResize);
     canvas.remove();
     toolbar.remove();
     _onUpdate = null;

@@ -153,7 +153,8 @@ async function buildReplayPayload(
     { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
     { k: "Session", v: session.sessionId.slice(0, 12), i: "🆔" },
     { k: "Severity", v: report.severity },
-    { k: "Priority", v: priorityLabel(report.priority), i: "🚩" },
+    // Tester-set only — the severity-derived fallback isn't their triage call.
+    ...(session.priority ? [{ k: "Priority", v: priorityLabel(session.priority), i: "🚩" }] : []),
   ];
   if (report.context) {
     for (const k of Object.keys(report.context)) {
@@ -168,21 +169,23 @@ async function buildReplayPayload(
     if (!entries || entries.length === 0) return;
     const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
     for (const e of shown) {
-      info.push({ k: `${label} · ${e.key}`, v: e.redacted ? `🔒 ${e.value}` : e.value, i: "🗄" });
+      info.push({ k: `${label} · ${e.key}`, v: e.redacted ? `🔒 ${e.value}` : e.value, i: "" });
     }
     const hiddenForDisplay = entries.length - shown.length;
     const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
-    if (totalHidden > 0) info.push({ k: `${label} · …`, v: `+${totalHidden} more`, i: "🗄" });
+    if (totalHidden > 0) info.push({ k: `${label} · …`, v: `+${totalHidden} more`, i: "" });
   }
   if (report.storage) {
     pushStorageRows("localStorage", report.storage.local, report.storage.localTruncated);
     pushStorageRows("sessionStorage", report.storage.session, report.storage.sessionTruncated);
+    pushStorageRows("Cookies", report.storage.cookies, report.storage.cookiesTruncated);
   }
 
   const payload: BundlePayload = {
     meta: {
       title: report.title,
       severity: report.severity,
+      priority: session.priority ? priorityLabel(session.priority) : undefined,
       summary: report.summary || "",
       rootCause: report.rootCause?.hint || "",
       page: report.environment?.url || report.session.events[0]?.page || "",

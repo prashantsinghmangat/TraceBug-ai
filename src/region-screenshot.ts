@@ -169,6 +169,9 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
 function cropDataUrl(dataUrl: string, r: Rect): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
+    // Release the decoded image after we're done so repeated region captures
+    // don't retain a chain of full-page bitmaps until GC.
+    const release = () => { img.onload = null; img.onerror = null; img.src = ""; };
     img.onload = () => {
       // captureVisibleTab returns device pixels; html2canvas at scale:1 returns CSS pixels.
       // Either way, scaling by naturalWidth / innerWidth gives the correct factor.
@@ -178,11 +181,13 @@ function cropDataUrl(dataUrl: string, r: Rect): Promise<string> {
       c.width = Math.max(1, Math.round(r.w * sx));
       c.height = Math.max(1, Math.round(r.h * sy));
       const ctx = c.getContext("2d");
-      if (!ctx) { resolve(dataUrl); return; }
+      if (!ctx) { release(); resolve(dataUrl); return; }
       ctx.drawImage(img, r.x * sx, r.y * sy, r.w * sx, r.h * sy, 0, 0, c.width, c.height);
-      resolve(c.toDataURL("image/png", 0.9));
+      const out = c.toDataURL("image/png", 0.9);
+      release();
+      resolve(out);
     };
-    img.onerror = () => resolve(dataUrl);
+    img.onerror = () => { release(); resolve(dataUrl); };
     img.src = dataUrl;
   });
 }
