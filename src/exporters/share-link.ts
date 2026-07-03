@@ -81,7 +81,8 @@ export async function shareSessionAsLink(
     videoDurationS: includeVideo && safe.video ? Math.round(safe.video.durationMs / 1000) : undefined,
     screenshotCount: safe.screenshots?.length ?? 0,
     thumbnail: thumbnail ?? undefined,
-    priority: safe.priority,
+    // Tester-set only — don't upload the severity-derived fallback.
+    priority: session.priority,
   });
 
   await bridge.uploadBlob(init.storageKey, init.uploadToken, blob, "text/html");

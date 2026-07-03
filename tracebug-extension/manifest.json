@@ -39,7 +39,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["content-script.js", "tracebug-sdk.js", "tracebug-init.js", "offscreen.html", "offscreen.js"],
+      "resources": ["tracebug-sdk.js", "tracebug-init.js"],
       "matches": ["<all_urls>"]
     }
   ],

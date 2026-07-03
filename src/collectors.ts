@@ -3,6 +3,7 @@
 // Returns a cleanup function to detach everything.
 
 import { EventType } from "./types";
+import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 
 type Emit = (type: EventType, data: Record<string, any>) => void;
 
@@ -28,6 +29,11 @@ const _networkFailures: NetworkFailure[] = [];
 
 function pushNetworkFailure(failure: NetworkFailure): void {
   try {
+    // Scrub token shapes (JWT, sk-, Bearer, cloud keys…) from the response
+    // snippet at capture — error bodies like `{"error":"bad key: sk_live_…"}`
+    // would otherwise flow verbatim into the modal and the shared .html
+    // export (the cloud path re-sanitizes, but local export didn't).
+    if (failure.response) failure.response = sanitizeTokenShapes(failure.response);
     _networkFailures.push(failure);
     if (_networkFailures.length > NETWORK_FAILURE_LIMIT) {
       _networkFailures.splice(0, _networkFailures.length - NETWORK_FAILURE_LIMIT);

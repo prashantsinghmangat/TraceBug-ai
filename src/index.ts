@@ -425,6 +425,12 @@ class TraceBugSDK {
       _wireStarted();
       _setStartedHandler(() => this._handleRecordingStarted());
       if (this.config.enableDashboard) {
+        // Snapshot the session id RESTORED at init. By the time the async
+        // offscreen status ping resolves, a popup action (capture-now →
+        // startRecording) may have armed a brand-new session — clearing THAT
+        // killed the live session and blanked the ticket the user just asked
+        // for (quickCapture then re-armed and wiped the fresh screenshot).
+        const restoredSessionId = this.sessionId;
         _restoreVideoState().then((wasActive) => {
           if (wasActive) {
             // Real recording is in progress in the offscreen — re-mount the
@@ -432,7 +438,7 @@ class TraceBugSDK {
             // for the rest of this session lands in the ticket.
             this._remountRecordingHud();
             this._attachConsoleCollectors();
-          } else if (this.sessionId) {
+          } else if (restoredSessionId && this.sessionId === restoredSessionId) {
             // Active-session flag survived but the recording didn't —
             // common when the captured tab navigated and Chrome ended the
             // share. Try to recover whatever the offscreen managed to
@@ -471,20 +477,11 @@ class TraceBugSDK {
    * it survives page reloads, and writes the initial environment + user
    * snapshot. Idempotent — a no-op if a session is already active.
    */
-  private _startActiveSession(): void {
+  private _startActiveSession(opts?: { keepScreenshots?: boolean }): void {
     if (this.sessionId) {
-      // Save current in-memory screenshots to the outgoing session before ending it
-      // so "View offline tickets" can show thumbnails for past sessions.
       try {
-        const shots = getScreenshots();
-        if (shots.length > 0) {
-          const outSessions = getCachedSessions();
-          const outSession = outSessions.find(s => s.sessionId === this.sessionId);
-          if (outSession) {
-            outSession.screenshots = shots.slice(0, 5);
-            scheduleFlush();
-          }
-        }
+        // _endActiveSession stashes the in-memory screenshots onto the
+        // outgoing session so "View saved tickets" keeps its thumbnails.
         this._endActiveSession();
         // Close any open quick-bug modal so the new session can show its own
         try {
@@ -555,7 +552,10 @@ class TraceBugSDK {
     // into this ticket. Clearing at session START (not end) is intentional —
     // stopRecording() opens the ticket-review modal, which still needs the
     // screenshots until the user explicitly starts a new session.
-    clearScreenshots();
+    // keepScreenshots: quickCapture arms a session AFTER the extension popup
+    // already captured a shot for this very ticket — wiping it here was the
+    // "blank ticket" bug.
+    if (!opts?.keepScreenshots) clearScreenshots();
 
     // Install console.* wrappers now that the user has explicitly armed a
     // session. These add a frame to every console call's stack trace, so we
@@ -606,6 +606,18 @@ class TraceBugSDK {
       return null;
     }
     const id = this.sessionId;
+    // Persist the in-memory screenshots onto the session record before it
+    // ends — they're what Saved Tickets thumbnails and "View ticket" render.
+    // Stashing only when the NEXT session started (the old behavior) lost
+    // them whenever the SDK was torn down in between (extension ✕ → destroy),
+    // and let orphaned shots get attributed to a later, unrelated session.
+    try {
+      const shots = getScreenshots();
+      if (shots.length > 0) {
+        const sess = getCachedSessions().find(s => s.sessionId === id);
+        if (sess) sess.screenshots = shots.slice(0, 5);
+      }
+    } catch {}
     flushPendingEvents();
     clearActiveSessionId();
     this.sessionId = null;
@@ -753,10 +765,12 @@ class TraceBugSDK {
     }
     // Open the modal for the CURRENT session. Do NOT start a fresh session here —
     // the capture actions (startRecording / takeScreenshot / toolbar buttons)
-    // already arm a new session before this runs. Starting one here would call
-    // clearScreenshots() and wipe the shot the popup just captured (empty ticket).
-    // Only arm a session if somehow none exists (e.g. quickCapture called alone).
-    if (!this.sessionId) this._startActiveSession();
+    // already arm a new session before this runs. If somehow none exists
+    // (quickCapture called alone, or the init-restore path cleared the armed
+    // session between capture and here), arm one but KEEP the in-memory
+    // screenshots — they belong to this very ticket, and wiping them was the
+    // "blank ticket" bug in the extension popup flow.
+    if (!this.sessionId) this._startActiveSession({ keepScreenshots: true });
     const { showQuickBugCapture } = await import("./ui/quick-bug");
     return showQuickBugCapture(root);
   }
@@ -1631,6 +1645,11 @@ class TraceBugSDK {
    * Tear down the SDK — removes all listeners and the dashboard.
    */
   destroy(): void {
+    // Finalize any armed session first: stashes its screenshots onto the
+    // session record, flushes, and clears the persisted active-session flag.
+    // Leaving the flag set made the next init() restore a stale session id,
+    // whose recovery path then fought with fresh popup actions.
+    try { this._endActiveSession(); } catch {}
     flushPendingEvents(); // Write any buffered events before teardown
     this._detachConsoleCollectors();
     this.cleanups.forEach((fn) => fn());

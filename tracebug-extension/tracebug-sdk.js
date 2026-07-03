@@ -108,11 +108,13 @@ var TraceBugModule = (() => {
     return _cachedSessions;
   }
   function scheduleFlush() {
+    _dirty = true;
     if (_pendingFlush) return;
     _pendingFlush = setTimeout(() => {
       _pendingFlush = null;
-      if (_cachedSessions) {
+      if (_cachedSessions && _dirty) {
         saveSessions(_cachedSessions);
+        _dirty = false;
       }
     }, FLUSH_INTERVAL_MS);
   }
@@ -123,6 +125,7 @@ var TraceBugModule = (() => {
     }
     if (_cachedSessions) {
       saveSessions(_cachedSessions);
+      _dirty = false;
     }
   }
   function invalidateCache() {
@@ -131,6 +134,7 @@ var TraceBugModule = (() => {
       _pendingFlush = null;
     }
     _cachedSessions = null;
+    _dirty = false;
   }
   function appendEvent(sessionId, event, maxEvents, maxSessions) {
     let sessions = getCachedSessions();
@@ -218,7 +222,7 @@ var TraceBugModule = (() => {
     } catch (e) {
     }
   }
-  var SESSIONS_KEY, ACTIVE_SESSION_KEY, _cachedSessions, _pendingFlush, FLUSH_INTERVAL_MS;
+  var SESSIONS_KEY, ACTIVE_SESSION_KEY, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
   var init_storage = __esm({
     "src/storage.ts"() {
       "use strict";
@@ -226,6 +230,7 @@ var TraceBugModule = (() => {
       ACTIVE_SESSION_KEY = "tracebug_active_session";
       _cachedSessions = null;
       _pendingFlush = null;
+      _dirty = false;
       FLUSH_INTERVAL_MS = 1e3;
       if (typeof window !== "undefined") {
         window.addEventListener("beforeunload", flushPendingEvents);
@@ -606,6 +611,13 @@ var TraceBugModule = (() => {
     canvas.width = 400;
     canvas.height = 200;
     const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      try {
+        return canvas.toDataURL("image/png");
+      } catch (e) {
+        return "";
+      }
+    }
     ctx.fillStyle = "#1a1a2e";
     ctx.fillRect(0, 0, 400, 200);
     ctx.fillStyle = "#e0e0e0";
@@ -809,9 +821,180 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/sanitize/cloud-upload.ts
+  function mask(s) {
+    if (s.length <= 12) return REDACTED;
+    return `${s.slice(0, 4)}\u2026${REDACTED}\u2026${s.slice(-4)}`;
+  }
+  function sanitizeUrl(url) {
+    if (typeof url !== "string" || url.length === 0) return url;
+    try {
+      const isAbs = /^[a-z][a-z0-9+.-]*:/i.test(url);
+      const u = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
+      let changed = false;
+      u.searchParams.forEach((_v, k) => {
+        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) {
+          u.searchParams.set(k, REDACTED);
+          changed = true;
+        }
+      });
+      if (!changed) return sanitizeText(url);
+      const out = isAbs ? u.toString() : u.pathname + u.search + u.hash;
+      return sanitizeText(out);
+    } catch (e) {
+      return sanitizeText(url);
+    }
+  }
+  function sanitizeText(s) {
+    if (s == null) return s;
+    let out = String(s);
+    for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
+    return out;
+  }
+  function sanitizeTokenShapes(s) {
+    return sanitizeText(s);
+  }
+  function sanitizeReportForUpload(report) {
+    var _a;
+    const out = typeof structuredClone === "function" ? structuredClone(report) : JSON.parse(JSON.stringify(report));
+    if (out.consoleErrors) {
+      out.consoleErrors = out.consoleErrors.map((e) => {
+        var _a2;
+        return {
+          ...e,
+          message: sanitizeText(e.message),
+          stack: sanitizeText((_a2 = e.stack) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.consoleLogs) {
+      out.consoleLogs = out.consoleLogs.map((e) => {
+        var _a2;
+        return {
+          ...e,
+          message: sanitizeText(e.message),
+          stack: sanitizeText((_a2 = e.stack) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.networkErrors) {
+      out.networkErrors = out.networkErrors.map((e) => {
+        var _a2;
+        return {
+          ...e,
+          url: sanitizeUrl(e.url),
+          response: sanitizeText((_a2 = e.response) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.networkRequests) {
+      out.networkRequests = out.networkRequests.map((e) => {
+        var _a2;
+        return {
+          ...e,
+          url: sanitizeUrl(e.url),
+          response: sanitizeText((_a2 = e.response) != null ? _a2 : void 0)
+        };
+      });
+    }
+    if (out.steps) out.steps = sanitizeText(out.steps);
+    if (out.summary) out.summary = sanitizeText(out.summary);
+    if (out.title) out.title = sanitizeText(out.title);
+    if (Array.isArray(out.sessionSteps)) out.sessionSteps = out.sessionSteps.map((s) => sanitizeText(s));
+    if (out.actionChips) {
+      out.actionChips = out.actionChips.map((c) => {
+        var _a2, _b;
+        return {
+          ...c,
+          target: sanitizeText((_a2 = c.target) != null ? _a2 : void 0),
+          detail: sanitizeText((_b = c.detail) != null ? _b : void 0)
+        };
+      });
+    }
+    if (out.storage) {
+      const scrub = (entries) => entries.map((e) => ({ ...e, value: sanitizeText(e.value) }));
+      out.storage.local = scrub(out.storage.local || []);
+      out.storage.session = scrub(out.storage.session || []);
+      if (out.storage.cookies) out.storage.cookies = scrub(out.storage.cookies);
+    }
+    if ((_a = out.environment) == null ? void 0 : _a.url) out.environment.url = sanitizeUrl(out.environment.url);
+    if (out.context && typeof out.context === "object") {
+      const ctx = {};
+      for (const [k, v] of Object.entries(out.context)) {
+        ctx[k] = typeof v === "string" ? sanitizeText(v) : v;
+      }
+      out.context = ctx;
+    }
+    return out;
+  }
+  var REDACTED, TOKEN_PATTERNS, SENSITIVE_QUERY_KEYS;
+  var init_cloud_upload = __esm({
+    "src/sanitize/cloud-upload.ts"() {
+      "use strict";
+      REDACTED = "[REDACTED]";
+      TOKEN_PATTERNS = [
+        // Bearer <token> in headers, console output, anywhere
+        { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED },
+        // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
+        { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
+        // OpenAI / Stripe sk_*
+        { name: "sk_prefix", re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
+        // Stripe secret + publishable (live/test, secret + publishable + restricted)
+        { name: "stripe", re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
+        // GitHub PATs (classic + fine-grained + OAuth + server tokens)
+        { name: "github_pat", re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
+        { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
+        // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
+        { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
+        { name: "aws_secret", re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
+        // Slack — broader than before (xoxa-z covers all known prefixes)
+        { name: "slack", re: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
+        // Google API keys
+        { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask },
+        // Twilio — Account SID + Auth tokens
+        { name: "twilio_sid", re: /\b(?:AC|SK)[a-f0-9]{32}\b/g, replace: mask },
+        // SendGrid
+        { name: "sendgrid", re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replace: mask },
+        // Mailgun
+        { name: "mailgun", re: /\bkey-[a-f0-9]{32}\b/g, replace: mask },
+        // Postmark
+        { name: "postmark", re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
+        // Linear / Vercel / Cloudflare / Discord
+        { name: "linear", re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
+        { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
+        // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
+        // session IDs, etc. that don't carry a recognizable prefix. Conservative:
+        // only triggers when preceded by a common secret-y keyword to avoid
+        // mangling legitimate hex like git SHAs.
+        { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s) => s.replace(/[a-fA-F0-9]{32,}/, REDACTED) }
+      ];
+      SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
+        "token",
+        "access_token",
+        "id_token",
+        "refresh_token",
+        "api_key",
+        "apikey",
+        "secret",
+        "password",
+        "passwd",
+        "pwd",
+        "auth",
+        "authorization",
+        "x-api-key",
+        "session",
+        "sid",
+        "csrf"
+      ]);
+    }
+  });
+
   // src/collectors.ts
   function pushNetworkFailure(failure) {
     try {
+      if (failure.response) failure.response = sanitizeTokenShapes(failure.response);
       _networkFailures.push(failure);
       if (_networkFailures.length > NETWORK_FAILURE_LIMIT) {
         _networkFailures.splice(0, _networkFailures.length - NETWORK_FAILURE_LIMIT);
@@ -825,7 +1008,7 @@ var TraceBugModule = (() => {
   function clearNetworkFailures() {
     _networkFailures.length = 0;
   }
-  function sanitizeUrl(url) {
+  function sanitizeUrl2(url) {
     if (!url) return url;
     try {
       const qIdx = url.indexOf("?");
@@ -1135,7 +1318,7 @@ var TraceBugModule = (() => {
         if (url && isInternalUrl(url)) return originalFetch.call(window, input, init);
       } catch (e) {
       }
-      const safeUrl = sanitizeUrl(url).slice(0, 500);
+      const safeUrl = sanitizeUrl2(url).slice(0, 500);
       try {
         const response = await originalFetch.call(window, input, init);
         try {
@@ -1212,7 +1395,7 @@ var TraceBugModule = (() => {
         const method = (meta == null ? void 0 : meta.method) || "GET";
         const url = (meta == null ? void 0 : meta.url) || "";
         if (isInternalUrl(url)) return origSend.call(this, body);
-        const safeUrl = sanitizeUrl(url).slice(0, 500);
+        const safeUrl = sanitizeUrl2(url).slice(0, 500);
         xhr.addEventListener("loadend", function() {
           try {
             emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } });
@@ -1279,7 +1462,7 @@ var TraceBugModule = (() => {
     const initiator = e.initiatorType || "";
     const method = (e.method || "GET").toUpperCase();
     const status = e.responseStatus || 0;
-    const url = sanitizeUrl(e.name).slice(0, 500);
+    const url = sanitizeUrl2(e.name).slice(0, 500);
     const timestamp = Math.round(navStart + e.startTime);
     const durationMs = Math.round(e.duration || 0);
     try {
@@ -1433,6 +1616,7 @@ var TraceBugModule = (() => {
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
+      init_cloud_upload();
       ROOT_ID = "tracebug-root";
       PANEL_ID = "tracebug-dashboard-panel";
       BTN_ID = "tracebug-dashboard-btn";
@@ -1559,6 +1743,7 @@ var TraceBugModule = (() => {
       } catch (e) {
         continue;
       }
+      if (INTERNAL_KEY.test(key)) continue;
       if (entries.length >= MAX_ENTRIES_PER_AREA) {
         truncated++;
         continue;
@@ -1578,6 +1763,35 @@ var TraceBugModule = (() => {
     }
     return { entries, truncated };
   }
+  function readCookies() {
+    const entries = [];
+    let truncated = 0;
+    let raw = "";
+    try {
+      raw = document.cookie || "";
+    } catch (e) {
+      return { entries, truncated };
+    }
+    if (!raw) return { entries, truncated };
+    for (const part of raw.split(/;\s*/)) {
+      const eq = part.indexOf("=");
+      if (eq <= 0) continue;
+      const key = part.slice(0, eq).trim();
+      const value = part.slice(eq + 1);
+      if (INTERNAL_KEY.test(key)) continue;
+      if (entries.length >= MAX_ENTRIES_PER_AREA) {
+        truncated++;
+        continue;
+      }
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+      if (sensitive) {
+        entries.push({ key, value: maskValue(value), redacted: true });
+      } else {
+        entries.push({ key, value: value.length > MAX_VALUE_LEN ? value.slice(0, MAX_VALUE_LEN) + "\u2026" : value });
+      }
+    }
+    return { entries, truncated };
+  }
   function captureStorageSnapshot() {
     const snapshot = { local: [], session: [] };
     if (typeof window === "undefined") return snapshot;
@@ -1593,9 +1807,15 @@ var TraceBugModule = (() => {
       if (ss.truncated > 0) snapshot.sessionTruncated = ss.truncated;
     } catch (e) {
     }
+    try {
+      const ck = readCookies();
+      if (ck.entries.length > 0) snapshot.cookies = ck.entries;
+      if (ck.truncated > 0) snapshot.cookiesTruncated = ck.truncated;
+    } catch (e) {
+    }
     return snapshot;
   }
-  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE;
+  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY;
   var init_storage_capture = __esm({
     "src/storage-capture.ts"() {
       "use strict";
@@ -1603,6 +1823,7 @@ var TraceBugModule = (() => {
       MAX_VALUE_LEN = 300;
       SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
       SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
+      INTERNAL_KEY = /^tracebug[_-]/i;
     }
   });
 
@@ -1782,7 +2003,11 @@ var TraceBugModule = (() => {
     root.appendChild(toast);
     const liveRegion = document.getElementById("tracebug-live");
     if (liveRegion) liveRegion.textContent = message;
+    let _dismissed = false;
     const dismiss = () => {
+      if (_dismissed) return;
+      _dismissed = true;
+      clearTimeout(autoTimer);
       toast.style.opacity = "0";
       toast.style.transform = "translateX(-50%) translateY(8px)";
       toast.style.transition = "all 0.3s ease";
@@ -1793,7 +2018,7 @@ var TraceBugModule = (() => {
       onAction();
     });
     toast.querySelector('[data-tb-action="dismiss"]').addEventListener("click", dismiss);
-    setTimeout(dismiss, 8e3);
+    const autoTimer = setTimeout(dismiss, 8e3);
   }
   function showToast(message, root) {
     const existing = root.querySelector(".bt-toast");
@@ -3597,11 +3822,17 @@ var TraceBugModule = (() => {
   });
 
   // src/report-builder.ts
+  function getSessionVideo(session) {
+    if (!session) return null;
+    const v = getLastVideoRecording();
+    if (!v) return null;
+    return v.startedAt >= (session.createdAt || 0) - VIDEO_SESSION_GRACE_MS ? v : null;
+  }
   function buildReport(session, extraScreenshots) {
     var _a, _b, _c, _d;
     const environment = session.environment || captureEnvironment();
     const _ssForAnchor = [...getScreenshots(), ...extraScreenshots || []];
-    const _vidForAnchor = getLastVideoRecording();
+    const _vidForAnchor = getSessionVideo(session);
     const captureTs = Math.max(
       (_a = _vidForAnchor == null ? void 0 : _vidForAnchor.startedAt) != null ? _a : 0,
       ..._ssForAnchor.map((s) => s.timestamp),
@@ -3681,7 +3912,7 @@ var TraceBugModule = (() => {
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
     const timeline = buildTimeline(events);
     const voiceTranscripts = getVoiceTranscripts();
-    const lastVideo = getLastVideoRecording();
+    const lastVideo = getSessionVideo(session);
     const video = lastVideo ? {
       url: lastVideo.url,
       dataUrl: lastVideo.dataUrl,
@@ -3962,7 +4193,7 @@ var TraceBugModule = (() => {
     }
     return "suggests an unexpected runtime value \u2014 inspect inputs and data sources";
   }
-  var SESSION_STEPS_LIMIT, RC_LABEL_MAX, SEVERITY_EMOJI, SEVERITY_LABEL;
+  var VIDEO_SESSION_GRACE_MS, SESSION_STEPS_LIMIT, RC_LABEL_MAX, SEVERITY_EMOJI, SEVERITY_LABEL;
   var init_report_builder = __esm({
     "src/report-builder.ts"() {
       "use strict";
@@ -3978,6 +4209,7 @@ var TraceBugModule = (() => {
       init_repro_generator();
       init_collectors();
       init_action_chips();
+      VIDEO_SESSION_GRACE_MS = 1e4;
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
       SEVERITY_EMOJI = {
@@ -5191,20 +5423,19 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     commentEl.textContent = a.comment;
     popover.append(header, commentEl);
     root.appendChild(popover);
-    popover.querySelector('[data-action="close"]').addEventListener("click", () => popover.remove());
+    const closePopover = () => {
+      popover.remove();
+      document.removeEventListener("click", closeHandler);
+      document.removeEventListener("keydown", escHandler);
+    };
     const closeHandler = (ev) => {
-      if (!popover.contains(ev.target) && ev.target !== badge) {
-        popover.remove();
-        document.removeEventListener("click", closeHandler);
-      }
+      if (!popover.contains(ev.target) && ev.target !== badge) closePopover();
     };
-    setTimeout(() => document.addEventListener("click", closeHandler), 10);
     const escHandler = (ev) => {
-      if (ev.key === "Escape") {
-        popover.remove();
-        document.removeEventListener("keydown", escHandler);
-      }
+      if (ev.key === "Escape") closePopover();
     };
+    popover.querySelector('[data-action="close"]').addEventListener("click", closePopover);
+    setTimeout(() => document.addEventListener("click", closeHandler), 10);
     document.addEventListener("keydown", escHandler);
   }
   function _updateBannerCount() {
@@ -5662,7 +5893,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     canvas.addEventListener("mousemove", onMouseMove);
     canvas.addEventListener("mouseup", onMouseUp);
     document.addEventListener("keydown", onKeyDown, { capture: true });
-    const resizeObserver = new ResizeObserver(() => {
+    const onCanvasResize = () => {
       const newW = Math.min(document.documentElement.scrollWidth, MAX_CANVAS_DIM);
       const newH = Math.min(document.documentElement.scrollHeight, MAX_CANVAS_DIM);
       if (canvas.width !== newW || canvas.height !== newH) {
@@ -5672,8 +5903,14 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         canvas.style.height = newH + "px";
         _redrawAllRegions(ctx, newW, newH);
       }
-    });
-    resizeObserver.observe(document.body);
+    };
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(onCanvasResize);
+      resizeObserver.observe(document.body);
+    } else {
+      window.addEventListener("resize", onCanvasResize);
+    }
     _cleanup2 = () => {
       _active3 = false;
       if (rafId !== null) {
@@ -5684,7 +5921,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("keydown", onKeyDown, { capture: true });
-      resizeObserver.disconnect();
+      if (resizeObserver) resizeObserver.disconnect();
+      else window.removeEventListener("resize", onCanvasResize);
       canvas.remove();
       toolbar.remove();
       _onUpdate2 = null;
@@ -6200,6 +6438,11 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   function cropDataUrl(dataUrl, r) {
     return new Promise((resolve) => {
       const img = new Image();
+      const release = () => {
+        img.onload = null;
+        img.onerror = null;
+        img.src = "";
+      };
       img.onload = () => {
         const sx = img.naturalWidth / window.innerWidth;
         const sy = img.naturalHeight / window.innerHeight;
@@ -6208,13 +6451,19 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         c.height = Math.max(1, Math.round(r.h * sy));
         const ctx = c.getContext("2d");
         if (!ctx) {
+          release();
           resolve(dataUrl);
           return;
         }
         ctx.drawImage(img, r.x * sx, r.y * sy, r.w * sx, r.h * sy, 0, 0, c.width, c.height);
-        resolve(c.toDataURL("image/png", 0.9));
+        const out = c.toDataURL("image/png", 0.9);
+        release();
+        resolve(out);
       };
-      img.onerror = () => resolve(dataUrl);
+      img.onerror = () => {
+        release();
+        resolve(dataUrl);
+      };
       img.src = dataUrl;
     });
   }
@@ -6538,10 +6787,13 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       currentTs = next;
       renderHandle();
       if (options.videoEl) {
-        try {
-          const vidStart = options.videoEl.dataset.tbStartTs ? Number(options.videoEl.dataset.tbStartTs) : startedAt;
-          options.videoEl.currentTime = Math.max(0, (currentTs - vidStart) / 1e3);
-        } catch (e) {
+        const v = options.videoEl;
+        if (v.played.length > 0 || !v.paused) {
+          try {
+            const vidStart = v.dataset.tbStartTs ? Number(v.dataset.tbStartTs) : startedAt;
+            v.currentTime = Math.max(0, (currentTs - vidStart) / 1e3);
+          } catch (e) {
+          }
         }
       }
       (_a2 = options.onSeek) == null ? void 0 : _a2.call(options, currentTs, marker);
@@ -7322,6 +7574,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     <span class="tb-vh-logo">\u{1F41E}</span>
     <span class="tb-vh-title" id="title"></span>
     <span class="tb-vh-sev" id="sev"></span>
+    <span class="tb-vh-sev tb-vh-prio" id="prio" style="display:none"></span>
     <button class="tb-vh-toggle" id="compact-toggle" title="Toggle compact mode (F)" aria-label="Toggle compact mode">\u26F6</button>
     <button class="tb-vh-toggle" id="theme-toggle" title="Toggle theme (auto / light / dark)" aria-label="Toggle theme">\u{1F317}</button>
     <button class="tb-vh-toggle" id="help-toggle" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
@@ -7344,6 +7597,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     <div id="scrubber"></div>
     <div class="tb-vss-meta" id="ssmeta"></div>
     <div id="ss-gallery" class="tb-vss-gallery" style="display:none"></div>
+    <div id="desc-wrap" style="display:none">
+      <h2 class="tb-vh2">Description</h2>
+      <pre class="tb-vdesc" id="desc"></pre>
+    </div>
     <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
       <img id="hover-thumb-img" alt="" />
       <div id="hover-thumb-time"></div>
@@ -7359,9 +7616,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       <button data-tab="network" class="tb-vtab" role="tab">Network <span class="tb-vtab-badge" id="badge-network"></span></button>
       <button data-tab="actions" class="tb-vtab" role="tab">Actions <span class="tb-vtab-badge" id="badge-actions"></span></button>
       <button data-tab="ai" class="tb-vtab" role="tab">AI</button>
-      <button data-tab="notes" class="tb-vtab" role="tab">Notes <span class="tb-vtab-badge" id="badge-notes"></span></button>
       <button data-tab="events" class="tb-vtab" role="tab">Events <span class="tb-vtab-badge" id="badge-events"></span></button>
-      <button data-tab="desc" class="tb-vtab" role="tab">Description</button>
     </div>
     <div class="tb-vtabpanels">
       <div data-panel="info" class="tb-vpanel tb-vpanel-active" id="panel-info"></div>
@@ -7369,9 +7624,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       <div data-panel="network" class="tb-vpanel" id="panel-network" hidden></div>
       <div data-panel="actions" class="tb-vpanel" id="panel-actions" hidden></div>
       <div data-panel="ai" class="tb-vpanel" id="panel-ai" hidden></div>
-      <div data-panel="notes" class="tb-vpanel" id="panel-notes" hidden></div>
       <div data-panel="events" class="tb-vpanel" id="panel-events"><ol class="tb-vevents" id="events"></ol></div>
-      <div data-panel="desc" class="tb-vpanel" id="panel-desc" hidden><pre class="tb-vdesc" id="desc"></pre></div>
     </div>
   </section>
 </main>
@@ -7388,7 +7641,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     <div class="tb-vhelp-row"><kbd>0</kbd><span>Jump to start</span></div>
     <div class="tb-vhelp-row"><kbd>E</kbd><span>Jump to first error</span></div>
     <div class="tb-vhelp-row"><kbd>F</kbd><span>Toggle compact mode</span></div>
-    <div class="tb-vhelp-row"><kbd>1</kbd>\u2013<kbd>8</kbd><span>Switch tabs</span></div>
+    <div class="tb-vhelp-row"><kbd>1</kbd>\u2013<kbd>6</kbd><span>Switch tabs</span></div>
     <div class="tb-vhelp-row"><kbd>T</kbd><span>Cycle theme (light / dark / auto)</span></div>
     <div class="tb-vhelp-row"><kbd>?</kbd> <kbd>Esc</kbd><span>Toggle / close this overlay</span></div>
     <button class="tb-vhelp-close" id="help-close" aria-label="Close">Close</button>
@@ -7489,6 +7742,7 @@ body { min-height: 100vh; }
 .tb-vh-logo { font-size: 20px; }
 .tb-vh-title { font-size: 15px; font-weight: 600; flex: 1; word-break: break-word; letter-spacing: -0.01em; }
 .tb-vh-sev { font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
+.tb-vh-prio { background: var(--tb-bg-2); color: var(--tb-text-2); border: 1px solid var(--tb-border); }
 .tb-vh-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 6px; max-width: 1400px; margin-left: auto; margin-right: auto; font-weight: 500; }
 .tb-vh-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font-size: 14px; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
 .tb-vh-toggle:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
@@ -7800,6 +8054,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     sevEl.textContent = SEV[data.meta.severity] || data.meta.severity;
     sevEl.className = "tb-vh-sev tb-sev-" + data.meta.severity;
   }
+  // Tester-assigned priority \u2014 their triage call, distinct from auto severity.
+  if (data.meta.priority) {
+    var prioEl = document.getElementById("prio");
+    if (prioEl) {
+      prioEl.textContent = "\u{1F6A9} " + data.meta.priority + " priority";
+      prioEl.style.display = "";
+    }
+  }
   var metaParts = [
     "Session " + (data.meta.sessionId || "").slice(0, 8),
     "Page " + (data.meta.page || ""),
@@ -7808,9 +8070,12 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   ].filter(Boolean);
   metaEl.textContent = metaParts.join(" \xB7 ");
 
-  // \u2500\u2500 Summary box + Description tab \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // \u2500\u2500 Summary box + Description (below the replay, mirrors the ticket modal) \u2500\u2500
   document.getElementById("summary").textContent = data.meta.summary || "(no summary)";
-  document.getElementById("desc").textContent = data.description || "(no description)";
+  if (data.description) {
+    document.getElementById("desc").textContent = data.description;
+    document.getElementById("desc-wrap").style.display = "";
+  }
 
   // \u2500\u2500 Tabs: populate counts + content \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
@@ -8161,18 +8426,6 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   aiHtml += '<div class="tb-vai-card tb-vai-empty"><div class="tb-vai-head">LLM analysis</div><div class="tb-vai-body">Open this report in the TraceBug UI to run LLM-based root-cause analysis (BYO API key).</div></div>';
   document.getElementById("panel-ai").innerHTML = aiHtml;
 
-  // Notes tab
-  var notes = data.annotations || [];
-  setBadge("badge-notes", notes.length);
-  var notesHtml = notes.length === 0
-    ? '<div class="tb-vempty-tab">No tester notes</div>'
-    : notes.map(function(a){
-        var exp = a.expected ? '<div class="tb-vnote-line"><strong>Expected:</strong> ' + esc(a.expected) + '</div>' : '';
-        var act = a.actual ? '<div class="tb-vnote-line"><strong>Actual:</strong> ' + esc(a.actual) + '</div>' : '';
-        return '<div class="tb-vnote tb-vnote-' + esc(a.severity || "info") + '"><div class="tb-vnote-sev">' + esc(a.severity || "info") + '</div><div class="tb-vnote-text">' + esc(a.text || "") + '</div>' + exp + act + '</div>';
-      }).join("");
-  document.getElementById("panel-notes").innerHTML = notesHtml;
-
   setBadge("badge-events", (data.events || []).length);
 
   // Tab switching
@@ -8309,6 +8562,13 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       if (playOverlay) playOverlay.style.display = "none";
       if (autoplay) try { video.play(); } catch(e) {}
     }
+    // A fresh load always plays from 0:00 \u2014 snap the scrubber to the video's
+    // start so the readout and handle move WITH playback instead of visibly
+    // walking backward from wherever the event-init seek left them.
+    if (data.video && data.video.startedAt) {
+      current = Math.max(startedAt, Math.min(endedAt, data.video.startedAt));
+      renderHandle();
+    }
   }
   if (playOverlay) {
     playOverlay.addEventListener("click", function(){ loadVideo(true); });
@@ -8323,19 +8583,23 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   if (video) {
     video.addEventListener("timeupdate", function(){
       if (!data.video || !data.video.startedAt) return;
+      if (dragging) return; // user owns the handle mid-drag \u2014 don't fight them
       var ts = data.video.startedAt + video.currentTime * 1000;
       var prevTs = current;
       current = Math.max(startedAt, Math.min(endedAt, ts));
       renderHandle();
       _syncConsoleFeed(current);
-      // Auto-pause across any unvisited error markers in this tick.
+      // Auto-pause ONCE at the first unvisited error crossed, then mark every
+      // error visited. Pausing at each of N clustered markers made playback
+      // feel broken ("the video keeps stopping"); one stop tells the story,
+      // and "Jump to error" re-arms it for deliberate error-hopping.
       var em = data.events || [];
       for (var i = 0; i < em.length; i++) {
         if (!em[i].isError) continue;
         var et = em[i].timestamp;
         if (_visitedErrors[et]) continue;
         if (et >= prevTs && et <= current + 250) {
-          _visitedErrors[et] = true;
+          for (var k = 0; k < em.length; k++) { if (em[k].isError) _visitedErrors[em[k].timestamp] = true; }
           try { video.pause(); } catch(_e){}
           _flashErrorToast(em[i]);
           break;
@@ -8502,9 +8766,10 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   function scrubberSeek(ts) {
     current = Math.max(startedAt, Math.min(endedAt, ts));
     renderHandle();
-    // Manual seek \u2192 re-arm error auto-pause so the user can re-trigger
-    // by scrubbing back across an error.
-    _visitedErrors = {};
+    // NOTE: deliberately does NOT re-arm the error auto-pause. Every drag /
+    // track click used to reset it, so any mouse interaction mid-playback
+    // caused a surprise pause moments later. Re-arming now happens only on
+    // the explicit "Jump to error" and restart (0) actions.
     // Swap screenshot preview
     var ss = findClosest(screenshots, current);
     if (ss && img.style.display !== "none") {
@@ -8548,7 +8813,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (!isNaN(ts)) scrubberSeek(ts);
   });
   if (jumpEl) jumpEl.addEventListener("click", function() {
-    if (errorMarkers.length) scrubberSeek(errorMarkers[0].timestamp);
+    if (errorMarkers.length) { _visitedErrors = {}; scrubberSeek(errorMarkers[0].timestamp); }
   });
   // \u2500\u2500 Keyboard shortcuts \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   // Bound at document level, but skipped when the user is typing in an
@@ -8569,7 +8834,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (events[nextIdx]) scrubberSeek(events[nextIdx].timestamp);
   }
   function jumpToFirstError() {
-    if (errorMarkers.length) scrubberSeek(errorMarkers[0].timestamp);
+    if (errorMarkers.length) { _visitedErrors = {}; scrubberSeek(errorMarkers[0].timestamp); }
   }
   function togglePlayback() {
     if (!hasVideo) {
@@ -8589,7 +8854,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     var btn = document.querySelector('[data-tab="' + which + '"]');
     if (btn) btn.click();
   }
-  var TAB_KEYS = ["info","console","network","actions","ai","notes","events","desc"];
+  var TAB_KEYS = ["info","console","network","actions","ai","events"];
 
   document.addEventListener("keydown", function(e) {
     if (isTyping(e.target)) return;
@@ -8604,13 +8869,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     // for power users. Without a video, arrows still step events.
     if (e.key === "ArrowLeft") {
       e.preventDefault();
-      _visitedErrors = {};
       if (hasVideo) { nudgeVideo(-5); } else { jumpEvent(-1); }
       return;
     }
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      _visitedErrors = {};
       if (hasVideo) { nudgeVideo(5); } else { jumpEvent(1); }
       return;
     }
@@ -8798,7 +9061,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
       { k: "Session", v: session.sessionId.slice(0, 12), i: "\u{1F194}" },
       { k: "Severity", v: report.severity },
-      { k: "Priority", v: priorityLabel(report.priority), i: "\u{1F6A9}" }
+      // Tester-set only — the severity-derived fallback isn't their triage call.
+      ...session.priority ? [{ k: "Priority", v: priorityLabel(session.priority), i: "\u{1F6A9}" }] : []
     ];
     if (report.context) {
       for (const k of Object.keys(report.context)) {
@@ -8810,20 +9074,22 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       if (!entries || entries.length === 0) return;
       const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
       for (const e of shown) {
-        info.push({ k: `${label} \xB7 ${e.key}`, v: e.redacted ? `\u{1F512} ${e.value}` : e.value, i: "\u{1F5C4}" });
+        info.push({ k: `${label} \xB7 ${e.key}`, v: e.redacted ? `\u{1F512} ${e.value}` : e.value, i: "" });
       }
       const hiddenForDisplay = entries.length - shown.length;
       const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
-      if (totalHidden > 0) info.push({ k: `${label} \xB7 \u2026`, v: `+${totalHidden} more`, i: "\u{1F5C4}" });
+      if (totalHidden > 0) info.push({ k: `${label} \xB7 \u2026`, v: `+${totalHidden} more`, i: "" });
     }
     if (report.storage) {
       pushStorageRows("localStorage", report.storage.local, report.storage.localTruncated);
       pushStorageRows("sessionStorage", report.storage.session, report.storage.sessionTruncated);
+      pushStorageRows("Cookies", report.storage.cookies, report.storage.cookiesTruncated);
     }
     const payload = {
       meta: {
         title: report.title,
         severity: report.severity,
+        priority: session.priority ? priorityLabel(session.priority) : void 0,
         summary: report.summary || "",
         rootCause: ((_b = report.rootCause) == null ? void 0 : _b.hint) || "",
         page: ((_c = report.environment) == null ? void 0 : _c.url) || ((_d = report.session.events[0]) == null ? void 0 : _d.page) || "",
@@ -9526,6 +9792,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       } catch (e) {
       }
     }
+    if (report && isHistoricalSession) report.video = void 0;
     const severity = (_d = report == null ? void 0 : report.severity) != null ? _d : "low";
     const timeline = (_e = report == null ? void 0 : report.timeline) != null ? _e : [];
     _openModal(root, { title, description, screenshots: screenshots2, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession });
@@ -9593,7 +9860,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root, data) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -9628,20 +9895,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   `;
     const ssCount = screenshots2.length;
     const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
-    const _rawVideo = getLastVideoRecording();
-    const video = !data.suppressVideo && _rawVideo && data.currentSession && _rawVideo.startedAt >= (data.currentSession.createdAt || 0) ? _rawVideo : null;
-    const sevColors = {
-      critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
-      high: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
-      medium: { bg: "#713f12", fg: "#fde68a", border: "#ca8a04" },
-      low: { bg: "#14532d", fg: "#bbf7d0", border: "#16a34a" }
-    };
-    const sevC = sevColors[data.severity] || sevColors.low;
-    const sevLabel = severityBadge(data.severity);
-    const consoleCount = (_c = (_b = (_a = data.report) == null ? void 0 : _a.consoleErrors) == null ? void 0 : _b.length) != null ? _c : 0;
-    const networkCount = (_i = (_h = (_e = (_d = data.report) == null ? void 0 : _d.networkRequests) == null ? void 0 : _e.length) != null ? _h : (_g = (_f = data.report) == null ? void 0 : _f.networkErrors) == null ? void 0 : _g.length) != null ? _i : 0;
-    const actionsCount = (_l = (_k = (_j = data.report) == null ? void 0 : _j.sessionSteps) == null ? void 0 : _k.length) != null ? _l : 0;
-    const annotationsCount = ((_o = (_n = (_m = data.currentSession) == null ? void 0 : _m.annotations) == null ? void 0 : _n.length) != null ? _o : 0) + _getElementAnnotationCount();
+    const video = !data.suppressVideo ? getSessionVideo(data.currentSession) : null;
+    const userPriority = (_b = (_a = data.currentSession) == null ? void 0 : _a.priority) != null ? _b : null;
+    const consoleCount = (_e = (_d = (_c = data.report) == null ? void 0 : _c.consoleErrors) == null ? void 0 : _d.length) != null ? _e : 0;
+    const networkCount = (_k = (_j = (_g = (_f = data.report) == null ? void 0 : _f.networkRequests) == null ? void 0 : _g.length) != null ? _j : (_i = (_h = data.report) == null ? void 0 : _h.networkErrors) == null ? void 0 : _i.length) != null ? _k : 0;
+    const actionsCount = (_n = (_m = (_l = data.report) == null ? void 0 : _l.sessionSteps) == null ? void 0 : _m.length) != null ? _n : 0;
+    const annotationsCount = ((_q = (_p = (_o = data.currentSession) == null ? void 0 : _o.annotations) == null ? void 0 : _p.length) != null ? _q : 0) + _getElementAnnotationCount();
     modal.innerHTML = `
     <!-- Header -->
     <div class="tb-qb-header">
@@ -9650,12 +9909,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <div class="tb-qb-titletext">Bug Ticket \u2014 Review &amp; Export</div>
         <div class="tb-qb-sub">${ssCountLabel} \xB7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
-      <span class="tb-qb-sev" style="background:${sevC.bg};color:${sevC.fg};border:1px solid ${sevC.border}">${sevLabel}</span>
-      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority \u2014 your triage call (defaults from severity)">
-        ${["high", "medium", "low"].map((p) => {
-      var _a2;
-      return `<option value="${p}"${(((_a2 = data.report) == null ? void 0 : _a2.priority) || "low") === p ? " selected" : ""}>\u{1F6A9} ${priorityLabel(p)}</option>`;
-    }).join("")}
+      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority \u2014 your triage call">
+        <option value="" disabled hidden${userPriority ? "" : " selected"}>\u{1F6A9} Priority</option>
+        ${["high", "medium", "low"].map((p) => `<option value="${p}"${userPriority === p ? " selected" : ""}>\u{1F6A9} ${priorityLabel(p)}</option>`).join("")}
       </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
       <button data-action="help-toggle" class="tb-qb-theme-toggle" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
@@ -9673,7 +9929,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
 
         ${video ? `
           <div class="tb-qb-preview">
-            <video id="tb-qb-video" controls preload="metadata" src="${video.url || video.dataUrl}" class="tb-qb-video"></video>
+            <video id="tb-qb-video" controls preload="auto" playsinline src="${video.url || video.dataUrl}" class="tb-qb-video"></video>
             <button data-action="grab-frame" class="tb-qb-grab-frame" title="Pause the video on the moment you want, then click to save that exact frame as a screenshot you can annotate &amp; attach">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Grab frame
@@ -9746,7 +10002,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           </div>
         ` : ""}
 
-        <details class="tb-qb-desc-wrap">
+        <details class="tb-qb-desc-wrap" open>
           <summary class="tb-qb-desc-summary">Description \u2014 editable, included in exports</summary>
           <textarea id="tb-qb-desc" class="tb-qb-textarea">${escapeHtml2(data.description)}</textarea>
         </details>
@@ -9760,7 +10016,11 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <button data-tab="console" class="tb-qb-tab" role="tab">Console${consoleCount ? `<span class="tb-qb-tab-badge">${consoleCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
           <button data-tab="network" class="tb-qb-tab" role="tab">Network${networkCount ? `<span class="tb-qb-tab-badge">${networkCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
           <button data-tab="ai" class="tb-qb-tab" role="tab">AI</button>
-          <button data-tab="annotations" class="tb-qb-tab" role="tab">Notes${annotationsCount ? `<span class="tb-qb-tab-badge">${annotationsCount}</span>` : ""}</button>
+          ${/* NOTES-TAB: hidden for now — the annotations flow isn't wired into
+       this modal yet, so the tab was always empty. Restore the button
+       below (and its panel) when notes become actionable here. */
+    ""}
+          ${annotationsCount ? `<button data-tab="annotations" class="tb-qb-tab" role="tab">Notes<span class="tb-qb-tab-badge">${annotationsCount}</span></button>` : ""}
         </div>
         <div class="tb-qb-tabpanels">
           <div data-panel="info" class="tb-qb-panel tb-qb-panel-active">${_buildInfoTab(data.report, data.currentSession)}</div>
@@ -9768,7 +10028,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <div data-panel="network" class="tb-qb-panel" hidden>${_buildNetworkTab(data.report)}</div>
           <div data-panel="actions" class="tb-qb-panel" hidden>${_buildActionsTab(data.report)}</div>
           <div data-panel="ai" class="tb-qb-panel" hidden>${_buildAITab(data.report)}</div>
-          <div data-panel="annotations" class="tb-qb-panel" hidden>${_buildAnnotationsTab(data.currentSession)}</div>
+          ${annotationsCount ? `<div data-panel="annotations" class="tb-qb-panel" hidden>${_buildAnnotationsTab(data.currentSession)}</div>` : ""}
         </div>
       </div>
     </div>
@@ -9776,8 +10036,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     <!-- Footer: export actions -->
     <div class="tb-qb-footer">
       <div class="tb-qb-actions">
-        <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_p = data.currentSession) == null ? void 0 : _p.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
-          ${((_q = data.currentSession) == null ? void 0 : _q.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
+        <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_r = data.currentSession) == null ? void 0 : _r.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
+          ${((_s = data.currentSession) == null ? void 0 : _s.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
         <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -9821,6 +10081,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     overlay.appendChild(modal);
     root.appendChild(overlay);
     _injectStyles2();
+    const _prevFocus = document.activeElement;
     setTimeout(() => {
       const titleInput = modal.querySelector("#tb-qb-title");
       if (titleInput) titleInput.focus();
@@ -9893,21 +10154,31 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     });
     const close = () => {
       _isOpen = false;
+      try {
+        _scrubberCtl == null ? void 0 : _scrubberCtl.destroy();
+      } catch (e) {
+      }
+      _scrubberCtl = null;
+      clearTimeout(saveTimer);
       overlay.remove();
       document.removeEventListener("keydown", escHandler);
       const k = overlay.__tbModalKey;
       if (k) document.removeEventListener("keydown", k);
+      try {
+        if (_prevFocus && _prevFocus.isConnected) _prevFocus.focus();
+      } catch (e) {
+      }
     };
     modal.querySelector('[data-action="close"]').addEventListener("click", close);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) close();
     });
-    (_r = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _r.addEventListener("click", () => {
+    (_t = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _t.addEventListener("click", () => {
       _cycleTheme();
       const btn = modal.querySelector('[data-action="theme-toggle"]');
       if (btn) btn.innerHTML = _themeIcon();
     });
-    (_s = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _s.addEventListener("change", (e) => {
+    (_u = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _u.addEventListener("change", (e) => {
       var _a2, _b2;
       const val = e.target.value;
       const sid = (_a2 = data.currentSession) == null ? void 0 : _a2.sessionId;
@@ -9922,8 +10193,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const open = force !== void 0 ? force : helpEl.style.display === "none";
       helpEl.style.display = open ? "flex" : "none";
     };
-    (_t = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _t.addEventListener("click", () => toggleHelp());
-    (_u = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _u.addEventListener("click", () => toggleHelp(false));
+    (_v = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _v.addEventListener("click", () => toggleHelp());
+    (_w = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _w.addEventListener("click", () => toggleHelp(false));
     helpEl == null ? void 0 : helpEl.addEventListener("click", (e) => {
       if (e.target === helpEl) toggleHelp(false);
     });
@@ -10064,6 +10335,10 @@ ${description}`;
         var _a2;
         const sid = (_a2 = data.currentSession) == null ? void 0 : _a2.sessionId;
         if (!sid) return;
+        if (!data.suppressVideo && data.currentSession) {
+          const liveShots = getScreenshots();
+          if (liveShots.length > 0) data.currentSession.screenshots = liveShots.slice(0, 5);
+        }
         markSessionSaved(sid);
         saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
         saveTicketBtn.classList.add("tb-qb-btn-saved");
@@ -10087,7 +10362,7 @@ ${description}`;
         if (moreMenu.dataset.open === "true" && !moreMenu.contains(e.target) && e.target !== moreBtn) setMoreOpen(false);
       });
     }
-    (_v = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _v.addEventListener("click", async () => {
+    (_x = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _x.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root);
         return;
@@ -10099,7 +10374,15 @@ ${description}`;
         } catch (e) {
         }
         const report = buildReport(data.currentSession);
-        const result = await exportSessionAsHtml(data.currentSession, report);
+        if (data.suppressVideo) report.video = void 0;
+        const draft = getDraft();
+        if (draft.title.trim()) report.title = draft.title.trim();
+        const userDesc = draft.description.trim();
+        const result = await exportSessionAsHtml(data.currentSession, report, {
+          descriptionOverride: userDesc ? report.steps ? `${userDesc}
+
+${report.steps}` : userDesc : void 0
+        });
         const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 Replay exported \xB7 ${sizeMb} MB`, root);
       } catch (err) {
@@ -10107,7 +10390,7 @@ ${description}`;
         showToast("Replay export failed", root);
       }
     });
-    (_w = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _w.addEventListener("click", (e) => {
+    (_y = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _y.addEventListener("click", (e) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root);
         return;
@@ -10251,7 +10534,7 @@ ${r.steps}` });
       _clearDraft();
       setTimeout(close, 300);
     });
-    (_x = modal.querySelector('[data-action="ai-configure"]')) == null ? void 0 : _x.addEventListener("click", () => {
+    (_z = modal.querySelector('[data-action="ai-configure"]')) == null ? void 0 : _z.addEventListener("click", () => {
       showToast("AI configuration UI coming soon \u2014 set tracebug_ai_key in localStorage to enable", root);
     });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
@@ -10271,7 +10554,7 @@ ${r.steps}` });
         }
       });
     });
-    (_y = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _y.addEventListener("click", () => {
+    (_A = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _A.addEventListener("click", () => {
       var _a2, _b2;
       const ssId = (_b2 = (_a2 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a2.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s) => s.id === ssId) || screenshots2[0];
@@ -10302,7 +10585,7 @@ ${r.steps}` });
         });
       });
     });
-    (_z = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _z.addEventListener("click", async () => {
+    (_B = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _B.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -10324,7 +10607,7 @@ ${r.steps}` });
         showToast("Screenshot cancelled", root);
       }
     });
-    (_A = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _C.addEventListener("click", () => {
       const v = modal.querySelector("#tb-qb-video");
       if (!v) return;
       if (!v.paused) {
@@ -10367,6 +10650,63 @@ ${r.steps}` });
       }
     });
     const videoEl = modal.querySelector("#tb-qb-video");
+    if (videoEl && video) {
+      const expectedS = (video.durationMs || 0) / 1e3;
+      let _painted = false;
+      const paintFirstFrame = () => {
+        if (_painted) return;
+        _painted = true;
+        try {
+          videoEl.currentTime = 0.05;
+        } catch (e) {
+        }
+      };
+      const handleMeta = () => {
+        const d = videoEl.duration;
+        const broken = d === Infinity || Number.isNaN(d) || expectedS > 1 && d < expectedS - 1.5;
+        if (!broken) {
+          paintFirstFrame();
+          return;
+        }
+        const snapBack = () => {
+          videoEl.removeEventListener("seeked", snapBack);
+          _painted = true;
+          try {
+            videoEl.currentTime = 0.05;
+          } catch (e) {
+          }
+        };
+        videoEl.addEventListener("seeked", snapBack);
+        try {
+          videoEl.currentTime = 1e7;
+        } catch (e) {
+          videoEl.removeEventListener("seeked", snapBack);
+          paintFirstFrame();
+        }
+      };
+      if (videoEl.readyState >= 1) handleMeta();
+      else videoEl.addEventListener("loadedmetadata", handleMeta, { once: true });
+      if (videoEl.readyState >= 2) paintFirstFrame();
+      else videoEl.addEventListener("loadeddata", paintFirstFrame, { once: true });
+      const preview = videoEl.closest(".tb-qb-preview");
+      let _blockedShown = false;
+      const showBlockedNotice = () => {
+        if (_blockedShown || !preview) return;
+        _blockedShown = true;
+        preview.style.background = "var(--tb-bg-secondary)";
+        preview.innerHTML = `
+        <div style="padding:26px 18px;text-align:center;color:var(--tb-text-secondary,#9aa0aa);font-size:12px;line-height:1.65">
+          <div style="font-size:24px;margin-bottom:8px">\u{1F3AC}</div>
+          <div style="color:var(--tb-text-primary,#e0e0e0);font-weight:600;margin-bottom:6px">Inline preview blocked by this page</div>
+          This site's security policy (CSP) blocks embedded video. Your ${_formatVideoTime(video.durationMs)} recording is fine \u2014
+          use <strong>Download .webm</strong> below or <strong>Export .html</strong> to watch it.
+        </div>`;
+      };
+      videoEl.addEventListener("error", showBlockedNotice);
+      setTimeout(() => {
+        if (!_blockedShown && videoEl.readyState === 0) showBlockedNotice();
+      }, 2500);
+    }
     const videoDownloadBtn = modal.querySelector('[data-action="download-video"]');
     if (videoDownloadBtn && video) {
       videoDownloadBtn.addEventListener("click", () => {
@@ -10476,6 +10816,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   }
   function _kvRow(label, value, icon) {
+    if (!value || !value.trim()) return "";
     const iconHtml = icon ? `<span class="tb-qb-kv-icon">${icon}</span>` : "";
     return `<div class="tb-qb-kv"><span class="tb-qb-kv-k">${escapeHtml2(label)}</span><span class="tb-qb-kv-v">${iconHtml}${escapeHtml2(value)}</span></div>`;
   }
@@ -10513,6 +10854,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     return "\u{1F310}";
   }
   function _buildInfoTab(report, session) {
+    var _a, _b, _c;
     const env = (report == null ? void 0 : report.environment) || (session == null ? void 0 : session.environment) || captureEnvironment();
     const ctx = (report == null ? void 0 : report.context) || {};
     const sevLabel = severityBadge((report == null ? void 0 : report.severity) || "low");
@@ -10529,7 +10871,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
     rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), "\u{1F194}"));
     rows.push(_kvRow("Severity", sevLabel));
-    if (report == null ? void 0 : report.priority) rows.push(_kvRow("Priority", priorityLabel(report.priority), "\u{1F6A9}"));
+    if (session == null ? void 0 : session.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), "\u{1F6A9}"));
     const ctxKeys = Object.keys(ctx);
     if (ctxKeys.length > 0) {
       rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
@@ -10544,14 +10886,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
         const shown = entries.slice(0, 20);
         for (const e of shown) {
-          rows.push(_kvRow(e.key, e.redacted ? `\u{1F512} ${e.value}` : e.value, "\u{1F5C4}"));
+          rows.push(_kvRow(e.key, e.redacted ? `\u{1F512} ${e.value}` : e.value));
         }
         if (entries.length > shown.length) {
-          rows.push(_kvRow("\u2026", `+${entries.length - shown.length} more`, "\u{1F5C4}"));
+          rows.push(_kvRow("\u2026", `+${entries.length - shown.length} more`));
         }
       };
       renderArea("localStorage", storage.local, storage.localTruncated);
       renderArea("sessionStorage", storage.session, storage.sessionTruncated);
+      renderArea("Cookies", storage.cookies, storage.cookiesTruncated);
+      const total = (((_a = storage.local) == null ? void 0 : _a.length) || 0) + (((_b = storage.session) == null ? void 0 : _b.length) || 0) + (((_c = storage.cookies) == null ? void 0 : _c.length) || 0);
+      if (total === 0) {
+        rows.push(`<div class="tb-qb-sec-head">Web storage \u2014 empty on this page</div>`);
+      }
     }
     return `<div class="tb-qb-info">${rows.join("")}</div>`;
   }
@@ -10707,7 +11054,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }).join("");
     return `
     <div class="tb-qb-feed-toolbar">
-      <input id="tb-qb-con-search" type="search" placeholder="Filter" class="tb-qb-net-search" />
+      <input id="tb-qb-con-search" type="search" placeholder="Filter" aria-label="Filter console feed" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-con-errors-only" type="checkbox" /> Errors only</label>
     </div>
     <div class="tb-qb-feed-pills">
@@ -10799,7 +11146,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }).join("");
     return `
     <div class="tb-qb-net-toolbar">
-      <input id="tb-qb-net-search" type="search" placeholder="Filter requests" class="tb-qb-net-search" />
+      <input id="tb-qb-net-search" type="search" placeholder="Filter requests" aria-label="Filter network requests" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-net-errors-only" type="checkbox" /> Errors only</label>
     </div>
     <div class="tb-qb-net-pills">
@@ -10945,6 +11292,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     style.textContent = `
     @keyframes tracebug-qb-fade-in { from { opacity: 0; } to { opacity: 1; } }
     @keyframes tracebug-qb-slide-up { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    /* Honor reduced-motion: disable the entrance + spinner animations (WCAG 2.3.3). */
+    @media (prefers-reduced-motion: reduce) {
+      #${MODAL_ID2}, #${MODAL_ID2} * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
 
     /* \u2500\u2500 Modal shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
     #${MODAL_ID2} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
@@ -11221,7 +11572,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID2} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
     /* "Fix with AI" \u2014 the highlight action. Gradient accent so it stands out. */
     #${MODAL_ID2} .tb-qb-btn-ai { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(124,92,255,0.35); }
-    #${MODAL_ID2} .tb-qb-btn-ai:hover { filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
+    /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
+       specificity, matches on hover) would otherwise repaint the background with
+       --tb-bg-elevated \u2014 white-on-white text in the light theme. */
+    #${MODAL_ID2} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
     /* Save Ticket \u2014 prominent green CTA */
     #${MODAL_ID2} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
     #${MODAL_ID2} .tb-qb-btn-save:hover { background:#15803d; border-color:transparent; transform:translateY(-1px); }
@@ -11781,13 +12135,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (!_checkLimit()) return;
         showToast3("Capturing\u2026", root);
         try {
-          try {
-            _onNewCapture == null ? void 0 : _onNewCapture();
-          } catch (e) {
+          if (!_isTracking) {
+            try {
+              _onNewCapture == null ? void 0 : _onNewCapture();
+            } catch (e) {
+            }
           }
           await captureScreenshot(null);
-          showToast3("\u2713 Screenshot captured \u2014 review your ticket", root);
-          await _openOrRefreshTicket(root);
+          if (_isTracking) {
+            showToast3("\u2713 Screenshot added to tracked session", root);
+          } else {
+            showToast3("\u2713 Screenshot captured \u2014 review your ticket", root);
+            await _openOrRefreshTicket(root);
+          }
         } catch (e) {
           showToast3("Screenshot failed", root);
         }
@@ -11800,17 +12160,23 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       async () => {
         if (!_checkLimit()) return;
         try {
-          try {
-            _onNewCapture == null ? void 0 : _onNewCapture();
-          } catch (e) {
+          if (!_isTracking) {
+            try {
+              _onNewCapture == null ? void 0 : _onNewCapture();
+            } catch (e) {
+            }
           }
           const ss = await captureRegionScreenshot();
           if (!ss) {
             showToast3("Cancelled", root);
             return;
           }
-          showToast3("\u2713 Region captured \u2014 review your ticket", root);
-          await _openOrRefreshTicket(root);
+          if (_isTracking) {
+            showToast3("\u2713 Region added to tracked session", root);
+          } else {
+            showToast3("\u2713 Region captured \u2014 review your ticket", root);
+            await _openOrRefreshTicket(root);
+          }
         } catch (e) {
           showToast3("Region screenshot failed", root);
         }
@@ -11830,6 +12196,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       recordBtn.title = "Screen recording not supported in this browser";
     }
     toolbar.appendChild(recordBtn);
+    const trackBtn = _createToolbarBtn(
+      "Track session (events only, no video)",
+      _trackIconSvg(false),
+      () => {
+        _toggleSessionTracking(root, trackBtn, showToast3).catch(() => {
+        });
+      },
+      "tracebug-toolbar-track-btn"
+    );
+    _trackBtn = trackBtn;
+    toolbar.appendChild(trackBtn);
     toolbar.appendChild(_divider());
     toolbar.appendChild(_createToolbarBtn(
       "View saved tickets",
@@ -11901,6 +12278,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const settingsCard = document.getElementById(SETTINGS_ID);
       settingsCard == null ? void 0 : settingsCard.remove();
       _toolbar = null;
+      _isTracking = false;
+      _trackBtn = null;
     };
   }
   function _createToolbarBtn(title, iconHtml, onClick, id) {
@@ -11936,6 +12315,57 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     d.dataset.tracebug = "toolbar-divider";
     d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
     return d;
+  }
+  function _trackIconSvg(active) {
+    if (active) {
+      return `<svg width="16" height="16" viewBox="0 0 24 24" fill="var(--tb-success, #22c55e)" stroke="var(--tb-success, #22c55e)" stroke-width="1.5" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+    }
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`;
+  }
+  function _resetTrackingState() {
+    if (!_isTracking) return;
+    _isTracking = false;
+    if (_trackBtn) {
+      _trackBtn.innerHTML = _trackIconSvg(false);
+      _trackBtn.classList.remove("tb-active");
+      _trackBtn.style.color = "var(--tb-btn-text, #aaa)";
+      _trackBtn.title = "Track session (events only, no video)";
+    }
+  }
+  async function _toggleSessionTracking(root, btn, showToast3) {
+    if (_isTracking) {
+      _isTracking = false;
+      btn.innerHTML = _trackIconSvg(false);
+      btn.classList.remove("tb-active");
+      btn.style.color = "var(--tb-btn-text, #aaa)";
+      btn.title = "Track session (events only, no video)";
+      try {
+        _onSessionEnd == null ? void 0 : _onSessionEnd();
+      } catch (err) {
+        console.warn("[TraceBug] Session end hook failed:", err);
+      }
+      try {
+        if (!isQuickBugOpen()) await showQuickBugCapture(root);
+      } catch (err) {
+        console.warn("[TraceBug] Failed to open ticket after session tracking:", err);
+      }
+      return;
+    }
+    if (isVideoRecording()) {
+      showToast3("Recording already tracks the session \u2014 hit Stop to file its ticket", root);
+      return;
+    }
+    _isTracking = true;
+    try {
+      _onSessionStart == null ? void 0 : _onSessionStart();
+    } catch (err) {
+      console.warn("[TraceBug] Session start hook failed:", err);
+    }
+    btn.innerHTML = _trackIconSvg(true);
+    btn.classList.add("tb-active");
+    btn.style.color = "var(--tb-success, #22c55e)";
+    btn.title = "Stop tracking & file ticket";
+    showToast3("Tracking session \u2014 click \u25A0 again to stop & file a ticket", root);
   }
   function _recordIconSvg(active) {
     if (active) {
@@ -11975,6 +12405,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     const choice = await _showRecordPreflight(root, btn);
     if (!choice) return;
+    _resetTrackingState();
+    try {
+      _onSessionStart == null ? void 0 : _onSessionStart();
+    } catch (err) {
+      console.warn("[TraceBug] Session start hook failed:", err);
+    }
     const ok = await startVideoRecording({
       mode: "rolling",
       surfaceMode: choice.surface,
@@ -11987,13 +12423,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (!ok) {
       await new Promise((r) => setTimeout(r, 400));
       if (isVideoRecording()) return;
+      try {
+        _onSessionEnd == null ? void 0 : _onSessionEnd();
+      } catch (e) {
+      }
       showToast3("Recording cancelled", root);
       return;
-    }
-    try {
-      _onSessionStart == null ? void 0 : _onSessionStart();
-    } catch (err) {
-      console.warn("[TraceBug] Session start hook failed:", err);
     }
     btn.innerHTML = _recordIconSvg(true);
     btn.classList.add("tb-active");
@@ -12415,7 +12850,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _panelEl.style.right = _panelOpen ? "0" : "-480px";
     }
   }
-  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _isRecording, _onToggleRecording, _onSessionStart, _onSessionEnd, _onNewCapture, _renderPanel, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded;
+  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _isRecording, _onToggleRecording, _onSessionStart, _onSessionEnd, _onNewCapture, _renderPanel, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
   var init_compact_toolbar = __esm({
     "src/compact-toolbar.ts"() {
       "use strict";
@@ -12449,6 +12884,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _position = "right";
       _isMobile = false;
       _fabExpanded = false;
+      _isTracking = false;
+      _trackBtn = null;
     }
   });
 
@@ -49174,166 +49611,7 @@ First element: \`${exampleSnippet}\``,
 
   // src/exporters/share-link.ts
   init_html_replay();
-
-  // src/sanitize/cloud-upload.ts
-  var REDACTED = "[REDACTED]";
-  var TOKEN_PATTERNS = [
-    // Bearer <token> in headers, console output, anywhere
-    { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED },
-    // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
-    { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
-    // OpenAI / Stripe sk_*
-    { name: "sk_prefix", re: /\bsk-[A-Za-z0-9_-]{20,}\b/g, replace: mask },
-    // Stripe secret + publishable (live/test, secret + publishable + restricted)
-    { name: "stripe", re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g, replace: mask },
-    // GitHub PATs (classic + fine-grained + OAuth + server tokens)
-    { name: "github_pat", re: /\bghp_[A-Za-z0-9]{30,}\b/g, replace: mask },
-    { name: "github_fine", re: /\bgithub_pat_[A-Za-z0-9_]{60,}\b/g, replace: mask },
-    { name: "github_oauth", re: /\bgho_[A-Za-z0-9]{30,}\b/g, replace: mask },
-    { name: "github_server", re: /\bghs_[A-Za-z0-9]{30,}\b/g, replace: mask },
-    // AWS access keys (begins with AKIA, ASIA, AGPA, AIDA, etc.) + secret key (40-char base64)
-    { name: "aws_access", re: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[A-Z0-9]{16}\b/g, replace: mask },
-    { name: "aws_secret", re: /\b(?:aws.{0,20})?[A-Za-z0-9/+]{40}\b(?=.*aws|.*secret|.*key)/gi, replace: mask },
-    // Slack — broader than before (xoxa-z covers all known prefixes)
-    { name: "slack", re: /\bxox[abeprs]-[A-Za-z0-9-]{10,}\b/g, replace: mask },
-    // Google API keys
-    { name: "google_api", re: /\bAIza[A-Za-z0-9_-]{35}\b/g, replace: mask },
-    // Twilio — Account SID + Auth tokens
-    { name: "twilio_sid", re: /\b(?:AC|SK)[a-f0-9]{32}\b/g, replace: mask },
-    // SendGrid
-    { name: "sendgrid", re: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g, replace: mask },
-    // Mailgun
-    { name: "mailgun", re: /\bkey-[a-f0-9]{32}\b/g, replace: mask },
-    // Postmark
-    { name: "postmark", re: /\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b(?=.{0,30}(postmark|server-token|api-token))/gi, replace: mask },
-    // Linear / Vercel / Cloudflare / Discord
-    { name: "linear", re: /\blin_api_[A-Za-z0-9]{40,}\b/g, replace: mask },
-    { name: "discord_bot", re: /\b[MN][A-Za-z\d]{23}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}\b/g, replace: mask },
-    // Generic high-entropy hex (≥32 chars). Catches webhook signing secrets,
-    // session IDs, etc. that don't carry a recognizable prefix. Conservative:
-    // only triggers when preceded by a common secret-y keyword to avoid
-    // mangling legitimate hex like git SHAs.
-    { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s) => s.replace(/[a-fA-F0-9]{32,}/, REDACTED) }
-  ];
-  function mask(s) {
-    if (s.length <= 12) return REDACTED;
-    return `${s.slice(0, 4)}\u2026${REDACTED}\u2026${s.slice(-4)}`;
-  }
-  var SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
-    "token",
-    "access_token",
-    "id_token",
-    "refresh_token",
-    "api_key",
-    "apikey",
-    "secret",
-    "password",
-    "passwd",
-    "pwd",
-    "auth",
-    "authorization",
-    "x-api-key",
-    "session",
-    "sid",
-    "csrf"
-  ]);
-  function sanitizeUrl2(url) {
-    if (typeof url !== "string" || url.length === 0) return url;
-    try {
-      const isAbs = /^[a-z][a-z0-9+.-]*:/i.test(url);
-      const u = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
-      let changed = false;
-      u.searchParams.forEach((_v, k) => {
-        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) {
-          u.searchParams.set(k, REDACTED);
-          changed = true;
-        }
-      });
-      if (!changed) return sanitizeText(url);
-      const out = isAbs ? u.toString() : u.pathname + u.search + u.hash;
-      return sanitizeText(out);
-    } catch (e) {
-      return sanitizeText(url);
-    }
-  }
-  function sanitizeText(s) {
-    if (s == null) return s;
-    let out = String(s);
-    for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
-    return out;
-  }
-  function sanitizeReportForUpload(report) {
-    var _a;
-    const out = structuredClone(report);
-    if (out.consoleErrors) {
-      out.consoleErrors = out.consoleErrors.map((e) => {
-        var _a2;
-        return {
-          ...e,
-          message: sanitizeText(e.message),
-          stack: sanitizeText((_a2 = e.stack) != null ? _a2 : void 0)
-        };
-      });
-    }
-    if (out.consoleLogs) {
-      out.consoleLogs = out.consoleLogs.map((e) => {
-        var _a2;
-        return {
-          ...e,
-          message: sanitizeText(e.message),
-          stack: sanitizeText((_a2 = e.stack) != null ? _a2 : void 0)
-        };
-      });
-    }
-    if (out.networkErrors) {
-      out.networkErrors = out.networkErrors.map((e) => {
-        var _a2;
-        return {
-          ...e,
-          url: sanitizeUrl2(e.url),
-          response: sanitizeText((_a2 = e.response) != null ? _a2 : void 0)
-        };
-      });
-    }
-    if (out.networkRequests) {
-      out.networkRequests = out.networkRequests.map((e) => {
-        var _a2;
-        return {
-          ...e,
-          url: sanitizeUrl2(e.url),
-          response: sanitizeText((_a2 = e.response) != null ? _a2 : void 0)
-        };
-      });
-    }
-    if (out.steps) out.steps = sanitizeText(out.steps);
-    if (out.summary) out.summary = sanitizeText(out.summary);
-    if (out.title) out.title = sanitizeText(out.title);
-    if (Array.isArray(out.sessionSteps)) out.sessionSteps = out.sessionSteps.map((s) => sanitizeText(s));
-    if (out.actionChips) {
-      out.actionChips = out.actionChips.map((c) => {
-        var _a2, _b;
-        return {
-          ...c,
-          target: sanitizeText((_a2 = c.target) != null ? _a2 : void 0),
-          detail: sanitizeText((_b = c.detail) != null ? _b : void 0)
-        };
-      });
-    }
-    if (out.storage) {
-      const scrub = (entries) => entries.map((e) => ({ ...e, value: sanitizeText(e.value) }));
-      out.storage.local = scrub(out.storage.local || []);
-      out.storage.session = scrub(out.storage.session || []);
-    }
-    if ((_a = out.environment) == null ? void 0 : _a.url) out.environment.url = sanitizeUrl2(out.environment.url);
-    if (out.context && typeof out.context === "object") {
-      const ctx = {};
-      for (const [k, v] of Object.entries(out.context)) {
-        ctx[k] = typeof v === "string" ? sanitizeText(v) : v;
-      }
-      out.context = ctx;
-    }
-    return out;
-  }
+  init_cloud_upload();
 
   // src/auth/iframe-bridge.ts
   init_cloud_endpoint();
@@ -49705,7 +49983,8 @@ First element: \`${exampleSnippet}\``,
       videoDurationS: includeVideo && safe.video ? Math.round(safe.video.durationMs / 1e3) : void 0,
       screenshotCount: (_e = (_d = safe.screenshots) == null ? void 0 : _d.length) != null ? _e : 0,
       thumbnail: thumbnail != null ? thumbnail : void 0,
-      priority: safe.priority
+      // Tester-set only — don't upload the severity-derived fallback.
+      priority: session.priority
     });
     await bridge.uploadBlob(init.storageKey, init.uploadToken, blob, "text/html");
     const complete = await bridge.uploadComplete(init.id);
@@ -49974,11 +50253,12 @@ First element: \`${exampleSnippet}\``,
         wireStartedListener();
         setStartedHandler(() => this._handleRecordingStarted());
         if (this.config.enableDashboard) {
+          const restoredSessionId = this.sessionId;
           restoreFromOffscreenIfActive().then((wasActive) => {
             if (wasActive) {
               this._remountRecordingHud();
               this._attachConsoleCollectors();
-            } else if (this.sessionId) {
+            } else if (restoredSessionId && this.sessionId === restoredSessionId) {
               clearActiveSessionId();
               this.sessionId = null;
               this.recording = false;
@@ -50008,18 +50288,9 @@ First element: \`${exampleSnippet}\``,
      * it survives page reloads, and writes the initial environment + user
      * snapshot. Idempotent — a no-op if a session is already active.
      */
-    _startActiveSession() {
+    _startActiveSession(opts) {
       if (this.sessionId) {
         try {
-          const shots = getScreenshots();
-          if (shots.length > 0) {
-            const outSessions = getCachedSessions();
-            const outSession = outSessions.find((s) => s.sessionId === this.sessionId);
-            if (outSession) {
-              outSession.screenshots = shots.slice(0, 5);
-              scheduleFlush();
-            }
-          }
           this._endActiveSession();
           try {
             const _tbModal = document.getElementById("tracebug-quick-bug-modal");
@@ -50065,7 +50336,7 @@ First element: \`${exampleSnippet}\``,
           scheduleFlush();
         }
       }
-      clearScreenshots();
+      if (!(opts == null ? void 0 : opts.keepScreenshots)) clearScreenshots();
       this._attachConsoleCollectors();
       if (this._emit) drainPerformanceNetwork(this._emit);
       try {
@@ -50102,6 +50373,14 @@ First element: \`${exampleSnippet}\``,
         return null;
       }
       const id = this.sessionId;
+      try {
+        const shots = getScreenshots();
+        if (shots.length > 0) {
+          const sess = getCachedSessions().find((s) => s.sessionId === id);
+          if (sess) sess.screenshots = shots.slice(0, 5);
+        }
+      } catch (e) {
+      }
       flushPendingEvents();
       clearActiveSessionId();
       this.sessionId = null;
@@ -50226,7 +50505,7 @@ First element: \`${exampleSnippet}\``,
         console.warn("[TraceBug] quickCapture requires the dashboard to be mounted.");
         return;
       }
-      if (!this.sessionId) this._startActiveSession();
+      if (!this.sessionId) this._startActiveSession({ keepScreenshots: true });
       const { showQuickBugCapture: showQuickBugCapture2 } = await Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports));
       return showQuickBugCapture2(root);
     }
@@ -50984,6 +51263,10 @@ First element: \`${exampleSnippet}\``,
      * Tear down the SDK — removes all listeners and the dashboard.
      */
     destroy() {
+      try {
+        this._endActiveSession();
+      } catch (e) {
+      }
       flushPendingEvents();
       this._detachConsoleCollectors();
       this.cleanups.forEach((fn) => fn());

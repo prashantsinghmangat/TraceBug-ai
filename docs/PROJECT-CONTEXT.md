@@ -2,6 +2,8 @@
 
 > Single source of truth for any agent or contributor picking up this project cold.
 > **Last updated:** 2026-05-18 (after cloud-sharing portal milestone)
+>
+> ⚠️ **2026-07-02 update:** the cloud-sharing UI described in §2 is **built but disabled** for the Phase 1 offline release (`PHASE2-CLOUD` markers in `src/ui/quick-bug.ts` and the extension popup). For the current verified state, the Phase 1 / Phase 2 split, launch blockers, and the July 2026 hardening pass, read **[PROJECT-STATUS.md](PROJECT-STATUS.md)** first.
 
 ---
 

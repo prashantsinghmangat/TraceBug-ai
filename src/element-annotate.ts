@@ -375,22 +375,23 @@ function _showBadgePopover(a: ElementAnnotation, badge: HTMLElement, root: HTMLE
 
   root.appendChild(popover);
 
-  // Close button
-  popover.querySelector('[data-action="close"]')!.addEventListener("click", () => popover.remove());
-
-  // Close on click outside
+  // Single teardown for every close path. Previously each path (Close button,
+  // click-outside, Escape) removed the popover but only its OWN document
+  // listener, so closing one way left the others' listeners on `document`.
+  const closePopover = () => {
+    popover.remove();
+    document.removeEventListener("click", closeHandler);
+    document.removeEventListener("keydown", escHandler);
+  };
   const closeHandler = (ev: MouseEvent) => {
-    if (!popover.contains(ev.target as Node) && ev.target !== badge) {
-      popover.remove();
-      document.removeEventListener("click", closeHandler);
-    }
+    if (!popover.contains(ev.target as Node) && ev.target !== badge) closePopover();
   };
-  setTimeout(() => document.addEventListener("click", closeHandler), 10);
-
-  // Close on Escape
   const escHandler = (ev: KeyboardEvent) => {
-    if (ev.key === "Escape") { popover.remove(); document.removeEventListener("keydown", escHandler); }
+    if (ev.key === "Escape") closePopover();
   };
+
+  popover.querySelector('[data-action="close"]')!.addEventListener("click", closePopover);
+  setTimeout(() => document.addEventListener("click", closeHandler), 10);
   document.addEventListener("keydown", escHandler);
 }
 

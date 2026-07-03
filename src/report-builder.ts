@@ -17,7 +17,7 @@ import { captureEnvironment } from "./environment";
 import { captureStorageSnapshot } from "./storage-capture";
 import { getScreenshots } from "./screenshot";
 import { getVoiceTranscripts } from "./voice-recorder";
-import { getLastVideoRecording } from "./video-recorder";
+import { getLastVideoRecording, type VideoRecording } from "./video-recorder";
 import { getCurrentContext } from "./dev-api";
 import { matchErrorPattern, formatPatternMatch } from "./patterns";
 import { generateBugTitle } from "./title-generator";
@@ -25,6 +25,22 @@ import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
 import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
+
+// getLastVideoRecording() is a global "most recent recording" — it says
+// nothing about WHICH session it was recorded in. A recording belongs to a
+// session only if it started after the session was created; otherwise a stale
+// video from an earlier recording would be bundled into a later ticket's
+// export. Grace window: on the extension transport the offscreen document
+// stamps startedAt the moment capture begins, slightly before the page can
+// arm the session, so a strict >= would reject the session's own video.
+const VIDEO_SESSION_GRACE_MS = 10_000;
+
+export function getSessionVideo(session: StoredSession | null | undefined): VideoRecording | null {
+  if (!session) return null;
+  const v = getLastVideoRecording();
+  if (!v) return null;
+  return v.startedAt >= (session.createdAt || 0) - VIDEO_SESSION_GRACE_MS ? v : null;
+}
 
 export function buildReport(
   session: StoredSession,
@@ -39,7 +55,7 @@ export function buildReport(
   // "194:44" instead of the real ~28s. captureTs = latest of video start +
   // screenshot timestamps; falls back to the newest event when there's no media.
   const _ssForAnchor = [...getScreenshots(), ...(extraScreenshots || [])];
-  const _vidForAnchor = getLastVideoRecording();
+  const _vidForAnchor = getSessionVideo(session);
   const captureTs = Math.max(
     _vidForAnchor?.startedAt ?? 0,
     ..._ssForAnchor.map((s) => s.timestamp),
@@ -154,8 +170,8 @@ export function buildReport(
   // Voice transcripts from memory
   const voiceTranscripts = getVoiceTranscripts();
 
-  // Most recent screen recording, if QA captured one this session.
-  const lastVideo = getLastVideoRecording();
+  // Most recent screen recording — only if it belongs to THIS session.
+  const lastVideo = getSessionVideo(session);
   const video = lastVideo ? {
     url: lastVideo.url,
     dataUrl: lastVideo.dataUrl, // raw base64 — exports use this directly

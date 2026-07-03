@@ -36,7 +36,7 @@ Every report opens with:
 
 No accounts. No SaaS lock-in. Data stays in your browser by default.
 
-**Optional cloud sharing** (new in v1.4): if you'd rather share a URL than a file, sign in once and get a `tracebug.netlify.app/share/<id>` link with the same content. Free, 5 video + 10 screenshot shares per account.
+**Optional cloud sharing** (coming in a future release — not in v1.3): if you'd rather share a URL than a file, sign in once and get a `tracebug.netlify.app/share/<id>` link with the same content. The code ships behind a feature flag today; the Share button is disabled until the portal launches. Local .html export is the supported sharing path in v1.3.
 
 **Works with any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, SvelteKit, Remix, Astro, or plain HTML.
 

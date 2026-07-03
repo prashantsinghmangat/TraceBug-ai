@@ -10,7 +10,7 @@ import { showUpgradeModal } from "./upgrade-modal";
 import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved } from "../storage";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
-import { buildReport, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
+/*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
 import { generateBugTitle, generateFlowSummary } from "../title-generator";
@@ -172,6 +172,11 @@ export async function showQuickBugCapture(
   if (currentSession) {
     try { report = buildReport(currentSession); } catch {}
   }
+  // Historical session: the global last-recording is a NEWER session's video.
+  // buildReport's time gate can't catch that direction (newer video passes the
+  // "started after session created" check), so strip it here — this report
+  // feeds the tabs, AI prompt, and exports for this ticket.
+  if (report && isHistoricalSession) report.video = undefined;
   const severity: import("../types").BugSeverity = report?.severity ?? "low";
   const timeline: import("../types").TimelineEntry[] = report?.timeline ?? [];
 
@@ -306,23 +311,20 @@ function _openModal(
   const ssCount = screenshots.length;
   const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
 
-  // Optional screen recording — only show if it was recorded after this session
-  // started. Also suppressed for historical sessions (data.suppressVideo) since
-  // _rawVideo is always the LAST recording and would bleed into older tickets.
-  const _rawVideo = getLastVideoRecording();
-  const video = !data.suppressVideo && _rawVideo && data.currentSession && _rawVideo.startedAt >= (data.currentSession.createdAt || 0)
-    ? _rawVideo
-    : null;
+  // Optional screen recording — only show if it belongs to this session
+  // (getSessionVideo gates by startedAt vs session.createdAt, same rule the
+  // exporters use via buildReport). Also suppressed for historical sessions
+  // (data.suppressVideo) since the last recording is global and would bleed
+  // into older tickets.
+  const video = !data.suppressVideo ? getSessionVideo(data.currentSession) : null;
 
   // Severity badge \u2014 colors match SEVERITY_COLORS in issues-panel.
-  const sevColors: Record<string, { bg: string; fg: string; border: string }> = {
-    critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
-    high: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
-    medium: { bg: "#713f12", fg: "#fde68a", border: "#ca8a04" },
-    low: { bg: "#14532d", fg: "#bbf7d0", border: "#16a34a" },
-  };
-  const sevC = sevColors[data.severity] || sevColors.low;
-  const sevLabel = severityBadge(data.severity); // e.g. "\uD83D\uDD34 Critical"
+  // Priority is the tester's call \u2014 the dropdown starts as an unset
+  // placeholder and only shows a value the user explicitly picked (persisted
+  // on the session). The auto severity badge was removed from the header: it
+  // sat next to the dropdown showing a system-guessed "MEDIUM" and read as a
+  // duplicate/pre-made triage. Auto severity still lives in the Info tab.
+  const userPriority = data.currentSession?.priority ?? null;
 
   // Tab badge counts
   const consoleCount = data.report?.consoleErrors?.length ?? 0;
@@ -340,9 +342,9 @@ function _openModal(
         <div class="tb-qb-titletext">Bug Ticket \u2014 Review &amp; Export</div>
         <div class="tb-qb-sub">${ssCountLabel} \u00B7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
-      <span class="tb-qb-sev" style="background:${sevC.bg};color:${sevC.fg};border:1px solid ${sevC.border}">${sevLabel}</span>
-      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority — your triage call (defaults from severity)">
-        ${(["high", "medium", "low"] as const).map((p) => `<option value="${p}"${(data.report?.priority || "low") === p ? " selected" : ""}>🚩 ${priorityLabel(p)}</option>`).join("")}
+      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority — your triage call">
+        <option value="" disabled hidden${userPriority ? "" : " selected"}>🚩 Priority</option>
+        ${(["high", "medium", "low"] as const).map((p) => `<option value="${p}"${userPriority === p ? " selected" : ""}>🚩 ${priorityLabel(p)}</option>`).join("")}
       </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
       <button data-action="help-toggle" class="tb-qb-theme-toggle" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
@@ -360,7 +362,7 @@ function _openModal(
 
         ${video ? `
           <div class="tb-qb-preview">
-            <video id="tb-qb-video" controls preload="metadata" src="${video.url || video.dataUrl}" class="tb-qb-video"></video>
+            <video id="tb-qb-video" controls preload="auto" playsinline src="${video.url || video.dataUrl}" class="tb-qb-video"></video>
             <button data-action="grab-frame" class="tb-qb-grab-frame" title="Pause the video on the moment you want, then click to save that exact frame as a screenshot you can annotate &amp; attach">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Grab frame
@@ -433,7 +435,7 @@ function _openModal(
           </div>
         ` : ""}
 
-        <details class="tb-qb-desc-wrap">
+        <details class="tb-qb-desc-wrap" open>
           <summary class="tb-qb-desc-summary">Description — editable, included in exports</summary>
           <textarea id="tb-qb-desc" class="tb-qb-textarea">${escapeHtml(data.description)}</textarea>
         </details>
@@ -447,7 +449,10 @@ function _openModal(
           <button data-tab="console" class="tb-qb-tab" role="tab">Console${consoleCount ? `<span class="tb-qb-tab-badge">${consoleCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
           <button data-tab="network" class="tb-qb-tab" role="tab">Network${networkCount ? `<span class="tb-qb-tab-badge">${networkCount}</span><span class="tb-qb-tab-dot"></span>` : ""}</button>
           <button data-tab="ai" class="tb-qb-tab" role="tab">AI</button>
-          <button data-tab="annotations" class="tb-qb-tab" role="tab">Notes${annotationsCount ? `<span class="tb-qb-tab-badge">${annotationsCount}</span>` : ""}</button>
+          ${/* NOTES-TAB: hidden for now — the annotations flow isn't wired into
+               this modal yet, so the tab was always empty. Restore the button
+               below (and its panel) when notes become actionable here. */ ""}
+          ${annotationsCount ? `<button data-tab="annotations" class="tb-qb-tab" role="tab">Notes<span class="tb-qb-tab-badge">${annotationsCount}</span></button>` : ""}
         </div>
         <div class="tb-qb-tabpanels">
           <div data-panel="info" class="tb-qb-panel tb-qb-panel-active">${_buildInfoTab(data.report, data.currentSession)}</div>
@@ -455,7 +460,7 @@ function _openModal(
           <div data-panel="network" class="tb-qb-panel" hidden>${_buildNetworkTab(data.report)}</div>
           <div data-panel="actions" class="tb-qb-panel" hidden>${_buildActionsTab(data.report)}</div>
           <div data-panel="ai" class="tb-qb-panel" hidden>${_buildAITab(data.report)}</div>
-          <div data-panel="annotations" class="tb-qb-panel" hidden>${_buildAnnotationsTab(data.currentSession)}</div>
+          ${annotationsCount ? `<div data-panel="annotations" class="tb-qb-panel" hidden>${_buildAnnotationsTab(data.currentSession)}</div>` : ""}
         </div>
       </div>
     </div>
@@ -512,6 +517,10 @@ function _openModal(
   root.appendChild(overlay);
 
   _injectStyles();
+
+  // Remember what had focus so we can restore it when the modal closes
+  // (WCAG 2.4.3 focus order). Guard against our own root element.
+  const _prevFocus = document.activeElement as HTMLElement | null;
 
   // Focus the title input for immediate editing
   setTimeout(() => {
@@ -600,10 +609,18 @@ function _openModal(
 
   const close = () => {
     _isOpen = false;
+    // Tear down the scrubber first — it owns a setTimeout playback chain that
+    // would otherwise keep firing against the detached modal DOM.
+    try { _scrubberCtl?.destroy(); } catch {}
+    _scrubberCtl = null;
+    // Cancel the pending draft-autosave debounce so it can't fire post-close.
+    clearTimeout(saveTimer);
     overlay.remove();
     document.removeEventListener("keydown", escHandler);
     const k = (overlay as any).__tbModalKey;
     if (k) document.removeEventListener("keydown", k);
+    // Restore focus to the element that opened the modal (WCAG 2.4.3).
+    try { if (_prevFocus && _prevFocus.isConnected) _prevFocus.focus(); } catch {}
   };
 
   modal.querySelector('[data-action="close"]')!.addEventListener("click", close);
@@ -769,6 +786,15 @@ function _openModal(
     saveTicketBtn.addEventListener("click", () => {
       const sid = data.currentSession?.sessionId;
       if (!sid) return;
+      // Persist this ticket's screenshots onto the session record NOW.
+      // Without this they were only stashed when the NEXT session started,
+      // so a saved ticket lost its thumbnails if the SDK was torn down first
+      // (extension ✕ → destroy). Live sessions only — a historical ticket
+      // opened from the saved list must not inherit the current global shots.
+      if (!data.suppressVideo && data.currentSession) {
+        const liveShots = getScreenshots();
+        if (liveShots.length > 0) data.currentSession.screenshots = liveShots.slice(0, 5);
+      }
       markSessionSaved(sid);
       saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
       saveTicketBtn.classList.add("tb-qb-btn-saved");
@@ -815,7 +841,18 @@ function _openModal(
       // export silently drops the video.
       try { await restoreLastRecordingFromOffscreen(); } catch {}
       const report = buildReport(data.currentSession);
-      const result = await exportSessionAsHtml(data.currentSession, report);
+      // Historical ticket: the restored recording belongs to a newer session.
+      if (data.suppressVideo) report.video = undefined;
+      // Carry what the user actually typed into the export — buildReport only
+      // knows the auto-generated title/steps, not the edited ticket fields.
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const userDesc = draft.description.trim();
+      const result = await exportSessionAsHtml(data.currentSession, report, {
+        descriptionOverride: userDesc
+          ? (report.steps ? `${userDesc}\n\n${report.steps}` : userDesc)
+          : undefined,
+      });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`\u2713 Replay exported \u00b7 ${sizeMb} MB`, root);
     } catch (err) {
@@ -1188,6 +1225,73 @@ function _openModal(
 
   // Video controls: download button + jump-to-comment chips.
   const videoEl = modal.querySelector<HTMLVideoElement>("#tb-qb-video");
+  // Chrome MediaRecorder quirk: a streamed WebM has no duration header, so the
+  // <video> element reports Infinity (or just the first cluster's length) and
+  // the native controls cap playback/seeking there — a 1-min recording "ends"
+  // after a few seconds. Seeking far past the end forces Chrome to scan the
+  // whole file and emit the real duration, then we snap back to 0. The .webm
+  // download and the .html export are unaffected (players parse the full
+  // stream / the export scrubber uses the recorded durationMs).
+  if (videoEl && video) {
+    const expectedS = (video.durationMs || 0) / 1000;
+    // Paint the first frame so the preview isn't a black rectangle at rest.
+    // A raw MediaRecorder WebM shows nothing until it's decoded to a specific
+    // position — and seeking to EXACTLY 0 often doesn't trigger a repaint, so
+    // we nudge to a tiny non-zero time. `_painted` guards against re-nudging
+    // once the user starts scrubbing/playing.
+    let _painted = false;
+    const paintFirstFrame = () => {
+      if (_painted) return;
+      _painted = true;
+      try { videoEl.currentTime = 0.05; } catch {}
+    };
+    const handleMeta = () => {
+      const d = videoEl.duration;
+      const broken = d === Infinity || Number.isNaN(d) || (expectedS > 1 && d < expectedS - 1.5);
+      if (!broken) { paintFirstFrame(); return; }
+      const snapBack = () => {
+        videoEl.removeEventListener("seeked", snapBack);
+        _painted = true;
+        try { videoEl.currentTime = 0.05; } catch {}
+      };
+      videoEl.addEventListener("seeked", snapBack);
+      try { videoEl.currentTime = 1e7; } catch { videoEl.removeEventListener("seeked", snapBack); paintFirstFrame(); }
+    };
+    // The <video> src is set in the initial HTML, so a blob URL can reach
+    // HAVE_METADATA / HAVE_CURRENT_DATA BEFORE these listeners attach. Act on
+    // the current readyState immediately, subscribe for what's pending.
+    if (videoEl.readyState >= 1) handleMeta();
+    else videoEl.addEventListener("loadedmetadata", handleMeta, { once: true });
+    if (videoEl.readyState >= 2) paintFirstFrame();
+    else videoEl.addEventListener("loadeddata", paintFirstFrame, { once: true });
+
+    // ── CSP fallback ────────────────────────────────────────────────────
+    // On strict host pages (corporate sites, etc.) the page's CSP media-src
+    // blocks blob:/data: video, so an INJECTED <video> renders controls but
+    // no picture. The blob itself is fine — Download .webm and Export .html
+    // (a standalone file with no CSP) both play it. Detect the block and
+    // replace the black box with a clear explanation instead of a mystery.
+    const preview = videoEl.closest(".tb-qb-preview") as HTMLElement | null;
+    let _blockedShown = false;
+    const showBlockedNotice = () => {
+      if (_blockedShown || !preview) return;
+      // networkState 3 = NETWORK_NO_SOURCE; a valid-but-slow local blob reaches
+      // readyState>=1 well within the timeout, so this only trips on a real block.
+      _blockedShown = true;
+      preview.style.background = "var(--tb-bg-secondary)";
+      preview.innerHTML = `
+        <div style="padding:26px 18px;text-align:center;color:var(--tb-text-secondary,#9aa0aa);font-size:12px;line-height:1.65">
+          <div style="font-size:24px;margin-bottom:8px">🎬</div>
+          <div style="color:var(--tb-text-primary,#e0e0e0);font-weight:600;margin-bottom:6px">Inline preview blocked by this page</div>
+          This site's security policy (CSP) blocks embedded video. Your ${_formatVideoTime(video.durationMs)} recording is fine —
+          use <strong>Download .webm</strong> below or <strong>Export .html</strong> to watch it.
+        </div>`;
+    };
+    videoEl.addEventListener("error", showBlockedNotice);
+    setTimeout(() => {
+      if (!_blockedShown && videoEl.readyState === 0) showBlockedNotice();
+    }, 2500);
+  }
   const videoDownloadBtn = modal.querySelector<HTMLButtonElement>('[data-action="download-video"]');
   if (videoDownloadBtn && video) {
     videoDownloadBtn.addEventListener("click", () => {
@@ -1290,6 +1394,9 @@ function _getElementAnnotationCount(): number {
 }
 
 function _kvRow(label: string, value: string, icon?: string): string {
+  // No value → no row. Unknown env fields (connection, device…) previously
+  // rendered as empty label-only rows.
+  if (!value || !value.trim()) return "";
   const iconHtml = icon ? `<span class="tb-qb-kv-icon">${icon}</span>` : "";
   return `<div class="tb-qb-kv"><span class="tb-qb-kv-k">${escapeHtml(label)}</span><span class="tb-qb-kv-v">${iconHtml}${escapeHtml(value)}</span></div>`;
 }
@@ -1348,7 +1455,9 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
   rows.push(_kvRow("Session", (session?.sessionId || "").slice(0, 12), "🆔"));
   rows.push(_kvRow("Severity", sevLabel));
-  if (report?.priority) rows.push(_kvRow("Priority", priorityLabel(report.priority), "🚩"));
+  // Priority appears only when the tester explicitly picked one — the
+  // report-level fallback (derived from severity) is not their triage call.
+  if (session?.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), "🚩"));
   const ctxKeys = Object.keys(ctx);
   if (ctxKeys.length > 0) {
     rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
@@ -1364,14 +1473,21 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
       rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
       const shown = entries.slice(0, 20);
       for (const e of shown) {
-        rows.push(_kvRow(e.key, e.redacted ? `🔒 ${e.value}` : e.value, "🗄"));
+        rows.push(_kvRow(e.key, e.redacted ? `🔒 ${e.value}` : e.value));
       }
       if (entries.length > shown.length) {
-        rows.push(_kvRow("…", `+${entries.length - shown.length} more`, "🗄"));
+        rows.push(_kvRow("…", `+${entries.length - shown.length} more`));
       }
     };
     renderArea("localStorage", storage.local, storage.localTruncated);
     renderArea("sessionStorage", storage.session, storage.sessionTruncated);
+    renderArea("Cookies", storage.cookies, storage.cookiesTruncated);
+    // Say so explicitly when the page had nothing — an absent section reads
+    // as "capture broken", not "storage empty".
+    const total = (storage.local?.length || 0) + (storage.session?.length || 0) + (storage.cookies?.length || 0);
+    if (total === 0) {
+      rows.push(`<div class="tb-qb-sec-head">Web storage — empty on this page</div>`);
+    }
   }
   return `<div class="tb-qb-info">${rows.join("")}</div>`;
 }
@@ -1547,7 +1663,7 @@ function _buildConsoleTab(report: import("../types").BugReport | null): string {
 
   return `
     <div class="tb-qb-feed-toolbar">
-      <input id="tb-qb-con-search" type="search" placeholder="Filter" class="tb-qb-net-search" />
+      <input id="tb-qb-con-search" type="search" placeholder="Filter" aria-label="Filter console feed" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-con-errors-only" type="checkbox" /> Errors only</label>
     </div>
     <div class="tb-qb-feed-pills">
@@ -1656,7 +1772,7 @@ function _buildNetworkTab(report: import("../types").BugReport | null): string {
 
   return `
     <div class="tb-qb-net-toolbar">
-      <input id="tb-qb-net-search" type="search" placeholder="Filter requests" class="tb-qb-net-search" />
+      <input id="tb-qb-net-search" type="search" placeholder="Filter requests" aria-label="Filter network requests" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-net-errors-only" type="checkbox" /> Errors only</label>
     </div>
     <div class="tb-qb-net-pills">
@@ -1808,6 +1924,10 @@ function _injectStyles(): void {
   style.textContent = `
     @keyframes tracebug-qb-fade-in { from { opacity: 0; } to { opacity: 1; } }
     @keyframes tracebug-qb-slide-up { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    /* Honor reduced-motion: disable the entrance + spinner animations (WCAG 2.3.3). */
+    @media (prefers-reduced-motion: reduce) {
+      #${MODAL_ID}, #${MODAL_ID} * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
 
     /* ── Modal shell ─────────────────────────────────── */
     #${MODAL_ID} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
@@ -2084,7 +2204,10 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
     /* "Fix with AI" — the highlight action. Gradient accent so it stands out. */
     #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(124,92,255,0.35); }
-    #${MODAL_ID} .tb-qb-btn-ai:hover { filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
+    /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
+       specificity, matches on hover) would otherwise repaint the background with
+       --tb-bg-elevated — white-on-white text in the light theme. */
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
     /* Save Ticket — prominent green CTA */
     #${MODAL_ID} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
     #${MODAL_ID} .tb-qb-btn-save:hover { background:#15803d; border-color:transparent; transform:translateY(-1px); }

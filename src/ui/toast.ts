@@ -48,7 +48,11 @@ export function showActionToast(
   const liveRegion = document.getElementById("tracebug-live");
   if (liveRegion) liveRegion.textContent = message;
 
+  let _dismissed = false;
   const dismiss = () => {
+    if (_dismissed) return; // idempotent — manual click + auto-timer can't double-fire
+    _dismissed = true;
+    clearTimeout(autoTimer);
     toast.style.opacity = "0";
     toast.style.transform = "translateX(-50%) translateY(8px)";
     toast.style.transition = "all 0.3s ease";
@@ -62,7 +66,7 @@ export function showActionToast(
   toast.querySelector('[data-tb-action="dismiss"]')!.addEventListener("click", dismiss);
 
   // Auto-dismiss after 8s
-  setTimeout(dismiss, 8000);
+  const autoTimer = setTimeout(dismiss, 8000);
 }
 
 export function showToast(message: string, root: HTMLElement): void {

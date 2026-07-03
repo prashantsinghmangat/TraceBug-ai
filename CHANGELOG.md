@@ -4,6 +4,34 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+> Current verified state, launch readiness, and the Phase 1 / Phase 2 split live in **[docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)**.
+
+### Production hardening & bug-fix pass (July 2026)
+
+#### Security
+
+- **Removed committed Supabase credentials**: `website/.env.local` untracked from git; `.gitignore` now covers `.env.local` / `.env.*.local`. Keys must be rotated (they remain in git history).
+- **`cloudEndpoint` validation** — new `src/cloud-endpoint.ts` with `resolveCloudEndpoint()`: HTTPS enforced (plain HTTP only for localhost), `javascript:`/`data:`/malformed URLs rejected with fallback to the production endpoint. Applied in the auth bridge constructor, all SDK call sites, share-link exporter, and the Quick Bug modal. Unit-tested.
+- Chrome extension manifest: explicit `content_security_policy` for extension pages.
+
+#### Fixed
+
+- **Stale video bundled into unrelated exports / fresh video missing from the modal.** The global last-recording had no session binding and the ownership check existed only in the modal. New shared `getSessionVideo()` gate in `report-builder.ts` (recording must start after the session was created, 10 s transport grace) used by both `buildReport()` and the modal; the toolbar record flow now arms the session *before* capture starts; historical tickets strip the video explicitly. (`src/report-builder.ts`, `src/compact-toolbar.ts`, `src/ui/quick-bug.ts`)
+- **Modal video played only a few seconds of long recordings.** Chrome MediaRecorder WebM lacks a duration header; the player now forces Chrome to compute the real duration (seek-past-end workaround) when the reported duration is Infinity/short. (`src/ui/quick-bug.ts`)
+- **`iframe-bridge.ready()` could hang forever and leak a message listener** when the bridge iframe never loaded — added a 20 s timeout that unmounts, cleans up, and allows retry. (`src/auth/iframe-bridge.ts`)
+- **`deleteSession()` silently dropped up to 1 s of pending events** from surviving sessions — pending flush now runs before the read. (`src/storage.ts`)
+- **`Uncaught (in promise) Error: No tab with id`** spam from the extension service worker — badge API promises are now awaited inside the try/catch. (`tracebug-extension/background.js`)
+- Clipboard copy failures now show "✗ Copy failed" instead of failing silently (`src/dashboard.ts`); "Fix with AI" button no longer renders white-on-white on hover in light theme; six ESLint errors fixed (emoji regex `u` flags, stray expression, extra semicolon); `pushScreenshot()` side-path now respects the 50-screenshot memory cap.
+
+#### Changed
+
+- **Exports now carry the user's edited title and description**; the description renders below the Replay (matching the ticket modal) instead of hiding in a tab. Notes and Description tabs removed from the export viewer (tabs: Info / Console / Network / Actions / AI / Events).
+- **Tester-assigned priority is surfaced everywhere**: 🚩 priority chip in the export header next to the auto-severity badge; priority flows user → session → report → all exports.
+- **Cookies captured** (non-HttpOnly only) alongside localStorage/sessionStorage with the same redaction rules; shown in the modal Info tab and export, scrubbed again by the cloud sanitizer.
+- Info tab cleanup: TraceBug's own `tracebug_*` storage keys filtered at capture, empty env rows dropped, per-row storage icons removed, explicit "Web storage — empty on this page" state.
+- Ticket modal: description editor open by default; Notes tab renders only when the session has annotations.
+- CI now runs ESLint and the test suite on every push/PR; `package.json` declares `engines: node >=18`.
+
 ### Cloud sharing portal (Phase 6)
 
 The local `.html` export still works exactly as before — this is an **optional** sharing layer on top of it. Local-first stays the product's spine.

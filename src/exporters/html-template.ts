@@ -11,6 +11,8 @@ export interface BundlePayload {
   meta: {
     title: string;
     severity: string;
+    /** Tester-assigned priority label (e.g. "High") — shown in the header. */
+    priority?: string;
     summary: string;
     rootCause: string;
     page: string;
@@ -115,6 +117,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
     <span class="tb-vh-logo">🐞</span>
     <span class="tb-vh-title" id="title"></span>
     <span class="tb-vh-sev" id="sev"></span>
+    <span class="tb-vh-sev tb-vh-prio" id="prio" style="display:none"></span>
     <button class="tb-vh-toggle" id="compact-toggle" title="Toggle compact mode (F)" aria-label="Toggle compact mode">⛶</button>
     <button class="tb-vh-toggle" id="theme-toggle" title="Toggle theme (auto / light / dark)" aria-label="Toggle theme">🌗</button>
     <button class="tb-vh-toggle" id="help-toggle" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
@@ -137,6 +140,10 @@ export function buildReplayHtml(payload: BundlePayload): string {
     <div id="scrubber"></div>
     <div class="tb-vss-meta" id="ssmeta"></div>
     <div id="ss-gallery" class="tb-vss-gallery" style="display:none"></div>
+    <div id="desc-wrap" style="display:none">
+      <h2 class="tb-vh2">Description</h2>
+      <pre class="tb-vdesc" id="desc"></pre>
+    </div>
     <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
       <img id="hover-thumb-img" alt="" />
       <div id="hover-thumb-time"></div>
@@ -152,9 +159,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
       <button data-tab="network" class="tb-vtab" role="tab">Network <span class="tb-vtab-badge" id="badge-network"></span></button>
       <button data-tab="actions" class="tb-vtab" role="tab">Actions <span class="tb-vtab-badge" id="badge-actions"></span></button>
       <button data-tab="ai" class="tb-vtab" role="tab">AI</button>
-      <button data-tab="notes" class="tb-vtab" role="tab">Notes <span class="tb-vtab-badge" id="badge-notes"></span></button>
       <button data-tab="events" class="tb-vtab" role="tab">Events <span class="tb-vtab-badge" id="badge-events"></span></button>
-      <button data-tab="desc" class="tb-vtab" role="tab">Description</button>
     </div>
     <div class="tb-vtabpanels">
       <div data-panel="info" class="tb-vpanel tb-vpanel-active" id="panel-info"></div>
@@ -162,9 +167,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
       <div data-panel="network" class="tb-vpanel" id="panel-network" hidden></div>
       <div data-panel="actions" class="tb-vpanel" id="panel-actions" hidden></div>
       <div data-panel="ai" class="tb-vpanel" id="panel-ai" hidden></div>
-      <div data-panel="notes" class="tb-vpanel" id="panel-notes" hidden></div>
       <div data-panel="events" class="tb-vpanel" id="panel-events"><ol class="tb-vevents" id="events"></ol></div>
-      <div data-panel="desc" class="tb-vpanel" id="panel-desc" hidden><pre class="tb-vdesc" id="desc"></pre></div>
     </div>
   </section>
 </main>
@@ -181,7 +184,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
     <div class="tb-vhelp-row"><kbd>0</kbd><span>Jump to start</span></div>
     <div class="tb-vhelp-row"><kbd>E</kbd><span>Jump to first error</span></div>
     <div class="tb-vhelp-row"><kbd>F</kbd><span>Toggle compact mode</span></div>
-    <div class="tb-vhelp-row"><kbd>1</kbd>–<kbd>8</kbd><span>Switch tabs</span></div>
+    <div class="tb-vhelp-row"><kbd>1</kbd>–<kbd>6</kbd><span>Switch tabs</span></div>
     <div class="tb-vhelp-row"><kbd>T</kbd><span>Cycle theme (light / dark / auto)</span></div>
     <div class="tb-vhelp-row"><kbd>?</kbd> <kbd>Esc</kbd><span>Toggle / close this overlay</span></div>
     <button class="tb-vhelp-close" id="help-close" aria-label="Close">Close</button>
@@ -290,6 +293,7 @@ body { min-height: 100vh; }
 .tb-vh-logo { font-size: 20px; }
 .tb-vh-title { font-size: 15px; font-weight: 600; flex: 1; word-break: break-word; letter-spacing: -0.01em; }
 .tb-vh-sev { font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
+.tb-vh-prio { background: var(--tb-bg-2); color: var(--tb-text-2); border: 1px solid var(--tb-border); }
 .tb-vh-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 6px; max-width: 1400px; margin-left: auto; margin-right: auto; font-weight: 500; }
 .tb-vh-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font-size: 14px; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
 .tb-vh-toggle:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
@@ -606,6 +610,14 @@ const REPLAY_RUNTIME = `(function(){
     sevEl.textContent = SEV[data.meta.severity] || data.meta.severity;
     sevEl.className = "tb-vh-sev tb-sev-" + data.meta.severity;
   }
+  // Tester-assigned priority — their triage call, distinct from auto severity.
+  if (data.meta.priority) {
+    var prioEl = document.getElementById("prio");
+    if (prioEl) {
+      prioEl.textContent = "🚩 " + data.meta.priority + " priority";
+      prioEl.style.display = "";
+    }
+  }
   var metaParts = [
     "Session " + (data.meta.sessionId || "").slice(0, 8),
     "Page " + (data.meta.page || ""),
@@ -614,9 +626,12 @@ const REPLAY_RUNTIME = `(function(){
   ].filter(Boolean);
   metaEl.textContent = metaParts.join(" · ");
 
-  // ── Summary box + Description tab ──────────────────────
+  // ── Summary box + Description (below the replay, mirrors the ticket modal) ──
   document.getElementById("summary").textContent = data.meta.summary || "(no summary)";
-  document.getElementById("desc").textContent = data.description || "(no description)";
+  if (data.description) {
+    document.getElementById("desc").textContent = data.description;
+    document.getElementById("desc-wrap").style.display = "";
+  }
 
   // ── Tabs: populate counts + content ─────────────────────
   function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
@@ -967,18 +982,6 @@ const REPLAY_RUNTIME = `(function(){
   aiHtml += '<div class="tb-vai-card tb-vai-empty"><div class="tb-vai-head">LLM analysis</div><div class="tb-vai-body">Open this report in the TraceBug UI to run LLM-based root-cause analysis (BYO API key).</div></div>';
   document.getElementById("panel-ai").innerHTML = aiHtml;
 
-  // Notes tab
-  var notes = data.annotations || [];
-  setBadge("badge-notes", notes.length);
-  var notesHtml = notes.length === 0
-    ? '<div class="tb-vempty-tab">No tester notes</div>'
-    : notes.map(function(a){
-        var exp = a.expected ? '<div class="tb-vnote-line"><strong>Expected:</strong> ' + esc(a.expected) + '</div>' : '';
-        var act = a.actual ? '<div class="tb-vnote-line"><strong>Actual:</strong> ' + esc(a.actual) + '</div>' : '';
-        return '<div class="tb-vnote tb-vnote-' + esc(a.severity || "info") + '"><div class="tb-vnote-sev">' + esc(a.severity || "info") + '</div><div class="tb-vnote-text">' + esc(a.text || "") + '</div>' + exp + act + '</div>';
-      }).join("");
-  document.getElementById("panel-notes").innerHTML = notesHtml;
-
   setBadge("badge-events", (data.events || []).length);
 
   // Tab switching
@@ -1115,6 +1118,13 @@ const REPLAY_RUNTIME = `(function(){
       if (playOverlay) playOverlay.style.display = "none";
       if (autoplay) try { video.play(); } catch(e) {}
     }
+    // A fresh load always plays from 0:00 — snap the scrubber to the video's
+    // start so the readout and handle move WITH playback instead of visibly
+    // walking backward from wherever the event-init seek left them.
+    if (data.video && data.video.startedAt) {
+      current = Math.max(startedAt, Math.min(endedAt, data.video.startedAt));
+      renderHandle();
+    }
   }
   if (playOverlay) {
     playOverlay.addEventListener("click", function(){ loadVideo(true); });
@@ -1129,19 +1139,23 @@ const REPLAY_RUNTIME = `(function(){
   if (video) {
     video.addEventListener("timeupdate", function(){
       if (!data.video || !data.video.startedAt) return;
+      if (dragging) return; // user owns the handle mid-drag — don't fight them
       var ts = data.video.startedAt + video.currentTime * 1000;
       var prevTs = current;
       current = Math.max(startedAt, Math.min(endedAt, ts));
       renderHandle();
       _syncConsoleFeed(current);
-      // Auto-pause across any unvisited error markers in this tick.
+      // Auto-pause ONCE at the first unvisited error crossed, then mark every
+      // error visited. Pausing at each of N clustered markers made playback
+      // feel broken ("the video keeps stopping"); one stop tells the story,
+      // and "Jump to error" re-arms it for deliberate error-hopping.
       var em = data.events || [];
       for (var i = 0; i < em.length; i++) {
         if (!em[i].isError) continue;
         var et = em[i].timestamp;
         if (_visitedErrors[et]) continue;
         if (et >= prevTs && et <= current + 250) {
-          _visitedErrors[et] = true;
+          for (var k = 0; k < em.length; k++) { if (em[k].isError) _visitedErrors[em[k].timestamp] = true; }
           try { video.pause(); } catch(_e){}
           _flashErrorToast(em[i]);
           break;
@@ -1308,9 +1322,10 @@ const REPLAY_RUNTIME = `(function(){
   function scrubberSeek(ts) {
     current = Math.max(startedAt, Math.min(endedAt, ts));
     renderHandle();
-    // Manual seek → re-arm error auto-pause so the user can re-trigger
-    // by scrubbing back across an error.
-    _visitedErrors = {};
+    // NOTE: deliberately does NOT re-arm the error auto-pause. Every drag /
+    // track click used to reset it, so any mouse interaction mid-playback
+    // caused a surprise pause moments later. Re-arming now happens only on
+    // the explicit "Jump to error" and restart (0) actions.
     // Swap screenshot preview
     var ss = findClosest(screenshots, current);
     if (ss && img.style.display !== "none") {
@@ -1354,7 +1369,7 @@ const REPLAY_RUNTIME = `(function(){
     if (!isNaN(ts)) scrubberSeek(ts);
   });
   if (jumpEl) jumpEl.addEventListener("click", function() {
-    if (errorMarkers.length) scrubberSeek(errorMarkers[0].timestamp);
+    if (errorMarkers.length) { _visitedErrors = {}; scrubberSeek(errorMarkers[0].timestamp); }
   });
   // ── Keyboard shortcuts ──────────────────────────────
   // Bound at document level, but skipped when the user is typing in an
@@ -1375,7 +1390,7 @@ const REPLAY_RUNTIME = `(function(){
     if (events[nextIdx]) scrubberSeek(events[nextIdx].timestamp);
   }
   function jumpToFirstError() {
-    if (errorMarkers.length) scrubberSeek(errorMarkers[0].timestamp);
+    if (errorMarkers.length) { _visitedErrors = {}; scrubberSeek(errorMarkers[0].timestamp); }
   }
   function togglePlayback() {
     if (!hasVideo) {
@@ -1395,7 +1410,7 @@ const REPLAY_RUNTIME = `(function(){
     var btn = document.querySelector('[data-tab="' + which + '"]');
     if (btn) btn.click();
   }
-  var TAB_KEYS = ["info","console","network","actions","ai","notes","events","desc"];
+  var TAB_KEYS = ["info","console","network","actions","ai","events"];
 
   document.addEventListener("keydown", function(e) {
     if (isTyping(e.target)) return;
@@ -1410,13 +1425,11 @@ const REPLAY_RUNTIME = `(function(){
     // for power users. Without a video, arrows still step events.
     if (e.key === "ArrowLeft") {
       e.preventDefault();
-      _visitedErrors = {};
       if (hasVideo) { nudgeVideo(-5); } else { jumpEvent(-1); }
       return;
     }
     if (e.key === "ArrowRight") {
       e.preventDefault();
-      _visitedErrors = {};
       if (hasVideo) { nudgeVideo(5); } else { jumpEvent(1); }
       return;
     }
