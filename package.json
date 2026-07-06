@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Capture a bug, see the root cause, and create a GitHub issue in 5 seconds. Zero-backend, browser-only debugging assistant. Free Sentry/LogRocket alternative.",
   "type": "module",
   "main": "dist/index.cjs",

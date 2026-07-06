@@ -2,7 +2,7 @@
 
 > **Purpose:** the current, verified state of the project — what ships now (Phase 1), what is built but disabled (Phase 2), and everything changed in the July 2026 hardening pass. Share this with any agent or reviewer who needs to cross-verify the product flow against the code.
 >
-> **Last updated:** 2026-07-02 · branch `feature/cloud-sharing` · version **1.3.0**
+> **Last updated:** 2026-07-02 · branch `feature/cloud-sharing` · version **1.4.0**
 >
 > Companion docs: [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) (deep orientation, May 2026 — note its cloud section describes code that is now UI-disabled), [WEBSITE-STATUS.md](WEBSITE-STATUS.md) (marketing site + portal: routes, messaging rules, deploy chain), [SHARE-PORTAL-PLAN.md](SHARE-PORTAL-PLAN.md) (cloud portal design spec), [../ARCHITECTURE.md](../ARCHITECTURE.md) (module-level architecture).
 
@@ -22,7 +22,7 @@ TraceBug is a local-first bug-reporting tool for QA and developers. It captures 
 
 ---
 
-## 2. Phase 1 — launchable now (v1.3.0, offline/local)
+## 2. Phase 1 — launchable now (v1.4.0, offline/local)
 
 Everything below is live in the shipping UI and verified working:
 
@@ -40,7 +40,7 @@ Everything below is live in the shipping UI and verified working:
 
 ## 3. Phase 2 — built but intentionally disabled (cloud sharing)
 
-All code exists and compiles; the **UI entry points are commented out with `PHASE2-CLOUD` markers**. Nothing cloud-related runs for end users in v1.3.0.
+All code exists and compiles; the **UI entry points are commented out with `PHASE2-CLOUD` markers**. Nothing cloud-related runs for end users in v1.4.0.
 
 **What exists:**
 
