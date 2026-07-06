@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tracebug": {
+      "command": "node",
+      "args": ["dist/bin.mjs", "mcp", "--dir", "demo-bug-reports"]
+    }
+  }
+}

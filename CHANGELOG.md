@@ -2,6 +2,12 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **MCP server** — `npx tracebug mcp [--dir <path>]` starts a local [Model Context Protocol](https://modelcontextprotocol.io) server so AI coding agents (Claude Code, Cursor, Windsurf, VS Code) can read exported bug reports and debug from them. Six tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, `get_screenshot` (returns real image content). Reads the self-contained `.html` exports directly (the embedded `tb-data` payload) — fully local, stdio-only, zero network connections, zero new dependencies (the JSON-RPC loop is hand-rolled). Includes a demo report (`demo-bug-reports/sample-report.html`) and a pre-configured `.mcp.json` so a fresh clone works with Claude Code out of the box. Docs: `docs/mcp.md`. (`cli/mcp-server.ts`, `cli/bin.ts`, `tests/mcp-server.test.ts` — 16 new tests)
+
 ## [1.4.0] - 2026-07-06
 
 > Current verified state, launch readiness, and the Phase 1 / Phase 2 split live in **[docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)**.

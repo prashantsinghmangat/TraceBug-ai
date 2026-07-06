@@ -21,7 +21,32 @@ async function main() {
     return
   }
 
+  if (command === 'mcp') {
+    await startMcpServer()
+    return
+  }
+
   console.log(`Unknown command: ${command}. Run ${CYAN}npx tracebug help${RESET}`)
+}
+
+async function startMcpServer() {
+  const { runMcpServer } = await import('./mcp-server')
+  const fs = await import('fs')
+  const path = await import('path')
+
+  // --dir <path> selects where exported bug reports live (default: cwd)
+  const dirFlag = args.indexOf('--dir')
+  const baseDir = dirFlag !== -1 && args[dirFlag + 1]
+    ? path.resolve(args[dirFlag + 1])
+    : process.cwd()
+
+  let version = '0.0.0'
+  try {
+    const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    version = pkg.version ?? version
+  } catch { /* version stays 0.0.0 — cosmetic only */ }
+
+  await runMcpServer(baseDir, version)
 }
 
 function printHelp() {
@@ -30,6 +55,8 @@ ${BOLD}TraceBug CLI${RESET} — Debug bugs in seconds, not hours
 
 ${BOLD}Commands:${RESET}
   ${CYAN}init${RESET}    Set up TraceBug in your project
+  ${CYAN}mcp${RESET}     Start the MCP server so AI agents (Claude Code, Cursor) can read
+          exported bug reports. Options: ${DIM}--dir <path>${RESET} (default: current dir)
   ${CYAN}help${RESET}    Show this help message
 
 ${BOLD}Quick Start:${RESET}
