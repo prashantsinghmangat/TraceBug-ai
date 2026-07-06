@@ -40,9 +40,9 @@ export default function BugReportPreview() {
     <section className="py-20 lg:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeading
-          eyebrow="Live preview"
-          title={<>What a real <span className="gradient-text">TraceBug report</span> looks like</>}
-          subtitle="An actual report generated from the demo “Vendor Update” bug — complete, structured, and ready for a developer."
+          eyebrow="The report"
+          title="What your developer actually receives"
+          subtitle="A real report, generated from a real bug. It opens with TraceBug's root-cause hint, so the developer knows where to look before scrolling a single line."
           className="mb-14"
         />
 
@@ -69,6 +69,25 @@ export default function BugReportPreview() {
             </div>
 
             <div className="p-6 grid lg:grid-cols-2 gap-6">
+              {/* Root-cause hint — the first thing every report shows */}
+              <div className="lg:col-span-2 rounded-xl border border-error/20 bg-error/[0.04] p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-error">
+                    Possible cause
+                  </span>
+                  <span className="text-[10px] rounded-full bg-error/10 text-error px-2 py-0.5 font-medium">
+                    high confidence
+                  </span>
+                </div>
+                <p className="text-[14px] text-text-primary leading-relaxed">
+                  API <span className="font-mono text-error">POST /api/vendor/update</span> failed
+                  with <span className="font-mono text-error font-semibold">500</span> after
+                  clicking <span className="text-primary font-medium">&apos;Update&apos;</span> —
+                  the thrown <span className="font-mono">TypeError</span> suggests the response body
+                  was missing.
+                </p>
+              </div>
+
               {/* Environment */}
               <Block title="Environment">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">

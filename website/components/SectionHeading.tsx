@@ -1,5 +1,4 @@
 import { type ReactNode } from "react";
-import { MiniMark } from "@/components/BrandMark";
 
 // Shared section header — keeps every section's eyebrow/title/subtitle rhythm
 // identical, which is most of what makes a long page feel designed (not stacked).
@@ -20,8 +19,7 @@ export default function SectionHeading({
   return (
     <div className={`flex flex-col ${alignCls} ${className}`}>
       {eyebrow && (
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/[0.07] pl-2 pr-3 py-1 text-[11.5px] font-medium tracking-wide text-primary mb-5">
-          <MiniMark size={15} className="text-primary" />
+        <span className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-primary mb-4">
           {eyebrow}
         </span>
       )}

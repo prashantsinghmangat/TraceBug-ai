@@ -28,11 +28,9 @@ const TIERS: Tier[] = [
       "Unlimited local bug reports",
       "Unlimited offline .html exports",
       "All capture (clicks, network, console, screenshots, video, voice)",
+      "Root-cause hints in every report",
       "GitHub / Linear / Slack / PDF export",
       "Chrome extension + npm SDK",
-      "20 active cloud share links",
-      "14-day cloud retention",
-      "30-second video cap on cloud uploads",
     ],
   },
   {
@@ -100,16 +98,12 @@ export default function PricingClient() {
       <Navbar />
       <section className="pt-32 pb-12 px-4">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface border border-border text-sm text-text-muted mb-6">
-            <span className="text-success">●</span>
-            Local-first, forever free
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold leading-tight mb-5">
+          <h1 className="text-4xl sm:text-5xl font-semibold tracking-[-0.03em] leading-tight mb-5">
             Local stays free.<br />
             <span className="gradient-text">Pay for collaboration when you need it.</span>
           </h1>
           <p className="text-text-muted text-lg leading-relaxed max-w-2xl mx-auto">
-            Capturing bugs and exporting offline `.html` reports is free for everyone, forever.
+            Capturing bugs and exporting offline .html reports is free for everyone, forever.
             Upgrade only when your team wants shareable URLs, integrations, or self-hosting.
           </p>
         </div>
@@ -123,12 +117,9 @@ export default function PricingClient() {
         </div>
 
         <div className="max-w-3xl mx-auto mt-16 text-center text-sm text-text-muted">
-          <p className="mb-2">
-            Currently in <strong className="text-text-primary">public beta</strong> —
-            the SDK ships everything free while we validate. Pro launches first.
-          </p>
           <p>
-            Local capture + `.html` export will always remain free. That promise is
+            Currently in <strong className="text-text-primary">public beta</strong> — the SDK
+            ships everything free while we validate. That promise is
             <a href="https://github.com/prashantsinghmangat/tracebug-ai" target="_blank" rel="noreferrer" className="text-primary hover:underline mx-1">
               on GitHub
             </a>

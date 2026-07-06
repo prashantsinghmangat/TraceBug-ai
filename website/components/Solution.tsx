@@ -17,9 +17,9 @@ export default function Solution() {
     <section id="solution" className="py-20 lg:py-28 bg-surface/50 border-y border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeading
-          eyebrow="The solution"
-          title={<>Everything your dev needs, <span className="gradient-text">in one file</span></>}
-          subtitle="Logs, network calls, screenshots, user actions — bundled into a single offline .html file. No accounts. No lock-in."
+          eyebrow="Before / after"
+          title="From “it's broken” to a fixable ticket"
+          subtitle="Vague reports cost days of back-and-forth. TraceBug records what actually happened — down to the button that was clicked and the request that failed."
           className="mb-14"
         />
 
@@ -64,6 +64,9 @@ export default function Solution() {
         </div>
 
         {/* Capture grid */}
+        <p className="text-center text-[13px] font-semibold uppercase tracking-[0.14em] text-text-subtle mb-6">
+          Captured automatically, every session
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {CAPTURES.map(({ Icon, label, desc }) => (
             <div
