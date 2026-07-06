@@ -237,7 +237,7 @@ function TierCard({ tier }: { tier: Tier }) {
         )
       ) : tier.name === "Enterprise" ? (
         <a
-          href="mailto:safeguarddevtz@taazaa.com?subject=TraceBug%20Enterprise%20inquiry"
+          href="https://github.com/prashantsinghmangat/TraceBug-ai/discussions/new?category=general&title=Enterprise%20inquiry"
           className="w-full rounded-md border border-border bg-surface hover:border-primary/50 text-text-primary px-4 py-2 text-sm font-semibold text-center"
         >
           {tier.cta}

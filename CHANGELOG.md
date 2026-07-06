@@ -2,7 +2,7 @@
 
 All notable changes to TraceBug are documented here.
 
-## [Unreleased]
+## [1.4.0] - 2026-07-06
 
 > Current verified state, launch readiness, and the Phase 1 / Phase 2 split live in **[docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)**.
 

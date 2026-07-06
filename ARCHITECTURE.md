@@ -447,8 +447,8 @@ npm install github:prashantsinghmangat/tracebug-ai
 ### From .tgz (offline sharing)
 ```bash
 cd tracebug-ai && npm pack
-# Share tracebug-sdk-1.3.0.tgz
-npm install ./tracebug-sdk-1.3.0.tgz
+# Share tracebug-sdk-1.4.0.tgz
+npm install ./tracebug-sdk-1.4.0.tgz
 ```
 
 ### Usage (2 lines of code)
