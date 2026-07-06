@@ -133,6 +133,18 @@ Plus:
 
 All four signals ship inline in GitHub issues, Jira tickets, PDF reports, and the Quick Bug modal. See [docs/bug-reporting.md](docs/bug-reporting.md) for full output examples.
 
+### 🤖 MCP Server — AI Agents Debug Your Reports (v1.5)
+
+Your coding agent (Claude Code, Cursor, Windsurf, VS Code) reads TraceBug bug reports and fixes the bug — **fully local, nothing uploaded**:
+
+```bash
+claude mcp add tracebug -- npx tracebug mcp --dir ./bug-reports
+```
+
+The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets six tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, and `get_screenshot` (real image content). Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
+
+Other tools' MCP servers are cloud-hosted: your bug data must live on their servers first. TraceBug's runs on your machine over stdio and opens **zero network connections**. Try it instantly — this repo ships a demo report and a pre-configured [`.mcp.json`](.mcp.json). See [docs/mcp.md](docs/mcp.md).
+
 ### Auto-Captured (Zero Effort)
 
 | What | Details |
@@ -465,6 +477,7 @@ Full documentation is in the [`docs/`](docs/) folder:
 - [API Reference](docs/api-reference.md) — Complete programmatic API
 - [Configuration](docs/configuration.md) — All config options explained
 - [Bug Reporting](docs/bug-reporting.md) — Screenshots, notes, voice, export
+- [MCP Server](docs/mcp.md) — Let AI agents (Claude Code, Cursor) debug your reports
 - [Annotate & Draw](docs/annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](docs/chrome-extension.md) — Extension install & usage
 - [Architecture](docs/architecture.md) — How TraceBug works internally
