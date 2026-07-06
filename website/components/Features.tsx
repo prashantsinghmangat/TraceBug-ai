@@ -48,7 +48,7 @@ const FEATURES = [
   },
   {
     Icon: ShieldCheck, title: "Local-first & private",
-    desc: "Sensitive fields auto-redacted. Data stays in localStorage by default — zero backend, no tracking. Cloud sharing is opt-in.",
+    desc: "Sensitive fields auto-redacted. Data stays in localStorage — zero backend, no tracking, nothing leaves your machine.",
     chip: "Privacy",
   },
 ];
@@ -59,7 +59,7 @@ export default function Features() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Features"
-          title={<>Built to make debugging <span className="gradient-text">effortless</span></>}
+          title="Capture is just the start"
           subtitle="Everything between “I found a bug” and “here's a fully-filled GitHub issue” — automated."
           className="mb-14"
         />

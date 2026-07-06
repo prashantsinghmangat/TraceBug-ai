@@ -4,7 +4,7 @@
 >
 > **Last updated:** 2026-07-02 · branch `feature/cloud-sharing` · version **1.3.0**
 >
-> Companion docs: [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) (deep orientation, May 2026 — note its cloud section describes code that is now UI-disabled), [SHARE-PORTAL-PLAN.md](SHARE-PORTAL-PLAN.md) (cloud portal design spec), [../ARCHITECTURE.md](../ARCHITECTURE.md) (module-level architecture).
+> Companion docs: [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) (deep orientation, May 2026 — note its cloud section describes code that is now UI-disabled), [WEBSITE-STATUS.md](WEBSITE-STATUS.md) (marketing site + portal: routes, messaging rules, deploy chain), [SHARE-PORTAL-PLAN.md](SHARE-PORTAL-PLAN.md) (cloud portal design spec), [../ARCHITECTURE.md](../ARCHITECTURE.md) (module-level architecture).
 
 ---
 

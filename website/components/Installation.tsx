@@ -32,9 +32,15 @@ export default function Installation() {
     <section id="install" className="py-20 lg:py-28">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeading
-          eyebrow="Installation"
-          title={<>Get started in <span className="gradient-text">under 2 minutes</span></>}
-          subtitle="SDK for developers, Chrome extension for everyone else. Pick what fits your workflow."
+          eyebrow="Get started"
+          title="Install once. Capture with a shortcut. Share one file."
+          subtitle={
+            <>
+              npm SDK for developers, Chrome extension for everyone else. Either way,{" "}
+              <code className="font-mono text-[0.9em] text-text-primary">Ctrl+Shift+B</code>{" "}
+              captures the bug and saves it as a single .html file you can share anywhere.
+            </>
+          }
           className="mb-12"
         />
 

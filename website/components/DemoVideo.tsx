@@ -42,7 +42,7 @@ export default function DemoVideo() {
               Interactive demo
             </>
           }
-          title={<>See it in <span className="gradient-text">action</span></>}
+          title="See it in action"
           subtitle="Watch TraceBug capture a bug, find the root cause, and create a GitHub issue — in seconds."
           className="mb-10 lg:mb-12"
         />

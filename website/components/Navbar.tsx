@@ -70,12 +70,7 @@ export default function Navbar() {
             <GitHubIcon size={16} />
           </a>
           <ThemeToggle />
-          <Link
-            href="/auth"
-            className="px-3 py-2 text-[13.5px] text-text-muted hover:text-text-primary transition-colors duration-150 font-medium"
-          >
-            Sign in
-          </Link>
+          {/* PHASE2-CLOUD: "Sign in" → /auth link returns when cloud sharing ships */}
           <a
             href={CHROME_URL}
             target="_blank"
@@ -121,13 +116,7 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="pt-3 pb-1 border-t border-border mt-3 flex flex-col gap-2">
-              <Link
-                href="/auth"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block w-full px-4 py-2.5 text-sm text-center text-text-primary border border-border-strong hover:border-primary/50 rounded-lg transition-colors font-medium"
-              >
-                Sign in
-              </Link>
+              {/* PHASE2-CLOUD: mobile "Sign in" link returns when cloud sharing ships */}
               <a
                 href={CHROME_URL}
                 target="_blank"

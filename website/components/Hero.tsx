@@ -40,7 +40,7 @@ export default function Hero() {
             </span>
             <span className="font-medium text-text-primary">v1.4</span>
             <span className="text-border-strong">·</span>
-            <span>Cloud sharing is here</span>
+            <span>Root-cause hints in every report</span>
             <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
           </a>
         </div>
