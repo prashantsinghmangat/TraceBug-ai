@@ -52,6 +52,9 @@ export default function DocsPage() {
                 { href: "#plugins-hooks", label: "Plugins & Hooks" },
                 { href: "#api-reference", label: "API Reference" },
                 { href: "/docs/mcp", label: "MCP Server — AI Agents Debug Your Reports" },
+                { href: "/docs/playwright", label: "Playwright Reporter — Bug Reports From Failed Tests" },
+                { href: "/docs/ai-debugger", label: "AI Debugger — BYO-Key LLM Analysis" },
+                { href: "/docs/har-export", label: "HAR Export — Portable Network Captures" },
               ].map((item) => (
                 <li key={item.href}>
                   <a
@@ -86,6 +89,42 @@ export default function DocsPage() {
               </div>
             </div>
           </a>
+
+          {/* v1.6 feature cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
+            {[
+              {
+                href: "/docs/playwright",
+                icon: "🎭",
+                title: "Playwright Reporter",
+                desc: "Every failed test becomes a self-contained .html report — upload as a CI artifact, debug with your agent.",
+              },
+              {
+                href: "/docs/ai-debugger",
+                icon: "🧠",
+                title: "AI Debugger",
+                desc: "BYO-key LLM root-cause analysis (Anthropic / OpenAI / Ollama), browser-direct — no backend, key stays local.",
+              },
+              {
+                href: "/docs/har-export",
+                icon: "🌐",
+                title: "HAR Export",
+                desc: "Export captured network activity as a standard HAR 1.2 file — opens in DevTools, Charles, Fiddler, Postman.",
+              },
+            ].map((card) => (
+              <a
+                key={card.href}
+                href={card.href}
+                className="block bg-surface border border-border rounded-xl p-5 hover:border-accent/60 transition-colors"
+              >
+                <span className="text-2xl">{card.icon}</span>
+                <h3 className="text-text-primary font-semibold text-sm mt-3 mb-1">
+                  {card.title}
+                </h3>
+                <p className="text-text-muted text-xs leading-relaxed">{card.desc}</p>
+              </a>
+            ))}
+          </div>
 
           {/* Getting Started */}
           <section id="getting-started" className="mb-16">

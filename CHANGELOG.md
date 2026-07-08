@@ -4,6 +4,10 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-09
+
+> The agent-workflow release. Three ways to get a bug in front of an AI — and none of them phone home: **failed Playwright tests** become the same agent-ready `.html` reports (upload as a CI artifact), **BYO-key LLM analysis** runs browser-direct against Anthropic/OpenAI/Ollama with your key never leaving the page, and **HAR export** hands you your network capture as a standard file you own. Built on the v1.5 local MCP foundation.
+
 ### Added
 
 - **HAR export** (`src/exporters/har-export.ts`) — a new **🌐 Export HAR** button in the Quick Bug modal writes the captured network activity as a standard HAR 1.2 (HTTP Archive) file that opens in Chrome/Firefox DevTools, Charles, Fiddler, and Postman. Reshapes the request/response data TraceBug already captures (method, url, status, timing, query string parsed into name/value pairs, failed-response bodies with a guessed mime type) into the spec — no new capture, no dependency. Spec-optional fields we don't capture (headers, cookies) are emitted as empty arrays / `-1` sentinels per the HAR schema, so the output validates. New SDK exports `buildHar` (pure) and `exportSessionAsHar` (build + download). Jam markets "everything a HAR offers" but ships no HAR export — this owns that axis. Docs: `docs/har-export.md`. (`src/ui/quick-bug.ts`, `tests/har-export.test.ts` — 8 tests)
