@@ -2450,7 +2450,7 @@ function showMcpHandoffCard(filename: string): void {
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
         background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
       ">📋 Copy prompt again</button>
-      <a href="https://github.com/prashantsinghmangat/tracebug-ai/blob/main/docs/mcp.md" target="_blank" rel="noopener" style="
+      <a href="https://tracebug.netlify.app/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
         color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
