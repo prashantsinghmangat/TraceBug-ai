@@ -4,6 +4,10 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Real issue-tracker integrations (BYO-token)** (`src/integrations/tracker-client.ts`) — the GitHub / Linear / Slack export buttons now create a **real** issue/message via the provider's API using the user's own token, instead of only prefilling a URL or copying markdown. The call goes **directly from the browser to the provider** — token in `localStorage`, no OAuth, no TraceBug backend — the same privacy pattern as the BYO-key AI Debugger. GitHub uses a PAT (`POST /repos/{owner}/{repo}/issues`), which also **lifts the ~6–8 KB URL-prefill truncation cap** (the full report body travels in the request body); Linear uses a personal API key (GraphQL `issueCreate`, returns the issue URL + identifier); Slack uses an incoming webhook (fire-and-forget). A **🔗 Configure integrations** modal (More menu) stores per-provider tokens; when a provider is configured its export button files for real, otherwise it falls back to the existing URL/copy flow. Jira Cloud is intentionally excluded (CORS-blocked for browser XHR) and stays copy-markup. New SDK exports: `createTrackerIssue`, `createGitHubIssue`, `createLinearIssue`, `sendSlackMessage`, `getIntegrationsConfig`/`setIntegrationsConfig`/`clearIntegrationsConfig`, `hasIntegration`. (`src/ui/quick-bug.ts`, `tests/tracker-client.test.ts` — 11 tests)
+
 ## [1.6.0] - 2026-07-09
 
 > The agent-workflow release. Three ways to get a bug in front of an AI — and none of them phone home: **failed Playwright tests** become the same agent-ready `.html` reports (upload as a CI artifact), **BYO-key LLM analysis** runs browser-direct against Anthropic/OpenAI/Ollama with your key never leaving the page, and **HAR export** hands you your network capture as a standard file you own. Built on the v1.5 local MCP foundation.

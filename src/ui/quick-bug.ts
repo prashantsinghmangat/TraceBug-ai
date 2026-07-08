@@ -15,7 +15,7 @@ import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
 import { generateBugTitle, generateFlowSummary } from "../title-generator";
 import { captureEnvironment } from "../environment";
-import { ScreenshotData, StoredSession } from "../types";
+import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast } from "./toast";
 import { escapeHtml } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
@@ -36,6 +36,11 @@ import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
 import { getElementAnnotations, getDrawRegions } from "../annotation-store";
 import { openLinearIssue } from "../linear-issue";
 import { generateSlackPost } from "../slack-export";
+import {
+  createTrackerIssue, hasIntegration,
+  getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
+  TRACKER_LABELS, type TrackerProvider, type IntegrationsConfig,
+} from "../integrations/tracker-client";
 
 // Caller can set this from the SDK init so the modal knows which repo to target
 let _githubRepo: string | null = null;
@@ -496,6 +501,7 @@ function _openModal(
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">△ Linear</button>
             <button data-action="slack" class="tb-qb-more-item" role="menuitem">💬 Slack</button>
             <button data-action="jira" class="tb-qb-more-item" role="menuitem">🎫 Jira</button>
+            <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">🔗 Configure integrations…</button>
           </div>
         </div>
       </div>
@@ -723,16 +729,14 @@ function _openModal(
   // Open in GitHub — prefilled URL, opens new tab (no API key needed)
   const openGhBtn = modal.querySelector('[data-action="open-github"]');
   if (openGhBtn && _githubRepo) {
-    openGhBtn.addEventListener("click", () => {
+    openGhBtn.addEventListener("click", async () => {
       const { title, description } = getDraft();
-      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-      const session = sessions[0];
-      const report = session ? buildReport(session) : null;
+      const report = _reportFromDraft(title, description);
       if (!report) { showToast("No session data yet", root); return; }
-      report.title = title;
-      // Inject user's description above the auto-generated body
+      // Real API (BYO-token) when configured; otherwise the prefilled-URL flow.
+      if (hasIntegration("github") && await _fileViaTracker("github", report, root, screenshots, close)) return;
       const repo = _githubRepo!; // checked in outer if
-      const ok = openGitHubIssue(repo, { ...report, steps: `${description}\n\n---\n\n${report.steps}` });
+      const ok = openGitHubIssue(repo, report);
       if (ok) {
         const tail = screenshots.length ? ` \u00b7 ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"} downloading` : "";
         showToast(`\u2713 GitHub issue page opened${tail}`, root);
@@ -749,6 +753,10 @@ function _openModal(
   // Copy actions
   modal.querySelector('[data-action="github"]')!.addEventListener("click", async () => {
     const { title, description } = getDraft();
+    if (hasIntegration("github")) {
+      const report = _reportFromDraft(title, description);
+      if (report && await _fileViaTracker("github", report, root, screenshots, close)) return;
+    }
     const markdown = _buildGitHubMarkdown(title, description, primary);
     const ok = await _copyToClipboard(markdown);
     const tail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
@@ -1091,14 +1099,12 @@ function _openModal(
   }
 
   // Linear — open prefilled new-issue URL in a new tab (no API key needed).
-  modal.querySelector('[data-action="linear"]')!.addEventListener("click", () => {
+  modal.querySelector('[data-action="linear"]')!.addEventListener("click", async () => {
     const { title, description } = getDraft();
-    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-    const session = sessions[0];
-    const r = session ? buildReport(session) : null;
+    const r = _reportFromDraft(title, description);
     if (!r) { showToast("No session data yet", root); return; }
-    r.title = title;
-    const ok = openLinearIssue({ ...r, steps: `${description}\n\n---\n\n${r.steps}` });
+    if (hasIntegration("linear") && await _fileViaTracker("linear", r, root, screenshots, close)) return;
+    const ok = openLinearIssue(r);
     if (ok) {
       const tail = screenshots.length ? ` \u00b7 ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"} downloading` : "";
       showToast(`\u2713 Linear new-issue page opened${tail}`, root);
@@ -1114,11 +1120,9 @@ function _openModal(
   // Slack — copy Slack-formatted bug summary to clipboard.
   modal.querySelector('[data-action="slack"]')!.addEventListener("click", async () => {
     const { title, description } = getDraft();
-    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-    const session = sessions[0];
-    const r = session ? buildReport(session) : null;
+    const r = _reportFromDraft(title, description);
     if (!r) { showToast("No session data yet", root); return; }
-    r.title = title;
+    if (hasIntegration("slack") && await _fileViaTracker("slack", r, root, screenshots, close)) return;
     const text = generateSlackPost(r, description);
     const ok = await _copyToClipboard(text);
     showToast(ok ? "\u2713 Slack-formatted summary copied" : "Copy failed", root);
@@ -1135,6 +1139,8 @@ function _openModal(
       showAIConfigModal(root, () => _rerenderAITab(modal, data));
     } else if (action === "ai-generate") {
       void _runAIAnalysis(root, modal, data);
+    } else if (action === "integrations-configure") {
+      showIntegrationsConfigModal(root, () => {});
     }
   });
 
@@ -1368,6 +1374,49 @@ function _videoFilename(video: VideoRecording): string {
   const ext = video.mimeType.includes("mp4") ? "mp4" : "webm";
   const stamp = new Date(video.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
   return `tracebug-recording-${stamp}.${ext}`;
+}
+
+// Build a report from the latest session for an export action: newest session,
+// user's title, and their description prepended to the auto-generated steps.
+function _reportFromDraft(title: string, description: string): BugReport | null {
+  const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
+  const session = sessions[0];
+  if (!session) return null;
+  const report = buildReport(session);
+  report.title = title;
+  report.steps = `${description}\n\n---\n\n${report.steps}`;
+  return report;
+}
+
+// File the report via a configured real integration (GitHub/Linear/Slack API).
+// Returns true if it ran the full success flow; false on error so the caller
+// can fall back to the URL-prefill / copy path.
+async function _fileViaTracker(
+  provider: TrackerProvider,
+  report: BugReport,
+  root: HTMLElement,
+  screenshots: ScreenshotData[],
+  close: () => void,
+): Promise<boolean> {
+  showToast(`Creating ${TRACKER_LABELS[provider]}…`, root);
+  try {
+    const result = await createTrackerIssue(provider, report);
+    const ref = result.ref ? ` ${result.ref}` : "";
+    if (result.url) {
+      window.open(result.url, "_blank", "noopener,noreferrer");
+      showToast(`✓ ${TRACKER_LABELS[provider]} issue created${ref}`, root);
+    } else {
+      showToast(`✓ Sent to ${TRACKER_LABELS[provider]}`, root);
+    }
+    if (screenshots.length) _downloadAllScreenshots(screenshots);
+    _downloadVideoIfPresent();
+    _clearDraft();
+    setTimeout(close, 300);
+    return true;
+  } catch (err) {
+    showToast(`${TRACKER_LABELS[provider]} failed: ${(err as Error)?.message || "error"}`, root);
+    return false;
+  }
 }
 
 function _buildGitHubMarkdown(title: string, description: string, screenshot: ScreenshotData | null): string {
@@ -2081,6 +2130,86 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
     if (p !== "ollama" && !cfg.apiKey) { showToast("Enter an API key", root); keyEl.focus(); return; }
     setAIConfig(cfg);
     showToast("✓ AI provider saved", root);
+    close();
+    onSaved();
+  });
+}
+
+function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): void {
+  document.getElementById("tb-int-config")?.remove();
+  const cfg = getIntegrationsConfig();
+
+  const overlay = document.createElement("div");
+  overlay.id = "tb-int-config";
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
+    "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+
+  const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px";
+  const lbl = "font-size:12px;color:#94A3B8";
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3">
+      <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">🔗 Integrations — bring your own token</div>
+        <div style="font-size:12px;color:#94A3B8;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">🐙 GitHub</div>
+          <label style="${lbl}">Personal access token (repo scope)
+            <input data-int-gh-token type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" value="${escapeHtml(cfg.github?.token || "")}" style="${fld}" /></label>
+          <label style="${lbl};display:block;margin-top:8px">Repository (owner/repo)
+            <input data-int-gh-repo type="text" spellcheck="false" placeholder="acme/app" value="${escapeHtml(cfg.github?.repo || "")}" style="${fld}" /></label>
+          <label style="${lbl};display:block;margin-top:8px">Labels (comma-separated, optional)
+            <input data-int-gh-labels type="text" spellcheck="false" placeholder="bug, tracebug" value="${escapeHtml((cfg.github?.labels || []).join(", "))}" style="${fld}" /></label>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">△ Linear</div>
+          <label style="${lbl}">Personal API key
+            <input data-int-ln-key type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" value="${escapeHtml(cfg.linear?.apiKey || "")}" style="${fld}" /></label>
+          <label style="${lbl};display:block;margin-top:8px">Team ID
+            <input data-int-ln-team type="text" spellcheck="false" placeholder="team UUID" value="${escapeHtml(cfg.linear?.teamId || "")}" style="${fld}" /></label>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">💬 Slack</div>
+          <label style="${lbl}">Incoming webhook URL
+            <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" value="${escapeHtml(cfg.slack?.webhookUrl || "")}" style="${fld}" /></label>
+        </div>
+      </div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#14161E;border-top:1px solid rgba(255,255,255,0.06)">
+        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
+        <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
+      </div>
+    </div>`;
+
+  const host = document.getElementById(MODAL_ID) || document.body;
+  host.appendChild(overlay);
+
+  const val = (sel: string) => overlay.querySelector<HTMLInputElement>(sel)?.value.trim() || "";
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("[data-int-close]")?.addEventListener("click", close);
+  overlay.querySelector("[data-int-clear]")?.addEventListener("click", () => {
+    clearIntegrationsConfig();
+    showToast("Integrations removed", root);
+    close();
+    onSaved();
+  });
+  overlay.querySelector("[data-int-save]")?.addEventListener("click", () => {
+    const next: IntegrationsConfig = {};
+    const ghToken = val("[data-int-gh-token]"), ghRepo = val("[data-int-gh-repo]");
+    if (ghToken && ghRepo) {
+      const labels = val("[data-int-gh-labels]").split(",").map((s) => s.trim()).filter(Boolean);
+      next.github = { token: ghToken, repo: ghRepo, labels: labels.length ? labels : undefined };
+    }
+    const lnKey = val("[data-int-ln-key]"), lnTeam = val("[data-int-ln-team]");
+    if (lnKey && lnTeam) next.linear = { apiKey: lnKey, teamId: lnTeam };
+    const slHook = val("[data-int-sl-hook]");
+    if (slHook) next.slack = { webhookUrl: slHook };
+    setIntegrationsConfig(next);
+    showToast("✓ Integrations saved", root);
     close();
     onSaved();
   });
