@@ -21,6 +21,7 @@ import { escapeHtml } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
+import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
@@ -484,6 +485,7 @@ function _openModal(
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">🤖 Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">📦 Export .html</button>
+        <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">🌐 Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">🔗 Share link</button>
         PHASE2-CLOUD -->
@@ -867,6 +869,27 @@ function _openModal(
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
+    }
+  });
+
+  // Export HAR — standard HTTP Archive of the captured network activity.
+  modal.querySelector('[data-action="export-har"]')?.addEventListener("click", () => {
+    if (!data.currentSession) {
+      showToast("No session to export yet", root);
+      return;
+    }
+    try {
+      const report = buildReport(data.currentSession);
+      const requests = report.networkRequests?.length || report.networkErrors?.length || 0;
+      if (requests === 0) {
+        showToast("No network activity captured to export", root);
+        return;
+      }
+      const result = exportSessionAsHar(report);
+      showToast(`✓ HAR exported · ${result.entryCount} request${result.entryCount === 1 ? "" : "s"}`, root);
+    } catch (err) {
+      console.warn("[TraceBug] HAR export failed:", err);
+      showToast("HAR export failed", root);
     }
   });
 

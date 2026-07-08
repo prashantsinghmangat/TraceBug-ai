@@ -164,6 +164,10 @@ Run real LLM root-cause analysis with **your own key** — Anthropic, OpenAI, or
 
 Combined with the local heuristic hint and the local MCP server, this is **AI debugging that never phones home** — the one position no cloud-hosted, metered competitor can copy. See [docs/ai-debugger.md](docs/ai-debugger.md).
 
+### 🌐 HAR Export (v1.6)
+
+One click exports the captured network activity as a standard **HAR 1.2** file that opens in DevTools, Charles, Fiddler, or Postman. No competitor ships this — Jam even markets "everything a HAR offers" without the export. Your network capture is a portable file you own, not a row in someone's cloud. See [docs/har-export.md](docs/har-export.md).
+
 ### Auto-Captured (Zero Effort)
 
 | What | Details |

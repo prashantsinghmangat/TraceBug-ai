@@ -171,6 +171,8 @@ export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint } from "./
 export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
+export { buildHar, exportSessionAsHar } from "./exporters/har-export";
+export type { HarLog, HarExportResult } from "./exporters/har-export";
 export {
   runLLMAnalysis, buildAnalysisPrompt,
   getAIConfig, setAIConfig, clearAIConfig, hasAIKey,
