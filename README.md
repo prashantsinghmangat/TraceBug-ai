@@ -147,6 +147,17 @@ Kicking off is one paste: the extension shows a ready-made agent prompt after ev
 
 Other tools' MCP servers are cloud-hosted: your bug data must live on their servers first. TraceBug's runs on your machine over stdio and opens **zero network connections**. Try it instantly — this repo ships a demo report and a pre-configured [`.mcp.json`](.mcp.json). See [docs/mcp.md](docs/mcp.md).
 
+### 🎭 Playwright Reporter — Bug Reports From Failed Tests (v1.6)
+
+Every failed Playwright test becomes the same self-contained `.html` bug report — assertion error + code snippet, step timeline as repro steps, page console + network (via the optional fixture), failure screenshot, and a root-cause hint. Upload `bug-reports/` as a CI artifact, then debug it with your agent via the MCP server:
+
+```ts
+// playwright.config.ts — that's the whole setup
+reporter: [["list"], ["tracebug-sdk/playwright", { outputDir: "bug-reports" }]],
+```
+
+Nobody else captures bugs from test runs as portable files — cloud tools can't attach their viewer to a CI artifact. See [docs/playwright.md](docs/playwright.md).
+
 ### Auto-Captured (Zero Effort)
 
 | What | Details |

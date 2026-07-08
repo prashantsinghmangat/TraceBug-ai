@@ -2,6 +2,12 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Playwright reporter** (`tracebug-sdk/playwright`) — every failed test writes a self-contained TraceBug `.html` report to `outputDir` (default `bug-reports/`): assertion error + Playwright code snippet, `test.step()`/`pw:api` timeline as repro steps and timeline events, failure screenshots from attachments, project metadata, and a local root-cause hint (5xx → high, 4xx/page error → medium, assertion-only → low). Optional `traceBugPage` fixture adds page console, uncaught errors, network requests with failed-response bodies, and navigations (attached only on failure, 500-entry caps). Reports are written only for the final retry; the reporter can never fail the run; output is verified readable by the MCP server (fuzzy title lookup + investigation guide). Zero runtime deps — the module imports nothing from `@playwright/test` (structural types), so it builds and tests without Playwright installed. New `./playwright` subpath export, Node-side tsup entry, and `tsconfig.node.json` for typechecking Node code (`cli/`, `src/reporters/`). Docs: `docs/playwright.md`. (`src/reporters/playwright.ts`, `tests/playwright-reporter.test.ts` — 5 tests)
+
 ## [1.5.0] - 2026-07-08
 
 > The MCP release: TraceBug exports become agent-ready. `npx -y tracebug mcp` gives Claude Code / Cursor / VS Code read access to every exported bug report — fully local, zero network connections.

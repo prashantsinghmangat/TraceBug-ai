@@ -37,6 +37,18 @@ export default defineConfig([
     sourcemap: true,
     outDir: "dist",
   },
+  // ── Playwright reporter (Node-side, subpath export ./playwright) ──────
+  {
+    entry: { playwright: "src/reporters/playwright.ts" },
+    format: ["cjs", "esm"],
+    dts: true,
+    clean: false,
+    splitting: false,
+    sourcemap: false,
+    outDir: "dist",
+    platform: "node",
+    target: "node18",
+  },
   // ── CLI build ─────────────────────────────────────────────────────────
   {
     entry: { bin: "cli/bin.ts" },

@@ -18,3 +18,8 @@ packages/tracebug/bin.mjs
 
 # Local release artifacts (extension zips etc.)
 releases/
+
+# Playwright e2e output
+e2e/bug-reports/
+test-results/
+playwright-report/
