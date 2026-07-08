@@ -328,6 +328,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 const OFFSCREEN_URL = chrome.runtime.getURL("offscreen.html");
 let _offscreenCreating = null;
 
+// Chrome hosts the recorder page as an offscreen document. Firefox has no
+// chrome.offscreen API (nor chrome.runtime.getContexts), so it hosts the same
+// page (offscreen.html + offscreen.js) in a small popup window instead — a
+// visible extension document is exactly what Firefox's getDisplayMedia needs.
+// Both paths speak the identical tb:rec:* message contract, so only the
+// host's create/teardown differs.
+const HAS_OFFSCREEN =
+  typeof chrome.offscreen?.createDocument === "function" &&
+  typeof chrome.runtime.getContexts === "function";
+let _recorderWindowId = null;
+
 async function hasOffscreenDocument() {
   // chrome.runtime.getContexts is the modern (Chrome 116+) way to check.
   if (typeof chrome.runtime.getContexts === "function") {
@@ -366,6 +377,46 @@ async function closeOffscreenDocument() {
   try { await chrome.offscreen.closeDocument(); } catch {}
 }
 
+// ── Firefox recorder-window host ────────────────────────────────────────────
+// Opens offscreen.html in a small popup window (Firefox has no offscreen API).
+// The page's offscreen.js listener is the same one Chrome's offscreen doc runs,
+// so background forwards tb:rec:* messages to it unchanged.
+
+async function ensureRecorderWindow() {
+  if (_recorderWindowId != null) {
+    try { await chrome.windows.get(_recorderWindowId); return; }
+    catch { _recorderWindowId = null; }
+  }
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL("offscreen.html"),
+    type: "popup",
+    width: 480,
+    height: 240,
+    focused: true,
+  });
+  _recorderWindowId = win?.id ?? null;
+  // Let the page install its chrome.runtime.onMessage listener before the
+  // first tb:rec:* message is forwarded to it.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+}
+
+async function closeRecorderWindow() {
+  if (_recorderWindowId == null) return;
+  const id = _recorderWindowId;
+  _recorderWindowId = null;
+  try { await chrome.windows.remove(id); } catch {}
+}
+
+// ── Recorder host dispatch (offscreen on Chrome, popup window on Firefox) ────
+
+async function ensureRecorderHost() {
+  return HAS_OFFSCREEN ? ensureOffscreenDocument() : ensureRecorderWindow();
+}
+
+async function closeRecorderHost() {
+  return HAS_OFFSCREEN ? closeOffscreenDocument() : closeRecorderWindow();
+}
+
 async function handleRecordingMessage(message, sender) {
   // No more silent tabCapture path. We always route to getDisplayMedia so
   // the user gets Chrome's native "Choose what to share" picker — they can
@@ -375,7 +426,7 @@ async function handleRecordingMessage(message, sender) {
   // and produces a recording that always plays back correctly.
   const extraData = {};
 
-  await ensureOffscreenDocument();
+  await ensureRecorderHost();
   // Forward to offscreen with the `_toOffscreen` marker so it knows this is
   // the routed copy. We use a Promise-wrapped sendMessage since the callback
   // form isn't promise-based when invoked across runtime contexts.

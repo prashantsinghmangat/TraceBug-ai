@@ -40,6 +40,8 @@
     "build:cli": "tsup && node -e \"require('fs').copyFileSync('dist/bin.mjs','packages/tracebug/bin.mjs');console.log('[OK] CLI package: packages/tracebug/bin.mjs')\"",
     "build:example": "tsup && cd example-app && npm install && echo [OK] Example app updated",
     "build:ext": "tsup && node tracebug-extension/build/build-ext.mjs",
+    "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
+    "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",
     "dev": "tsup --watch",
     "prepare": "tsup",
     "prepublishOnly": "npm run build",
