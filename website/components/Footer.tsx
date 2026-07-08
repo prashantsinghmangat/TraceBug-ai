@@ -20,6 +20,9 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     links: [
       { label: "Documentation", href: "/docs" },
       { label: "MCP Server", href: "/docs/mcp" },
+      { label: "Playwright Reporter", href: "/docs/playwright" },
+      { label: "AI Debugger", href: "/docs/ai-debugger" },
+      { label: "HAR Export", href: "/docs/har-export" },
       { label: "GitHub", href: REPO, external: true },
       { label: "npm package", href: NPM, external: true },
       { label: "Chrome extension", href: "/#install" },
