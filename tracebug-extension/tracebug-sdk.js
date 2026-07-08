@@ -7900,6 +7900,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vai-conf-low { background: var(--tb-info-bg); color: var(--tb-info); }
 .tb-vai-body { font-size: 13px; color: var(--tb-text); line-height: 1.6; }
 .tb-vai-empty .tb-vai-body { color: var(--tb-text-2); }
+.tb-vai-prompt { margin: 10px 0 0; padding: 10px 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); font-family: var(--tb-mono); font-size: 11px; line-height: 1.55; color: var(--tb-text-2); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
+.tb-vai-copy { margin-top: 10px; padding: 8px 14px; background: var(--tb-accent); color: #fff; border: 0; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
+.tb-vai-copy:hover { filter: brightness(1.1); }
 
 /* Actions tab \u2014 chips */
 .tb-vchips { display: flex; flex-direction: column; gap: 5px; }
@@ -8424,7 +8427,42 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Pattern-based hint <span class="tb-vai-conf tb-vai-conf-' + esc(rc.confidence || "low") + '">' + esc(rc.confidence || "low") + '</span></div><div class="tb-vai-body">' + esc(rc.hint) + '</div></div>';
   }
   aiHtml += '<div class="tb-vai-card tb-vai-empty"><div class="tb-vai-head">LLM analysis</div><div class="tb-vai-body">Open this report in the TraceBug UI to run LLM-based root-cause analysis (BYO API key).</div></div>';
+
+  // Agent hand-off \u2014 this file IS the MCP artifact, so hand the recipient the
+  // exact prompt to paste into Claude Code / Cursor. Filename is recovered
+  // from the file:// URL at view time so the prompt survives renames.
+  var mcpFile = "";
+  try { mcpFile = decodeURIComponent(location.pathname.split(/[\\\\/]/).pop() || ""); } catch (e) {}
+  if (!mcpFile || !/\\.html?$/i.test(mcpFile)) mcpFile = "<this .html export>";
+  var mcpPrompt = 'This is a TraceBug bug report export: ' + mcpFile + '\\n\\n' +
+    '1. Call get_bug_report("' + mcpFile + '") to load the report overview and its investigation guide.\\n' +
+    '2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).\\n' +
+    '3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.\\n\\n' +
+    'If the tracebug MCP server is not connected yet, register it first (point --dir at the folder containing this file):\\n' +
+    'claude mcp add tracebug -- npx tracebug mcp --dir <reports-folder>';
+  aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
+    '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
+    '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +
+    '<button class="tb-vai-copy" id="mcp-prompt-copy" type="button">Copy prompt</button></div>';
   document.getElementById("panel-ai").innerHTML = aiHtml;
+
+  var mcpCopyBtn = document.getElementById("mcp-prompt-copy");
+  if (mcpCopyBtn) mcpCopyBtn.addEventListener("click", function(){
+    var done = function(){ mcpCopyBtn.textContent = "Copied \\u2713"; setTimeout(function(){ mcpCopyBtn.textContent = "Copy prompt"; }, 1100); };
+    // file:// pages don't always get the async clipboard API \u2014 textarea fallback.
+    var fallbackCopy = function(){
+      var ta = document.createElement("textarea");
+      ta.value = mcpPrompt;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) {}
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(mcpPrompt).then(done, fallbackCopy);
+    } else fallbackCopy();
+  });
 
   setBadge("badge-events", (data.events || []).length);
 
@@ -9340,6 +9378,18 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (!s) return "";
     if (s.length <= max) return s;
     return s.slice(0, max - 1) + "\u2026";
+  }
+  function generateMcpPrompt(filename) {
+    return [
+      `This is a TraceBug bug report export: ${filename}`,
+      ``,
+      `1. Call get_bug_report("${filename}") to load the report overview and its investigation guide.`,
+      `2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).`,
+      `3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.`,
+      ``,
+      `If the tracebug MCP server isn't connected yet, register it first (point --dir at the folder containing the export):`,
+      `claude mcp add tracebug -- npx tracebug mcp --dir <reports-folder>`
+    ].join("\n");
   }
   function openInClaude(prompt) {
     if (typeof window === "undefined") return;
@@ -10385,6 +10435,7 @@ ${report.steps}` : userDesc : void 0
         });
         const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 Replay exported \xB7 ${sizeMb} MB`, root);
+        showMcpHandoffCard(result.filename);
       } catch (err) {
         console.warn("[TraceBug] HTML replay export failed:", err);
         showToast("Replay export failed", root);
@@ -11734,6 +11785,105 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           btn.textContent = "\u2713 Copied";
           setTimeout(() => {
             btn.innerHTML = "\u{1F4CB} Copy again";
+          }, 1100);
+        }
+      } else if (action === "close" || target === overlay) close();
+    });
+    const onKey = (e) => {
+      if (e.key === "Escape") close();
+    };
+    function close() {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey);
+    }
+    document.addEventListener("keydown", onKey);
+  }
+  function showMcpHandoffCard(filename) {
+    var _a;
+    (_a = document.getElementById("tb-mcp-handoff")) == null ? void 0 : _a.remove();
+    const prompt = generateMcpPrompt(filename);
+    try {
+      navigator.clipboard.writeText(prompt);
+    } catch (e) {
+    }
+    const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const overlay = document.createElement("div");
+    overlay.id = "tb-mcp-handoff";
+    overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 2147483647;
+    background: rgba(5, 7, 12, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    font-family: system-ui, -apple-system, sans-serif;
+  `;
+    const card = document.createElement("div");
+    card.style.cssText = `
+    width: 100%; max-width: 560px; max-height: 80vh;
+    background: #14161E;
+    border: 1px solid rgba(124,92,255,0.28);
+    border-radius: 14px;
+    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    color: #E6EDF3;
+    overflow: hidden;
+  `;
+    card.innerHTML = `
+    <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:16px;line-height:1">\u{1F916}</span>
+        <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">Debug this export with your coding agent</div>
+      </div>
+      <div style="font-size:12px;color:#94A3B8;line-height:1.45">
+        \u2713 Prompt copied \xB7 paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.
+        The agent reads the .html via TraceBug's local MCP server \u2014 nothing is uploaded.
+      </div>
+    </div>
+    <pre style="
+      margin:0;padding:14px 18px;
+      flex:1;overflow:auto;
+      background:#0B0D12;
+      font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
+      font-size:11.5px;line-height:1.55;
+      color:#CBD2DA;
+      white-space:pre-wrap;word-break:break-word;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+    ">${escaped}</pre>
+    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#14161E">
+      <button data-mcp-action="copy" style="
+        flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+        padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
+        background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+      ">\u{1F4CB} Copy prompt again</button>
+      <a href="https://github.com/prashantsinghmangat/tracebug-ai/blob/main/docs/mcp.md" target="_blank" rel="noopener" style="
+        display:inline-flex;align-items:center;justify-content:center;gap:6px;
+        padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
+        color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
+      ">MCP setup guide \u2197</a>
+      <button data-mcp-action="close" aria-label="Close" style="
+        display:inline-flex;align-items:center;justify-content:center;
+        width:38px;padding:10px 0;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
+        background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif;
+      ">\u2715</button>
+    </div>
+  `;
+    overlay.appendChild(card);
+    const host = document.getElementById(MODAL_ID2) || document.body;
+    host.appendChild(overlay);
+    overlay.addEventListener("click", (e) => {
+      var _a2;
+      const target = e.target;
+      const action = (_a2 = target.closest("[data-mcp-action]")) == null ? void 0 : _a2.getAttribute("data-mcp-action");
+      if (action === "copy") {
+        try {
+          navigator.clipboard.writeText(prompt);
+        } catch (e2) {
+        }
+        const btn = target.closest("button");
+        if (btn) {
+          btn.textContent = "\u2713 Copied";
+          setTimeout(() => {
+            btn.innerHTML = "\u{1F4CB} Copy prompt again";
           }, 1100);
         }
       } else if (action === "close" || target === overlay) close();
@@ -49561,6 +49711,7 @@ First element: \`${exampleSnippet}\``,
     generateGitHubIssue: () => generateGitHubIssue,
     generateGitHubIssueUrl: () => generateGitHubIssueUrl,
     generateJiraTicket: () => generateJiraTicket,
+    generateMcpPrompt: () => generateMcpPrompt,
     generatePdfReport: () => generatePdfReport,
     generateReproSteps: () => generateReproSteps,
     generateRootCauseHint: () => generateRootCauseHint,

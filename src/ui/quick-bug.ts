@@ -23,7 +23,7 @@ import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
-import { generateAIPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
+import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
 // PHASE2-CLOUD: import { getBridge } from "../auth/iframe-bridge";
 import { showScreenshotTrimModal } from "./screenshot-trim-modal";
 import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
@@ -855,6 +855,10 @@ function _openModal(
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`\u2713 Replay exported \u00b7 ${sizeMb} MB`, root);
+      // Offer the agent hand-off: the export is exactly what the MCP server
+      // reads, so the natural next step is pasting this prompt into Claude
+      // Code / Cursor next to the codebase that owns the bug.
+      showMcpHandoffCard(result.filename);
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
@@ -2378,6 +2382,102 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     else if (action === "close" || target === overlay) close();
   });
 
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  document.addEventListener("keydown", onKey);
+}
+
+// ── MCP hand-off card ───────────────────────────────────────────────────
+// Shown after a successful .html export. The exported file is exactly what
+// the TraceBug MCP server reads, so this closes the loop: copy one prompt,
+// paste it into Claude Code / Cursor sitting in the codebase, and the agent
+// debugs from the report. Mirrors Jam's "copy AI prompt" hand-off — but the
+// data stays on disk instead of a vendor cloud.
+function showMcpHandoffCard(filename: string): void {
+  document.getElementById("tb-mcp-handoff")?.remove();
+  const prompt = generateMcpPrompt(filename);
+  try { navigator.clipboard.writeText(prompt); } catch {}
+
+  const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const overlay = document.createElement("div");
+  overlay.id = "tb-mcp-handoff";
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 2147483647;
+    background: rgba(5, 7, 12, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    font-family: system-ui, -apple-system, sans-serif;
+  `;
+  const card = document.createElement("div");
+  card.style.cssText = `
+    width: 100%; max-width: 560px; max-height: 80vh;
+    background: #14161E;
+    border: 1px solid rgba(124,92,255,0.28);
+    border-radius: 14px;
+    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    color: #E6EDF3;
+    overflow: hidden;
+  `;
+  card.innerHTML = `
+    <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:16px;line-height:1">🤖</span>
+        <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">Debug this export with your coding agent</div>
+      </div>
+      <div style="font-size:12px;color:#94A3B8;line-height:1.45">
+        ✓ Prompt copied · paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.
+        The agent reads the .html via TraceBug's local MCP server — nothing is uploaded.
+      </div>
+    </div>
+    <pre style="
+      margin:0;padding:14px 18px;
+      flex:1;overflow:auto;
+      background:#0B0D12;
+      font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
+      font-size:11.5px;line-height:1.55;
+      color:#CBD2DA;
+      white-space:pre-wrap;word-break:break-word;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+    ">${escaped}</pre>
+    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#14161E">
+      <button data-mcp-action="copy" style="
+        flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+        padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
+        background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+      ">📋 Copy prompt again</button>
+      <a href="https://github.com/prashantsinghmangat/tracebug-ai/blob/main/docs/mcp.md" target="_blank" rel="noopener" style="
+        display:inline-flex;align-items:center;justify-content:center;gap:6px;
+        padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
+        color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
+      ">MCP setup guide ↗</a>
+      <button data-mcp-action="close" aria-label="Close" style="
+        display:inline-flex;align-items:center;justify-content:center;
+        width:38px;padding:10px 0;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
+        background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif;
+      ">✕</button>
+    </div>
+  `;
+  overlay.appendChild(card);
+  const host = document.getElementById(MODAL_ID) || document.body;
+  host.appendChild(overlay);
+
+  overlay.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    const action = target.closest("[data-mcp-action]")?.getAttribute("data-mcp-action");
+    if (action === "copy") {
+      try { navigator.clipboard.writeText(prompt); } catch {}
+      const btn = target.closest("button");
+      if (btn) {
+        btn.textContent = "✓ Copied";
+        setTimeout(() => { btn.innerHTML = "📋 Copy prompt again"; }, 1100);
+      }
+    } else if (action === "close" || target === overlay) close();
+  });
   const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
   function close() {
     overlay.remove();

@@ -165,6 +165,26 @@ function truncate(s: string, max: number): string {
   return s.slice(0, max - 1) + "…";
 }
 
+// ── MCP hand-off prompt ───────────────────────────────────────────────────
+// The paste-into-your-agent prompt shown after an .html export. Unlike
+// generateAIPrompt (which inlines the bug data for chat UIs), this one points
+// a coding agent at the export file via the TraceBug MCP server, so the agent
+// pulls exactly the data it needs — including screenshots as real images —
+// and can cross-reference the codebase it's already sitting in.
+
+export function generateMcpPrompt(filename: string): string {
+  return [
+    `This is a TraceBug bug report export: ${filename}`,
+    ``,
+    `1. Call get_bug_report("${filename}") to load the report overview and its investigation guide.`,
+    `2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).`,
+    `3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.`,
+    ``,
+    `If the tracebug MCP server isn't connected yet, register it first (point --dir at the folder containing the export):`,
+    `claude mcp add tracebug -- npx tracebug mcp --dir <reports-folder>`,
+  ].join("\n");
+}
+
 // ── Deep-link helpers ─────────────────────────────────────────────────────
 // URL-prefilled chat URLs work for short prompts. Above ~6 KB we fall back
 // to opening an empty chat + leaving the prompt on the clipboard.

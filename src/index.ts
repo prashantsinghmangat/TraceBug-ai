@@ -170,7 +170,7 @@ export type { NetworkFailure } from "./collectors";
 export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint } from "./types";
 export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
-export { generateAIPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
+export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
 export type { AIPromptOptions } from "./exporters/ai-prompt";
 export type { JiraTicket } from "./jira-issue";
 export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";

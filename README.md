@@ -141,7 +141,9 @@ Your coding agent (Claude Code, Cursor, Windsurf, VS Code) reads TraceBug bug re
 claude mcp add tracebug -- npx tracebug mcp --dir ./bug-reports
 ```
 
-The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets six tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, and `get_screenshot` (real image content). Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
+The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets six tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, and `get_screenshot` (real image content). `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
+
+Kicking off is one paste: the extension shows a ready-made agent prompt after every **Export .html** (auto-copied), the exported file itself carries the same prompt in its **AI** tab, and in Claude Code you can just type `/tracebug:debug_bug_report`.
 
 Other tools' MCP servers are cloud-hosted: your bug data must live on their servers first. TraceBug's runs on your machine over stdio and opens **zero network connections**. Try it instantly — this repo ships a demo report and a pre-configured [`.mcp.json`](.mcp.json). See [docs/mcp.md](docs/mcp.md).
 

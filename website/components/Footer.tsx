@@ -19,6 +19,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     title: "Resources",
     links: [
       { label: "Documentation", href: "/docs" },
+      { label: "MCP Server", href: "/docs/mcp" },
       { label: "GitHub", href: REPO, external: true },
       { label: "npm package", href: NPM, external: true },
       { label: "Chrome extension", href: "/#install" },

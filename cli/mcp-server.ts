@@ -113,15 +113,87 @@ export function scanReportFiles(dir: string, depth = 0): string[] {
 // stripped from text results (token-heavy); get_screenshot returns real image
 // content instead.
 
+// Resolves the way an agent (or human) actually refers to a report: exact
+// path first, then bare filename anywhere under the base dir, then a
+// case-insensitive substring of the filename or report title. Jam's tools
+// accept "a UUID or a jam.dev URL" for the same reason — agents paste
+// whatever identifier they have.
 function requireReport(baseDir: string, file: string): { payload: ReportPayload; resolved: string } {
-  const resolved = path.isAbsolute(file) ? file : path.join(baseDir, file);
-  const payload = parseReportFile(resolved);
-  if (!payload) {
-    throw new Error(
-      `Not a TraceBug export: ${resolved}. Use list_bug_reports to find valid report files.`
+  const direct = path.isAbsolute(file) ? file : path.join(baseDir, file);
+  const directPayload = parseReportFile(direct);
+  if (directPayload) return { payload: directPayload, resolved: direct };
+
+  const candidates = scanReportFiles(baseDir);
+  const query = file.toLowerCase();
+  let match = candidates.find((c) => path.basename(c).toLowerCase() === query);
+  if (!match) {
+    match = candidates.find((c) => {
+      if (path.basename(c).toLowerCase().includes(query)) return true;
+      const p = parseReportFile(c);
+      return p !== null && p.meta.title.toLowerCase().includes(query);
+    });
+  }
+  if (match) return { payload: parseReportFile(match)!, resolved: match };
+
+  const available = candidates.map((c) => path.relative(baseDir, c) || c);
+  throw new Error(
+    `Not a TraceBug export: ${file}. ` +
+      (available.length
+        ? `Available reports: ${available.join(", ")}`
+        : `No reports found under ${baseDir} — check the server's --dir.`)
+  );
+}
+
+// ── Investigation guide ──────────────────────────────────────────────────
+// A prioritized "what to fetch next" list computed from what the report
+// actually contains. Returned by get_bug_report so the agent spends its
+// tool calls on the data that matters for THIS bug instead of guessing.
+
+export function buildInvestigationGuide(p: ReportPayload): string[] {
+  const steps: string[] = [];
+  const consoleErrors =
+    p.consoleLogs?.filter((l) => l.level === "error").length ?? p.consoleErrors?.length ?? 0;
+  const netFailures = p.networkErrors?.length ?? 0;
+  const frustration = (p.actionChips ?? []).filter((c) => c.frustration).length;
+  const screenshots = p.screenshots?.length ?? 0;
+  const hintMentionsNetwork = /\b(request|response|http|4\d\d|5\d\d|status|api|fetch|xhr)\b/i.test(
+    p.rootCauseHint?.hint ?? ""
+  );
+
+  // When the root-cause hint blames a request, the network trail leads;
+  // otherwise console stack traces are the fastest path to a file name.
+  const networkStep =
+    netFailures > 0 &&
+    `[HIGH] get_network_activity — ${netFailures} failed request${netFailures === 1 ? "" : "s"} captured, with response-body snippets that often name the server-side error.`;
+  const consoleStep =
+    consoleErrors > 0 &&
+    `[HIGH] get_console_errors — ${consoleErrors} console error${consoleErrors === 1 ? "" : "s"} captured; stack traces point at the failing file and function.`;
+  for (const step of hintMentionsNetwork ? [networkStep, consoleStep] : [consoleStep, networkStep]) {
+    if (step) steps.push(step);
+  }
+
+  steps.push(
+    frustration > 0
+      ? `[HIGH] get_repro_steps — includes ${frustration} frustration signal${frustration === 1 ? "" : "s"} (rage/dead clicks) marking where the user got stuck, plus the action-to-error timeline.`
+      : `[MEDIUM] get_repro_steps — the plain-English steps and session timeline show what the user did leading up to the bug.`
+  );
+
+  if (screenshots > 0) {
+    steps.push(
+      `[${consoleErrors || netFailures ? "MEDIUM" : "HIGH"}] get_screenshot — ${screenshots} screenshot${screenshots === 1 ? "" : "s"} showing the visual state when the bug was captured${consoleErrors || netFailures ? "" : " (no errors were captured, so visuals are a primary source)"}.`
     );
   }
-  return { payload, resolved };
+
+  if (p.video?.comments?.length) {
+    steps.push(
+      `[MEDIUM] The video has ${p.video.comments.length} timestamped tester comment${p.video.comments.length === 1 ? "" : "s"} (included in get_bug_report) — read them, they mark the exact moments the tester flagged.`
+    );
+  }
+
+  steps.push(
+    "Finally: cross-reference the findings with the codebase — search for the failing endpoint path, the symbols in the stack trace, or the UI text near the error — to locate the root cause and propose a fix."
+  );
+  return steps;
 }
 
 export function toolListBugReports(baseDir: string, args: { dir?: string }) {
@@ -147,7 +219,14 @@ export function toolListBugReports(baseDir: string, args: { dir?: string }) {
       },
     };
   });
-  return { count: reports.length, scannedDir: scanDir, reports };
+  return {
+    count: reports.length,
+    scannedDir: scanDir,
+    reports,
+    ...(reports.length
+      ? { nextStep: "Call get_bug_report on a file for the full overview plus a prioritized investigation guide." }
+      : {}),
+  };
 }
 
 export function toolGetBugReport(baseDir: string, args: { file: string }) {
@@ -171,8 +250,7 @@ export function toolGetBugReport(baseDir: string, args: { file: string }) {
     video: p.video
       ? { durationMs: p.video.durationMs, comments: p.video.comments }
       : null,
-    note:
-      "Use get_console_errors, get_network_activity, get_repro_steps, and get_screenshot for full detail.",
+    investigationGuide: buildInvestigationGuide(p),
   };
 }
 
@@ -259,7 +337,8 @@ export function toolGetScreenshot(baseDir: string, args: { file: string; index?:
 const FILE_PROP = {
   file: {
     type: "string",
-    description: "Path to a TraceBug export file (.html), absolute or relative to the server's base directory. Get paths from list_bug_reports.",
+    description:
+      "The report to read: a path to a TraceBug export file (.html), absolute or relative to the server's base directory — or just the filename, or a fragment of the filename or report title. Get exact paths from list_bug_reports.",
   },
 } as const;
 
@@ -278,7 +357,7 @@ export const TOOL_DEFINITIONS = [
   {
     name: "get_bug_report",
     description:
-      "Get the overview of one TraceBug bug report: title, summary, severity, root-cause hint, environment, tester annotations, and what captured data is available.",
+      "Get the overview of one TraceBug bug report: title, summary, severity, root-cause hint, environment, tester annotations, and a prioritized investigation guide telling you which tools to call next for this specific bug. Call this before the other get_* tools.",
     inputSchema: { type: "object", properties: { ...FILE_PROP }, required: ["file"] },
   },
   {
@@ -319,6 +398,43 @@ export const TOOL_DEFINITIONS = [
     },
   },
 ];
+
+// ── MCP prompts (prompts/list + prompts/get) ─────────────────────────────
+// The same hand-off prompt TraceBug shows in the extension after an export,
+// exposed as a first-class MCP prompt. In Claude Code it appears as
+// /tracebug:debug_bug_report; other clients surface it in their prompt picker.
+
+export const PROMPT_DEFINITIONS = [
+  {
+    name: "debug_bug_report",
+    description:
+      "Debug a TraceBug bug report: load it, follow its investigation guide, and cross-reference with the codebase to find the root cause and propose a fix.",
+    arguments: [
+      {
+        name: "file",
+        description:
+          "Which report to debug — a path, filename, or title fragment. Omit to pick the most recent report.",
+        required: false,
+      },
+    ],
+  },
+];
+
+export function buildDebugPrompt(file?: string): string {
+  const target = file?.trim();
+  return [
+    target
+      ? `This is a TraceBug bug report: ${target}`
+      : "Debug the most recent TraceBug bug report.",
+    "",
+    target
+      ? `1. Call get_bug_report("${target}") to load the report overview and its investigation guide.`
+      : "1. Call list_bug_reports to find the reports, then get_bug_report on the most recent one to load its overview and investigation guide.",
+    "2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).",
+    "3. Cross-reference the findings with this codebase — search for the failing endpoint path, stack-trace symbols, or the UI text near the error — to identify the root cause.",
+    "4. Propose a concrete fix, citing the files and lines involved, and note edge cases worth testing once it lands.",
+  ].join("\n");
+}
 
 type ToolResult =
   | { content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>; isError?: boolean };
@@ -374,10 +490,10 @@ export function handleMessage(baseDir: string, msg: JsonRpcRequest): object | nu
     case "initialize":
       return reply(msg.id, {
         protocolVersion: (msg.params?.protocolVersion as string) || "2025-06-18",
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, prompts: {} },
         serverInfo: { name: "tracebug", version: SERVER_VERSION },
         instructions:
-          "TraceBug exposes locally-exported bug reports (self-contained .html files) to AI agents. Call list_bug_reports first to discover reports, then drill in with the get_* tools. All data is read from local disk — nothing is uploaded.",
+          "TraceBug exposes locally-exported bug reports (self-contained .html files) to AI agents. Call list_bug_reports to discover reports, then get_bug_report — it returns an investigation guide telling you which get_* tools to call next. All data is read from local disk — nothing is uploaded.",
       });
     case "ping":
       return reply(msg.id, {});
@@ -387,6 +503,21 @@ export function handleMessage(baseDir: string, msg: JsonRpcRequest): object | nu
       const name = msg.params?.name as string;
       const args = (msg.params?.arguments as Record<string, unknown>) ?? {};
       return reply(msg.id, callTool(baseDir, name, args));
+    }
+    case "prompts/list":
+      return reply(msg.id, { prompts: PROMPT_DEFINITIONS });
+    case "prompts/get": {
+      const promptName = msg.params?.name as string;
+      if (promptName !== "debug_bug_report") {
+        return { jsonrpc: "2.0", id: msg.id ?? null, error: { code: -32602, message: `Unknown prompt: ${promptName}` } };
+      }
+      const promptArgs = (msg.params?.arguments as Record<string, string>) ?? {};
+      return reply(msg.id, {
+        description: PROMPT_DEFINITIONS[0].description,
+        messages: [
+          { role: "user", content: { type: "text", text: buildDebugPrompt(promptArgs.file) } },
+        ],
+      });
     }
     default:
       if (isNotification) return null; // e.g. notifications/initialized, notifications/cancelled

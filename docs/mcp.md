@@ -18,6 +18,26 @@ npx tracebug mcp --dir ./bug-reports
 
 4. The agent reads the report, correlates the stack trace with the failed request, finds the actual source file, and proposes a fix — with full context a pasted screenshot could never carry.
 
+## The hand-off prompt
+
+The fastest way to kick off an agent debugging session is to paste this into Claude Code / Cursor (opened in the codebase that owns the bug):
+
+```
+This is a TraceBug bug report export: <report-file.html>
+
+1. Call get_bug_report("<report-file.html>") to load the report overview and its investigation guide.
+2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).
+3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.
+```
+
+You rarely have to type it yourself — TraceBug puts it in front of you at every hand-off point:
+
+- **The extension shows it after every Export .html** (already copied to your clipboard), so the tester can paste it straight into a Slack message next to the file.
+- **The exported .html itself carries it** — the recipient opens the file, clicks the **AI** tab, and hits *Copy prompt*. The file is self-advertising: whoever receives it learns how to feed it to their agent.
+- **It's a first-class MCP prompt** — in Claude Code, type `/tracebug:debug_bug_report` (optionally passing a filename); any MCP client with a prompt picker will surface it. No copy-paste at all.
+
+`get_bug_report` responses include an **investigation guide**: a prioritized list of next steps computed from what the report actually contains (e.g. *"[HIGH] get_network_activity — 2 failed requests captured, with response-body snippets that often name the server-side error"*). The agent spends its tool calls on the data that matters for that specific bug instead of guessing.
+
 ## Setup
 
 ### Claude Code
@@ -81,13 +101,17 @@ npx tracebug mcp [--dir <path>]
 | Tool | What it returns |
 |---|---|
 | `list_bug_reports` | Every TraceBug export under the directory: title, summary, severity, priority, root-cause hint, and counts of captured data. **Agents start here.** |
-| `get_bug_report` | Overview of one report: environment, tester annotations, description, what data is available. |
+| `get_bug_report` | Overview of one report: environment, tester annotations, description, plus the **investigation guide** — a prioritized list of which tools to call next for this specific bug. |
 | `get_console_errors` | Full console capture (errors / warnings / logs) with stack traces. |
 | `get_network_activity` | Failed requests with response-body snippets by default; pass `failuresOnly: false` for every captured request. |
 | `get_repro_steps` | Plain-English reproduction steps, structured user actions (including rage-click / dead-click frustration signals), and the full session timeline. |
 | `get_screenshot` | A screenshot as real image content the agent can see. Screenshots are auto-named from the triggering action (`01_click_save.png`). |
 
 Screenshots and video are deliberately excluded from the text tools (they're token-heavy); `get_screenshot` delivers images on demand.
+
+Every tool's `file` argument is forgiving: pass a path, a bare filename (found anywhere under the scan dir), or a case-insensitive fragment of the filename or report title — `get_bug_report("vendor update")` works. Unresolvable names error with the list of available reports.
+
+The server also exposes one MCP **prompt**, `debug_bug_report` (optional `file` argument) — the same hand-off prompt above, invokable as `/tracebug:debug_bug_report` in Claude Code or from any client's prompt picker.
 
 ## What files does it read?
 
