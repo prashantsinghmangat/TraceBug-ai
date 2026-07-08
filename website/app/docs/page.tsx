@@ -51,6 +51,7 @@ export default function DocsPage() {
                 { href: "#github-integration", label: "GitHub Integration" },
                 { href: "#plugins-hooks", label: "Plugins & Hooks" },
                 { href: "#api-reference", label: "API Reference" },
+                { href: "/docs/mcp", label: "MCP Server — AI Agents Debug Your Reports" },
               ].map((item) => (
                 <li key={item.href}>
                   <a
@@ -63,6 +64,28 @@ export default function DocsPage() {
               ))}
             </ul>
           </div>
+
+          {/* MCP promo card — the newest capability, deep-dive on its own page */}
+          <a
+            href="/docs/mcp"
+            className="block bg-surface border border-accent/30 rounded-xl p-6 mb-12 hover:border-accent/60 transition-colors"
+          >
+            <div className="flex items-start gap-4">
+              <span className="text-2xl">🤖</span>
+              <div>
+                <h3 className="text-text-primary font-semibold mb-1">
+                  New: MCP Server — let AI agents debug your bug reports
+                </h3>
+                <p className="text-text-muted text-sm leading-relaxed">
+                  Connect Claude Code, Cursor, or VS Code to your exported .html
+                  reports. The agent reads the console errors, network failures,
+                  and screenshots, then finds the fix in your codebase — fully
+                  local, nothing uploaded.{" "}
+                  <span className="text-accent">Read the guide →</span>
+                </p>
+              </div>
+            </div>
+          </a>
 
           {/* Getting Started */}
           <section id="getting-started" className="mb-16">

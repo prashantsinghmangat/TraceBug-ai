@@ -15,6 +15,9 @@ import {
   callTool,
   handleMessage,
   TOOL_DEFINITIONS,
+  PROMPT_DEFINITIONS,
+  buildInvestigationGuide,
+  buildDebugPrompt,
 } from '../cli/mcp-server';
 
 // 1×1 transparent PNG
@@ -147,6 +150,50 @@ describe('tool handlers', () => {
     expect(JSON.stringify(r)).not.toContain(TINY_PNG);
   });
 
+  it('get_bug_report includes a prioritized investigation guide', () => {
+    const r = toolGetBugReport(tmpDir, { file: 'bug-report.html' });
+    const guide = r.investigationGuide;
+    expect(guide.length).toBeGreaterThanOrEqual(4);
+    // Root-cause hint blames a request → network leads, console second.
+    expect(guide[0]).toContain('[HIGH] get_network_activity');
+    expect(guide[0]).toContain('1 failed request');
+    expect(guide[1]).toContain('[HIGH] get_console_errors');
+    // Rage click in the fixture → repro steps flagged HIGH with signal count.
+    expect(guide.find((s) => s.includes('get_repro_steps'))).toContain('[HIGH]');
+    expect(guide.find((s) => s.includes('get_screenshot'))).toContain('1 screenshot');
+    expect(guide[guide.length - 1]).toContain('cross-reference');
+  });
+
+  it('investigation guide adapts to what the report contains', () => {
+    const quiet = fixturePayload();
+    quiet.consoleErrors = [];
+    quiet.consoleLogs = [];
+    quiet.networkErrors = [];
+    quiet.rootCauseHint = undefined;
+    quiet.actionChips = [{ verb: 'Clicked', kind: 'click', timestamp: 1751789990000 }];
+    const guide = buildInvestigationGuide(quiet as any);
+    expect(guide.join('\n')).not.toContain('get_console_errors');
+    expect(guide.join('\n')).not.toContain('get_network_activity');
+    // No errors captured → visuals are promoted to a primary source.
+    expect(guide.find((s) => s.includes('get_screenshot'))).toContain('[HIGH]');
+    expect(guide.find((s) => s.includes('get_repro_steps'))).toContain('[MEDIUM]');
+  });
+
+  it('resolves reports by nested filename and by title fragment', () => {
+    // Bare filename of a report one level deep — previously needed 'nested/'.
+    const byName = toolGetBugReport(tmpDir, { file: 'second-report.html' });
+    expect(byName.title).toContain('Vendor Update Fails');
+    // Case-insensitive title fragment.
+    const byTitle = toolGetBugReport(tmpDir, { file: 'vendor update' });
+    expect(byTitle.title).toContain('Vendor Update Fails');
+  });
+
+  it('unresolvable file errors list the available reports', () => {
+    const r = callTool(tmpDir, 'get_bug_report', { file: 'zzz-no-such-thing' });
+    expect(r.isError).toBe(true);
+    expect(r.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('bug-report.html') });
+  });
+
   it('get_console_errors prefers full consoleLogs', () => {
     const r = toolGetConsoleErrors(tmpDir, { file: 'bug-report.html' });
     expect(r.count).toBe(2);
@@ -227,5 +274,33 @@ describe('MCP protocol (handleMessage)', () => {
   it('responds to ping', () => {
     const res = handleMessage(tmpDir, { jsonrpc: '2.0', id: 5, method: 'ping' }) as Record<string, any>;
     expect(res.result).toEqual({});
+  });
+
+  it('advertises and serves the debug_bug_report prompt', () => {
+    const init = handleMessage(tmpDir, { jsonrpc: '2.0', id: 6, method: 'initialize', params: {} }) as Record<string, any>;
+    expect(init.result.capabilities.prompts).toEqual({});
+
+    const list = handleMessage(tmpDir, { jsonrpc: '2.0', id: 7, method: 'prompts/list' }) as Record<string, any>;
+    expect(list.result.prompts).toEqual(PROMPT_DEFINITIONS);
+    expect(list.result.prompts[0].name).toBe('debug_bug_report');
+
+    const get = handleMessage(tmpDir, {
+      jsonrpc: '2.0', id: 8, method: 'prompts/get',
+      params: { name: 'debug_bug_report', arguments: { file: 'bug-report.html' } },
+    }) as Record<string, any>;
+    const text = get.result.messages[0].content.text;
+    expect(text).toContain('get_bug_report("bug-report.html")');
+    expect(text).toContain('investigation guide');
+    expect(text).toContain('root cause');
+
+    const unknown = handleMessage(tmpDir, {
+      jsonrpc: '2.0', id: 9, method: 'prompts/get', params: { name: 'nope' },
+    }) as Record<string, any>;
+    expect(unknown.error.code).toBe(-32602);
+  });
+
+  it('debug prompt falls back to list_bug_reports when no file is given', () => {
+    expect(buildDebugPrompt()).toContain('list_bug_reports');
+    expect(buildDebugPrompt('  ')).toContain('list_bug_reports');
   });
 });

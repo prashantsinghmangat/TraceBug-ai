@@ -451,6 +451,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vai-conf-low { background: var(--tb-info-bg); color: var(--tb-info); }
 .tb-vai-body { font-size: 13px; color: var(--tb-text); line-height: 1.6; }
 .tb-vai-empty .tb-vai-body { color: var(--tb-text-2); }
+.tb-vai-prompt { margin: 10px 0 0; padding: 10px 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); font-family: var(--tb-mono); font-size: 11px; line-height: 1.55; color: var(--tb-text-2); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
+.tb-vai-copy { margin-top: 10px; padding: 8px 14px; background: var(--tb-accent); color: #fff; border: 0; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
+.tb-vai-copy:hover { filter: brightness(1.1); }
 
 /* Actions tab — chips */
 .tb-vchips { display: flex; flex-direction: column; gap: 5px; }
@@ -980,7 +983,42 @@ const REPLAY_RUNTIME = `(function(){
     aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Pattern-based hint <span class="tb-vai-conf tb-vai-conf-' + esc(rc.confidence || "low") + '">' + esc(rc.confidence || "low") + '</span></div><div class="tb-vai-body">' + esc(rc.hint) + '</div></div>';
   }
   aiHtml += '<div class="tb-vai-card tb-vai-empty"><div class="tb-vai-head">LLM analysis</div><div class="tb-vai-body">Open this report in the TraceBug UI to run LLM-based root-cause analysis (BYO API key).</div></div>';
+
+  // Agent hand-off — this file IS the MCP artifact, so hand the recipient the
+  // exact prompt to paste into Claude Code / Cursor. Filename is recovered
+  // from the file:// URL at view time so the prompt survives renames.
+  var mcpFile = "";
+  try { mcpFile = decodeURIComponent(location.pathname.split(/[\\\\/]/).pop() || ""); } catch (e) {}
+  if (!mcpFile || !/\\.html?$/i.test(mcpFile)) mcpFile = "<this .html export>";
+  var mcpPrompt = 'This is a TraceBug bug report export: ' + mcpFile + '\\n\\n' +
+    '1. Call get_bug_report("' + mcpFile + '") to load the report overview and its investigation guide.\\n' +
+    '2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).\\n' +
+    '3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.\\n\\n' +
+    'If the tracebug MCP server is not connected yet, register it first (point --dir at the folder containing this file):\\n' +
+    'claude mcp add tracebug -- npx tracebug mcp --dir <reports-folder>';
+  aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
+    '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
+    '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +
+    '<button class="tb-vai-copy" id="mcp-prompt-copy" type="button">Copy prompt</button></div>';
   document.getElementById("panel-ai").innerHTML = aiHtml;
+
+  var mcpCopyBtn = document.getElementById("mcp-prompt-copy");
+  if (mcpCopyBtn) mcpCopyBtn.addEventListener("click", function(){
+    var done = function(){ mcpCopyBtn.textContent = "Copied \\u2713"; setTimeout(function(){ mcpCopyBtn.textContent = "Copy prompt"; }, 1100); };
+    // file:// pages don't always get the async clipboard API — textarea fallback.
+    var fallbackCopy = function(){
+      var ta = document.createElement("textarea");
+      ta.value = mcpPrompt;
+      ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) {}
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(mcpPrompt).then(done, fallbackCopy);
+    } else fallbackCopy();
+  });
 
   setBadge("badge-events", (data.events || []).length);
 
