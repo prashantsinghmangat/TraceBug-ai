@@ -9232,6 +9232,163 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/exporters/har-export.ts
+  function buildHar(report, creatorVersion = "0.0.0") {
+    const env = report.environment;
+    const pageStart = (env == null ? void 0 : env.timestamp) || report.generatedAt || minTimestamp(report) || Date.now();
+    const requests = report.networkRequests && report.networkRequests.length ? report.networkRequests : report.networkErrors || [];
+    const pageId = "page_1";
+    const entries = requests.slice().sort((a, b) => a.timestamp - b.timestamp).map((r) => toEntry(r, pageId));
+    return {
+      log: {
+        version: "1.2",
+        creator: { name: "TraceBug", version: creatorVersion },
+        ...(env == null ? void 0 : env.browser) ? { browser: { name: env.browser, version: env.browserVersion || "" } } : {},
+        pages: [
+          {
+            startedDateTime: new Date(pageStart).toISOString(),
+            id: pageId,
+            title: (env == null ? void 0 : env.url) || report.title || "TraceBug session",
+            pageTimings: { onContentLoad: -1, onLoad: -1 }
+          }
+        ],
+        entries
+      }
+    };
+  }
+  function toEntry(r, pageId) {
+    var _a, _b;
+    const duration = Math.max(0, Math.round(r.duration || 0));
+    const hasBody = typeof r.response === "string" && r.response.length > 0;
+    return {
+      pageref: pageId,
+      startedDateTime: new Date(r.timestamp).toISOString(),
+      time: duration,
+      request: {
+        method: r.method || "GET",
+        url: r.url || "",
+        httpVersion: "HTTP/1.1",
+        cookies: [],
+        headers: [],
+        queryString: parseQueryString(r.url || ""),
+        headersSize: -1,
+        bodySize: -1
+      },
+      response: {
+        status: (_a = r.status) != null ? _a : 0,
+        statusText: statusText((_b = r.status) != null ? _b : 0),
+        httpVersion: "HTTP/1.1",
+        cookies: [],
+        headers: [],
+        content: hasBody ? { size: r.response.length, mimeType: guessMime(r.response), text: r.response } : { size: 0, mimeType: "" },
+        redirectURL: "",
+        headersSize: -1,
+        bodySize: hasBody ? r.response.length : -1
+      },
+      cache: {},
+      // We only captured total duration; attribute it to `wait` and mark the
+      // phases we didn't measure as -1 (the HAR spec sentinel for "unknown").
+      timings: { send: -1, wait: duration, receive: -1 }
+    };
+  }
+  function exportSessionAsHar(report, options = {}) {
+    const har = buildHar(report, options.creatorVersion);
+    const json = JSON.stringify(har, null, 2);
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const filename = options.filename || defaultFilename2(report);
+    triggerDownload2(url, filename);
+    return { filename, blob, url, sizeBytes: blob.size, entryCount: har.log.entries.length };
+  }
+  function defaultFilename2(report) {
+    var _a, _b;
+    const sid = ((_b = (_a = report.session) == null ? void 0 : _a.sessionId) == null ? void 0 : _b.slice(0, 8)) || "session";
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    return `tracebug-${sid}-${stamp}.har`;
+  }
+  function triggerDownload2(url, filename) {
+    if (typeof document === "undefined") return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch (e) {
+      }
+    }, 3e4);
+  }
+  function parseQueryString(url) {
+    const q = url.indexOf("?");
+    if (q === -1) return [];
+    const search = url.slice(q + 1).split("#")[0];
+    if (!search) return [];
+    const out = [];
+    for (const pair of search.split("&")) {
+      if (!pair) continue;
+      const eq = pair.indexOf("=");
+      const name = eq === -1 ? pair : pair.slice(0, eq);
+      const value = eq === -1 ? "" : pair.slice(eq + 1);
+      out.push({ name: safeDecode(name), value: safeDecode(value) });
+    }
+    return out;
+  }
+  function safeDecode(s) {
+    try {
+      return decodeURIComponent(s.replace(/\+/g, " "));
+    } catch (e) {
+      return s;
+    }
+  }
+  function guessMime(body) {
+    const t = body.trimStart();
+    if (t.startsWith("{") || t.startsWith("[")) return "application/json";
+    if (t.startsWith("<")) return t.slice(0, 20).toLowerCase().includes("html") ? "text/html" : "application/xml";
+    return "text/plain";
+  }
+  function statusText(status) {
+    var _a;
+    return (_a = STATUS_TEXT[status]) != null ? _a : "";
+  }
+  function minTimestamp(report) {
+    const all = [];
+    for (const r of report.networkRequests || []) all.push(r.timestamp);
+    for (const r of report.networkErrors || []) all.push(r.timestamp);
+    return all.length ? Math.min(...all) : null;
+  }
+  var STATUS_TEXT;
+  var init_har_export = __esm({
+    "src/exporters/har-export.ts"() {
+      "use strict";
+      STATUS_TEXT = {
+        0: "",
+        200: "OK",
+        201: "Created",
+        204: "No Content",
+        301: "Moved Permanently",
+        302: "Found",
+        304: "Not Modified",
+        400: "Bad Request",
+        401: "Unauthorized",
+        403: "Forbidden",
+        404: "Not Found",
+        405: "Method Not Allowed",
+        408: "Request Timeout",
+        409: "Conflict",
+        422: "Unprocessable Entity",
+        429: "Too Many Requests",
+        500: "Internal Server Error",
+        501: "Not Implemented",
+        502: "Bad Gateway",
+        503: "Service Unavailable",
+        504: "Gateway Timeout"
+      };
+    }
+  });
+
   // src/cloud-endpoint.ts
   function resolveCloudEndpoint(endpoint) {
     const raw = endpoint == null ? void 0 : endpoint.trim();
@@ -10127,7 +10284,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root, data) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -10312,6 +10469,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">\u{1F916} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">\u{1F4E6} Export .html</button>
+        <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">\u{1F310} Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">\u{1F517} Share link</button>
         PHASE2-CLOUD -->
@@ -10658,7 +10816,27 @@ ${report.steps}` : userDesc : void 0
         showToast("Replay export failed", root);
       }
     });
-    (_y = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _y.addEventListener("click", (e) => {
+    (_y = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _y.addEventListener("click", () => {
+      var _a2, _b2;
+      if (!data.currentSession) {
+        showToast("No session to export yet", root);
+        return;
+      }
+      try {
+        const report = buildReport(data.currentSession);
+        const requests = ((_a2 = report.networkRequests) == null ? void 0 : _a2.length) || ((_b2 = report.networkErrors) == null ? void 0 : _b2.length) || 0;
+        if (requests === 0) {
+          showToast("No network activity captured to export", root);
+          return;
+        }
+        const result = exportSessionAsHar(report);
+        showToast(`\u2713 HAR exported \xB7 ${result.entryCount} request${result.entryCount === 1 ? "" : "s"}`, root);
+      } catch (err) {
+        console.warn("[TraceBug] HAR export failed:", err);
+        showToast("HAR export failed", root);
+      }
+    });
+    (_z = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _z.addEventListener("click", (e) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root);
         return;
@@ -10828,7 +11006,7 @@ ${r.steps}` });
         }
       });
     });
-    (_z = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _z.addEventListener("click", () => {
+    (_A = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _A.addEventListener("click", () => {
       var _a2, _b2;
       const ssId = (_b2 = (_a2 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a2.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s) => s.id === ssId) || screenshots2[0];
@@ -10859,7 +11037,7 @@ ${r.steps}` });
         });
       });
     });
-    (_A = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _A.addEventListener("click", async () => {
+    (_B = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _B.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -10881,7 +11059,7 @@ ${r.steps}` });
         showToast("Screenshot cancelled", root);
       }
     });
-    (_B = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _B.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _C.addEventListener("click", () => {
       const v = modal.querySelector("#tb-qb-video");
       if (!v) return;
       if (!v.paused) {
@@ -12327,6 +12505,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_replay_scrubber();
       init_blur_tool();
       init_html_replay();
+      init_har_export();
       init_cloud_endpoint();
       init_ai_prompt();
       init_llm_client();
@@ -14514,7 +14693,7 @@ ${ticket.description}`;
     const startBtn = overlay.querySelector("#bt-voice-start");
     const stopBtn = overlay.querySelector("#bt-voice-stop");
     const dot = overlay.querySelector("#bt-voice-dot");
-    const statusText = overlay.querySelector("#bt-voice-status-text");
+    const statusText2 = overlay.querySelector("#bt-voice-status-text");
     let pulseInterval = null;
     startBtn.addEventListener("click", () => {
       const started = startVoiceRecording({
@@ -14526,8 +14705,8 @@ ${ticket.description}`;
         onStatus: (status, message) => {
           if (status === "recording") {
             dot.style.background = "#22c55e";
-            statusText.textContent = "Listening... speak now";
-            statusText.style.color = "#22c55e";
+            statusText2.textContent = "Listening... speak now";
+            statusText2.style.color = "#22c55e";
             startBtn.style.display = "none";
             stopBtn.style.display = "block";
             pulseInterval = setInterval(() => {
@@ -14535,8 +14714,8 @@ ${ticket.description}`;
             }, 500);
           } else if (status === "stopped") {
             dot.style.background = "#666";
-            statusText.textContent = "Recording stopped";
-            statusText.style.color = "#888";
+            statusText2.textContent = "Recording stopped";
+            statusText2.style.color = "#888";
             startBtn.style.display = "block";
             startBtn.textContent = "\u{1F3A4} Record More";
             stopBtn.style.display = "none";
@@ -14548,8 +14727,8 @@ ${ticket.description}`;
             dot.style.opacity = "1";
           } else if (status === "error") {
             dot.style.background = "#ef4444";
-            statusText.textContent = message || "Error occurred";
-            statusText.style.color = "#ef4444";
+            statusText2.textContent = message || "Error occurred";
+            statusText2.style.color = "#ef4444";
             startBtn.style.display = "block";
             startBtn.textContent = "\u{1F3A4} Try Again";
             stopBtn.style.display = "none";
@@ -14562,8 +14741,8 @@ ${ticket.description}`;
         }
       });
       if (!started && !isVoiceSupported()) {
-        statusText.textContent = "Speech recognition not supported in this browser.";
-        statusText.style.color = "#ef4444";
+        statusText2.textContent = "Speech recognition not supported in this browser.";
+        statusText2.style.color = "#ef4444";
       }
     });
     stopBtn.addEventListener("click", () => {
@@ -14579,8 +14758,8 @@ ${ticket.description}`;
       if (pulseInterval) clearInterval(pulseInterval);
       const text = transcriptEl.value.trim();
       if (!text) {
-        statusText.textContent = "No text to save. Record or type something first.";
-        statusText.style.color = "#ef4444";
+        statusText2.textContent = "No text to save. Record or type something first.";
+        statusText2.style.color = "#ef4444";
         return;
       }
       const annotation = {
@@ -50100,6 +50279,7 @@ First element: \`${exampleSnippet}\``,
     FREE_LIMITS: () => FREE_LIMITS,
     PROVIDER_LABELS: () => PROVIDER_LABELS,
     buildAnalysisPrompt: () => buildAnalysisPrompt,
+    buildHar: () => buildHar,
     buildReport: () => buildReport,
     buildTimeline: () => buildTimeline,
     captureEnvironment: () => captureEnvironment,
@@ -50117,6 +50297,7 @@ First element: \`${exampleSnippet}\``,
     downloadAllScreenshots: () => downloadAllScreenshots,
     downloadPdfAsHtml: () => downloadPdfAsHtml,
     downloadVideoRecording: () => downloadVideoRecording,
+    exportSessionAsHar: () => exportSessionAsHar,
     extractClickedElement: () => extractClickedElement,
     formatRootCauseLine: () => formatRootCauseLine,
     formatTimelineText: () => formatTimelineText,
@@ -50646,6 +50827,7 @@ First element: \`${exampleSnippet}\``,
   init_github_issue();
   init_jira_issue();
   init_ai_prompt();
+  init_har_export();
   init_llm_client();
   init_pdf_generator();
   init_title_generator();
