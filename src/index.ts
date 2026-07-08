@@ -171,6 +171,12 @@ export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint } from "./
 export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
+export {
+  runLLMAnalysis, buildAnalysisPrompt,
+  getAIConfig, setAIConfig, clearAIConfig, hasAIKey,
+  DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES, PROVIDER_LABELS,
+} from "./ai/llm-client";
+export type { AIProvider, AIConfig, AIAnalysisResult } from "./ai/llm-client";
 export type { AIPromptOptions } from "./exporters/ai-prompt";
 export type { JiraTicket } from "./jira-issue";
 export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
