@@ -15,3 +15,6 @@ dist/
 
 # Generated at build time from dist/bin.mjs (npm run build:cli)
 packages/tracebug/bin.mjs
+
+# Local release artifacts (extension zips etc.)
+releases/
