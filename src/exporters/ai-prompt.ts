@@ -181,7 +181,7 @@ export function generateMcpPrompt(filename: string): string {
     `3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.`,
     ``,
     `If the tracebug MCP server isn't connected yet, register it first (point --dir at the folder containing the export):`,
-    `claude mcp add tracebug -- npx tracebug mcp --dir <reports-folder>`,
+    `claude mcp add tracebug -- npx -y tracebug mcp --dir <reports-folder>`,
   ].join("\n");
 }
 

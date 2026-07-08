@@ -1,5 +1,6 @@
 // ── TraceBug MCP Server ──────────────────────────────────────────────────
-// `npx tracebug mcp [--dir <path>]`
+// `npx -y tracebug mcp [--dir <path>]` — published standalone as the `tracebug`
+// package (packages/tracebug, ~24KB) and bundled inside `tracebug-sdk`.
 //
 // A local, stdio Model Context Protocol server that lets AI coding agents
 // (Claude Code, Cursor, Windsurf, …) read TraceBug bug reports. It operates

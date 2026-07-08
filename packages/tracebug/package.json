@@ -1,0 +1,43 @@
+{
+  "name": "tracebug",
+  "version": "1.5.0",
+  "description": "TraceBug CLI — local MCP server that lets AI coding agents (Claude Code, Cursor, VS Code) debug TraceBug bug-report exports, plus framework setup via `tracebug init`. Zero dependencies.",
+  "type": "module",
+  "bin": {
+    "tracebug": "./bin.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepublishOnly": "node -e \"if(!require('fs').existsSync('bin.mjs')){console.error('bin.mjs missing - run: npm run build:cli (from the repo root)');process.exit(1)}\""
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "bug-reporting",
+    "debugging",
+    "claude-code",
+    "cursor",
+    "ai-agents",
+    "tracebug"
+  ],
+  "author": {
+    "name": "Prashant Singh Mangat",
+    "url": "https://github.com/prashantsinghmangat"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prashantsinghmangat/tracebug-ai.git",
+    "directory": "packages/tracebug"
+  },
+  "homepage": "https://tracebug.netlify.app/docs/mcp",
+  "bugs": {
+    "url": "https://github.com/prashantsinghmangat/tracebug-ai/issues"
+  }
+}

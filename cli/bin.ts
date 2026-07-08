@@ -40,11 +40,15 @@ async function startMcpServer() {
     ? path.resolve(args[dirFlag + 1])
     : process.cwd()
 
+  // package.json lives one level up in the SDK layout (dist/bin.mjs) but is a
+  // sibling in the standalone `tracebug` CLI package (packages/tracebug/bin.mjs).
   let version = '0.0.0'
-  try {
-    const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-    version = pkg.version ?? version
-  } catch { /* version stays 0.0.0 — cosmetic only */ }
+  for (const rel of ['./package.json', '../package.json']) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(new URL(rel, import.meta.url), 'utf8'))
+      if (pkg.version) { version = pkg.version; break }
+    } catch { /* try next location — cosmetic only */ }
+  }
 
   await runMcpServer(baseDir, version)
 }

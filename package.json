@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Capture a bug, see the root cause, and create a GitHub issue in 5 seconds. Zero-backend, browser-only debugging assistant. Free Sentry/LogRocket alternative.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -27,6 +27,7 @@
   "scripts": {
     "build": "tsup",
     "build:all": "tsup && echo [OK] npm package: dist/ && echo [OK] Chrome extension: tracebug-extension/tracebug-sdk.js",
+    "build:cli": "tsup && node -e \"require('fs').copyFileSync('dist/bin.mjs','packages/tracebug/bin.mjs');console.log('[OK] CLI package: packages/tracebug/bin.mjs')\"",
     "build:example": "tsup && cd example-app && npm install && echo [OK] Example app updated",
     "dev": "tsup --watch",
     "prepare": "tsup",

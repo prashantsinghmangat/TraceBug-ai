@@ -224,7 +224,7 @@ After the listing is live for ~2 weeks:
 - [ ] Small promo tile (440×280) uploaded
 - [ ] Privacy URL points to live `/privacy` page (not `#`)
 - [ ] Category is "Developer Tools"
-- [ ] Extension version in `manifest.json` matches the uploaded `.zip` (currently 1.4.0)
+- [ ] Extension version in `manifest.json` matches the uploaded `.zip` (currently 1.5.0)
 - [ ] `README.md` GIF in place so the GitHub fallback isn't embarrassing
 - [ ] Live demo at `https://tracebug.netlify.app` is working (your iframe fix is deployed)
 

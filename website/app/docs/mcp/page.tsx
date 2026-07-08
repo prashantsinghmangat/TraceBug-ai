@@ -61,7 +61,7 @@ export default function McpDocsPage() {
             <pre className="text-text-primary font-mono text-sm">
               <span className="text-text-muted">$ </span>
               <span className="text-success">npx</span>
-              <span className="text-text-primary"> tracebug mcp --dir ./bug-reports</span>
+              <span className="text-text-primary"> -y tracebug mcp --dir ./bug-reports</span>
             </pre>
           </div>
 
@@ -251,7 +251,7 @@ export default function McpDocsPage() {
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
                     <span className="text-success">claude</span>
-                    <span className="text-text-primary"> mcp add tracebug -- npx tracebug mcp --dir ./bug-reports</span>
+                    <span className="text-text-primary"> mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports</span>
                   </pre>
                 </div>
                 <p className="text-text-muted text-sm mb-3">
@@ -265,7 +265,7 @@ export default function McpDocsPage() {
   "mcpServers": {
     "tracebug": {
       "command": "npx",
-      "args": ["tracebug", "mcp", "--dir", "bug-reports"]
+      "args": ["-y", "tracebug", "mcp", "--dir", "bug-reports"]
     }
   }
 }`}
@@ -288,7 +288,7 @@ export default function McpDocsPage() {
                     </li>
                     <li>
                       <span className="text-text-primary font-sans font-semibold">Args:</span>{" "}
-                      tracebug mcp --dir ./bug-reports
+                      -y tracebug mcp --dir ./bug-reports
                     </li>
                   </ul>
                 </div>
@@ -315,7 +315,7 @@ export default function McpDocsPage() {
     "tracebug": {
       "type": "stdio",
       "command": "npx",
-      "args": ["tracebug", "mcp", "--dir", "bug-reports"]
+      "args": ["-y", "tracebug", "mcp", "--dir", "bug-reports"]
     }
   }
 }`}
@@ -334,7 +334,7 @@ export default function McpDocsPage() {
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
                     <span className="text-success">npx</span>
-                    <span className="text-text-primary"> tracebug mcp [--dir &lt;path&gt;]</span>
+                    <span className="text-text-primary"> -y tracebug mcp [--dir &lt;path&gt;]</span>
                   </pre>
                 </div>
                 <p className="text-text-muted text-sm">
@@ -540,7 +540,11 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
                 },
                 {
                   symptom: "Client says the server won't start",
-                  fix: "Requires Node ≥ 18. Test manually: npx tracebug mcp --dir . should print \"TraceBug MCP server — reading bug reports from …\" to stderr and then wait for input.",
+                  fix: "Requires Node ≥ 18. Test manually: npx -y tracebug mcp --dir . should print \"TraceBug MCP server — reading bug reports from …\" to stderr and then wait for input.",
+                },
+                {
+                  symptom: "Which package am I running?",
+                  fix: "The tracebug package is the standalone ~24 KB CLI (MCP server + init) — all a developer receiving reports needs. tracebug-sdk (the full capture SDK) bundles the same CLI, so inside a project with the SDK installed, npx tracebug mcp resolves locally.",
                 },
                 {
                   symptom: "Report file not recognized",
@@ -572,7 +576,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
               <pre className="text-text-primary font-mono text-sm">
                 <span className="text-text-muted">$ </span>
                 <span className="text-success">claude</span>
-                <span className="text-text-primary"> mcp add tracebug -- npx tracebug mcp --dir ./bug-reports</span>
+                <span className="text-text-primary"> mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports</span>
               </pre>
             </div>
           </div>

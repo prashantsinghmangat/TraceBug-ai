@@ -995,7 +995,7 @@ const REPLAY_RUNTIME = `(function(){
     '2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).\\n' +
     '3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.\\n\\n' +
     'If the tracebug MCP server is not connected yet, register it first (point --dir at the folder containing this file):\\n' +
-    'claude mcp add tracebug -- npx tracebug mcp --dir <reports-folder>';
+    'claude mcp add tracebug -- npx -y tracebug mcp --dir <reports-folder>';
   aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
     '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
     '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +
