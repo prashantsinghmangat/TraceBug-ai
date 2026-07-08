@@ -113,6 +113,10 @@ Every tool's `file` argument is forgiving: pass a path, a bare filename (found a
 
 The server also exposes one MCP **prompt**, `debug_bug_report` (optional `file` argument) — the same hand-off prompt above, invokable as `/tracebug:debug_bug_report` in Claude Code or from any client's prompt picker.
 
+## Reports from CI too
+
+The [Playwright reporter](playwright.md) writes the same `.html` artifact for every failed test — upload `bug-reports/` as a CI artifact, download it into your repo, and debug the failure with the exact same MCP flow.
+
 ## What files does it read?
 
 Any TraceBug export:

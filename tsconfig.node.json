@@ -1,0 +1,17 @@
+{
+  // Node-side code: the CLI (MCP server) and test-runner reporters.
+  // Kept out of the main tsconfig, which types src/ against the DOM.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node"
+  },
+  "include": ["cli/**/*", "src/reporters/**/*", "src/exporters/html-template.ts"]
+}
