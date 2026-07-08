@@ -179,6 +179,14 @@ export {
   DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES, PROVIDER_LABELS,
 } from "./ai/llm-client";
 export type { AIProvider, AIConfig, AIAnalysisResult } from "./ai/llm-client";
+export {
+  createTrackerIssue, createGitHubIssue, createLinearIssue, sendSlackMessage,
+  getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig, hasIntegration,
+  TRACKER_LABELS,
+} from "./integrations/tracker-client";
+export type {
+  TrackerProvider, IntegrationsConfig, GitHubConfig, LinearConfig, SlackConfig, CreateIssueResult,
+} from "./integrations/tracker-client";
 export type { AIPromptOptions } from "./exporters/ai-prompt";
 export type { JiraTicket } from "./jira-issue";
 export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
