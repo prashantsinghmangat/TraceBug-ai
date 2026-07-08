@@ -26,8 +26,8 @@ npx tracebug init
 
 ```bash
 cd tracebug-ai && npm pack
-# Share the file: tracebug-sdk-1.4.0.tgz
-npm install ./tracebug-sdk-1.4.0.tgz
+# Share the file: tracebug-sdk-1.5.0.tgz
+npm install ./tracebug-sdk-1.5.0.tgz
 ```
 
 ## Setup (2 lines of code)
@@ -198,7 +198,7 @@ const json = TraceBug.exportSessionJSON();
 - [Configuration](configuration.md) — All config options (theme, position, console capture)
 - [API Reference](api-reference.md) — Full programmatic API (plugins, hooks, CI helpers)
 - [Bug Reporting](bug-reporting.md) — Screenshots, notes, voice, export
-- [MCP Server](mcp.md) — `npx tracebug mcp`: let Claude Code / Cursor read your exported reports and fix the bug
+- [MCP Server](mcp.md) — `npx -y tracebug mcp`: let Claude Code / Cursor read your exported reports and fix the bug
 - [Ticket Flow](ticket-flow.md) — Start → capture → stop → review → export, with all options
 - [Freemium Plan](freemium.md) — What's free vs premium, gates, dev toggle
 - [Annotate & Draw](annotate-and-draw.md) — UI annotation features

@@ -138,7 +138,7 @@ All four signals ship inline in GitHub issues, Jira tickets, PDF reports, and th
 Your coding agent (Claude Code, Cursor, Windsurf, VS Code) reads TraceBug bug reports and fixes the bug — **fully local, nothing uploaded**:
 
 ```bash
-claude mcp add tracebug -- npx tracebug mcp --dir ./bug-reports
+claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
 ```
 
 The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets six tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, and `get_screenshot` (real image content). `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
