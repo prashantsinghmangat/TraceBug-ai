@@ -9420,6 +9420,223 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/ai/llm-client.ts
+  function getAIConfig() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY2);
+      if (raw) {
+        const c = JSON.parse(raw);
+        if (c && c.provider && (c.provider === "ollama" || c.apiKey)) {
+          return {
+            provider: c.provider,
+            apiKey: c.apiKey || "",
+            model: c.model || DEFAULT_MODELS[c.provider],
+            baseUrl: c.baseUrl
+          };
+        }
+      }
+      const legacy = localStorage.getItem(LEGACY_KEY);
+      if (legacy) {
+        const migrated = { provider: "anthropic", apiKey: legacy, model: DEFAULT_MODELS.anthropic };
+        setAIConfig(migrated);
+        return migrated;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  function setAIConfig(config) {
+    try {
+      localStorage.setItem(STORAGE_KEY2, JSON.stringify(config));
+      localStorage.removeItem(LEGACY_KEY);
+    } catch (e) {
+    }
+  }
+  function clearAIConfig() {
+    try {
+      localStorage.removeItem(STORAGE_KEY2);
+      localStorage.removeItem(LEGACY_KEY);
+    } catch (e) {
+    }
+  }
+  function hasAIKey() {
+    const c = getAIConfig();
+    return !!c && (c.provider === "ollama" || !!c.apiKey);
+  }
+  function buildAnalysisPrompt(report) {
+    const prompt = generateAIPrompt(report, { includeTask: false });
+    return sanitizeTokenShapes(prompt);
+  }
+  async function runLLMAnalysis(report, options = {}) {
+    const config = getAIConfig();
+    if (!config) throw new Error("No AI provider configured. Add an API key first.");
+    if (config.provider !== "ollama" && !config.apiKey) {
+      throw new Error(`Add an API key for ${PROVIDER_LABELS[config.provider]}.`);
+    }
+    const userContent = buildAnalysisPrompt(report);
+    const baseUrl = (config.baseUrl || DEFAULT_BASE_URLS[config.provider]).replace(/\/+$/, "");
+    switch (config.provider) {
+      case "anthropic":
+        return callAnthropic(config, baseUrl, userContent, options.signal);
+      case "openai":
+        return callOpenAI(config, baseUrl, userContent, options.signal);
+      case "ollama":
+        return callOllama(config, baseUrl, userContent, options.signal);
+      default:
+        throw new Error(`Unknown provider: ${config.provider}`);
+    }
+  }
+  async function callAnthropic(config, baseUrl, userContent, signal) {
+    const res = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": config.apiKey,
+        "anthropic-version": "2023-06-01",
+        // Opt in to CORS from the browser — Anthropic gates direct browser
+        // access behind this header. The key is the user's own (BYO-key).
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userContent }]
+      })
+    });
+    const data = await parseJsonOrThrow(res, "Anthropic");
+    if (data.stop_reason === "refusal") {
+      throw new Error("The model declined to analyze this report.");
+    }
+    const text = extractAnthropicText(data);
+    if (!text) throw new Error("Anthropic returned an empty response.");
+    return {
+      text,
+      provider: "anthropic",
+      model: data.model || config.model,
+      usage: data.usage ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens } : void 0
+    };
+  }
+  function extractAnthropicText(data) {
+    if (!Array.isArray(data.content)) return "";
+    return data.content.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join("").trim();
+  }
+  async function callOpenAI(config, baseUrl, userContent, signal) {
+    var _a, _b, _c;
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_completion_tokens: 4096,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent }
+        ]
+      })
+    });
+    const data = await parseJsonOrThrow(res, "OpenAI");
+    const text = String(((_c = (_b = (_a = data == null ? void 0 : data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "").trim();
+    if (!text) throw new Error("OpenAI returned an empty response.");
+    return {
+      text,
+      provider: "openai",
+      model: data.model || config.model,
+      usage: data.usage ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens } : void 0
+    };
+  }
+  async function callOllama(config, baseUrl, userContent, signal) {
+    var _a;
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: config.model,
+        stream: false,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent }
+        ]
+      })
+    });
+    const data = await parseJsonOrThrow(res, "Ollama");
+    const text = String(((_a = data == null ? void 0 : data.message) == null ? void 0 : _a.content) || "").trim();
+    if (!text) throw new Error("Ollama returned an empty response.");
+    return {
+      text,
+      provider: "ollama",
+      model: data.model || config.model,
+      usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
+    };
+  }
+  async function parseJsonOrThrow(res, provider) {
+    let body;
+    try {
+      body = await res.json();
+    } catch (e) {
+      if (!res.ok) throw new Error(friendlyStatus(res.status, provider));
+      throw new Error(`${provider} returned an unreadable response.`);
+    }
+    if (!res.ok) {
+      const msg = extractProviderError(body) || friendlyStatus(res.status, provider);
+      throw new Error(msg);
+    }
+    return body;
+  }
+  function extractProviderError(body) {
+    var _a;
+    if (body && typeof body === "object") {
+      const b = body;
+      if (typeof b.error === "string") return b.error;
+      if ((_a = b.error) == null ? void 0 : _a.message) return b.error.message;
+    }
+    return null;
+  }
+  function friendlyStatus(status, provider) {
+    if (status === 401 || status === 403) return `${provider}: invalid or unauthorized API key.`;
+    if (status === 429) return `${provider}: rate limited \u2014 wait a moment and retry.`;
+    if (status === 0) return `Could not reach ${provider}. Check your connection${provider === "Ollama" ? " and that Ollama is running." : "."}`;
+    if (status >= 500) return `${provider} is temporarily unavailable (${status}).`;
+    return `${provider} request failed (${status}).`;
+  }
+  var STORAGE_KEY2, LEGACY_KEY, PROVIDER_LABELS, DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES, DEFAULT_BASE_URLS, SYSTEM_PROMPT;
+  var init_llm_client = __esm({
+    "src/ai/llm-client.ts"() {
+      "use strict";
+      init_ai_prompt();
+      init_cloud_upload();
+      STORAGE_KEY2 = "tracebug_ai_config";
+      LEGACY_KEY = "tracebug_ai_key";
+      PROVIDER_LABELS = {
+        anthropic: "Anthropic (Claude)",
+        openai: "OpenAI",
+        ollama: "Ollama (local)"
+      };
+      DEFAULT_MODELS = {
+        anthropic: "claude-sonnet-4-6",
+        openai: "gpt-4o-mini",
+        ollama: "llama3.1"
+      };
+      ANTHROPIC_MODEL_CHOICES = [
+        { id: "claude-haiku-4-5", label: "Haiku 4.5 \u2014 fastest, cheapest" },
+        { id: "claude-sonnet-4-6", label: "Sonnet 4.6 \u2014 balanced (recommended)" },
+        { id: "claude-opus-4-8", label: "Opus 4.8 \u2014 most capable" }
+      ];
+      DEFAULT_BASE_URLS = {
+        anthropic: "https://api.anthropic.com",
+        openai: "https://api.openai.com",
+        ollama: "http://localhost:11434"
+      };
+      SYSTEM_PROMPT = "You are an expert debugging assistant. You are given a structured bug report captured by TraceBug (console errors, network activity, reproduction steps, environment). Analyze it and respond in concise markdown with exactly these sections:\n\n## Root cause\nThe single most likely cause, stated plainly.\n\n## Evidence\nThe specific signals in the report that point to it (quote the error/status/step).\n\n## Where to look\nThe files, components, or endpoints a developer should inspect first.\n\n## Suggested fix\nA concrete fix, with a short code sketch when possible.\n\n## Edge cases to test\n2-4 things to verify once the fix lands.\n\nBe specific and grounded in the report \u2014 do not invent details it does not contain. If the report lacks enough signal, say so and list what to capture next.";
+    }
+  });
+
   // src/theme.ts
   function getResolvedTheme() {
     if (_currentMode === "auto") {
@@ -9910,7 +10127,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root, data) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -10585,8 +10802,14 @@ ${r.steps}` });
       _clearDraft();
       setTimeout(close, 300);
     });
-    (_z = modal.querySelector('[data-action="ai-configure"]')) == null ? void 0 : _z.addEventListener("click", () => {
-      showToast("AI configuration UI coming soon \u2014 set tracebug_ai_key in localStorage to enable", root);
+    modal.addEventListener("click", (e) => {
+      var _a2, _b2, _c2;
+      const action = (_c2 = (_b2 = (_a2 = e.target).closest) == null ? void 0 : _b2.call(_a2, "[data-action]")) == null ? void 0 : _c2.getAttribute("data-action");
+      if (action === "ai-configure") {
+        showAIConfigModal(root, () => _rerenderAITab(modal, data));
+      } else if (action === "ai-generate") {
+        void _runAIAnalysis(root, modal, data);
+      }
     });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -10605,7 +10828,7 @@ ${r.steps}` });
         }
       });
     });
-    (_A = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_z = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _z.addEventListener("click", () => {
       var _a2, _b2;
       const ssId = (_b2 = (_a2 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a2.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s) => s.id === ssId) || screenshots2[0];
@@ -10636,7 +10859,7 @@ ${r.steps}` });
         });
       });
     });
-    (_B = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _B.addEventListener("click", async () => {
+    (_A = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _A.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -10658,7 +10881,7 @@ ${r.steps}` });
         showToast("Screenshot cancelled", root);
       }
     });
-    (_C = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_B = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _B.addEventListener("click", () => {
       const v = modal.querySelector("#tb-qb-video");
       if (!v) return;
       if (!v.paused) {
@@ -11259,24 +11482,23 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   }
   function _buildAITab(report) {
     const rootCause = report == null ? void 0 : report.rootCause;
-    const hasKey = (() => {
-      try {
-        return !!localStorage.getItem("tracebug_ai_key");
-      } catch (e) {
-        return false;
-      }
-    })();
+    const aiConfig = getAIConfig();
+    const hasKey = !!aiConfig && (aiConfig.provider === "ollama" || !!aiConfig.apiKey);
     const deterministic = rootCause ? `
     <div class="tb-qb-ai-card">
       <div class="tb-qb-ai-card-head">Pattern-based hint <span class="tb-qb-ai-conf tb-qb-ai-conf-${rootCause.confidence}">${rootCause.confidence}</span></div>
       <div class="tb-qb-ai-card-body">${escapeHtml2(rootCause.hint)}</div>
     </div>
   ` : "";
+    const providerLine = hasKey ? `${escapeHtml2(PROVIDER_LABELS[aiConfig.provider])} \xB7 ${escapeHtml2(aiConfig.model)}` : "";
     const llmBlock = hasKey ? `
-    <div class="tb-qb-ai-card">
-      <div class="tb-qb-ai-card-head">LLM analysis</div>
-      <div class="tb-qb-ai-card-body"><em>Click \u201CGenerate\u201D below to run the LLM analysis (BYO API key).</em></div>
-      <button class="tb-qb-btn tb-qb-btn-accent" data-action="ai-generate" style="margin-top:10px">\u2728 Generate AI analysis</button>
+    <div class="tb-qb-ai-card" data-ai-llm-card>
+      <div class="tb-qb-ai-card-head">AI Debugger <span class="tb-qb-ai-provider">${providerLine}</span></div>
+      <div class="tb-qb-ai-card-body" data-ai-output><em>Runs on your own key \u2014 the report is scrubbed of secret shapes, then sent directly to ${escapeHtml2(PROVIDER_LABELS[aiConfig.provider])}. TraceBug never sees it.</em></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="tb-qb-btn tb-qb-btn-accent" data-action="ai-generate">\u2728 Generate AI analysis</button>
+        <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Change key</button>
+      </div>
     </div>
   ` : `
     <div class="tb-qb-ai-card tb-qb-ai-empty">
@@ -11288,6 +11510,180 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     </div>
   `;
     return deterministic + llmBlock;
+  }
+  function _rerenderAITab(modal, data) {
+    const panel = modal.querySelector('[data-panel="ai"]');
+    if (panel) panel.innerHTML = _buildAITab(data.report);
+  }
+  async function _runAIAnalysis(root, modal, data) {
+    var _a, _b;
+    const report = data.report;
+    if (!report) {
+      showToast("No report to analyze yet", root);
+      return;
+    }
+    const card = modal.querySelector("[data-ai-llm-card]");
+    const out = card == null ? void 0 : card.querySelector("[data-ai-output]");
+    const genBtn = card == null ? void 0 : card.querySelector('[data-action="ai-generate"]');
+    if (!out) return;
+    if (genBtn) {
+      genBtn.disabled = true;
+      genBtn.textContent = "Analyzing\u2026";
+    }
+    out.innerHTML = '<div class="tb-qb-ai-loading">\u{1F916} Running analysis on your key\u2026 this stays between your browser and the provider.</div>';
+    try {
+      const result = await runLLMAnalysis(report);
+      const meta = ((_a = result.usage) == null ? void 0 : _a.outputTokens) ? `<div class="tb-qb-ai-meta">${escapeHtml2(result.model)} \xB7 ${(_b = result.usage.inputTokens) != null ? _b : "?"}\u2192${result.usage.outputTokens} tokens</div>` : `<div class="tb-qb-ai-meta">${escapeHtml2(result.model)}</div>`;
+      out.innerHTML = `<div class="tb-qb-ai-md">${_renderMarkdownLite(result.text)}</div>${meta}`;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Analysis failed.";
+      out.innerHTML = `<div class="tb-qb-ai-error">\u26A0\uFE0F ${escapeHtml2(msg)}</div>`;
+    } finally {
+      if (genBtn) {
+        genBtn.disabled = false;
+        genBtn.innerHTML = "\u2728 Regenerate";
+      }
+    }
+  }
+  function _renderMarkdownLite(md) {
+    const esc = (s) => escapeHtml2(s);
+    const lines = md.replace(/\r\n/g, "\n").split("\n");
+    const html = [];
+    let inList = false, inCode = false;
+    const codeBuf = [];
+    const closeList = () => {
+      if (inList) {
+        html.push("</ul>");
+        inList = false;
+      }
+    };
+    for (const line of lines) {
+      if (line.trim().startsWith("```")) {
+        if (inCode) {
+          html.push(`<pre class="tb-qb-ai-code">${esc(codeBuf.join("\n"))}</pre>`);
+          codeBuf.length = 0;
+          inCode = false;
+        } else {
+          closeList();
+          inCode = true;
+        }
+        continue;
+      }
+      if (inCode) {
+        codeBuf.push(line);
+        continue;
+      }
+      const h = /^(#{1,4})\s+(.*)$/.exec(line);
+      if (h) {
+        closeList();
+        const level = Math.min(6, h[1].length + 2);
+        html.push(`<div class="tb-qb-ai-h tb-qb-ai-h${level}">${_inlineMd(h[2])}</div>`);
+        continue;
+      }
+      const li = /^\s*[-*]\s+(.*)$/.exec(line);
+      if (li) {
+        if (!inList) {
+          html.push('<ul class="tb-qb-ai-ul">');
+          inList = true;
+        }
+        html.push(`<li>${_inlineMd(li[1])}</li>`);
+        continue;
+      }
+      if (line.trim() === "") {
+        closeList();
+        continue;
+      }
+      closeList();
+      html.push(`<p>${_inlineMd(line)}</p>`);
+    }
+    if (inCode && codeBuf.length) html.push(`<pre class="tb-qb-ai-code">${esc(codeBuf.join("\n"))}</pre>`);
+    closeList();
+    return html.join("");
+  }
+  function _inlineMd(s) {
+    return escapeHtml2(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  }
+  function showAIConfigModal(root, onSaved) {
+    var _a, _b, _c, _d;
+    (_a = document.getElementById("tb-ai-config")) == null ? void 0 : _a.remove();
+    const existing = getAIConfig();
+    const provider = (existing == null ? void 0 : existing.provider) || "anthropic";
+    const overlay = document.createElement("div");
+    overlay.id = "tb-ai-config";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+    overlay.innerHTML = `
+    <div style="width:100%;max-width:460px;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3;overflow:hidden">
+      <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">\u{1F916} AI Debugger \u2014 bring your own key</div>
+        <div style="font-size:12px;color:#94A3B8;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider \u2014 TraceBug never sees it.</div>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+        <label style="font-size:12px;color:#94A3B8">Provider
+          <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px">
+            ${Object.keys(PROVIDER_LABELS).map((p) => `<option value="${p}" ${p === provider ? "selected" : ""}>${escapeHtml2(PROVIDER_LABELS[p])}</option>`).join("")}
+          </select>
+        </label>
+        <label data-ai-key-wrap style="font-size:12px;color:#94A3B8">API key
+          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-\u2026" value="${escapeHtml2((existing == null ? void 0 : existing.apiKey) || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px" />
+        </label>
+        <label style="font-size:12px;color:#94A3B8">Model
+          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml2((existing == null ? void 0 : existing.model) || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
+          <span data-ai-model-hint style="display:block;margin-top:5px;font-size:11px;color:#64748B"></span>
+        </label>
+      </div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#14161E;border-top:1px solid rgba(255,255,255,0.06)">
+        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
+        <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
+      </div>
+    </div>`;
+    const host = document.getElementById(MODAL_ID2) || document.body;
+    host.appendChild(overlay);
+    const providerEl = overlay.querySelector("[data-ai-provider]");
+    const keyEl = overlay.querySelector("[data-ai-key]");
+    const keyWrap = overlay.querySelector("[data-ai-key-wrap]");
+    const modelEl = overlay.querySelector("[data-ai-model]");
+    const hintEl = overlay.querySelector("[data-ai-model-hint]");
+    function syncProviderUI() {
+      const p = providerEl.value;
+      keyWrap.style.display = p === "ollama" ? "none" : "";
+      if (p === "anthropic") {
+        hintEl.textContent = "Tiers: " + ANTHROPIC_MODEL_CHOICES.map((c) => c.id).join(" / ");
+      } else if (p === "openai") {
+        hintEl.textContent = "e.g. gpt-4o, gpt-4o-mini";
+      } else {
+        hintEl.textContent = "Local model tag, e.g. llama3.1 (Ollama must be running with CORS allowed).";
+      }
+    }
+    providerEl.addEventListener("change", () => {
+      modelEl.value = DEFAULT_MODELS[providerEl.value];
+      syncProviderUI();
+    });
+    syncProviderUI();
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    (_b = overlay.querySelector("[data-ai-close]")) == null ? void 0 : _b.addEventListener("click", close);
+    (_c = overlay.querySelector("[data-ai-clear]")) == null ? void 0 : _c.addEventListener("click", () => {
+      clearAIConfig();
+      showToast("AI key removed", root);
+      close();
+      onSaved();
+    });
+    (_d = overlay.querySelector("[data-ai-save]")) == null ? void 0 : _d.addEventListener("click", () => {
+      const p = providerEl.value;
+      const cfg = { provider: p, apiKey: keyEl.value.trim(), model: modelEl.value.trim() || DEFAULT_MODELS[p] };
+      if (p !== "ollama" && !cfg.apiKey) {
+        showToast("Enter an API key", root);
+        keyEl.focus();
+        return;
+      }
+      setAIConfig(cfg);
+      showToast("\u2713 AI provider saved", root);
+      close();
+      onSaved();
+    });
   }
   function _buildAnnotationsTab(session) {
     const sessAnn = (session == null ? void 0 : session.annotations) || [];
@@ -11558,6 +11954,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID2} .tb-qb-ai-conf-medium { background:var(--tb-warning-bg); color:var(--tb-warning); }
     #${MODAL_ID2} .tb-qb-ai-conf-low { background:var(--tb-info-bg); color:var(--tb-info); }
     #${MODAL_ID2} .tb-qb-ai-card-body { font-size:13px; color:var(--tb-text-primary); line-height:1.6; }
+    #${MODAL_ID2} .tb-qb-ai-provider { font-size:10px; padding:2px 8px; border-radius:999px; font-weight:700; letter-spacing:0.3px; text-transform:none; background:var(--tb-accent-soft); color:var(--tb-accent); }
+    #${MODAL_ID2} .tb-qb-ai-loading { font-size:12px; color:var(--tb-text-muted); }
+    #${MODAL_ID2} .tb-qb-ai-error { font-size:12.5px; color:var(--tb-error); background:var(--tb-error-bg); border:1px solid var(--tb-error); border-radius:var(--tb-radius-sm); padding:10px 12px; line-height:1.5; }
+    #${MODAL_ID2} .tb-qb-ai-meta { font-size:10.5px; color:var(--tb-text-muted); margin-top:8px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-ai-md { font-size:13px; line-height:1.6; color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-ai-md p { margin:0 0 8px; }
+    #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-h { font-weight:700; margin:12px 0 5px; color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-h4 { font-size:13px; }
+    #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-h5, #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-h6 { font-size:12px; }
+    #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-ul { margin:0 0 8px; padding-left:20px; }
+    #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-ul li { margin-bottom:3px; }
+    #${MODAL_ID2} .tb-qb-ai-md code { font-family:var(--tb-font-mono); font-size:11.5px; background:var(--tb-bg-secondary); padding:1px 5px; border-radius:4px; }
+    #${MODAL_ID2} .tb-qb-ai-md .tb-qb-ai-code { font-family:var(--tb-font-mono); font-size:11.5px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:10px 12px; overflow:auto; white-space:pre-wrap; word-break:break-word; margin:0 0 8px; }
     #${MODAL_ID2} .tb-qb-ai-card-body p { margin:0 0 10px; }
     #${MODAL_ID2} .tb-qb-ai-empty .tb-qb-ai-card-body { color:var(--tb-text-secondary); }
 
@@ -11920,6 +12329,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_html_replay();
       init_cloud_endpoint();
       init_ai_prompt();
+      init_llm_client();
       init_theme();
       init_annotation_store();
       init_linear_issue();
@@ -13042,7 +13452,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   // src/onboarding.ts
   function isComplete() {
     try {
-      return localStorage.getItem(STORAGE_KEY2) === "true";
+      return localStorage.getItem(STORAGE_KEY3) === "true";
     } catch (e) {
       return false;
     }
@@ -13071,11 +13481,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (btn) btn.style.boxShadow = "";
     });
   }
-  var STORAGE_KEY2, TOOLTIP_ID, STEPS, _cleanup3;
+  var STORAGE_KEY3, TOOLTIP_ID, STEPS, _cleanup3;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
-      STORAGE_KEY2 = "tracebug_onboarding_complete";
+      STORAGE_KEY3 = "tracebug_onboarding_complete";
       TOOLTIP_ID = "tracebug-onboarding-tooltip";
       STEPS = [
         {
@@ -49685,13 +50095,18 @@ First element: \`${exampleSnippet}\``,
   // src/index.ts
   var src_exports = {};
   __export(src_exports, {
+    ANTHROPIC_MODEL_CHOICES: () => ANTHROPIC_MODEL_CHOICES,
+    DEFAULT_MODELS: () => DEFAULT_MODELS,
     FREE_LIMITS: () => FREE_LIMITS,
+    PROVIDER_LABELS: () => PROVIDER_LABELS,
+    buildAnalysisPrompt: () => buildAnalysisPrompt,
     buildReport: () => buildReport,
     buildTimeline: () => buildTimeline,
     captureEnvironment: () => captureEnvironment,
     captureRegionScreenshot: () => captureRegionScreenshot,
     captureRollingBuffer: () => captureRollingBuffer,
     captureScreenshot: () => captureScreenshot,
+    clearAIConfig: () => clearAIConfig,
     clearAllSessions: () => clearAllSessions,
     clearIssues: () => clearIssues,
     clearVideoRecording: () => clearVideoRecording,
@@ -49717,6 +50132,7 @@ First element: \`${exampleSnippet}\``,
     generateRootCauseHint: () => generateRootCauseHint,
     generateSessionSteps: () => generateSessionSteps,
     generateSmartSummary: () => generateSmartSummary,
+    getAIConfig: () => getAIConfig,
     getAllSessions: () => getAllSessions,
     getCaptureCount: () => getCaptureCount,
     getIssueById: () => getIssueById,
@@ -49728,6 +50144,7 @@ First element: \`${exampleSnippet}\``,
     getPlan: () => getPlan,
     getScreenshots: () => getScreenshots,
     getVoiceTranscripts: () => getVoiceTranscripts,
+    hasAIKey: () => hasAIKey,
     hydratePlan: () => hydratePlan,
     isPremium: () => isPremium,
     isRollingMode: () => isRollingMode,
@@ -49738,7 +50155,9 @@ First element: \`${exampleSnippet}\``,
     openGitHubIssue: () => openGitHubIssue,
     openInChatGPT: () => openInChatGPT,
     openInClaude: () => openInClaude,
+    runLLMAnalysis: () => runLLMAnalysis,
     scan: () => scan,
+    setAIConfig: () => setAIConfig,
     setPlan: () => setPlan,
     startVideoRecording: () => startVideoRecording,
     startVoiceRecording: () => startVoiceRecording,
@@ -50227,6 +50646,7 @@ First element: \`${exampleSnippet}\``,
   init_github_issue();
   init_jira_issue();
   init_ai_prompt();
+  init_llm_client();
   init_pdf_generator();
   init_title_generator();
   init_timeline_builder();

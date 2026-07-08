@@ -158,6 +158,12 @@ reporter: [["list"], ["tracebug-sdk/playwright", { outputDir: "bug-reports" }]],
 
 Nobody else captures bugs from test runs as portable files — cloud tools can't attach their viewer to a CI artifact. See [docs/playwright.md](docs/playwright.md).
 
+### 🧠 AI Debugger — BYO-Key LLM Analysis (v1.6)
+
+Run real LLM root-cause analysis with **your own key** — Anthropic, OpenAI, or local Ollama. The call goes **directly from your browser to the provider**: TraceBug never sees the key, the prompt, or the response, and the prompt is scrubbed of secret shapes before it leaves the page. No metered credits, no vendor cloud in the path.
+
+Combined with the local heuristic hint and the local MCP server, this is **AI debugging that never phones home** — the one position no cloud-hosted, metered competitor can copy. See [docs/ai-debugger.md](docs/ai-debugger.md).
+
 ### Auto-Captured (Zero Effort)
 
 | What | Details |

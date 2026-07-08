@@ -24,6 +24,11 @@ import { exportSessionAsHtml } from "../exporters/html-replay";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
+import {
+  runLLMAnalysis, getAIConfig, setAIConfig, clearAIConfig,
+  PROVIDER_LABELS, DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES,
+  type AIProvider, type AIConfig,
+} from "../ai/llm-client";
 // PHASE2-CLOUD: import { getBridge } from "../auth/iframe-bridge";
 import { showScreenshotTrimModal } from "./screenshot-trim-modal";
 import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
@@ -1099,9 +1104,15 @@ function _openModal(
     setTimeout(close, 300);
   });
 
-  // AI tab — wire the Configure button + Generate button if present.
-  modal.querySelector('[data-action="ai-configure"]')?.addEventListener("click", () => {
-    showToast("AI configuration UI coming soon \u2014 set tracebug_ai_key in localStorage to enable", root);
+  // AI tab — Configure (BYO-key modal) + Generate (run analysis). Delegated so
+  // the handlers survive the AI panel re-rendering after a config save.
+  modal.addEventListener("click", (e) => {
+    const action = (e.target as HTMLElement).closest?.("[data-action]")?.getAttribute("data-action");
+    if (action === "ai-configure") {
+      showAIConfigModal(root, () => _rerenderAITab(modal, data));
+    } else if (action === "ai-generate") {
+      void _runAIAnalysis(root, modal, data);
+    }
   });
 
   // Thumbnail strip: click \u2192 open the annotation editor on that screenshot.
@@ -1854,18 +1865,25 @@ function _renderElementPreview(el: { tag: string; attrs: import("../types").Acti
 
 function _buildAITab(report: import("../types").BugReport | null): string {
   const rootCause = report?.rootCause;
-  const hasKey = (() => { try { return !!localStorage.getItem("tracebug_ai_key"); } catch { return false; } })();
+  const aiConfig = getAIConfig();
+  const hasKey = !!aiConfig && (aiConfig.provider === "ollama" || !!aiConfig.apiKey);
   const deterministic = rootCause ? `
     <div class="tb-qb-ai-card">
       <div class="tb-qb-ai-card-head">Pattern-based hint <span class="tb-qb-ai-conf tb-qb-ai-conf-${rootCause.confidence}">${rootCause.confidence}</span></div>
       <div class="tb-qb-ai-card-body">${escapeHtml(rootCause.hint)}</div>
     </div>
   ` : "";
+  const providerLine = hasKey
+    ? `${escapeHtml(PROVIDER_LABELS[aiConfig!.provider])} \u00B7 ${escapeHtml(aiConfig!.model)}`
+    : "";
   const llmBlock = hasKey ? `
-    <div class="tb-qb-ai-card">
-      <div class="tb-qb-ai-card-head">LLM analysis</div>
-      <div class="tb-qb-ai-card-body"><em>Click \u201CGenerate\u201D below to run the LLM analysis (BYO API key).</em></div>
-      <button class="tb-qb-btn tb-qb-btn-accent" data-action="ai-generate" style="margin-top:10px">\u2728 Generate AI analysis</button>
+    <div class="tb-qb-ai-card" data-ai-llm-card>
+      <div class="tb-qb-ai-card-head">AI Debugger <span class="tb-qb-ai-provider">${providerLine}</span></div>
+      <div class="tb-qb-ai-card-body" data-ai-output><em>Runs on your own key \u2014 the report is scrubbed of secret shapes, then sent directly to ${escapeHtml(PROVIDER_LABELS[aiConfig!.provider])}. TraceBug never sees it.</em></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="tb-qb-btn tb-qb-btn-accent" data-action="ai-generate">\u2728 Generate AI analysis</button>
+        <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Change key</button>
+      </div>
     </div>
   ` : `
     <div class="tb-qb-ai-card tb-qb-ai-empty">
@@ -1877,6 +1895,172 @@ function _buildAITab(report: import("../types").BugReport | null): string {
     </div>
   `;
   return deterministic + llmBlock;
+}
+
+// ── BYO-key LLM analysis wiring ────────────────────────────────────────────
+
+type _AITabData = { report: import("../types").BugReport | null };
+
+function _rerenderAITab(modal: HTMLElement, data: _AITabData): void {
+  const panel = modal.querySelector('[data-panel="ai"]');
+  if (panel) panel.innerHTML = _buildAITab(data.report);
+}
+
+async function _runAIAnalysis(root: HTMLElement, modal: HTMLElement, data: _AITabData): Promise<void> {
+  const report = data.report;
+  if (!report) { showToast("No report to analyze yet", root); return; }
+  const card = modal.querySelector('[data-ai-llm-card]');
+  const out = card?.querySelector<HTMLElement>('[data-ai-output]');
+  const genBtn = card?.querySelector<HTMLButtonElement>('[data-action="ai-generate"]');
+  if (!out) return;
+
+  if (genBtn) { genBtn.disabled = true; genBtn.textContent = "Analyzing…"; }
+  out.innerHTML = '<div class="tb-qb-ai-loading">🤖 Running analysis on your key… this stays between your browser and the provider.</div>';
+
+  try {
+    const result = await runLLMAnalysis(report);
+    const meta = result.usage?.outputTokens
+      ? `<div class="tb-qb-ai-meta">${escapeHtml(result.model)} · ${result.usage.inputTokens ?? "?"}→${result.usage.outputTokens} tokens</div>`
+      : `<div class="tb-qb-ai-meta">${escapeHtml(result.model)}</div>`;
+    out.innerHTML = `<div class="tb-qb-ai-md">${_renderMarkdownLite(result.text)}</div>${meta}`;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Analysis failed.";
+    out.innerHTML = `<div class="tb-qb-ai-error">⚠️ ${escapeHtml(msg)}</div>`;
+  } finally {
+    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = "✨ Regenerate"; }
+  }
+}
+
+// Minimal, safe markdown → HTML: headings, bold, inline code, fenced code,
+// and bullet lists. Everything is escaped first, so model output can't inject.
+function _renderMarkdownLite(md: string): string {
+  const esc = (s: string) => escapeHtml(s);
+  const lines = md.replace(/\r\n/g, "\n").split("\n");
+  const html: string[] = [];
+  let inList = false, inCode = false;
+  const codeBuf: string[] = [];
+  const closeList = () => { if (inList) { html.push("</ul>"); inList = false; } };
+
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      if (inCode) { html.push(`<pre class="tb-qb-ai-code">${esc(codeBuf.join("\n"))}</pre>`); codeBuf.length = 0; inCode = false; }
+      else { closeList(); inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+
+    const h = /^(#{1,4})\s+(.*)$/.exec(line);
+    if (h) {
+      closeList();
+      const level = Math.min(6, h[1].length + 2); // ## -> h4-ish sizing
+      html.push(`<div class="tb-qb-ai-h tb-qb-ai-h${level}">${_inlineMd(h[2])}</div>`);
+      continue;
+    }
+    const li = /^\s*[-*]\s+(.*)$/.exec(line);
+    if (li) {
+      if (!inList) { html.push('<ul class="tb-qb-ai-ul">'); inList = true; }
+      html.push(`<li>${_inlineMd(li[1])}</li>`);
+      continue;
+    }
+    if (line.trim() === "") { closeList(); continue; }
+    closeList();
+    html.push(`<p>${_inlineMd(line)}</p>`);
+  }
+  if (inCode && codeBuf.length) html.push(`<pre class="tb-qb-ai-code">${esc(codeBuf.join("\n"))}</pre>`);
+  closeList();
+  return html.join("");
+}
+
+function _inlineMd(s: string): string {
+  return escapeHtml(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+// ── BYO-key config modal ──────────────────────────────────────────────────
+
+function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
+  document.getElementById("tb-ai-config")?.remove();
+  const existing = getAIConfig();
+  const provider: AIProvider = existing?.provider || "anthropic";
+
+  const overlay = document.createElement("div");
+  overlay.id = "tb-ai-config";
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
+    "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:460px;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3;overflow:hidden">
+      <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">🤖 AI Debugger — bring your own key</div>
+        <div style="font-size:12px;color:#94A3B8;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+        <label style="font-size:12px;color:#94A3B8">Provider
+          <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px">
+            ${(Object.keys(PROVIDER_LABELS) as AIProvider[]).map((p) => `<option value="${p}" ${p === provider ? "selected" : ""}>${escapeHtml(PROVIDER_LABELS[p])}</option>`).join("")}
+          </select>
+        </label>
+        <label data-ai-key-wrap style="font-size:12px;color:#94A3B8">API key
+          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" value="${escapeHtml(existing?.apiKey || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px" />
+        </label>
+        <label style="font-size:12px;color:#94A3B8">Model
+          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml(existing?.model || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
+          <span data-ai-model-hint style="display:block;margin-top:5px;font-size:11px;color:#64748B"></span>
+        </label>
+      </div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#14161E;border-top:1px solid rgba(255,255,255,0.06)">
+        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
+        <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
+      </div>
+    </div>`;
+
+  const host = document.getElementById(MODAL_ID) || document.body;
+  host.appendChild(overlay);
+
+  const providerEl = overlay.querySelector<HTMLSelectElement>("[data-ai-provider]")!;
+  const keyEl = overlay.querySelector<HTMLInputElement>("[data-ai-key]")!;
+  const keyWrap = overlay.querySelector<HTMLElement>("[data-ai-key-wrap]")!;
+  const modelEl = overlay.querySelector<HTMLInputElement>("[data-ai-model]")!;
+  const hintEl = overlay.querySelector<HTMLElement>("[data-ai-model-hint]")!;
+
+  function syncProviderUI() {
+    const p = providerEl.value as AIProvider;
+    keyWrap.style.display = p === "ollama" ? "none" : "";
+    if (p === "anthropic") {
+      hintEl.textContent = "Tiers: " + ANTHROPIC_MODEL_CHOICES.map((c) => c.id).join(" / ");
+    } else if (p === "openai") {
+      hintEl.textContent = "e.g. gpt-4o, gpt-4o-mini";
+    } else {
+      hintEl.textContent = "Local model tag, e.g. llama3.1 (Ollama must be running with CORS allowed).";
+    }
+  }
+  providerEl.addEventListener("change", () => {
+    modelEl.value = DEFAULT_MODELS[providerEl.value as AIProvider];
+    syncProviderUI();
+  });
+  syncProviderUI();
+
+  const close = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector("[data-ai-close]")?.addEventListener("click", close);
+  overlay.querySelector("[data-ai-clear]")?.addEventListener("click", () => {
+    clearAIConfig();
+    showToast("AI key removed", root);
+    close();
+    onSaved();
+  });
+  overlay.querySelector("[data-ai-save]")?.addEventListener("click", () => {
+    const p = providerEl.value as AIProvider;
+    const cfg: AIConfig = { provider: p, apiKey: keyEl.value.trim(), model: modelEl.value.trim() || DEFAULT_MODELS[p] };
+    if (p !== "ollama" && !cfg.apiKey) { showToast("Enter an API key", root); keyEl.focus(); return; }
+    setAIConfig(cfg);
+    showToast("✓ AI provider saved", root);
+    close();
+    onSaved();
+  });
 }
 
 function _buildAnnotationsTab(session: StoredSession | null): string {
@@ -2143,6 +2327,19 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-ai-conf-medium { background:var(--tb-warning-bg); color:var(--tb-warning); }
     #${MODAL_ID} .tb-qb-ai-conf-low { background:var(--tb-info-bg); color:var(--tb-info); }
     #${MODAL_ID} .tb-qb-ai-card-body { font-size:13px; color:var(--tb-text-primary); line-height:1.6; }
+    #${MODAL_ID} .tb-qb-ai-provider { font-size:10px; padding:2px 8px; border-radius:999px; font-weight:700; letter-spacing:0.3px; text-transform:none; background:var(--tb-accent-soft); color:var(--tb-accent); }
+    #${MODAL_ID} .tb-qb-ai-loading { font-size:12px; color:var(--tb-text-muted); }
+    #${MODAL_ID} .tb-qb-ai-error { font-size:12.5px; color:var(--tb-error); background:var(--tb-error-bg); border:1px solid var(--tb-error); border-radius:var(--tb-radius-sm); padding:10px 12px; line-height:1.5; }
+    #${MODAL_ID} .tb-qb-ai-meta { font-size:10.5px; color:var(--tb-text-muted); margin-top:8px; font-family:var(--tb-font-mono); }
+    #${MODAL_ID} .tb-qb-ai-md { font-size:13px; line-height:1.6; color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-ai-md p { margin:0 0 8px; }
+    #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-h { font-weight:700; margin:12px 0 5px; color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-h4 { font-size:13px; }
+    #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-h5, #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-h6 { font-size:12px; }
+    #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-ul { margin:0 0 8px; padding-left:20px; }
+    #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-ul li { margin-bottom:3px; }
+    #${MODAL_ID} .tb-qb-ai-md code { font-family:var(--tb-font-mono); font-size:11.5px; background:var(--tb-bg-secondary); padding:1px 5px; border-radius:4px; }
+    #${MODAL_ID} .tb-qb-ai-md .tb-qb-ai-code { font-family:var(--tb-font-mono); font-size:11.5px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:10px 12px; overflow:auto; white-space:pre-wrap; word-break:break-word; margin:0 0 8px; }
     #${MODAL_ID} .tb-qb-ai-card-body p { margin:0 0 10px; }
     #${MODAL_ID} .tb-qb-ai-empty .tb-qb-ai-card-body { color:var(--tb-text-secondary); }
 
