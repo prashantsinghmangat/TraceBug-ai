@@ -1,6 +1,34 @@
 // ── Dashboard UI Helpers ─────────────────────────────────────────────────
 // Shared utility functions used across all dashboard modules.
 
+// ── Defensive style isolation (no Shadow DOM) ────────────────────────────
+// Returns a conservative, scoped CSS reset for an injected-widget root so
+// host-page styles can't leak in. It asserts our own base and neutralizes the
+// common leak vectors (box-sizing, inherited text properties, button/input
+// casing, svg/img sizing, link decoration) — it does NOT nuke our own rules,
+// so it is safe to prepend to any widget's <style> block. Zero dependencies.
+// Prepend it so our own, more-specific rules always win the cascade.
+export function tbIsolationCss(root: string): string {
+  return `
+    ${root} {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px; font-weight: 400; line-height: 1.5; font-style: normal;
+      letter-spacing: normal; text-transform: none; text-align: left;
+      text-indent: 0; white-space: normal; word-spacing: normal; text-shadow: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    ${root} *, ${root} *::before, ${root} *::after { box-sizing: border-box; }
+    ${root} button, ${root} input, ${root} select, ${root} textarea {
+      font-family: inherit; font-size: inherit; letter-spacing: normal;
+      text-transform: none; margin: 0;
+    }
+    ${root} svg { max-width: none; max-height: none; vertical-align: middle; }
+    ${root} img { max-width: none; }
+    ${root} a { text-decoration: none; }
+  `;
+}
+
 // ── Keyboard shortcut parsing ────────────────────────────────────────────
 // Accepts strings like "ctrl+shift+s", "cmd+b", "alt+shift+a". Treats
 // "ctrl" and "cmd" as interchangeable — on macOS we match Cmd, on other
