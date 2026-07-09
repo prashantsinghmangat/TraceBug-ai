@@ -24,7 +24,7 @@ import { exportSessionAsHtml } from "../exporters/html-replay";
 import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
-import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "../exporters/ai-prompt";
+import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT, exportReportAsMarkdown } from "../exporters/ai-prompt";
 import {
   runLLMAnalysis, getAIConfig, setAIConfig, clearAIConfig,
   PROVIDER_LABELS, DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES,
@@ -200,6 +200,25 @@ function _downloadAllScreenshots(screenshots: ScreenshotData[]): void {
   screenshots.forEach((ss, i) => {
     setTimeout(() => downloadScreenshot(ss.dataUrl, ss.filename), i * 120);
   });
+}
+
+/**
+ * Estimate the size of the self-contained `.html` export before it's built,
+ * so the Export button can warn about a big file up front. The video and
+ * screenshots dominate; both are embedded as base64 (≈4/3 of the raw blob for
+ * the video, and the screenshot dataUrls are already base64 chars ≈ bytes).
+ * Plus a fixed ~120 KB for the HTML/CSS/JS scaffold and structured data.
+ * Video is restored before the modal renders, so `report.video.sizeBytes` is
+ * reliably present here when a recording exists.
+ */
+function _estimateHtmlExportBytes(report: import("../types").BugReport | null): number {
+  let bytes = 120 * 1024;
+  const v = report?.video;
+  if (v?.sizeBytes) bytes += Math.round((v.sizeBytes * 4) / 3);
+  for (const s of report?.screenshots ?? []) {
+    bytes += (s.originalDataUrl || s.dataUrl || "").length;
+  }
+  return bytes;
 }
 
 /** Download the active screen recording (if any) so the dev can attach it. */
@@ -489,7 +508,7 @@ function _openModal(
           ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
-        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">${_ic("fileCode")} Export .html</button>
+        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export .html<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">🔗 Share link</button>
@@ -497,6 +516,8 @@ function _openModal(
         <div class="tb-qb-more">
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
+            <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report — upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
+            ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
             <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
@@ -873,7 +894,7 @@ function _openModal(
       // Offer the agent hand-off: the export is exactly what the MCP server
       // reads, so the natural next step is pasting this prompt into Claude
       // Code / Cursor next to the codebase that owns the bug.
-      showMcpHandoffCard(result.filename);
+      showMcpHandoffCard(result.filename, result.sizeBytes);
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
@@ -899,6 +920,41 @@ function _openModal(
       console.warn("[TraceBug] HAR export failed:", err);
       showToast("HAR export failed", root);
     }
+  });
+
+  // Download report (.md) — the compact, upload-friendly artifact for non-MCP
+  // users. A few KB of text (no base64) any agent or chat reads directly;
+  // screenshots go as separate image files (see download-screenshots).
+  modal.querySelector('[data-action="download-md"]')?.addEventListener("click", () => {
+    if (!data.currentSession) {
+      showToast("No session to export yet", root);
+      return;
+    }
+    try {
+      const report = buildReport(data.currentSession);
+      // Carry the edited ticket fields into the report, same as the .html path.
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const result = exportReportAsMarkdown(report);
+      const n = report.screenshots?.length ?? 0;
+      const sizeKb = (result.sizeBytes / 1024).toFixed(1);
+      const tail = n ? ` · grab the screenshot${n === 1 ? "" : "s"} too ↓` : "";
+      showToast(`✓ Report saved · ${sizeKb} KB${tail}`, root);
+    } catch (err) {
+      console.warn("[TraceBug] Markdown report export failed:", err);
+      showToast("Report export failed", root);
+    }
+  });
+
+  // Download screenshots — raw PNG(s) the user attaches next to the .md report
+  // so the agent gets real visuals through the cheap vision path (not base64).
+  modal.querySelector('[data-action="download-screenshots"]')?.addEventListener("click", () => {
+    if (!screenshots.length) {
+      showToast("No screenshots captured", root);
+      return;
+    }
+    _downloadAllScreenshots(screenshots);
+    showToast(`✓ Downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}`, root);
   });
 
   /* PHASE2-CLOUD: share link handler disabled for Phase 1 offline release
@@ -1516,6 +1572,8 @@ const _LU: Record<string, string> = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
   alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   film: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/>',
+  fileText: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
 };
 function _ic(name: keyof typeof _LU | string): string {
   const paths = _LU[name] || _LU.globe;
@@ -2770,10 +2828,21 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
 // paste it into Claude Code / Cursor sitting in the codebase, and the agent
 // debugs from the report. Mirrors Jam's "copy AI prompt" hand-off — but the
 // data stays on disk instead of a vendor cloud.
-function showMcpHandoffCard(filename: string): void {
+function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   document.getElementById("tb-mcp-handoff")?.remove();
   const prompt = generateMcpPrompt(filename);
   try { navigator.clipboard.writeText(prompt); } catch {}
+
+  // When the .html is video-heavy it can't be pasted into a chat (the base64
+  // video overflows the context). Point non-MCP users at the compact .md +
+  // screenshots path instead. ~3 MB is roughly where a chat upload starts to
+  // choke, so only nag above that.
+  const CHAT_UPLOAD_LIMIT = 3 * 1024 * 1024;
+  const bigFileNote = sizeBytes && sizeBytes > CHAT_UPLOAD_LIMIT
+    ? `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
+         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? This file is <strong>${_formatBytes(sizeBytes)}</strong> — the embedded video makes it too big to upload. Use <strong>Download report (.md)</strong> + <strong>Download screenshots</strong> from the <strong>More&nbsp;▾</strong> menu.
+       </div>`
+    : "";
 
   const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const overlay = document.createElement("div");
@@ -2807,6 +2876,7 @@ function showMcpHandoffCard(filename: string): void {
         ✓ Prompt copied · paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.
         The agent reads the .html via TraceBug's local MCP server — nothing is uploaded.
       </div>
+      ${bigFileNote}
     </div>
     <pre style="
       margin:0;padding:14px 18px;
