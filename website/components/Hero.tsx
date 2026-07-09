@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ChromeIcon } from "@/components/ui/brand-icons";
 import { ArrowRight, Check, Copy, ChevronRight } from "lucide-react";
 import { Caret } from "@/components/BrandMark";
+import { SDK_VERSION_TAG } from "@/lib/version";
 import { useState } from "react";
 
 const CHROME_URL =
@@ -31,14 +32,14 @@ export default function Hero() {
         {/* Eyebrow */}
         <div className="flex justify-center mb-6">
           <a
-            href="#features"
+            href="#how"
             className="group inline-flex items-center gap-2 rounded-full border border-border bg-background/70 backdrop-blur px-3 py-1.5 text-[12.5px] text-text-muted shadow-xs hover:border-border-strong transition-colors"
           >
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
             </span>
-            <span className="font-medium text-text-primary">v1.4</span>
+            <span className="font-medium text-text-primary">{SDK_VERSION_TAG}</span>
             <span className="text-border-strong">·</span>
             <span>Root-cause hints in every report</span>
             <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
@@ -53,7 +54,7 @@ export default function Hero() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-center text-text-muted text-lg sm:text-xl leading-relaxed">
-          One click captures the bug — replay, console errors, network calls, and
+          One shortcut captures the bug — replay, console errors, network calls, and
           screenshots — into a single{" "}
           <code className="font-mono text-[0.86em] text-text-primary bg-surface-2 border border-border rounded px-1.5 py-0.5">
             .html
@@ -83,16 +84,6 @@ export default function Hero() {
             )}
           </button>
         </div>
-
-        {/* Trust line */}
-        <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[13px] text-text-muted">
-          {["Stays on your machine", "No account needed", "Works offline", "MIT open source"].map((t) => (
-            <li key={t} className="flex items-center gap-1.5">
-              <Check size={13} className="text-success" strokeWidth={3} />
-              {t}
-            </li>
-          ))}
-        </ul>
 
         {/* Product visual — light browser frame with the auto-generated report */}
         <div className="relative mx-auto mt-16 max-w-4xl">

@@ -4,6 +4,7 @@ import { useState } from "react";
 import SectionHeading from "@/components/SectionHeading";
 import { ChromeIcon, NpmIcon, GitHubIcon, TerminalIcon } from "@/components/ui/brand-icons";
 import { Check, Copy } from "lucide-react";
+import { SDK_VERSION } from "@/lib/version";
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
@@ -41,8 +42,35 @@ export default function Installation() {
               captures the bug and saves it as a single .html file you can share anywhere.
             </>
           }
-          className="mb-12"
+          className="mb-10"
         />
+
+        {/* Two ways in — one product. Makes the audience split obvious before
+            the install commands. */}
+        <div className="grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto mb-10">
+          <div className="rounded-2xl border border-border bg-background p-5 shadow-xs">
+            <div className="flex items-center gap-2.5 mb-2">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/[0.08] text-primary">
+                <ChromeIcon size={17} />
+              </span>
+              <span className="text-[15px] font-semibold text-text-primary">Chrome extension</span>
+            </div>
+            <p className="text-[13.5px] text-text-muted leading-relaxed">
+              For QA, designers, PMs — anyone who reports bugs. Nothing to add to the codebase.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-background p-5 shadow-xs">
+            <div className="flex items-center gap-2.5 mb-2">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.10] text-accent">
+                <NpmIcon size={17} />
+              </span>
+              <span className="text-[15px] font-semibold text-text-primary">SDK</span>
+            </div>
+            <p className="text-[13.5px] text-text-muted leading-relaxed">
+              For developers embedding TraceBug in an app — two lines, any front-end framework.
+            </p>
+          </div>
+        </div>
 
         {/* Tabs */}
         <div className="flex flex-wrap justify-center gap-2 mb-8">
@@ -168,8 +196,8 @@ TraceBug — Setting up bug reporting
                   copied={copied}
                   onCopy={copy}
                   code={`$ cd tracebug-ai
-$ npm pack     # creates tracebug-sdk-1.4.0.tgz
-$ npm install ./tracebug-sdk-1.4.0.tgz`}
+$ npm pack     # creates tracebug-sdk-${SDK_VERSION}.tgz
+$ npm install ./tracebug-sdk-${SDK_VERSION}.tgz`}
                 />
               </Step>
             </div>

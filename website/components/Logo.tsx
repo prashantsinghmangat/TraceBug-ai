@@ -3,6 +3,8 @@
 // reads as a crisp brand mark on either theme. `idPrefix` keeps gradient ids
 // unique when multiple marks render on one page.
 
+import { SDK_VERSION_TAG } from "@/lib/version";
+
 export function LogoMark({
   size = 32,
   className = "",
@@ -70,7 +72,7 @@ export function LogoLockup({
       </span>
       {showVersion && (
         <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md bg-surface border border-border text-[10px] font-mono uppercase tracking-wider text-text-muted">
-          v1.4
+          {SDK_VERSION_TAG}
         </span>
       )}
     </span>
