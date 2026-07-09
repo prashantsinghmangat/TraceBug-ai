@@ -74,10 +74,10 @@ function _saveThemePref(mode: ThemeMode): void {
 }
 
 function _themeIcon(): string {
-  // Sun = light, moon = dark, half-moon = auto (adapts to system).
+  // Sun = light, moon = dark, monitor = auto (adapts to system).
   const pref = _loadThemePref();
-  if (pref === "auto") return "🌗";
-  return pref === "dark" ? "🌙" : "☀";
+  if (pref === "auto") return _ic("monitor");
+  return pref === "dark" ? _ic("moon") : _ic("sun");
 }
 
 function _cycleTheme(): ThemeMode {
@@ -1512,6 +1512,10 @@ const _LU: Record<string, string> = {
   ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
   settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   triangle: '<path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  film: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/>',
 };
 function _ic(name: keyof typeof _LU | string): string {
   const paths = _LU[name] || _LU.globe;
@@ -2006,7 +2010,7 @@ async function _runAIAnalysis(root: HTMLElement, modal: HTMLElement, data: _AITa
   if (!out) return;
 
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = "Analyzing…"; }
-  out.innerHTML = '<div class="tb-qb-ai-loading">🤖 Running analysis on your key… this stays between your browser and the provider.</div>';
+  out.innerHTML = `<div class="tb-qb-ai-loading">${_ic("sparkles")} Running analysis on your key… this stays between your browser and the provider.</div>`;
 
   try {
     const result = await runLLMAnalysis(report);
@@ -2016,9 +2020,9 @@ async function _runAIAnalysis(root: HTMLElement, modal: HTMLElement, data: _AITa
     out.innerHTML = `<div class="tb-qb-ai-md">${_renderMarkdownLite(result.text)}</div>${meta}`;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analysis failed.";
-    out.innerHTML = `<div class="tb-qb-ai-error">⚠️ ${escapeHtml(msg)}</div>`;
+    out.innerHTML = `<div class="tb-qb-ai-error">${_ic("alert")} ${escapeHtml(msg)}</div>`;
   } finally {
-    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = "✨ Regenerate"; }
+    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = `${_ic("sparkles")} Regenerate`; }
   }
 }
 
@@ -2084,7 +2088,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
   overlay.innerHTML = `
     <div style="width:100%;max-width:460px;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <div style="font-size:14px;font-weight:600;margin-bottom:4px">🤖 AI Debugger — bring your own key</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger — bring your own key</div>
         <div style="font-size:12px;color:#94A3B8;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
       </div>
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
@@ -2170,12 +2174,12 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   overlay.innerHTML = `
     <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <div style="font-size:14px;font-weight:600;margin-bottom:4px">🔗 Integrations — bring your own token</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations — bring your own token</div>
         <div style="font-size:12px;color:#94A3B8;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
       </div>
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:16px">
         <div>
-          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">🐙 GitHub</div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">GitHub</div>
           <label style="${lbl}">Personal access token (repo scope)
             <input data-int-gh-token type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" value="${escapeHtml(cfg.github?.token || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Repository (owner/repo)
@@ -2184,14 +2188,14 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
             <input data-int-gh-labels type="text" spellcheck="false" placeholder="bug, tracebug" value="${escapeHtml((cfg.github?.labels || []).join(", "))}" style="${fld}" /></label>
         </div>
         <div>
-          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">△ Linear</div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">Linear</div>
           <label style="${lbl}">Personal API key
             <input data-int-ln-key type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" value="${escapeHtml(cfg.linear?.apiKey || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Team ID
             <input data-int-ln-team type="text" spellcheck="false" placeholder="team UUID" value="${escapeHtml(cfg.linear?.teamId || "")}" style="${fld}" /></label>
         </div>
         <div>
-          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">💬 Slack</div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">Slack</div>
           <label style="${lbl}">Incoming webhook URL
             <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" value="${escapeHtml(cfg.slack?.webhookUrl || "")}" style="${fld}" /></label>
         </div>
@@ -2674,7 +2678,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
   card.innerHTML = `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="font-size:16px;line-height:1">🤖</span>
+        <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
         <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">AI debugging prompt is ready</div>
       </div>
       <div style="font-size:12px;color:#94A3B8;line-height:1.45">
@@ -2714,7 +2718,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
         background:transparent;color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;
-      ">📋 Copy again</button>
+      ">${_ic("copy")} Copy again</button>
       <button data-ai-action="close" aria-label="Close" style="
         display:inline-flex;align-items:center;justify-content:center;
         width:38px;padding:10px 0;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
@@ -2745,7 +2749,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓ Copied";
-        setTimeout(() => { btn.innerHTML = "📋 Copy again"; }, 1100);
+        setTimeout(() => { btn.innerHTML = `${_ic("copy")} Copy again`; }, 1100);
       }
     }
     else if (action === "close" || target === overlay) close();
@@ -2795,7 +2799,7 @@ function showMcpHandoffCard(filename: string): void {
   card.innerHTML = `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="font-size:16px;line-height:1">🤖</span>
+        <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
         <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">Debug this export with your coding agent</div>
       </div>
       <div style="font-size:12px;color:#94A3B8;line-height:1.45">
@@ -2818,7 +2822,7 @@ function showMcpHandoffCard(filename: string): void {
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
         background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
-      ">📋 Copy prompt again</button>
+      ">${_ic("copy")} Copy prompt again</button>
       <a href="https://tracebug.netlify.app/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
@@ -2843,7 +2847,7 @@ function showMcpHandoffCard(filename: string): void {
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓ Copied";
-        setTimeout(() => { btn.innerHTML = "📋 Copy prompt again"; }, 1100);
+        setTimeout(() => { btn.innerHTML = `${_ic("copy")} Copy prompt again`; }, 1100);
       }
     } else if (action === "close" || target === overlay) close();
   });
