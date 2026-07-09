@@ -17,7 +17,7 @@ import { generateBugTitle, generateFlowSummary } from "../title-generator";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast } from "./toast";
-import { escapeHtml } from "./helpers";
+import { escapeHtml, tbIsolationCss } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
@@ -2285,6 +2285,7 @@ function _injectStyles(): void {
   const style = document.createElement("style");
   style.id = "tracebug-qb-styles";
   style.textContent = `
+    ${tbIsolationCss(`#${MODAL_ID}`)}
     @keyframes tracebug-qb-fade-in { from { opacity: 0; } to { opacity: 1; } }
     @keyframes tracebug-qb-slide-up { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
     /* Honor reduced-motion: disable the entrance + spinner animations (WCAG 2.3.3). */
