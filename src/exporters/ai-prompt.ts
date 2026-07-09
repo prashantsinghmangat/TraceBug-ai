@@ -26,10 +26,17 @@ export interface AIPromptOptions {
   includeTask?: boolean;
   /** Optional project name shown in the header. */
   projectName?: string;
+  /**
+   * True when the screenshots are being handed off as separate image files
+   * (the `.md` download path). The prompt then names them and tells the model
+   * to look at the attached images, instead of the "not embedded" note used by
+   * the copy-to-chat flow. Default: false.
+   */
+  screenshotsAttached?: boolean;
 }
 
 export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {}): string {
-  const { includeTask = true, projectName } = options;
+  const { includeTask = true, projectName, screenshotsAttached = false } = options;
   const env = report.environment;
   const lines: string[] = [];
 
@@ -116,7 +123,15 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
   // ── Attached context ──────────────────────────────────────────────────
   const ctxBits: string[] = [];
   if (report.screenshots && report.screenshots.length > 0) {
-    ctxBits.push(`${report.screenshots.length} screenshot${report.screenshots.length === 1 ? "" : "s"} captured (not embedded — share the .html or cloud link for visuals)`);
+    const n = report.screenshots.length;
+    if (screenshotsAttached) {
+      const names = report.screenshots.map((s) => s.filename).filter(Boolean);
+      ctxBits.push(
+        `${n} screenshot${n === 1 ? "" : "s"} attached separately as image file${n === 1 ? "" : "s"}${names.length ? ` (${names.join(", ")})` : ""} — look at the attached image${n === 1 ? "" : "s"} for the visual state when the bug was captured.`,
+      );
+    } else {
+      ctxBits.push(`${n} screenshot${n === 1 ? "" : "s"} captured (not embedded — share the .html or cloud link for visuals)`);
+    }
   }
   if (report.video) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1000)}s)`);
   if (report.annotations && report.annotations.length > 0) ctxBits.push(`${report.annotations.length} tester note${report.annotations.length === 1 ? "" : "s"}`);
@@ -207,4 +222,49 @@ export function openInChatGPT(prompt: string): void {
   } else {
     window.open("https://chat.openai.com/", "_blank", "noopener");
   }
+}
+
+// ── Markdown report download ──────────────────────────────────────────────
+// The upload-friendly artifact for non-MCP users. Unlike the self-contained
+// `.html` (which inlines the video/screenshots as base64 and blows a chat's
+// context when uploaded), this is a few KB of plain markdown that any agent
+// or chat reads directly. Screenshots are handed off as separate image files
+// (see the widget's "Download screenshots" action), so the prompt references
+// them by name and the model gets visuals through the cheap vision path.
+
+export interface MarkdownReportResult {
+  filename: string;
+  blob: Blob;
+  url: string;
+  sizeBytes: number;
+}
+
+export function exportReportAsMarkdown(
+  report: BugReport,
+  options: AIPromptOptions & { filename?: string } = {},
+): MarkdownReportResult {
+  const hasShots = (report.screenshots?.length ?? 0) > 0;
+  const md = generateAIPrompt(report, { ...options, screenshotsAttached: hasShots });
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const filename = options.filename || defaultMarkdownFilename(report);
+  triggerDownload(url, filename);
+  return { filename, blob, url, sizeBytes: blob.size };
+}
+
+function defaultMarkdownFilename(report: BugReport): string {
+  const sid = report.session?.sessionId?.slice(0, 8) || "session";
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  return `tracebug-report-${sid}-${stamp}.md`;
+}
+
+function triggerDownload(url: string, filename: string): void {
+  if (typeof document === "undefined") return;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* already revoked */ } }, 30000);
 }
