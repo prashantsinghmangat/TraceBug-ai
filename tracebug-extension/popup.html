@@ -25,12 +25,12 @@
         </svg>
         <span class="hd-name">TraceBug</span>
       </div>
-      <button id="themeToggle" class="hd-theme" title="Toggle theme" aria-label="Toggle theme">🌗</button>
+      <button id="themeToggle" class="hd-theme" title="Toggle theme" aria-label="Toggle theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg></button>
     </header>
 
     <!-- Unavailable state (chrome:// pages) -->
     <div class="unavailable" id="unavailable" style="display:none;">
-      <div class="unavailable-icon">🚫</div>
+      <div class="unavailable-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></div>
       <div class="unavailable-text">Can't run on this page</div>
       <div class="unavailable-sub">TraceBug works on any website. Open a regular tab to get started.</div>
     </div>
@@ -81,7 +81,7 @@
       <!-- Hero CTA — starts a tab-capture recording. Reproduce, then stop in the
            on-page HUD; modal opens with the full replay + auto-collected data. -->
       <button class="cta-primary" id="btnCaptureBug">
-        <span class="cta-icon">🎥</span>
+        <span class="cta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg></span>
         <span class="cta-body">
           <span class="cta-title">Capture Bug</span>
           <span class="cta-sub">Records the tab · stop when done</span>
@@ -93,7 +93,7 @@
            Turn on to narrate the recording — adds a mic permission prompt
            the first time recording starts. State persists per user. -->
       <button class="mic-opt" id="micOpt" type="button" aria-pressed="false" title="Toggle microphone for the recording">
-        <span class="mic-opt-icon">🎙</span>
+        <span class="mic-opt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span>
         <span class="mic-opt-text">Microphone</span>
         <span class="mic-opt-pill" id="micOptState">Off</span>
       </button>
@@ -101,11 +101,11 @@
       <!-- Secondary row -->
       <div class="cta-row">
         <button class="cta-secondary" id="btnScreenshot">
-          <span class="cta2-icon">📸</span>
+          <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
           <span class="cta2-label">Screenshot only</span>
         </button>
         <button class="cta-secondary" id="btnViewTickets">
-          <span class="cta2-icon">📋</span>
+          <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
           <span class="cta2-label">View tickets</span>
         </button>
       </div>
