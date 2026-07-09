@@ -10134,6 +10134,154 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     }
   });
 
+  // src/integrations/tracker-client.ts
+  function getIntegrationsConfig() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY3);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {
+    }
+    return {};
+  }
+  function setIntegrationsConfig(config) {
+    try {
+      localStorage.setItem(STORAGE_KEY3, JSON.stringify(config));
+    } catch (e) {
+    }
+  }
+  function clearIntegrationsConfig() {
+    try {
+      localStorage.removeItem(STORAGE_KEY3);
+    } catch (e) {
+    }
+  }
+  function hasIntegration(provider) {
+    var _a, _b, _c, _d, _e;
+    const c = getIntegrationsConfig();
+    switch (provider) {
+      case "github":
+        return !!(((_a = c.github) == null ? void 0 : _a.token) && ((_b = c.github) == null ? void 0 : _b.repo));
+      case "linear":
+        return !!(((_c = c.linear) == null ? void 0 : _c.apiKey) && ((_d = c.linear) == null ? void 0 : _d.teamId));
+      case "slack":
+        return !!((_e = c.slack) == null ? void 0 : _e.webhookUrl);
+      default:
+        return false;
+    }
+  }
+  function issueTitle(report) {
+    const raw = report.title || "Bug report";
+    return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
+  }
+  function issueBody(report) {
+    return generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, "");
+  }
+  async function parseJsonOrThrow2(res, label) {
+    var _a;
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {
+    }
+    if (!res.ok) {
+      const msg = data && (data.message || data.error || Array.isArray(data.errors) && ((_a = data.errors[0]) == null ? void 0 : _a.message)) || `${label} request failed (HTTP ${res.status}).`;
+      throw new Error(String(msg));
+    }
+    return data;
+  }
+  async function createGitHubIssue(report, config, signal) {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(config.repo)) {
+      throw new Error(`Invalid repo "${config.repo}". Expected "owner/repo".`);
+    }
+    const res = await fetch(`https://api.github.com/repos/${config.repo}/issues`, {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        "accept": "application/vnd.github+json",
+        "authorization": `Bearer ${config.token}`
+      },
+      body: JSON.stringify({
+        title: issueTitle(report),
+        body: issueBody(report),
+        labels: config.labels && config.labels.length ? config.labels : void 0
+      })
+    });
+    const data = await parseJsonOrThrow2(res, "GitHub");
+    return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
+  }
+  async function createLinearIssue(report, config, signal) {
+    var _a, _b, _c, _d, _e;
+    const query = "mutation IssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }";
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        // Linear personal API keys go in Authorization verbatim (no "Bearer").
+        "authorization": config.apiKey
+      },
+      body: JSON.stringify({
+        query,
+        variables: { input: { teamId: config.teamId, title: issueTitle(report), description: issueBody(report) } }
+      })
+    });
+    const data = await parseJsonOrThrow2(res, "Linear");
+    if (Array.isArray(data.errors) && data.errors.length) {
+      throw new Error(((_a = data.errors[0]) == null ? void 0 : _a.message) || "Linear rejected the request.");
+    }
+    const issue = (_c = (_b = data == null ? void 0 : data.data) == null ? void 0 : _b.issueCreate) == null ? void 0 : _c.issue;
+    if (!((_e = (_d = data == null ? void 0 : data.data) == null ? void 0 : _d.issueCreate) == null ? void 0 : _e.success) || !issue) {
+      throw new Error("Linear did not create the issue.");
+    }
+    return { provider: "linear", ok: true, url: issue.url, ref: issue.identifier };
+  }
+  async function sendSlackMessage(report, config, signal) {
+    if (!/^https:\/\/hooks\.slack\.com\//.test(config.webhookUrl)) {
+      throw new Error("Invalid Slack webhook URL (expected https://hooks.slack.com/\u2026).");
+    }
+    await fetch(config.webhookUrl, {
+      method: "POST",
+      signal,
+      mode: "no-cors",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: "payload=" + encodeURIComponent(JSON.stringify({ text: generateSlackPost(report) }))
+    });
+    return { provider: "slack", ok: true, opaque: true };
+  }
+  async function createTrackerIssue(provider, report, signal) {
+    var _a, _b, _c, _d, _e;
+    const c = getIntegrationsConfig();
+    switch (provider) {
+      case "github":
+        if (!((_a = c.github) == null ? void 0 : _a.token) || !((_b = c.github) == null ? void 0 : _b.repo)) throw new Error("GitHub is not configured.");
+        return createGitHubIssue(report, c.github, signal);
+      case "linear":
+        if (!((_c = c.linear) == null ? void 0 : _c.apiKey) || !((_d = c.linear) == null ? void 0 : _d.teamId)) throw new Error("Linear is not configured.");
+        return createLinearIssue(report, c.linear, signal);
+      case "slack":
+        if (!((_e = c.slack) == null ? void 0 : _e.webhookUrl)) throw new Error("Slack is not configured.");
+        return sendSlackMessage(report, c.slack, signal);
+      default:
+        throw new Error(`Unknown provider: ${provider}`);
+    }
+  }
+  var TRACKER_LABELS, STORAGE_KEY3;
+  var init_tracker_client = __esm({
+    "src/integrations/tracker-client.ts"() {
+      "use strict";
+      init_github_issue();
+      init_slack_export();
+      init_report_builder();
+      TRACKER_LABELS = {
+        github: "GitHub",
+        linear: "Linear",
+        slack: "Slack"
+      };
+      STORAGE_KEY3 = "tracebug_integrations";
+    }
+  });
+
   // src/ui/quick-bug.ts
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
@@ -10334,8 +10482,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <div class="tb-qb-sub">${ssCountLabel} \xB7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
       <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority \u2014 your triage call">
-        <option value="" disabled hidden${userPriority ? "" : " selected"}>\u{1F6A9} Priority</option>
-        ${["high", "medium", "low"].map((p) => `<option value="${p}"${userPriority === p ? " selected" : ""}>\u{1F6A9} ${priorityLabel(p)}</option>`).join("")}
+        <option value="" disabled hidden${userPriority ? "" : " selected"}>Priority</option>
+        ${["high", "medium", "low"].map((p) => `<option value="${p}"${userPriority === p ? " selected" : ""}>${priorityLabel(p)}</option>`).join("")}
       </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
       <button data-action="help-toggle" class="tb-qb-theme-toggle" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
@@ -10467,19 +10615,20 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
-        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">\u{1F916} Fix with AI</button>
-        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">\u{1F4E6} Export .html</button>
-        <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">\u{1F310} Export HAR</button>
+        <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
+        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share">${_ic("fileCode")} Export .html</button>
+        <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">\u{1F517} Share link</button>
         PHASE2-CLOUD -->
         <div class="tb-qb-more">
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More \u25BE</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
-            ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">\u{1F419} Copy GitHub markdown</button>` : ""}
-            <button data-action="linear" class="tb-qb-more-item" role="menuitem">\u25B3 Linear</button>
-            <button data-action="slack" class="tb-qb-more-item" role="menuitem">\u{1F4AC} Slack</button>
-            <button data-action="jira" class="tb-qb-more-item" role="menuitem">\u{1F3AB} Jira</button>
+            ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
+            <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
+            <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
+            <button data-action="jira" class="tb-qb-more-item" role="menuitem">${_ic("ticket")} Jira</button>
+            <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations\u2026</button>
           </div>
         </div>
       </div>
@@ -10679,22 +10828,16 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     overlay.__tbEscKey = escHandler;
     const openGhBtn = modal.querySelector('[data-action="open-github"]');
     if (openGhBtn && _githubRepo) {
-      openGhBtn.addEventListener("click", () => {
+      openGhBtn.addEventListener("click", async () => {
         const { title, description } = getDraft();
-        const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-        const session = sessions[0];
-        const report = session ? buildReport(session) : null;
+        const report = _reportFromDraft(title, description);
         if (!report) {
           showToast("No session data yet", root);
           return;
         }
-        report.title = title;
+        if (hasIntegration("github") && await _fileViaTracker("github", report, root, screenshots2, close)) return;
         const repo = _githubRepo;
-        const ok = openGitHubIssue(repo, { ...report, steps: `${description}
-
----
-
-${report.steps}` });
+        const ok = openGitHubIssue(repo, report);
         if (ok) {
           const tail = screenshots2.length ? ` \xB7 ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"} downloading` : "";
           showToast(`\u2713 GitHub issue page opened${tail}`, root);
@@ -10709,6 +10852,10 @@ ${report.steps}` });
     }
     modal.querySelector('[data-action="github"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
+      if (hasIntegration("github")) {
+        const report = _reportFromDraft(title, description);
+        if (report && await _fileViaTracker("github", report, root, screenshots2, close)) return;
+      }
       const markdown = _buildGitHubMarkdown(title, description, primary);
       const ok = await _copyToClipboard(markdown);
       const tail = ok && screenshots2.length ? ` \xB7 downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}` : "";
@@ -10937,21 +11084,15 @@ ${report.steps}` : userDesc : void 0
         });
       });
     }
-    modal.querySelector('[data-action="linear"]').addEventListener("click", () => {
+    modal.querySelector('[data-action="linear"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
-      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-      const session = sessions[0];
-      const r = session ? buildReport(session) : null;
+      const r = _reportFromDraft(title, description);
       if (!r) {
         showToast("No session data yet", root);
         return;
       }
-      r.title = title;
-      const ok = openLinearIssue({ ...r, steps: `${description}
-
----
-
-${r.steps}` });
+      if (hasIntegration("linear") && await _fileViaTracker("linear", r, root, screenshots2, close)) return;
+      const ok = openLinearIssue(r);
       if (ok) {
         const tail = screenshots2.length ? ` \xB7 ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"} downloading` : "";
         showToast(`\u2713 Linear new-issue page opened${tail}`, root);
@@ -10965,14 +11106,12 @@ ${r.steps}` });
     });
     modal.querySelector('[data-action="slack"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
-      const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
-      const session = sessions[0];
-      const r = session ? buildReport(session) : null;
+      const r = _reportFromDraft(title, description);
       if (!r) {
         showToast("No session data yet", root);
         return;
       }
-      r.title = title;
+      if (hasIntegration("slack") && await _fileViaTracker("slack", r, root, screenshots2, close)) return;
       const text = generateSlackPost(r, description);
       const ok = await _copyToClipboard(text);
       showToast(ok ? "\u2713 Slack-formatted summary copied" : "Copy failed", root);
@@ -10987,6 +11126,9 @@ ${r.steps}` });
         showAIConfigModal(root, () => _rerenderAITab(modal, data));
       } else if (action === "ai-generate") {
         void _runAIAnalysis(root, modal, data);
+      } else if (action === "integrations-configure") {
+        showIntegrationsConfigModal(root, () => {
+        });
       }
     });
     modal.querySelectorAll("[data-thumb-index]").forEach((btn) => {
@@ -11194,6 +11336,40 @@ ${r.steps}` });
     const stamp = new Date(video.startedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
     return `tracebug-recording-${stamp}.${ext}`;
   }
+  function _reportFromDraft(title, description) {
+    const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
+    const session = sessions[0];
+    if (!session) return null;
+    const report = buildReport(session);
+    report.title = title;
+    report.steps = `${description}
+
+---
+
+${report.steps}`;
+    return report;
+  }
+  async function _fileViaTracker(provider, report, root, screenshots2, close) {
+    showToast(`Creating ${TRACKER_LABELS[provider]}\u2026`, root);
+    try {
+      const result = await createTrackerIssue(provider, report);
+      const ref = result.ref ? ` ${result.ref}` : "";
+      if (result.url) {
+        window.open(result.url, "_blank", "noopener,noreferrer");
+        showToast(`\u2713 ${TRACKER_LABELS[provider]} issue created${ref}`, root);
+      } else {
+        showToast(`\u2713 Sent to ${TRACKER_LABELS[provider]}`, root);
+      }
+      if (screenshots2.length) _downloadAllScreenshots(screenshots2);
+      _downloadVideoIfPresent();
+      _clearDraft();
+      setTimeout(close, 300);
+      return true;
+    } catch (err) {
+      showToast(`${TRACKER_LABELS[provider]} failed: ${(err == null ? void 0 : err.message) || "error"}`, root);
+      return false;
+    }
+  }
   function _buildGitHubMarkdown(title, description, screenshot) {
     const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0];
@@ -11272,38 +11448,31 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const iconHtml = icon ? `<span class="tb-qb-kv-icon">${icon}</span>` : "";
     return `<div class="tb-qb-kv"><span class="tb-qb-kv-k">${escapeHtml2(label)}</span><span class="tb-qb-kv-v">${iconHtml}${escapeHtml2(value)}</span></div>`;
   }
+  function _ic(name) {
+    const paths = _LU[name] || _LU.globe;
+    return `<svg class="tb-lu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  }
   function _browserIcon(name) {
     const n = (name || "").toLowerCase();
-    if (n.includes("chrome")) return "\u{1F535}";
-    if (n.includes("edge")) return "\u{1F537}";
-    if (n.includes("firefox")) return "\u{1F98A}";
-    if (n.includes("safari")) return "\u{1F9ED}";
-    if (n.includes("opera")) return "\u{1F3AD}";
-    if (n.includes("brave")) return "\u{1F981}";
-    return "\u{1F310}";
+    if (n.includes("chrome") || n.includes("edge") || n.includes("brave")) return _ic("chrome");
+    return _ic("globe");
   }
   function _osIcon(name) {
     const n = (name || "").toLowerCase();
-    if (n.includes("mac") || n.includes("darwin")) return "\u{1F34E}";
-    if (n.includes("windows") || n.includes("win")) return "\u{1FA9F}";
-    if (n.includes("linux")) return "\u{1F427}";
-    if (n.includes("ios") || n.includes("iphone") || n.includes("ipad")) return "\u{1F4F1}";
-    if (n.includes("android")) return "\u{1F916}";
-    if (n.includes("chrome os")) return "\u{1F535}";
-    return "\u{1F4BB}";
+    if (n.includes("ios") || n.includes("iphone") || n.includes("ipad") || n.includes("android")) return _ic("smartphone");
+    return _ic("monitor");
   }
   function _deviceIcon(name) {
     const n = (name || "").toLowerCase();
-    if (n === "tablet") return "\u{1F4F1}";
-    if (n === "mobile") return "\u{1F4F1}";
-    return "\u{1F5A5}";
+    if (n === "tablet" || n === "mobile") return _ic("smartphone");
+    return _ic("monitor");
   }
   function _connectionIcon(name) {
     const n = (name || "").toLowerCase();
-    if (n.includes("wifi")) return "\u{1F4F6}";
-    if (n.includes("ethernet")) return "\u{1F50C}";
-    if (n.includes("5g") || n.includes("4g") || n.includes("3g") || n.includes("cellular")) return "\u{1F4E1}";
-    return "\u{1F310}";
+    if (n.includes("wifi")) return _ic("wifi");
+    if (n.includes("ethernet")) return _ic("plug");
+    if (n.includes("5g") || n.includes("4g") || n.includes("3g") || n.includes("cellular")) return _ic("signal");
+    return _ic("globe");
   }
   function _buildInfoTab(report, session) {
     var _a, _b, _c;
@@ -11311,19 +11480,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const ctx = (report == null ? void 0 : report.context) || {};
     const sevLabel = severityBadge((report == null ? void 0 : report.severity) || "low");
     const rows = [];
-    rows.push(_kvRow("URL", env.url || window.location.href, "\u{1F517}"));
-    rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), "\u{1F552}"));
+    rows.push(_kvRow("URL", env.url || window.location.href, _ic("link")));
+    rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
     rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
     rows.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
-    rows.push(_kvRow("Viewport", env.viewport || "", "\u{1F4D0}"));
-    rows.push(_kvRow("Screen", env.screenResolution || "", "\u{1F5BC}"));
+    rows.push(_kvRow("Viewport", env.viewport || "", _ic("ruler")));
+    rows.push(_kvRow("Screen", env.screenResolution || "", _ic("monitor")));
     rows.push(_kvRow("Device", env.deviceType || "", _deviceIcon(env.deviceType)));
-    rows.push(_kvRow("Language", env.language || "", "\u{1F5E3}"));
-    rows.push(_kvRow("Timezone", env.timezone || "", "\u{1F30D}"));
+    rows.push(_kvRow("Language", env.language || "", _ic("languages")));
+    rows.push(_kvRow("Timezone", env.timezone || "", _ic("globe")));
     rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
-    rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), "\u{1F194}"));
+    rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), _ic("hash")));
     rows.push(_kvRow("Severity", sevLabel));
-    if (session == null ? void 0 : session.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), "\u{1F6A9}"));
+    if (session == null ? void 0 : session.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
     const ctxKeys = Object.keys(ctx);
     if (ctxKeys.length > 0) {
       rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
@@ -11863,6 +12032,84 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       onSaved();
     });
   }
+  function showIntegrationsConfigModal(root, onSaved) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    (_a = document.getElementById("tb-int-config")) == null ? void 0 : _a.remove();
+    const cfg = getIntegrationsConfig();
+    const overlay = document.createElement("div");
+    overlay.id = "tb-int-config";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+    const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px";
+    const lbl = "font-size:12px;color:#94A3B8";
+    overlay.innerHTML = `
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3">
+      <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">\u{1F517} Integrations \u2014 bring your own token</div>
+        <div style="font-size:12px;color:#94A3B8;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser \u2014 TraceBug has no backend in the path. Fill in only the providers you use.</div>
+      </div>
+      <div style="padding:16px 18px;display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">\u{1F419} GitHub</div>
+          <label style="${lbl}">Personal access token (repo scope)
+            <input data-int-gh-token type="password" autocomplete="off" spellcheck="false" placeholder="ghp_\u2026" value="${escapeHtml2(((_b = cfg.github) == null ? void 0 : _b.token) || "")}" style="${fld}" /></label>
+          <label style="${lbl};display:block;margin-top:8px">Repository (owner/repo)
+            <input data-int-gh-repo type="text" spellcheck="false" placeholder="acme/app" value="${escapeHtml2(((_c = cfg.github) == null ? void 0 : _c.repo) || "")}" style="${fld}" /></label>
+          <label style="${lbl};display:block;margin-top:8px">Labels (comma-separated, optional)
+            <input data-int-gh-labels type="text" spellcheck="false" placeholder="bug, tracebug" value="${escapeHtml2((((_d = cfg.github) == null ? void 0 : _d.labels) || []).join(", "))}" style="${fld}" /></label>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">\u25B3 Linear</div>
+          <label style="${lbl}">Personal API key
+            <input data-int-ln-key type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_\u2026" value="${escapeHtml2(((_e = cfg.linear) == null ? void 0 : _e.apiKey) || "")}" style="${fld}" /></label>
+          <label style="${lbl};display:block;margin-top:8px">Team ID
+            <input data-int-ln-team type="text" spellcheck="false" placeholder="team UUID" value="${escapeHtml2(((_f = cfg.linear) == null ? void 0 : _f.teamId) || "")}" style="${fld}" /></label>
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">\u{1F4AC} Slack</div>
+          <label style="${lbl}">Incoming webhook URL
+            <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/\u2026" value="${escapeHtml2(((_g = cfg.slack) == null ? void 0 : _g.webhookUrl) || "")}" style="${fld}" /></label>
+        </div>
+      </div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#14161E;border-top:1px solid rgba(255,255,255,0.06)">
+        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
+        <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
+      </div>
+    </div>`;
+    const host = document.getElementById(MODAL_ID2) || document.body;
+    host.appendChild(overlay);
+    const val = (sel) => {
+      var _a2;
+      return ((_a2 = overlay.querySelector(sel)) == null ? void 0 : _a2.value.trim()) || "";
+    };
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    (_h = overlay.querySelector("[data-int-close]")) == null ? void 0 : _h.addEventListener("click", close);
+    (_i = overlay.querySelector("[data-int-clear]")) == null ? void 0 : _i.addEventListener("click", () => {
+      clearIntegrationsConfig();
+      showToast("Integrations removed", root);
+      close();
+      onSaved();
+    });
+    (_j = overlay.querySelector("[data-int-save]")) == null ? void 0 : _j.addEventListener("click", () => {
+      const next = {};
+      const ghToken = val("[data-int-gh-token]"), ghRepo = val("[data-int-gh-repo]");
+      if (ghToken && ghRepo) {
+        const labels = val("[data-int-gh-labels]").split(",").map((s) => s.trim()).filter(Boolean);
+        next.github = { token: ghToken, repo: ghRepo, labels: labels.length ? labels : void 0 };
+      }
+      const lnKey = val("[data-int-ln-key]"), lnTeam = val("[data-int-ln-team]");
+      if (lnKey && lnTeam) next.linear = { apiKey: lnKey, teamId: lnTeam };
+      const slHook = val("[data-int-sl-hook]");
+      if (slHook) next.slack = { webhookUrl: slHook };
+      setIntegrationsConfig(next);
+      showToast("\u2713 Integrations saved", root);
+      close();
+      onSaved();
+    });
+  }
   function _buildAnnotationsTab(session) {
     const sessAnn = (session == null ? void 0 : session.annotations) || [];
     let els = [];
@@ -12019,7 +12266,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID2} .tb-qb-kv:hover { border-color:var(--tb-border); }
     #${MODAL_ID2} .tb-qb-kv-k { font-size:11px; color:var(--tb-text-muted); min-width:98px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; flex-shrink:0; }
     #${MODAL_ID2} .tb-qb-kv-v { font-size:12px; color:var(--tb-text-primary); word-break:break-word; min-width:0; flex:1; font-family:var(--tb-font-mono); display:flex; align-items:center; gap:6px; }
-    #${MODAL_ID2} .tb-qb-kv-icon { font-size:13px; line-height:1; flex-shrink:0; }
+    #${MODAL_ID2} .tb-qb-kv-icon { display:inline-flex; align-items:center; flex-shrink:0; color:var(--tb-text-muted); }
+    #${MODAL_ID2} .tb-lu { width:14px; height:14px; display:inline-block; vertical-align:middle; flex-shrink:0; }
     #${MODAL_ID2} .tb-qb-log { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-left:3px solid var(--tb-border-hover); border-radius:var(--tb-radius-sm); }
     #${MODAL_ID2} .tb-qb-log-error { border-left-color:var(--tb-error); }
     #${MODAL_ID2} .tb-qb-log-warn { border-left-color:var(--tb-warning); }
@@ -12484,7 +12732,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey);
   }
-  var _githubRepo, _cloudEndpoint, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, _cloudEndpoint, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -12513,12 +12761,36 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_annotation_store();
       init_linear_issue();
       init_slack_export();
+      init_tracker_client();
       _githubRepo = null;
       _cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
       MODAL_ID2 = "tracebug-quick-bug-modal";
       DRAFT_KEY = "tracebug_last_bug_draft";
       THEME_PREF_KEY = "tracebug_theme_pref";
       _isOpen = false;
+      _LU = {
+        link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+        clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+        monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+        smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+        globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+        chrome: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" x2="12" y1="8" y2="8"/><line x1="3.95" x2="8.54" y1="6.06" y2="14"/><line x1="10.88" x2="15.46" y1="21.94" y2="14"/>',
+        ruler: '<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
+        languages: '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+        hash: '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
+        flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+        wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
+        signal: '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/>',
+        plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+        sparkles: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
+        fileCode: '<path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/>',
+        network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+        copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+        message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+        ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
+        settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+        triangle: '<path d="M13.73 4a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>'
+      };
       CON_ICONS = {
         videoStart: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`,
         videoStop: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>`,
@@ -13631,7 +13903,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   // src/onboarding.ts
   function isComplete() {
     try {
-      return localStorage.getItem(STORAGE_KEY3) === "true";
+      return localStorage.getItem(STORAGE_KEY4) === "true";
     } catch (e) {
       return false;
     }
@@ -13660,11 +13932,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (btn) btn.style.boxShadow = "";
     });
   }
-  var STORAGE_KEY3, TOOLTIP_ID, STEPS, _cleanup3;
+  var STORAGE_KEY4, TOOLTIP_ID, STEPS, _cleanup3;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
-      STORAGE_KEY3 = "tracebug_onboarding_complete";
+      STORAGE_KEY4 = "tracebug_onboarding_complete";
       TOOLTIP_ID = "tracebug-onboarding-tooltip";
       STEPS = [
         {
@@ -50278,6 +50550,7 @@ First element: \`${exampleSnippet}\``,
     DEFAULT_MODELS: () => DEFAULT_MODELS,
     FREE_LIMITS: () => FREE_LIMITS,
     PROVIDER_LABELS: () => PROVIDER_LABELS,
+    TRACKER_LABELS: () => TRACKER_LABELS,
     buildAnalysisPrompt: () => buildAnalysisPrompt,
     buildHar: () => buildHar,
     buildReport: () => buildReport,
@@ -50288,9 +50561,13 @@ First element: \`${exampleSnippet}\``,
     captureScreenshot: () => captureScreenshot,
     clearAIConfig: () => clearAIConfig,
     clearAllSessions: () => clearAllSessions,
+    clearIntegrationsConfig: () => clearIntegrationsConfig,
     clearIssues: () => clearIssues,
     clearVideoRecording: () => clearVideoRecording,
     clearVoiceTranscripts: () => clearVoiceTranscripts,
+    createGitHubIssue: () => createGitHubIssue,
+    createLinearIssue: () => createLinearIssue,
+    createTrackerIssue: () => createTrackerIssue,
     default: () => src_default,
     deleteSession: () => deleteSession,
     dismissIssue: () => dismissIssue,
@@ -50316,6 +50593,7 @@ First element: \`${exampleSnippet}\``,
     getAIConfig: () => getAIConfig,
     getAllSessions: () => getAllSessions,
     getCaptureCount: () => getCaptureCount,
+    getIntegrationsConfig: () => getIntegrationsConfig,
     getIssueById: () => getIssueById,
     getIssueCountsByDetector: () => getIssueCountsByDetector,
     getIssueCountsBySeverity: () => getIssueCountsBySeverity,
@@ -50326,6 +50604,7 @@ First element: \`${exampleSnippet}\``,
     getScreenshots: () => getScreenshots,
     getVoiceTranscripts: () => getVoiceTranscripts,
     hasAIKey: () => hasAIKey,
+    hasIntegration: () => hasIntegration,
     hydratePlan: () => hydratePlan,
     isPremium: () => isPremium,
     isRollingMode: () => isRollingMode,
@@ -50338,7 +50617,9 @@ First element: \`${exampleSnippet}\``,
     openInClaude: () => openInClaude,
     runLLMAnalysis: () => runLLMAnalysis,
     scan: () => scan,
+    sendSlackMessage: () => sendSlackMessage,
     setAIConfig: () => setAIConfig,
+    setIntegrationsConfig: () => setIntegrationsConfig,
     setPlan: () => setPlan,
     startVideoRecording: () => startVideoRecording,
     startVoiceRecording: () => startVoiceRecording,
@@ -50829,6 +51110,7 @@ First element: \`${exampleSnippet}\``,
   init_ai_prompt();
   init_har_export();
   init_llm_client();
+  init_tracker_client();
   init_pdf_generator();
   init_title_generator();
   init_timeline_builder();
