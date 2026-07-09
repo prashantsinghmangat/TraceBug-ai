@@ -132,7 +132,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
       <img id="ssimg" alt="Session screenshot" />
       <div id="empty" class="tb-vempty" style="display:none">No screenshots captured.</div>
       <button id="play-overlay" class="tb-vplay-overlay" style="display:none" aria-label="Play recording (Space)">
-        <span class="tb-vplay-icon">▶</span>
+        <span class="tb-vplay-icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>
         <span class="tb-vplay-label">Play recording</span>
         <span class="tb-vplay-sub" id="play-overlay-sub"></span>
       </button>
@@ -334,7 +334,8 @@ body { min-height: 100vh; }
 .tb-vkv:hover { border-color: var(--tb-border); }
 .tb-vkv-k { font-size: 11px; color: var(--tb-text-3); min-width: 100px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; flex-shrink: 0; }
 .tb-vkv-v { font-size: 12px; color: var(--tb-text); word-break: break-word; flex: 1; font-family: var(--tb-mono); display: flex; align-items: center; gap: 6px; }
-.tb-vkv-icon { font-size: 13px; line-height: 1; flex-shrink: 0; }
+.tb-vkv-icon { display: inline-flex; align-items: center; line-height: 1; flex-shrink: 0; color: var(--tb-text-3); }
+.tb-vlu { width: 14px; height: 14px; display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .tb-vlog { padding: 10px 12px; margin-bottom: 8px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-left: 3px solid var(--tb-border-hover); border-radius: var(--tb-radius-sm); }
 .tb-vlog-error { border-left-color: var(--tb-error); }
 .tb-vlog-warn { border-left-color: var(--tb-warning); }
@@ -661,7 +662,9 @@ const REPLAY_RUNTIME = `(function(){
   var infoHtml = info.length === 0
     ? '<div class="tb-vempty-tab">No info captured</div>'
     : info.map(function(r){
-        var iconHtml = r.i ? '<span class="tb-vkv-icon">' + esc(r.i) + '</span>' : '';
+        // r.i is a trusted inline Lucide <svg> built by html-replay.ts (never
+        // user data), so it is injected raw — escaping it would print the markup.
+        var iconHtml = r.i ? '<span class="tb-vkv-icon">' + r.i + '</span>' : '';
         return '<div class="tb-vkv"><span class="tb-vkv-k">' + esc(r.k) + '</span><span class="tb-vkv-v">' + iconHtml + esc(r.v) + '</span></div>';
       }).join("");
   document.getElementById("panel-info").innerHTML = infoHtml;

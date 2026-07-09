@@ -107,54 +107,63 @@ async function buildReplayPayload(
   // Build the kv pairs for the Info tab — environment + custom context.
   const env = report.environment;
   // Render kv pairs for the Info tab. Each value optionally carries an
-  // icon for the OS / browser / device / connection / etc. — same set
-  // the modal uses, kept inline so the export stays self-contained.
+  // icon for the OS / browser / device / connection / etc. — the SAME Lucide
+  // set the Quick Bug modal uses (src/ui/quick-bug.ts `_LU`), kept inline so
+  // the export stays self-contained (no external assets, no network).
+  const LU: Record<string, string> = {
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+    smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+    globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+    chrome: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" x2="12" y1="8" y2="8"/><line x1="3.95" x2="8.54" y1="6.06" y2="14"/><line x1="10.88" x2="15.46" y1="21.94" y2="14"/>',
+    ruler: '<path d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z"/><path d="m14.5 12.5 2-2"/><path d="m11.5 9.5 2-2"/><path d="m8.5 6.5 2-2"/><path d="m17.5 15.5 2-2"/>',
+    languages: '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+    hash: '<line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
+    signal: '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/><path d="M22 4v16"/>',
+    plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+  };
+  const ic = (name: string): string =>
+    `<svg class="tb-vlu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LU[name] || LU.globe}</svg>`;
   function browserIcon(n: string): string {
     n = (n || "").toLowerCase();
-    if (n.includes("chrome")) return "🔵";
-    if (n.includes("edge")) return "🔷";
-    if (n.includes("firefox")) return "🦊";
-    if (n.includes("safari")) return "🧭";
-    if (n.includes("opera")) return "🎭";
-    if (n.includes("brave")) return "🦁";
-    return "🌐";
+    if (n.includes("chrome") || n.includes("edge") || n.includes("brave")) return ic("chrome");
+    return ic("globe");
   }
   function osIcon(n: string): string {
     n = (n || "").toLowerCase();
-    if (n.includes("mac") || n.includes("darwin")) return "🍎";
-    if (n.includes("windows") || n.includes("win")) return "🪟";
-    if (n.includes("linux")) return "🐧";
-    if (n.includes("ios") || n.includes("iphone") || n.includes("ipad")) return "📱";
-    if (n.includes("android")) return "🤖";
-    return "💻";
+    if (n.includes("ios") || n.includes("iphone") || n.includes("ipad") || n.includes("android")) return ic("smartphone");
+    return ic("monitor");
   }
   function deviceIcon(n: string): string {
     n = (n || "").toLowerCase();
-    if (n === "tablet" || n === "mobile") return "📱";
-    return "🖥";
+    if (n === "tablet" || n === "mobile") return ic("smartphone");
+    return ic("monitor");
   }
   function connectionIcon(n: string): string {
     n = (n || "").toLowerCase();
-    if (n.includes("wifi")) return "📶";
-    if (n.includes("ethernet")) return "🔌";
-    if (n.includes("5g") || n.includes("4g") || n.includes("3g") || n.includes("cellular")) return "📡";
-    return "🌐";
+    if (n.includes("wifi")) return ic("wifi");
+    if (n.includes("ethernet")) return ic("plug");
+    if (n.includes("5g") || n.includes("4g") || n.includes("3g") || n.includes("cellular")) return ic("signal");
+    return ic("globe");
   }
   const info: Array<{ k: string; v: string; i?: string }> = [
-    { k: "URL", v: env.url, i: "🔗" },
-    { k: "Timestamp", v: new Date(env.timestamp || report.generatedAt).toLocaleString(), i: "🕒" },
+    { k: "URL", v: env.url, i: ic("link") },
+    { k: "Timestamp", v: new Date(env.timestamp || report.generatedAt).toLocaleString(), i: ic("clock") },
     { k: "OS", v: env.os, i: osIcon(env.os) },
     { k: "Browser", v: `${env.browser} ${env.browserVersion}`.trim(), i: browserIcon(env.browser) },
-    { k: "Viewport", v: env.viewport, i: "📐" },
-    { k: "Screen", v: env.screenResolution, i: "🖼" },
+    { k: "Viewport", v: env.viewport, i: ic("ruler") },
+    { k: "Screen", v: env.screenResolution, i: ic("monitor") },
     { k: "Device", v: env.deviceType, i: deviceIcon(env.deviceType) },
-    { k: "Language", v: env.language, i: "🗣" },
-    { k: "Timezone", v: env.timezone, i: "🌍" },
+    { k: "Language", v: env.language, i: ic("languages") },
+    { k: "Timezone", v: env.timezone, i: ic("globe") },
     { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
-    { k: "Session", v: session.sessionId.slice(0, 12), i: "🆔" },
+    { k: "Session", v: session.sessionId.slice(0, 12), i: ic("hash") },
     { k: "Severity", v: report.severity },
     // Tester-set only — the severity-derived fallback isn't their triage call.
-    ...(session.priority ? [{ k: "Priority", v: priorityLabel(session.priority), i: "🚩" }] : []),
+    ...(session.priority ? [{ k: "Priority", v: priorityLabel(session.priority), i: ic("flag") }] : []),
   ];
   if (report.context) {
     for (const k of Object.keys(report.context)) {
