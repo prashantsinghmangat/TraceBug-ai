@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { SDK_VERSION } from "@/lib/version";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -96,11 +97,10 @@ export default function RootLayout({
               applicationCategory: "DeveloperApplication",
               operatingSystem: "Any (browser-based)",
               offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-              aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", ratingCount: "120" },
               author: { "@type": "Person", name: "Prashant Singh Mangat", url: "https://github.com/prashantsinghmangat" },
               url: "https://tracebug.netlify.app",
               downloadUrl: "https://www.npmjs.com/package/tracebug-sdk",
-              softwareVersion: "1.4.0",
+              softwareVersion: SDK_VERSION,
               license: "https://opensource.org/licenses/MIT",
             }),
           }}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChromeIcon, GitHubIcon } from "@/components/ui/brand-icons";
 import { LogoMark } from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
+import { SDK_VERSION_TAG } from "@/lib/version";
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
@@ -22,7 +23,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/#demo", label: "Demo" },
-    { href: "/#features", label: "Features" },
+    { href: "/features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
     { href: "/docs", label: "Docs" },
   ];
@@ -42,7 +43,7 @@ export default function Navbar() {
             TraceBug
           </span>
           <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded-md bg-surface border border-border text-[10px] font-mono uppercase tracking-wider text-text-subtle">
-            v1.4
+            {SDK_VERSION_TAG}
           </span>
         </Link>
 

@@ -34,7 +34,7 @@ export default function FinalCTA() {
                 </a>
               </Button>
               <Button asChild size="lg" variant="secondary" className="w-full sm:w-auto">
-                <a href="#install">
+                <a href="/#install">
                   <NpmIcon size={15} /> npm install tracebug-sdk
                 </a>
               </Button>

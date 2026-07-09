@@ -7,7 +7,7 @@ const CAPTURES = [
   { Icon: MousePointerClick, label: "Clicks", desc: "Tag, id, aria-label, role, data-testid" },
   { Icon: Network, label: "Network", desc: "Method, URL, status, duration — failures flagged" },
   { Icon: AlertOctagon, label: "Console", desc: "Errors, stack traces, source file, line" },
-  { Icon: Camera, label: "Screenshots", desc: "html2canvas · annotate · draw markup" },
+  { Icon: Camera, label: "Screenshots", desc: "Full-page or region · annotate · draw markup" },
   { Icon: Compass, label: "Navigation", desc: "Every route, timestamp, time on page" },
   { Icon: Monitor, label: "Environment", desc: "Browser, OS, viewport, device, connection" },
 ];

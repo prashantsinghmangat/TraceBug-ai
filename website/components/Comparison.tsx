@@ -33,7 +33,7 @@ export default function Comparison() {
         <SectionHeading
           eyebrow="Comparison"
           title="Monitoring platforms watch production. TraceBug files the bug."
-          subtitle="Sentry and LogRocket are built for observability dashboards. TraceBug is built for the moment someone hits a bug and needs to hand it to a developer."
+          subtitle="Sentry and LogRocket are built for observability — TraceBug complements them for the moment someone hits a bug and needs to hand it to a developer. In that hand-off it does what dedicated bug-reporting tools do, with no account and nothing to upload."
           className="mb-14"
         />
 
@@ -66,8 +66,8 @@ export default function Comparison() {
         </div>
 
         <p className="mt-8 text-center text-[13.5px] text-text-muted max-w-xl mx-auto">
-          Already running Sentry? Keep it — TraceBug lives in the browser and doesn&apos;t touch
-          your monitoring stack.
+          Already running Sentry or LogRocket? Keep them — TraceBug lives in the browser and
+          doesn&apos;t touch your monitoring stack. It just makes the hand-off to a developer effortless.
         </p>
       </div>
     </section>
