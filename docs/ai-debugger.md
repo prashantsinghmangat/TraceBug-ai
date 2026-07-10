@@ -38,11 +38,11 @@ The model is asked to return concise markdown with five sections: **Root cause**
 ## Programmatic use (SDK)
 
 ```ts
-import { setAIConfig, runLLMAnalysis, generateReport } from "tracebug-sdk";
+import TraceBug, { setAIConfig, runLLMAnalysis } from "tracebug-sdk";
 
 setAIConfig({ provider: "anthropic", apiKey: "sk-ant-…", model: "claude-sonnet-4-6" });
 
-const report = generateReport();
+const report = TraceBug.generateReport();
 const { text, model, usage } = await runLLMAnalysis(report);
 console.log(text); // markdown analysis
 ```

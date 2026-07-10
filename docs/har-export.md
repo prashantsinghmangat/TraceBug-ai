@@ -29,9 +29,9 @@ Fields TraceBug doesn't capture — request/response **headers** and **cookies**
 ## Programmatic use (SDK)
 
 ```ts
-import { buildHar, exportSessionAsHar, generateReport } from "tracebug-sdk";
+import TraceBug, { buildHar, exportSessionAsHar } from "tracebug-sdk";
 
-const report = generateReport();
+const report = TraceBug.generateReport();
 
 // Pure — returns the HAR 1.2 object, no side effects:
 const har = buildHar(report, "1.6.0");

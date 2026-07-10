@@ -162,17 +162,20 @@ Drafts auto-save to `localStorage` under `tracebug_last_bug_draft`; if you accid
 
 ## Step 4 — Export
 
-The modal exposes **five** export actions. Every one of them downloads **all** screenshots in the ticket alongside the clipboard / URL payload.
+The modal footer exposes the primary exports, with the rest under **More ▾**:
 
-| Action | Output | Screenshots |
-|--------|--------|-------------|
-| **Open in GitHub** _(only if `githubRepo` is configured)_ | Opens `github.com/{repo}/issues/new?title=...&body=...` in a new tab | All downloaded, staggered 120ms |
-| **Copy as GitHub Issue** | Markdown → clipboard | All downloaded, staggered 120ms |
-| **Copy as Jira Ticket** | Jira-formatted text → clipboard (with priority + labels) | All downloaded, staggered 120ms |
-| **Copy as Plain Text** | `title\n\ndescription` → clipboard | All downloaded, staggered 120ms |
-| **Download Screenshots** | No clipboard payload | All, staggered 120ms |
+| Action | Output |
+|--------|--------|
+| **Export .html** | Self-contained interactive DOM replay (rrweb) — KB, not MB. The canonical artifact to hand a developer or an MCP-connected agent. |
+| **Export HAR** | Network capture as a standard HAR 1.2 file. |
+| **Fix with AI** | Builds the structured prompt and opens Claude / ChatGPT (or runs BYO-key analysis in the AI tab). |
+| **Open in GitHub** _(if `githubRepo` set)_ | Prefilled GitHub issue, or files a real one with a configured token. |
+| **Export for AI (.html)** _(More)_ | Tiny (~5 KB) text-only HTML — paste/upload into a chat, no MCP needed. |
+| **Download report (.md)** _(More)_ | Compact markdown report. |
+| **Download screenshots** _(More)_ | Raw PNG(s) to attach alongside the `.md`. |
+| **GitHub / Linear / Slack / Jira** _(More)_ | File a real issue/message with a configured token. |
 
-The 120ms stagger prevents Chrome's "this site is trying to download multiple files" warning that fires on rapid concurrent downloads.
+The full replay `.html` is built for a human browser and the MCP reader; **Export for AI (.html)** / **`.md`** are the small, chat-safe artifacts for pasting into an AI chat.
 
 Toast shows the count:
 

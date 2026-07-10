@@ -9,10 +9,10 @@ TraceBug.init({
   maxSessions: 50,
   enableDashboard: true,
   enabled: "auto",
-  theme: "dark",
+  theme: "light",
   toolbarPosition: "right",
   minimized: false,
-  captureConsole: "errors",
+  captureConsole: "all",
   shortcuts: {
     screenshot: "ctrl+shift+s",
     annotate: "ctrl+shift+a",
@@ -114,8 +114,8 @@ Controls the visual theme for all TraceBug UI.
 
 | Value | Behavior |
 |-------|----------|
-| `"dark"` | Dark navy background (default) |
-| `"light"` | Light background |
+| `"light"` | Light background (default) |
+| `"dark"` | Dark (cyber-graphite) background |
 | `"auto"` | Follows system `prefers-color-scheme`, updates live |
 
 ```typescript
@@ -155,9 +155,9 @@ Controls which console methods are captured as events.
 
 | Value | Behavior |
 |-------|----------|
-| `"errors"` | Only `console.error` (default, backward compatible) |
+| `"all"` | `console.error` + `console.warn` + `console.log` (last 50 logs) — **default** |
 | `"warnings"` | `console.error` + `console.warn` |
-| `"all"` | `console.error` + `console.warn` + `console.log` (last 50 logs) |
+| `"errors"` | Only `console.error` |
 | `"none"` | No console interception (runtime errors still captured) |
 
 ```typescript
@@ -192,10 +192,11 @@ This ensures TraceBug never breaks your app due to misconfiguration.
 
 ## Session Behavior
 
-- **New session per page load** — Each page load or refresh creates a new session ID
-- **No session persistence across tabs** — Each tab has its own session
-- **Sessions stored in localStorage** under the key `tracebug_sessions`
-- **Automatic pruning** — Oldest sessions are removed when `maxSessions` is exceeded
+- **Idle until armed** — No session is created on page load. A session starts only when you click **Record** / **Track session** or call `TraceBug.startRecording()`. The active session id is persisted under `tracebug_active_session`.
+- **Survives full-page navigation** — An event-only (**Track session**) capture keeps recording across page loads: the SDK restores the active session and appends new events under the same id. A capture *mode* (`tracebug_active_capture_mode`) distinguishes this from a video session, which is finalized on navigation (Chrome ends the tab-share).
+- **Durable writes** — Events flush to `localStorage` on a debounced schedule and on `beforeunload` / `pagehide` / `visibilitychange:hidden`, so nothing is lost right before a navigation.
+- **Sessions stored in localStorage** under the key `tracebug_sessions`.
+- **Automatic pruning** — Oldest unsaved sessions are removed when `maxSessions` is exceeded; explicitly saved tickets are kept.
 
 ## User Identification
 

@@ -93,9 +93,17 @@ src/
 ├── linear-issue.ts         # Linear deeplink generator
 ├── slack-export.ts         # Slack-flavored export
 ├── pdf-generator.ts        # Print-optimized HTML report
+├── rrweb-recorder.ts       # Lazy rrweb DOM recorder (masked; .tb-block/.tb-mask)
+├── ai/llm-client.ts        # BYO-key LLM analysis (Anthropic / OpenAI / Ollama)
+├── integrations/tracker-client.ts  # Real GitHub / Linear / Slack / Jira issues
+├── reporters/playwright.ts # Playwright reporter (failed test → .html)
 ├── exporters/
-│   ├── html-replay.ts      # Standalone HTML replay bundler
-│   └── html-template.ts    # Inlined viewer template + JSON payload
+│   ├── html-replay.ts      # Self-contained replay bundler (gzip rrweb stream)
+│   ├── html-template.ts    # Inlined viewer template + inflate/mount runtime
+│   ├── rrweb-runtime.generated.ts  # Inlined rrweb Replayer (npm run gen:rrweb)
+│   ├── ai-prompt.ts        # AI prompt + .md report + "Export for AI (.html)"
+│   ├── har-export.ts       # HAR 1.2 network export
+│   └── share-link.ts       # Cloud share upload (PHASE2-CLOUD, gated off)
 ├── patterns/               # Heuristic detectors (frustration, etc.)
 ├── scanner/                # Auto-bug scanner + detector modules
 └── ui/
@@ -204,14 +212,18 @@ CSS custom property design tokens injected into `#tracebug-root`:
 
 ### Compact Toolbar (compact-toolbar.ts)
 
-Configurable toolbar with 7 icon buttons:
-- Logo (open session panel)
-- Annotate mode toggle
-- Draw mode toggle
-- Screenshot capture
-- Annotation list
-- Settings pop-out card
-- Help (replay onboarding tour)
+Configurable toolbar (current buttons):
+- ⚡ Quick Bug (open the ticket-review modal)
+- 📷 Screenshot capture
+- ▢ Region screenshot
+- 🔴 Record (video — Sentry mode: rolling buffer + HUD)
+- ⏺ Track session (event-only capture, no video; survives navigation)
+- ✓ View saved tickets
+- ✕ Turn off on this page
+
+> Annotate / Draw / Annotation-list / Settings buttons were cut in v1.0 — those
+> modes remain in the bundle and are reachable programmatically (and Draw via the
+> recording HUD's Pen button).
 
 **Position:** Configurable via `toolbarPosition` — right, left, bottom-right, bottom-left.
 

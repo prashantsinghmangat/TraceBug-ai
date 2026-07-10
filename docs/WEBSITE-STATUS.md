@@ -2,9 +2,9 @@
 
 > **Purpose:** the current, verified state of the marketing site + cloud portal in `website/` — structure, messaging, what's live vs. disabled, deploy requirements. Written for agents/reviewers cross-verifying the site against the code.
 >
-> **Last updated:** 2026-07-04 · branch `feature/cloud-sharing` · builds clean (tsc + `next build`, all routes compile)
+> **Last updated:** 2026-07-10 · product version 1.6.0 · builds clean (tsc + `next build`, all routes compile)
 >
-> Companion docs: [PROJECT-STATUS.md](PROJECT-STATUS.md) (product-wide Phase 1/2 split), [SHARE-PORTAL-PLAN.md](SHARE-PORTAL-PLAN.md) (cloud portal design), [CHROME-WEB-STORE-LISTING.md](CHROME-WEB-STORE-LISTING.md) (store listing copy).
+> Companion docs: [PROJECT-STATUS.md](PROJECT-STATUS.md) (product-wide Phase 1/2 split), [CHROME-WEB-STORE-LISTING.md](CHROME-WEB-STORE-LISTING.md) (store listing copy).
 
 ---
 

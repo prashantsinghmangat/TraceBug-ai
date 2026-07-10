@@ -1,622 +1,193 @@
-# TraceBug — Architecture & Project Context
+# TraceBug — Architecture
 
-## What is TraceBug?
-TraceBug is a **one-stop QA testing tool** that records user sessions and auto-generates developer-ready bug reports. It solves the #1 problem in software teams: **testers finding bugs but developers not being able to reproduce them**.
+System-level overview of how TraceBug is put together and how data flows through
+it. For a file-by-file tour of the internals, see [`docs/architecture.md`](docs/architecture.md).
+For the public API, see [`docs/api-reference.md`](docs/api-reference.md).
 
-Zero-backend, browser-only. All data stays in localStorage. No servers, no API keys, no external dependencies.
+> **Offline-first.** Everything works with zero backend: capture, replay, and
+> export all run in the browser and write only to `localStorage`. The optional
+> cloud share portal and BYO-key AI features are strictly additive — nothing is
+> uploaded unless the user explicitly asks.
 
-Available as:
-- **npm package** (`tracebug-sdk`) — for developers to embed in their apps
-- **Chrome Extension** — for non-developers (QA testers, PMs, clients) to use on ANY website
+---
 
-Works with **any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, Remix, Astro, plain HTML — anything that runs in a browser.
+## 1. Three surfaces, one core
 
-## The Problem It Solves
+The same core SDK (`src/`) ships in three ways:
+
+| Surface | Entry | How it loads |
+| --- | --- | --- |
+| **npm SDK** (`tracebug-sdk`) | `TraceBug.init()` | App imports it; framework-agnostic, tree-shakeable (`dist/`). |
+| **Chrome / Firefox extension** | `tracebug-extension/` | A content script injects the bundled IIFE (`tracebug-sdk.js`) into every page. |
+| **MCP server** (`tracebug` package) | `npx tracebug mcp` | A separate ~24 KB zero-dep CLI that reads exported `.html` reports for coding agents (`cli/mcp-server.ts`). |
+
+Heavy, optional dependencies (`html2canvas` for screenshots, `rrweb` for DOM
+replay) are **lazy-imported** so the core bundle stays small and the SDK has no
+mandatory peer deps.
+
+---
+
+## 2. Session model (idle-by-default, survives navigation)
+
+TraceBug does **not** record automatically. On load the SDK is idle; a session
+is armed only when the user acts:
+
+- **Record** (video) or **Track session** (events-only) on the toolbar, or
+- a programmatic `TraceBug.startRecording()`.
+
+The active session id is persisted in `localStorage` (`tracebug_active_session`)
+together with a **capture mode** (`tracebug_active_capture_mode` = `"events"` |
+`"video"`). This is what lets an **event-only session survive a full-page
+navigation**: on the next page the SDK restores the session id, keeps capturing,
+and appends new events under the same id. A *video* session, whose tab-share
+Chrome ends on navigation, is finalized instead and its ticket opened. See
+`src/index.ts` (init/restore) and `src/storage.ts`.
+
+Events flush to `localStorage` on a debounced schedule and durably on
+`beforeunload` / `pagehide` / `visibilitychange:hidden`, so the last actions
+before a navigation are never lost.
+
+---
+
+## 3. Data flow
 
 ```
-BEFORE TraceBug:
-  Tester: "The page is broken"
-  Developer: "What did you click? What browser? Can you reproduce it?"
-  Tester: "I don't remember exactly..."
-  → 3 days of back-and-forth
-
-AFTER TraceBug:
-  Tester finds bug → clicks 🐛 button → gets complete report:
-    - Auto-generated reproduction steps
-    - Screenshots with annotations
-    - Console errors + stack traces
-    - Network failures
-    - Browser/OS/viewport info
-    - Session timeline
-    - Voice description of the bug
-  → Pastes into Jira/GitHub → Developer has everything. Zero back-and-forth.
+ user action ─▶ collectors ─▶ in-memory session ─▶ localStorage (batched)
+                    │                                     │
+   console/network/clicks/route/rrweb DOM/video/screens   │
+                                                           ▼
+                                            report-builder ─▶ BugReport
+                                                           │
+        ┌──────────────┬───────────────┬──────────────────┼───────────────┐
+        ▼              ▼               ▼                   ▼               ▼
+   Export .html   Export for AI    Download .md        Export HAR      GitHub /
+   (rrweb replay)   (.html, text)   (report)          (network)     Linear / Slack / Jira
 ```
 
-## How It Works
-1. User interacts with the app (clicks, types, navigates, triggers API calls)
-2. SDK silently captures all events into localStorage (grouped by session)
-3. Each page load creates a new session automatically
-4. When an error occurs, reproduction steps are generated instantly in-browser
-5. Tester can capture screenshots, add voice descriptions, annotate with notes
-6. One-click export to GitHub Issue, Jira Ticket, or PDF report
-7. Developer gets a complete, developer-ready bug report with zero effort from the tester
+- **Collectors** (`src/collectors.ts`, `src/environment.ts`, `src/rrweb-recorder.ts`,
+  `src/video-recorder.ts`, `src/screenshot.ts`, `src/storage-capture.ts`) gather
+  console lines, network requests, clicks/inputs/route changes, the DOM stream,
+  optional screen video, screenshots, and a redacted Web-Storage snapshot.
+- **Scanner / detectors** (`src/scanner/`) run a11y, broken-image, mixed-content,
+  session-data, and frustration heuristics to surface issues and a root-cause hint.
+- **Report builder** (`src/report-builder.ts`, `src/repro-generator.ts`,
+  `src/title-generator.ts`) turns a session into a structured `BugReport`
+  (summary, repro steps, environment, timeline, root cause).
 
-## Feature Overview
+---
 
-### Sentry Mode — Rolling Video Buffer (latest)
+## 4. The offline replay pipeline (headline feature)
 
-The marquee feature: arm a screen-share once and snapshot multiple bug tickets from the same recording.
+Instead of shipping tens of MB of video, TraceBug records the **DOM** and replays
+it. The exported `.html` reconstructs the page and re-applies every change.
 
-- **One Record click** opens the OS screen-picker; from then on, MediaRecorder runs in the background.
-- **HUD pill** at the top of the page shows a pulsing red dot, elapsed timer, capture count, comment input (timestamped to recording time, Enter to save), 📸 Capture button, and ⏹ Stop.
-- **📸 Capture** snapshots the in-progress recording into a finished `VideoRecording` and opens the Quick Bug modal — the screen-share keeps running, so QA can file the next bug from the same arm session. Comments reset between captures so each ticket gets its own.
-- **Auto-capture on error** — when an unhandled error fires while a rolling session is armed, the existing error toast offers "Capture with video" instead of "Capture bug." One click captures the buffer + opens the ticket.
-- **Smart Stop** — if captures were taken, Stop ends silently with a toast. Otherwise Stop opens the modal with the full recording (preserves the simple one-shot flow).
-- **Exports include the video.** GitHub issue / Jira ticket / PDF report all add a "Screen Recording" section with the auto-downloaded `.webm` filename, duration, file size, and timestamped comments. The blob auto-downloads on every export action.
-- **In-memory only** — Blob URL dies on reload, like screenshots. ~50 MB per minute at 30 fps webm.
-- Implementation: [src/video-recorder.ts](src/video-recorder.ts), [src/ui/recording-hud.ts](src/ui/recording-hud.ts).
-
-### Auto-Scanner (latest)
-
-A magnifying-glass toolbar button that runs six in-browser detectors in parallel and surfaces findings as severity-bucketed issues. Solves the "I didn't even know to look there" case — bugs the QA wouldn't have noticed manually.
-
-- **Detectors** (each in `src/scanner/detectors/`):
-  - **a11y.ts** — axe-core, lazy-loaded (~1.4 MB). Restricted to WCAG 2.0/2.1 A+AA. Multi-element violations roll into one issue with `(+ N more)` suffix.
-  - **broken-images.ts** — `<img>` where `naturalWidth === 0 && complete === true`.
-  - **mixed-content.ts** — `http://` resources on HTTPS pages, across all fetchable element types.
-  - **session-data.ts** — three classifiers over already-collected events: `console-error` (deduped), `failed-request` (with response snippets), `slow-api` (>2 s).
-- **Orchestrator** ([src/scanner/index.ts](src/scanner/index.ts)) runs detectors in parallel via `Promise.all` + per-detector catch wrapper — one failure doesn't break the others. Concurrent `scan()` calls are coalesced. Issues live in memory only; reload = fresh scan.
-- **Issues Panel** ([src/ui/issues-panel.ts](src/ui/issues-panel.ts)) — severity-grouped modal with three actions per row: 📍 Locate (scrolls + flashes the element with a 2.4 s purple outline), File Ticket (pre-fills the Quick Bug modal via new `prefilledTitle`/`prefilledDescription` options on `showQuickBugCapture()`), Dismiss.
-- **Public API:** `TraceBug.scanPage()`, `TraceBug.showIssuesPanel()`, `TraceBug.getIssues()`, `dismissIssue/undismissIssue/clearIssues`, `getIssueCounts()`.
-- New types: `Issue`, `IssueDetector`, `IssueSeverity`.
-
-### Debugging Assistant (v1.3 — the hero feature)
-
-TraceBug's positioning is "debugging assistant," not "bug reporter." Every report opens with four derived signals that eliminate DevTools round-trips:
-
-- **🔍 Root Cause Hint** — confidence-tiered one-liner generated by `generateRootCauseHint(report)` in [src/report-builder.ts](src/report-builder.ts). HIGH when network failure present, MEDIUM on runtime error only, LOW on click-only/fallback. Deterministic — no AI APIs. Dictionary of error-message → plain-English suggestions lives in `suggestCauseFromError()`.
-- **TL;DR (Smart Summary)** — one-sentence summary via `generateSmartSummary(report)`. Priority ladder: network+click → error+click → network → error → click → page.
-- **Session Steps** — last 10 user actions as plain-English strings via `generateSessionSteps(events)`. Input events skipped (too noisy).
-- **Clicked Element** — structured `{ tag, text, selector, id, ariaLabel, testId, page }` snapshot of the last click via `extractClickedElement(events)`.
-
-Injected at the top of GitHub issues, Jira tickets, PDF reports, and the Quick Bug modal via shared `formatRootCauseLine(rc)`.
-
-### Network Failure Capture (v1.3)
-
-- Fetch wrapper in [src/collectors.ts](src/collectors.ts) clones the response on failure (`status >= 400 || status === 0`) and reads `clone.text()` on a microtask tick — caller gets the response unchanged, body is buffered asynchronously.
-- XHR wrapper reads `xhr.responseText` on `loadend` for failures (guarded; throws for binary responseTypes).
-- Snippet truncated to 200 chars.
-- Ring-buffered at 10 entries via `pushNetworkFailure` / `getNetworkFailures` / `clearNetworkFailures`.
-- `buildReport()` stitches buffer data into `networkErrors` entries by `(method+url+status)` with ±5s timestamp window, filtered by `timestamp >= session.createdAt` to prevent cross-session leak.
-- Response snippets rendered: `<details>` block on GitHub · `h4. Response Snippets` on Jira · monospace blocks on PDF · inline in Quick Bug modal description.
-
-### Storage Cache Integrity (v1.3 bugfix)
-
-[src/storage.ts](src/storage.ts) keeps a module-scoped `_cachedSessions` cache for batched writes. The v1.3 release fixes three correctness bugs:
-
-- `clearAllSessions()` and `deleteSession()` now call `invalidateCache()` BEFORE writing — otherwise a pending flush could resurrect cleared/deleted data.
-- `updateSessionError`, `addAnnotation`, `saveEnvironment` now read through `getCachedSessions()` and call `scheduleFlush()` instead of `saveSessions()` — cache is authoritative, so a pending flush can't overwrite their writes.
-- Both "Clear All Data" handlers (dashboard panel + compact toolbar settings card) now wipe screenshots, voice transcripts, element annotations, annotation badges, AND the network failure buffer — previously only sessions were cleared.
-
-### Core Recording
-- **Click tracking** — tag, text, id, className, aria-label, role, data-testid, href, button type
-- **Input tracking** — field name, type, actual value (sensitive fields auto-redacted), placeholder
-- **Select/dropdown tracking** — selected option, all available options, field name
-- **Form submission tracking** — form id, action, method, all field values (passwords redacted)
-- **Route/navigation tracking** — from path to path
-- **API request tracking** — fetch + XMLHttpRequest, URL, method, status, duration
-- **Error tracking** — message, stack trace, source file, line, column
-- **Console error tracking** — console.error() arguments
-- **Unhandled rejection tracking** — promise rejection reason + stack
-
-### Compact Toolbar (v1.0 — 6 elements)
-
-After the v1.0 polish pass, the toolbar is just **capture, scan, record, screenshot, region**:
-
-| # | Button | Purpose |
-|---|---|---|
-| 1 | **Logo** | Toggles the slide-out session panel |
-| 2 | **⚡ Quick Bug** (`Ctrl+Shift+B`) | Opens the ticket-review modal with auto-filled title + description + screenshots |
-| 3 | **🔍 Scan** | Runs the auto-scanner, opens the issues panel |
-| 4 | **📷 Screenshot** | Adds a viewport screenshot to the active ticket |
-| 5 | **⬚ Region** | Drag-to-select region screenshot; added to ticket |
-| 6 | **🔴 Record** | Arms Sentry mode (rolling video buffer + HUD) |
-
-### QA Tools (in the Quick Bug modal)
-- **Screenshots** — capture via html2canvas with smart auto-naming from event context (toolbar button + auto on modal open)
-- **Region screenshot** — drag-to-select snipping-tool style (toolbar button)
-- **Screenshot annotation editor** — rectangles, arrows, text overlays on a captured screenshot with color picker (modal action)
-- **Voice Note** — speech-to-text bug description using Web Speech API (free, no API keys)
-- **GitHub Issue** — one-click generates markdown, copies to clipboard, auto-downloads screenshots + video
-- **Jira Ticket** — one-click generates Jira markup, copies to clipboard, auto-downloads screenshots + video
-- **Open in GitHub** — prefilled `/issues/new?title=...&body=...` URL when `githubRepo` is configured
-
-### Cut from default UI (still available programmatically)
-
-These features were cut from the default toolbar in v1.0 but ship in the bundle and remain accessible via the public API for power users / custom integrations:
-
-| Feature | API access |
-|---|---|
-| Element Annotate Mode | `TraceBug.activateAnnotateMode()`, `deactivateAnnotateMode()`, `isAnnotateModeActive()` |
-| Draw Mode (live-page rectangles/ellipses) | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
-| Annotation list / export (JSON, Markdown) | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"/"markdown")`, `clearAnnotations()` |
-| PDF report export | `TraceBug.downloadPdf()` |
-| First-run onboarding tour | `replayOnboarding()` (named export from `./onboarding`) |
-| Plain text export | Build manually from `TraceBug.generateReport()` and `JSON.stringify` if needed |
-
-The `shortcuts.annotate` and `shortcuts.draw` config keys are retained in `TraceBugConfig` for backwards compatibility but are no-ops since the corresponding toolbar buttons aren't mounted.
-
-### Theme System
-- **Dark/Light/Auto themes** — `TraceBug.init({ theme: 'dark' | 'light' | 'auto' })`
-- CSS custom property design tokens (`--tb-bg-primary`, `--tb-accent`, `--tb-error`, etc.)
-- Auto theme follows `prefers-color-scheme` in 'auto' mode
-- All components use theme variables for consistent theming
-
-### First-Run Onboarding
-- **4-step tooltip tour** shown once on first use, stored in `tracebug_onboarding_complete`
-- **Help button** ("?") at bottom of toolbar replays the tour
-- **Pulse animation** on logo for first 10 seconds if user hasn't interacted
-
-### Toolbar & Layout
-- **Configurable position**: `TraceBug.init({ toolbarPosition: 'right' | 'left' | 'bottom-right' | 'bottom-left' })`
-- **Drag to reposition** — toolbar can be dragged anywhere, position persisted in localStorage
-- **Mobile responsive**: viewport < 768px collapses to FAB, panel becomes bottom sheet
-- **Touch support** for drag on mobile devices
-
-### Dashboard Tabs
-- Session detail view split into **4 tabs**: Overview, Timeline, Errors, Export
-- **Sticky header** with bug title + severity badge + back button
-- **Session search/filter** — filter by "has errors" / "healthy", text search across sessions
-- **Auto session naming** — sessions named by primary page visited (e.g., "Login Session")
-- **Session preview** — each card shows last error or last action, not just event count
-
-### Plugin System
-- `TraceBug.use({ name, onEvent, onReport, onExport })` — plugin API
-- `TraceBug.on('event', callback)` — hook system for events
-- Hooks: `session:start`, `error:captured`, `screenshot:taken`, `report:generated`, etc.
-- Plugins can filter, transform, or enrich events before storage
-- Enables community plugins: Slack webhook, Linear integration, etc.
-
-### Console Capture
-- **Configurable level**: `TraceBug.init({ captureConsole: 'errors' | 'warnings' | 'all' | 'none' })`
-- `console.warn` capture as warning events (when level is 'warnings' or 'all')
-- `console.log` capture as info events, capped at 50 (when level is 'all')
-
-### User Identification
-- `TraceBug.setUser({ id, email, name })` — identify users for session attribution
-- `TraceBug.getUser()` / `TraceBug.clearUser()` — query and clear
-- Persisted in `tracebug_user` localStorage key, auto-attached to sessions
-
-### Bug Flagging & Compact Reports
-- `TraceBug.markAsBug()` — flag current session as a bug (`isBug: true`)
-- `TraceBug.getCompactReport()` — 2-3 sentence Slack-friendly summary
-
-### CI/CD Helpers
-- `TraceBug.getErrorCount()` — for test assertions
-- `TraceBug.exportSessionJSON()` — clean JSON for CI artifacts
-
-### CLI Tool
-- `npx tracebug init` — auto-detects framework, prints integration snippet
-- Supports: Next.js, React, Vue, Angular, Svelte, Nuxt, vanilla JS
-
-### Screenshot & Ticket Flow
-- Toolbar camera and region buttons add screenshots to the active **bug ticket** — they no longer auto-download
-- `stopRecording()` opens the ticket-review modal; downloads happen only on export (Open in GitHub, Copy as GitHub/Jira/Plain Text, Download Screenshots) and bundle every screenshot in the ticket
-- `takeScreenshot({ includeAnnotations: true })` captures page with annotation badges visible
-- `takeRegionScreenshot()` shows a fullscreen overlay; user drags a rectangle; cropped PNG (with `_region.png` suffix) is added to the ticket. Reuses the `captureScreenshot()` pipeline and crops via canvas with DPR-aware scaling. Press `Esc` to cancel.
-- "Save Annotated" in the annotation editor still auto-downloads (manual one-shot export, separate flow)
-- Chrome Extension uses `chrome.tabs.captureVisibleTab` instead of html2canvas (CORS-safe)
-- See [docs/ticket-flow.md](docs/ticket-flow.md) for the full step-by-step flow
-
-### Clickable Annotation Badges
-- Numbered badges on annotated elements are clickable
-- Click opens a popover showing intent, severity, and comment
-- Annotation list panel shows screenshots alongside annotations/draw regions
-
-### Config Validation
-- Runtime checks on `init()`: projectId must be string, maxEvents/maxSessions must be positive
-- Invalid config warns and falls back to defaults (never crashes)
-
-### Error Boundary
-- Entire `init()` body wrapped in try/catch
-- All collector handlers wrapped individually
-- Fetch/XHR wrappers always call original function even on tracking error
-- Dashboard mount wrapped — page works even if UI fails
-
-### Accessibility (A11y)
-- `aria-label` on all toolbar buttons (icon-only)
-- `role="dialog"` on panel, `role="complementary"` on root
-- Visible focus rings (2px solid accent color) via `:focus-visible`
-- `aria-live="polite"` region announces mode changes and toast messages
-- All interactive elements keyboard-navigable
-
-### Smart Features
-- **Auto bug title generation** — heuristic-based, e.g. "Vendor Update Fails — TypeError"
-- **Auto flow summary** — e.g. "Click 'Edit' → Select 'Inactive' → Click 'Update'"
-- **Session timeline** — elapsed timestamps, color-coded event types
-- **Environment auto-capture** — browser, OS, viewport, device type, connection type
-- **Framework noise filtering** — auto-filters Next.js/Webpack/Vite internal requests
-- **Error deduplication** — consecutive identical errors collapsed
-- **Privacy** — passwords, credit cards, SSNs, tokens auto-redacted as `[REDACTED]`
-- **SDK self-filtering** — TraceBug's own UI interactions never appear in the timeline
-
-### Voice-to-Bug-Report
-- Uses **Web Speech API** (SpeechRecognition) — completely free, no paid APIs
-- Real-time transcript display with interim results
-- Auto-punctuation cleanup (capitalize, add periods, spoken "period"/"comma" converted)
-- Continuous mode with auto-restart on browser timeout
-- Saved as tester annotation, included in GitHub/Jira/PDF reports
-- Works in Chrome, Edge, Brave, Opera (all Chromium browsers)
-
-## Project Structure
 ```
-tracebug-ai/
-├── src/                       # SDK source (published as "tracebug-sdk")
-│   ├── index.ts               # Entry point — TraceBug class with all public methods
-│   ├── types.ts               # TypeScript interfaces (all shared types)
-│   ├── collectors.ts          # Event collectors with self-filtering + framework noise filtering
-│   ├── storage.ts             # localStorage persistence — sessions, annotations, environment
-│   ├── repro-generator.ts     # Generates human-readable reproduction steps from events
-│   ├── dashboard.ts           # In-browser slide-out panel with QA toolbar (vanilla DOM)
-│   ├── compact-toolbar.ts     # Minimal vertical rail toolbar (replaces old floating button)
-│   ├── element-annotate.ts    # Element-level annotation mode with multi-select
-│   ├── draw-mode.ts           # Rectangle/ellipse drawing on live page
-│   ├── annotation-store.ts    # In-memory annotation store with JSON/Markdown export
-│   ├── theme.ts               # CSS custom property design token system (light/dark/auto)
-│   ├── onboarding.ts          # First-run tooltip tour + help button replay
-│   ├── plugin-system.ts       # Plugin API + event hook system
-│   ├── environment.ts         # Auto-captures browser, OS, viewport, device, connection
-│   ├── screenshot.ts          # Screenshot capture with html2canvas + smart auto-naming
-│   ├── voice-recorder.ts      # Web Speech API voice-to-text for bug descriptions
-│   ├── title-generator.ts     # Auto-generates bug titles and flow summaries
-│   ├── timeline-builder.ts    # Builds debug timeline with elapsed timestamps
-│   ├── report-builder.ts      # Assembles complete BugReport from all data sources
-│   ├── github-issue.ts        # GitHub issue markdown generator
-│   ├── jira-issue.ts          # Jira ticket template generator (Jira markup format)
-│   ├── pdf-generator.ts       # Print-optimized HTML report (save as PDF from browser) — programmatic only in v1.0
-│   ├── video-recorder.ts      # Sentry mode: getDisplayMedia + MediaRecorder + rolling-buffer captures
-│   ├── region-screenshot.ts   # Drag-to-select snipping-tool screenshot
-│   ├── plan.ts                # Free/Premium plan flag (chrome.storage.local + localStorage)
-│   ├── scanner/               # Auto-scanner — runs detectors in parallel, surfaces issues
-│   │   ├── index.ts           # Orchestrator: scan(), getIssues, dismiss, severity sort
-│   │   ├── helpers.ts         # Selector builder, severity coercion, ID generator
-│   │   └── detectors/
-│   │       ├── a11y.ts        # axe-core (lazy-loaded), WCAG 2.0/2.1 A+AA only
-│   │       ├── broken-images.ts   # naturalWidth === 0 check
-│   │       ├── mixed-content.ts   # http:// resources on https:// pages
-│   │       └── session-data.ts    # console-error / failed-request / slow-api classifiers
-│   └── ui/                    # Extracted dashboard UI modules
-│       ├── index.ts           # Barrel export
-│       ├── helpers.ts         # Shared utilities (formatDuration, escapeHtml, styles)
-│       ├── toast.ts           # Toast notification system
-│       ├── quick-bug.ts       # Ticket-review modal — auto-fills, exports to GitHub/Jira
-│       ├── recording-hud.ts   # Floating pill shown during Sentry-mode recording
-│       ├── issues-panel.ts    # Auto-scanner findings — Locate / File ticket / Dismiss
-│       └── upgrade-modal.ts   # Free → Premium upsell modal
-├── cli/                       # CLI tool (npx tracebug init)
-│   └── bin.ts                 # Framework detection + setup instructions
-├── tracebug-extension/        # Chrome Extension (Manifest V3)
-│   ├── manifest.json          # Extension config — permissions, content scripts
-│   ├── background.js          # Service worker — site enable/disable, SDK injection via chrome.scripting API
-│   ├── content-script.js      # Bridge between popup/background and page-context SDK
-│   ├── tracebug-init.js       # Page-context initializer — SDK init + extension action handlers
-│   ├── tracebug-sdk.js        # Auto-built IIFE bundle (from tsup, ~160KB) — DO NOT EDIT MANUALLY
-│   ├── popup.html             # Extension popup UI
-│   ├── popup.js               # Popup logic — toggle, quick actions, site list
-│   ├── styles.css             # Dark-themed popup styles
-│   ├── generate-icons.html    # Helper to generate better icons in browser
-│   └── icons/                 # Extension icons (16, 48, 128px)
-├── example-app/               # Demo Next.js 14 app with deliberate bug
-│   └── app/
-│       ├── tracebug-init.tsx   # Dynamic import of SDK from npm package
-│       ├── layout.tsx
-│       ├── page.tsx            # Home page with links
-│       └── vendor/page.tsx     # Demo page with intentional TypeError bug
-├── package.json               # SDK config — dual CJS/ESM, conditional exports
-├── tsconfig.json              # TypeScript config (target ES2018, module ES2020)
-├── tsup.config.ts             # tsup bundler config — CJS + ESM + IIFE (extension)
-├── docs/                      # Documentation
-│   ├── getting-started.md     # Install, setup, first use
-│   ├── api-reference.md       # Full programmatic API reference
-│   ├── configuration.md       # All config options explained
-│   ├── bug-reporting.md       # Screenshots, notes, voice, export
-│   ├── annotate-and-draw.md   # Element annotation & draw mode
-│   ├── chrome-extension.md    # Extension install & usage
-│   └── architecture.md        # How TraceBug works internally
-└── dist/                      # Built output (gitignored, auto-built via prepare script)
-    ├── index.js               # ESM output (~151KB)
-    ├── index.cjs              # CJS output (~153KB)
-    ├── index.d.ts             # TypeScript declarations (ESM)
-    └── index.d.cts            # TypeScript declarations (CJS)
+capture:   rrweb.record()  ──▶  full DOM snapshot + incremental mutation events
+                                 (inputs masked, .tb-block/.tb-mask respected,
+                                  images inlined for true offline)
+compress:  gzip(JSON events) ─▶ base64  (CompressionStream)   ~3–4× smaller file
+export:    html-replay.ts ─────▶ single self-contained .html:
+                                   • gzipped event stream (rrwebEventsGz)
+                                   • inlined rrweb Replayer runtime
+                                   • structured data (console/network/actions)
+                                   • the viewer UI + CSS
+playback:  open offline ───────▶ DecompressionStream inflates the stream,
+                                  rrweb Replayer rebuilds the DOM in an <iframe>,
+                                  scaled-to-fit, with a play/seek control bar.
 ```
 
-## Key Architecture Decisions
+Key files: `src/rrweb-recorder.ts` (capture), `src/exporters/html-replay.ts`
+(payload assembly + `gzipToBase64`), `src/exporters/html-template.ts` (the
+self-contained viewer + inflate/mount runtime), `src/exporters/rrweb-runtime.generated.ts`
+(the inlined Replayer, regenerated by `npm run gen:rrweb` — a `prebuild` hook,
+gitignored). If the Replayer or `DecompressionStream` is unavailable, the viewer
+falls back to the screenshot gallery.
 
-### Triple Build Output (CJS + ESM + IIFE)
-- Built with `tsup` configured in `tsup.config.ts` with two build entries
-- Entry 1: CJS (`dist/index.cjs`) + ESM (`dist/index.js`) + DTS for npm package
-- Entry 2: IIFE (`tracebug-extension/tracebug-sdk.js`) for Chrome Extension
-- IIFE build exposes `window.TraceBug` via footer script with `__TRACEBUG_LOADED__` guard
-- `package.json` uses conditional `exports` field so bundlers pick the right format
-- Single `npm run build` command builds ALL outputs (npm + extension)
+### Export formats
 
-### Chrome Extension Architecture
-- **Manifest V3** with `scripting`, `storage`, `tabs`, `activeTab` permissions
-- **CSP-safe injection**: Uses `chrome.scripting.executeScript({ world: "MAIN" })` — NOT DOM `<script>` tags. This bypasses page CSP entirely.
-- **Per-site toggle**: Enabled sites stored in `chrome.storage.local`
-- **Duplicate injection guard**: `injectedTabs` Set in background + `__TRACEBUG_INITIALIZED__` flag in page context
-- **Clipboard fallback**: Uses `document.execCommand("copy")` via hidden textarea when `navigator.clipboard` fails (popup steals focus from page)
-- **Communication flow**: Popup → Background (chrome.runtime.sendMessage) → Content Script (chrome.tabs.sendMessage) → Page (CustomEvent)
+| Export | File | Best for |
+| --- | --- | --- |
+| **Export .html** | self-contained replay | Handing to a developer or an MCP-connected coding agent. |
+| **Export for AI (.html)** | tiny text-only report | Pasting/uploading into a chat (Claude/ChatGPT) — a few KB, no MCP needed. |
+| **Download report (.md)** | markdown | Same as above, plain markdown. |
+| **Export HAR** | `.har` | Opening network activity in DevTools / Charles / Postman. |
+| **GitHub / Linear / Slack / Jira** | real issue/message | Filing directly via API (`src/integrations/tracker-client.ts`). |
 
-### Dashboard Z-Index Strategy
-- Dashboard button and panel use `z-index: 2147483647 !important` (max 32-bit int)
-- All styles injected via a `<style>` tag with `!important` rules — cannot be overridden by app CSS
-- Root container `#tracebug-root` appended to `document.documentElement` (`<html>`) not `<body>` — escapes all body stacking contexts
-- `isolation: isolate` on root creates its own stacking context
-- `pointer-events: none` on root with `pointer-events: auto` on children — doesn't block page interaction
+The full replay `.html` is built for a human browser and the MCP reader; the
+**AI/`.md`** exports are the small, chat-safe artifacts. The `.html` replay and
+AI export are triggered from the Quick Bug modal (not standalone public exports);
+`buildHar` / `exportSessionAsHar` and the AI-prompt helpers *are* public API.
 
-### Session Management
-- New session ID generated on **every page load** (no sessionStorage caching)
-- Sessions stored in localStorage under key `tracebug_sessions`
-- Sessions capped at 50, events at 200 per session
-- Old sessions auto-pruned when limit exceeded
+---
 
-### SDK Self-Filtering
-- All collectors check `isTraceBugElement()` before emitting events
-- Checks `#tracebug-root` container, then walks up DOM looking for `id="tracebug-*"`, `id="bt-*"`, `class="tracebug-*"`, `class="bt-ann*"`, `class="bt-voice*"`, or `data-tracebug` attributes
-- Annotation canvas has `data-tracebug="annotation-canvas"` attribute
-- Voice dialog has `data-tracebug="voice-dialog"` attribute
-- SDK's own interactions never appear in the event timeline
+## 5. Extension internals
 
-### Framework Noise Filtering
-- Internal dev-server URLs are auto-filtered from API tracking:
-  - Next.js: `__nextjs_original-stack-frame`, `_next/static/webpack`, `_next/webpack-hmr`
-  - Webpack: `__webpack_hmr`, `.hot-update.`, `webpack-dev-server`
-  - Vite: `__vite_ping`, `@vite/client`, `@react-refresh`
-  - General: `sockjs-node`, `turbopack-hmr`
+- **`content-script.js`** injects `tracebug-sdk.js` (the IIFE build) and re-injects
+  on same-tab navigation, which is what makes cross-page event capture work.
+- **`offscreen.js` / `offscreen.html`** own the screen recording in an offscreen
+  document so a page reload doesn't kill an in-flight video.
+- **`background.js`** tracks which tabs are active, brokers offscreen recording,
+  and honors the toolbar ✕ ("turn off on this page" → stop re-injecting).
+- **`popup.js` / `popup.html` / `styles.css`** are the browser-action popup.
 
-### Voice Recording
-- Uses Web Speech API (SpeechRecognition / webkitSpeechRecognition)
-- Zero cost — uses browser's built-in speech recognition
-- No audio stored — only text transcripts saved in memory
-- Auto-restarts on browser timeout (continuous mode)
-- Transcript cleaned up: capitalized, punctuated, spoken punctuation converted
+Version is injected from `package.json` at build time (`build-ext.mjs`), so the
+manifest never drifts.
 
-## Dashboard Features
-- **Session list** with red/green dot indicators (error/healthy) and "Repro Ready" badges
-- **Recording toggle** — pause/resume button with live green/red indicator dot
-- **QA Toolbar**: Screenshot, Add Note, Voice Note, GitHub Issue, Jira Ticket, PDF Report
-- **Session detail view**:
-  - Session Overview card (duration, events, pages, API calls, error status)
-  - Problems Detected panel (critical/warning/info severity with counts)
-  - Error Details with type classification (TypeError, ReferenceError, etc.) and stack trace parsing
-  - Performance insights (avg/slowest response time, success %, per-API breakdown with bars)
-  - Rich event timeline with time gap indicators, color-coded icons, inline values
-  - Reproduction Steps section with copy button
-  - Tester Notes display (annotations with severity badges, including voice notes)
-  - Screenshots gallery (inline images with filenames)
-  - Environment Info grid (browser, OS, viewport, device)
-- **Download reports**: JSON, Text, HTML, PDF
-- **Copy to clipboard**: Full Report, GitHub Issue, Jira Ticket
-- **Screenshot annotation editor**: rectangle highlights, arrows, text overlays, color picker, undo
-- Event types color-coded: clicks (blue), inputs (purple), selects (green), forms (orange), navigation (cyan), API (yellow), errors (red)
+---
 
-## Build & Run
-```bash
-# Build SDK (produces CJS + ESM + IIFE for extension — single command does everything)
-cd tracebug-ai && npm install && npm run build
+## 6. UI layer
 
-# Run the unit test suite (Vitest + jsdom — tests/ directory)
-npm test               # Single run, 5 test files, 74 test cases
-npm run test:watch     # Watch mode for iterative development
-npm run test:coverage  # Generate coverage report
+All in-page UI is self-contained, zero-dependency, and style-isolated (no leakage
+to/from the host page). Design tokens live in `src/theme.ts` (a single
+light/dark source of truth aligned to the website's shadcn palette); every widget
+reads `--tb-*` variables.
 
-# Lint the SDK source (non-blocking; catches prefer-const / no-this-alias / etc.)
-npm run lint
+- **Compact toolbar** (`src/compact-toolbar.ts`): Quick Bug · Screenshot · Region ·
+  Record (video) · **Track session** (events-only) · View saved tickets · Close.
+- **Quick Bug modal** (`src/ui/quick-bug.ts`): review/edit the ticket and export.
+- **Recording HUD, live bug card, replay scrubber, draw/annotate tools, toasts**
+  round out the surface.
 
-# Run example app
-cd example-app && npm install && npm run dev
-# Open http://localhost:3000
+---
 
-# Build + update example app in one command
-npm run build:example
+## 7. Optional / additive subsystems
 
-# Chrome Extension
-# Install from Chrome Web Store: https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj
-# Works in Chrome, Edge, Brave, Opera
-#
-# Developer install (from source):
-# 1. npm run build
-# 2. Open chrome://extensions/ → Enable Developer mode
-# 3. Click Load unpacked → select tracebug-extension/ folder
-# 4. After code changes: npm run build → refresh extension in chrome://extensions/
-```
+- **AI debugger** (`src/ai/llm-client.ts`): BYO-key analysis via Anthropic / OpenAI /
+  Ollama. Keys stay in `localStorage`; nothing is proxied through a TraceBug server.
+- **Integrations** (`src/integrations/tracker-client.ts`): create real GitHub /
+  Linear / Slack / Jira issues from a report.
+- **Playwright reporter** (`src/reporters/playwright.ts`): attaches a TraceBug
+  `.html` to failing tests, ready for the MCP hand-off.
+- **Cloud share portal** (`website/`, `src/exporters/share-link.ts`): upload a
+  report and get a shareable link. Built but UI-gated off by default
+  (`PHASE2-CLOUD`).
 
-## Installation in Any Project
+---
 
-### From npm
-```bash
-npm install tracebug-sdk
-```
+## 8. Privacy & security
 
-### From GitHub
-```bash
-npm install github:prashantsinghmangat/tracebug-ai
-```
+- Data lives in `localStorage`; nothing leaves the machine unless the user
+  exports, shares, or files an issue.
+- rrweb inputs are masked (`maskAllInputs`); `.tb-block` / `.tb-mask` elements are
+  blocked / text-masked; Web-Storage values for sensitive keys are redacted at
+  capture.
+- Exported `.html` escapes all session-derived strings before rendering and
+  neutralizes `</script>` breakout in the embedded data block.
+- No string-based script injection (CSP-safe); no crash telemetry.
 
-### From .tgz (offline sharing)
-```bash
-cd tracebug-ai && npm pack
-# Share tracebug-sdk-1.4.0.tgz
-npm install ./tracebug-sdk-1.4.0.tgz
-```
+---
 
-### Usage (2 lines of code)
-```typescript
-import TraceBug from "tracebug-sdk";
-TraceBug.init({ projectId: "my-app" });
-```
+## 9. Build & packaging
 
-### Programmatic API
-```typescript
-import TraceBug, { getAllSessions, clearAllSessions, deleteSession } from "tracebug-sdk";
+- **Bundler:** `tsup` (esbuild) → `dist/` (ESM + CJS + types) for the npm SDK; an
+  IIFE build for the extension.
+- **`npm run gen:rrweb`** regenerates the inlined Replayer runtime; a `prebuild`
+  hook runs it before every build, so fresh clones build cleanly.
+- **`npm run build:ext`** builds the SDK and packs the Chrome + Firefox extensions.
+- Runtime dependencies: `html2canvas`, `axe-core`, `rrweb` (all lazy-loaded).
 
-// Pause/resume recording
-TraceBug.pauseRecording();
-TraceBug.resumeRecording();
-TraceBug.startRecording();   // alias for resumeRecording
-TraceBug.stopRecording();    // alias for pauseRecording
-TraceBug.isRecording(); // boolean
-TraceBug.getSessionId(); // current session ID
+---
 
-// Screenshots
-const screenshot = await TraceBug.takeScreenshot();
-const region = await TraceBug.takeRegionScreenshot(); // snipping-tool style — null if cancelled
-const allScreenshots = TraceBug.getScreenshots();
-
-// Tester notes
-TraceBug.addNote({ text: "...", expected: "...", actual: "...", severity: "critical" });
-
-// Voice recording
-TraceBug.isVoiceSupported();     // boolean — check browser support
-TraceBug.startVoiceRecording({   // start speech-to-text
-  onUpdate: (text, interim) => console.log(text),
-  onStatus: (status, msg) => console.log(status, msg),
-});
-TraceBug.stopVoiceRecording();   // returns VoiceTranscript
-TraceBug.isVoiceRecording();     // boolean
-TraceBug.getVoiceTranscripts();  // VoiceTranscript[]
-
-// Reports
-const report = TraceBug.generateReport();
-const title = TraceBug.getBugTitle();
-const markdown = TraceBug.getGitHubIssue();
-const ticket = TraceBug.getJiraTicket();
-TraceBug.downloadPdf();
-const env = TraceBug.getEnvironment();
-
-// Data access
-const sessions = getAllSessions();
-clearAllSessions();
-deleteSession("session-id");
-
-// Element Annotate Mode
-TraceBug.activateAnnotateMode();
-TraceBug.deactivateAnnotateMode();
-TraceBug.isAnnotateModeActive();
-
-// Draw Mode
-TraceBug.activateDrawMode();
-TraceBug.deactivateDrawMode();
-TraceBug.isDrawModeActive();
-
-// UI Annotations export
-const report = TraceBug.getAnnotationReport();
-TraceBug.exportAnnotationsJSON();
-TraceBug.exportAnnotationsMarkdown();
-await TraceBug.copyAnnotationsToClipboard("markdown");
-TraceBug.clearAnnotations();
-
-// Plugin System
-TraceBug.use({
-  name: 'my-plugin',
-  onEvent: (event) => event,           // filter/transform events
-  onReport: (report) => report,        // enrich reports
-  onExport: (format, data) => data,    // custom export targets
-});
-TraceBug.removePlugin('my-plugin');
-
-// Hook System
-TraceBug.on('session:start', (sessionId) => {});
-TraceBug.on('error:captured', (error) => {});
-TraceBug.on('screenshot:taken', (screenshot) => {});
-TraceBug.on('report:generated', (report) => {});
-
-// User Identification
-TraceBug.setUser({ id: "user_123", email: "dev@co.com", name: "Jane" });
-TraceBug.getUser();                    // { id, email, name } | null
-TraceBug.clearUser();
-
-// Bug Flagging
-TraceBug.markAsBug();                  // flag session as bug
-TraceBug.getCompactReport();           // Slack-friendly 2-sentence summary
-
-// CI/CD Helpers
-TraceBug.getErrorCount();              // for test assertions
-TraceBug.exportSessionJSON();          // JSON for CI artifacts
-
-// Screenshots — added to the active ticket; downloads happen on export
-await TraceBug.takeScreenshot();
-await TraceBug.takeScreenshot({ includeAnnotations: true });  // with annotation badges visible
-await TraceBug.takeRegionScreenshot();                        // drag-to-select region, Esc to cancel
-
-// Sentry mode (rolling video buffer)
-const ok = await TraceBug.startVideoRecording({ mode: "rolling" });  // default
-const armed = TraceBug.isRollingMode();
-const elapsed = TraceBug.getCaptureCount();
-const recording = await TraceBug.captureRollingBuffer();   // snapshot, recording continues
-const final = await TraceBug.stopVideoRecording();         // ends screen-share
-TraceBug.isVideoRecording();
-TraceBug.isVideoSupported?.();   // exported as isVideoSupportedFn
-TraceBug.getLastVideoRecording();
-
-// Auto-scanner
-const result = await TraceBug.scanPage();                  // { issues, durationMs, scannedAt }
-await TraceBug.showIssuesPanel({ rescan: true });
-TraceBug.getIssues({ includeDismissed: false });
-TraceBug.dismissIssue("issue_id");
-TraceBug.undismissIssue("issue_id");
-TraceBug.clearIssues();
-TraceBug.getIssue("issue_id");
-TraceBug.getIssueCounts();        // { critical, serious, moderate, minor }
-
-// Tear down completely
-TraceBug.destroy();
-```
-
-### Configuration
-```typescript
-TraceBug.init({
-  projectId: "my-app",        // Required: identifies your app
-  maxEvents: 200,             // Max events per session (default 200)
-  maxSessions: 50,            // Max sessions in localStorage (default 50)
-  enableDashboard: true,      // Show the floating bug button (default true)
-  enabled: "auto",            // "auto" | "development" | "staging" | "all" | "off" | string[]
-  theme: "dark",              // "dark" | "light" | "auto" (follows system preference)
-  toolbarPosition: "right",   // "right" | "left" | "bottom-right" | "bottom-left"
-  minimized: false,           // Start in minimized FAB mode
-  captureConsole: "errors",   // "errors" | "warnings" | "all" | "none"
-  shortcuts: {                // Custom keyboard shortcuts
-    screenshot: "ctrl+shift+s",
-    annotate: "ctrl+shift+a",
-    draw: "ctrl+shift+d",
-  },
-});
-```
-
-## Key Patterns & Rules
-- **example-app/tracebug-init.tsx**: Uses dynamic `import("tracebug-sdk")` — NOT an inlined SDK copy. Requires the built SDK to be installed.
-- **Runtime deps**: `html2canvas` (screenshot capture, lazy-loaded) and `axe-core` (a11y detector, lazy-loaded — only fetched when `scanPage()` is called the first time). Both are dynamic-imported so the base bundle stays light for users who never trigger them. Extension IIFE bundles everything.
-- **Privacy**: Sensitive fields (password, credit card, SSN, tokens) are auto-redacted as `[REDACTED]`.
-- **Build tool**: `tsup` (not raw `tsc`) — configured in `tsup.config.ts` with two build targets.
-- **Prepare script**: `npm pack` and `npm install` from GitHub both trigger `tsup` build automatically.
-- **Extension SDK**: `tracebug-extension/tracebug-sdk.js` is auto-built by tsup. Do not edit it manually.
-- **Screenshots in memory**: Screenshots are stored in memory (not localStorage) to avoid quota issues.
-- **Voice transcripts in memory**: Voice transcripts stored in memory, included in reports when generated.
-- **Element annotations in memory**: Element annotations and draw regions stored in memory via annotation-store.ts.
-- **Compact toolbar replaces old button**: The old 48px floating bug button is replaced by a vertical rail toolbar.
-- **Mode banners**: Annotate and Draw modes show a purple gradient banner at the top of the page with instructions and exit controls.
-- **Escape key exits modes**: Both annotate and draw modes can be exited with the Escape key.
-
-## Uninstall
-```bash
-npm uninstall tracebug-sdk
-```
-Then remove the `TraceBug.init()` call from your app's entry file.
-
-## Testing the Example Bug
-1. Go to /vendor
-2. Click "Edit"
-3. Change Status to "Inactive"
-4. Click "Update" → triggers TypeError
-5. Click bug button to see report with reproduction steps
+For the detailed, file-by-file internals (offscreen recording protocol, storage
+batching, action-chip synthesis, fingerprinting, cache invalidation), continue to
+[`docs/architecture.md`](docs/architecture.md).

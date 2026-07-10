@@ -30,7 +30,7 @@ These are non-negotiable. PRs that break these will be rejected:
 - **Self-filtering** — all UI must be inside `#tracebug-root` with `data-tracebug` attributes
 - **Z-index max** — all UI at `z-index: 2147483647`, appended to `<html>` not `<body>`
 - **Error boundary** — every collector handler wrapped in try/catch. Never break the host app.
-- **1 runtime dependency** — only `html2canvas`. Justify any addition.
+- **Minimal runtime dependencies** — `html2canvas`, `axe-core`, and `rrweb`, all **lazy-loaded** so the core bundle stays small. Justify any addition.
 - **CSP-safe** — no string-based script injection. Use `createElement` and event listeners.
 - **Theme variables** — use `var(--tb-*)` CSS custom properties for all colors
 - **Framework agnostic** — vanilla DOM only for SDK UI (no React/Vue/Angular)

@@ -2,9 +2,9 @@
 
 > **Purpose:** the current, verified state of the project — what ships now (Phase 1), what is built but disabled (Phase 2), and everything changed in the July 2026 hardening pass. Share this with any agent or reviewer who needs to cross-verify the product flow against the code.
 >
-> **Last updated:** 2026-07-02 · branch `feature/cloud-sharing` · version **1.4.0**
+> **Last updated:** 2026-07-10 · version **1.6.0** (CHANGELOG has an `[Unreleased]` section on top)
 >
-> Companion docs: [PROJECT-CONTEXT.md](PROJECT-CONTEXT.md) (deep orientation, May 2026 — note its cloud section describes code that is now UI-disabled), [WEBSITE-STATUS.md](WEBSITE-STATUS.md) (marketing site + portal: routes, messaging rules, deploy chain), [SHARE-PORTAL-PLAN.md](SHARE-PORTAL-PLAN.md) (cloud portal design spec), [../ARCHITECTURE.md](../ARCHITECTURE.md) (module-level architecture).
+> Companion docs: [WEBSITE-STATUS.md](WEBSITE-STATUS.md) (marketing site + portal: routes, messaging rules, deploy chain), [../ARCHITECTURE.md](../ARCHITECTURE.md) (system architecture), [architecture.md](architecture.md) (file-by-file internals).
 
 ---
 
@@ -22,7 +22,7 @@ TraceBug is a local-first bug-reporting tool for QA and developers. It captures 
 
 ---
 
-## 2. Phase 1 — launchable now (v1.4.0, offline/local)
+## 2. Phase 1 — launchable now (v1.6.0, offline/local)
 
 Everything below is live in the shipping UI and verified working:
 
@@ -36,11 +36,11 @@ Everything below is live in the shipping UI and verified working:
 - **Auto-scanner / debugging assistant**: a11y scan (axe-core), error-pattern matching, root-cause hints, severity rules, live error capture prompt.
 - **Redaction (defense in depth)**: sensitive storage keys/values masked at capture (`storage-capture.ts`); network/console token scrubbing; pre-upload sanitizer for the future cloud path (`sanitize/cloud-upload.ts`). Screenshots/video are **not** scanned — visual data is the tester's responsibility.
 - **CLI**: `npx tracebug init` — framework detection + setup snippet (React, Vue, Angular, Next.js, Svelte, Nuxt, vanilla).
-- **Freemium**: plan gates implemented but **OFF** (`PLANS_LIVE = false`) — everything free at launch. See `docs/freemium.md` and `docs/MONETIZATION-PLAN.md`.
+- **Freemium**: plan gates implemented but **OFF** (`PLANS_LIVE = false`) — everything free at launch. See `docs/freemium.md`.
 
 ## 3. Phase 2 — built but intentionally disabled (cloud sharing)
 
-All code exists and compiles; the **UI entry points are commented out with `PHASE2-CLOUD` markers**. Nothing cloud-related runs for end users in v1.4.0.
+All code exists and compiles; the **UI entry points are commented out with `PHASE2-CLOUD` markers**. Nothing cloud-related runs for end users in v1.6.0.
 
 **What exists:**
 
@@ -93,7 +93,7 @@ All code exists and compiles; the **UI entry points are commented out with `PHAS
 - CI (`.github/workflows/ci.yml`) now runs **lint and tests** in addition to typecheck + build + bundle-size checks.
 - `package.json`: `engines: node >=18` added. (`sideEffects: false` deliberately **not** added — the SDK registers module-level listeners.)
 
-**Verified state:** `tsc --noEmit` clean · ESLint 0 errors (174 pre-existing `any` warnings) · **98/98 tests pass** (8 files) · all builds succeed. Bundle sizes: ESM ~70 KB, CJS ~77 KB, extension IIFE ~2.2 MB (includes axe-core; html2canvas stubbed).
+**Verified state:** `tsc --noEmit` clean · **155/155 tests pass** (13 files) · all builds succeed. Bundle sizes: ESM ~70 KB, CJS ~77 KB, extension IIFE ~3.1 MB (includes axe-core + rrweb recorder/replayer; html2canvas stubbed).
 
 ## 5. Launch blockers & required ops actions
 
