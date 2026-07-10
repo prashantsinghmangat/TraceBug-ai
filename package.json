@@ -35,15 +35,17 @@
     "dist"
   ],
   "scripts": {
+    "gen:rrweb": "node scripts/gen-rrweb-runtime.mjs",
+    "prebuild": "npm run gen:rrweb",
     "build": "tsup",
-    "build:all": "tsup && echo [OK] npm package: dist/ && echo [OK] Chrome extension: tracebug-extension/tracebug-sdk.js",
-    "build:cli": "tsup && node -e \"require('fs').copyFileSync('dist/bin.mjs','packages/tracebug/bin.mjs');console.log('[OK] CLI package: packages/tracebug/bin.mjs')\"",
-    "build:example": "tsup && cd example-app && npm install && echo [OK] Example app updated",
-    "build:ext": "tsup && node tracebug-extension/build/build-ext.mjs",
+    "build:all": "npm run gen:rrweb && tsup && echo [OK] npm package: dist/ && echo [OK] Chrome extension: tracebug-extension/tracebug-sdk.js",
+    "build:cli": "npm run gen:rrweb && tsup && node -e \"require('fs').copyFileSync('dist/bin.mjs','packages/tracebug/bin.mjs');console.log('[OK] CLI package: packages/tracebug/bin.mjs')\"",
+    "build:example": "npm run gen:rrweb && tsup && cd example-app && npm install && echo [OK] Example app updated",
+    "build:ext": "npm run gen:rrweb && tsup && node tracebug-extension/build/build-ext.mjs",
     "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",
-    "dev": "tsup --watch",
-    "prepare": "tsup",
+    "dev": "npm run gen:rrweb && tsup --watch",
+    "prepare": "npm run gen:rrweb && tsup",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -115,6 +117,7 @@
   },
   "dependencies": {
     "axe-core": "^4.11.4",
-    "html2canvas": "1.4.1"
+    "html2canvas": "1.4.1",
+    "rrweb": "^2.1.0"
   }
 }

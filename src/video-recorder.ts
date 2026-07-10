@@ -18,6 +18,8 @@
 // so they can be synced to the video on playback in the Quick Bug modal.
 // No backend, no API keys.
 
+import { startDomRecording, stopDomRecording, snapshotDomEvents } from "./rrweb-recorder";
+
 export interface VideoComment {
   /** Milliseconds since recording started. */
   offsetMs: number;
@@ -39,6 +41,9 @@ export interface VideoRecording {
   comments: VideoComment[];
   /** Wall-clock timestamp of when recording started. */
   startedAt: number;
+  /** rrweb DOM-replay event stream captured for this recording (in-page
+   *  transport). Embedded in the .html export in place of the base64 video. */
+  rrwebEvents?: unknown[];
 }
 
 // ── Shadow state (read by sync getters in both transports) ───────────────
@@ -271,6 +276,9 @@ async function _startVideoRecordingInner(options?: {
     _capturesTaken = 0;
     _comments = [];
     _mimeType = "video/webm";
+    // Capture the DOM replay in the page context alongside the offscreen video.
+    // Best-effort + lazy: no-op if rrweb is unavailable (stubbed in the ext bundle).
+    void startDomRecording();
     // Same 2-min cloud-share cap as the in-page path. Previously the extension
     // transport had NO client cap, so a long recording would silently blow past
     // the 50 MB cloud-upload limit. Cleared by finalizeStop on any stop.
@@ -286,8 +294,9 @@ export function stopVideoRecording(): Promise<VideoRecording | null> {
   if (!_active) return Promise.resolve(null);
   if (isExtensionContext()) {
     return rpcCall<any>("tb:rec:stop").then((rec) => {
+      const domEvents = stopDomRecording();
       const recording = rec && !rec.error ? hydrateRecording(rec) : null;
-      if (recording) revokeAndStash(recording);
+      if (recording) { recording.rrwebEvents = domEvents; revokeAndStash(recording); }
       finalizeStop(recording);
       return recording;
     }).catch(() => {
@@ -304,6 +313,7 @@ export function captureRollingBuffer(): Promise<VideoRecording | null> {
     return rpcCall<any>("tb:rec:capture").then((rec) => {
       if (!rec || rec.error) return null;
       const recording = hydrateRecording(rec);
+      recording.rrwebEvents = snapshotDomEvents();
       revokeAndStash(recording);
       _capturesTaken += 1;
       // Comments reset for the next capture (mirroring offscreen behavior).
@@ -348,6 +358,7 @@ export function abortVideoRecording(): void {
     _stream = null;
     _chunks = [];
   }
+  stopDomRecording();
   _active = false;
   _comments = [];
   _capturesTaken = 0;
@@ -420,6 +431,7 @@ export function wireAutoStopListener(): void {
   if (_autoStopWired || typeof window === "undefined") return;
   _autoStopWired = true;
   window.addEventListener("tracebug-rec-auto-stopped", async (e: Event) => {
+    const domEvents = stopDomRecording();
     const detail = (e as CustomEvent).detail;
     const recRaw = detail?.recording;
     let recording = recRaw ? hydrateRecording(recRaw) : null;
@@ -433,7 +445,7 @@ export function wireAutoStopListener(): void {
         if (isUsableRecording(pulled)) recording = pulled;
       } catch {}
     }
-    if (recording && isUsableRecording(recording)) revokeAndStash(recording);
+    if (recording && isUsableRecording(recording)) { recording.rrwebEvents = domEvents; revokeAndStash(recording); }
     finalizeStop(recording);
     _onAutoStop?.(recording);
   });
@@ -585,6 +597,10 @@ async function startVideoRecordingInPage(
   _pausedMs = 0;
   _pausedAt = 0;
 
+  // Capture the DOM replay stream alongside the video. Lazy + best-effort —
+  // falls back silently to video-only if rrweb can't load.
+  void startDomRecording();
+
   // Page-reload safety net: warn the user, and finalize chunks on pagehide.
   installInPageReloadGuards();
 
@@ -625,6 +641,7 @@ function stopVideoRecordingInPage(): Promise<VideoRecording | null> {
         sizeBytes: blob.size,
         comments,
         startedAt,
+        rrwebEvents: stopDomRecording(),
       };
 
       revokeAndStash(recording);
@@ -682,6 +699,7 @@ function captureRollingBufferInPage(): Promise<VideoRecording | null> {
         sizeBytes: blob.size,
         comments: commentsCopy,
         startedAt,
+        rrwebEvents: snapshotDomEvents(),
       };
 
       revokeAndStash(recording);
@@ -746,6 +764,10 @@ function finalizeStop(_recording: VideoRecording | null): void {
   _capturesTaken = 0;
   _startedAt = 0;
   _mode = "rolling";
+  // Safety net: guarantee the DOM recorder is torn down on every stop path,
+  // even ones that didn't attach events (idempotent — returns [] if already
+  // stopped). Prevents a leaked rrweb observer after an aborted/failed stop.
+  stopDomRecording();
   // Clear duration-cap timers so a stop-then-restart sequence doesn't fire
   // stale warnings on the new recording.
   clearDurationCapTimers();

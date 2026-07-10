@@ -180,6 +180,7 @@ export function buildReport(
     sizeBytes: lastVideo.sizeBytes,
     comments: lastVideo.comments.slice(),
     startedAt: lastVideo.startedAt,
+    rrwebEvents: lastVideo.rrwebEvents, // DOM replay stream — embedded by the .html exporter
   } : undefined;
 
   // Auto-generate title

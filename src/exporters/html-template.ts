@@ -42,6 +42,16 @@ export interface BundlePayload {
     startedAt: number;
     comments: Array<{ offsetMs: number; text: string }>;
   };
+  /** rrweb DOM-replay event stream. When present (with the player runtime
+   *  inlined), the export renders an interactive DOM replay instead of the
+   *  base64 video — KB instead of MB, and inspectable. */
+  rrwebEvents?: unknown[];
+  /** gzip(JSON of rrwebEvents) → base64. The DOM stream is repetitive text and
+   *  compresses ~8–12×, so when the exporting browser has `CompressionStream`
+   *  we ship this instead of the raw `rrwebEvents` array — the whole file drops
+   *  ~4×. The viewer inflates it with the native `DecompressionStream` at load.
+   *  `rrwebEvents` is the uncompressed fallback for old browsers on either end. */
+  rrwebEventsGz?: string;
   // Tabbed-viewer data — populated in html-replay.ts from BugReport.
   info?: Array<{ k: string; v: string; i?: string }>;
   consoleErrors?: Array<{ message: string; stack?: string; timestamp: number }>;
@@ -99,8 +109,30 @@ export interface BundlePayload {
  *
  * Output is one self-contained `.html` file. Opens offline. Zero requests.
  */
-export function buildReplayHtml(payload: BundlePayload): string {
+export function buildReplayHtml(
+  payload: BundlePayload,
+  extras?: { rrwebJs?: string; rrwebCss?: string },
+): string {
   const dataJson = JSON.stringify(payload).replace(/<\/script>/gi, "<\\/script>");
+  // DOM-replay export: inline rrweb's core Replayer runtime + its CSS, and add
+  // the replay stage + a small control bar. Only active when the exporter passed
+  // both the events (in payload) and the runtime (in extras).
+  const hasRrwebData =
+    (Array.isArray(payload.rrwebEvents) && payload.rrwebEvents.length > 0) ||
+    (typeof payload.rrwebEventsGz === "string" && payload.rrwebEventsGz.length > 0);
+  const hasRrweb = hasRrwebData && !!extras?.rrwebJs;
+  const rrwebCssTag = hasRrweb && extras?.rrwebCss ? `<style>${extras.rrwebCss}</style>` : "";
+  const rrwebJsTag = hasRrweb && extras?.rrwebJs ? `<script>${extras.rrwebJs}</script>` : "";
+  const rrwebBlock = hasRrweb
+    ? `<div class="tb-vpreview tb-vrrweb" id="rrweb-wrap" style="display:none">
+      <div id="rrweb-root" class="tb-vrrweb-stage"></div>
+      <div id="rrweb-ctrl" class="tb-vrrweb-ctrl" style="display:none">
+        <button id="rr-play" class="tb-vrrweb-btn" aria-label="Play / pause replay (Space)">▶</button>
+        <input id="rr-seek" class="tb-vrrweb-seek" type="range" min="0" max="1000" value="0" aria-label="Seek replay" />
+        <span id="rr-time" class="tb-vrrweb-time">0:00 / 0:00</span>
+      </div>
+    </div>`
+    : "";
   // The renderer below is written defensively — it reads `tb-data` and renders
   // the report + scrubber + screenshot preview. Self-contained, no externals.
   return `<!DOCTYPE html>
@@ -110,6 +142,18 @@ export function buildReplayHtml(payload: BundlePayload): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>TraceBug Replay — ${escapeHtml(payload.meta.title)}</title>
 <style>${REPLAY_CSS}</style>
+${rrwebCssTag}
+<style>
+.tb-vrrweb{display:block;padding:10px;min-height:0}
+.tb-vrrweb-stage{position:relative;width:100%;overflow:hidden;background:#fff;border:1px solid var(--tb-border);border-radius:var(--tb-radius-sm)}
+.tb-vrrweb-stage .replayer-wrapper{position:relative;transform-origin:top left}
+.tb-vrrweb-stage iframe{border:0;background:#fff}
+.tb-vrrweb-ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
+.tb-vrrweb-btn{background:var(--tb-accent,#7C5CFF);color:#fff;border:0;border-radius:6px;width:36px;height:30px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0}
+.tb-vrrweb-btn:hover{filter:brightness(1.08)}
+.tb-vrrweb-seek{flex:1;accent-color:var(--tb-accent,#7C5CFF);cursor:pointer}
+.tb-vrrweb-time{font-family:var(--tb-mono);font-size:12px;color:var(--tb-text-3);min-width:92px;text-align:right;flex-shrink:0}
+</style>
 </head>
 <body>
 <header class="tb-vh">
@@ -127,6 +171,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
 <main class="tb-vmain">
   <section class="tb-vleft">
     <h2 class="tb-vh2">Replay</h2>
+    ${rrwebBlock}
     <div class="tb-vpreview" id="preview-wrap">
       <video id="video" controls playsinline style="display:none"></video>
       <img id="ssimg" alt="Session screenshot" />
@@ -191,6 +236,7 @@ export function buildReplayHtml(payload: BundlePayload): string {
   </div>
 </div>
 <script id="tb-data" type="application/json">${dataJson}</script>
+${rrwebJsTag}
 <script>
 ${REPLAY_RUNTIME}
 </script>
@@ -219,58 +265,60 @@ const REPLAY_CSS = `
  * prefers-color-scheme auto-switch was removed in favor of this. */
 :root {
   --tb-bg: #ffffff;
-  --tb-bg-2: #fafafa;
-  --tb-bg-3: #ffffff;
-  --tb-text: #09090b;
-  --tb-text-2: #52525b;
-  --tb-text-3: #a1a1aa;
+  --tb-bg-2: #F8F9FB;
+  --tb-bg-3: #F1F3F7;
+  --tb-text: #0C0F17;
+  --tb-text-2: #505869;
+  --tb-text-3: #868E9F;
   --tb-accent: #6D4AFF;
   --tb-accent-2: #5B3FE6;
   --tb-accent-soft: #6D4AFF14;
-  --tb-border: #e4e4e7;
-  --tb-border-sub: #f4f4f5;
-  --tb-border-hover: #d4d4d8;
-  --tb-error: #dc2626;
+  --tb-ring: rgba(109, 74, 255, 0.55);
+  --tb-border: #EAECF1;
+  --tb-border-sub: #F1F3F7;
+  --tb-border-hover: #DBDFE6;
+  --tb-error: #DC2626;
   --tb-error-bg: #fef2f2;
-  --tb-warning: #d97706;
+  --tb-warning: #D97706;
   --tb-warning-bg: #fffbeb;
-  --tb-success: #059669;
+  --tb-success: #16A34A;
   --tb-success-bg: #ecfdf5;
   --tb-info: #2563eb;
   --tb-info-bg: #eff6ff;
-  --tb-code-bg: #f4f4f5;
+  --tb-code-bg: #F1F3F7;
   --tb-code-text: #27272a;
   --tb-code-tag: #be185d;
   --tb-code-attr-name: #a16207;
   --tb-code-attr-val: #15803d;
-  --tb-radius-sm: 6px;
-  --tb-radius-md: 10px;
-  --tb-shadow-md: 0 4px 16px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
+  --tb-radius-sm: 8px;
+  --tb-radius-md: 12px;
+  --tb-shadow-md: 0 4px 16px rgba(16,24,40,0.08), 0 2px 4px rgba(16,24,40,0.04);
   --tb-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --tb-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace;
 }
 :root[data-theme="dark"], html[data-theme="dark"] body {
-  --tb-bg: #0a0a0c;
-  --tb-bg-2: #18181b;
-  --tb-bg-3: #27272a;
-  --tb-text: #fafafa;
-  --tb-text-2: #a1a1aa;
-  --tb-text-3: #71717a;
+  --tb-bg: #0B0D10;
+  --tb-bg-2: #11151A;
+  --tb-bg-3: #161B22;
+  --tb-text: #E6EDF3;
+  --tb-text-2: #94A3B8;
+  --tb-text-3: #64748B;
   --tb-accent: #7C5CFF;
-  --tb-accent-2: #a78bfa;
+  --tb-accent-2: #9B7DFF;
   --tb-accent-soft: #7C5CFF1f;
-  --tb-border: #27272a;
-  --tb-border-sub: #1f1f23;
-  --tb-border-hover: #3f3f46;
-  --tb-error: #ef4444;
-  --tb-error-bg: #ef44441a;
-  --tb-warning: #f59e0b;
-  --tb-warning-bg: #f59e0b1a;
-  --tb-success: #10b981;
-  --tb-success-bg: #10b9811a;
+  --tb-ring: rgba(124, 92, 255, 0.55);
+  --tb-border: #1F2630;
+  --tb-border-sub: #161B22;
+  --tb-border-hover: #2A3441;
+  --tb-error: #FF5D73;
+  --tb-error-bg: #FF5D731a;
+  --tb-warning: #F59E0B;
+  --tb-warning-bg: #F59E0B1a;
+  --tb-success: #22C55E;
+  --tb-success-bg: #22C55E1a;
   --tb-info: #3b82f6;
   --tb-info-bg: #3b82f61a;
-  --tb-code-bg: #09090b;
+  --tb-code-bg: #0B0D10;
   --tb-code-text: #d4d4d8;
   --tb-code-tag: #f472b6;
   --tb-code-attr-name: #fcd34d;
@@ -281,6 +329,14 @@ const REPLAY_CSS = `
 /* ── Base ─────────────────────────────────────────── */
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--tb-bg); color: var(--tb-text); font-family: var(--tb-font); -webkit-font-smoothing: antialiased; }
+/* Focus ring — shadcn new-york (ring-2 ring-primary/60 ring-offset-2). Keyboard
+   focus only; matches the injected widget's ring for a consistent product feel. */
+button:focus-visible, a:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--tb-bg), 0 0 0 4px var(--tb-ring);
+  border-radius: var(--tb-radius-sm);
+}
 body { min-height: 100vh; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
@@ -1061,6 +1117,28 @@ const REPLAY_RUNTIME = `(function(){
   var playOverlay = document.getElementById("play-overlay");
   var playOverlaySub = document.getElementById("play-overlay-sub");
   var hasVideo = !!(data.video && data.video.dataUrl);
+  var hasReplayer = !!(window.rrweb && window.rrweb.Replayer);
+  var hasRrwebData = !!((data.rrwebEvents && data.rrwebEvents.length) || data.rrwebEventsGz);
+  var hasRrweb = hasRrwebData && hasReplayer;
+
+  // Inflate the gzip+base64 DOM stream using the browser's native
+  // DecompressionStream (no bundled library, works offline from file://).
+  // Returns the parsed rrweb event array. Rejects on any unsupported/failed
+  // path so the caller can fall back to the screenshot preview.
+  function inflateRrweb(b64) {
+    return new Promise(function (resolve, reject) {
+      try {
+        if (typeof DecompressionStream === "undefined" || typeof Response === "undefined")
+          return reject(new Error("DecompressionStream unavailable"));
+        var bin = atob(b64), len = bin.length, bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+        var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+        new Response(stream).text().then(function (txt) {
+          resolve(JSON.parse(txt));
+        }).catch(reject);
+      } catch (e) { reject(e); }
+    });
+  }
 
   function formatBytes(b) {
     if (!b) return "";
@@ -1069,7 +1147,104 @@ const REPLAY_RUNTIME = `(function(){
     return (b / (1024 * 1024)).toFixed(1) + " MB";
   }
 
-  if (hasVideo) {
+  // Mount rrweb's core Replayer over the DOM event stream, wrapped in our own
+  // small control bar (play/pause + seek). The Replayer renders the recorded DOM
+  // into an iframe at its original size, so we scale it to fit the stage width.
+  // On any failure we fall back to the screenshot/video preview.
+  function mountRrwebPlayer() {
+    try {
+      var R = window.rrweb && window.rrweb.Replayer;
+      var wrap = document.getElementById("rrweb-wrap");
+      var stage = document.getElementById("rrweb-root");
+      var pv = document.getElementById("preview-wrap");
+      if (!R || !wrap || !stage) throw new Error("replayer/stage missing");
+      if (pv) pv.style.display = "none";
+      wrap.style.display = "block";
+      // rrweb owns the timeline now — hide the legacy event scrubber that only
+      // drove the video/screenshot preview.
+      var oldScrub = document.getElementById("scrubber");
+      if (oldScrub) oldScrub.style.display = "none";
+
+      var evs = data.rrwebEvents, recW = 1280, recH = 800;
+      for (var i = 0; i < evs.length; i++) {
+        var ev = evs[i];
+        if (ev && ev.type === 4 && ev.data && ev.data.width) { recW = ev.data.width; recH = ev.data.height || recH; break; }
+      }
+
+      var replayer = new R(evs, { root: stage, mouseTail: false, skipInactive: true, speed: 1 });
+      var meta = replayer.getMetaData();
+      var total = Math.max(1, meta.totalTime || (meta.endTime - meta.startTime) || 1);
+
+      // Scale the recorded viewport down to the stage width.
+      function fit() {
+        var wr = stage.querySelector(".replayer-wrapper");
+        if (!wr) return;
+        var avail = stage.clientWidth || wrap.clientWidth || 720;
+        var scale = Math.min(1, avail / recW);
+        wr.style.transform = "scale(" + scale + ")";
+        stage.style.height = Math.round(recH * scale) + "px";
+      }
+      fit();
+      window.addEventListener("resize", fit);
+
+      var ctrl = document.getElementById("rrweb-ctrl");
+      var playBtn = document.getElementById("rr-play");
+      var seek = document.getElementById("rr-seek");
+      var timeEl = document.getElementById("rr-time");
+      if (ctrl) ctrl.style.display = "flex";
+      var playing = false;
+      function fmt(ms) { var s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
+      function setBtn(p) { playing = p; if (playBtn) playBtn.textContent = p ? "❚❚" : "▶"; }
+      function loop() {
+        if (!playing) return;
+        var t = replayer.getCurrentTime();
+        if (t >= total) { if (seek) seek.value = "1000"; if (timeEl) timeEl.textContent = fmt(total) + " / " + fmt(total); setBtn(false); return; }
+        if (seek) seek.value = String(Math.round(t / total * 1000));
+        if (timeEl) timeEl.textContent = fmt(t) + " / " + fmt(total);
+        requestAnimationFrame(loop);
+      }
+      if (timeEl) timeEl.textContent = "0:00 / " + fmt(total);
+      if (playBtn) playBtn.addEventListener("click", function () {
+        if (playing) { replayer.pause(); setBtn(false); }
+        else { var off = seek ? (seek.value / 1000) * total : 0; if (off >= total) off = 0; replayer.play(off); setBtn(true); loop(); }
+      });
+      if (seek) seek.addEventListener("input", function () {
+        var t = (seek.value / 1000) * total;
+        replayer.pause(); setBtn(false); replayer.play(t); replayer.pause();
+        if (timeEl) timeEl.textContent = fmt(t) + " / " + fmt(total);
+      });
+      // Bridge so Console/Network/Events "click to seek" can drive the replay.
+      window.__rrwebSeekAbs = function (absTs) {
+        var off = absTs - meta.startTime; if (off < 0) off = 0; if (off > total) off = total;
+        replayer.pause(); replayer.play(off); replayer.pause(); setBtn(false);
+        if (seek) seek.value = String(Math.round(off / total * 1000));
+        if (timeEl) timeEl.textContent = fmt(off) + " / " + fmt(total);
+      };
+    } catch (e) {
+      hasRrweb = false;
+      var w2 = document.getElementById("rrweb-wrap"); if (w2) w2.style.display = "none";
+      var p2 = document.getElementById("preview-wrap"); if (p2) p2.style.display = "";
+      if (screenshots.length > 0) { img.src = screenshots[0].dataUrl; img.style.display = "block"; buildScreenshotGallery(); }
+      if (typeof console !== "undefined") console.warn("[TraceBug] rrweb replay mount failed:", e && e.message);
+    }
+  }
+
+  if (hasRrweb && data.rrwebEvents && data.rrwebEvents.length) {
+    mountRrwebPlayer();
+  } else if (hasRrweb && data.rrwebEventsGz) {
+    // Compressed stream: inflate off the raw base64, then mount. Cheap
+    // (~10ms for a few hundred KB) so no spinner; on failure fall back.
+    inflateRrweb(data.rrwebEventsGz).then(function (evs) {
+      data.rrwebEvents = evs;
+      mountRrwebPlayer();
+    }).catch(function (e) {
+      hasRrweb = false;
+      if (typeof console !== "undefined") console.warn("[TraceBug] replay decompress failed:", e && e.message);
+      var pv = document.getElementById("preview-wrap"); if (pv) pv.style.display = "";
+      if (screenshots.length > 0) { img.src = screenshots[0].dataUrl; img.style.display = "block"; buildScreenshotGallery(); }
+      else { img.style.display = "none"; emptyMsg.style.display = "block"; }
+    });
+  } else if (hasVideo) {
     // Show poster (best screenshot) + Play overlay; defer base64 decode.
     if (screenshots.length > 0) {
       img.src = screenshots[0].dataUrl;
@@ -1094,12 +1269,17 @@ const REPLAY_RUNTIME = `(function(){
     emptyMsg.style.display = "block";
   }
 
-  // Screenshot gallery — with no video, show ALL screenshots as clickable
-  // thumbnails and hide the scrubber. For a screenshots-only report the
-  // timeline just spans the minutes between captures, which isn't useful;
+  // Screenshot gallery — with no video/DOM-replay, show ALL screenshots as
+  // clickable thumbnails and hide the scrubber. For a screenshots-only report
+  // the timeline just spans the minutes between captures, which isn't useful;
   // the user wants to browse the shots. Clicking a thumb shows it full-size.
-  var ssGallery = document.getElementById("ss-gallery");
-  if (!hasVideo && screenshots.length > 0 && ssGallery) {
+  // Extracted to a function (idempotent via data-built) so the rrweb-failure
+  // fallback paths can also render the full gallery, not just screenshots[0].
+  function buildScreenshotGallery() {
+    var ssGallery = document.getElementById("ss-gallery");
+    if (!ssGallery || screenshots.length === 0) return;
+    if (ssGallery.getAttribute("data-built") === "1") return;
+    ssGallery.setAttribute("data-built", "1");
     for (var gi = 0; gi < screenshots.length; gi++) {
       (function (s, idx) {
         var t = document.createElement("button");
@@ -1125,6 +1305,7 @@ const REPLAY_RUNTIME = `(function(){
     var scEl = document.getElementById("scrubber");
     if (scEl) scEl.style.display = "none";
   }
+  if (!hasVideo && !hasRrweb) buildScreenshotGallery();
 
   // Decode the base64 data URL into a Blob URL only when the user actually
   // wants to play. Keeps initial load fast.
@@ -1361,6 +1542,9 @@ const REPLAY_RUNTIME = `(function(){
     timeEl.textContent = fmtElapsed(current - startedAt) + " / " + fmtElapsed(span);
   }
   function scrubberSeek(ts) {
+    // When the DOM replay is active, clicks on Console/Network/Events rows (and
+    // the legacy scrubber) drive the rrweb replay to that moment.
+    if (hasRrweb && window.__rrwebSeekAbs) { try { window.__rrwebSeekAbs(ts); } catch (_e) {} }
     current = Math.max(startedAt, Math.min(endedAt, ts));
     renderHandle();
     // NOTE: deliberately does NOT re-arm the error auto-pause. Every drag /

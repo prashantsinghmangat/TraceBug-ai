@@ -21,6 +21,40 @@ const stubHtml2Canvas = {
   },
 };
 
+// Same treatment for rrweb: the extension will record DOM in the page context
+// via its own path (not this content-script bundle), so inlining rrweb's
+// recorder here is dead weight. rrweb-recorder.ts's loadRrweb() sees a null
+// `record` export and returns false → DOM capture no-ops and screen recording
+// takes over. No feature loss in the extension.
+const stubRrweb = {
+  name: "stub-rrweb",
+  setup(build: { onResolve: Function; onLoad: Function }) {
+    build.onResolve({ filter: /^rrweb$/ }, () => ({
+      path: "rrweb",
+      namespace: "tb-stub-rrweb",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "tb-stub-rrweb" }, () => ({
+      contents: "export const record = null; export default { record: null };",
+      loader: "js",
+    }));
+  },
+};
+
+// The ~137 KB inlined rrweb-player runtime is only needed to *generate* a
+// DOM-replay .html. IIFE can't code-split, so without this it would inline into
+// the content-script bundle as dead weight (the extension never produces rrweb
+// exports — the recorder above is stubbed). Empty it out; buildReplayHtml() then
+// sees no player JS and keeps the video/screenshot path.
+const stubRrwebRuntime = {
+  name: "stub-rrweb-runtime",
+  setup(build: { onLoad: Function }) {
+    build.onLoad({ filter: /rrweb-runtime\.generated\.ts$/ }, () => ({
+      contents: "export const RRWEB_JS = ''; export const RRWEB_CSS = '';",
+      loader: "js",
+    }));
+  },
+};
+
 export default defineConfig([
   // ── Main SDK build (npm package) ──────────────────────────────────────
   // splitting: true so that `await import("html2canvas")` in screenshot.ts
@@ -67,6 +101,13 @@ export default defineConfig([
   // IIFE can't split chunks, so esbuild inlines every dynamic import. We stub
   // html2canvas (unused in the extension — see stubHtml2Canvas above) to drop
   // ~600KB. axe-core stays: it powers the a11y auto-scanner, an actual feature.
+  //
+  // rrweb (recorder) and the inlined replay runtime are NOT stubbed here: the
+  // extension records DOM in the page context and embeds the same DOM-replay in
+  // its .html exports as the npm SDK. This adds rrweb to the content-script
+  // bundle (~0.5 MB); a future optimization can lazy-load it from a packaged
+  // web-accessible resource instead of inlining. (stubRrweb / stubRrwebRuntime
+  // remain defined above so this is a one-line revert if needed.)
   {
     entry: { "tracebug-sdk": "src/index.ts" },
     format: ["iife"],
