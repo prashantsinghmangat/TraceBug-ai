@@ -32,6 +32,8 @@ import {
   getActiveSessionId,
   setActiveSessionId,
   clearActiveSessionId,
+  getActiveCaptureMode,
+  setActiveCaptureMode,
   generateSessionId,
   getOrCreateSession,
   appendEvent,
@@ -455,26 +457,43 @@ class TraceBugSDK {
             this._remountRecordingHud();
             this._attachConsoleCollectors();
           } else if (restoredSessionId && this.sessionId === restoredSessionId) {
-            // Active-session flag survived but the recording didn't —
-            // common when the captured tab navigated and Chrome ended the
-            // share. Try to recover whatever the offscreen managed to
-            // finalize and open the ticket modal so the user doesn't lose
-            // the recording.
-            clearActiveSessionId();
-            this.sessionId = null;
-            this.recording = false;
-            updateRecordingState(false);
-            _restoreLastRecording().then((rec) => {
-              if (rec) this._handleAutoStop(rec);
-            }).catch(() => {});
+            // No live offscreen recording — but WHY depends on the mode.
+            // Anything that isn't explicitly "events" (i.e. "video", or a null
+            // mode from a session armed before this feature shipped) is treated
+            // as a video session whose tab-share died — the safe pre-feature
+            // behavior. Only an explicit "events" session resumes.
+            if (getActiveCaptureMode() !== "events") {
+              // A video session whose tab-share Chrome ended on navigation.
+              // Recover whatever the offscreen finalized and open the ticket
+              // so the user doesn't lose the recording.
+              clearActiveSessionId();
+              this.sessionId = null;
+              this.recording = false;
+              updateRecordingState(false);
+              _restoreLastRecording().then((rec) => {
+                if (rec) this._handleAutoStop(rec);
+              }).catch(() => {});
+            } else {
+              // Event-only tracking (no video to die). The session ID + events
+              // survived the navigation and `recording` is already true from
+              // init, so the collectors keep capturing on this new page. Keep
+              // the console wrappers attached, backfill the network resources
+              // this new page loaded before the SDK re-injected, and refresh
+              // the toolbar's "tracking" state — DON'T tear the session down.
+              this._attachConsoleCollectors();
+              if (this._emit) drainPerformanceNetwork(this._emit);
+              updateRecordingState(true);
+            }
           }
         }).catch(() => {});
       }
 
-      // Re-emit session:start only when restoring an in-flight session
-      // (i.e., a recording survived a reload). Fresh starts emit from
-      // _startActiveSession() instead.
-      if (this.sessionId) {
+      // Re-emit session:start only when restoring a VIDEO session that survived
+      // a reload (hooks re-attach to it). Event-only sessions already emitted
+      // session:start when armed and simply continue across navigations —
+      // re-emitting on every page load would spam hooks with duplicate starts.
+      // Fresh starts emit from _startActiveSession() instead.
+      if (this.sessionId && getActiveCaptureMode() !== "events") {
         emitHook("session:start", this.sessionId);
       }
 
@@ -514,6 +533,10 @@ class TraceBugSDK {
     this.sessionId = id;
     this.recording = true;
     setActiveSessionId(id);
+    // Default arming is event-only capture. If a screen recording starts for
+    // this session, the video path upgrades this to "video". The mode is what
+    // lets a page navigation resume event capture instead of tearing it down.
+    setActiveCaptureMode("events");
 
     // Persist the session record immediately into the shared cache so
     // getAllSessions() returns it even before the first event fires.

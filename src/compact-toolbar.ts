@@ -13,7 +13,7 @@ import { captureScreenshot, getScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
 import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
-import { getAllSessions, clearAllSessions as clearAllSessionsFn, deleteSession } from "./storage";
+import { getAllSessions, clearAllSessions as clearAllSessionsFn, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId } from "./storage";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
@@ -228,6 +228,20 @@ export function mountCompactToolbar(
   _trackBtn = trackBtn;
   toolbar.appendChild(trackBtn);
 
+  // Resume the tracking UI after a page navigation: if an event-only session
+  // is still armed (the SDK keeps capturing across the load), show the green
+  // stop-square so the button reflects reality and a click stops correctly.
+  // Video sessions are excluded — the record button owns those.
+  try {
+    if (!_isTracking && getActiveSessionId() && getActiveCaptureMode() === "events") {
+      _isTracking = true;
+      trackBtn.innerHTML = _trackIconSvg(true);
+      trackBtn.classList.add("tb-active");
+      trackBtn.style.color = "var(--tb-success, #22c55e)";
+      trackBtn.title = "Stop tracking & file ticket";
+    }
+  } catch {}
+
   // View saved tickets — opens the offline Saved Tickets popover.
   toolbar.appendChild(_divider());
   toolbar.appendChild(_createToolbarBtn(
@@ -249,7 +263,14 @@ export function mountCompactToolbar(
       try {
         const tb = (window as unknown as { TraceBug?: { destroy?: () => void } }).TraceBug;
         if (tb?.destroy) tb.destroy();
-        else { _toolbar?.remove(); _panelEl?.remove(); }
+        else {
+          // No SDK destroy() available (bare toolbar mount) — clear the active
+          // session ourselves so an event-only session doesn't silently resume
+          // on the next page load after the user turned TraceBug off.
+          try { clearActiveSessionId(); } catch {}
+          _resetTrackingState();
+          _toolbar?.remove(); _panelEl?.remove();
+        }
       } catch {
         _toolbar?.remove();
       }
@@ -484,6 +505,12 @@ async function _toggleRecording(
   // startedAt, and the ticket modal's "video belongs to this session" check
   // suppressed the video the user just recorded.
   try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
+  // Mark this as a VIDEO session up front — BEFORE awaiting the screen picker,
+  // which can sit open for seconds. If the page navigates during the picker,
+  // the SDK's restore logic must not mistake this for an event-only session and
+  // silently resume it. On cancel below, _onSessionEnd() clears the session
+  // (and with it this mode), so a downgrade isn't needed.
+  try { setActiveCaptureMode("video"); } catch {}
 
   const ok = await startVideoRecording({
     mode: "rolling",

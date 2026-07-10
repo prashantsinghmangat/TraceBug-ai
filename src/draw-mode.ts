@@ -644,9 +644,9 @@ function _showCommentInput(
   input.style.cssText = `
     position: absolute; z-index: 2147483647;
     left: ${inputLeft}px; top: ${inputTop}px;
-    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 10px;
+    background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
     padding: 12px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    box-shadow: var(--tb-shadow-lg, 0 8px 24px rgba(0,0,0,0.5));
     display: flex; gap: 8px; align-items: center;
     animation: tracebug-draw-slide 0.15s ease;
   `;
@@ -655,8 +655,8 @@ function _showCommentInput(
   textInput.type = "text";
   textInput.placeholder = "Describe this region (optional)";
   textInput.style.cssText = `
-    background: #0f0f1a; border: 1px solid #3a3a5e; color: #e0e0e0;
-    padding: 8px 12px; border-radius: 8px; font-size: 13px;
+    background: var(--tb-bg-primary, #0B0D10); border: 1px solid var(--tb-border-hover, #2A3441); color: var(--tb-text-primary, #E6EDF3);
+    padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); font-size: 13px;
     font-family: inherit; width: 240px; outline: none;
   `;
 
@@ -674,8 +674,8 @@ function _showCommentInput(
   skipBtn.textContent = "No comment";
   skipBtn.dataset.tracebug = "draw-cancel-btn";
   skipBtn.style.cssText = `
-    background: none; border: 1px solid #3a3a5e; color: #999;
-    padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    background: none; border: 1px solid var(--tb-border-hover, #2A3441); color: var(--tb-text-secondary, #94A3B8);
+    padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); cursor: pointer; font-size: 12px;
     font-family: inherit; transition: all 0.15s; white-space: nowrap;
   `;
 

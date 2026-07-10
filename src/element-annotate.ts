@@ -509,9 +509,9 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
   popover.style.cssText = `
     position: fixed; z-index: 2147483647;
     left: ${left}px; top: ${top}px; width: 310px;
-    background: #1a1a2e; border: 1px solid #3a3a5e; border-radius: 12px;
+    background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
     padding: 18px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif); font-size: 13px;
-    color: #e0e0e0; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    color: var(--tb-text-primary, #E6EDF3); box-shadow: var(--tb-shadow-lg, 0 12px 40px rgba(0,0,0,0.5));
     animation: tracebug-slide-down 0.15s ease;
   `;
 
@@ -522,7 +522,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
   popover.innerHTML = `
     <div style="margin-bottom:14px">
-      <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">
+      <div style="font-size:13px;font-weight:600;color:var(--tb-text-primary, #E6EDF3);margin-bottom:4px">
         ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
       </div>
       <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(selectorText)}">
@@ -531,7 +531,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
     </div>
 
     <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:#999;margin-bottom:6px;font-weight:500">What needs to happen?</div>
+      <div style="font-size:11px;color:var(--tb-text-muted, #868E9F);margin-bottom:6px;font-weight:500">What needs to happen?</div>
       <div style="display:flex;gap:5px" id="tracebug-intent-btns">
         <button data-intent="fix" title="This element has a bug that needs fixing" style="${_intentBtnStyle("fix", true)}">Bug Fix</button>
         <button data-intent="redesign" title="This element needs a design or UX change" style="${_intentBtnStyle("redesign", false)}">Redesign</button>
@@ -541,8 +541,8 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
     </div>
 
     <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:#999;margin-bottom:6px;font-weight:500">Priority</div>
-      <select id="tracebug-sev-select" style="width:100%;background:#0f0f1a;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-primary, #e0e0e0);padding:8px 10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;cursor:pointer">
+      <div style="font-size:11px;color:var(--tb-text-muted, #868E9F);margin-bottom:6px;font-weight:500">Priority</div>
+      <select id="tracebug-sev-select" style="width:100%;background:var(--tb-bg-primary, #0B0D10);border:1px solid var(--tb-border-hover, #2A3441);color:var(--tb-text-primary, #E6EDF3);padding:8px 10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;cursor:pointer">
         <option value="critical">Critical - Blocks users</option>
         <option value="major">Major - Significant issue</option>
         <option value="minor" selected>Minor - Small improvement</option>
@@ -552,10 +552,10 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
     <div style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:11px;color:#999;font-weight:500">Describe the issue</span>
-        <span id="tracebug-char-count" style="font-size:10px;color:#555">0 / 500</span>
+        <span style="font-size:11px;color:var(--tb-text-muted, #868E9F);font-weight:500">Describe the issue</span>
+        <span id="tracebug-char-count" style="font-size:10px;color:var(--tb-text-muted, #868E9F)">0 / 500</span>
       </div>
-      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:#0f0f1a;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-primary, #e0e0e0);padding:10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
+      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:var(--tb-bg-primary, #0B0D10);border:1px solid var(--tb-border-hover, #2A3441);color:var(--tb-text-primary, #E6EDF3);padding:10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
       <div id="tracebug-comment-error" style="font-size:11px;color:#ef4444;margin-top:4px;display:none">Please describe the issue before saving.</div>
     </div>
 

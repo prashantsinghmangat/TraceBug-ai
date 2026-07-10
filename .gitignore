@@ -16,6 +16,10 @@ dist/
 # Generated at build time from dist/bin.mjs (npm run build:cli)
 packages/tracebug/bin.mjs
 
+# Generated at build time by `npm run gen:rrweb` (a `prebuild` hook regenerates
+# it). Statically imported by src/exporters/html-replay.ts — builds run gen first.
+src/exporters/rrweb-runtime.generated.ts
+
 # Local release artifacts (extension zips etc.)
 releases/
 

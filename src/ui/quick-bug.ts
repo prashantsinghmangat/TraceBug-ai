@@ -24,7 +24,7 @@ import { exportSessionAsHtml } from "../exporters/html-replay";
 import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
-import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT, exportReportAsMarkdown } from "../exporters/ai-prompt";
+import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT, exportReportAsMarkdown, exportReportAsAiHtml } from "../exporters/ai-prompt";
 import {
   runLLMAnalysis, getAIConfig, setAIConfig, clearAIConfig,
   PROVIDER_LABELS, DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES,
@@ -204,17 +204,34 @@ function _downloadAllScreenshots(screenshots: ScreenshotData[]): void {
 
 /**
  * Estimate the size of the self-contained `.html` export before it's built,
- * so the Export button can warn about a big file up front. The video and
- * screenshots dominate; both are embedded as base64 (≈4/3 of the raw blob for
- * the video, and the screenshot dataUrls are already base64 chars ≈ bytes).
- * Plus a fixed ~120 KB for the HTML/CSS/JS scaffold and structured data.
- * Video is restored before the modal renders, so `report.video.sizeBytes` is
- * reliably present here when a recording exists.
+ * so the Export button can warn about a big file up front. This MUST mirror
+ * the branch logic in html-replay.ts `buildReplayPayload`, or the label lies:
+ *
+ *  • DOM replay present  → video is dropped; we embed the rrweb event stream
+ *    (JSON) plus the inlined ~260 KB Replayer runtime. This is the small path.
+ *  • No DOM replay       → the WebM video is base64-embedded (≈4/3 of the raw
+ *    blob), which dominates.
+ *
+ * Screenshots (already base64 dataUrls ≈ bytes) are embedded either way. Plus a
+ * fixed ~120 KB for the HTML/CSS/JS scaffold and structured data. Video is
+ * restored before the modal renders, so `report.video.sizeBytes`/`rrwebEvents`
+ * are reliably present here when a recording exists.
  */
 function _estimateHtmlExportBytes(report: import("../types").BugReport | null): number {
   let bytes = 120 * 1024;
   const v = report?.video;
-  if (v?.sizeBytes) bytes += Math.round((v.sizeBytes * 4) / 3);
+  const rrwebEvents = v?.rrwebEvents;
+  const hasRrweb = Array.isArray(rrwebEvents) && rrwebEvents.length > 0;
+  if (hasRrweb) {
+    // rrweb path: video OFF, inline the Replayer runtime (~260 KB JS + ~2 KB
+    // CSS) and the DOM-event stream. The stream is gzip+base64'd in the export
+    // (CompressionStream); measured net ratio (after base64's +33%) is ~5.7× on
+    // real captures, so ÷6 keeps the label within ~10% of the real file.
+    bytes += 262 * 1024;
+    try { bytes += Math.round(JSON.stringify(rrwebEvents).length / 6); } catch {}
+  } else if (v?.sizeBytes) {
+    bytes += Math.round((v.sizeBytes * 4) / 3);
+  }
   for (const s of report?.screenshots ?? []) {
     bytes += (s.originalDataUrl || s.dataUrl || "").length;
   }
@@ -326,14 +343,14 @@ function _openModal(
   const modal = document.createElement("div");
   modal.dataset.tracebug = "quick-bug-inner";
   modal.style.cssText = `
-    background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-border-hover, #3a3a5e);
-    border-radius: var(--tb-radius-lg, 12px);
+    background: var(--tb-bg-secondary, #11151A);
+    border: 1px solid var(--tb-border, #1F2630);
+    border-radius: var(--tb-radius-lg, 16px);
     width: 100%; max-width: 1180px; max-height: 92vh;
     display: flex; flex-direction: column;
     font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--tb-text-primary, #e0e0e0);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    color: var(--tb-text-primary, #E6EDF3);
+    box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
     animation: tracebug-qb-slide-up 0.2s ease;
     overflow: hidden;
   `;
@@ -517,6 +534,7 @@ function _openModal(
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report — upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
+            <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
@@ -943,6 +961,27 @@ function _openModal(
     } catch (err) {
       console.warn("[TraceBug] Markdown report export failed:", err);
       showToast("Report export failed", root);
+    }
+  });
+
+  // Export for AI (.html) — a tiny, text-only .html (no rrweb runtime, no DOM
+  // blob, no base64 media) so it uploads into a chat without "Prompt is too
+  // long". Same capped/deduped content as the .md, just rendered as HTML.
+  modal.querySelector('[data-action="export-ai-html"]')?.addEventListener("click", () => {
+    if (!data.currentSession) {
+      showToast("No session to export yet", root);
+      return;
+    }
+    try {
+      const report = buildReport(data.currentSession);
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const result = exportReportAsAiHtml(report);
+      const sizeKb = (result.sizeBytes / 1024).toFixed(1);
+      showToast(`✓ AI report saved · ${sizeKb} KB · safe to paste into a chat`, root);
+    } catch (err) {
+      console.warn("[TraceBug] AI HTML export failed:", err);
+      showToast("AI report export failed", root);
     }
   });
 
@@ -2144,26 +2183,26 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
     "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
 
   overlay.innerHTML = `
-    <div style="width:100%;max-width:460px;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3;overflow:hidden">
+    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger — bring your own key</div>
         <div style="font-size:12px;color:#94A3B8;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
       </div>
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
         <label style="font-size:12px;color:#94A3B8">Provider
-          <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px">
+          <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px">
             ${(Object.keys(PROVIDER_LABELS) as AIProvider[]).map((p) => `<option value="${p}" ${p === provider ? "selected" : ""}>${escapeHtml(PROVIDER_LABELS[p])}</option>`).join("")}
           </select>
         </label>
         <label data-ai-key-wrap style="font-size:12px;color:#94A3B8">API key
-          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" value="${escapeHtml(existing?.apiKey || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px" />
+          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" value="${escapeHtml(existing?.apiKey || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px" />
         </label>
         <label style="font-size:12px;color:#94A3B8">Model
-          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml(existing?.model || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
+          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml(existing?.model || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
           <span data-ai-model-hint style="display:block;margin-top:5px;font-size:11px;color:#64748B"></span>
         </label>
       </div>
-      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#14161E;border-top:1px solid rgba(255,255,255,0.06)">
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
         <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
         <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
@@ -2226,11 +2265,11 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
     "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
     "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
 
-  const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D12;color:#E6EDF3;font:inherit;font-size:13px";
+  const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px";
   const lbl = "font-size:12px;color:#94A3B8";
 
   overlay.innerHTML = `
-    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#14161E;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3">
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations — bring your own token</div>
         <div style="font-size:12px;color:#94A3B8;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
@@ -2258,7 +2297,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
             <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" value="${escapeHtml(cfg.slack?.webhookUrl || "")}" style="${fld}" /></label>
         </div>
       </div>
-      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#14161E;border-top:1px solid rgba(255,255,255,0.06)">
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
         <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
         <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
@@ -2355,6 +2394,21 @@ function _injectStyles(): void {
     #${MODAL_ID} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
     #${MODAL_ID} * { box-sizing: border-box; }
 
+    /* ── Focus ring (shadcn new-york: ring-2 ring-primary/60 ring-offset-2) ──
+       One consistent keyboard-focus treatment for every interactive element:
+       a 2px bg-colored offset, then the primary ring. Mouse clicks don't get
+       it (:focus-visible), matching shadcn. */
+    #${MODAL_ID} button:focus-visible,
+    #${MODAL_ID} a:focus-visible,
+    #${MODAL_ID} input:focus-visible,
+    #${MODAL_ID} select:focus-visible,
+    #${MODAL_ID} textarea:focus-visible,
+    #${MODAL_ID} [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--tb-bg-primary), 0 0 0 4px var(--tb-ring);
+      border-radius: var(--tb-radius-sm);
+    }
+
     /* ── Header ─────────────────────────────────────── */
     #${MODAL_ID} .tb-qb-header { display:flex; align-items:center; gap:12px; padding:16px 22px; border-bottom:1px solid var(--tb-border); flex-shrink:0; background:var(--tb-bg-primary); }
     #${MODAL_ID} .tb-qb-logo { font-size:20px; line-height:1; }
@@ -2414,7 +2468,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
     #${MODAL_ID} .tb-qb-thumb-num { position:absolute; top:3px; left:3px; font-size:9px; font-weight:700; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.7); background:rgba(0,0,0,0.6); border-radius:3px; padding:1px 5px; }
     #${MODAL_ID} .tb-qb-thumb-edit { position:absolute; bottom:3px; right:4px; font-size:11px; color:#fff; background:rgba(0,0,0,0.6); border-radius:3px; padding:0 4px; opacity:0; transition:opacity 0.15s; line-height:1.4; }
-    #${MODAL_ID} .tb-qb-thumb-del { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--tb-error, #ef4444); color:#fff; border:2px solid var(--tb-bg, #14161E); cursor:pointer; font-size:10px; font-weight:700; line-height:1; padding:0; display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0.85); transition:opacity 0.15s, transform 0.15s, filter 0.15s; font-family:inherit; }
+    #${MODAL_ID} .tb-qb-thumb-del { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--tb-error, #ef4444); color:#fff; border:2px solid var(--tb-bg, #11151A); cursor:pointer; font-size:10px; font-weight:700; line-height:1; padding:0; display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0.85); transition:opacity 0.15s, transform 0.15s, filter 0.15s; font-family:inherit; }
     #${MODAL_ID} .tb-qb-thumb-del:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-thumb-del:focus-visible { opacity:1; transform:scale(1); outline:2px solid var(--tb-accent); outline-offset:2px; }
     #${MODAL_ID} .tb-qb-comments { display:flex; flex-direction:column; gap:4px; margin-bottom:14px; max-height:160px; overflow-y:auto; padding-right:4px; }
@@ -2623,10 +2677,17 @@ function _injectStyles(): void {
     /* ── Footer ──────────────────────────────────────── */
     #${MODAL_ID} .tb-qb-footer { padding:14px 22px; border-top:1px solid var(--tb-border); background:var(--tb-bg-primary); flex-shrink:0; }
     #${MODAL_ID} .tb-qb-actions { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
-    #${MODAL_ID} .tb-qb-btn { background:var(--tb-bg-secondary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); padding:9px 14px; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; display:inline-flex; align-items:center; gap:7px; transition:all 0.15s; letter-spacing:-0.01em; }
-    #${MODAL_ID} .tb-qb-btn:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); transform:translateY(-1px); }
-    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; }
-    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent-hover); border-color:transparent; }
+    /* Secondary variant (shadcn new-york): surface fill, hairline border that
+       strengthens on hover, subtle shadow, and a 1px press on :active — no
+       hover-lift. rounded-lg (radius-sm = 8px). */
+    #${MODAL_ID} .tb-qb-btn { background:var(--tb-bg-secondary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:9px 14px; cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; display:inline-flex; align-items:center; gap:7px; transition:all 0.2s; letter-spacing:-0.01em; box-shadow:var(--tb-shadow-sm); }
+    #${MODAL_ID} .tb-qb-btn:hover { background:var(--tb-bg-elevated); border-color:var(--tb-border-hover); }
+    #${MODAL_ID} .tb-qb-btn:active { transform:translateY(1px); }
+    #${MODAL_ID} .tb-qb-btn:disabled { pointer-events:none; opacity:0.5; }
+    /* Primary variant (shadcn new-york): solid accent, white text, primary glow
+       that grows on hover + brightness-110. */
+    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
+    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
     #${MODAL_ID} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
@@ -2643,14 +2704,14 @@ function _injectStyles(): void {
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated — white-on-white text in the light theme. */
-    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(124,92,255,0.45); }
     /* Save Ticket — prominent green CTA */
     #${MODAL_ID} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
-    #${MODAL_ID} .tb-qb-btn-save:hover { background:#15803d; border-color:transparent; transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-btn-save:hover { background:#16a34a; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(34,197,94,0.45); }
     #${MODAL_ID} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
-    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; }
-    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent-hover); border-color:transparent; transform:translateY(-1px); }
+    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
+    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
     #${MODAL_ID} .tb-qb-more { position:relative; display:inline-flex; }
     #${MODAL_ID} .tb-qb-more-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:200px; background:var(--tb-bg-elevated); border:1px solid var(--tb-border-hover); border-radius:var(--tb-radius-md); box-shadow:var(--tb-shadow-lg); padding:6px; display:none; flex-direction:column; gap:2px; z-index:6; }
     #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
@@ -2726,7 +2787,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
   const card = document.createElement("div");
   card.style.cssText = `
     width: 100%; max-width: 560px; max-height: 80vh;
-    background: #14161E;
+    background: #11151A;
     border: 1px solid rgba(124,92,255,0.28);
     border-radius: 14px;
     box-shadow: 0 24px 72px rgba(0,0,0,0.6);
@@ -2748,7 +2809,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     <pre style="
       margin:0;padding:14px 18px;
       flex:1;overflow:auto;
-      background:#0B0D12;
+      background:#0B0D10;
       font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
       font-size:11.5px;line-height:1.55;
       color:#CBD2DA;
@@ -2756,7 +2817,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
       border-bottom:1px solid rgba(255,255,255,0.06);
     ">${escaped}</pre>
 
-    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;background:#14161E">
+    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;background:#11151A">
       <button data-ai-action="claude" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
@@ -2833,16 +2894,15 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   const prompt = generateMcpPrompt(filename);
   try { navigator.clipboard.writeText(prompt); } catch {}
 
-  // When the .html is video-heavy it can't be pasted into a chat (the base64
-  // video overflows the context). Point non-MCP users at the compact .md +
-  // screenshots path instead. ~3 MB is roughly where a chat upload starts to
-  // choke, so only nag above that.
-  const CHAT_UPLOAD_LIMIT = 3 * 1024 * 1024;
-  const bigFileNote = sizeBytes && sizeBytes > CHAT_UPLOAD_LIMIT
-    ? `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
-         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? This file is <strong>${_formatBytes(sizeBytes)}</strong> — the embedded video makes it too big to upload. Use <strong>Download report (.md)</strong> + <strong>Download screenshots</strong> from the <strong>More&nbsp;▾</strong> menu.
-       </div>`
-    : "";
+  // This replay .html is built for a human (open in a browser) and for the MCP
+  // server (parses the data) — NOT for pasting into a chat. Even compressed it's
+  // mostly rrweb runtime + DOM-replay data that a chat model reads as noise and
+  // rejects with "Prompt is too long". So always point chat users at the tiny
+  // text-only artifacts instead, regardless of file size.
+  const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
+  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
+         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} — use <strong>Export for AI (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;▾</strong> menu. Both are a few KB of plain text built for chat.
+       </div>`;
 
   const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const overlay = document.createElement("div");
@@ -2858,7 +2918,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   const card = document.createElement("div");
   card.style.cssText = `
     width: 100%; max-width: 560px; max-height: 80vh;
-    background: #14161E;
+    background: #11151A;
     border: 1px solid rgba(124,92,255,0.28);
     border-radius: 14px;
     box-shadow: 0 24px 72px rgba(0,0,0,0.6);
@@ -2881,14 +2941,14 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
     <pre style="
       margin:0;padding:14px 18px;
       flex:1;overflow:auto;
-      background:#0B0D12;
+      background:#0B0D10;
       font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
       font-size:11.5px;line-height:1.55;
       color:#CBD2DA;
       white-space:pre-wrap;word-break:break-word;
       border-bottom:1px solid rgba(255,255,255,0.06);
     ">${escaped}</pre>
-    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#14161E">
+    <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#11151A">
       <button data-mcp-action="copy" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
@@ -2981,7 +3041,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
     const card = document.createElement("div");
     card.style.cssText = `
       width: 100%; max-width: 460px;
-      background: #14161E; color: #E6EDF3;
+      background: #11151A; color: #E6EDF3;
       border: 1px solid rgba(124,92,255,0.32);
       border-radius: 14px;
       box-shadow: 0 24px 72px rgba(0,0,0,0.6);

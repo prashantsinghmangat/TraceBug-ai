@@ -61,7 +61,13 @@ async function buildReplayPayload(
   report: BugReport,
   options?: HtmlReplayOptions,
 ): Promise<{ blob: Blob; html: string }> {
-  const includeVideo = options?.includeVideo ?? !!report.video;
+  // DOM replay (rrweb) is the preferred, tiny, inspectable replay surface. When
+  // it's present we default the base64 video OFF — that's the whole size win
+  // (KB of DOM events vs tens of MB of WebM). A caller can still force the video
+  // in alongside it with `includeVideo: true`.
+  const rrwebEvents = report.video?.rrwebEvents;
+  const hasRrweb = Array.isArray(rrwebEvents) && rrwebEvents.length > 0;
+  const includeVideo = options?.includeVideo ?? (hasRrweb ? false : !!report.video);
 
   // Build a timeline that mirrors the live scrubber's marker logic.
   const timeline = buildTimeline(report.session.events).map(t => ({
@@ -213,6 +219,8 @@ async function buildReplayPayload(
       filename: s.filename,
     })),
     video: videoPayload,
+    // Set below: compressed when the browser has CompressionStream, else raw.
+    rrwebEvents: undefined,
     info,
     consoleErrors: report.consoleErrors.map(e => ({
       message: e.message,
@@ -236,7 +244,30 @@ async function buildReplayPayload(
     } : undefined,
   };
 
-  const html = buildReplayHtml(payload);
+  // Compress the DOM-replay stream. It's repetitive text and gzips ~8–12×, so
+  // this is the single biggest lever on the file size (the stream is ~89% of a
+  // typical export). Prefer the compressed field; keep the raw array only as a
+  // fallback when the exporting browser lacks CompressionStream — the viewer
+  // then reads whichever one is present.
+  if (hasRrweb && rrwebEvents) {
+    const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
+    if (gz) payload.rrwebEventsGz = gz;
+    else payload.rrwebEvents = rrwebEvents;
+  }
+
+  // Only pull in the ~137 KB rrweb-player runtime when this export actually
+  // carries a DOM-replay stream — lazy import so the SDK core bundle is unaffected.
+  let rrwebExtras: { rrwebJs: string; rrwebCss: string } | undefined;
+  if (hasRrweb) {
+    try {
+      const rt = await import("./rrweb-runtime.generated");
+      rrwebExtras = { rrwebJs: rt.RRWEB_JS, rrwebCss: rt.RRWEB_CSS };
+    } catch (err) {
+      console.warn("[TraceBug] Failed to load rrweb replay runtime — export will fall back to screenshots:", err);
+    }
+  }
+
+  const html = buildReplayHtml(payload, rrwebExtras);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   return { blob, html };
 }
@@ -282,6 +313,32 @@ function estimateDuration(session: StoredSession, report: BugReport): number {
   // 4-hour ceiling — anything more than that is almost certainly a stale
   // event timestamp leaking into a fresh session.
   return Math.min(span, 4 * 60 * 60 * 1000);
+}
+
+/**
+ * gzip a string and return it base64-encoded, using the browser's native
+ * `CompressionStream`. Returns null when the API is unavailable (very old
+ * browsers, or a non-browser build context) so the caller ships the raw
+ * events instead. The viewer inflates this with `DecompressionStream`.
+ */
+async function gzipToBase64(str: string): Promise<string | null> {
+  try {
+    const CS = (globalThis as { CompressionStream?: unknown }).CompressionStream;
+    if (typeof CS !== "function") return null;
+    const stream = new Blob([str]).stream().pipeThrough(new (CS as typeof CompressionStream)("gzip"));
+    const buf = await new Response(stream).arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    // Build the binary string in chunks — String.fromCharCode.apply blows the
+    // argument-count limit on large arrays.
+    let bin = "";
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
+    }
+    return btoa(bin);
+  } catch {
+    return null;
+  }
 }
 
 /**

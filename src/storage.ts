@@ -5,6 +5,13 @@ import { TraceBugEvent, StoredSession, Annotation, EnvironmentInfo, BugPriority 
 
 const SESSIONS_KEY = "tracebug_sessions";
 const ACTIVE_SESSION_KEY = "tracebug_active_session";
+// How the active session was armed. "events" = the toolbar's event-only
+// tracking (no video); "video" = a screen recording. Persisted so a page
+// navigation can tell them apart: an event-only session must RESUME capture
+// on the next page, whereas a video session whose tab-share Chrome ended on
+// navigation should finalize and open its ticket. See index.ts init/restore.
+const ACTIVE_CAPTURE_MODE_KEY = "tracebug_active_capture_mode";
+export type ActiveCaptureMode = "events" | "video";
 
 // ── Session ID — record-driven lifecycle ────────────────────────────────
 // A session ID is persisted when the user clicks Record, kept across page
@@ -33,6 +40,24 @@ export function setActiveSessionId(id: string): void {
 
 export function clearActiveSessionId(): void {
   try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch {}
+  // Mode is meaningless without an active session — clear the two together so
+  // a stale "video"/"events" flag can't leak into the next session.
+  try { localStorage.removeItem(ACTIVE_CAPTURE_MODE_KEY); } catch {}
+}
+
+/** How the active session was armed. Defaults to "events" when a session is
+ *  active but no explicit mode was written (older sessions, defensive). */
+export function getActiveCaptureMode(): ActiveCaptureMode | null {
+  try {
+    const v = localStorage.getItem(ACTIVE_CAPTURE_MODE_KEY);
+    return v === "events" || v === "video" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveCaptureMode(mode: ActiveCaptureMode): void {
+  try { localStorage.setItem(ACTIVE_CAPTURE_MODE_KEY, mode); } catch {}
 }
 
 /** Back-compat: returns the active session ID or null. */
@@ -190,9 +215,17 @@ function invalidateCache(): void {
   _dirty = false;
 }
 
-// Flush on page unload so no events are lost
+// Flush on page unload so no events are lost. `beforeunload` alone is
+// unreliable: browsers may skip it when a page enters the bfcache, and a link
+// click can navigate that way. `pagehide` + `visibilitychange→hidden` are the
+// recommended durable-write pair — all point at the synchronous flush, which
+// is idempotent, so firing more than once is harmless.
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flushPendingEvents);
+  window.addEventListener("pagehide", flushPendingEvents);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingEvents();
+  });
 }
 
 // ── Append an event to a session ──────────────────────────────────────────

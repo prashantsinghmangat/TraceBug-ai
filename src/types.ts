@@ -517,6 +517,11 @@ export interface VideoRecordingData {
   sizeBytes: number;
   comments: VideoCommentData[];
   startedAt: number;
+  /** Optional rrweb DOM-replay event stream captured alongside the screen
+   *  recording. When present, the .html export embeds this (KB, inspectable)
+   *  in place of the base64 video. Loose `unknown[]` so the public type surface
+   *  never depends on rrweb's types. */
+  rrwebEvents?: unknown[];
 }
 
 // ── Timeline ──────────────────────────────────────────────────────────────
