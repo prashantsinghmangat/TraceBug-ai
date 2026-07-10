@@ -39,7 +39,7 @@ import TraceBug from "tracebug-sdk";
 TraceBug.init({ projectId: "my-app" });
 ```
 
-That's it. A compact toolbar appears on the right edge of the screen. TraceBug starts recording automatically.
+That's it. A compact toolbar appears on the right edge of the screen. TraceBug stays **idle** until you arm a session — click **Record** (video) or **Track session** (events-only), or capture a screenshot — so page loads never create empty sessions.
 
 ## What You'll See
 
@@ -52,7 +52,7 @@ After initialization, a **compact toolbar rail** appears on the right edge of yo
 | ▶ Record | **Record** video + session — a quick preflight lets you pick *this tab* or *screen / window* and whether to include the microphone | — |
 | 📈 Track | **Track session** — events only, no video. Click to start capturing clicks / inputs / navigations / network / console; click again (■) to stop and open the ticket. Screenshots taken while tracking join the same ticket. Tickets file fine with events alone — no media required | — |
 
-Press **`Ctrl+Shift+B`** anywhere to open the **Quick Bug** ticket modal — auto-filled title, editable description, screenshots, the interactive replay scrubber, and one-click export (Open in GitHub · Export .html · plus Linear / Slack / Jira / AI under **More**). A cloud **Share link** button is coming in a future release.
+Press **`Ctrl+Shift+B`** anywhere to open the **Quick Bug** ticket modal — auto-filled title, editable description, screenshots, the interactive DOM replay, and one-click export: **Export .html** (self-contained interactive replay), **Export HAR**, **Fix with AI**, plus under **More** — **Export for AI (.html)** (tiny text-only, chat-ready), **Download report (.md)**, and file a real GitHub / Linear / Slack / Jira issue. A cloud **Share link** button is built but gated off by default.
 
 While recording, a floating HUD (top-center) gives you **Stop · Pause · Mic · Screenshot · Pen · Blur**.
 
@@ -66,7 +66,7 @@ TraceBug.init({ projectId: "my-app", toolbarPosition: "left" });
 
 You can also **drag** the toolbar anywhere on screen — the position is remembered.
 
-**Themes:** TraceBug supports dark (default), light, and auto (follows system preference):
+**Themes:** TraceBug supports light (default), dark, and auto (follows system preference):
 
 ```typescript
 TraceBug.init({ projectId: "my-app", theme: "auto" });
@@ -86,12 +86,12 @@ The fastest way to report a bug. Use it 10 times a day:
    - Auto-filled **description** with steps to reproduce + environment
    - **Screenshot preview** (with annotations if you have them)
 3. Edit the title/description inline if needed
-4. Click one of the four copy buttons:
-   - **🐙 Copy as GitHub Issue** — Markdown formatted
-   - **🎫 Copy as Jira Ticket** — Jira markup
-   - **📋 Copy as Plain Text** — for Slack/Teams
-   - **⬇ Download Screenshot** — just the PNG
-5. Paste into your tool. Screenshot auto-downloads alongside.
+4. Export or file it:
+   - **Export .html** — the self-contained interactive replay to hand to a developer or an MCP agent
+   - **Export for AI (.html)** / **Download report (.md)** — tiny text-only artifacts to paste into a chat
+   - **Export HAR** — the network capture as a standard `.har`
+   - **Open in GitHub** / **Fix with AI**, or file a real GitHub / Linear / Slack / Jira issue
+5. Send the file, or paste the issue — the developer (or agent) has everything.
 
 The modal also auto-saves your draft as you type, so you never lose work if you accidentally close it.
 
@@ -104,7 +104,7 @@ await TraceBug.quickCapture();
 
 For more control:
 
-1. Use the app normally — TraceBug records everything silently
+1. Arm a session (click **Record** or **Track session**), then use the app normally — TraceBug captures the session
 2. Find a bug, then press **`Ctrl+Shift+B`** (or click 📷 Screenshot / ▶ Record on the toolbar)
 3. Review the auto-filled ticket — title, editable description, screenshots, and the interactive replay
 4. Click **Open in GitHub** (or **Export .html**, or pick Jira / Linear / Slack / Fix-with-AI under **More**)

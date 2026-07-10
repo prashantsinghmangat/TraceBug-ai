@@ -1,14 +1,13 @@
-# Release Checklist — v1.3.0 (Phase 1, offline)
+# Release Checklist — v1.6.0 (Phase 1, offline)
 
-> Automated gates are run by CI and were last verified 2026-07-02 (see [PROJECT-STATUS.md](PROJECT-STATUS.md) §4).
-> This document covers the checks a human must run before shipping — cross-browser regression, extension smoke test, and profiling — plus the state of everything already verified.
+> This document covers the checks a human must run before shipping — cross-browser regression, extension smoke test, and profiling — plus the state of everything already verified. Re-stamp the version each release.
 
-## 0. Already verified (automated, 2026-07-02)
+## 0. Already verified (automated)
 
-- [x] `tsc --noEmit` clean · ESLint 0 errors · 98/98 tests · all builds succeed
-- [x] npm tarball resolution: `npx @arethetypeswrong/cli tracebug-sdk-1.3.0.tgz` → **no problems** (node10 / node16-CJS / node16-ESM / bundler all green — covers Vite, Webpack, Next.js, CRA resolution)
-- [x] SSR safety: ESM `import` and CJS `require` of the packed tarball succeed in bare Node with no `window` (Next.js server-side import won't crash); `default.init` present, 59 named exports
-- [x] Version consistency: package.json = manifest.json = 1.3.0; CHANGELOG has a 1.3.0 entry
+- [x] `tsc --noEmit` clean · 155/155 tests · all builds succeed (`prebuild` regenerates the rrweb runtime)
+- [x] npm tarball resolution: `npx @arethetypeswrong/cli tracebug-sdk-1.6.0.tgz` → **no problems** (node10 / node16-CJS / node16-ESM / bundler all green — covers Vite, Webpack, Next.js, CRA resolution)
+- [x] SSR safety: ESM `import` and CJS `require` of the packed tarball succeed in bare Node with no `window` (Next.js server-side import won't crash); `default.init` present
+- [x] Version consistency: package.json = manifest.json = 1.6.0; CHANGELOG has a 1.6.0 entry (+ `[Unreleased]`)
 - [x] LICENSE file (MIT), SUPPORT.md, GitHub issue templates present
 - [x] Security review of exported HTML: every `innerHTML` sink in the export template and ticket modal escapes captured data (`esc()` / `escapeHtml()`); `</script>` breakout in the embedded JSON payload correctly escaped; media dataUrls assigned via `.src` property (no attribute injection)
 - [x] Redaction: password/sensitive inputs masked at capture; sensitive URL query params redacted; storage + cookie values redacted by key/value patterns; **network response snippets now token-scrubbed at capture** (fixed 2026-07-02 — previously reached local .html exports unscrubbed)
@@ -78,8 +77,8 @@ Module resolution + SSR safety already verified (§0). Per-framework runtime smo
 ## 5. Release mechanics
 
 - [ ] **Rotate Supabase keys** (blocker — see PROJECT-STATUS §5) even for Phase-1-only launch
-- [ ] Commit `feature/cloud-sharing`, merge to `main`, CI green
-- [ ] Decide version: current diff contains fixes + small features (cookies capture, export layout) → **1.4.0** recommended; move CHANGELOG [Unreleased] hardening section under it
+- [ ] Commit the working-tree changes, merge to `main`, CI green
+- [ ] Decide version: move the CHANGELOG `[Unreleased]` section (offline replay + compression + AI export + nav-capture fix + shadcn) under a new version heading and bump `package.json`
 - [ ] `npm publish` (runs `prepublishOnly` → build); verify `npm view tracebug-sdk` after
 - [ ] Zip `tracebug-extension/` → Chrome Web Store upload; listing copy from docs/CHROME-WEB-STORE-LISTING.md; justify `<all_urls>` with the per-tab opt-in model
 - [ ] Tag the release + GitHub release notes from CHANGELOG

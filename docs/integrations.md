@@ -37,11 +37,11 @@ Jira Cloud's REST API doesn't send CORS headers for browser XHR, so a direct bro
 ## Programmatic use (SDK)
 
 ```ts
-import { setIntegrationsConfig, createTrackerIssue, generateReport } from "tracebug-sdk";
+import TraceBug, { setIntegrationsConfig, createTrackerIssue } from "tracebug-sdk";
 
 setIntegrationsConfig({ github: { token: "ghp_…", repo: "acme/app", labels: ["bug"] } });
 
-const report = generateReport();
+const report = TraceBug.generateReport();
 const { url, ref } = await createTrackerIssue("github", report);
 console.log(`Filed ${ref} → ${url}`);
 ```

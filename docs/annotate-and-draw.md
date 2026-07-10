@@ -19,7 +19,7 @@ Annotate mode lets you click any element on the page and attach structured feedb
 
 ### How to Use
 
-1. **Activate** — Click the crosshair button in the toolbar, or press `Ctrl+Shift+A`
+1. **Activate** — Call `TraceBug.activateAnnotateMode()` (no toolbar button / shortcut in v1.0)
 2. A **purple banner** appears at the top: "Annotate Mode"
 3. **Hover** over elements — they highlight with a purple border
 4. **Click** an element to select it — a feedback form appears
@@ -75,7 +75,7 @@ Draw mode lets you draw rectangles or ellipses directly on the live page to mark
 
 ### How to Use
 
-1. **Activate** — Click the grid button in the toolbar, or press `Ctrl+Shift+D`
+1. **Activate** — Call `TraceBug.activateDrawMode()`, or use the recording HUD's ✎ **Pen** button (no dedicated toolbar button / shortcut in v1.0)
 2. A **purple toolbar** appears at the top with shape and color options
 3. **Drag** anywhere on the page to draw a shape
 4. A comment input appears — add a description or click **No comment** to save without one
@@ -99,7 +99,7 @@ Each draw region records:
 
 | Field | Description |
 |-------|-------------|
-| Shape | `rect` or `ellipse` |
+| Shape | `rect`, `ellipse`, or `redact` (blur/black-out) |
 | Position | X, Y coordinates (document-relative) |
 | Size | Width and height in pixels |
 | Color | The color used for the shape |
@@ -114,7 +114,7 @@ Saved regions display on the canvas with:
 
 ## Viewing Annotations
 
-Click the **list icon** in the compact toolbar to open the annotation panel. It shows:
+Open the annotation panel programmatically (`getAnnotationReport()` and the export helpers below). It shows:
 
 ### Element Annotations Section
 - Numbered badges with intent and severity
@@ -206,8 +206,8 @@ TraceBug.clearAnnotations();
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+Shift+A` | Toggle annotate mode |
-| `Ctrl+Shift+D` | Toggle draw mode |
+| `Ctrl+Shift+A` | Toggle annotate mode — **not wired in v1.0** (call `activateAnnotateMode()`) |
+| `Ctrl+Shift+D` | Toggle draw mode — **not wired in v1.0** (call `activateDrawMode()`) |
 | `Ctrl+Shift+S` | Take screenshot |
 | `Esc` | Exit current mode / close popover |
 | `Shift+Click` | Multi-select elements (annotate mode) |

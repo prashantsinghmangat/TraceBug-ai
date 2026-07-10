@@ -161,35 +161,32 @@ The modal:
 - Auto-saves draft to `tracebug_last_bug_draft` (recovered if you accidentally close)
 - Closes on Escape, click-outside, or after a successful export
 
-**Export actions (v1.0 — three options; each auto-downloads every attached screenshot + the screen recording if any):**
+**Export actions** (from the Quick Bug modal footer + **More ▾** menu):
 
-| Button | Action | Auto-downloads |
-|--------|--------|-------------|
-| Open in GitHub | Opens prefilled GitHub issue page in a new tab (only shown when `githubRepo` is configured) | Screenshots + `.webm` (staggered 120 ms) |
-| Copy as GitHub Issue | Copies markdown to clipboard | Screenshots + `.webm` |
-| Copy as Jira Ticket | Copies Jira-formatted text to clipboard (premium) | Screenshots + `.webm` |
+| Button | Action |
+|--------|--------|
+| **Export .html** | Self-contained interactive DOM replay (rrweb), with a live size estimate. Best for a developer or an MCP-connected agent. |
+| **Export HAR** | Network capture as a standard `.har` (DevTools / Charles / Postman). |
+| **Fix with AI** | Builds the structured AI prompt and opens Claude / ChatGPT (or runs BYO-key analysis in the AI tab). |
+| **Open in GitHub** | Prefilled GitHub issue (shown when `githubRepo` is set), or files a real issue if a token is configured. |
+| **Export for AI (.html)** *(More)* | Tiny (~5 KB) text-only HTML report — paste/upload into a chat, no MCP needed. |
+| **Download report (.md)** *(More)* | Compact markdown report. |
+| **Download screenshots** *(More)* | Raw PNG(s) to attach alongside the `.md`. |
+| **GitHub / Linear / Slack / Jira** *(More)* | File a real issue/message with a configured token ([integrations.md](integrations.md)). |
 
-> **Cut from v1.0 toolbar:** "Copy as Plain Text" and "Download Screenshots" buttons. GitHub markdown is pasteable anywhere; explicit screenshot downloads happen as part of every export. Generate plain text manually via `TraceBug.generateReport()` if needed.
+> A cloud **Share link** button exists in the code but is gated off by default (`PHASE2-CLOUD`).
 
 ## Screenshots
 
-### `TraceBug.takeScreenshot(options?): Promise<ScreenshotData | null>`
+### `TraceBug.takeScreenshot(): Promise<ScreenshotData | null>`
 
-Capture a screenshot of the current page. The file auto-downloads to the user's system. Returns the screenshot data including base64 data URL, filename, and dimensions.
+Capture a screenshot of the current page and add it to the active ticket. Returns the screenshot data (base64 data URL, filename, dimensions), or `null` if capture fails or the free screenshot cap is hit. Any visible annotation badges/outlines are included as rendered.
 
 ```typescript
-// Standard screenshot (clean page, annotations hidden)
 const screenshot = await TraceBug.takeScreenshot();
-
-// Screenshot with annotations visible (badges + outlines stay on screen)
-const annotated = await TraceBug.takeScreenshot({ includeAnnotations: true });
+// Region screenshot (drag to select an area):
+const region = await TraceBug.takeRegionScreenshot();
 ```
-
-**Options:**
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `includeAnnotations` | `boolean` | `false` | Keep annotation badges and outlines visible in the screenshot |
 
 In the Chrome Extension, screenshots use `chrome.tabs.captureVisibleTab` instead of html2canvas for reliable cross-origin capture.
 
@@ -965,7 +962,7 @@ These features were removed from the default toolbar in v1.0 to reduce noise. Th
 | Draw Mode | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
 | Annotation list / export | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"\|"markdown")`, `clearAnnotations()` |
 | PDF report | `TraceBug.downloadPdf()` (free shows upgrade modal — see [freemium.md](freemium.md)) |
-| First-run onboarding tour | `replayOnboarding()` (named export from `tracebug-sdk`) |
+| First-run onboarding tour | Runs automatically on first mount (`src/onboarding.ts`); not a public export |
 | Plain text export | Build manually from `TraceBug.generateReport()` |
 
 The `shortcuts.annotate` and `shortcuts.draw` config keys are still typed in `TraceBugConfig` for backwards compatibility but are no-ops in v1.0.

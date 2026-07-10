@@ -36,7 +36,7 @@ Every report opens with:
 
 No accounts. No SaaS lock-in. Data stays in your browser by default.
 
-**Optional cloud sharing** (coming in a future release — not in v1.3): if you'd rather share a URL than a file, sign in once and get a `tracebug.netlify.app/share/<id>` link with the same content. The code ships behind a feature flag today; the Share button is disabled until the portal launches. Local .html export is the supported sharing path in v1.3.
+**Optional cloud sharing** (built, UI-gated off by default): if you'd rather share a URL than a file, sign in once and get a share link with the same content. The code ships behind a feature flag (`PHASE2-CLOUD`); the Share button stays disabled until the portal is switched on. Local `.html` export is the supported sharing path today.
 
 **Works with any frontend framework**: React, Angular, Vue, Next.js, Nuxt, Vite, Svelte, SvelteKit, Remix, Astro, or plain HTML.
 
@@ -58,30 +58,36 @@ That's it. The CLI detects your framework and prints the exact 2-line snippet. P
 ```
 Tester opens the page
   ↓
-SDK silently captures: clicks, inputs, navigation, API calls, errors, environment
+Arm a session (idle until you act):
+  • ⚡ Quick Bug      — Ctrl+Shift+B opens the ticket-review modal
+  • 📷 Screenshot / Region
+  • 🔴 Record         — Sentry mode: rolling video buffer + HUD with timestamped
+                        comments. File multiple bugs from one screen-share.
+  • ⏺ Track session   — event-only capture (no video). Survives full-page
+                        navigation, so clicking a link keeps recording.
   ↓
-Three primary toolbar actions cover the main workflows:
-  • ⚡ Quick Bug   — Ctrl+Shift+B opens the ticket-review modal
-  • 🔍 Scan Page   — runs in-browser detectors (a11y via axe-core, broken
-                     images, mixed content, frustration signals like rage/dead
-                     clicks, plus failed APIs, slow APIs, and JS errors from
-                     the session) → opens issues panel
-  • 🔴 Record      — arms Sentry mode: rolling video buffer + HUD with
-                     timestamped comments. File multiple bugs from one
-                     screen-share without re-picking
+The SDK captures: clicks, inputs, navigation, API calls, console, errors, the DOM
+stream (rrweb), environment, and a redacted Web-Storage snapshot
   ↓
-Click "Copy as GitHub Issue" or "Copy as Jira Ticket"
+Review the ticket, then export:
+  • Export .html          — self-contained interactive DOM replay (KB, not MB)
+  • Export for AI (.html) — tiny text-only report to paste into a chat
+  • Download report (.md) · Export HAR · file a real GitHub/Linear/Slack/Jira issue
   ↓
-Complete bug report copied to clipboard:
+Complete report includes:
   - Auto-generated title + smart summary + root-cause hint (high/medium/low confidence)
-  - Steps to reproduce
-  - Screenshots, screen recording (.webm) with timestamped comments
+  - Steps to reproduce, full session timeline
+  - Interactive DOM replay (or screen recording .webm), screenshots
   - Console errors + stack traces, failed network requests with response snippets
   - Environment (browser, OS, viewport, device)
-  - Full session timeline
   ↓
-Paste into GitHub/Jira → screenshots + .webm auto-download. Developer has everything.
+Send the .html → developer opens it offline and sees exactly what happened,
+or an MCP-connected coding agent reads it and debugs from it.
 ```
+
+> **Scan Page** (a11y via axe-core, broken images, mixed content, frustration
+> signals, failed/slow APIs, JS errors) is available programmatically as
+> `TraceBug.scanPage()`; it is no longer a toolbar button.
 
 ## Two Ways to Use TraceBug
 
@@ -465,22 +471,27 @@ TraceBug.clearAnnotations();
 
 The compact toolbar on the right edge of the screen provides:
 
-- **Session panel** (logo button) — Full bug reporting with timeline, errors, export
-- **Annotate mode** — Click elements to attach feedback
-- **Draw mode** — Draw rectangles/ellipses for layout issues
-- **Screenshot** — Capture with annotation editor
-- **Annotation list** — View/export/delete all annotations
-- **Settings** — Pause recording, view stats, clear data
+- **⚡ Quick Bug** — open the ticket-review modal (`Ctrl+Shift+B`)
+- **📷 Screenshot** — capture the page, with an annotation editor
+- **▢ Region** — capture a selected region
+- **🔴 Record** — screen recording (Sentry mode: rolling buffer + HUD)
+- **⏺ Track session** — event-only capture, no video (survives navigation)
+- **✓ View saved tickets** — the offline Saved Tickets list
+- **✕** — turn TraceBug off on this page
 
-### Session Panel Details
+> Annotate and Draw modes still ship in the bundle but were cut as standalone
+> toolbar buttons in v1.0 — reach them programmatically or via the recording
+> HUD's Pen button. See [docs/annotate-and-draw.md](docs/annotate-and-draw.md).
 
-- Session list with error/healthy indicators and "Repro Ready" badges
-- QA Toolbar: Screenshot, Add Note, Voice Note, GitHub Issue, Jira Ticket, PDF Report
-- Session overview, problems detected, error details, performance insights
-- Tester notes, screenshots gallery, environment info
-- Color-coded event timeline with rich details
-- Auto-generated reproduction steps with copy button
-- Export: JSON, Text, HTML, PDF, GitHub Issue, Jira Ticket
+### Quick Bug modal
+
+Review and edit the ticket, then export or file it:
+
+- Auto-generated title, summary, root-cause hint, reproduction steps, timeline
+- Interactive DOM replay (or the screen recording), screenshots gallery
+- Tabs: Info · Console · Network · Actions · AI · Events
+- Export: **Export .html** (replay) · **Export for AI (.html)** · **Download report (.md)** · **Export HAR**
+- File directly: GitHub · Linear · Slack · Jira (real issues with a configured token)
 
 ## Keyboard Shortcuts
 

@@ -36,50 +36,19 @@ Internal dev-server requests are automatically excluded:
 - Vite: `__vite_ping`, `@vite/client`
 - General: `sockjs-node`, `turbopack-hmr`
 
-## Session Panel
+## Quick Bug modal
 
-Click the **TraceBug logo** in the compact toolbar to open the session panel. It shows:
+`Ctrl+Shift+B` (or ⚡ on the toolbar) opens the **Quick Bug** modal — the review-and-export surface for the current session. Header: auto-generated title + severity/priority badge. It has:
 
-### Session List
-- All recorded sessions sorted by most recent
-- **Search bar** — filter sessions by error message, page URL, or session ID
-- **Filter dropdown** — "All", "Has errors", "Healthy"
-- Red dot = session has errors, Green dot = healthy
-- "Repro Ready" badge when reproduction steps are available
-- **Auto-named sessions** — e.g., "Login Session", "Vendor Session" (based on primary page)
-- **Preview line** — shows last error or last action, not just event count
+- **Replay** — the interactive DOM replay (or the screen recording), with a play/seek control bar. Clicking a Console/Network/Events row seeks the replay to that moment.
+- **Editable description** — auto-filled with root cause, repro steps, environment, errors, and failed requests.
+- **Screenshots** — primary preview + numbered thumbnail strip.
+- **Tabs**: **Info** (environment + storage) · **Console** (unified event feed) · **Network** (DevTools-style request table) · **Actions** (action chips) · **AI** (prompt + BYO-key analysis) · **Events** (raw timeline).
+- **Export/file** actions — see [ticket-flow.md](ticket-flow.md#step-4--export).
 
-### Session Detail (click a session)
+## Saved Tickets
 
-The detail view has a **sticky header** with the auto-generated bug title and severity badge, plus a **tabbed layout**:
-
-#### Overview Tab
-- **QA Tools** — Screenshot, Add Note, Voice Note
-- **Session Overview** — Duration, events, pages visited, API calls, error status
-- **Problems Detected** — Critical/warning/info issues with icons and details
-- **Error Details** — Error type classification, message, stack trace, source location
-- **Performance** — Average/slowest response time, success rate, per-API breakdown with visual bars
-- **Reproduction Steps** — Auto-generated steps with copy button
-- **Tester Notes** — All annotations with severity badges
-- **Screenshots** — Inline images with filenames
-- **Environment** — Browser, OS, viewport, device type
-
-#### Timeline Tab
-- Full chronological event stream with color-coded icons
-- Time gap indicators between events
-- Inline values for each event type
-- API calls show method, status, duration with visual bars
-
-#### Errors Tab (only shown if errors exist)
-- Grouped error details with type classification
-- Stack traces with expandable view
-- Error count badge on the tab
-
-#### Export Tab
-- **Issue Trackers** — GitHub Issue (Markdown), Jira Ticket
-- **Downloads** — PDF Report, JSON, Text Report, HTML Report
-- **Clipboard** — Copy Full Report (plain text)
-- **Delete** — Delete this session
+The **✓ View saved tickets** toolbar button opens the offline Saved Tickets list: every ticket you explicitly saved, with error/healthy indicators and one-click re-open. Everything is read from `localStorage` — nothing is uploaded.
 
 ## Screenshots
 
@@ -113,17 +82,14 @@ When you're done reproducing the bug, click the **recording toggle** to stop, or
 - Auto-filled title and description (root cause, steps, environment, errors, failed requests)
 - **Primary preview** of the first screenshot
 - **Numbered thumbnail strip** of every other screenshot; click any thumbnail to swap it into the primary preview
-- Five export actions (Open in GitHub, Copy as GitHub Issue, Copy as Jira Ticket, Copy as Plain Text, Download Screenshots) — **all** of them download every screenshot in the ticket alongside the markdown/clipboard payload
+- Export actions: **Export .html** (interactive replay), **Export HAR**, **Fix with AI**, and under **More ▾** — **Export for AI (.html)**, **Download report (.md)**, **Download screenshots**, and file a real GitHub / Linear / Slack / Jira issue. See [ticket-flow.md](ticket-flow.md#step-4--export).
 - Press `Ctrl+Shift+B` (or call `TraceBug.quickCapture()`) to open the same modal at any time
 
 ### Screenshot with Annotations
 
-To capture a screenshot that includes annotation badges and outlines visible on the page:
-1. Open the **Annotation List** panel (list icon in toolbar)
-2. Click the green **"Save"** button
-3. The page is captured with all annotation markers visible, and the PNG auto-downloads
+Annotation badges/outlines that are visible on the page are included when you capture. Take a screenshot (📷 toolbar button or `TraceBug.takeScreenshot()`) while the markers are on screen.
 
-Programmatically: `await TraceBug.takeScreenshot({ includeAnnotations: true })`
+Programmatically: `await TraceBug.takeScreenshot()`  _(no arguments; region variant: `takeRegionScreenshot()`)_
 
 ### Annotation Editor
 
