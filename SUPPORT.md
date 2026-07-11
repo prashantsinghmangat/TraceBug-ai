@@ -21,9 +21,17 @@ Open a [GitHub issue](https://github.com/prashantsinghmangat/TraceBug-ai/issues/
 - Check the [docs](docs/) first — [getting-started](docs/getting-started.md), [API reference](docs/api-reference.md), [configuration](docs/configuration.md).
 - Otherwise open a GitHub issue; there is no separate forum or chat yet.
 
+## Supported browsers
+
+The **npm SDK** runs in any modern browser (Chrome, Edge, Firefox, Safari). The
+**browser extension** is Chromium-only today (Chrome / Edge / Brave / Opera) — on
+Firefox and Safari, use the npm SDK. See the [browser support matrix](README.md#browser-support).
+
 ## Security issues
 
-**Do not open a public issue for security vulnerabilities.** Email the maintainer instead (see the author field in [package.json](package.json) / [GitHub profile](https://github.com/prashantsinghmangat)) with details and reproduction steps. You'll get an acknowledgment within a few days.
+**Do not open a public issue for security vulnerabilities.** See [SECURITY.md](SECURITY.md)
+— report privately via GitHub's "Report a vulnerability" (Security → Advisories) or
+the maintainer contact in [package.json](package.json) / [GitHub profile](https://github.com/prashantsinghmangat).
 
 ## How TraceBug handles its own errors
 

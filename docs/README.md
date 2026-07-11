@@ -8,6 +8,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 
 | Doc | What it covers |
 | --- | --- |
+| [quickstart.md](quickstart.md) | **Report your first bug in 2 minutes** — the fastest path for QA and developers. |
 | [getting-started.md](getting-started.md) | Install, initialize, and the in-page toolbar. |
 | [configuration.md](configuration.md) | Every `TraceBug.init()` option and defaults; session behavior. |
 | [bug-reporting.md](bug-reporting.md) | The Quick Bug modal and Saved Tickets. |

@@ -42,6 +42,8 @@ No accounts. No SaaS lock-in. Data stays in your browser by default.
 
 ## ⚡ Get Started in 30 Seconds
 
+> New here? **[Report your first bug in 2 minutes →](docs/quickstart.md)**
+
 ```bash
 npx tracebug init
 ```
@@ -117,6 +119,23 @@ Install the browser extension — no code needed. QA testers, PMs, and clients c
 | Brave | Yes — Chrome Web Store extensions work natively |
 | Opera | Yes — install "Install Chrome Extensions" add-on first |
 | Firefox | Not yet — use the npm SDK instead |
+
+## Browser support
+
+| Browser | npm SDK | Extension |
+|---------|:---:|:---:|
+| Chrome | ✅ | ✅ |
+| Edge | ✅ | ✅ |
+| Brave / Opera | ✅ | ✅ |
+| Firefox | ✅ | ⏳ (port paused — SDK only) |
+| Safari | ✅¹ | ❌ (SDK only) |
+
+The **SDK** is framework- and browser-agnostic — it runs anywhere modern JS runs.
+¹ The interactive DOM-replay export uses the browser-native `CompressionStream` /
+`DecompressionStream` (Chrome 80+, Firefox 113+, Safari 16.4+); on older engines
+the exporter ships the replay uncompressed and the viewer falls back to the
+screenshot gallery. The **extension** is Chromium-only today (Firefox port paused;
+no Safari build) — on those, use the npm SDK.
 
 ## Features
 
