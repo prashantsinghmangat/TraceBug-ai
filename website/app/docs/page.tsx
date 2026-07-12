@@ -5,7 +5,7 @@ import Footer from "@/components/Footer";
 export const metadata: Metadata = {
   title: "Documentation — TraceBug",
   description:
-    "Complete guide to integrating TraceBug SDK and Chrome Extension. Setup in 2 lines of code. API reference, configuration, and framework examples.",
+    "How to use TraceBug: the Chrome extension (capture bugs on any site, no code), the MCP server (let AI agents debug your reports), and the SDK. Setup, configuration, and API reference.",
   openGraph: {
     title: "TraceBug Documentation",
     description:
@@ -42,16 +42,16 @@ export default function DocsPage() {
             <ul className="space-y-2">
               {[
                 { href: "#getting-started", label: "Getting Started" },
-                { href: "#sdk-setup", label: "SDK Setup" },
+                { href: "#chrome-extension", label: "Chrome Extension Usage" },
+                { href: "/docs/mcp", label: "MCP Server — AI Agents Debug Your Reports" },
+                { href: "#sdk-setup", label: "SDK Setup (developers)" },
                 { href: "#configuration", label: "Configuration" },
                 { href: "#user-identification", label: "User Identification" },
                 { href: "#screenshots", label: "Screenshots & Annotations" },
-                { href: "#chrome-extension", label: "Chrome Extension Usage" },
                 { href: "#bug-report-format", label: "Bug Report Format" },
                 { href: "#github-integration", label: "GitHub Integration" },
                 { href: "#plugins-hooks", label: "Plugins & Hooks" },
                 { href: "#api-reference", label: "API Reference" },
-                { href: "/docs/mcp", label: "MCP Server — AI Agents Debug Your Reports" },
                 { href: "/docs/playwright", label: "Playwright Reporter — Bug Reports From Failed Tests" },
                 { href: "/docs/ai-debugger", label: "AI Debugger — BYO-Key LLM Analysis" },
                 { href: "/docs/har-export", label: "HAR Export — Portable Network Captures" },
