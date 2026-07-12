@@ -18,6 +18,7 @@ import {
   PROMPT_DEFINITIONS,
   buildInvestigationGuide,
   buildDebugPrompt,
+  knownReportDirs,
 } from '../cli/mcp-server';
 
 // 1×1 transparent PNG
@@ -113,6 +114,37 @@ describe('parseReportFile', () => {
     expect(parseReportFile(path.join(tmpDir, 'not-a-report.html'))).toBeNull();
     expect(parseReportFile(path.join(tmpDir, 'random.json'))).toBeNull();
     expect(parseReportFile(path.join(tmpDir, 'does-not-exist.html'))).toBeNull();
+  });
+});
+
+describe('auto-discovery outside --dir', () => {
+  it('resolves a report in ~/Downloads by bare filename even when baseDir has none', () => {
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-home-'));
+    const downloads = path.join(fakeHome, 'Downloads');
+    fs.mkdirSync(downloads);
+    // Export naming (tracebug-*) matters: shared folders are name-prefiltered.
+    fs.writeFileSync(path.join(downloads, 'tracebug-replay-zzz.html'), buildReplayHtml(fixturePayload()), 'utf8');
+    const emptyBase = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-empty-'));
+    // os.homedir() reads USERPROFILE (Windows) / HOME (POSIX); can't spy in ESM.
+    const orig = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
+    try {
+      if (os.homedir() !== fakeHome) return; // platform ignores the env override — skip
+      // baseDir has no reports — requireReport falls back to ~/Downloads.
+      expect(toolGetBugReport(emptyBase, { file: 'tracebug-replay-zzz.html' }).title)
+        .toBe('Vendor Update Fails — TypeError');
+      // …and by a bare fragment of the filename.
+      expect(toolGetBugReport(emptyBase, { file: 'zzz' }).title)
+        .toBe('Vendor Update Fails — TypeError');
+      expect(knownReportDirs(emptyBase)).toContain(downloads);
+    } finally {
+      for (const k of ['HOME', 'USERPROFILE'] as const) {
+        if (orig[k] === undefined) delete process.env[k]; else process.env[k] = orig[k];
+      }
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+      fs.rmSync(emptyBase, { recursive: true, force: true });
+    }
   });
 });
 

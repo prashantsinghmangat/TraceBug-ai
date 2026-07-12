@@ -19,6 +19,7 @@ All notable changes to TraceBug are documented here.
 ### Fixed
 
 - **Event capture no longer stops on full-page navigation** (`src/index.ts`, `src/storage.ts`, `src/compact-toolbar.ts`) — the **Track session** (events-only) capture now survives clicking a link to another page. A persisted **capture mode** (`tracebug_active_capture_mode`) lets the SDK resume an event-only session on the next page (keeping one session id across the whole flow) while still finalizing a *video* session whose tab-share Chrome ended. Also: durable flush on `pagehide`/`visibilitychange:hidden` (bfcache-safe), no duplicate `session:start` per navigation, and the toolbar's tracking state is restored after the load.
+- **MCP server finds reports with zero setup** (`cli/mcp-server.ts`, `cli/bin.ts`) — `get_bug_report` (and the other `get_*` tools) now resolve a report by bare filename or fragment from the user's **Downloads/Desktop** folders — where browser exports land — in addition to `--dir`. Previously the copy-pasted hand-off prompt failed unless the server was pointed at the download folder. Shared folders are shallow-scanned and name-prefiltered (`tracebug-*`) to stay fast. `list_bug_reports` widens to those folders only when the server started **without** an explicit `--dir` (an explicit `--dir` stays scoped to that folder). The generated hand-off prompt (`generateMcpPrompt`) drops the `--dir` requirement. (`src/exporters/ai-prompt.ts`, `tests/mcp-server.test.ts`)
 
 ## [1.6.0] - 2026-07-09
 

@@ -34,11 +34,12 @@ async function startMcpServer() {
   const fs = await import('fs')
   const path = await import('path')
 
-  // --dir <path> selects where exported bug reports live (default: cwd)
+  // --dir <path> selects where exported bug reports live (default: cwd).
+  // Without an explicit --dir, the server also auto-discovers reports in the
+  // user's Downloads/Desktop, so the copy-pasted hand-off prompt just works.
   const dirFlag = args.indexOf('--dir')
-  const baseDir = dirFlag !== -1 && args[dirFlag + 1]
-    ? path.resolve(args[dirFlag + 1])
-    : process.cwd()
+  const hasExplicitDir = dirFlag !== -1 && !!args[dirFlag + 1]
+  const baseDir = hasExplicitDir ? path.resolve(args[dirFlag + 1]) : process.cwd()
 
   // package.json lives one level up in the SDK layout (dist/bin.mjs) but is a
   // sibling in the standalone `tracebug` CLI package (packages/tracebug/bin.mjs).
@@ -50,7 +51,7 @@ async function startMcpServer() {
     } catch { /* try next location — cosmetic only */ }
   }
 
-  await runMcpServer(baseDir, version)
+  await runMcpServer(baseDir, version, !hasExplicitDir)
 }
 
 function printHelp() {
