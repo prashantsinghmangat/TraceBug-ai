@@ -2,24 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { ChromeIcon } from "@/components/ui/brand-icons";
-import { ArrowRight, Check, Copy, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
 import { Caret } from "@/components/BrandMark";
 import { SDK_VERSION_TAG } from "@/lib/version";
-import { useState } from "react";
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
 export default function Hero() {
-  const [copied, setCopied] = useState(false);
-  const copyInstall = async () => {
-    try {
-      await navigator.clipboard.writeText("npx tracebug init");
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {}
-  };
-
   return (
     <section className="relative overflow-hidden pt-28 pb-16 lg:pt-36 lg:pb-24">
       {/* Aurora field + grid — the futuristic light behind the fold */}
@@ -71,18 +61,14 @@ export default function Hero() {
               <ArrowRight size={15} />
             </a>
           </Button>
-          <button
-            onClick={copyInstall}
-            className="group inline-flex w-full sm:w-auto items-center justify-center gap-3 rounded-xl border border-border-strong bg-background px-5 h-12 font-mono text-[13.5px] text-text-primary shadow-xs hover:border-primary/40 transition-colors"
+          <a
+            href="#mcp"
+            className="group inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-border-strong bg-background px-5 h-12 text-[14px] font-medium text-text-primary shadow-xs hover:border-primary/40 transition-colors"
           >
-            <ChevronRight size={15} strokeWidth={2.5} className="text-primary -ml-0.5" />
-            <span>npx tracebug init</span>
-            {copied ? (
-              <Check size={15} className="text-success" />
-            ) : (
-              <Copy size={15} className="text-text-subtle group-hover:text-primary transition-colors" />
-            )}
-          </button>
+            <Sparkles size={15} className="text-primary" />
+            See it debug with AI
+            <ArrowRight size={15} className="text-text-subtle transition-transform group-hover:translate-x-0.5" />
+          </a>
         </div>
 
         {/* Product visual — light browser frame with the auto-generated report */}
