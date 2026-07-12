@@ -3,23 +3,26 @@
 import { useState } from "react";
 import SectionHeading from "@/components/SectionHeading";
 import { ChromeIcon, NpmIcon, GitHubIcon, TerminalIcon } from "@/components/ui/brand-icons";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Sparkles } from "lucide-react";
 import { SDK_VERSION } from "@/lib/version";
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
-type TabKey = "npm" | "cli" | "chrome" | "github";
+type TabKey = "chrome" | "mcp" | "npm" | "cli" | "github";
 
+// Extension first (anyone, no code), then the AI-agent/MCP hand-off — the two
+// primary paths. The SDK is the developer option, not the default.
 const TABS: { key: TabKey; label: string; Icon: any }[] = [
+  { key: "chrome", label: "Chrome extension", Icon: ChromeIcon },
+  { key: "mcp", label: "AI agents (MCP)", Icon: Sparkles },
   { key: "npm", label: "npm (SDK)", Icon: NpmIcon },
   { key: "cli", label: "CLI setup", Icon: TerminalIcon },
-  { key: "chrome", label: "Chrome extension", Icon: ChromeIcon },
   { key: "github", label: "GitHub", Icon: GitHubIcon },
 ];
 
 export default function Installation() {
-  const [activeTab, setActiveTab] = useState<TabKey>("npm");
+  const [activeTab, setActiveTab] = useState<TabKey>("chrome");
   const [copied, setCopied] = useState<string | null>(null);
 
   const copy = (id: string, text: string) => {
@@ -34,19 +37,19 @@ export default function Installation() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Get started"
-          title="Install once. Capture with a shortcut. Share one file."
+          title="One click to capture. One command to debug with AI."
           subtitle={
             <>
-              npm SDK for developers, Chrome extension for everyone else. Either way,{" "}
-              <code className="font-mono text-[0.9em] text-text-primary">Ctrl+Shift+B</code>{" "}
-              captures the bug and saves it as a single .html file you can share anywhere.
+              Install the Chrome extension and capture a bug on any site — no code. Hand the exported
+              report to your AI coding agent through the local MCP server to fix it. Embedding in your
+              own app instead? The SDK is two lines.
             </>
           }
           className="mb-10"
         />
 
-        {/* Two ways in — one product. Makes the audience split obvious before
-            the install commands. */}
+        {/* The two priorities: capture with the extension, debug with an AI agent.
+            The SDK is still here — as a tab, not a headline. */}
         <div className="grid sm:grid-cols-2 gap-4 max-w-3xl mx-auto mb-10">
           <div className="rounded-2xl border border-border bg-background p-5 shadow-xs">
             <div className="flex items-center gap-2.5 mb-2">
@@ -56,18 +59,20 @@ export default function Installation() {
               <span className="text-[15px] font-semibold text-text-primary">Chrome extension</span>
             </div>
             <p className="text-[13.5px] text-text-muted leading-relaxed">
-              For QA, designers, PMs — anyone who reports bugs. Nothing to add to the codebase.
+              For QA, designers, PMs — anyone who reports bugs. Capture on any site, nothing to add to
+              the codebase.
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-background p-5 shadow-xs">
             <div className="flex items-center gap-2.5 mb-2">
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.10] text-accent">
-                <NpmIcon size={17} />
+                <Sparkles size={17} />
               </span>
-              <span className="text-[15px] font-semibold text-text-primary">SDK</span>
+              <span className="text-[15px] font-semibold text-text-primary">AI coding agents</span>
             </div>
             <p className="text-[13.5px] text-text-muted leading-relaxed">
-              For developers embedding TraceBug in an app — two lines, any front-end framework.
+              Hand the report to Claude Code, Cursor, or any MCP client — it debugs from the real
+              console, network, and repro data.
             </p>
           </div>
         </div>
@@ -91,6 +96,40 @@ export default function Installation() {
         </div>
 
         <div className="rounded-2xl border border-border bg-background shadow-card p-6 sm:p-8">
+          {activeTab === "mcp" && (
+            <div className="space-y-6">
+              <Step n={1} title="Connect it to Claude Code (one command)">
+                <CodeBlock
+                  id="mcp-add"
+                  copied={copied}
+                  onCopy={copy}
+                  code="claude mcp add tracebug -- npx -y tracebug mcp"
+                />
+              </Step>
+              <Step n={2} title="…or add it to any MCP client — Cursor, Windsurf, VS Code">
+                <CodeBlock
+                  id="mcp-json"
+                  copied={copied}
+                  onCopy={copy}
+                  code={`{
+  "mcpServers": {
+    "tracebug": { "command": "npx", "args": ["-y", "tracebug", "mcp"] }
+  }
+}`}
+                />
+              </Step>
+              <Note>
+                Export a bug as <code className="font-mono text-text-primary">.html</code>, then paste the
+                auto-copied prompt (or run <code className="font-mono text-text-primary">/tracebug:debug_bug_report</code>{" "}
+                in Claude Code). The agent reads the console, network, repro steps, and screenshots — and
+                fixes it in your code. <b className="text-text-primary">Fully local; nothing uploaded.</b> No{" "}
+                <code className="font-mono text-text-primary">--dir</code> needed — it auto-finds reports in
+                your Downloads.{" "}
+                <a href="/docs/mcp" className="text-primary hover:underline">Read the MCP docs →</a>
+              </Note>
+            </div>
+          )}
+
           {activeTab === "npm" && (
             <div className="space-y-6">
               <Step n={1} title="Install">
