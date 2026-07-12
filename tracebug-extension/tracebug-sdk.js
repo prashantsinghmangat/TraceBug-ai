@@ -27397,8 +27397,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       `2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).`,
       `3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.`,
       ``,
-      `If the tracebug MCP server isn't connected yet, register it first (point --dir at the folder containing the export):`,
-      `claude mcp add tracebug -- npx -y tracebug mcp --dir <reports-folder>`
+      `If the tracebug MCP server isn't connected yet, register it first \u2014 it auto-finds reports in your Downloads/Desktop folders, so no path setup is needed:`,
+      `claude mcp add tracebug -- npx -y tracebug mcp`,
+      `(If your reports live elsewhere, add: --dir "<reports-folder>")`
     ].join("\n");
   }
   function openInClaude(prompt) {
