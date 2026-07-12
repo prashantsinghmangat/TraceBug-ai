@@ -125,21 +125,33 @@ TraceBug.init({
                 onCopy={copy}
                 code={`$ npx tracebug init
 
-TraceBug — Setting up bug reporting
+TraceBug — the exact setup for your framework
 
   Detected framework: nextjs
 
-  Add this to your project:
-  ───────────────────────────
-  import TraceBug from "tracebug-sdk";
-  TraceBug.init({ projectId: "my-app" });
-  ───────────────────────────
+  ⚠ Heads up (nextjs): App Router components run on the
+  server by default, but TraceBug is browser-only — it must
+  live in a Client Component ("use client") + useEffect.
 
-  Done! TraceBug is ready.`}
+  // app/tracebug.tsx
+  "use client";
+  import { useEffect } from "react";
+  export default function TraceBugInit() {
+    useEffect(() => {
+      import("tracebug-sdk").then(({ default: TraceBug }) =>
+        TraceBug.init({ projectId: "my-app", enabled: "auto" })
+      );
+    }, []);
+    return null;
+  }
+  // then mount <TraceBugInit /> in app/layout.tsx`}
               />
               <Note>
-                Supports <b className="text-text-primary">React, Next.js, Vue, Angular, Svelte, Nuxt</b> and
-                vanilla JS. The CLI auto-detects your framework from <code className="font-mono">package.json</code>.
+                Detects your framework from <code className="font-mono">package.json</code> and prints the
+                <b className="text-text-primary"> correct integration</b> — including the non-obvious bits for{" "}
+                <b className="text-text-primary">Next.js, Nuxt, and Svelte</b> (SSR-safe mounting) plus the{" "}
+                <code className="font-mono">enabled: &quot;auto&quot;</code> dev-only flag. It prints the snippet;
+                you paste it.
               </Note>
             </div>
           )}

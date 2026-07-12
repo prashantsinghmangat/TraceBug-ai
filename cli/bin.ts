@@ -7,6 +7,7 @@ const command = args[0]
 const BOLD = '\x1b[1m'
 const CYAN = '\x1b[36m'
 const GREEN = '\x1b[32m'
+const YELLOW = '\x1b[33m'
 const DIM = '\x1b[2m'
 const RESET = '\x1b[0m'
 
@@ -59,7 +60,7 @@ function printHelp() {
 ${BOLD}TraceBug CLI${RESET} — Debug bugs in seconds, not hours
 
 ${BOLD}Commands:${RESET}
-  ${CYAN}init${RESET}    Set up TraceBug in your project
+  ${CYAN}init${RESET}    Print the exact TraceBug setup for your framework (incl. the gotcha)
   ${CYAN}mcp${RESET}     Start the MCP server so AI agents (Claude Code, Cursor) can read
           exported bug reports. Options: ${DIM}--dir <path>${RESET} (default: current dir)
   ${CYAN}help${RESET}    Show this help message
@@ -73,94 +74,122 @@ ${BOLD}Docs:${RESET} https://tracebug.dev/docs
 }
 
 async function initProject() {
-  console.log(`\n${BOLD}${CYAN}TraceBug${RESET} — Setting up bug reporting\n`)
-
-  // Detect framework
   const fs = await import('fs')
   const path = await import('path')
   const cwd = process.cwd()
+  const projectId = path.basename(cwd) || 'my-app'
 
+  console.log(`\n${BOLD}${CYAN}TraceBug${RESET} — the exact setup for your framework`)
+  console.log(`${DIM}(this prints the right snippet — it doesn't install or edit any files)${RESET}\n`)
+
+  // Detect framework from package.json.
   let framework = 'vanilla'
   const pkgPath = path.join(cwd, 'package.json')
-
   if (fs.existsSync(pkgPath)) {
     try {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
       const deps = { ...pkg.dependencies, ...pkg.devDependencies }
       if (deps['next']) framework = 'nextjs'
       else if (deps['nuxt']) framework = 'nuxt'
-      else if (deps['vue']) framework = 'vue'
       else if (deps['@angular/core']) framework = 'angular'
       else if (deps['svelte']) framework = 'svelte'
+      else if (deps['vue']) framework = 'vue'
       else if (deps['react']) framework = 'react'
     } catch {}
   }
 
-  console.log(`  Detected framework: ${GREEN}${framework}${RESET}`)
-
-  // Print setup instructions
-  const snippets: Record<string, string> = {
-    nextjs: `// app/tracebug.tsx (create this file)
+  // Each guide leads with the snippet AND (for the tricky ones) the gotcha that
+  // actually trips developers up — not just the two lines they could copy from
+  // the docs. All snippets set `enabled: "auto"` (dev/staging only).
+  const guides: Record<string, { snippet: string; gotcha?: string }> = {
+    nextjs: {
+      snippet: `// 1 — create app/tracebug.tsx
 "use client";
 import { useEffect } from "react";
 
 export default function TraceBugInit() {
   useEffect(() => {
-    import("tracebug-sdk").then(({ default: TraceBug }) => {
-      TraceBug.init({ projectId: "${path.basename(cwd)}" });
-    });
+    import("tracebug-sdk").then(({ default: TraceBug }) =>
+      TraceBug.init({ projectId: "${projectId}", enabled: "auto" })
+    );
   }, []);
   return null;
 }
 
-// Then add <TraceBugInit /> to your root layout.tsx`,
-
-    react: `// src/main.tsx (add to your entry file)
+// 2 — mount it once inside <body> in app/layout.tsx:  <TraceBugInit />`,
+      gotcha: `App Router components run on the server by default, but TraceBug is
+  browser-only. It must live in a Client Component ("use client") and fire from
+  useEffect — calling init() in a server component silently does nothing.`,
+    },
+    nuxt: {
+      snippet: `// plugins/tracebug.client.ts   (the .client suffix is required)
 import TraceBug from "tracebug-sdk";
-TraceBug.init({ projectId: "${path.basename(cwd)}" });`,
 
-    vue: `// main.ts (add to your entry file)
-import TraceBug from "tracebug-sdk";
-TraceBug.init({ projectId: "${path.basename(cwd)}" });`,
-
-    svelte: `<!-- +layout.svelte (add to your root layout) -->
+export default defineNuxtPlugin(() => {
+  TraceBug.init({ projectId: "${projectId}", enabled: "auto" });
+});`,
+      gotcha: `The ".client.ts" filename is what keeps TraceBug out of the SSR
+  bundle — a plain tracebug.ts would try to run during server render and crash.`,
+    },
+    svelte: {
+      snippet: `<!-- src/routes/+layout.svelte -->
 <script>
-  import { onMount } from 'svelte';
-  import TraceBug from 'tracebug-sdk';
-  onMount(() => TraceBug.init({ projectId: "${path.basename(cwd)}" }));
+  import { onMount } from "svelte";
+  import TraceBug from "tracebug-sdk";
+  onMount(() => TraceBug.init({ projectId: "${projectId}", enabled: "auto" }));
 </script>`,
-
-    angular: `// app.component.ts (add to constructor or ngOnInit)
+      gotcha: `Use onMount — it only runs in the browser, keeping TraceBug out of
+  SvelteKit's SSR pass. A top-level init() call would break the server render.`,
+    },
+    react: {
+      snippet: `// src/main.tsx  (your app entry file)
 import TraceBug from "tracebug-sdk";
-TraceBug.init({ projectId: "${path.basename(cwd)}" });`,
 
-    vanilla: `<!-- Add before </body> -->
+TraceBug.init({ projectId: "${projectId}", enabled: "auto" });`,
+    },
+    vue: {
+      snippet: `// src/main.ts  (your app entry file)
+import TraceBug from "tracebug-sdk";
+
+TraceBug.init({ projectId: "${projectId}", enabled: "auto" });`,
+    },
+    angular: {
+      snippet: `// src/main.ts  (before bootstrapApplication / bootstrapModule)
+import TraceBug from "tracebug-sdk";
+
+TraceBug.init({ projectId: "${projectId}", enabled: "auto" });`,
+    },
+    vanilla: {
+      snippet: `<!-- add before </body> -->
 <script type="module">
   import TraceBug from "tracebug-sdk";
-  TraceBug.init({ projectId: "${path.basename(cwd)}" });
+  TraceBug.init({ projectId: "${projectId}", enabled: "auto" });
 </script>`,
-
-    nuxt: `// plugins/tracebug.client.ts (create this file)
-import TraceBug from "tracebug-sdk";
-export default defineNuxtPlugin(() => {
-  TraceBug.init({ projectId: "${path.basename(cwd)}" });
-});`,
+    },
   }
 
-  console.log(`\n${BOLD}Add this to your project:${RESET}\n`)
-  console.log(`${DIM}───────────────────────────────────────${RESET}`)
-  console.log(snippets[framework])
-  console.log(`${DIM}───────────────────────────────────────${RESET}`)
+  const guide = guides[framework]
+  console.log(`  Detected framework: ${GREEN}${framework}${RESET}\n`)
 
-  console.log(`
-${BOLD}Next steps:${RESET}
-  1. Install the SDK:  ${CYAN}npm install tracebug-sdk${RESET}
-  2. Add the snippet above to your app
-  3. Run your dev server and interact with your app
-  4. Click the TraceBug toolbar to see captured sessions
+  console.log(`${BOLD}1. Install the SDK${RESET}`)
+  console.log(`   ${CYAN}npm install tracebug-sdk${RESET}\n`)
 
-${GREEN}Done!${RESET} TraceBug is ready. Happy debugging.
-`)
+  console.log(`${BOLD}2. Add this yourself${RESET}`)
+  console.log(`${DIM}───────────────────────────────────────────────────${RESET}`)
+  console.log(guide.snippet)
+  console.log(`${DIM}───────────────────────────────────────────────────${RESET}\n`)
+
+  if (guide.gotcha) {
+    console.log(`${YELLOW}${BOLD}⚠ Heads up (${framework}):${RESET}${YELLOW} ${guide.gotcha}${RESET}\n`)
+  }
+
+  console.log(`${DIM}  enabled: "auto" loads TraceBug in dev & staging only — it never ships
+  to your production users. Set enabled: true to force it on.${RESET}\n`)
+
+  console.log(`${BOLD}3. Run your app${RESET}, reproduce a bug, then click ${BOLD}Export .html${RESET} on the toolbar.\n`)
+
+  console.log(`${DIM}Hand the exported report to your AI agent:${RESET}  ${CYAN}npx tracebug mcp${RESET}`)
+  console.log(`${DIM}Full guide:${RESET}  https://tracebug.dev/docs/getting-started\n`)
 }
 
 main().catch(console.error)

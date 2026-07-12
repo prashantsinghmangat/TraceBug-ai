@@ -13,6 +13,7 @@ All notable changes to TraceBug are documented here.
 
 ### Changed
 
+- **`npx tracebug init` is now honest and actually useful** (`cli/bin.ts`) — it no longer claims to "set up" the project or print "Done! ready" when it only echoes a snippet. It now states plainly that it prints (doesn't install/edit), and — the real value — **leads with the framework gotcha** developers actually trip on: the Next.js App-Router `"use client"` + `useEffect` requirement, Nuxt's `.client.ts` SSR rule, and Svelte's `onMount`. All snippets now include the dev-only `enabled: "auto"` flag with an explainer. Website "CLI setup" tab updated to match.
 - **shadcn (new-york) UI re-skin** — the injected widget (`src/theme.ts`), the exported replay viewer (`src/exporters/html-template.ts`), the AI export (`src/exporters/ai-prompt.ts`), and the extension popup (`tracebug-extension/styles.css`) all now share the website's brand palette (violet-600 primary, cyber-graphite dark, hairline borders, 8/12/16 radii). Buttons match new-york variants (glow primary, `active` press, `focus-visible` rings via `--tb-ring`); the Quick Bug modal is a `rounded-2xl` card. Hardcoded off-palette colors in the draw/annotate tools were tokenized.
 - **`prebuild` hook regenerates the rrweb runtime** — `src/exporters/rrweb-runtime.generated.ts` is gitignored and rebuilt by a `prebuild` step wired into all `build*` scripts, so a fresh clone builds cleanly.
 
