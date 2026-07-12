@@ -23,6 +23,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/#demo", label: "Demo" },
+    { href: "/#mcp", label: "AI Agents" },
     { href: "/features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
     { href: "/docs", label: "Docs" },
