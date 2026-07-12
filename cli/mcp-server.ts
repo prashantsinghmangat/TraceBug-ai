@@ -14,6 +14,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 
 // ── Payload shape (mirrors BundlePayload in src/exporters/html-template.ts) ──
 
@@ -86,9 +87,19 @@ function isReportPayload(p: unknown): p is ReportPayload {
   );
 }
 
+interface ScanOpts {
+  /** Override the default depth limit (MAX_SCAN_DEPTH). Use a small value for
+   *  large shared folders like Downloads so the scan stays fast. */
+  maxDepth?: number;
+  /** Only consider files whose name passes this test before parsing — a cheap
+   *  prefilter that avoids reading every unrelated `.html` in a crowded folder. */
+  nameFilter?: (name: string) => boolean;
+}
+
 /** Recursively find TraceBug export files under `dir` (depth-limited). */
-export function scanReportFiles(dir: string, depth = 0): string[] {
-  if (depth > MAX_SCAN_DEPTH) return [];
+export function scanReportFiles(dir: string, depth = 0, opts: ScanOpts = {}): string[] {
+  const maxDepth = opts.maxDepth ?? MAX_SCAN_DEPTH;
+  if (depth > maxDepth) return [];
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -100,13 +111,69 @@ export function scanReportFiles(dir: string, depth = 0): string[] {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
-        found.push(...scanReportFiles(full, depth + 1));
+        found.push(...scanReportFiles(full, depth + 1, opts));
       }
     } else if (entry.name.endsWith(".html") || entry.name.endsWith(".json")) {
+      if (opts.nameFilter && !opts.nameFilter(entry.name)) continue;
       if (parseReportFile(full) !== null) found.push(full);
     }
   }
   return found;
+}
+
+// TraceBug exports are named `tracebug-replay-*`, `tracebug-ai-*`, etc. Used to
+// prefilter big shared folders (Downloads/Desktop) so we don't parse every
+// unrelated `.html` there. The user's own `--dir` is scanned without this
+// filter, so renamed reports still resolve when pointed at directly.
+const TB_EXPORT_NAME_RE = /^tracebug[-.]/i;
+
+/** Directories to search for reports, beyond `--dir`: the download/desktop
+ *  folders where browser exports land, plus cwd — so a bare filename resolves
+ *  without the user configuring `--dir`. Returns existing dirs only, deduped,
+ *  with `baseDir` first (it wins basename ties). */
+export function knownReportDirs(baseDir: string): string[] {
+  const raw = [baseDir, process.cwd()];
+  try {
+    const home = os.homedir();
+    raw.push(path.join(home, "Downloads"), path.join(home, "Desktop"));
+  } catch { /* no home dir available */ }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of raw) {
+    let key: string;
+    try { key = path.resolve(d); } catch { continue; }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    try { if (fs.statSync(d).isDirectory()) out.push(d); } catch { /* skip missing */ }
+  }
+  return out;
+}
+
+/** All TraceBug reports discoverable for this server: `baseDir` scanned fully,
+ *  plus the well-known export folders scanned shallow + name-prefiltered (fast
+ *  even in a crowded Downloads). Deduped by absolute path; baseDir results first. */
+export function collectReports(baseDir: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (f: string) => {
+    const key = path.resolve(f);
+    if (!seen.has(key)) { seen.add(key); out.push(f); }
+  };
+  for (const f of scanReportFiles(baseDir)) add(f);
+  const baseKey = path.resolve(baseDir);
+  for (const dir of knownReportDirs(baseDir)) {
+    if (path.resolve(dir) === baseKey) continue; // baseDir already fully scanned
+    for (const f of scanReportFiles(dir, 0, { maxDepth: 1, nameFilter: (n) => TB_EXPORT_NAME_RE.test(n) })) add(f);
+  }
+  return out;
+}
+
+/** How a report path is shown to the agent: relative to baseDir when it's under
+ *  it, otherwise just the basename (which requireReport resolves across all
+ *  known dirs anyway). */
+function displayReportName(baseDir: string, file: string): string {
+  const rel = path.relative(baseDir, file);
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : path.basename(file);
 }
 
 // ── Tool implementations ─────────────────────────────────────────────────
@@ -120,11 +187,20 @@ export function scanReportFiles(dir: string, depth = 0): string[] {
 // accept "a UUID or a jam.dev URL" for the same reason — agents paste
 // whatever identifier they have.
 function requireReport(baseDir: string, file: string): { payload: ReportPayload; resolved: string } {
-  const direct = path.isAbsolute(file) ? file : path.join(baseDir, file);
-  const directPayload = parseReportFile(direct);
-  if (directPayload) return { payload: directPayload, resolved: direct };
+  // Direct path: absolute as-is, else relative to baseDir OR the cwd the agent
+  // runs in (an agent often has the report's absolute path already).
+  const directCandidates = path.isAbsolute(file)
+    ? [file]
+    : [path.join(baseDir, file), path.resolve(process.cwd(), file)];
+  for (const direct of directCandidates) {
+    const p = parseReportFile(direct);
+    if (p) return { payload: p, resolved: direct };
+  }
 
-  const candidates = scanReportFiles(baseDir);
+  // Fall back to searching baseDir + the well-known export folders (Downloads,
+  // Desktop, cwd), so a bare filename resolves without the server being pointed
+  // at the download folder.
+  const candidates = collectReports(baseDir);
   const query = file.toLowerCase();
   let match = candidates.find((c) => path.basename(c).toLowerCase() === query);
   if (!match) {
@@ -136,12 +212,12 @@ function requireReport(baseDir: string, file: string): { payload: ReportPayload;
   }
   if (match) return { payload: parseReportFile(match)!, resolved: match };
 
-  const available = candidates.map((c) => path.relative(baseDir, c) || c);
+  const available = candidates.map((c) => displayReportName(baseDir, c));
   throw new Error(
     `Not a TraceBug export: ${file}. ` +
       (available.length
         ? `Available reports: ${available.join(", ")}`
-        : `No reports found under ${baseDir} — check the server's --dir.`)
+        : `No reports found under ${baseDir}, Downloads, or Desktop — pass an absolute path, or point the server's --dir at your reports folder.`)
   );
 }
 
@@ -198,12 +274,18 @@ export function buildInvestigationGuide(p: ReportPayload): string[] {
 }
 
 export function toolListBugReports(baseDir: string, args: { dir?: string }) {
+  // An explicit `dir` arg scans exactly that folder. Otherwise scan baseDir —
+  // widened to the well-known export folders (Downloads/Desktop/cwd) only when
+  // the server was started WITHOUT an explicit --dir (AUTO_DISCOVER), so a user
+  // who did point --dir at a specific folder gets exactly that folder's reports.
   const scanDir = args.dir ? (path.isAbsolute(args.dir) ? args.dir : path.join(baseDir, args.dir)) : baseDir;
-  const files = scanReportFiles(scanDir);
+  const files = args.dir
+    ? scanReportFiles(scanDir)
+    : AUTO_DISCOVER ? collectReports(baseDir) : scanReportFiles(baseDir);
   const reports = files.map((file) => {
     const p = parseReportFile(file)!;
     return {
-      file: path.relative(baseDir, file) || file,
+      file: displayReportName(baseDir, file),
       title: p.meta.title,
       summary: p.meta.summary,
       severity: p.meta.severity,
@@ -222,7 +304,7 @@ export function toolListBugReports(baseDir: string, args: { dir?: string }) {
   });
   return {
     count: reports.length,
-    scannedDir: scanDir,
+    scannedDir: args.dir ? scanDir : (AUTO_DISCOVER ? knownReportDirs(baseDir).join(", ") : baseDir),
     reports,
     ...(reports.length
       ? { nextStep: "Call get_bug_report on a file for the full overview plus a prioritized investigation guide." }
@@ -531,11 +613,20 @@ function reply(id: number | string | null | undefined, result: object): object {
 }
 
 let SERVER_VERSION = "0.0.0";
+// When the server starts WITHOUT an explicit --dir, list_bug_reports widens its
+// enumeration to the well-known export folders (Downloads/Desktop/cwd) so the
+// "debug the most recent report" flow finds reports with zero setup. Targeted
+// lookups (get_bug_report by name) always search those folders regardless.
+let AUTO_DISCOVER = false;
 
 /** Start the MCP server on stdio. Resolves when stdin closes. */
-export function runMcpServer(baseDir: string, version: string): Promise<void> {
+export function runMcpServer(baseDir: string, version: string, autoDiscover = false): Promise<void> {
   SERVER_VERSION = version;
-  process.stderr.write(`TraceBug MCP server — reading bug reports from ${baseDir}\n`);
+  AUTO_DISCOVER = autoDiscover;
+  process.stderr.write(
+    `TraceBug MCP server — reading bug reports from ${baseDir}` +
+      (autoDiscover ? " (+ Downloads/Desktop auto-discovery)" : "") + "\n"
+  );
 
   return new Promise((resolve) => {
     let buffer = "";
