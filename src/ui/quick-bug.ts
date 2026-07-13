@@ -455,6 +455,10 @@ function _openModal(
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Add page shot
             </button>
+            <button data-action="download-screenshots" class="tb-qb-ss-add" title="Download all ${ssCount} screenshot${ssCount === 1 ? "" : "s"} as PNG file${ssCount === 1 ? "" : "s"} — attach next to the report or drop into a chat">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Download
+            </button>
           </div>
           <div class="tb-qb-thumbs">
             ${screenshots.map((ss, i) => `
@@ -987,13 +991,17 @@ function _openModal(
 
   // Download screenshots — raw PNG(s) the user attaches next to the .md report
   // so the agent gets real visuals through the cheap vision path (not base64).
-  modal.querySelector('[data-action="download-screenshots"]')?.addEventListener("click", () => {
-    if (!screenshots.length) {
-      showToast("No screenshots captured", root);
-      return;
-    }
-    _downloadAllScreenshots(screenshots);
-    showToast(`✓ Downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}`, root);
+  // Two triggers: the More-menu item and the button in the screenshot strip
+  // (next to "Add page shot") — wire both.
+  modal.querySelectorAll('[data-action="download-screenshots"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (!screenshots.length) {
+        showToast("No screenshots captured", root);
+        return;
+      }
+      _downloadAllScreenshots(screenshots);
+      showToast(`✓ Downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}`, root);
+    });
   });
 
   /* PHASE2-CLOUD: share link handler disabled for Phase 1 offline release
