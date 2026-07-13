@@ -84,7 +84,7 @@ export default function AgentHandoff() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
           {STEPS.map(({ Icon, label, desc }, i) => (
             <div key={label} className="relative">
-              <div className="group card-rise h-full rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover">
+              <div className="spotlight group card-rise h-full rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover">
                 <div className="flex items-center gap-3 mb-4">
                   <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
                     <Icon size={18} />

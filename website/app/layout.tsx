@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { SDK_VERSION } from "@/lib/version";
 import ConsoleEgg from "@/components/ConsoleEgg";
+import SpotlightEffect from "@/components/SpotlightEffect";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -74,9 +75,10 @@ export const viewport: Viewport = {
   ],
 };
 
-// Applied before paint so the chosen theme never flashes. Light is the default;
-// we only switch to dark when the user explicitly opted in previously.
-const themeInit = `(function(){try{var t=localStorage.getItem('tracebug-theme');if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`;
+// Applied before paint so the chosen theme never flashes. An explicit choice
+// (localStorage) always wins; with no stored choice we follow the OS
+// preference — our dev audience skews dark, don't fight their system theme.
+const themeInit = `(function(){try{var t=localStorage.getItem('tracebug-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -110,6 +112,7 @@ export default function RootLayout({
       <body className="bg-background text-text-primary antialiased">
         {children}
         <ConsoleEgg />
+        <SpotlightEffect />
       </body>
     </html>
   );
