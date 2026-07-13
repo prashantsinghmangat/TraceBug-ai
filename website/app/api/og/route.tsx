@@ -7,8 +7,8 @@ export const runtime = 'edge'
 const MARK_SVG =
   "<svg xmlns='http://www.w3.org/2000/svg' width='76' height='76' viewBox='0 0 96 96'>" +
   "<defs><linearGradient id='c' x1='0' y1='0' x2='96' y2='96' gradientUnits='userSpaceOnUse'>" +
-  "<stop offset='0' stop-color='#7C5CFF'/><stop offset='1' stop-color='#22D3EE'/></linearGradient></defs>" +
-  "<rect x='2' y='2' width='92' height='92' rx='26' fill='#0B0B0F'/>" +
+  "<stop offset='0' stop-color='#818CF8'/><stop offset='1' stop-color='#4F46E5'/></linearGradient></defs>" +
+  "<rect x='2' y='2' width='92' height='92' rx='26' fill='#0B0B10'/>" +
   "<path d='M30 33 L47 48 L30 63' fill='none' stroke='#EAECF3' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/>" +
   "<rect x='52' y='41' width='14' height='14' rx='4' fill='url(#c)'/></svg>";
 const MARK_SRC = `data:image/svg+xml;base64,${btoa(MARK_SVG)}`;
@@ -32,10 +32,10 @@ export async function GET() {
         }}
       >
         {/* soft aurora washes */}
-        <div style={{ position: 'absolute', top: -160, right: -120, width: 520, height: 520, borderRadius: 9999, background: 'radial-gradient(circle, rgba(124,92,255,0.28), transparent 70%)', display: 'flex' }} />
+        <div style={{ position: 'absolute', top: -160, right: -120, width: 520, height: 520, borderRadius: 9999, background: 'radial-gradient(circle, rgba(99,102,241,0.28), transparent 70%)', display: 'flex' }} />
         <div style={{ position: 'absolute', bottom: -200, left: -120, width: 520, height: 520, borderRadius: 9999, background: 'radial-gradient(circle, rgba(34,211,238,0.22), transparent 70%)', display: 'flex' }} />
         {/* top gradient hairline */}
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 6, background: 'linear-gradient(90deg, #7C5CFF, #6D4AFF, #22D3EE)', display: 'flex' }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 6, background: 'linear-gradient(90deg, #818CF8, #6366F1, #4F46E5)', display: 'flex' }} />
 
         {/* logo lockup */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 40 }}>
@@ -51,7 +51,7 @@ export async function GET() {
           </span>
           <span style={{ fontSize: 72, fontWeight: 700, letterSpacing: -2, lineHeight: 1.05, display: 'flex' }}>
             <span style={{ color: '#0C0F17' }}>can&nbsp;</span>
-            <span style={{ background: 'linear-gradient(120deg, #7C5CFF, #22D3EE)', backgroundClip: 'text', color: 'transparent', display: 'flex' }}>
+            <span style={{ background: 'linear-gradient(120deg, #818CF8, #4F46E5)', backgroundClip: 'text', color: 'transparent', display: 'flex' }}>
               actually open
             </span>
           </span>

@@ -19,8 +19,8 @@ let _onDeactivate: (() => void) | null = null;
 let _persistentBadges: HTMLElement[] = [];
 let _badgeRoot: HTMLElement | null = null;
 
-const HIGHLIGHT_COLOR = "#7C5CFF";
-const SELECTION_COLOR = "#22D3EE";
+const HIGHLIGHT_COLOR = "#6366F1";
+const SELECTION_COLOR = "#4F46E5";
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -47,10 +47,10 @@ export function activateElementAnnotateMode(
   _modeBanner.dataset.tracebug = "annotate-banner";
   _modeBanner.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-    background: linear-gradient(90deg, var(--tb-gradient-start, #7C5CFF), var(--tb-gradient-end, #5B3FDF)); color: #fff;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #6366F1), var(--tb-gradient-end, #4F46E5)); color: #fff;
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(123, 97, 255, 0.3);
+    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
     animation: tracebug-slide-down 0.2s ease;
   `;
   _modeBanner.innerHTML = `
@@ -91,7 +91,7 @@ export function activateElementAnnotateMode(
   _highlightOverlay.dataset.tracebug = "element-highlight";
   _highlightOverlay.style.cssText = `
     position: fixed; pointer-events: none; z-index: 2147483646;
-    border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(123, 97, 255, 0.08);
+    border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(99, 102, 241, 0.08);
     border-radius: 3px; transition: all 0.08s ease; display: none;
   `;
   root.appendChild(_highlightOverlay);
@@ -511,7 +511,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
     left: ${left}px; top: ${top}px; width: 310px;
     background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
     padding: 18px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif); font-size: 13px;
-    color: var(--tb-text-primary, #E6EDF3); box-shadow: var(--tb-shadow-lg, 0 12px 40px rgba(0,0,0,0.5));
+    color: var(--tb-text-primary, #FAFAFA); box-shadow: var(--tb-shadow-lg, 0 12px 40px rgba(0,0,0,0.5));
     animation: tracebug-slide-down 0.15s ease;
   `;
 
@@ -522,7 +522,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
   popover.innerHTML = `
     <div style="margin-bottom:14px">
-      <div style="font-size:13px;font-weight:600;color:var(--tb-text-primary, #E6EDF3);margin-bottom:4px">
+      <div style="font-size:13px;font-weight:600;color:var(--tb-text-primary, #FAFAFA);margin-bottom:4px">
         ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
       </div>
       <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(selectorText)}">
@@ -542,7 +542,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
     <div style="margin-bottom:12px">
       <div style="font-size:11px;color:var(--tb-text-muted, #868E9F);margin-bottom:6px;font-weight:500">Priority</div>
-      <select id="tracebug-sev-select" style="width:100%;background:var(--tb-bg-primary, #0B0D10);border:1px solid var(--tb-border-hover, #2A3441);color:var(--tb-text-primary, #E6EDF3);padding:8px 10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;cursor:pointer">
+      <select id="tracebug-sev-select" style="width:100%;background:var(--tb-bg-primary, #0B0B10);border:1px solid var(--tb-border-hover, #2A2A35);color:var(--tb-text-primary, #FAFAFA);padding:8px 10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;cursor:pointer">
         <option value="critical">Critical - Blocks users</option>
         <option value="major">Major - Significant issue</option>
         <option value="minor" selected>Minor - Small improvement</option>
@@ -555,13 +555,13 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
         <span style="font-size:11px;color:var(--tb-text-muted, #868E9F);font-weight:500">Describe the issue</span>
         <span id="tracebug-char-count" style="font-size:10px;color:var(--tb-text-muted, #868E9F)">0 / 500</span>
       </div>
-      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:var(--tb-bg-primary, #0B0D10);border:1px solid var(--tb-border-hover, #2A3441);color:var(--tb-text-primary, #E6EDF3);padding:10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
+      <textarea id="tracebug-ann-comment" rows="4" maxlength="500" placeholder="What's wrong? What should change?&#10;e.g. 'Button text is misleading — should say Save instead of Submit'" style="width:100%;background:var(--tb-bg-primary, #0B0B10);border:1px solid var(--tb-border-hover, #2A2A35);color:var(--tb-text-primary, #FAFAFA);padding:10px;border-radius:var(--tb-radius-md, 8px);font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box;line-height:1.4"></textarea>
       <div id="tracebug-comment-error" style="font-size:11px;color:#ef4444;margin-top:4px;display:none">Please describe the issue before saving.</div>
     </div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#7C5CFF;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(123,97,255,0.3)">Save Annotation</button>
+      <button id="tracebug-ann-save" style="background:#6366F1;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(99,102,241,0.3)">Save Annotation</button>
     </div>
   `;
 
@@ -662,7 +662,7 @@ function _intentBtnStyle(intent: AnnotationIntent, active: boolean): string {
 function _intentColor(intent: AnnotationIntent): string {
   switch (intent) {
     case "fix": return "#ef4444";
-    case "redesign": return "#7C5CFF";
+    case "redesign": return "#6366F1";
     case "remove": return "#f97316";
     case "question": return "#3b82f6";
   }

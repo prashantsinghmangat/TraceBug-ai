@@ -64,7 +64,7 @@ export function showUpgradeModal(options: UpgradeOptions, root?: HTMLElement | n
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button data-action="upgrade" style="flex:1;background:var(--tb-accent, #7C5CFF);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Upgrade (Coming Soon)</button>
+      <button data-action="upgrade" style="flex:1;background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:var(--tb-radius-md, 6px);padding:10px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">Upgrade (Coming Soon)</button>
       <button data-action="close" style="background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px 14px;cursor:pointer;font-size:12px;font-family:inherit">Not now</button>
     </div>
 

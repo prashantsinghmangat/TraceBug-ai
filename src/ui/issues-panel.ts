@@ -70,8 +70,8 @@ function _injectStyles(): void {
   style.id = STYLE_ID;
   style.textContent = `
     @keyframes tracebug-issue-locate-flash {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(123,97,255,0.0); outline: 2px solid transparent; }
-      30% { box-shadow: 0 0 0 6px rgba(123,97,255,0.5); outline: 2px solid #7C5CFF; }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }
+      30% { box-shadow: 0 0 0 6px rgba(99,102,241,0.5); outline: 2px solid #6366F1; }
     }
     #${PANEL_ID}-overlay {
       position: fixed !important;
@@ -149,7 +149,7 @@ function _injectStyles(): void {
       color: var(--tb-text-primary, #fff);
     }
     #${PANEL_ID} .tb-issue-actions button[data-action="file"] {
-      background: var(--tb-accent, #7C5CFF);
+      background: var(--tb-accent, #6366F1);
       color: #fff;
       border-color: transparent;
     }
@@ -310,7 +310,7 @@ function _issueRowHtml(issue: Issue): string {
           <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml(issue.title)}</span>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml(desc)}</div>
-        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #7C5CFF);margin-top:4px;display:inline-block">Learn more →</a>` : ""}
+        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #6366F1);margin-top:4px;display:inline-block">Learn more →</a>` : ""}
         ${samplesHtml}
       </div>
       <div class="tb-issue-actions">
@@ -345,8 +345,8 @@ function _locate(issue: Issue): void {
   const prevOutline = htmlEl.style.outline;
   const prevTransition = htmlEl.style.transition;
   htmlEl.style.transition = "outline 0.2s, box-shadow 0.2s";
-  htmlEl.style.outline = "3px solid #7C5CFF";
-  htmlEl.style.boxShadow = "0 0 0 6px rgba(123,97,255,0.35)";
+  htmlEl.style.outline = "3px solid #6366F1";
+  htmlEl.style.boxShadow = "0 0 0 6px rgba(99,102,241,0.35)";
   setTimeout(() => {
     htmlEl.style.outline = prevOutline;
     htmlEl.style.boxShadow = "";

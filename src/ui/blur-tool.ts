@@ -83,8 +83,8 @@ function _ensureStyles(): void {
       box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; pointer-events: none !important; white-space: nowrap !important;
     }
     #${DRAW_OVERLAY_ID} .tb-blur-rubber {
-      position: fixed !important; border: 1.5px dashed #7C5CFF !important;
-      background: rgba(124,92,255,0.12) !important; border-radius: 4px !important; pointer-events: none !important;
+      position: fixed !important; border: 1.5px dashed #6366F1 !important;
+      background: rgba(99,102,241,0.12) !important; border-radius: 4px !important; pointer-events: none !important;
     }
   `;
   document.head.appendChild(s);

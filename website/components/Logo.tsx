@@ -28,12 +28,12 @@ export function LogoMark({
     >
       <defs>
         <linearGradient id={bg} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#1B1640" />
-          <stop offset="100%" stopColor="#0B0B0F" />
+          <stop offset="0%" stopColor="#16163E" />
+          <stop offset="100%" stopColor="#0B0B10" />
         </linearGradient>
         <linearGradient id={cur} x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#7C5CFF" />
-          <stop offset="100%" stopColor="#22D3EE" />
+          <stop offset="0%" stopColor="#818CF8" />
+          <stop offset="100%" stopColor="#4F46E5" />
         </linearGradient>
       </defs>
       <rect x="4" y="4" width="88" height="88" rx="24" fill={`url(#${bg})`} />

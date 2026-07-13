@@ -8,48 +8,50 @@
    LIGHT is the default theme (:root). DARK is opt-in (.dark).
    ─────────────────────────────────────────────────────────────── */
 :root {
+  /* "Slate Indigo" — cool zinc neutrals, a single refined indigo brand
+     accent, soft shadows. Light counterpart of the slate dark theme. */
   --background: 255 255 255;
-  --surface: 248 249 251;       /* #F8F9FB — section alt / cards */
-  --surface-2: 241 243 247;     /* #F1F3F7 — insets, code chips   */
-  --border: 234 236 241;        /* #EAECF1 hairline                */
-  --border-strong: 219 223 230; /* #DBDFE6                         */
-  --primary: 109 74 255;        /* #6D4AFF — AA on white           */
-  --primary-soft: 109 74 255;   /* used with /opacity              */
-  --accent: 8 145 178;          /* #0891B2 cyan-teal, legible      */
+  --surface: 250 250 250;       /* #FAFAFA — section alt / cards   */
+  --surface-2: 244 244 245;     /* #F4F4F5 — insets, code chips    */
+  --border: 228 228 231;        /* #E4E4E7 hairline (zinc-200)     */
+  --border-strong: 212 212 216; /* #D4D4D8 (zinc-300)              */
+  --primary: 79 70 229;         /* #4F46E5 — indigo, AA on white   */
+  --primary-soft: 79 70 229;    /* used with /opacity              */
+  --accent: 99 102 241;         /* #6366F1 indigo-500              */
   --success: 22 163 74;         /* #16A34A                         */
   --error: 220 38 38;           /* #DC2626                         */
   --warning: 217 119 6;         /* #D97706                         */
-  --text-primary: 12 15 23;     /* #0C0F17 near-black              */
-  --text-muted: 80 88 105;      /* #505869                         */
-  --text-subtle: 134 142 159;   /* #868E9F                         */
+  --text-primary: 17 17 19;     /* #111113 near-black              */
+  --text-muted: 82 82 91;       /* #52525B (zinc-600)              */
+  --text-subtle: 130 130 140;   /* #82828C                         */
 
-  --grad-from: #7C5CFF;
-  --grad-mid: #6D4AFF;
-  --grad-to: #22D3EE;
+  --grad-from: #818CF8;
+  --grad-mid: #6366F1;
+  --grad-to: #4F46E5;
   --shadow-ink: 16 24 40;       /* shadow base, used as rgb(... / a) */
 
   color-scheme: light;
 }
 
 .dark {
-  --background: 11 13 16;       /* #0B0D10 cyber-graphite          */
-  --surface: 17 21 26;          /* #11151A                         */
-  --surface-2: 22 27 34;        /* #161B22                         */
-  --border: 31 38 48;           /* #1F2630                         */
-  --border-strong: 42 52 65;    /* #2A3441                         */
-  --primary: 124 92 255;        /* #7C5CFF                         */
-  --primary-soft: 124 92 255;
-  --accent: 0 217 255;          /* #00D9FF                         */
+  --background: 11 11 16;       /* #0B0B10 almost-black, slate-tinted */
+  --surface: 22 22 29;          /* #16161D                         */
+  --surface-2: 30 30 38;        /* #1E1E26                         */
+  --border: 38 38 46;           /* #26262E                         */
+  --border-strong: 42 42 53;    /* #2A2A35 hover border            */
+  --primary: 99 102 241;        /* #6366F1 indigo-500              */
+  --primary-soft: 99 102 241;
+  --accent: 129 140 248;         /* #818CF8                         */
   --success: 34 197 94;
-  --error: 255 93 115;
+  --error: 239 68 68;
   --warning: 245 158 11;
-  --text-primary: 230 237 243;  /* #E6EDF3                         */
-  --text-muted: 148 163 184;    /* #94A3B8                         */
-  --text-subtle: 100 116 139;   /* #64748B                         */
+  --text-primary: 250 250 250;  /* #FAFAFA                         */
+  --text-muted: 161 161 170;    /* #A1A1AA (zinc-400)              */
+  --text-subtle: 113 113 122;   /* #71717A (zinc-500)              */
 
-  --grad-from: #9B7DFF;
-  --grad-mid: #7C5CFF;
-  --grad-to: #00D9FF;
+  --grad-from: #818CF8;
+  --grad-mid: #6366F1;
+  --grad-to: #4F46E5;
   --shadow-ink: 0 0 0;
 
   color-scheme: dark;
@@ -217,6 +219,33 @@ a { color: inherit; text-decoration: none; }
 @keyframes caretBlink { 0%, 48% { opacity: 1; } 50%, 100% { opacity: 0.12; } }
 .brand-caret { animation: caretBlink 1.15s steps(1) infinite; }
 
+/* ── FlowDiagram beams + mascot life ─────────────────────────── */
+
+/* Traveling pulse along the connection beziers: a short dash sweeping the
+   path. Dasharray period (130) must match the offset so the loop is seamless. */
+@keyframes beamDash {
+  to { stroke-dashoffset: -130; }
+}
+.beam-flow {
+  stroke-dasharray: 14 116;
+  animation: beamDash 2.8s linear infinite;
+  opacity: 0.9;
+}
+
+/* Trace blinks… */
+@keyframes mascotBlink {
+  0%, 91%, 100% { transform: scaleY(1); }
+  94%, 96% { transform: scaleY(0.12); }
+}
+.mascot-eye { animation: mascotBlink 4.4s ease-in-out infinite; }
+
+/* …and waves the antennae. */
+@keyframes mascotAntenna {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(4deg); }
+}
+.mascot-antenna { animation: mascotAntenna 3.2s ease-in-out infinite; }
+
 /* Marquee track helper */
 .marquee-mask {
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
@@ -227,7 +256,8 @@ a { color: inherit; text-decoration: none; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .aurora, .gradient-text-anim, .shimmer::after, .conic-glow::before,
   .animate-marquee, .animate-marquee-slow, .animate-float, .animate-aurora,
-  .animate-spin-slow, .animate-pulse-ring, .brand-caret {
+  .animate-spin-slow, .animate-pulse-ring, .brand-caret,
+  .beam-flow, .mascot-eye, .mascot-antenna {
     animation: none !important;
   }
 }

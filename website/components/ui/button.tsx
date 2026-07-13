@@ -17,7 +17,7 @@ const buttonVariants = cva(
         primary:
           "bg-primary text-white shadow-glow-sm hover:shadow-glow-primary hover:brightness-110",
         gradient:
-          "text-white bg-[linear-gradient(120deg,#7C5CFF,#6D4AFF_45%,#22D3EE)] shadow-glow-sm hover:shadow-glow-primary hover:brightness-[1.06]",
+          "text-white bg-[linear-gradient(120deg,#818CF8,#6366F1_45%,#4F46E5)] shadow-glow-sm hover:shadow-glow-primary hover:brightness-[1.06]",
         secondary:
           "bg-surface text-text-primary border border-border hover:border-border-strong hover:bg-surface-2 shadow-xs",
         ghost:

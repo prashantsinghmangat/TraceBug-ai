@@ -121,14 +121,14 @@ function _showStep(root: HTMLElement): void {
     right: ${window.innerWidth - rect.left + 12}px;
     top: ${rect.top + rect.height / 2 - 24}px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #7C5CFF);
+    border: 1px solid var(--tb-accent, #6366F1);
     border-radius: var(--tb-radius-lg, 12px);
     padding: 12px 16px;
     max-width: 260px;
     font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px;
     color: var(--tb-text-primary, #e0e0e0);
-    box-shadow: 0 4px 24px rgba(123, 97, 255, 0.25);
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.25);
     animation: tracebug-tooltip-in 0.2s ease;
     pointer-events: auto;
   `;
@@ -139,8 +139,8 @@ function _showStep(root: HTMLElement): void {
       position: absolute; right: -6px; top: 18px;
       width: 10px; height: 10px;
       background: var(--tb-bg-secondary, #1a1a2e);
-      border-right: 1px solid var(--tb-accent, #7C5CFF);
-      border-top: 1px solid var(--tb-accent, #7C5CFF);
+      border-right: 1px solid var(--tb-accent, #6366F1);
+      border-top: 1px solid var(--tb-accent, #6366F1);
       transform: rotate(45deg);
     "></div>
   `;
@@ -164,7 +164,7 @@ function _showStep(root: HTMLElement): void {
               cursor:pointer;font-size:11px;padding:4px 8px;font-family:inherit
             ">Skip</button>
             <button data-action="next" style="
-              background:var(--tb-accent, #7C5CFF);border:none;color:#fff;
+              background:var(--tb-accent, #6366F1);border:none;color:#fff;
               border-radius:var(--tb-radius-sm, 4px);cursor:pointer;font-size:11px;
               padding:4px 12px;font-family:inherit;font-weight:600
             ">${isLast ? "Done" : "Next"}</button>
@@ -177,7 +177,7 @@ function _showStep(root: HTMLElement): void {
   root.appendChild(tooltip);
 
   // Highlight the target button
-  target.style.boxShadow = "0 0 0 2px var(--tb-accent, #7C5CFF), 0 0 12px rgba(123,97,255,0.4)";
+  target.style.boxShadow = "0 0 0 2px var(--tb-accent, #6366F1), 0 0 12px rgba(99,102,241,0.4)";
   target.style.borderRadius = "var(--tb-radius-md, 8px)";
 
   tooltip.querySelector('[data-action="next"]')!.addEventListener("click", () => {
@@ -216,8 +216,8 @@ export function injectOnboardingStyles(): void {
       to { opacity: 1; transform: translateX(0); }
     }
     @keyframes tracebug-onboard-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(123, 97, 255, 0); }
-      50% { box-shadow: 0 0 0 4px rgba(123, 97, 255, 0.4); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+      50% { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.4); }
     }
   `;
   document.head.appendChild(style);

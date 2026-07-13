@@ -104,7 +104,7 @@ export function showRecordingHUD(
         transition: background 0.12s ease !important;
       }
       #${HUD_ID} .tb-hud-btn:hover { background: rgba(255,255,255,0.08) !important; }
-      #${HUD_ID} .tb-hud-btn[data-active="1"] { background: rgba(124,92,255,0.22) !important; color: #c5b8ff !important; }
+      #${HUD_ID} .tb-hud-btn[data-active="1"] { background: rgba(99,102,241,0.22) !important; color: #c5b8ff !important; }
       #${HUD_ID} .tb-hud-btn[data-muted="1"] { color: rgba(239,68,68,0.95) !important; }
       #${HUD_ID} .tb-hud-stop {
         background: #ef4444 !important; color: #fff !important;
@@ -276,7 +276,7 @@ export function flashRecordingHUD(): void {
   if (!_hud) return;
   const prev = _hud.style.boxShadow;
   _hud.style.transition = "box-shadow 0.3s";
-  _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #7C5CFF)66, 0 12px 40px rgba(0,0,0,0.55)";
+  _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #6366F1)66, 0 12px 40px rgba(0,0,0,0.55)";
   setTimeout(() => {
     if (_hud) _hud.style.boxShadow = prev;
   }, 400);

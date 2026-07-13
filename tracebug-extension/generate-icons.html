@@ -3,15 +3,15 @@
 <head>
   <title>Generate TraceBug Brand Icons</title>
   <style>
-    body { font-family: system-ui, sans-serif; background: #0B0B0F; color: #E0E0EE; padding: 2rem; }
+    body { font-family: system-ui, sans-serif; background: #0B0B10; color: #E0E0EE; padding: 2rem; }
     h2 { margin-bottom: 0.5rem; }
     .sub { color: #6B6B80; font-size: 0.85rem; margin-bottom: 2rem; }
     .icons { display: flex; gap: 2rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 2rem; }
     .icon-box { text-align: center; }
-    .icon-box p { font-size: 0.8rem; color: #7C5CFF; margin-bottom: 8px; font-family: monospace; }
+    .icon-box p { font-size: 0.8rem; color: #818CF8; margin-bottom: 8px; font-family: monospace; }
     canvas { border: 1px solid #1E1E2E; border-radius: 8px; }
-    button { background: #7C5CFF; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; }
-    button:hover { background: #5B3FE6; }
+    button { background: #818CF8; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; }
+    button:hover { background: #4F46E5; }
   </style>
 </head>
 <body>
@@ -36,8 +36,8 @@ function drawIcon(canvas) {
   // Deep rounded-square badge
   roundRect(ctx, 3 * k, 3 * k, 90 * k, 90 * k, 22 * k);
   const bg = ctx.createLinearGradient(0, 0, s, s);
-  bg.addColorStop(0, '#1B1640');
-  bg.addColorStop(1, '#0B0B0F');
+  bg.addColorStop(0, '#16163E');
+  bg.addColorStop(1, '#0B0B10');
   ctx.fillStyle = bg;
   ctx.fill();
 
@@ -54,8 +54,8 @@ function drawIcon(canvas) {
 
   // Cursor block (gradient)
   const cg = ctx.createLinearGradient(0, 0, s, s);
-  cg.addColorStop(0, '#7C5CFF');
-  cg.addColorStop(1, '#22D3EE');
+  cg.addColorStop(0, '#818CF8');
+  cg.addColorStop(1, '#4F46E5');
   ctx.fillStyle = cg;
   roundRect(ctx, 52 * k, 41 * k, 14 * k, 14 * k, 4 * k);
   ctx.fill();

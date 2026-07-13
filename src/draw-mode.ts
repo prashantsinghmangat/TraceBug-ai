@@ -33,12 +33,12 @@ interface EphemeralShape {
 let _active = false;
 let _cleanup: (() => void) | null = null;
 let _currentShape: DrawShape = "rect";
-let _currentColor = "#7C5CFF";
+let _currentColor = "#6366F1";
 let _onUpdate: (() => void) | null = null;
 let _onDeactivate: (() => void) | null = null;
 
 const COLORS: { value: string; label: string }[] = [
-  { value: "#7C5CFF", label: "Purple" },
+  { value: "#6366F1", label: "Indigo" },
   { value: "#ef4444", label: "Red" },
   { value: "#eab308", label: "Yellow" },
   { value: "#22c55e", label: "Green" },
@@ -518,7 +518,7 @@ function _createToolbar(root: HTMLElement): HTMLElement {
     position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #7C5CFF);
+    border: 1px solid var(--tb-accent, #6366F1);
     border-radius: 999px;
     padding: 5px 8px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -787,7 +787,7 @@ function _showCommentInput(
   textInput.type = "text";
   textInput.placeholder = "Describe this region (optional)";
   textInput.style.cssText = `
-    background: var(--tb-bg-primary, #0B0D10); border: 1px solid var(--tb-border-hover, #2A3441); color: var(--tb-text-primary, #E6EDF3);
+    background: var(--tb-bg-primary, #0B0B10); border: 1px solid var(--tb-border-hover, #2A2A35); color: var(--tb-text-primary, #FAFAFA);
     padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); font-size: 13px;
     font-family: inherit; width: 240px; outline: none;
   `;
@@ -796,9 +796,9 @@ function _showCommentInput(
   saveBtn.textContent = "Save";
   saveBtn.dataset.tracebug = "draw-save-btn";
   saveBtn.style.cssText = `
-    background: #7C5CFF; border: none; color: #fff; padding: 8px 14px;
+    background: #6366F1; border: none; color: #fff; padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
-    font-family: inherit; box-shadow: 0 2px 6px rgba(123,97,255,0.3);
+    font-family: inherit; box-shadow: 0 2px 6px rgba(99,102,241,0.3);
     transition: all 0.15s; white-space: nowrap;
   `;
 
@@ -806,7 +806,7 @@ function _showCommentInput(
   skipBtn.textContent = "No comment";
   skipBtn.dataset.tracebug = "draw-cancel-btn";
   skipBtn.style.cssText = `
-    background: none; border: 1px solid var(--tb-border-hover, #2A3441); color: var(--tb-text-secondary, #94A3B8);
+    background: none; border: 1px solid var(--tb-border-hover, #2A2A35); color: var(--tb-text-secondary, #A1A1AA);
     padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); cursor: pointer; font-size: 12px;
     font-family: inherit; transition: all 0.15s; white-space: nowrap;
   `;
@@ -861,7 +861,7 @@ function _showCommentInput(
 function _toolBtnStyle(active: boolean): string {
   const base = `width:26px;height:26px;padding:0;border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;`;
   if (active) {
-    return base + `background:var(--tb-accent, #7C5CFF);color:#fff;border:1px solid var(--tb-accent, #7C5CFF);`;
+    return base + `background:var(--tb-accent, #6366F1);color:#fff;border:1px solid var(--tb-accent, #6366F1);`;
   }
   return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
 }

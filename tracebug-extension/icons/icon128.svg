@@ -1,14 +1,14 @@
 <svg width="128" height="128" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1B1640"/><stop offset="100%" stop-color="#0B0B0F"/>
+      <stop offset="0%" stop-color="#16163E"/><stop offset="100%" stop-color="#0B0B10"/>
     </linearGradient>
     <linearGradient id="cursor" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#22D3EE"/>
+      <stop offset="0%" stop-color="#818CF8"/><stop offset="100%" stop-color="#4F46E5"/>
     </linearGradient>
     <radialGradient id="glow" cx="50%" cy="42%" r="55%">
-      <stop offset="0%" stop-color="#7C5CFF" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#7C5CFF" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#818CF8" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#818CF8" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <rect x="3" y="3" width="90" height="90" rx="24" fill="url(#bg)"/>

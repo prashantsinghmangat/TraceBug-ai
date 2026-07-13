@@ -6,7 +6,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#0B0B0F;color:#E8EAED;font-family:'Inter',sans-serif;padding:2rem}
+  body{background:#0B0B10;color:#E8EAED;font-family:'Inter',sans-serif;padding:2rem}
   h1{font-size:1.5rem;margin-bottom:0.3rem}
   .sub{color:#6B6B80;font-size:0.85rem;font-family:'JetBrains Mono',monospace;margin-bottom:2rem}
   .screenshots{display:flex;flex-direction:column;gap:2rem}
@@ -33,7 +33,7 @@
 <script>
 const W = 1280, H = 800;
 const COLORS = {
-  bg: '#0B0B0F', bg2: '#13131A', bg3: '#16161E',
+  bg: '#0B0B10', bg2: '#13131A', bg3: '#16161E',
   primary: '#7B61FF', cyan: '#00E5FF', lavender: '#9B7DFF',
   red: '#FF4D6D', green: '#00FFA3', yellow: '#FFD166',
   border: '#1E1E2E', muted: '#6B6B80', text: '#E8EAED',
@@ -72,7 +72,7 @@ function drawBugIcon(ctx, cx, cy, scale) {
   ctx.beginPath();
   ctx.moveTo(40*f,15*f); ctx.lineTo(57*f,25*f); ctx.lineTo(57*f,44*f);
   ctx.lineTo(40*f,54*f); ctx.lineTo(23*f,44*f); ctx.lineTo(23*f,25*f); ctx.closePath();
-  ctx.fillStyle = 'rgba(123,97,255,0.12)'; ctx.fill();
+  ctx.fillStyle = 'rgba(99,102,241,0.12)'; ctx.fill();
   const bodyGrad = ctx.createLinearGradient(23*f,15*f,57*f,54*f);
   bodyGrad.addColorStop(0,'#9B7DFF'); bodyGrad.addColorStop(1,'#00E5FF');
   ctx.strokeStyle = bodyGrad; ctx.lineWidth = Math.max(1,1.6*f); ctx.stroke();
@@ -80,7 +80,7 @@ function drawBugIcon(ctx, cx, cy, scale) {
   // Scan line
   const scanGrad = ctx.createLinearGradient(15*f,0,65*f,0);
   scanGrad.addColorStop(0,'rgba(0,229,255,0)'); scanGrad.addColorStop(0.3,'rgba(0,229,255,0.9)');
-  scanGrad.addColorStop(0.7,'rgba(123,97,255,0.9)'); scanGrad.addColorStop(1,'rgba(123,97,255,0)');
+  scanGrad.addColorStop(0.7,'rgba(99,102,241,0.9)'); scanGrad.addColorStop(1,'rgba(99,102,241,0)');
   ctx.fillStyle = scanGrad;
   roundRect(ctx,15*f,33.5*f,50*f,2.2*f,1.1*f); ctx.fill();
 
@@ -154,13 +154,13 @@ function drawCard(ctx, x, y, w, h) {
   ctx.fillStyle = COLORS.bg; ctx.fillRect(0,0,W,H);
 
   // Subtle grid
-  ctx.strokeStyle = 'rgba(123,97,255,0.04)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(99,102,241,0.04)'; ctx.lineWidth = 1;
   for(let i=0;i<W;i+=60){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
   for(let i=0;i<H;i+=60){ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(W,i);ctx.stroke();}
 
   // Glow orbs
   const g1 = ctx.createRadialGradient(300,400,0,300,400,300);
-  g1.addColorStop(0,'rgba(123,97,255,0.08)'); g1.addColorStop(1,'rgba(123,97,255,0)');
+  g1.addColorStop(0,'rgba(99,102,241,0.08)'); g1.addColorStop(1,'rgba(99,102,241,0)');
   ctx.fillStyle = g1; ctx.fillRect(0,0,W,H);
   const g2 = ctx.createRadialGradient(900,300,0,900,300,250);
   g2.addColorStop(0,'rgba(0,229,255,0.05)'); g2.addColorStop(1,'rgba(0,229,255,0)');
