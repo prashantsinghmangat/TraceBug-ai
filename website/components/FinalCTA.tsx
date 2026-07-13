@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ChromeIcon, NpmIcon } from "@/components/ui/brand-icons";
 import { ArrowRight, Check } from "lucide-react";
-import { Caret } from "@/components/BrandMark";
+import Mascot from "@/components/Mascot";
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
@@ -22,7 +22,10 @@ export default function FinalCTA() {
             </span>
             <h2 className="mx-auto max-w-2xl text-[32px] sm:text-5xl font-semibold tracking-[-0.03em] leading-[1.08] text-text-primary">
               Ship better bug reports <span className="gradient-text-anim">today</span>
-              <Caret className="ml-2 align-middle w-[0.3em] h-[0.62em]" />
+              {/* same blinking-bug signature as the hero headline */}
+              <span className="brand-caret ml-2 inline-block w-[0.55em] align-middle" aria-hidden="true">
+                <Mascot className="h-auto w-full" animated={false} />
+              </span>
             </h2>
             <p className="mx-auto mt-5 max-w-xl text-text-muted text-lg">
               Install in 30 seconds. Works in any front-end framework. Your data stays yours.
