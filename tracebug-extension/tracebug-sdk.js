@@ -28454,7 +28454,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -28568,6 +28568,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             <button data-action="add-screenshot" class="tb-qb-ss-add" title="${video ? "Capture a fresh screenshot of the current page (use \u201CGrab frame\u201D on the video for a video frame)" : "Capture a fresh screenshot of the current page"}">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               Add page shot
+            </button>
+            <button data-action="download-screenshots" class="tb-qb-ss-add" title="Download all ${ssCount} screenshot${ssCount === 1 ? "" : "s"} as PNG file${ssCount === 1 ? "" : "s"} \u2014 attach next to the report or drop into a chat">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+              Download
             </button>
           </div>
           <div class="tb-qb-thumbs">
@@ -29045,15 +29049,17 @@ ${report.steps}` : userDesc : void 0
         showToast("AI report export failed", root2);
       }
     });
-    (_B = modal.querySelector('[data-action="download-screenshots"]')) == null ? void 0 : _B.addEventListener("click", () => {
-      if (!screenshots2.length) {
-        showToast("No screenshots captured", root2);
-        return;
-      }
-      _downloadAllScreenshots(screenshots2);
-      showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
+    modal.querySelectorAll('[data-action="download-screenshots"]').forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!screenshots2.length) {
+          showToast("No screenshots captured", root2);
+          return;
+        }
+        _downloadAllScreenshots(screenshots2);
+        showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
+      });
     });
-    (_C = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _C.addEventListener("click", (e2) => {
+    (_B = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _B.addEventListener("click", (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root2);
         return;
@@ -29218,7 +29224,7 @@ ${report.steps}` : userDesc : void 0
         }
       });
     });
-    (_D = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _D.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _C.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -29249,7 +29255,7 @@ ${report.steps}` : userDesc : void 0
         });
       });
     });
-    (_E = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _E.addEventListener("click", async () => {
+    (_D = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _D.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -29271,7 +29277,7 @@ ${report.steps}` : userDesc : void 0
         showToast("Screenshot cancelled", root2);
       }
     });
-    (_F = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _F.addEventListener("click", () => {
+    (_E = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _E.addEventListener("click", () => {
       const v2 = modal.querySelector("#tb-qb-video");
       if (!v2) return;
       if (!v2.paused) {
