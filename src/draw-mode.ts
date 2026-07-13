@@ -92,6 +92,73 @@ export function activateDrawMode(
   `;
   document.body.appendChild(canvas);
 
+  // ── SVG mirror overlay (so drawings survive into the DOM replay) ────
+  // The canvas above renders the live drawing, but rrweb records the DOM —
+  // not canvas pixels (recordCanvas is off) — so canvas strokes never show
+  // up in the exported .html replay (only in the screen video). We mirror
+  // each COMMITTED ephemeral shape as an SVG element here; rrweb captures the
+  // add + fade-out as ordinary DOM mutations, so the pen appears in the replay
+  // exactly when it was drawn. The overlay sits just under the canvas with
+  // pointer-events:none, so live drawing is unaffected.
+  const SVG_NS = "http://www.w3.org/2000/svg" as const;
+  const svgOverlay = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
+  svgOverlay.dataset.tracebug = "draw-svg";
+  svgOverlay.setAttribute("width", String(docW));
+  svgOverlay.setAttribute("height", String(docH));
+  svgOverlay.setAttribute("viewBox", `0 0 ${docW} ${docH}`);
+  svgOverlay.style.cssText = `
+    position: absolute !important; top: 0 !important; left: 0 !important;
+    z-index: 2147483644 !important;
+    width: ${docW}px !important; height: ${docH}px !important;
+    pointer-events: none !important; margin: 0 !important; padding: 0 !important;
+    overflow: visible !important;
+  `;
+  document.body.appendChild(svgOverlay);
+
+  // Append a committed ephemeral shape to the SVG mirror and fade+remove it on
+  // the same timeline as the canvas ephemeral, so the replay matches the video.
+  const mirrorToSvg = (
+    shape: DrawShape,
+    color: string,
+    geom: { x: number; y: number; w: number; h: number; points?: Array<{ x: number; y: number }> },
+    lifeMs: number,
+  ) => {
+    let el: SVGElement;
+    if (shape === "pen" && geom.points && geom.points.length >= 2) {
+      const d = "M " + geom.points.map((p) => `${Math.round(p.x)} ${Math.round(p.y)}`).join(" L ");
+      el = document.createElementNS(SVG_NS, "path");
+      el.setAttribute("d", d);
+      el.setAttribute("fill", "none");
+      el.setAttribute("stroke", color);
+      el.setAttribute("stroke-width", "3");
+      el.setAttribute("stroke-linecap", "round");
+      el.setAttribute("stroke-linejoin", "round");
+    } else if (shape === "ellipse") {
+      el = document.createElementNS(SVG_NS, "ellipse");
+      el.setAttribute("cx", String(Math.round(geom.x + geom.w / 2)));
+      el.setAttribute("cy", String(Math.round(geom.y + geom.h / 2)));
+      el.setAttribute("rx", String(Math.round(Math.abs(geom.w) / 2)));
+      el.setAttribute("ry", String(Math.round(Math.abs(geom.h) / 2)));
+      el.setAttribute("fill", `${color}22`);
+      el.setAttribute("stroke", color);
+      el.setAttribute("stroke-width", "2.5");
+    } else {
+      el = document.createElementNS(SVG_NS, "rect");
+      el.setAttribute("x", String(Math.round(geom.x)));
+      el.setAttribute("y", String(Math.round(geom.y)));
+      el.setAttribute("width", String(Math.round(Math.abs(geom.w))));
+      el.setAttribute("height", String(Math.round(Math.abs(geom.h))));
+      el.setAttribute("fill", shape === "redact" ? "#000000" : `${color}22`);
+      el.setAttribute("stroke", shape === "redact" ? "#000000" : color);
+      el.setAttribute("stroke-width", "2.5");
+    }
+    el.style.opacity = "0.85";
+    el.style.transition = "opacity 0.6s linear";
+    svgOverlay.appendChild(el);
+    window.setTimeout(() => { try { el.style.opacity = "0"; } catch {} }, Math.max(0, lifeMs - 600));
+    window.setTimeout(() => { try { el.remove(); } catch {} }, lifeMs + 60);
+  };
+
   // Toolbar stays in the TraceBug root (it's a fixed pill that follows
   // the viewport, which is what we want).
 
@@ -201,6 +268,7 @@ export function activateDrawMode(
       if (pts.length < 3) { redrawAll(); return; }
       if (ephemeralMs) {
         ephemerals.push({ shape: "pen", color: _currentColor, expiresAt: Date.now() + ephemeralMs, x: 0, y: 0, w: 0, h: 0, points: pts });
+        mirrorToSvg("pen", _currentColor, { x: 0, y: 0, w: 0, h: 0, points: pts }, ephemeralMs);
         _emitDrawMark("pen", _currentColor, { points: pts.length });
         startFadeLoop();
         redrawAll();
@@ -243,6 +311,7 @@ export function activateDrawMode(
     // Ephemeral mode (used during recording) — show, fade, emit a mark.
     if (ephemeralMs) {
       ephemerals.push({ shape: _currentShape, color: _currentColor, expiresAt: Date.now() + ephemeralMs, x: normX, y: normY, w: normW, h: normH });
+      mirrorToSvg(_currentShape, _currentColor, { x: normX, y: normY, w: normW, h: normH }, ephemeralMs);
       _emitDrawMark(_currentShape, _currentColor, { x: Math.round(normX), y: Math.round(normY), w: Math.round(normW), h: Math.round(normH) });
       startFadeLoop();
       redrawAll();
@@ -296,6 +365,11 @@ export function activateDrawMode(
       canvas.height = newH;
       canvas.style.width = newW + "px";
       canvas.style.height = newH + "px";
+      svgOverlay.setAttribute("width", String(newW));
+      svgOverlay.setAttribute("height", String(newH));
+      svgOverlay.setAttribute("viewBox", `0 0 ${newW} ${newH}`);
+      svgOverlay.style.width = newW + "px";
+      svgOverlay.style.height = newH + "px";
       _redrawAllRegions(ctx, newW, newH);
     }
   };
@@ -317,6 +391,7 @@ export function activateDrawMode(
     if (resizeObserver) resizeObserver.disconnect();
     else window.removeEventListener("resize", onCanvasResize);
     canvas.remove();
+    svgOverlay.remove();
     toolbar.remove();
     _onUpdate = null;
     if (_onDeactivate) _onDeactivate();
