@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TraceBug — Live Sandbox (real widget, real bugs)</title>
+<meta name="robots" content="noindex" />
+<style>
+  /* Slate Indigo, matched to the site tokens */
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: #FAFAFA; color: #111113; min-height: 100vh;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .top {
+    background: #0B0B10; color: #FAFAFA; padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .top .mark { width: 26px; height: 26px; border-radius: 8px; background: #6366F1; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+  .top b { font-size: 14px; letter-spacing: -0.01em; }
+  .top span { font-size: 12.5px; color: #A1A1AA; }
+  .top a { margin-left: auto; color: #818CF8; font-size: 12.5px; font-weight: 600; text-decoration: none; }
+  .top a:hover { text-decoration: underline; }
+  .banner {
+    max-width: 760px; margin: 26px auto 0; padding: 12px 16px;
+    background: rgba(99, 102, 241, 0.07); border: 1px solid rgba(99, 102, 241, 0.30);
+    border-radius: 12px; font-size: 13.5px; line-height: 1.6; color: #3F3F46;
+  }
+  .banner b { color: #4F46E5; }
+  .wrap { max-width: 760px; margin: 22px auto 80px; padding: 0 16px; }
+  .shop {
+    background: #fff; border: 1px solid #E4E4E7; border-radius: 16px;
+    box-shadow: 0 12px 28px -8px rgba(16, 24, 40, 0.10); overflow: hidden;
+  }
+  .shop-hd { padding: 16px 20px; border-bottom: 1px solid #EDEDF0; display: flex; align-items: center; gap: 10px; }
+  .shop-hd .logo { width: 26px; height: 26px; border-radius: 7px; background: #111113; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .shop-hd b { font-size: 14.5px; letter-spacing: -0.01em; }
+  .shop-hd span { margin-left: auto; font-size: 12px; color: #82828C; font-family: ui-monospace, Consolas, monospace; }
+  .item { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #F4F4F5; }
+  .item .thumb { width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, #818CF8, #4F46E5); }
+  .item .nm { font-size: 14px; font-weight: 600; }
+  .item .pr { margin-left: auto; font-size: 14px; font-weight: 600; font-family: ui-monospace, Consolas, monospace; }
+  .row { display: flex; gap: 10px; padding: 16px 20px; align-items: center; flex-wrap: wrap; }
+  .row input {
+    flex: 1; min-width: 160px; padding: 10px 12px; font-size: 13.5px;
+    border: 1px solid #E4E4E7; border-radius: 10px; font-family: inherit; outline: none;
+  }
+  .row input:focus { border-color: #6366F1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+  button { font-family: inherit; cursor: pointer; font-size: 13.5px; font-weight: 600; border-radius: 10px; padding: 10px 16px; transition: all .15s; }
+  .btn-ghost { background: #fff; color: #111113; border: 1px solid #D4D4D8; }
+  .btn-ghost:hover { border-color: #A1A1AA; }
+  .btn-primary { background: #4F46E5; color: #fff; border: none; }
+  .btn-primary:hover { background: #4338CA; }
+  .total { padding: 14px 20px; border-top: 1px solid #EDEDF0; display: flex; align-items: center; font-size: 14px; }
+  .total b { margin-left: auto; font-family: ui-monospace, Consolas, monospace; }
+  .toast {
+    display: none; margin: 14px 20px 18px; padding: 10px 14px; border-radius: 10px;
+    font-size: 13px; font-weight: 500;
+    background: rgba(220, 38, 38, 0.07); border: 1px solid rgba(220, 38, 38, 0.35); color: #DC2626;
+  }
+  .steps { margin-top: 22px; font-size: 13px; color: #52525B; line-height: 1.75; }
+  .steps b { color: #111113; }
+  .steps .kbd { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #F4F4F5; border: 1px solid #E4E4E7; border-radius: 6px; padding: 1px 7px; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="mark">›_</span>
+  <b>TraceBug — Live Sandbox</b>
+  <span>the real widget is running on this page</span>
+  <a href="/">← back to tracebug</a>
+</div>
+
+<div class="banner">
+  <b>This page has real bugs, on purpose.</b> The actual TraceBug widget is live (bug button, bottom-right).
+  Trigger a bug below, then capture it and hit <b>Export .html</b> — you'll download a genuine
+  self-contained report you can open offline or hand to your AI agent.
+</div>
+
+<div class="wrap">
+  <div class="shop">
+    <div class="shop-hd"><span class="logo">A</span><b>Acme Checkout</b><span>/checkout</span></div>
+    <div class="item"><span class="thumb"></span><span class="nm">Mechanical Keyboard — Indigo</span><span class="pr">$129.00</span></div>
+    <div class="row">
+      <input id="coupon" placeholder="Coupon code (try: SAVE20)" />
+      <button class="btn-ghost" id="applyBtn">Apply coupon</button>
+    </div>
+    <div class="total">Total <b id="total">$129.00</b></div>
+    <div class="row" style="border-top:1px solid #EDEDF0">
+      <button class="btn-primary" id="orderBtn" style="flex:1">Place order</button>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <div class="steps">
+    <b>Reproduce the bugs:</b><br />
+    1. Type <span class="kbd">SAVE20</span> and click <b>Apply coupon</b> → a <b>TypeError</b> is thrown (watch it land in the report's console tab).<br />
+    2. Click <b>Place order</b> → <span class="kbd">POST /api/orders</span> fails (captured with the failing request).<br />
+    3. Open the <b>TraceBug button</b> (bottom-right) → review the captured session → <b>Export .html</b>.
+  </div>
+</div>
+
+<script src="/tracebug-sdk.js"></script>
+<script>
+  // The real SDK — same call as the README quick start.
+  if (window.TraceBug && window.TraceBug.init) {
+    window.TraceBug.init({ projectId: "tracebug-live-sandbox" });
+  }
+
+  var toast = document.getElementById("toast");
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.style.display = "block";
+  }
+
+  // Bug #1 — a genuine TypeError: coupons["SAVE20"] is undefined, and we read
+  // .discount off it. Classic "config missing for this code path".
+  document.getElementById("applyBtn").addEventListener("click", function () {
+    var coupons = { WELCOME10: { discount: 0.10 } };
+    var code = (document.getElementById("coupon").value || "").trim().toUpperCase();
+    setTimeout(function () {
+      var pct = coupons[code].discount; // throws for SAVE20 — on purpose
+      document.getElementById("total").textContent = "$" + (129 * (1 - pct)).toFixed(2);
+    }, 60);
+    if (!coupons[code]) showToast("Something went wrong applying the coupon.");
+  });
+
+  // Bug #2 — a genuine failing request: POST to an endpoint that doesn't exist.
+  document.getElementById("orderBtn").addEventListener("click", function () {
+    fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sku: "KB-IND-129", qty: 1 }),
+    })
+      .then(function (r) {
+        if (!r.ok) showToast("Order failed: " + r.status + " — /api/orders");
+      })
+      .catch(function () {
+        showToast("Order failed: network error — /api/orders");
+      });
+  });
+</script>
+</body>
+</html>

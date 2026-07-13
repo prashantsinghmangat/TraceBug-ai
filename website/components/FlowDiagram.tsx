@@ -119,7 +119,7 @@ export default function FlowDiagram() {
                 <div
                   key={s.title}
                   ref={(el) => { sourceRefs.current[i] = el; }}
-                  className="card-rise flex items-center gap-3.5 rounded-2xl border border-border bg-background px-4 py-3.5 shadow-soft hover:shadow-card hover:border-primary/30"
+                  className="spotlight card-rise flex items-center gap-3.5 rounded-2xl border border-border bg-background px-4 py-3.5 shadow-soft hover:shadow-card hover:border-primary/30"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <s.icon size={19} strokeWidth={1.8} />
@@ -161,7 +161,7 @@ export default function FlowDiagram() {
                 <div
                   key={t.title}
                   ref={(el) => { targetRefs.current[i] = el; }}
-                  className="card-rise flex items-center gap-3.5 rounded-2xl border border-border bg-background px-4 py-3.5 shadow-soft hover:shadow-card hover:border-primary/30"
+                  className="spotlight card-rise flex items-center gap-3.5 rounded-2xl border border-border bg-background px-4 py-3.5 shadow-soft hover:shadow-card hover:border-primary/30"
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-text-primary">
                     <t.icon size={19} strokeWidth={1.8} />

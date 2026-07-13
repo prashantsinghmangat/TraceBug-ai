@@ -68,7 +68,7 @@ export default function Features() {
           {FEATURES.map(({ Icon, title, desc, chip, span }) => (
             <div
               key={title}
-              className={`group card-rise rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover ${span ?? ""}`}
+              className={`spotlight group card-rise rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover ${span ?? ""}`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary group-hover:text-white">

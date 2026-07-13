@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Clock, Check } from "lucide-react";
+import { Clock, Check, MousePointerClick, ArrowUpRight } from "lucide-react";
 import SectionHeading from "@/components/SectionHeading";
 import { LogoMark } from "@/components/Logo";
 
@@ -78,6 +78,21 @@ export default function DemoVideo() {
             <Check size={15} className="text-success" strokeWidth={2.5} />
             Plays automatically · no install needed
           </div>
+        </div>
+
+        {/* The dogfood moment: a sandbox page running the REAL widget with
+            real (intentional) bugs — capture one and export a genuine report. */}
+        <div className="mt-8 flex justify-center">
+          <a
+            href="/try.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group inline-flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/[0.06] px-5 py-3 text-[14px] font-semibold text-primary shadow-xs transition-colors hover:bg-primary/10 hover:border-primary/50"
+          >
+            <MousePointerClick size={16} />
+            Try it yourself — live sandbox with the real widget
+            <ArrowUpRight size={15} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+          </a>
         </div>
       </div>
     </section>
