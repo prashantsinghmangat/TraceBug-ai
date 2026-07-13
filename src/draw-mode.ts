@@ -125,9 +125,8 @@ export function activateDrawMode(
   ) => {
     let el: SVGElement;
     if (shape === "pen" && geom.points && geom.points.length >= 2) {
-      const d = "M " + geom.points.map((p) => `${Math.round(p.x)} ${Math.round(p.y)}`).join(" L ");
       el = document.createElementNS(SVG_NS, "path");
-      el.setAttribute("d", d);
+      el.setAttribute("d", _svgPathData(geom.points));
       el.setAttribute("fill", "none");
       el.setAttribute("stroke", color);
       el.setAttribute("stroke-width", "3");
@@ -197,6 +196,12 @@ export function activateDrawMode(
         _drawShape(ctx, preview.shape, preview.color, preview.x, preview.y, preview.w, preview.h, 0.3);
       }
     }
+    // A full clear+redraw (the fade loop) would wipe the in-progress freehand
+    // stroke that onMouseMove draws incrementally — repaint it so it survives a
+    // concurrent fade frame.
+    if (!preview && isDrawing && _currentShape === "pen" && penPoints.length > 1) {
+      _drawPath(ctx, _currentColor, penPoints, 0.85);
+    }
   };
 
   const startFadeLoop = () => {
@@ -245,7 +250,10 @@ export function activateDrawMode(
     const p = toCanvasCoords(e);
     if (_currentShape === "pen") {
       penPoints.push({ x: p.x, y: p.y });
-      redrawAll({ shape: "pen", color: _currentColor, x: 0, y: 0, w: 0, h: 0, points: penPoints });
+      // Draw only the newest smoothed segment — O(1) per move, so long strokes
+      // stay smooth instead of getting laggier as the point count grows (the
+      // old code re-stroked the whole path on every move → O(n²)).
+      _drawPenSegment(ctx, _currentColor, penPoints);
     } else {
       redrawAll({ shape: _currentShape, color: _currentColor, x: startX, y: startY, w: p.x - startX, h: p.y - startY });
     }
@@ -431,11 +439,60 @@ function _drawPath(
   ctx.lineJoin = "round";
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y);
+  // Quadratic smoothing through segment midpoints turns the raw polyline into a
+  // smooth freehand curve (the roughness fix).
+  for (let i = 1; i < points.length - 1; i++) {
+    const mx = (points[i].x + points[i + 1].x) / 2;
+    const my = (points[i].y + points[i + 1].y) / 2;
+    ctx.quadraticCurveTo(points[i].x, points[i].y, mx, my);
+  }
+  const last = points[points.length - 1];
+  ctx.lineTo(last.x, last.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Draw only the newest smoothed segment of an in-progress freehand stroke.
+// O(1) per pointer move, so strokes never get laggier as they grow.
+function _drawPenSegment(
+  ctx: CanvasRenderingContext2D,
+  color: string,
+  pts: Array<{ x: number; y: number }>,
+): void {
+  const n = pts.length;
+  if (n < 2) return;
+  ctx.save();
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  if (n === 2) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[1].x, pts[1].y);
+  } else {
+    const p0 = pts[n - 3], p1 = pts[n - 2], p2 = pts[n - 1];
+    ctx.moveTo((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
+    ctx.quadraticCurveTo(p1.x, p1.y, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
   }
   ctx.stroke();
   ctx.restore();
+}
+
+// Build a smoothed SVG path `d` (quadratic through midpoints) from raw points —
+// mirrors _drawPath so the replay stroke looks like the on-screen one.
+function _svgPathData(points: Array<{ x: number; y: number }>): string {
+  const r = (n: number) => Math.round(n);
+  let d = `M ${r(points[0].x)} ${r(points[0].y)}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const mx = (points[i].x + points[i + 1].x) / 2;
+    const my = (points[i].y + points[i + 1].y) / 2;
+    d += ` Q ${r(points[i].x)} ${r(points[i].y)} ${r(mx)} ${r(my)}`;
+  }
+  const last = points[points.length - 1];
+  d += ` L ${r(last.x)} ${r(last.y)}`;
+  return d;
 }
 
 export function deactivateDrawMode(): void {

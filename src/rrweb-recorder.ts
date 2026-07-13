@@ -71,6 +71,13 @@ export async function startDomRecording(): Promise<boolean> {
       // aren't covered by rrweb — a residual, minor offline gap.)
       inlineImages: true,
       blockClass: "tb-block",
+      // Keep TraceBug's OWN injected UI out of the replay — the widget root
+      // (toolbar, HUD, modals) and the blank draw canvas. Without this they get
+      // recorded and render on top of the user's page in the exported replay.
+      // The draw *SVG* overlay (data-tracebug="draw-svg") is deliberately NOT
+      // matched here, so freehand pen/shape annotations still replay. With the
+      // core Replayer, blocked nodes render as empty/transparent (no placeholder).
+      blockSelector: "#tracebug-root, #tracebug-draw-canvas",
       maskTextClass: "tb-mask",
     });
     _stopFn = typeof stop === "function" ? stop : null;
