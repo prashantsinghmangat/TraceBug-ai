@@ -1,15 +1,26 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChromeIcon } from "@/components/ui/brand-icons";
 import { ArrowRight, ChevronRight, Sparkles } from "lucide-react";
-import { Caret } from "@/components/BrandMark";
+import Mascot from "@/components/Mascot";
 import { SDK_VERSION_TAG } from "@/lib/version";
 
 const CHROME_URL =
   "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
+// One full pass of the report-assembly story (stagger in → hold), then the
+// key change remounts the grid and the sequence replays from a clean slate.
+const BUILD_CYCLE_MS = 10500;
+
 export default function Hero() {
+  const [buildCycle, setBuildCycle] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setBuildCycle((c) => c + 1), BUILD_CYCLE_MS);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <section className="relative overflow-hidden pt-28 pb-16 lg:pt-36 lg:pb-24">
       {/* Aurora field + grid — the futuristic light behind the fold */}
@@ -40,7 +51,11 @@ export default function Hero() {
         <h1 className="mx-auto max-w-4xl text-center text-[42px] sm:text-6xl lg:text-[76px] font-semibold leading-[1.04] tracking-[-0.035em] text-text-primary">
           Bug reports your dev can{" "}
           <span className="gradient-text-anim">actually open</span>
-          <Caret className="ml-2.5 align-middle w-[0.32em] h-[0.6em]" />
+          {/* Trace IS the terminal caret — the bug blinks at the end of the
+              line instead of the cursor block */}
+          <span className="brand-caret ml-2.5 inline-block w-[0.55em] align-middle" aria-hidden="true">
+            <Mascot className="h-auto w-full" animated={false} />
+          </span>
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-center text-text-muted text-lg sm:text-xl leading-relaxed">
@@ -101,11 +116,25 @@ export default function Hero() {
               </span>
             </div>
 
-            {/* Report body */}
-            <div className="p-5 sm:p-7 grid sm:grid-cols-5 gap-6">
+            {/* Report body — key remount restarts the assembly loop in sync */}
+            <div key={buildCycle} className="p-5 sm:p-7 grid sm:grid-cols-5 gap-6">
               {/* Left: root cause + tldr */}
               <div className="sm:col-span-3 space-y-4">
-                <div className="rounded-xl border border-error/20 bg-error/[0.04] p-4">
+                <div className="relative">
+                  {/* skeleton shown while events stream in — "analyzing…" */}
+                  <div
+                    className="skel-seq pointer-events-none absolute inset-0 rounded-xl border border-border bg-surface p-4"
+                    style={{ "--seq": 6 } as React.CSSProperties}
+                    aria-hidden="true"
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="skel-bar h-2.5 w-24" />
+                      <span className="skel-bar h-2.5 w-16" />
+                    </div>
+                    <span className="skel-bar block h-3 w-full" />
+                    <span className="skel-bar mt-2 block h-3 w-3/4" />
+                  </div>
+                  <div className="build-seq rounded-xl border border-error/20 bg-error/[0.04] p-4" style={{ "--seq": 6 } as React.CSSProperties}>
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-error">
                       Possible cause
@@ -119,22 +148,34 @@ export default function Hero() {
                     with <span className="font-mono text-error font-semibold">500</span> after
                     clicking <span className="text-primary font-medium">&apos;Place Order&apos;</span>
                   </p>
+                  </div>
                 </div>
 
-                <div className="rounded-xl border border-border bg-surface p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle mb-1.5">
-                    TL;DR
+                <div className="relative">
+                  <div
+                    className="skel-seq pointer-events-none absolute inset-0 rounded-xl border border-border bg-surface p-4"
+                    style={{ "--seq": 7.5 } as React.CSSProperties}
+                    aria-hidden="true"
+                  >
+                    <span className="skel-bar mb-3 block h-2.5 w-12" />
+                    <span className="skel-bar block h-3 w-5/6" />
                   </div>
-                  <p className="text-[13.5px] text-text-muted leading-relaxed">
-                    TypeError on <span className="font-mono text-text-primary">/checkout</span> — Cannot
-                    read &apos;status&apos; of undefined.
-                  </p>
+                  <div className="build-seq rounded-xl border border-border bg-surface p-4" style={{ "--seq": 7.5 } as React.CSSProperties}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle mb-1.5">
+                      TL;DR
+                    </div>
+                    <p className="text-[13.5px] text-text-muted leading-relaxed">
+                      TypeError on <span className="font-mono text-text-primary">/checkout</span> — Cannot
+                      read &apos;status&apos; of undefined.
+                    </p>
+                  </div>
                 </div>
               </div>
 
               {/* Right: timeline */}
               <div className="sm:col-span-2 rounded-xl border border-border bg-surface p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle mb-3">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-text-subtle mb-3">
+                  <span className="rec-dot h-1.5 w-1.5 rounded-full bg-error" aria-hidden="true" />
                   Session timeline
                 </div>
                 <ul className="space-y-2.5 font-mono text-[12px]">
@@ -144,9 +185,9 @@ export default function Hero() {
                     { t: "00:09", label: 'click "Place Order"', c: "text-text-muted" },
                     { t: "00:09", label: "POST /api/orders → 500", c: "text-error" },
                   ].map((s, i) => (
-                    <li key={i} className="flex items-center gap-2.5">
+                    <li key={i} className="build-seq flex items-center gap-2.5" style={{ "--seq": i } as React.CSSProperties}>
                       <span className="text-text-subtle tabular-nums text-[11px]">{s.t}</span>
-                      <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${s.c === "text-error" ? "bg-error" : s.c === "text-accent" ? "bg-accent" : "bg-border-strong"}`} />
+                      <span className={`dot-pop h-1.5 w-1.5 rounded-full flex-shrink-0 ${s.c === "text-error" ? "bg-error" : s.c === "text-accent" ? "bg-accent" : "bg-border-strong"}`} />
                       <span className={s.c}>{s.label}</span>
                     </li>
                   ))}

@@ -239,12 +239,49 @@ a { color: inherit; text-decoration: none; }
 }
 .mascot-eye { animation: mascotBlink 4.4s ease-in-out infinite; }
 
-/* …and waves the antennae. */
-@keyframes mascotAntenna {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(4deg); }
+/* …and the antenna tips / tail pixel blip (opacity only — rotation would
+   blur the crispEdges pixels). */
+@keyframes mascotBlip {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
-.mascot-antenna { animation: mascotAntenna 3.2s ease-in-out infinite; }
+.mascot-blip { animation: mascotBlip 2.2s ease-in-out infinite; }
+
+/* ── Hero: the report assembles itself ───────────────────────────
+   Elements stagger in narrative order (--seq × 0.75s: events stream in
+   → cause concludes → TL;DR) and hold; the Hero component remounts the
+   grid every ~10s so the whole story replays in sync. */
+@keyframes buildIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.build-seq {
+  animation: buildIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--seq, 0) * 0.75s);
+}
+/* "Recording" pulse next to the session timeline label */
+@keyframes recPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+.rec-dot { animation: recPulse 1.3s ease-in-out infinite; }
+
+/* Skeleton placeholder that hands off to the real box at its --seq slot */
+@keyframes skelOut { to { opacity: 0; visibility: hidden; } }
+.skel-seq {
+  animation: skelOut 0.35s ease both;
+  animation-delay: calc(var(--seq, 0) * 0.75s + 0.1s);
+}
+@keyframes skelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.skel-bar {
+  background: rgb(var(--surface-2));
+  border-radius: 6px;
+  animation: skelPulse 1.3s ease-in-out infinite;
+}
+
+/* Timeline dot pops as its event lands */
+@keyframes dotPop { 0% { transform: scale(0); } 60% { transform: scale(1.8); } 100% { transform: scale(1); } }
+.dot-pop {
+  animation: dotPop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--seq, 0) * 0.75s + 0.12s);
+}
 
 /* Marquee track helper */
 .marquee-mask {
@@ -257,7 +294,11 @@ a { color: inherit; text-decoration: none; }
   .aurora, .gradient-text-anim, .shimmer::after, .conic-glow::before,
   .animate-marquee, .animate-marquee-slow, .animate-float, .animate-aurora,
   .animate-spin-slow, .animate-pulse-ring, .brand-caret,
-  .beam-flow, .mascot-eye, .mascot-antenna {
+  .beam-flow, .mascot-eye, .mascot-blip,
+  .build-seq, .rec-dot, .skel-bar, .dot-pop {
     animation: none !important;
   }
+  /* Without animations the skeletons would sit on top of the real content
+     forever — hide them so the static, complete report shows instead. */
+  .skel-seq { display: none !important; }
 }

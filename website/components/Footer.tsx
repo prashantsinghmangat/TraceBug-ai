@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GitHubIcon, NpmIcon } from "@/components/ui/brand-icons";
 import { LogoMark } from "@/components/Logo";
+import Mascot from "@/components/Mascot";
 
 const REPO = "https://github.com/prashantsinghmangat/tracebug-ai";
 const NPM = "https://www.npmjs.com/package/tracebug-sdk";
@@ -108,7 +109,9 @@ export default function Footer() {
 
         <div className="mt-14 pt-7 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-[13px] text-text-subtle">© 2026 TraceBug. Open source under the MIT License.</p>
-          <p className="text-[13px] text-text-subtle">Made with ♥ for developers tired of “cannot reproduce”</p>
+          <p className="inline-flex items-center gap-1.5 text-[13px] text-text-subtle">
+            Made with <Mascot size={16} animated={false} className="-mt-0.5" /> for developers tired of “cannot reproduce”
+          </p>
         </div>
       </div>
     </footer>
