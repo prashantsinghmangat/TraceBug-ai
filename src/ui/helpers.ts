@@ -69,7 +69,7 @@ export function matchesShortcut(e: KeyboardEvent, shortcut: string): boolean {
 export const eventConfig: Record<string, { label: string; icon: string; color: string; bg: string }> = {
   click:                { label: "Click",        icon: "\uD83D\uDC46", color: "#60a5fa", bg: "#1e293b" },
   input:                { label: "Input",        icon: "\u2328\uFE0F", color: "#c084fc", bg: "#1e1533" },
-  select_change:        { label: "Select",       icon: "\uD83D\uDCCB", color: "#34d399", bg: "#052015" },
+  select_change:        { label: "Select",       icon: "\uD83D\uDCCB", color: "#818CF8", bg: "#052015" },
   form_submit:          { label: "Form Submit",  icon: "\uD83D\uDCE4", color: "#fb923c", bg: "#2a1505" },
   route_change:         { label: "Navigate",     icon: "\uD83D\uDD00", color: "#22d3ee", bg: "#0c2e33" },
   api_request:          { label: "API",          icon: "\uD83C\uDF10", color: "#fbbf24", bg: "#2a2005" },
@@ -172,7 +172,7 @@ export function smallBtnStyle(color: string): string {
 
 export function tabBtnStyle(active: boolean): string {
   return active
-    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7C5CFF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
+    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #6366F1);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
     : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
 }
 

@@ -13,12 +13,12 @@
   --tb-bg: #ffffff;
   --tb-bg-2: #fafafa;
   --tb-bg-3: #ffffff;
-  --tb-text: #09090b;
+  --tb-text: #0B0B10;
   --tb-text-2: #52525b;
   --tb-text-3: #a1a1aa;
-  --tb-accent: #6D4AFF;
+  --tb-accent: #6366F1;
   --tb-accent-2: #5B3FE6;
-  --tb-accent-soft: #6D4AFF14;
+  --tb-accent-soft: #6366F114;
   --tb-border: #e4e4e7;
   --tb-border-sub: #f4f4f5;
   --tb-border-hover: #d4d4d8;
@@ -26,12 +26,12 @@
   --tb-error-bg: #fef2f2;
   --tb-warning: #d97706;
   --tb-warning-bg: #fffbeb;
-  --tb-success: #059669;
+  --tb-success: #4F46E5;
   --tb-success-bg: #ecfdf5;
   --tb-info: #2563eb;
   --tb-info-bg: #eff6ff;
   --tb-code-bg: #f4f4f5;
-  --tb-code-text: #27272a;
+  --tb-code-text: #26262E;
   --tb-code-tag: #be185d;
   --tb-code-attr-name: #a16207;
   --tb-code-attr-val: #15803d;
@@ -43,26 +43,26 @@
 }
 :root[data-theme="dark"], html[data-theme="dark"] body {
   --tb-bg: #0a0a0c;
-  --tb-bg-2: #18181b;
-  --tb-bg-3: #27272a;
+  --tb-bg-2: #16161D;
+  --tb-bg-3: #26262E;
   --tb-text: #fafafa;
   --tb-text-2: #a1a1aa;
   --tb-text-3: #71717a;
-  --tb-accent: #7C5CFF;
+  --tb-accent: #6366F1;
   --tb-accent-2: #a78bfa;
-  --tb-accent-soft: #7C5CFF1f;
-  --tb-border: #27272a;
-  --tb-border-sub: #1f1f23;
-  --tb-border-hover: #3f3f46;
+  --tb-accent-soft: #6366F11f;
+  --tb-border: #26262E;
+  --tb-border-sub: #1E1E24;
+  --tb-border-hover: #2A2A35;
   --tb-error: #ef4444;
   --tb-error-bg: #ef44441a;
   --tb-warning: #f59e0b;
   --tb-warning-bg: #f59e0b1a;
-  --tb-success: #10b981;
-  --tb-success-bg: #10b9811a;
+  --tb-success: #6366F1;
+  --tb-success-bg: #6366F11a;
   --tb-info: #3b82f6;
   --tb-info-bg: #3b82f61a;
-  --tb-code-bg: #09090b;
+  --tb-code-bg: #0B0B10;
   --tb-code-text: #d4d4d8;
   --tb-code-tag: #f472b6;
   --tb-code-attr-name: #fcd34d;
@@ -336,7 +336,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vss-thumb:hover { transform: translateY(-1px); }
 .tb-vss-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tb-vss-thumb span { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.72); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 4px; }
-.tb-vss-thumb.active { border-color: var(--tb-accent, #7C5CFF); }
+.tb-vss-thumb.active { border-color: var(--tb-accent, #6366F1); }
 
 /* ── Hover thumbnail on scrubber ──────────────────── */
 .tb-vhover-thumb { position: fixed; pointer-events: none; z-index: 50; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 4px; box-shadow: var(--tb-shadow-md); }
@@ -1202,7 +1202,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   var markersEl = document.getElementById("tb-rs-markers");
   var jumpEl = document.getElementById("tb-rs-jump");
 
-  var COLORS = { click: "#7C5CFF", input: "#7C5CFF", select_change: "#7C5CFF", form_submit: "#7C5CFF", route_change: "#22d3ee", api_request: "#facc15" };
+  var COLORS = { click: "#6366F1", input: "#6366F1", select_change: "#6366F1", form_submit: "#6366F1", route_change: "#4F46E5", api_request: "#facc15" };
   // Cap markers
   var MAX = 200;
   var visible = events.length <= MAX ? events : sample(events, MAX);
@@ -1211,7 +1211,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     m.className = ev.isError ? "tb-rs-marker tb-rs-error" : "tb-rs-marker";
     var leftPct = ((ev.timestamp - startedAt) / span) * 100;
     m.style.left = Math.max(0, Math.min(100, leftPct)) + "%";
-    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#7C5CFF");
+    m.style.background = ev.isError ? "#ef4444" : (COLORS[ev.type] || "#6366F1");
     m.dataset.ts = String(ev.timestamp);
     if (ev.isError) m.textContent = "!";
     m.title = (ev.elapsed || "") + " · " + (ev.description || ev.type);

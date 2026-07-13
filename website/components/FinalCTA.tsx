@@ -13,8 +13,8 @@ export default function FinalCTA() {
         <div className="relative overflow-hidden rounded-[2rem] border border-border bg-background shadow-card">
           {/* aurora wash */}
           <div className="absolute inset-0 -z-0 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
-          <div className="aurora animate-aurora top-[-30%] left-[15%] h-[280px] w-[320px] bg-[#7C5CFF]/25" />
-          <div className="aurora animate-aurora top-[10%] right-[10%] h-[240px] w-[280px] bg-[#22D3EE]/20" style={{ animationDelay: "-6s" }} />
+          <div className="aurora animate-aurora top-[-30%] left-[15%] h-[280px] w-[320px] bg-[#818CF8]/25" />
+          <div className="aurora animate-aurora top-[10%] right-[10%] h-[240px] w-[280px] bg-[#4F46E5]/20" style={{ animationDelay: "-6s" }} />
 
           <div className="relative px-6 py-16 sm:px-12 sm:py-20 text-center">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-3 py-1 text-[11.5px] font-medium text-success mb-6">

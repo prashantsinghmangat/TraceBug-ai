@@ -296,9 +296,9 @@ function EmptyState({ filter, hasAny, onClear }: { filter: Filter; hasAny: boole
 const GRADIENTS: [string, string][] = [
   ["#7c3aed", "#06b6d4"],
   ["#ec4899", "#f59e0b"],
-  ["#10b981", "#3b82f6"],
+  ["#6366F1", "#3b82f6"],
   ["#f43f5e", "#8b5cf6"],
-  ["#06b6d4", "#10b981"],
+  ["#06b6d4", "#6366F1"],
   ["#f59e0b", "#ec4899"],
   ["#8b5cf6", "#06b6d4"],
   ["#3b82f6", "#ec4899"],

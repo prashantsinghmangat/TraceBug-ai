@@ -51,10 +51,10 @@ export interface ScrubberHandle {
 const STYLE_ID = "tracebug-replay-scrubber-styles";
 
 const MARKER_COLORS: Record<string, string> = {
-  click: "#7C5CFF",
-  input: "#7C5CFF",
-  select_change: "#7C5CFF",
-  form_submit: "#7C5CFF",
+  click: "#6366F1",
+  input: "#6366F1",
+  select_change: "#6366F1",
+  form_submit: "#6366F1",
   route_change: "#22d3ee",
   api_request: "#facc15",
   error: "#ef4444",
@@ -68,7 +68,7 @@ const CHIP_META: Record<string, { color: string; icon: string }> = {
   screenshot: { color: "#22d3ee", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>` },
   annotation: { color: "#a855f7", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>` },
   note: { color: "#f59e0b", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
-  blur: { color: "#94a3b8", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` },
+  blur: { color: "#A1A1AA", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` },
 };
 
 /**
@@ -203,7 +203,7 @@ export function mountReplayScrubber(
       ? "tb-rs-marker tb-rs-error"
       : isMark ? "tb-rs-marker tb-rs-mark" : "tb-rs-marker";
     m.style.left = `${pct(entry.timestamp, startedAt, span)}%`;
-    m.style.background = isError ? MARKER_COLORS.error : (MARKER_COLORS[entry.type] || "#7C5CFF");
+    m.style.background = isError ? MARKER_COLORS.error : (MARKER_COLORS[entry.type] || "#6366F1");
     m.dataset.ts = String(entry.timestamp);
     m.dataset.desc = `${entry.elapsed} · ${entry.description}`;
     if (isError) m.textContent = "!";
@@ -641,7 +641,7 @@ function _injectStyles(): void {
       border-radius: var(--tb-radius-md, 6px) !important;
       outline: none !important;
     }
-    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #7C5CFF) !important; }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #6366F1) !important; }
     .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
     .tb-rs-empty {
       font-size: 11px; color: var(--tb-text-muted, #888);
@@ -719,7 +719,7 @@ function _injectStyles(): void {
     .tb-rs-fill {
       position: absolute !important; top: 0 !important; left: 0 !important;
       height: 100% !important; width: 0% !important;
-      background: linear-gradient(90deg, rgba(123,97,255,0.18), rgba(123,97,255,0.08)) !important;
+      background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.08)) !important;
       border-radius: 999px !important;
       pointer-events: none !important;
     }
@@ -743,7 +743,7 @@ function _injectStyles(): void {
       transform: translate(-50%, -50%) !important;
       width: 10px !important; height: 10px !important;
       border-radius: 50% !important;
-      background: #7C5CFF !important;
+      background: #6366F1 !important;
       box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
       pointer-events: auto !important;
       cursor: pointer !important;
@@ -771,7 +771,7 @@ function _injectStyles(): void {
       width: 16px !important; height: 16px !important;
       transform: translate(-50%, -50%) !important;
       background: #fff !important;
-      border: 3px solid var(--tb-accent, #7C5CFF) !important;
+      border: 3px solid var(--tb-accent, #6366F1) !important;
       border-radius: 50% !important;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
       pointer-events: none !important;
@@ -799,7 +799,7 @@ function _injectStyles(): void {
     /* Play button + speed selector */
     .tb-rs-play {
       width: 28px !important; height: 28px !important;
-      background: var(--tb-accent, #7C5CFF) !important;
+      background: var(--tb-accent, #6366F1) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;

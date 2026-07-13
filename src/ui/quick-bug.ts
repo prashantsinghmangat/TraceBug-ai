@@ -349,7 +349,7 @@ function _openModal(
     width: 100%; max-width: 1180px; max-height: 92vh;
     display: flex; flex-direction: column;
     font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--tb-text-primary, #E6EDF3);
+    color: var(--tb-text-primary, #FAFAFA);
     box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
     animation: tracebug-qb-slide-up 0.2s ease;
     overflow: hidden;
@@ -2191,29 +2191,29 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
     "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
 
   overlay.innerHTML = `
-    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3;overflow:hidden">
+    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger — bring your own key</div>
-        <div style="font-size:12px;color:#94A3B8;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
+        <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
       </div>
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
-        <label style="font-size:12px;color:#94A3B8">Provider
-          <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px">
+        <label style="font-size:12px;color:#A1A1AA">Provider
+          <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px">
             ${(Object.keys(PROVIDER_LABELS) as AIProvider[]).map((p) => `<option value="${p}" ${p === provider ? "selected" : ""}>${escapeHtml(PROVIDER_LABELS[p])}</option>`).join("")}
           </select>
         </label>
-        <label data-ai-key-wrap style="font-size:12px;color:#94A3B8">API key
-          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" value="${escapeHtml(existing?.apiKey || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px" />
+        <label data-ai-key-wrap style="font-size:12px;color:#A1A1AA">API key
+          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" value="${escapeHtml(existing?.apiKey || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px" />
         </label>
-        <label style="font-size:12px;color:#94A3B8">Model
-          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml(existing?.model || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
+        <label style="font-size:12px;color:#A1A1AA">Model
+          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml(existing?.model || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
           <span data-ai-model-hint style="display:block;margin-top:5px;font-size:11px;color:#64748B"></span>
         </label>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
-        <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
-        <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
+        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
+        <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
     </div>`;
 
@@ -2273,18 +2273,18 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
     "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
     "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
 
-  const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0D10;color:#E6EDF3;font:inherit;font-size:13px";
-  const lbl = "font-size:12px;color:#94A3B8";
+  const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
+  const lbl = "font-size:12px;color:#A1A1AA";
 
   overlay.innerHTML = `
-    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(124,92,255,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#E6EDF3">
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations — bring your own token</div>
-        <div style="font-size:12px;color:#94A3B8;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
+        <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
       </div>
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:16px">
         <div>
-          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">GitHub</div>
+          <div style="font-size:12px;font-weight:600;color:#FAFAFA;margin-bottom:6px">GitHub</div>
           <label style="${lbl}">Personal access token (repo scope)
             <input data-int-gh-token type="password" autocomplete="off" spellcheck="false" placeholder="ghp_…" value="${escapeHtml(cfg.github?.token || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Repository (owner/repo)
@@ -2293,22 +2293,22 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
             <input data-int-gh-labels type="text" spellcheck="false" placeholder="bug, tracebug" value="${escapeHtml((cfg.github?.labels || []).join(", "))}" style="${fld}" /></label>
         </div>
         <div>
-          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">Linear</div>
+          <div style="font-size:12px;font-weight:600;color:#FAFAFA;margin-bottom:6px">Linear</div>
           <label style="${lbl}">Personal API key
             <input data-int-ln-key type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_…" value="${escapeHtml(cfg.linear?.apiKey || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Team ID
             <input data-int-ln-team type="text" spellcheck="false" placeholder="team UUID" value="${escapeHtml(cfg.linear?.teamId || "")}" style="${fld}" /></label>
         </div>
         <div>
-          <div style="font-size:12px;font-weight:600;color:#E6EDF3;margin-bottom:6px">Slack</div>
+          <div style="font-size:12px;font-weight:600;color:#FAFAFA;margin-bottom:6px">Slack</div>
           <label style="${lbl}">Incoming webhook URL
             <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/…" value="${escapeHtml(cfg.slack?.webhookUrl || "")}" style="${fld}" /></label>
         </div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
-        <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
-        <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
+        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
+        <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
     </div>`;
 
@@ -2441,7 +2441,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
     #${MODAL_ID} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
     #${MODAL_ID} .tb-qb-preview { position:relative; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
-    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(124,92,255,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
     #${MODAL_ID} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
     #${MODAL_ID} .tb-qb-primary-edit svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-preview-empty { flex-direction:column; gap:12px; padding:30px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
@@ -2464,7 +2464,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
-    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(124,92,255,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(99,102,241,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     #${MODAL_ID} .tb-qb-ss-add svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-ss-add:hover { filter:brightness(1.15); }
     #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
@@ -2708,11 +2708,11 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
     #${MODAL_ID} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
     /* "Fix with AI" — the highlight action. Gradient accent so it stands out. */
-    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(124,92,255,0.35); }
+    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(99,102,241,0.35); }
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated — white-on-white text in the light theme. */
-    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#7C5CFF,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(124,92,255,0.45); }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(99,102,241,0.45); }
     /* Save Ticket — prominent green CTA */
     #${MODAL_ID} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
     #${MODAL_ID} .tb-qb-btn-save:hover { background:#16a34a; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(34,197,94,0.45); }
@@ -2796,11 +2796,11 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
   card.style.cssText = `
     width: 100%; max-width: 560px; max-height: 80vh;
     background: #11151A;
-    border: 1px solid rgba(124,92,255,0.28);
+    border: 1px solid rgba(99,102,241,0.28);
     border-radius: 14px;
     box-shadow: 0 24px 72px rgba(0,0,0,0.6);
     display: flex; flex-direction: column;
-    color: #E6EDF3;
+    color: #FAFAFA;
     overflow: hidden;
   `;
   card.innerHTML = `
@@ -2809,7 +2809,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
         <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">AI debugging prompt is ready</div>
       </div>
-      <div style="font-size:12px;color:#94A3B8;line-height:1.45">
+      <div style="font-size:12px;color:#A1A1AA;line-height:1.45">
         ✓ Copied to clipboard · ${sizeKb} KB · ~${approxTokens} tokens · pick an AI below or paste anywhere.
       </div>
     </div>
@@ -2817,7 +2817,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     <pre style="
       margin:0;padding:14px 18px;
       flex:1;overflow:auto;
-      background:#0B0D10;
+      background:#0B0B10;
       font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
       font-size:11.5px;line-height:1.55;
       color:#CBD2DA;
@@ -2845,12 +2845,12 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
       <button data-ai-action="copy" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
-        background:transparent;color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;
+        background:transparent;color:#FAFAFA;font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy again</button>
       <button data-ai-action="close" aria-label="Close" style="
         display:inline-flex;align-items:center;justify-content:center;
         width:38px;padding:10px 0;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
-        background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif;
+        background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif;
       ">✕</button>
     </div>
   `;
@@ -2908,7 +2908,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   // rejects with "Prompt is too long". So always point chat users at the tiny
   // text-only artifacts instead, regardless of file size.
   const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
-  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
+  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
          Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} — use <strong>Export for AI (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;▾</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
 
@@ -2927,11 +2927,11 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   card.style.cssText = `
     width: 100%; max-width: 560px; max-height: 80vh;
     background: #11151A;
-    border: 1px solid rgba(124,92,255,0.28);
+    border: 1px solid rgba(99,102,241,0.28);
     border-radius: 14px;
     box-shadow: 0 24px 72px rgba(0,0,0,0.6);
     display: flex; flex-direction: column;
-    color: #E6EDF3;
+    color: #FAFAFA;
     overflow: hidden;
   `;
   card.innerHTML = `
@@ -2940,7 +2940,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
         <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">Debug this export with your coding agent</div>
       </div>
-      <div style="font-size:12px;color:#94A3B8;line-height:1.45">
+      <div style="font-size:12px;color:#A1A1AA;line-height:1.45">
         ✓ Prompt copied · paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.
         The agent reads the .html via TraceBug's local MCP server — nothing is uploaded.
       </div>
@@ -2949,7 +2949,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
     <pre style="
       margin:0;padding:14px 18px;
       flex:1;overflow:auto;
-      background:#0B0D10;
+      background:#0B0B10;
       font-family:ui-monospace,'SF Mono','JetBrains Mono',Consolas,monospace;
       font-size:11.5px;line-height:1.55;
       color:#CBD2DA;
@@ -2960,17 +2960,17 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       <button data-mcp-action="copy" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
-        background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+        background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy prompt again</button>
       <a href="https://tracebug.netlify.app/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
-        color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
+        color:#FAFAFA;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
       ">MCP setup guide ↗</a>
       <button data-mcp-action="close" aria-label="Close" style="
         display:inline-flex;align-items:center;justify-content:center;
         width:38px;padding:10px 0;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;
-        background:transparent;color:#94A3B8;font:600 14px system-ui,-apple-system,sans-serif;
+        background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif;
       ">✕</button>
     </div>
   `;
@@ -3049,8 +3049,8 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
     const card = document.createElement("div");
     card.style.cssText = `
       width: 100%; max-width: 460px;
-      background: #11151A; color: #E6EDF3;
-      border: 1px solid rgba(124,92,255,0.32);
+      background: #11151A; color: #FAFAFA;
+      border: 1px solid rgba(99,102,241,0.32);
       border-radius: 14px;
       box-shadow: 0 24px 72px rgba(0,0,0,0.6);
       padding: 22px 24px;
@@ -3062,15 +3062,15 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
       </div>
       <div style="font-size:13px;color:#B9C2CC;line-height:1.55;margin-bottom:14px">
         TraceBug auto-scrubs token shapes (JWTs, Bearer tokens, API keys, etc.)
-        from <strong style="color:#E6EDF3">console logs</strong>, <strong style="color:#E6EDF3">URLs</strong>, and
-        <strong style="color:#E6EDF3">network responses</strong> before upload.
+        from <strong style="color:#FAFAFA">console logs</strong>, <strong style="color:#FAFAFA">URLs</strong>, and
+        <strong style="color:#FAFAFA">network responses</strong> before upload.
       </div>
       <div style="font-size:13px;color:#B9C2CC;line-height:1.55;margin-bottom:18px;padding:10px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:8px">
         <strong style="color:#F59E0B">Screenshots and video are uploaded as captured.</strong>
         If any frame shows sensitive UI (passwords, tokens, PII), redact or
         delete it before sharing. Use ✎ Annotate to draw over sensitive areas.
       </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:12px;color:#94A3B8">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:12px;color:#A1A1AA">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
           <input type="checkbox" id="tb-consent-dont-show" style="margin:0;cursor:pointer" />
           Don't show this again
@@ -3079,11 +3079,11 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button data-act="cancel" style="
           padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.14);
-          background:transparent;color:#E6EDF3;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+          background:transparent;color:#FAFAFA;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
         ">Cancel</button>
         <button data-act="continue" style="
           padding:8px 18px;border-radius:8px;border:0;
-          background:#7C5CFF;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+          background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
         ">I understand — continue</button>
       </div>
     `;

@@ -14,9 +14,9 @@ export default function Hero() {
     <section className="relative overflow-hidden pt-28 pb-16 lg:pt-36 lg:pb-24">
       {/* Aurora field + grid — the futuristic light behind the fold */}
       <div className="absolute inset-0 -z-10 grid-bg opacity-60 [mask-image:radial-gradient(ellipse_75%_55%_at_50%_0%,black,transparent)]" />
-      <div className="aurora animate-aurora -z-10 top-[-10%] left-[10%] h-[420px] w-[460px] bg-[#7C5CFF]/25" />
-      <div className="aurora animate-aurora -z-10 top-[5%] right-[5%] h-[380px] w-[420px] bg-[#22D3EE]/20" style={{ animationDelay: "-6s" }} />
-      <div className="aurora animate-aurora -z-10 top-[30%] left-[40%] h-[300px] w-[360px] bg-[#6D4AFF]/15" style={{ animationDelay: "-12s" }} />
+      <div className="aurora animate-aurora -z-10 top-[-10%] left-[10%] h-[420px] w-[460px] bg-[#818CF8]/25" />
+      <div className="aurora animate-aurora -z-10 top-[5%] right-[5%] h-[380px] w-[420px] bg-[#4F46E5]/20" style={{ animationDelay: "-6s" }} />
+      <div className="aurora animate-aurora -z-10 top-[30%] left-[40%] h-[300px] w-[360px] bg-[#6366F1]/15" style={{ animationDelay: "-12s" }} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Eyebrow */}
@@ -73,7 +73,7 @@ export default function Hero() {
 
         {/* Product visual — light browser frame with the auto-generated report */}
         <div className="relative mx-auto mt-16 max-w-4xl">
-          <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-[#7C5CFF]/15 via-transparent to-[#22D3EE]/15 blur-2xl" />
+          <div className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-tr from-[#818CF8]/15 via-transparent to-[#4F46E5]/15 blur-2xl" />
 
           {/* Floating accent chips */}
           <div className="hidden md:block absolute -left-10 top-16 z-20 animate-float">

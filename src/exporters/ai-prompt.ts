@@ -309,21 +309,21 @@ export function exportReportAsAiHtml(
 const AI_HTML_CSS = `
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
-body{margin:0;background:#fff;color:#0C0F17;font:14px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased}
-@media(prefers-color-scheme:dark){body{background:#0B0D10;color:#E6EDF3}}
+body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+@media(prefers-color-scheme:dark){body{background:#0B0B10;color:#FAFAFA}}
 .tb-ai{max-width:760px;margin:0 auto;padding:40px 24px}
 .tb-ai h1{font-size:22px;font-weight:650;letter-spacing:-0.02em;margin:0 0 6px}
-.tb-ai h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#868E9F;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid #EAECF1}
-@media(prefers-color-scheme:dark){.tb-ai h2{color:#94A3B8;border-color:#1F2630}}
+.tb-ai h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#82828C;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid #E4E4E7}
+@media(prefers-color-scheme:dark){.tb-ai h2{color:#A1A1AA;border-color:#26262E}}
 .tb-ai p{margin:6px 0}
 .tb-ai ul,.tb-ai ol{margin:6px 0;padding-left:22px}
 .tb-ai li{margin:3px 0}
 .tb-ai strong{font-weight:650}
-.tb-ai code{font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:12.5px;background:#F1F3F7;padding:1px 5px;border-radius:5px}
-@media(prefers-color-scheme:dark){.tb-ai code{background:#161B22}}
-.tb-ai pre{font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:12px;background:#F1F3F7;color:#3f3f46;padding:10px 12px;border-radius:8px;overflow:auto;margin:6px 0;white-space:pre-wrap;word-break:break-word}
-@media(prefers-color-scheme:dark){.tb-ai pre{background:#161B22;color:#d4d4d8}}
-.tb-ai-foot{max-width:760px;margin:0 auto;padding:0 24px 40px;font-size:11px;color:#868E9F}
+.tb-ai code{font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:12.5px;background:#F4F4F5;padding:1px 5px;border-radius:5px}
+@media(prefers-color-scheme:dark){.tb-ai code{background:#14141F}}
+.tb-ai pre{font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:12px;background:#F4F4F5;color:#2A2A35;padding:10px 12px;border-radius:8px;overflow:auto;margin:6px 0;white-space:pre-wrap;word-break:break-word}
+@media(prefers-color-scheme:dark){.tb-ai pre{background:#14141F;color:#d4d4d8}}
+.tb-ai-foot{max-width:760px;margin:0 auto;padding:0 24px 40px;font-size:11px;color:#82828C}
 `;
 
 // Minimal, safe markdown → HTML for exactly the subset generateAIPrompt emits:

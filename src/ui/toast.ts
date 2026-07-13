@@ -39,7 +39,7 @@ export function showActionToast(
 
   toast.innerHTML = `
     <span style="flex:1">${message.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>
-    <button data-tb-action="capture" style="background:var(--tb-accent, #7C5CFF);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</button>
+    <button data-tb-action="capture" style="background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</button>
     <button data-tb-action="dismiss" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px">\u2715</button>
   `;
 
@@ -86,7 +86,7 @@ export function showToast(message: string, root: HTMLElement): void {
     transform:translateX(-50%) !important;
     background:#0E1117 !important;
     color:#FFFFFF !important;
-    border:1px solid #7C5CFF !important;
+    border:1px solid #6366F1 !important;
     border-radius:10px !important;
     padding:14px 22px !important;
     font-size:14px !important;
@@ -94,7 +94,7 @@ export function showToast(message: string, root: HTMLElement): void {
     letter-spacing:-0.005em !important;
     font-family:system-ui,-apple-system,sans-serif !important;
     z-index:2147483647 !important;
-    box-shadow:0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(124,92,255,0.12) !important;
+    box-shadow:0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(99,102,241,0.12) !important;
     pointer-events:auto !important;
     max-width:460px !important;
     text-align:center !important;

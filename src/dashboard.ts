@@ -128,7 +128,7 @@ export function mountDashboard(
     #tracebug-root select:focus-visible,
     #tracebug-root textarea:focus-visible,
     #tracebug-root [tabindex]:focus-visible {
-      outline: 2px solid var(--tb-accent, #7C5CFF) !important;
+      outline: 2px solid var(--tb-accent, #6366F1) !important;
       outline-offset: 2px !important;
     }
     #tracebug-root *:focus:not(:focus-visible) {
@@ -234,7 +234,7 @@ function renderPanel(panel: HTMLElement): void {
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B0F"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</div>
+          <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4F46E5"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</div>
           <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording ? "Recording" : "Paused"}"></div>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} · ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
@@ -393,7 +393,7 @@ function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLEle
     <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(preview)}</div>
     <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events · ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button data-tracebug="view-ticket" style="${smallBtnStyle("#7C5CFF")}font-size:10px;flex:1">📋 View Ticket</button>
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#6366F1")}font-size:10px;flex:1">📋 View Ticket</button>
       <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
     </div>
   `;
@@ -824,8 +824,8 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     } else if (ev.type === "select_change") {
       const sel = ev.data.element;
       const fieldName = sel?.name || sel?.id || "dropdown";
-      html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#34d399">${escapeHtml(fieldName)}</span>" dropdown</div>`;
-      html += `<div style="font-size:11px;color:#34d399;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml(sel?.selectedText || sel?.value || "")}</strong>"</div>`;
+      html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Changed "<span style="color:#818CF8">${escapeHtml(fieldName)}</span>" dropdown</div>`;
+      html += `<div style="font-size:11px;color:#818CF8;margin-top:3px;background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d">Selected: "<strong>${escapeHtml(sel?.selectedText || sel?.value || "")}</strong>"</div>`;
       if (sel?.allOptions && sel.allOptions.length > 0) {
         html += `<div style="font-size:9px;color:var(--tb-text-muted, #444);margin-top:3px">Options: ${sel.allOptions.map((o: string) => escapeHtml(o)).join(", ")}</div>`;
       }
@@ -1359,7 +1359,7 @@ function buildHtmlReport(
   .tag{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:600}
   pre{white-space:pre-wrap;font-size:12px;line-height:1.5}
   .value-box{background:#1e153344;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #1e1533;margin-top:4px;font-size:11px;color:#a78bfa;word-break:break-word}
-  .select-box{background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d;margin-top:4px;font-size:11px;color:#34d399}
+  .select-box{background:#05201544;padding:4px 8px;border-radius:var(--tb-radius-sm, 4px);border:1px solid #14532d;margin-top:4px;font-size:11px;color:#818CF8}
 </style></head><body>
 <h1>🐛 TraceBug Session Report</h1>
 <div class="meta">Session: ${s.sessionId} · ${new Date(s.createdAt).toLocaleString()} · Duration: ${formatDuration(sessionDur)}</div>`;
@@ -1456,7 +1456,7 @@ function describeEventHtml(ev: any): string {
     }
     case "select_change": {
       const sel = ev.data.element;
-      let s = `Changed "<span style="color:#34d399">${escapeHtml(sel?.name || "dropdown")}</span>"`;
+      let s = `Changed "<span style="color:#818CF8">${escapeHtml(sel?.name || "dropdown")}</span>"`;
       s += `<div class="select-box">Selected: "<strong>${escapeHtml(sel?.selectedText || sel?.value || "")}</strong>"</div>`;
       return s;
     }
@@ -1549,7 +1549,7 @@ function downloadFile(filename: string, content: string, mimeType: string): void
 const eventConfig: Record<string, { label: string; icon: string; color: string; bg: string }> = {
   click:                { label: "Click",        icon: "👆", color: "#60a5fa", bg: "#1e293b" },
   input:                { label: "Input",        icon: "⌨️", color: "#c084fc", bg: "#1e1533" },
-  select_change:        { label: "Select",       icon: "📋", color: "#34d399", bg: "#052015" },
+  select_change:        { label: "Select",       icon: "📋", color: "#818CF8", bg: "#052015" },
   form_submit:          { label: "Form Submit",  icon: "📤", color: "#fb923c", bg: "#2a1505" },
   route_change:         { label: "Navigate",     icon: "🔀", color: "#22d3ee", bg: "#0c2e33" },
   api_request:          { label: "API",          icon: "🌐", color: "#fbbf24", bg: "#2a2005" },
@@ -1652,7 +1652,7 @@ function smallBtnStyle(color: string): string {
 
 function _tabBtnStyle(active: boolean): string {
   return active
-    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #7C5CFF);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
+    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #6366F1);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
     : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
 }
 
@@ -1748,7 +1748,7 @@ function renderAnnotationList(panel: HTMLElement): void {
         </svg>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
         <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
-          Use <strong style="color:#7C5CFF">Annotate</strong> to click elements or <strong style="color:#7C5CFF">Draw</strong> to mark regions on the page.
+          Use <strong style="color:#6366F1">Annotate</strong> to click elements or <strong style="color:#6366F1">Draw</strong> to mark regions on the page.
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
           Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
@@ -1763,7 +1763,7 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   // Element annotations
   if (elAnnotations.length > 0) {
-    html += `<div style="font-size:11px;color:#7C5CFF;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #7C5CFF;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
+    html += `<div style="font-size:11px;color:#6366F1;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #6366F1;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
     for (let i = 0; i < elAnnotations.length; i++) {
       const a = elAnnotations[i];
       const intentColor = _getIntentColor(a.intent);
@@ -1788,7 +1788,7 @@ function renderAnnotationList(panel: HTMLElement): void {
 
   // Draw regions
   if (drawRegions.length > 0) {
-    html += `<div style="font-size:11px;color:#22D3EE;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #22D3EE;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
+    html += `<div style="font-size:11px;color:#4F46E5;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #4F46E5;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
     for (let i = 0; i < drawRegions.length; i++) {
       const r = drawRegions[i];
       const shapeLabel = r.shape === "rect" ? "Rectangle" : "Ellipse";
@@ -1849,7 +1849,7 @@ function renderAnnotationList(panel: HTMLElement): void {
 function _getIntentColor(intent: string): string {
   switch (intent) {
     case "fix": return "#ef4444";
-    case "redesign": return "#7C5CFF";
+    case "redesign": return "#6366F1";
     case "remove": return "#f97316";
     case "question": return "#3b82f6";
     default: return "#888";
@@ -2010,7 +2010,7 @@ function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement
       </button>
 
       <!-- Save — primary accent -->
-      <button id="bt-ann-save" style="background:var(--tb-accent, #7C5CFF);color:#fff;border:none;border-radius:8px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);white-space:nowrap;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(124,92,255,0.35);transition:all 0.15s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+      <button id="bt-ann-save" style="background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:8px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);white-space:nowrap;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(99,102,241,0.35);transition:all 0.15s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         Save Annotated
       </button>
@@ -2373,7 +2373,7 @@ function mergeAnnotations(baseDataUrl: string, annotationCanvas: HTMLCanvasEleme
 
 function annToolBtnStyle(active: boolean): string {
   if (active) {
-    return "background:#7C5CFF;color:#fff;border:1px solid #7C5CFF;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 8px rgba(124,92,255,0.4);display:inline-flex;align-items:center;";
+    return "background:#6366F1;color:#fff;border:1px solid #6366F1;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 8px rgba(99,102,241,0.4);display:inline-flex;align-items:center;";
   }
   return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
 }

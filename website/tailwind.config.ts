@@ -41,7 +41,7 @@ const config: Config = {
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         "grid-dot": "radial-gradient(circle, rgb(var(--border-strong) / 0.7) 1px, transparent 1px)",
-        "brand-gradient": "linear-gradient(120deg, #7C5CFF 0%, #6D4AFF 45%, #22D3EE 100%)",
+        "brand-gradient": "linear-gradient(120deg, #818CF8 0%, #6366F1 45%, #4F46E5 100%)",
       },
       backgroundSize: {
         "grid-dot": "26px 26px",
@@ -99,9 +99,10 @@ const config: Config = {
         soft: "0 1px 3px rgb(16 24 40 / 0.05), 0 1px 2px rgb(16 24 40 / 0.04)",
         card: "0 2px 6px rgb(16 24 40 / 0.04), 0 12px 28px -8px rgb(16 24 40 / 0.10)",
         "card-hover": "0 4px 10px rgb(16 24 40 / 0.05), 0 22px 48px -12px rgb(16 24 40 / 0.16)",
-        float: "0 24px 60px -16px rgb(76 56 160 / 0.22)",
-        "glow-primary": "0 0 0 1px rgb(124 92 255 / 0.18), 0 18px 50px -12px rgb(124 92 255 / 0.40)",
-        "glow-sm": "0 6px 18px -6px rgb(124 92 255 / 0.45)",
+        float: "0 24px 60px -16px rgb(11 11 16 / 0.22)",
+        /* Indigo "glow" kept intentionally soft — a subtle tint, not neon. */
+        "glow-primary": "0 0 0 1px rgb(99 102 241 / 0.14), 0 12px 32px -14px rgb(99 102 241 / 0.30)",
+        "glow-sm": "0 4px 14px -6px rgb(99 102 241 / 0.30)",
       },
     },
   },

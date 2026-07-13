@@ -622,7 +622,7 @@ function _showRecordPreflight(
     const startEl = pop.querySelector('[data-tb-pre="start"]') as HTMLButtonElement;
 
     const paintSurface = () => {
-      const on = ";border-color:var(--tb-accent, #7C5CFF);background:var(--tb-accent-subtle, rgba(124,92,255,0.15));color:var(--tb-text-primary, #fff)";
+      const on = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
       tabBtn.style.cssText = segBase + (surface === "tab" ? on : "");
       deskBtn.style.cssText = segBase + (surface === "desktop" ? on : "");
     };
@@ -764,7 +764,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
       actions.style.cssText = "display:flex;flex-direction:column;gap:4px;flex-shrink:0";
       const openBtn = document.createElement("button");
       openBtn.textContent = "Open";
-      openBtn.style.cssText = "background:var(--tb-accent,#7C5CFF);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap";
+      openBtn.style.cssText = "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap";
       openBtn.addEventListener("click", () => {
         pop.remove();
         // Close any open modal first so the _isOpen guard doesn't block reopening.
@@ -870,14 +870,14 @@ function _updateActiveStates(toolbar: HTMLElement): void {
   if (annotateBtn) {
     const active = isElementAnnotateActive();
     annotateBtn.classList.toggle("tb-active", active);
-    annotateBtn.style.background = active ? "var(--tb-accent-subtle, #7C5CFF33)" : "transparent";
-    annotateBtn.style.color = active ? "var(--tb-accent, #7C5CFF)" : "var(--tb-text-muted, #888)";
+    annotateBtn.style.background = active ? "var(--tb-accent-subtle, #6366F133)" : "transparent";
+    annotateBtn.style.color = active ? "var(--tb-accent, #6366F1)" : "var(--tb-text-muted, #888)";
   }
   if (drawBtn) {
     const active = isDrawModeActive();
     drawBtn.classList.toggle("tb-active", active);
-    drawBtn.style.background = active ? "var(--tb-accent-subtle, #7C5CFF33)" : "transparent";
-    drawBtn.style.color = active ? "var(--tb-accent, #7C5CFF)" : "var(--tb-text-muted, #888)";
+    drawBtn.style.background = active ? "var(--tb-accent-subtle, #6366F133)" : "transparent";
+    drawBtn.style.color = active ? "var(--tb-accent, #6366F1)" : "var(--tb-text-muted, #888)";
   }
 }
 
@@ -950,7 +950,7 @@ function _toggleSettingsCard(
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between">
         <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Plan</span>
-        <span id="tracebug-settings-plan-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--tb-accent, #7C5CFF);color:#fff">✨ All features free</span>
+        <span id="tracebug-settings-plan-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--tb-accent, #6366F1);color:#fff">✨ All features free</span>
       </div>
       <div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:10px;display:flex;gap:6px">
         <button id="tracebug-settings-clear-ann" style="flex:1;background:var(--tb-warning-bg, #f9731622);color:var(--tb-warning, #f97316);border:1px solid var(--tb-warning, #f97316)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear Annotations</button>
@@ -1224,5 +1224,5 @@ function _restoreToolbar(toolbar: HTMLElement): void {
 }
 
 function _logoSvg(): string {
-  return `<svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="tb-cr" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7C5CFF"/><stop offset="1" stop-color="#22D3EE"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B0F"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#tb-cr)"/></svg>`;
+  return `<svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="tb-cr" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4F46E5"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#tb-cr)"/></svg>`;
 }
