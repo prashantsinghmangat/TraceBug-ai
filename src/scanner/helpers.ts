@@ -69,8 +69,8 @@ export function coerceSeverity(impact: string | null | undefined): IssueSeverity
  * would break a selector (colons, brackets, dots in framework-generated ids).
  */
 function cssEscape(value: string): string {
-  if (typeof (window as any).CSS?.escape === "function") {
-    return (window as any).CSS.escape(value);
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(value);
   }
   return value.replace(/[^\w-]/g, ch => `\\${ch}`);
 }

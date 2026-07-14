@@ -114,8 +114,25 @@ function issueBody(report: BugReport): string {
   return generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, "");
 }
 
-async function parseJsonOrThrow(res: Response, label: string): Promise<any> {
-  let data: any = null;
+/** The union of response fields we read off provider JSON — GitHub REST
+ *  (html_url/number) and Linear GraphQL (data.issueCreate). All optional:
+ *  bodies are dynamic and only trusted after the checks at each call site. */
+interface TrackerJsonResponse {
+  message?: string;
+  error?: string;
+  errors?: Array<{ message?: string }>;
+  html_url?: string;
+  number?: number;
+  data?: {
+    issueCreate?: {
+      success?: boolean;
+      issue?: { url?: string; identifier?: string };
+    };
+  };
+}
+
+async function parseJsonOrThrow(res: Response, label: string): Promise<TrackerJsonResponse> {
+  let data: TrackerJsonResponse | null = null;
   try { data = await res.json(); } catch { /* non-JSON error body */ }
   if (!res.ok) {
     const msg =
@@ -123,7 +140,10 @@ async function parseJsonOrThrow(res: Response, label: string): Promise<any> {
       `${label} request failed (HTTP ${res.status}).`;
     throw new Error(String(msg));
   }
-  return data;
+  // res.ok with an unparseable body is a provider bug — keep the historical
+  // shape (callers read fields off whatever came back) rather than inventing
+  // a fallback object here.
+  return data!;
 }
 
 // ── GitHub (REST: create an issue) ─────────────────────────────────────────

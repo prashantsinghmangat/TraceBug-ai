@@ -206,8 +206,8 @@ export function activateElementAnnotateMode(
     document.removeEventListener("click", onClick, { capture: true });
     document.removeEventListener("contextmenu", onContext, { capture: true });
     document.removeEventListener("keydown", onKeyDown, { capture: true });
-    window.removeEventListener("wheel", preventScroll, { capture: true } as any);
-    window.removeEventListener("touchmove", preventScroll, { capture: true } as any);
+    window.removeEventListener("wheel", preventScroll, { capture: true });
+    window.removeEventListener("touchmove", preventScroll, { capture: true });
 
     // Restore scroll & cursor
     document.documentElement.style.overflow = savedOverflowHtml;

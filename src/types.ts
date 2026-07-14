@@ -117,6 +117,16 @@ export type EventType =
  */
 export type ContextData = Record<string, string | number | boolean | null>;
 
+/**
+ * A value that has round-tripped through `JSON.parse` — dynamic by nature.
+ * Event payload shapes vary per event type (`element` for clicks/inputs,
+ * `request` for API calls, `error` for exceptions, `form` for submits,
+ * `from`/`to` for route changes, `label`/`payload` for marks) and are
+ * persisted to localStorage as JSON, so per-event typing happens at the
+ * consumer sites via optional chaining.
+ */
+export type JsonParsedValue = ReturnType<typeof JSON.parse>;
+
 export interface TraceBugEvent {
   id: string;
   sessionId: string;
@@ -124,7 +134,7 @@ export interface TraceBugEvent {
   type: EventType;
   page: string;
   timestamp: number;
-  data: Record<string, any>;
+  data: Record<string, JsonParsedValue>;
 }
 
 // ── Stored session ────────────────────────────────────────────────────────
@@ -196,8 +206,10 @@ export interface DrawRegion {
   id: string;
   timestamp: number;
   /** "redact" draws a solid filled block that hides the underlying content —
-   *  use to obscure PII/tokens/etc. before sharing a screenshot. */
-  shape: "rect" | "ellipse" | "redact";
+   *  use to obscure PII/tokens/etc. before sharing a screenshot.
+   *  "pen" is a freehand stroke — x/y/width/height hold its bounding box and
+   *  `points` holds the captured path. */
+  shape: "rect" | "ellipse" | "redact" | "pen";
   x: number;
   y: number;
   width: number;
@@ -207,6 +219,8 @@ export interface DrawRegion {
   page: string;
   scrollX: number;
   scrollY: number;
+  /** Freehand path in document coords — present only when shape is "pen". */
+  points?: Array<{ x: number; y: number }>;
 }
 
 // ── Annotation Report ────────────────────────────────────────────────────

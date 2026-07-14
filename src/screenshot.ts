@@ -25,7 +25,7 @@ function loadHtml2Canvas(): Promise<typeof html2canvasStatic | null> {
   if (_html2canvasPromise) return _html2canvasPromise;
   _html2canvasPromise = import("html2canvas")
     .then((mod) => {
-      const fn = (mod as any).default || (mod as any);
+      const fn: unknown = (mod as { default?: unknown }).default || mod;
       return typeof fn === "function" ? (fn as typeof html2canvasStatic) : null;
     })
     .catch(() => null);
@@ -51,7 +51,7 @@ export function isNonRenderingLink(el: Element): boolean {
  * to the content script → background script.
  */
 export function isExtensionContext(): boolean {
-  return !!(window as any).__TRACEBUG_INITIALIZED__;
+  return !!(window as { __TRACEBUG_INITIALIZED__?: boolean }).__TRACEBUG_INITIALIZED__;
 }
 
 function captureViaExtension(): Promise<string | null> {
@@ -395,8 +395,9 @@ async function drawClickHighlight(dataUrl: string, bbox: BBox): Promise<string |
   if (!ctx) return null;
 
   // Polyfill roundRect on contexts without it (older Chromium/Firefox).
-  if (typeof (ctx as any).roundRect !== "function") {
-    (ctx as any).roundRect = function (x: number, y: number, w: number, h: number, r: number) {
+  if (typeof ctx.roundRect !== "function") {
+    ctx.roundRect = function (x: number, y: number, w: number, h: number, radii?: number | DOMPointInit | (number | DOMPointInit)[]) {
+      const r = typeof radii === "number" ? radii : 0;
       const rad = Math.min(r, w / 2, h / 2);
       this.moveTo(x + rad, y);
       this.lineTo(x + w - rad, y);

@@ -69,7 +69,8 @@ function detectDeviceType(): "desktop" | "tablet" | "mobile" {
 }
 
 function getConnectionType(): string {
-  const nav = navigator as any;
+  // Network Information API — not in lib.dom yet, so type the slice we read.
+  const nav = navigator as Navigator & { connection?: { effectiveType?: string; type?: string } };
   if (nav.connection) {
     const c = nav.connection;
     return c.effectiveType || c.type || "unknown";

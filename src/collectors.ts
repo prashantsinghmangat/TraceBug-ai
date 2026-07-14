@@ -5,7 +5,7 @@
 import { EventType } from "./types";
 import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 
-type Emit = (type: EventType, data: Record<string, any>) => void;
+type Emit = (type: EventType, data: Record<string, unknown>) => void;
 
 const ROOT_ID = "tracebug-root";
 const PANEL_ID = "tracebug-dashboard-panel";
@@ -111,7 +111,7 @@ async function readResponseBodySafe(response: Response): Promise<string> {
     const ct = response.headers.get("content-type") || "";
     if (BINARY_CONTENT_TYPE_RE.test(ct)) return "";
 
-    if (!response.body || typeof (response.body as any).getReader !== "function") {
+    if (!response.body || typeof response.body.getReader !== "function") {
       // No streaming available — last-resort text() read.
       // (Truncate after the fact; we can't do better without streams.)
       try {
@@ -207,16 +207,13 @@ export function collectClicks(emit: Emit): () => void {
       if (!t || isTraceBugElement(t)) return;
 
       const tag = t.tagName.toLowerCase();
-      const data: Record<string, any> = {
-        element: {
-          tag,
-          text: (t.innerText || "").slice(0, 120),
-          id: t.id || "",
-          className: typeof t.className === "string" ? t.className : "",
-        },
+      const el: Record<string, unknown> = {
+        tag,
+        text: (t.innerText || "").slice(0, 120),
+        id: t.id || "",
+        className: typeof t.className === "string" ? t.className : "",
       };
-
-      const el = data.element;
+      const data: Record<string, unknown> = { element: el };
       if (tag === "a") el.href = (t as HTMLAnchorElement).href || "";
       if (tag === "button" || (t as HTMLButtonElement).type === "submit") {
         el.buttonType = (t as HTMLButtonElement).type || "button";
@@ -307,19 +304,18 @@ export function collectInputs(emit: Emit): () => void {
             const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) ||
               /password|secret|token|ssn|credit/i.test(t.name || t.id || "");
 
-            const data: Record<string, any> = {
-              element: {
-                tag, name: t.name || t.id || "", type: inputType,
-                valueLength: (t.value || "").length,
-                value: isSensitive ? "[REDACTED]" : (t.value || "").slice(0, 200),
-                placeholder: t.placeholder || "",
-              },
+            const element: Record<string, unknown> = {
+              tag, name: t.name || t.id || "", type: inputType,
+              valueLength: (t.value || "").length,
+              value: isSensitive ? "[REDACTED]" : (t.value || "").slice(0, 200),
+              placeholder: t.placeholder || "",
             };
+            const data: Record<string, unknown> = { element };
             if (inputType === "checkbox" || inputType === "radio") {
-              data.element.checked = (t as HTMLInputElement).checked;
-              data.element.value = (t as HTMLInputElement).checked ? "checked" : "unchecked";
+              element.checked = (t as HTMLInputElement).checked;
+              element.value = (t as HTMLInputElement).checked ? "checked" : "unchecked";
             }
-            if (inputType === "number" || inputType === "range") { data.element.value = t.value; }
+            if (inputType === "number" || inputType === "range") { element.value = t.value; }
             emit("input", data);
           } catch (err) {
             if (typeof console !== 'undefined') console.warn('[TraceBug] Input capture error:', err);
@@ -521,12 +517,16 @@ export function collectXhrRequests(emit: Emit): () => void {
 
   const xhrMeta = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
 
-  OrigXHR.prototype.open = function (method: string, url: string | URL, ...rest: any[]) {
+  OrigXHR.prototype.open = function (
+    method: string,
+    url: string | URL,
+    ...rest: [async?: boolean, username?: string | null, password?: string | null]
+  ) {
     try { xhrMeta.set(this, { method, url: typeof url === "string" ? url : url.toString() }); } catch {}
-    return origOpen.apply(this, [method, url, ...rest] as any);
+    return origOpen.apply(this, [method, url, ...rest] as Parameters<XMLHttpRequest["open"]>);
   };
 
-  OrigXHR.prototype.send = function (this: XMLHttpRequest, body?: any) {
+  OrigXHR.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       const xhr: XMLHttpRequest = this;
@@ -615,13 +615,16 @@ function _emitPerfEntry(emit: Emit, e: PerformanceResourceTiming): void {
   _perfSeen.add(key);
 
   const navStart = (typeof performance.timeOrigin === "number") ? performance.timeOrigin : Date.now();
-  const initiator = (e as any).initiatorType || "";
-  const method = ((e as any).method || "GET").toUpperCase();
+  // `method`/`responseStatus` are newer Resource Timing fields not present in
+  // every lib.dom version — read them via a widened view of the entry.
+  const ext = e as PerformanceResourceTiming & { method?: string; responseStatus?: number };
+  const initiator = e.initiatorType || "";
+  const method = (ext.method || "GET").toUpperCase();
   // responseStatus needs same-origin (or Timing-Allow-Origin header) to be
   // exposed. When the browser hides it we report 0; report-builder treats
   // 0 as "unknown" rather than "error", so it lands in the Network tab
   // without polluting the Errors-only filter.
-  const status = (e as any).responseStatus || 0;
+  const status = ext.responseStatus || 0;
   const url = sanitizeUrl(e.name).slice(0, 500);
   const timestamp = Math.round(navStart + e.startTime);
   const durationMs = Math.round(e.duration || 0);
@@ -720,7 +723,7 @@ export function collectErrors(emit: Emit): () => void {
 export function collectConsoleErrors(emit: Emit): () => void {
   const origConsoleError = console.error;
   let _insideEmit = false;
-  console.error = function (...args: any[]) {
+  console.error = function (...args: unknown[]) {
     if (_insideEmit) { origConsoleError.apply(console, args); return; }
     _insideEmit = true;
     try {
@@ -742,7 +745,7 @@ export function collectConsoleErrors(emit: Emit): () => void {
 export function collectConsoleWarnings(emit: Emit): () => void {
   const origWarn = console.warn;
   let _inside = false;
-  console.warn = function (...args: any[]) {
+  console.warn = function (...args: unknown[]) {
     if (_inside) { origWarn.apply(console, args); return; }
     _inside = true;
     try {
@@ -762,7 +765,7 @@ export function collectConsoleLogs(emit: Emit): () => void {
   const origLog = console.log;
   let _inside = false;
   let _count = 0;
-  console.log = function (...args: any[]) {
+  console.log = function (...args: unknown[]) {
     if (_inside || _count >= 50) { origLog.apply(console, args); return; }
     _inside = true;
     _count++;

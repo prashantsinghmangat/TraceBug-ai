@@ -36,7 +36,6 @@ export function downloadPdfAsHtml(report: BugReport): void {
 function buildPdfHtml(report: BugReport): string {
   const env = report.environment;
   const session = report.session;
-  const hasError = report.consoleErrors.length > 0;
 
   let html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">

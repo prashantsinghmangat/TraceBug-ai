@@ -303,7 +303,7 @@ export function activateDrawMode(
         const region: DrawRegion = {
           id: `dr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           timestamp: Date.now(),
-          shape: "pen" as any,
+          shape: "pen",
           x: minX, y: minY, width: maxX - minX, height: maxY - minY,
           comment: "",
           color: _currentColor,
@@ -311,7 +311,7 @@ export function activateDrawMode(
           scrollX: window.scrollX,
           scrollY: window.scrollY,
           points: pts,
-        } as any;
+        };
         addDrawRegion(region);
         redrawAll();
         if (_onUpdate) _onUpdate();
@@ -434,7 +434,7 @@ export function activateDrawMode(
  */
 function _emitDrawMark(shape: DrawShape, color: string, extra: Record<string, unknown>): void {
   try {
-    const tb = (window as any).TraceBug;
+    const tb = (window as { TraceBug?: { mark?: (label: string, payload?: Record<string, unknown>) => void } }).TraceBug;
     if (tb && typeof tb.mark === "function") {
       tb.mark(`Drew ${shape}`, { shape, color, ...extra });
     }
@@ -521,7 +521,7 @@ export function deactivateDrawMode(): void {
 
 // ── Toolbar ───────────────────────────────────────────────────────────────
 
-function _createToolbar(root: HTMLElement): HTMLElement {
+function _createToolbar(_root: HTMLElement): HTMLElement {
   const bar = document.createElement("div");
   bar.id = "tracebug-draw-toolbar";
   bar.dataset.tracebug = "draw-toolbar";
@@ -712,8 +712,8 @@ function _redrawAllRegions(ctx: CanvasRenderingContext2D, w: number, h: number):
     if (r.page !== page) continue;
 
     // Pen strokes render along their captured path rather than as a bbox.
-    if ((r.shape as any) === "pen" && (r as any).points?.length >= 2) {
-      _drawPath(ctx, r.color, (r as any).points, 0.7);
+    if (r.shape === "pen" && r.points && r.points.length >= 2) {
+      _drawPath(ctx, r.color, r.points, 0.7);
       continue;
     }
     _drawShape(ctx, r.shape, r.color, r.x, r.y, r.width, r.height, 0.12);

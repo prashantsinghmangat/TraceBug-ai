@@ -8,7 +8,7 @@
 // users who screenshot a password input will share that screenshot. Document
 // this limitation in the share-modal copy.
 
-import type { BugReport, StorageEntry } from "../types";
+import type { BugReport, ContextData, StorageEntry } from "../types";
 
 const REDACTED = "[REDACTED]";
 
@@ -88,8 +88,11 @@ function sanitizeUrl(url: string): string {
   }
 }
 
-function sanitizeText(s: string | undefined | null): string {
-  if (s == null) return s as any;
+function sanitizeText(s: string): string;
+function sanitizeText(s: string | undefined): string | undefined;
+function sanitizeText(s: string | undefined | null): string | undefined | null;
+function sanitizeText(s: string | undefined | null): string | undefined | null {
+  if (s == null) return s;
   let out = String(s);
   for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
   return out;
@@ -167,11 +170,11 @@ export function sanitizeReportForUpload(report: BugReport): BugReport {
   }
   if (out.environment?.url) out.environment.url = sanitizeUrl(out.environment.url);
   if (out.context && typeof out.context === "object") {
-    const ctx: Record<string, any> = {};
+    const ctx: ContextData = {};
     for (const [k, v] of Object.entries(out.context)) {
       ctx[k] = typeof v === "string" ? sanitizeText(v) : v;
     }
-    out.context = ctx as any;
+    out.context = ctx;
   }
 
   return out;

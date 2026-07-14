@@ -131,7 +131,7 @@ function detectDeadClicks(events: TraceBugEvent[], page: string): Issue[] {
 // ── Form abandonment ──────────────────────────────────────────────────
 // Inputs on a form, then route_change before form_submit.
 
-function detectFormAbandonment(events: TraceBugEvent[], page: string): Issue[] {
+function detectFormAbandonment(events: TraceBugEvent[], _page: string): Issue[] {
   const out: Issue[] = [];
   // Track per-form: has the user typed in it but not submitted?
   const formActivity: Record<string, { firstInputAt: number; fieldsSeen: Set<string>; lastInputAt: number; page: string }> = {};

@@ -37,7 +37,7 @@ const ATTR_PRIORITY: ReadonlyArray<{ key: string; label?: string }> = [
   { key: "value" },
 ];
 
-function pickAttrs(el: Record<string, any>): { attrs: ActionChipAttr[]; moreCount: number } {
+function pickAttrs(el: Record<string, unknown>): { attrs: ActionChipAttr[]; moreCount: number } {
   if (!el || typeof el !== "object") return { attrs: [], moreCount: 0 };
   const picked: ActionChipAttr[] = [];
   let total = 0;
@@ -112,36 +112,36 @@ function nounForTag(tag: string): string {
   }
 }
 
-function cleanText(s: string, max = MAX_TARGET_LEN): string {
+function cleanText(s: unknown, max = MAX_TARGET_LEN): string {
   return truncate(String(s || "").trim().replace(/\s+/g, " "), max);
 }
 
 // Best human label for a clickable element. Reads, in order: explicit text,
 // aria-label, value (for buttons), title, then humanized id/name/testId.
-function extractClickTarget(el: Record<string, any>): string {
+function extractClickTarget(el: Record<string, unknown>): string {
   if (el.text && String(el.text).trim()) return cleanText(el.text);
   if (el.ariaLabel) return cleanText(el.ariaLabel);
   if (typeof el.value === "string" && el.value && el.value !== "[REDACTED]") return cleanText(el.value);
   if (el.title) return cleanText(el.title);
-  if (el.testId) return cleanText(humanizeIdentifier(el.testId));
-  if (el.id) return cleanText(humanizeIdentifier(el.id));
-  if (el.name) return cleanText(humanizeIdentifier(el.name));
+  if (el.testId) return cleanText(humanizeIdentifier(String(el.testId)));
+  if (el.id) return cleanText(humanizeIdentifier(String(el.id)));
+  if (el.name) return cleanText(humanizeIdentifier(String(el.name)));
   return "";
 }
 
 // Best human label for an input/select field. Reads aria-label, placeholder,
 // then humanizes name/id. The result is the field name the user would
 // recognize — "Email", "Phone Number", "Coupon Code".
-function extractFieldTarget(el: Record<string, any>): string {
+function extractFieldTarget(el: Record<string, unknown>): string {
   if (el.ariaLabel) return cleanText(el.ariaLabel);
   if (el.placeholder) return cleanText(el.placeholder);
-  if (el.name) return cleanText(humanizeIdentifier(el.name));
-  if (el.id) return cleanText(humanizeIdentifier(el.id));
+  if (el.name) return cleanText(humanizeIdentifier(String(el.name)));
+  if (el.id) return cleanText(humanizeIdentifier(String(el.id)));
   return "";
 }
 
 // Guess a form's purpose from its id/action URL. Falls back to humanized id.
-function extractFormTarget(f: Record<string, any>): string {
+function extractFormTarget(f: Record<string, unknown>): string {
   const action = String(f.action || "");
   const id = String(f.id || "");
   const hay = `${id} ${action}`.toLowerCase();
@@ -157,8 +157,9 @@ function extractFormTarget(f: Record<string, any>): string {
 }
 
 // Count how many form fields ended up with a value.
-function countFilledFields(f: Record<string, any>): { filled: number; total: number } {
-  const fields = f.fields && typeof f.fields === "object" ? f.fields : {};
+function countFilledFields(f: Record<string, unknown>): { filled: number; total: number } {
+  const fields: Record<string, unknown> =
+    f.fields && typeof f.fields === "object" ? (f.fields as Record<string, unknown>) : {};
   const total = typeof f.fieldCount === "number" ? f.fieldCount : Object.keys(fields).length;
   let filled = 0;
   for (const v of Object.values(fields)) {
