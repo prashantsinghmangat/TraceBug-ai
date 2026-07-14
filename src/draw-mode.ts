@@ -89,6 +89,7 @@ export function activateDrawMode(
     width: ${docW}px !important; height: ${docH}px !important;
     cursor: crosshair !important; pointer-events: auto !important;
     margin: 0 !important; padding: 0 !important;
+    touch-action: none !important;
   `;
   document.body.appendChild(canvas);
 
@@ -226,16 +227,23 @@ export function activateDrawMode(
   // The canvas is appended to <body> with position:absolute, so its rect
   // already reflects the page's scroll position — adding window.scrollX/Y
   // on top would double-count and put strokes off-screen after scrolling.
+  // Cache the canvas rect and refresh it only on scroll/resize. Calling
+  // getBoundingClientRect() on every pointer move forces a synchronous layout
+  // reflow — the main source of drawing lag on a full-document-sized canvas.
+  let canvasRect = canvas.getBoundingClientRect();
+  const refreshRect = () => { canvasRect = canvas.getBoundingClientRect(); };
+  window.addEventListener("scroll", refreshRect, { passive: true, capture: true });
   const toCanvasCoords = (e: MouseEvent): { x: number; y: number } => {
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return { x: e.clientX - canvasRect.left, y: e.clientY - canvasRect.top };
   };
 
-  const onMouseDown = (e: MouseEvent) => {
+  const onPointerDown = (e: PointerEvent) => {
     if (!_active) return;
     if ((e.target as HTMLElement)?.closest("#tracebug-draw-toolbar")) return;
     if ((e.target as HTMLElement)?.closest("[data-tracebug='draw-comment-input']")) return;
 
+    refreshRect();
+    try { canvas.setPointerCapture(e.pointerId); } catch {}
     const p = toCanvasCoords(e);
     startX = p.x;
     startY = p.y;
@@ -245,23 +253,28 @@ export function activateDrawMode(
     }
   };
 
-  const onMouseMove = (e: MouseEvent) => {
+  const onPointerMove = (e: PointerEvent) => {
     if (!isDrawing || !_active) return;
-    const p = toCanvasCoords(e);
     if (_currentShape === "pen") {
-      penPoints.push({ x: p.x, y: p.y });
-      // Draw only the newest smoothed segment — O(1) per move, so long strokes
-      // stay smooth instead of getting laggier as the point count grows (the
-      // old code re-stroked the whole path on every move → O(n²)).
-      _drawPenSegment(ctx, _currentColor, penPoints);
+      // Draw every intermediate point the browser coalesced into this event —
+      // fast strokes keep all their points, so the line stays smooth (not
+      // gappy) and there's no reflow, so no lag. O(1) per point.
+      const batch = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
+      const pts = batch.length ? batch : [e];
+      for (const pe of pts) {
+        penPoints.push(toCanvasCoords(pe));
+        _drawPenSegment(ctx, _currentColor, penPoints);
+      }
     } else {
+      const p = toCanvasCoords(e);
       redrawAll({ shape: _currentShape, color: _currentColor, x: startX, y: startY, w: p.x - startX, h: p.y - startY });
     }
   };
 
-  const onMouseUp = (e: MouseEvent) => {
+  const onPointerUp = (e: PointerEvent) => {
     if (!isDrawing || !_active) return;
     isDrawing = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch {}
 
     const p = toCanvasCoords(e);
     const endX = p.x;
@@ -357,9 +370,10 @@ export function activateDrawMode(
     }
   };
 
-  canvas.addEventListener("mousedown", onMouseDown);
-  canvas.addEventListener("mousemove", onMouseMove);
-  canvas.addEventListener("mouseup", onMouseUp);
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerUp);
   document.addEventListener("keydown", onKeyDown, { capture: true });
 
   // ResizeObserver is Safari 13.1+ / Firefox 69+ — fall back to window
@@ -380,6 +394,7 @@ export function activateDrawMode(
       svgOverlay.style.height = newH + "px";
       _redrawAllRegions(ctx, newW, newH);
     }
+    refreshRect();
   };
   let resizeObserver: ResizeObserver | null = null;
   if (typeof ResizeObserver !== "undefined") {
@@ -392,9 +407,11 @@ export function activateDrawMode(
   _cleanup = () => {
     _active = false;
     if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-    canvas.removeEventListener("mousedown", onMouseDown);
-    canvas.removeEventListener("mousemove", onMouseMove);
-    canvas.removeEventListener("mouseup", onMouseUp);
+    canvas.removeEventListener("pointerdown", onPointerDown);
+    canvas.removeEventListener("pointermove", onPointerMove);
+    canvas.removeEventListener("pointerup", onPointerUp);
+    canvas.removeEventListener("pointercancel", onPointerUp);
+    window.removeEventListener("scroll", refreshRect, { capture: true } as EventListenerOptions);
     document.removeEventListener("keydown", onKeyDown, { capture: true });
     if (resizeObserver) resizeObserver.disconnect();
     else window.removeEventListener("resize", onCanvasResize);
