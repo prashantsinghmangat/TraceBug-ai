@@ -3,23 +3,19 @@
 // Replaces the old 48px floating bug button.
 // Primary actions as small icons, settings in a pop-out card.
 
-import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive, clearAnnotationBadges } from "./element-annotate";
-import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
-import { getAnnotationCount, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getElementAnnotations, getDrawRegions } from "./annotation-store";
-import { clearScreenshots } from "./screenshot";
-import { clearVoiceTranscripts } from "./voice-recorder";
-import { clearNetworkFailures } from "./collectors";
+import { deactivateElementAnnotateMode } from "./element-annotate";
+import { deactivateDrawMode } from "./draw-mode";
 import { captureScreenshot, getScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
 import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
-import { getAllSessions, clearAllSessions as clearAllSessionsFn, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId } from "./storage";
+import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId } from "./storage";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
 import { matchesShortcut } from "./ui/helpers";
-import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, captureRollingBuffer, getCaptureCount } from "./video-recorder";
-import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
+import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, getCaptureCount } from "./video-recorder";
+import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
@@ -27,15 +23,11 @@ const DRAG_POS_KEY = "tracebug_toolbar_pos";
 
 export type ToolbarPosition = "right" | "left" | "bottom-right" | "bottom-left";
 
-let _isRecording = true;
-let _onToggleRecording: (() => void) | null = null;
 let _onSessionStart: (() => void) | null = null;
 let _onSessionEnd: (() => void) | null = null;
 let _onNewCapture: (() => void) | null = null;
-let _renderPanel: ((panel: HTMLElement) => void) | null = null;
 let _panelEl: HTMLElement | null = null;
-let _panelOpen = false;
-let _annotationViewOpen = false;
+const _panelOpen = false;
 let _toolbar: HTMLElement | null = null;
 let _position: ToolbarPosition = "right";
 let _isMobile = false;
@@ -43,9 +35,9 @@ const _fabExpanded = false;
 
 // ── Wiring from SDK ───────────────────────────────────────────────────────
 
-export function setToolbarRecordingState(isRecording: boolean, onToggle: () => void): void {
-  _isRecording = isRecording;
-  _onToggleRecording = onToggle;
+export function setToolbarRecordingState(_isRecording: boolean, _onToggle: () => void): void {
+  // Recording state now lives on the SDK; the toolbar only mirrors it via
+  // updateToolbarRecordingState(). Kept for API compatibility with dashboard.ts.
 }
 
 /**
@@ -70,7 +62,6 @@ export function setNewCaptureHandler(fn: () => void): void {
 }
 
 export function updateToolbarRecordingState(isRecording: boolean): void {
-  _isRecording = isRecording;
   const dot = document.getElementById("tracebug-toolbar-rec-dot");
   if (dot) {
     dot.style.background = isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
@@ -78,8 +69,9 @@ export function updateToolbarRecordingState(isRecording: boolean): void {
   }
 }
 
-export function setRenderPanel(fn: (panel: HTMLElement) => void): void {
-  _renderPanel = fn;
+export function setRenderPanel(_fn: (panel: HTMLElement) => void): void {
+  // The floating panel was removed; nothing renders into it anymore.
+  // Kept for API compatibility with dashboard.ts.
 }
 
 // ── Mount ─────────────────────────────────────────────────────────────────
@@ -802,216 +794,6 @@ function _showOfflineTicketList(root: HTMLElement): void {
   }, 0);
 }
 
-/**
- * Snapshot the in-flight rolling recording, open the ticket modal so the
- * user can edit + export, and let the recorder keep rolling so the same
- * arm session can produce more tickets.
- */
-async function _captureRollingFromHUD(
-  root: HTMLElement,
-  showToast: (msg: string, root: HTMLElement) => void
-): Promise<void> {
-  if (isQuickBugOpen()) {
-    showToast("A ticket is already open — close it first", root);
-    return;
-  }
-  const recording = await captureRollingBuffer();
-  if (!recording) {
-    showToast("Capture failed — recording may have ended", root);
-    return;
-  }
-  flashRecordingHUD();
-  showToast("Captured — review the ticket", root);
-  try {
-    await showQuickBugCapture(root);
-  } catch (err) {
-    console.warn("[TraceBug] Failed to open ticket modal after rolling capture:", err);
-  }
-}
-
-function _togglePanel(
-  panel: HTMLElement,
-  toolbar: HTMLElement,
-  showToast: (msg: string, root: HTMLElement) => void
-): void {
-  _panelOpen = !_panelOpen;
-
-  if (_isMobile) {
-    // Mobile: slide panel up from bottom
-    panel.style.bottom = _panelOpen ? "0" : "-85vh";
-  } else {
-    const isLeft = _position === "left" || _position === "bottom-left";
-    if (isLeft) {
-      panel.style.left = _panelOpen ? "0" : "-480px";
-      panel.style.right = "auto";
-      // Only move toolbar if no custom drag position
-      if (!localStorage.getItem(DRAG_POS_KEY)) {
-        toolbar.style.left = _panelOpen ? "482px" : "12px";
-      }
-    } else {
-      panel.style.right = _panelOpen ? "0" : "-480px";
-      // Only move toolbar if no custom drag position
-      if (!localStorage.getItem(DRAG_POS_KEY)) {
-        toolbar.style.right = _panelOpen ? "482px" : "12px";
-      }
-    }
-  }
-
-  if (_panelOpen && _renderPanel) {
-    _annotationViewOpen = false;
-    _renderPanel(panel);
-  }
-}
-
-function _updateActiveStates(toolbar: HTMLElement): void {
-  const annotateBtn = toolbar.querySelector("#tracebug-toolbar-annotate-btn") as HTMLElement;
-  const drawBtn = toolbar.querySelector("#tracebug-toolbar-draw-btn") as HTMLElement;
-
-  if (annotateBtn) {
-    const active = isElementAnnotateActive();
-    annotateBtn.classList.toggle("tb-active", active);
-    annotateBtn.style.background = active ? "var(--tb-accent-subtle, #6366F133)" : "transparent";
-    annotateBtn.style.color = active ? "var(--tb-accent, #6366F1)" : "var(--tb-text-muted, #888)";
-  }
-  if (drawBtn) {
-    const active = isDrawModeActive();
-    drawBtn.classList.toggle("tb-active", active);
-    drawBtn.style.background = active ? "var(--tb-accent-subtle, #6366F133)" : "transparent";
-    drawBtn.style.color = active ? "var(--tb-accent, #6366F1)" : "var(--tb-text-muted, #888)";
-  }
-}
-
-function _updateAnnotationCount(toolbar: HTMLElement): void {
-  const badge = toolbar.querySelector("#tracebug-toolbar-badge") as HTMLElement;
-  if (badge) {
-    const count = getAnnotationCount();
-    badge.textContent = String(count);
-    badge.style.display = count > 0 ? "flex" : "none";
-  }
-}
-
-function _toggleSettingsCard(
-  e: MouseEvent,
-  root: HTMLElement,
-  toolbar: HTMLElement,
-  showToast: (msg: string, root: HTMLElement) => void
-): void {
-  e.stopPropagation();
-  const existing = document.getElementById(SETTINGS_ID);
-  if (existing) {
-    existing.remove();
-    return;
-  }
-
-  const card = document.createElement("div");
-  card.id = SETTINGS_ID;
-  card.dataset.tracebug = "settings-card";
-
-  // Position to the left of the toolbar
-  const toolbarRect = toolbar.getBoundingClientRect();
-  card.style.cssText = `
-    position: fixed; z-index: 2147483647;
-    right: ${window.innerWidth - toolbarRect.left + 8}px;
-    top: ${toolbarRect.top + toolbarRect.height - 220}px;
-    width: 220px; background: var(--tb-bg-secondary, #1a1a2e); border: 1px solid var(--tb-border-hover, #3a3a5e);
-    border-radius: var(--tb-radius-lg, 12px); padding: 16px;
-    font-family: var(--tb-font-family, system-ui, sans-serif); font-size: 13px; color: var(--tb-text-primary, #e0e0e0);
-    box-shadow: var(--tb-shadow-lg, 0 8px 32px rgba(0,0,0,0.5));
-  `;
-
-  const sessions = getAllSessions();
-  const errorCount = sessions.filter(s => s.errorMessage).length;
-
-  card.innerHTML = `
-    <div style="font-size:14px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-      Settings
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Recording</span>
-        <button id="tracebug-settings-rec" style="
-          background:${_isRecording ? "var(--tb-success-bg, #22c55e22)" : "var(--tb-error-bg, #ef444422)"};
-          color:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};
-          border:1px solid ${_isRecording ? "var(--tb-success, #22c55e)44" : "var(--tb-error, #ef4444)44"};
-          border-radius:6px;padding:3px 10px;cursor:pointer;font-size:11px;font-family:inherit
-        ">${_isRecording ? "Pause" : "Resume"}</button>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Sessions</span>
-        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${sessions.length} (${errorCount} errors)</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Annotations</span>
-        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${getAnnotationCount()}</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Screenshots</span>
-        <span style="font-size:12px;color:var(--tb-text-muted, #888)">${getScreenshots().length}${isPremium() ? "" : ` / ${FREE_LIMITS.screenshots}`}</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:12px;color:var(--tb-text-secondary, #aaa)">Plan</span>
-        <span id="tracebug-settings-plan-badge" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--tb-accent, #6366F1);color:#fff">✨ All features free</span>
-      </div>
-      <div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:10px;display:flex;gap:6px">
-        <button id="tracebug-settings-clear-ann" style="flex:1;background:var(--tb-warning-bg, #f9731622);color:var(--tb-warning, #f97316);border:1px solid var(--tb-warning, #f97316)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear Annotations</button>
-        <button id="tracebug-settings-clear-all" style="flex:1;background:var(--tb-error-bg, #ef444422);color:var(--tb-error, #ef4444);border:1px solid var(--tb-error, #ef4444)44;border-radius:6px;padding:4px;cursor:pointer;font-size:10px;font-family:inherit">Clear All Data</button>
-      </div>
-    </div>
-  `;
-
-  root.appendChild(card);
-
-  card.querySelector("#tracebug-settings-rec")!.addEventListener("click", () => {
-    if (_onToggleRecording) _onToggleRecording();
-    card.remove();
-  });
-
-  // Plan badge — opens the upgrade modal (which exposes the dev toggle).
-  const planBadge = card.querySelector("#tracebug-settings-plan-badge") as HTMLElement | null;
-  if (planBadge) {
-    planBadge.style.cursor = "pointer";
-    planBadge.title = "Plan info";
-    planBadge.addEventListener("click", () => {
-      card.remove();
-      showUpgradeModal({
-        feature: "Plans coming soon",
-        message: "Every feature is free right now — unlimited screenshots, video, PDF/HTML export, Jira/GitHub/Linear, and more. Paid plans (cloud sharing, team workspaces) are coming soon. Thanks for being early!",
-      }, root);
-    });
-  }
-
-  card.querySelector("#tracebug-settings-clear-ann")!.addEventListener("click", () => {
-    clearAllAnnotations();
-    _updateAnnotationCount(toolbar);
-    showToast("Annotations cleared", root);
-    card.remove();
-  });
-
-  card.querySelector("#tracebug-settings-clear-all")!.addEventListener("click", () => {
-    if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
-      // Comprehensive wipe — nothing stale leaks into future reports.
-      try { clearAllSessionsFn(); } catch {}
-      try { clearScreenshots(); } catch {}
-      try { clearVoiceTranscripts(); } catch {}
-      try { clearAllAnnotations(); } catch {}
-      try { clearAnnotationBadges(); } catch {}
-      try { clearNetworkFailures(); } catch {}
-      _updateAnnotationCount(toolbar);
-      showToast("All data cleared", root);
-      card.remove();
-    }
-  });
-
-  // Close on click outside
-  const closeHandler = (ev: MouseEvent) => {
-    if (!card.contains(ev.target as Node) && ev.target !== e.target) {
-      card.remove();
-      document.removeEventListener("click", closeHandler);
-    }
-  };
-  setTimeout(() => document.addEventListener("click", closeHandler), 10);
-}
-
 // ── Position & Layout ────────────────────────────────────────────────────
 
 function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition): void {
@@ -1175,7 +957,7 @@ function _convertToFab(
   toolbar: HTMLElement,
   root: HTMLElement,
   panel: HTMLElement,
-  showToast: (msg: string, root: HTMLElement) => void
+  _showToast: (msg: string, root: HTMLElement) => void
 ): void {
   // Save all children except the logo button
   const buttons = Array.from(toolbar.children);
@@ -1221,8 +1003,4 @@ function _restoreToolbar(toolbar: HTMLElement): void {
     _panelEl.style.borderRadius = "";
     _panelEl.style.right = _panelOpen ? "0" : "-480px";
   }
-}
-
-function _logoSvg(): string {
-  return `<svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="tb-cr" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4F46E5"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#tb-cr)"/></svg>`;
 }

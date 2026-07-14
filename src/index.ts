@@ -15,17 +15,12 @@
 import {
   TraceBugConfig,
   TraceBugEvent,
-  TraceBugUser,
   EventType,
-  StoredSession,
   BugReport,
   Annotation,
   ScreenshotData,
   EnvironmentInfo,
-  ElementAnnotation,
-  DrawRegion,
   UIAnnotationReport,
-  AnnotationIntent,
   BugPriority,
 } from "./types";
 import {
@@ -35,7 +30,6 @@ import {
   getActiveCaptureMode,
   setActiveCaptureMode,
   generateSessionId,
-  getOrCreateSession,
   appendEvent,
   updateSessionError,
   getAllSessions,
@@ -66,7 +60,7 @@ import {
   clearNetworkFailures,
 } from "./collectors";
 import { captureEnvironment } from "./environment";
-import { captureScreenshot, getScreenshots, clearScreenshots, downloadAllScreenshots } from "./screenshot";
+import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
 import { hydratePlan, getPlan, isPremium, setPlan, FREE_LIMITS } from "./plan";
 import type { Plan } from "./plan";
@@ -74,12 +68,11 @@ import { showUpgradeModal } from "./ui/upgrade-modal";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
-import { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
+import { generatePdfReport } from "./pdf-generator";
 import { shareSessionAsLink, ShareReportOptions, ShareLinkResult } from "./exporters/share-link";
 import { getBridge } from "./auth/iframe-bridge";
 import { resolveCloudEndpoint } from "./cloud-endpoint";
-import { generateBugTitle, generateFlowSummary } from "./title-generator";
-import { buildTimeline, formatTimelineText } from "./timeline-builder";
+import { generateBugTitle } from "./title-generator";
 import { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 import {
   startVideoRecording as _startVideoRecording,
@@ -92,7 +85,6 @@ import {
   getLastVideoRecording,
   clearVideoRecording,
   abortVideoRecording,
-  downloadVideoRecording,
   restoreFromOffscreenIfActive as _restoreVideoState,
   restoreLastRecordingFromOffscreen as _restoreLastRecording,
   wireAutoStopListener as _wireAutoStop,
@@ -124,15 +116,15 @@ import {
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import {
-  getAnnotationReport, getElementAnnotations, getDrawRegions,
+  getAnnotationReport,
   exportAsJSON as exportAnnotationsJSON, exportAsMarkdown as exportAnnotationsMD,
   copyToClipboard as copyAnnotationsToClipboard, clearAllAnnotations,
 } from "./annotation-store";
 import { injectTheme, removeTheme } from "./theme";
 import {
   TraceBugPlugin,
-  registerPlugin, unregisterPlugin, getPlugins,
-  runEventPlugins, runReportPlugins,
+  registerPlugin, unregisterPlugin,
+  runEventPlugins,
   onHook, emitHook, clearAllPlugins,
 } from "./plugin-system";
 
@@ -242,7 +234,7 @@ class TraceBugSDK {
   private _consoleCleanups: (() => void)[] = [];
   // The emit fn is created in init(); cached here so the lazy console
   // collectors attached later can share it without re-wiring.
-  private _emit: ((type: EventType, data: Record<string, any>) => void) | null = null;
+  private _emit: ((type: EventType, data: TraceBugEvent["data"]) => void) | null = null;
   private _consoleLevel: "errors" | "warnings" | "all" | "none" = "errors";
   private _lastErrorMsgPrompted: string | null = null;
 
@@ -337,7 +329,7 @@ class TraceBugSDK {
       // ── Emit function — collectors call this with raw event data ───────
       // Reads sessionId / recording dynamically from `this` so toggling
       // record state mid-session takes effect without re-wiring collectors.
-      const emit = (type: EventType, data: Record<string, any>) => {
+      const emit = (type: EventType, data: TraceBugEvent["data"]) => {
         try {
           if (!this.recording) return;
           const sid = this.sessionId;
@@ -525,7 +517,7 @@ class TraceBugSDK {
             const _tbClose = _tbModal.querySelector('[data-action="close"]') as HTMLButtonElement | null;
             if (_tbClose) _tbClose.click();
           }
-        } catch (_e2) {}
+        } catch {}
       } catch {}
       // Fall through to create a fresh session below
     }
@@ -1275,8 +1267,8 @@ class TraceBugSDK {
   }
 
   /** Subscribe to a hook event. Returns unsubscribe function. */
-  on(event: string, callback: (...args: any[]) => void): () => void {
-    return onHook(event as any, callback);
+  on(event: string, callback: Parameters<typeof onHook>[1]): () => void {
+    return onHook(event as Parameters<typeof onHook>[0], callback);
   }
 
   // ── CI/CD Helpers ─────────────────────────────────────────────────
@@ -1478,8 +1470,8 @@ class TraceBugSDK {
   private detectEnvironment(): string {
     // Vite: import.meta.env.MODE / import.meta.env.PROD
     try {
-      if (typeof (import.meta as any)?.env !== "undefined") {
-        const meta = (import.meta as any).env;
+      const meta = (import.meta as unknown as { env?: { PROD?: boolean; DEV?: boolean; MODE?: string } }).env;
+      if (typeof meta !== "undefined") {
         if (meta.PROD === true) return "production";
         if (meta.DEV === true) return "development";
         if (meta.MODE) return meta.MODE;
@@ -1488,7 +1480,7 @@ class TraceBugSDK {
 
     // Node/Webpack: process.env.NODE_ENV
     try {
-      const g = globalThis as any;
+      const g = globalThis as unknown as { process?: { env?: Record<string, string | undefined> } };
       if (typeof g.process !== "undefined" && g.process.env?.NODE_ENV) {
         return g.process.env.NODE_ENV;
       }

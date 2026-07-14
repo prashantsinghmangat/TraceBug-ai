@@ -29,6 +29,17 @@ export interface ShareLinkResult {
   sizeBytes: number;
 }
 
+/** Error thrown when a share exceeds one of the upload caps. The extra fields
+ *  let the UI compose a specific message ("too many screenshots (max 5)"). */
+interface ShareLimitError extends Error {
+  code?: string;
+  count?: number;
+  limit?: number;
+  durationMs?: number;
+  limitS?: number;
+  sizeBytes?: number;
+}
+
 export async function shareSessionAsLink(
   session: StoredSession,
   report: BugReport,
@@ -42,7 +53,7 @@ export async function shareSessionAsLink(
   const safe = sanitizeReportForUpload(report);
 
   if (safe.screenshots && safe.screenshots.length > MAX_SCREENSHOTS_PER_SHARE) {
-    const err: any = new Error("too_many_screenshots");
+    const err: ShareLimitError = new Error("too_many_screenshots");
     err.code = "too_many_screenshots";
     err.count = safe.screenshots.length;
     err.limit = MAX_SCREENSHOTS_PER_SHARE;
@@ -50,7 +61,7 @@ export async function shareSessionAsLink(
   }
 
   if (includeVideo && safe.video?.durationMs && safe.video.durationMs > MAX_VIDEO_DURATION_S * 1000) {
-    const err: any = new Error("video_too_long");
+    const err: ShareLimitError = new Error("video_too_long");
     err.code = "video_too_long";
     err.durationMs = safe.video.durationMs;
     err.limitS = MAX_VIDEO_DURATION_S;
@@ -60,7 +71,7 @@ export async function shareSessionAsLink(
   const blob = await buildReplayBlob(session, safe, { includeVideo });
 
   if (blob.size > MAX_UPLOAD_BYTES) {
-    const err: any = new Error("size_too_large");
+    const err: ShareLimitError = new Error("size_too_large");
     err.code = "size_too_large";
     err.sizeBytes = blob.size;
     err.limit = MAX_UPLOAD_BYTES;

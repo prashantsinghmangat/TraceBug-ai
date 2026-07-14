@@ -3,7 +3,7 @@
 // Reads session data directly from localStorage.
 
 import { getAllSessions, deleteSession, clearAllSessions, addAnnotation } from "./storage";
-import { StoredSession, Annotation, ScreenshotData } from "./types";
+import { StoredSession, TraceBugEvent, Annotation, ScreenshotData } from "./types";
 import { captureScreenshot, getScreenshots, downloadAllScreenshots, downloadScreenshot, clearScreenshots } from "./screenshot";
 import { clearNetworkFailures } from "./collectors";
 import { buildReport } from "./report-builder";
@@ -11,24 +11,15 @@ import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
 import { generatePdfReport } from "./pdf-generator";
 import { generateBugTitle } from "./title-generator";
-import { captureEnvironment } from "./environment";
-import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
-import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, exportAsJSON, exportAsMarkdown, copyToClipboard, getAnnotationCount } from "./annotation-store";
+import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, clearVoiceTranscripts } from "./voice-recorder";
+import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, copyToClipboard } from "./annotation-store";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
 
 export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setNewCaptureHandler };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { addLogoPulse, cleanupOnboarding } from "./onboarding";
-import { showToast as _showToastModule } from "./ui/toast";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
-// UI helpers extracted to src/ui/ — imported with prefix for gradual migration
-import {
-  eventConfig as _uiEventConfig, escapeHtml as _uiEscapeHtml, smallBtnStyle as _uiSmallBtnStyle,
-  tabBtnStyle as _uiTabBtnStyle, describeEvent as _uiDescribeEvent, timeAgo as _uiTimeAgo,
-  formatDuration as _uiFormatDuration, getStatusColor as _uiGetStatusColor, getStatusLabel as _uiGetStatusLabel,
-  getSpeedLabel as _uiGetSpeedLabel, getErrorType as _uiGetErrorType, downloadFile as _uiDownloadFile,
-  matchesShortcut,
-} from "./ui/helpers";
+import { matchesShortcut } from "./ui/helpers";
 
 export interface ShortcutsConfig {
   screenshot?: string;
@@ -37,7 +28,6 @@ export interface ShortcutsConfig {
 }
 
 const PANEL_ID = "tracebug-dashboard-panel";
-const BTN_ID = "tracebug-dashboard-btn";
 
 // Recording state — controlled by TraceBugSDK via the global
 let _isRecording = true;
@@ -1078,7 +1068,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
 
 // ── Note dialog ───────────────────────────────────────────────────────────
 
-function showNoteDialog(sessionId: string, panel: HTMLElement, session: StoredSession): void {
+function showNoteDialog(sessionId: string, panel: HTMLElement, _session: StoredSession): void {
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
 
@@ -1145,7 +1135,7 @@ function showNoteDialog(sessionId: string, panel: HTMLElement, session: StoredSe
 
 // ── Voice recording dialog ────────────────────────────────────────────────
 
-function showVoiceDialog(sessionId: string, panel: HTMLElement, session: StoredSession): void {
+function showVoiceDialog(sessionId: string, panel: HTMLElement, _session: StoredSession): void {
   const overlay = document.createElement("div");
   overlay.id = "bt-voice-overlay";
   overlay.dataset.tracebug = "voice-dialog";
@@ -1182,7 +1172,7 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, session: StoredS
   const dot = overlay.querySelector("#bt-voice-dot") as HTMLElement;
   const statusText = overlay.querySelector("#bt-voice-status-text") as HTMLElement;
 
-  let pulseInterval: any = null;
+  let pulseInterval: ReturnType<typeof setInterval> | null = null;
 
   startBtn.addEventListener("click", () => {
     const started = startVoiceRecording({
@@ -1279,7 +1269,7 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, session: StoredS
 function buildTextReport(
   s: StoredSession,
   problems: {severity:string;title:string;detail:string}[],
-  apiEvents: any[],
+  apiEvents: TraceBugEvent[],
   sessionDur: number
 ): string {
   let report = `TraceBug Session Report\n${"=".repeat(50)}\n\n`;
@@ -1331,7 +1321,7 @@ function buildTextReport(
 function buildHtmlReport(
   s: StoredSession,
   problems: {severity:string;icon:string;title:string;detail:string;color:string}[],
-  apiEvents: any[],
+  apiEvents: TraceBugEvent[],
   sessionDur: number
 ): string {
   const hasError = !!s.errorMessage;
@@ -1437,7 +1427,7 @@ function buildHtmlReport(
   return html;
 }
 
-function describeEventHtml(ev: any): string {
+function describeEventHtml(ev: TraceBugEvent): string {
   switch (ev.type) {
     case "click": {
       const el = ev.data.element;
@@ -1488,7 +1478,7 @@ function describeEventHtml(ev: any): string {
   }
 }
 
-function describeEventForReport(ev: any): string {
+function describeEventForReport(ev: TraceBugEvent): string {
   switch (ev.type) {
     case "click": {
       const el = ev.data.element;
@@ -1602,7 +1592,7 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms/60000)}m ${Math.floor((ms%60000)/1000)}s`;
 }
 
-function describeEvent(event: { type: string; data: Record<string, any>; page: string }): string {
+function describeEvent(event: TraceBugEvent): string {
   const d = event.data;
   switch (event.type) {
     case "click":
@@ -1905,6 +1895,10 @@ function showToast(message: string, root: HTMLElement): void {
 // Provides draw tools: rectangle highlight, arrow, and text overlay.
 // All drawing is done on a canvas overlay on top of the screenshot.
 
+/** Stashed by showAnnotationEditor(); read back by the Save handler inside
+ *  the editor overlay so the annotated screenshot can be persisted. */
+let _annotationEditorOnSave: ((patch: { dataUrl: string; filename: string; width: number; height: number }) => void) | undefined;
+
 /** Opens the screenshot annotation editor (highlight / arrow / text +
  *  4 colors + undo/clear). When the user saves, the optional `onSave`
  *  callback fires with the new dataUrl + dimensions so callers can persist
@@ -1914,7 +1908,7 @@ export function showAnnotationEditor(
   root: HTMLElement,
   onSave?: (patch: { dataUrl: string; filename: string; width: number; height: number }) => void,
 ): void {
-  (showAnnotationEditor as any)._onSave = onSave;
+  _annotationEditorOnSave = onSave;
   _showAnnotationEditorImpl(screenshot, root);
 }
 
@@ -2324,9 +2318,7 @@ function initAnnotationCanvas(
   overlay.querySelector("#bt-ann-save")!.addEventListener("click", () => {
     const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
     screenshot.dataUrl = merged;
-    const onSave = (showAnnotationEditor as any)._onSave as
-      | ((p: { dataUrl: string; filename: string; width: number; height: number }) => void)
-      | undefined;
+    const onSave = _annotationEditorOnSave;
     if (onSave) {
       try {
         onSave({

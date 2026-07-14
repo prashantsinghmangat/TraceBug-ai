@@ -190,8 +190,12 @@ export function activateBlurMode(_root: HTMLElement, onExit?: () => void): void 
   document.addEventListener("keydown", onKey, true);
 
   // Stash the key handler so deactivate can remove it.
-  (overlay as any)._tbKey = onKey;
+  (overlay as BlurOverlayElement)._tbKey = onKey;
 }
+
+/** The draw overlay, with the keydown handler stashed on it so
+ *  deactivateBlurMode can detach the listener it didn't register itself. */
+type BlurOverlayElement = HTMLElement & { _tbKey?: (e: KeyboardEvent) => void };
 
 /** Exit blur-draw mode. Placed boxes stay on the page. */
 export function deactivateBlurMode(): void {
@@ -199,7 +203,7 @@ export function deactivateBlurMode(): void {
   _active = false;
   const overlay = document.getElementById(DRAW_OVERLAY_ID);
   if (overlay) {
-    const onKey = (overlay as any)._tbKey as ((e: KeyboardEvent) => void) | undefined;
+    const onKey = (overlay as BlurOverlayElement)._tbKey;
     if (onKey) document.removeEventListener("keydown", onKey, true);
     overlay.remove();
   }

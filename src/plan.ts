@@ -21,6 +21,21 @@ export const FREE_LIMITS = {
 let _cached: Plan = "free";
 let _hydrated = false;
 
+// Minimal chrome.storage.local surface — we can't depend on @types/chrome in
+// the web SDK build, and only these two callback-style methods are used.
+interface ChromeStorageLocalLike {
+  get(key: string, cb: (result: Record<string, unknown>) => void): void;
+  set(items: Record<string, unknown>, cb: () => void): void;
+}
+
+interface ChromeLike {
+  storage?: { local?: ChromeStorageLocalLike };
+}
+
+function getChrome(): ChromeLike | undefined {
+  return (globalThis as { chrome?: ChromeLike }).chrome;
+}
+
 /**
  * Read the plan from storage and cache it. Idempotent — safe to call multiple
  * times. Called once at SDK init; getters are synchronous after that.
@@ -31,11 +46,12 @@ export async function hydratePlan(): Promise<Plan> {
 
   // Prefer chrome.storage.local in extension context (cross-popup persistence)
   try {
-    const c: any = (globalThis as any).chrome;
+    const c = getChrome();
     if (c?.storage?.local?.get) {
-      const result = await new Promise<Record<string, any>>((resolve) => {
+      const local = c.storage.local;
+      const result = await new Promise<Record<string, unknown>>((resolve) => {
         try {
-          c.storage.local.get(STORAGE_KEY, (r: any) => resolve(r || {}));
+          local.get(STORAGE_KEY, (r) => resolve(r || {}));
         } catch { resolve({}); }
       });
       const v = result[STORAGE_KEY];
@@ -77,10 +93,11 @@ export async function setPlan(plan: Plan): Promise<void> {
   _cached = plan;
   _hydrated = true;
   try {
-    const c: any = (globalThis as any).chrome;
+    const c = getChrome();
     if (c?.storage?.local?.set) {
+      const local = c.storage.local;
       await new Promise<void>((resolve) => {
-        try { c.storage.local.set({ [STORAGE_KEY]: plan }, () => resolve()); }
+        try { local.set({ [STORAGE_KEY]: plan }, () => resolve()); }
         catch { resolve(); }
       });
     }

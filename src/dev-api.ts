@@ -12,7 +12,7 @@
 import { ContextData, EventType, TraceBugEvent } from "./types";
 
 // Module-scope state. Cleared by destroy() via clearDevApiState().
-let _emit: ((type: EventType, data: Record<string, any>) => void) | null = null;
+let _emit: ((type: EventType, data: TraceBugEvent["data"]) => void) | null = null;
 let _processError: ((message: string, stack?: string) => void) | null = null;
 let _context: ContextData = {};
 
@@ -21,7 +21,7 @@ let _context: ContextData = {};
  * pipeline as the auto-collectors. Without this, mark/assert are no-ops.
  */
 export function setDevApiHooks(hooks: {
-  emit: (type: EventType, data: Record<string, any>) => void;
+  emit: (type: EventType, data: TraceBugEvent["data"]) => void;
   processError: (message: string, stack?: string) => void;
 }): void {
   _emit = hooks.emit;

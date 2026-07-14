@@ -294,7 +294,29 @@ async function callOllama(
 
 // ── Shared error handling ─────────────────────────────────────────────────
 
-async function parseJsonOrThrow(res: Response, provider: string): Promise<Record<string, unknown> & { [k: string]: any }> {
+/** The union of response fields we actually read across the three providers.
+ *  Everything is optional — provider JSON is dynamic and only trusted after
+ *  the explicit checks at each call site. */
+interface ProviderResponse {
+  model?: string;
+  // Anthropic (Messages API)
+  stop_reason?: string;
+  content?: Array<{ type?: string; text?: string }>;
+  // OpenAI (Chat Completions)
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+  // Ollama (/api/chat)
+  message?: { content?: string };
+  prompt_eval_count?: number;
+  eval_count?: number;
+}
+
+async function parseJsonOrThrow(res: Response, provider: string): Promise<ProviderResponse> {
   let body: unknown;
   try {
     body = await res.json();
@@ -306,7 +328,7 @@ async function parseJsonOrThrow(res: Response, provider: string): Promise<Record
     const msg = extractProviderError(body) || friendlyStatus(res.status, provider);
     throw new Error(msg);
   }
-  return body as Record<string, unknown> & { [k: string]: any };
+  return body as ProviderResponse;
 }
 
 function extractProviderError(body: unknown): string | null {

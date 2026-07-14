@@ -23,7 +23,7 @@ type HookEvent =
   | "annotate:saved"
   | "draw:saved";
 
-type HookCallback = (...args: any[]) => void;
+type HookCallback = (...args: unknown[]) => void;
 
 const _plugins: TraceBugPlugin[] = [];
 const _hooks: Map<HookEvent, Set<HookCallback>> = new Map();
@@ -98,7 +98,7 @@ export function onHook(event: HookEvent, callback: HookCallback): () => void {
   };
 }
 
-export function emitHook(event: HookEvent, ...args: any[]): void {
+export function emitHook(event: HookEvent, ...args: unknown[]): void {
   const callbacks = _hooks.get(event);
   if (!callbacks) return;
   for (const cb of callbacks) {

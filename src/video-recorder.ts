@@ -46,6 +46,31 @@ export interface VideoRecording {
   rrwebEvents?: unknown[];
 }
 
+// ── Extension wire formats ────────────────────────────────────────────────
+// Shapes of the payloads the offscreen document sends back over the RPC
+// bridge (CustomEvent → content script → background → offscreen). Blob can't
+// cross chrome.runtime messaging, so recordings travel as base64 dataUrls.
+
+interface RawRecording {
+  dataUrl?: string;
+  mimeType?: string;
+  durationMs?: number;
+  sizeBytes?: number;
+  comments?: VideoComment[];
+  startedAt?: number;
+  error?: string;
+}
+
+interface OffscreenStatus {
+  active?: boolean;
+  mode?: string;
+  capturesTaken?: number;
+  comments?: VideoComment[];
+  mimeType?: string;
+  startedAt?: number;
+  elapsedMs?: number;
+}
+
 // ── Shadow state (read by sync getters in both transports) ───────────────
 
 let _active = false;
@@ -121,7 +146,7 @@ export function setAutoStopHandler(cb: ((recording: VideoRecording | null) => vo
 // ── Transport detection ──────────────────────────────────────────────────
 
 function isExtensionContext(): boolean {
-  return !!(window as any).__TRACEBUG_INITIALIZED__;
+  return !!(window as Window & { __TRACEBUG_INITIALIZED__?: boolean }).__TRACEBUG_INITIALIZED__;
 }
 
 // ── Public sync queries ──────────────────────────────────────────────────
@@ -132,7 +157,7 @@ export function isVideoSupported(): boolean {
     typeof navigator !== "undefined" &&
     navigator.mediaDevices &&
     typeof navigator.mediaDevices.getDisplayMedia === "function" &&
-    typeof (window as any).MediaRecorder === "function"
+    typeof window.MediaRecorder === "function"
   );
 }
 
@@ -293,7 +318,7 @@ async function _startVideoRecordingInner(options?: {
 export function stopVideoRecording(): Promise<VideoRecording | null> {
   if (!_active) return Promise.resolve(null);
   if (isExtensionContext()) {
-    return rpcCall<any>("tb:rec:stop").then((rec) => {
+    return rpcCall<RawRecording | null>("tb:rec:stop").then((rec) => {
       const domEvents = stopDomRecording();
       const recording = rec && !rec.error ? hydrateRecording(rec) : null;
       if (recording) { recording.rrwebEvents = domEvents; revokeAndStash(recording); }
@@ -310,7 +335,7 @@ export function stopVideoRecording(): Promise<VideoRecording | null> {
 export function captureRollingBuffer(): Promise<VideoRecording | null> {
   if (!_active) return Promise.resolve(null);
   if (isExtensionContext()) {
-    return rpcCall<any>("tb:rec:capture").then((rec) => {
+    return rpcCall<RawRecording | null>("tb:rec:capture").then((rec) => {
       if (!rec || rec.error) return null;
       const recording = hydrateRecording(rec);
       recording.rrwebEvents = snapshotDomEvents();
@@ -385,7 +410,7 @@ export function downloadVideoRecording(recording: VideoRecording, filename = "tr
 
 export async function restoreFromOffscreenIfActive(): Promise<boolean> {
   if (!isExtensionContext()) return false;
-  const status = await rpcCall<any>("tb:rec:status").catch(() => null);
+  const status = await rpcCall<OffscreenStatus | null>("tb:rec:status").catch(() => null);
   if (!status || !status.active) return false;
 
   _active = true;
@@ -410,7 +435,7 @@ export async function restoreLastRecordingFromOffscreen(): Promise<VideoRecordin
   if (!isExtensionContext()) return null;
   if (isUsableRecording(_lastRecording)) return _lastRecording;
   try {
-    const raw = await rpcCall<any>("tb:rec:last-recording").catch(() => null);
+    const raw = await rpcCall<RawRecording | null>("tb:rec:last-recording").catch(() => null);
     if (!raw) return null;
     const recording = hydrateRecording(raw);
     if (isUsableRecording(recording)) {
@@ -432,7 +457,7 @@ export function wireAutoStopListener(): void {
   _autoStopWired = true;
   window.addEventListener("tracebug-rec-auto-stopped", async (e: Event) => {
     const domEvents = stopDomRecording();
-    const detail = (e as CustomEvent).detail;
+    const detail = (e as CustomEvent<{ recording?: RawRecording } | undefined>).detail;
     const recRaw = detail?.recording;
     let recording = recRaw ? hydrateRecording(recRaw) : null;
     // The broadcast can carry an empty stub if the offscreen finalized
@@ -440,7 +465,7 @@ export function wireAutoStopListener(): void {
     // back to a direct RPC pull so the modal still gets the real video.
     if (!isUsableRecording(recording)) {
       try {
-        const raw = await rpcCall<any>("tb:rec:last-recording").catch(() => null);
+        const raw = await rpcCall<RawRecording | null>("tb:rec:last-recording").catch(() => null);
         const pulled = raw ? hydrateRecording(raw) : null;
         if (isUsableRecording(pulled)) recording = pulled;
       } catch {}
@@ -500,7 +525,7 @@ function pickMimeType(): string {
     "video/webm;codecs=vp8",
     "video/webm",
   ];
-  const MR = (window as any).MediaRecorder;
+  const MR = window.MediaRecorder;
   if (!MR || typeof MR.isTypeSupported !== "function") return "";
   for (const t of candidates) {
     if (MR.isTypeSupported(t)) return t;
@@ -523,7 +548,12 @@ async function startVideoRecordingInPage(
     // current tab. These constraints are best-effort — the spec only
     // recently added them and older Chromium silently ignores unknown
     // keys, so falling back to the standard picker is automatic.
-    const constraints: any = {
+    const constraints: MediaStreamConstraints & {
+      preferCurrentTab?: boolean;
+      selfBrowserSurface?: string;
+      surfaceSwitching?: string;
+      systemAudio?: string;
+    } = {
       video: { frameRate: { ideal: 30, max: 60 } },
       audio: true,
     };
@@ -534,12 +564,13 @@ async function startVideoRecordingInPage(
       constraints.systemAudio = "exclude";
     }
     displayStream = await navigator.mediaDevices.getDisplayMedia(constraints as MediaStreamConstraints);
-  } catch (err: any) {
-    if (err?.name === "NotAllowedError" || err?.name === "AbortError") {
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "";
+    if (name === "NotAllowedError" || name === "AbortError") {
       _onStatus?.("stopped", "cancelled");
       return false;
     }
-    _onStatus?.("error", err?.message || "Could not start screen capture.");
+    _onStatus?.("error", (err instanceof Error && err.message) || "Could not start screen capture.");
     return false;
   }
 
@@ -562,10 +593,10 @@ async function startVideoRecordingInPage(
     _recorder = _mimeType
       ? new MediaRecorder(displayStream, { mimeType: _mimeType })
       : new MediaRecorder(displayStream);
-  } catch (err: any) {
+  } catch (err) {
     _stream.getTracks().forEach(t => t.stop());
     _stream = null;
-    _onStatus?.("error", err?.message || "MediaRecorder could not be created.");
+    _onStatus?.("error", (err instanceof Error && err.message) || "MediaRecorder could not be created.");
     return false;
   }
 
@@ -800,7 +831,7 @@ function revokeAndStash(recording: VideoRecording): void {
  * (which uses base64 dataUrl since Blob doesn't survive chrome.runtime
  * messaging). Decodes back to a Blob + creates a fresh Blob URL.
  */
-function hydrateRecording(raw: any): VideoRecording {
+function hydrateRecording(raw: RawRecording): VideoRecording {
   const dataUrl: string = raw?.dataUrl || "";
   const mimeType: string = raw?.mimeType || "video/webm";
   const blob = dataUrlToBlob(dataUrl, mimeType);
@@ -868,7 +899,7 @@ function dataUrlToBlob(dataUrl: string, fallbackMime: string): Blob {
 
 let _rpcCounter = 0;
 
-function rpcCall<T = unknown>(type: string, data?: any, timeoutMs = 60000): Promise<T> {
+function rpcCall<T = unknown>(type: string, data?: unknown, timeoutMs = 60000): Promise<T> {
   return new Promise((resolve, reject) => {
     const id = `tb_rpc_${++_rpcCounter}_${Date.now().toString(36)}`;
     const handler = (e: Event) => {

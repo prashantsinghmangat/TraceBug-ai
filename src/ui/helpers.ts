@@ -1,6 +1,8 @@
 // ── Dashboard UI Helpers ─────────────────────────────────────────────────
 // Shared utility functions used across all dashboard modules.
 
+import type { TraceBugEvent } from "../types";
+
 // ── Defensive style isolation (no Shadow DOM) ────────────────────────────
 // Returns a conservative, scoped CSS reset for an injected-widget root so
 // host-page styles can't leak in. It asserts our own base and neutralizes the
@@ -122,7 +124,7 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
 }
 
-export function describeEvent(event: { type: string; data: Record<string, any>; page: string }): string {
+export function describeEvent(event: { type: string; data: TraceBugEvent["data"]; page: string }): string {
   const d = event.data;
   switch (event.type) {
     case "click":

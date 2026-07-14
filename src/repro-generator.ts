@@ -22,8 +22,6 @@ export function generateReproSteps(
   let stepNum = 1;
 
   // Track state for smarter descriptions
-  let currentPage = "";
-
   // Track last step text to avoid duplicates
   let lastStepText = "";
 
@@ -33,7 +31,6 @@ export function generateReproSteps(
         const to = event.data.to || event.page;
         const pageName = friendlyPageName(to);
         steps.push(`${stepNum++}. Navigate to ${pageName} (${to})`);
-        currentPage = to;
         break;
       }
 
@@ -139,7 +136,17 @@ export function generateReproSteps(
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function describeElement(el: any): string {
+/** The element-summary fields captured by the click collector that this
+ *  helper reads. Payloads come off `event.data`, so everything is optional. */
+interface ClickedElementInfo {
+  tag?: string;
+  text?: string;
+  id?: string;
+  ariaLabel?: string;
+  buttonType?: string;
+}
+
+function describeElement(el: ClickedElementInfo | null | undefined): string {
   if (!el) return "an element";
 
   const tag = (el.tag || "").toLowerCase();

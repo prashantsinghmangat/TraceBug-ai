@@ -10,9 +10,9 @@
 import { resolveCloudEndpoint } from "../cloud-endpoint";
 
 interface PendingRequest {
-  resolve: (data: any) => void;
-  reject: (err: any) => void;
-  timer: any;
+  resolve: (data: unknown) => void;
+  reject: (err: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -133,8 +133,9 @@ export class IframeBridge {
 
   private onMessage(e: MessageEvent) {
     if (e.origin !== this.origin) return;
-    const d: any = e.data;
-    if (!d || typeof d !== "object") return;
+    const raw: unknown = e.data;
+    if (!raw || typeof raw !== "object") return;
+    const d = raw as { type?: unknown; authed?: unknown; requestId?: unknown; data?: unknown };
 
     // Auth state change broadcast (no requestId, no pending).
     if (d.type === "tracebug:auth-changed") {
@@ -149,14 +150,15 @@ export class IframeBridge {
     if (!p) return;
     clearTimeout(p.timer);
     this.pending.delete(d.requestId);
-    if (d.data && typeof d.data === "object" && "error" in d.data && Object.keys(d.data).length === 1) {
-      p.reject(new Error(String(d.data.error)));
+    const data = d.data;
+    if (data && typeof data === "object" && "error" in data && Object.keys(data).length === 1) {
+      p.reject(new Error(String((data as { error: unknown }).error)));
     } else {
-      p.resolve(d.data);
+      p.resolve(data);
     }
   }
 
-  private async send<T>(type: string, extra?: Record<string, any>): Promise<T> {
+  private async send<T>(type: string, extra?: Record<string, unknown>): Promise<T> {
     await this.ready();
     if (!this.iframe?.contentWindow) throw new Error("bridge not mounted");
     const requestId = `req_${Math.random().toString(36).slice(2)}_${Date.now()}`;
@@ -165,7 +167,7 @@ export class IframeBridge {
         this.pending.delete(requestId);
         reject(new Error(`bridge timeout (${type})`));
       }, DEFAULT_TIMEOUT_MS);
-      this.pending.set(requestId, { resolve, reject, timer });
+      this.pending.set(requestId, { resolve: resolve as (data: unknown) => void, reject, timer });
       this.iframe!.contentWindow!.postMessage({ type, requestId, ...extra }, this.origin);
     });
   }
@@ -187,7 +189,7 @@ export class IframeBridge {
     // Race: explicit auth-change broadcast vs polling fallback
     return new Promise<BridgeUser>((resolve, reject) => {
       let done = false;
-      const finish = (err: any, user?: BridgeUser) => {
+      const finish = (err: unknown, user?: BridgeUser) => {
         if (done) return;
         done = true;
         this.authChangeListeners.delete(onChange);
@@ -223,19 +225,19 @@ export class IframeBridge {
     await this.send("sign-out");
   }
 
-  getQuotas(): Promise<any> {
+  getQuotas(): Promise<unknown> {
     return this.send("get-quotas");
   }
 
   async uploadInit(payload: UploadInitPayload): Promise<UploadInitResponse> {
-    const res = await this.send<{ status: number; body: any }>("upload-init", { payload });
+    const res = await this.send<{ status: number; body: UploadInitResponse & { error?: string } }>("upload-init", { payload });
     if (res.status >= 400) {
-      const err: any = new Error(res.body?.error || `upload-init failed (${res.status})`);
-      err.status = res.status;
-      err.body = res.body;
-      throw err;
+      throw Object.assign(new Error(res.body?.error || `upload-init failed (${res.status})`), {
+        status: res.status,
+        body: res.body,
+      });
     }
-    return res.body as UploadInitResponse;
+    return res.body;
   }
 
   async uploadBlob(storageKey: string, token: string, blob: Blob, contentType = "text/html"): Promise<void> {
@@ -246,7 +248,7 @@ export class IframeBridge {
   }
 
   async uploadComplete(id: string): Promise<{ shareUrl: string; id: string }> {
-    const res = await this.send<{ status: number; body: any }>("upload-complete", { id });
+    const res = await this.send<{ status: number; body: { shareUrl: string; id: string; error?: string } }>("upload-complete", { id });
     if (res.status >= 400) {
       throw new Error(res.body?.error || `upload-complete failed (${res.status})`);
     }

@@ -10,7 +10,57 @@ export interface VoiceTranscript {
   duration: number; // ms
 }
 
-let recognition: any = null;
+// ── Minimal Web Speech API typings ────────────────────────────────────────
+// lib.dom doesn't ship SpeechRecognition types — declare just the surface we
+// use so the rest of the module is fully typed.
+
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  [index: number]: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionResultListLike {
+  length: number;
+  [index: number]: SpeechRecognitionResultLike;
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: SpeechRecognitionResultListLike;
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+/** Vendor-prefixed lookup for the SpeechRecognition constructor. */
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | undefined {
+  const w = window as Window & {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition;
+}
+
+let recognition: SpeechRecognitionLike | null = null;
 let isRecording = false;
 let transcript = "";
 let interimTranscript = "";
@@ -23,10 +73,7 @@ let onStatusChange: ((status: "recording" | "stopped" | "error", message?: strin
 
 /** Check if voice recording is supported in this browser */
 export function isVoiceSupported(): boolean {
-  return !!(
-    (window as any).SpeechRecognition ||
-    (window as any).webkitSpeechRecognition
-  );
+  return !!getSpeechRecognitionCtor();
 }
 
 /** Start voice recording */
@@ -35,7 +82,8 @@ export function startVoiceRecording(options?: {
   onStatus?: (status: "recording" | "stopped" | "error", message?: string) => void;
 }): boolean {
   if (isRecording) return false;
-  if (!isVoiceSupported()) {
+  const SpeechRecognitionImpl = getSpeechRecognitionCtor();
+  if (!SpeechRecognitionImpl) {
     options?.onStatus?.("error", "Speech recognition not supported in this browser.");
     return false;
   }
@@ -43,20 +91,18 @@ export function startVoiceRecording(options?: {
   onTranscriptUpdate = options?.onUpdate || null;
   onStatusChange = options?.onStatus || null;
 
-  const SpeechRecognition =
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-  recognition = new SpeechRecognition();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = navigator.language || "en-US";
-  recognition.maxAlternatives = 1;
+  const rec = new SpeechRecognitionImpl();
+  recognition = rec;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = navigator.language || "en-US";
+  rec.maxAlternatives = 1;
 
   transcript = "";
   interimTranscript = "";
   startTime = Date.now();
 
-  recognition.onresult = (event: any) => {
+  rec.onresult = (event: SpeechRecognitionEventLike) => {
     let final = "";
     let interim = "";
 
@@ -77,7 +123,7 @@ export function startVoiceRecording(options?: {
     onTranscriptUpdate?.(transcript, interimTranscript);
   };
 
-  recognition.onerror = (event: any) => {
+  rec.onerror = (event: SpeechRecognitionErrorEventLike) => {
     const errorMessages: Record<string, string> = {
       "not-allowed": "Microphone access denied. Please allow microphone permission.",
       "no-speech": "No speech detected. Try speaking louder.",
@@ -98,11 +144,11 @@ export function startVoiceRecording(options?: {
     onTranscriptUpdate = null;
   };
 
-  recognition.onend = () => {
+  rec.onend = () => {
     // Auto-restart if still supposed to be recording (handles browser timeout)
     if (isRecording) {
       try {
-        recognition.start();
+        rec.start();
       } catch {
         isRecording = false;
         onStatusChange?.("stopped");
@@ -113,12 +159,12 @@ export function startVoiceRecording(options?: {
   };
 
   try {
-    recognition.start();
+    rec.start();
     isRecording = true;
     onStatusChange?.("recording");
     return true;
-  } catch (err: any) {
-    onStatusChange?.("error", err.message || "Failed to start voice recording.");
+  } catch (err) {
+    onStatusChange?.("error", (err instanceof Error && err.message) || "Failed to start voice recording.");
     return false;
   }
 }

@@ -9,12 +9,15 @@
 import { Issue } from "../../types";
 import { coerceSeverity, makeIssueId } from "../helpers";
 
-let _axePromise: Promise<any> | null = null;
+type AxeModule = typeof import("axe-core");
+type AxeResults = import("axe-core").AxeResults;
 
-function loadAxe(): Promise<any> {
+let _axePromise: Promise<AxeModule | null> | null = null;
+
+function loadAxe(): Promise<AxeModule | null> {
   if (_axePromise) return _axePromise;
   _axePromise = import("axe-core")
-    .then((mod: any) => mod.default || mod)
+    .then((mod) => (mod as AxeModule & { default?: AxeModule }).default || mod)
     .catch((err) => {
       console.warn("[TraceBug] axe-core failed to load:", err);
       return null;
@@ -26,7 +29,7 @@ export async function detectA11yViolations(): Promise<Issue[]> {
   const axe = await loadAxe();
   if (!axe || typeof axe.run !== "function") return [];
 
-  let results: any;
+  let results: AxeResults;
   try {
     results = await axe.run(document, {
       // Only WCAG-tagged rules — keeps signal-to-noise high. Best-practice

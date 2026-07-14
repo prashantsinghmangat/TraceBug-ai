@@ -2,7 +2,7 @@
 // Zero-friction bug reporting: 1 keystroke → screenshot → auto-filled modal → 1-click copy.
 // Total flow under 5 seconds. Replaces the 6-7 click manual workflow.
 
-import { captureScreenshot, downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot, pushScreenshot } from "../screenshot";
+import { downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot, pushScreenshot } from "../screenshot";
 import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { isPremium } from "../plan";
@@ -23,7 +23,7 @@ import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
 import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
-import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
+// PHASE2-CLOUD: import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT, exportReportAsMarkdown, exportReportAsAiHtml } from "../exporters/ai-prompt";
 import {
   runLLMAnalysis, getAIConfig, setAIConfig, clearAIConfig,
@@ -31,8 +31,8 @@ import {
   type AIProvider, type AIConfig,
 } from "../ai/llm-client";
 // PHASE2-CLOUD: import { getBridge } from "../auth/iframe-bridge";
-import { showScreenshotTrimModal } from "./screenshot-trim-modal";
-import { injectTheme, getResolvedTheme, type ThemeMode } from "../theme";
+// PHASE2-CLOUD: import { showScreenshotTrimModal } from "./screenshot-trim-modal";
+import { injectTheme, type ThemeMode } from "../theme";
 import { getElementAnnotations, getDrawRegions } from "../annotation-store";
 import { openLinearIssue } from "../linear-issue";
 import { generateSlackPost } from "../slack-export";
@@ -48,9 +48,11 @@ export function setGithubRepo(repo: string | null): void { _githubRepo = repo; }
 
 // Cloud endpoint for the Share link flow. Defaults to production; can be
 // overridden at init time via TraceBug.init({ cloudEndpoint: ... }).
-let _cloudEndpoint: string = DEFAULT_CLOUD_ENDPOINT;
-export function setCloudEndpoint(endpoint: string | null | undefined): void {
-  _cloudEndpoint = resolveCloudEndpoint(endpoint);
+// PHASE2-CLOUD: the share-link handler that consumed this is disabled for the
+// Phase 1 offline release, so the setter is a no-op until the flow returns:
+// PHASE2-CLOUD: let _cloudEndpoint: string = DEFAULT_CLOUD_ENDPOINT;
+export function setCloudEndpoint(_endpoint: string | null | undefined): void {
+  // PHASE2-CLOUD: _cloudEndpoint = resolveCloudEndpoint(_endpoint);
 }
 
 const MODAL_ID = "tracebug-quick-bug-modal";
@@ -96,6 +98,13 @@ interface Draft {
 
 let _isOpen = false;
 
+/** The modal overlay with its document-level keydown handlers stashed on it,
+ *  so the refresh path (which never calls close()) can detach them too. */
+type ModalOverlayElement = HTMLElement & {
+  __tbModalKey?: (e: KeyboardEvent) => void;
+  __tbEscKey?: (e: KeyboardEvent) => void;
+};
+
 /** Check if quick bug modal is currently open */
 export function isQuickBugOpen(): boolean {
   return _isOpen;
@@ -110,8 +119,8 @@ export async function refreshQuickBugCapture(root: HTMLElement): Promise<void> {
   if (existing) {
     // Detach the document keydown listeners this overlay registered before we
     // drop it — close() isn't called on the refresh path, so they'd leak.
-    const k = (existing as any).__tbModalKey;
-    const esc = (existing as any).__tbEscKey;
+    const k = (existing as ModalOverlayElement).__tbModalKey;
+    const esc = (existing as ModalOverlayElement).__tbEscKey;
     if (k) document.removeEventListener("keydown", k);
     if (esc) document.removeEventListener("keydown", esc);
     existing.remove();
@@ -653,7 +662,7 @@ function _openModal(
   };
 
   // Auto-save draft on input (debounced)
-  let saveTimer: any;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   modal.querySelector("#tb-qb-title")!.addEventListener("input", () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveDraft, 500);
@@ -673,7 +682,7 @@ function _openModal(
     clearTimeout(saveTimer);
     overlay.remove();
     document.removeEventListener("keydown", escHandler);
-    const k = (overlay as any).__tbModalKey;
+    const k = (overlay as ModalOverlayElement).__tbModalKey;
     if (k) document.removeEventListener("keydown", k);
     // Restore focus to the element that opened the modal (WCAG 2.4.3).
     try { if (_prevFocus && _prevFocus.isConnected) _prevFocus.focus(); } catch {}
@@ -760,14 +769,14 @@ function _openModal(
   };
   document.addEventListener("keydown", modalKeyHandler);
   // Detach when modal closes — added to the existing close path below.
-  (overlay as any).__tbModalKey = modalKeyHandler;
+  (overlay as ModalOverlayElement).__tbModalKey = modalKeyHandler;
 
   const escHandler = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
   document.addEventListener("keydown", escHandler);
   // Stash so a refresh (which removes the DOM without calling close()) can also
   // detach it — otherwise every screenshot refresh leaked two document keydown
   // listeners pointing at the discarded overlay.
-  (overlay as any).__tbEscKey = escHandler;
+  (overlay as ModalOverlayElement).__tbEscKey = escHandler;
 
   // Open in GitHub — prefilled URL, opens new tab (no API key needed)
   const openGhBtn = modal.querySelector('[data-action="open-github"]');
@@ -1853,11 +1862,11 @@ function _buildConsoleTab(report: import("../types").BugReport | null): string {
   }
 
   // Pill counts so the user sees what's available before clicking.
-  const counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
+  const counts: Record<string, number> = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
   for (const e of feed) counts[e.cat] = (counts[e.cat] || 0) + 1;
 
   const pill = (key: string, label: string) => {
-    const c = (counts as any)[key] || 0;
+    const c = counts[key] || 0;
     if (key !== "all" && c === 0) return "";
     return `<button class="tb-qb-feed-pill${key === "all" ? " tb-qb-feed-pill-active" : ""}" data-cat="${key}">${label}${c > 0 ? `<span class="tb-qb-feed-pill-n">${c}</span>` : ""}</button>`;
   };
@@ -3006,15 +3015,15 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
 //
 // "Don't show again" is honored via localStorage. Resolving false aborts
 // the share; true proceeds.
+/* PHASE2-CLOUD: share consent dialog disabled for Phase 1 offline release —
+   only the (also disabled) share-link handler above uses it.
 const CONSENT_KEY = "tracebug_share_consent_v1";
 
-/**
- * Mount a popup/dialog ABOVE the open ticket modal. The modal and these popups
- * all use the max z-index, so a popup appended to document.body can lose to
- * #tracebug-root's stacking context and render BEHIND the ticket. Appending it
- * inside the modal overlay (last child, same stacking context) guarantees it
- * paints on top. Falls back to body when no ticket is open.
- */
+// Mount a popup/dialog ABOVE the open ticket modal. The modal and these popups
+// all use the max z-index, so a popup appended to document.body can lose to
+// #tracebug-root's stacking context and render BEHIND the ticket. Appending it
+// inside the modal overlay (last child, same stacking context) guarantees it
+// paints on top. Falls back to body when no ticket is open.
 function _mountAboveModal(overlay: HTMLElement): void {
   (document.getElementById(MODAL_ID) || document.body).appendChild(overlay);
 }
@@ -3116,3 +3125,4 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
     void root;
   });
 }
+PHASE2-CLOUD */

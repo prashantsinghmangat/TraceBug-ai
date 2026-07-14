@@ -266,7 +266,6 @@ var TraceBugModule = (() => {
     var _a2, _b;
     const steps = [];
     let stepNum = 1;
-    let currentPage = "";
     let lastStepText = "";
     for (const event of events) {
       switch (event.type) {
@@ -274,7 +273,6 @@ var TraceBugModule = (() => {
           const to = event.data.to || event.page;
           const pageName = friendlyPageName(to);
           steps.push(`${stepNum++}. Navigate to ${pageName} (${to})`);
-          currentPage = to;
           break;
         }
         case "click": {
@@ -719,7 +717,8 @@ var TraceBugModule = (() => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     if (typeof ctx.roundRect !== "function") {
-      ctx.roundRect = function(x2, y2, w2, h2, r2) {
+      ctx.roundRect = function(x2, y2, w2, h2, radii) {
+        const r2 = typeof radii === "number" ? radii : 0;
         const rad = Math.min(r2, w2 / 2, h2 / 2);
         this.moveTo(x2 + rad, y2);
         this.lineTo(x2 + w2 - rad, y2);
@@ -1121,15 +1120,13 @@ var TraceBugModule = (() => {
         const t2 = e2.target;
         if (!t2 || isTraceBugElement(t2)) return;
         const tag = t2.tagName.toLowerCase();
-        const data = {
-          element: {
-            tag,
-            text: (t2.innerText || "").slice(0, 120),
-            id: t2.id || "",
-            className: typeof t2.className === "string" ? t2.className : ""
-          }
+        const el = {
+          tag,
+          text: (t2.innerText || "").slice(0, 120),
+          id: t2.id || "",
+          className: typeof t2.className === "string" ? t2.className : ""
         };
-        const el = data.element;
+        const data = { element: el };
         if (tag === "a") el.href = t2.href || "";
         if (tag === "button" || t2.type === "submit") {
           el.buttonType = t2.type || "button";
@@ -1209,22 +1206,21 @@ var TraceBugModule = (() => {
               const tag = t2.tagName.toLowerCase();
               const inputType = t2.type || "";
               const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) || /password|secret|token|ssn|credit/i.test(t2.name || t2.id || "");
-              const data = {
-                element: {
-                  tag,
-                  name: t2.name || t2.id || "",
-                  type: inputType,
-                  valueLength: (t2.value || "").length,
-                  value: isSensitive ? "[REDACTED]" : (t2.value || "").slice(0, 200),
-                  placeholder: t2.placeholder || ""
-                }
+              const element = {
+                tag,
+                name: t2.name || t2.id || "",
+                type: inputType,
+                valueLength: (t2.value || "").length,
+                value: isSensitive ? "[REDACTED]" : (t2.value || "").slice(0, 200),
+                placeholder: t2.placeholder || ""
               };
+              const data = { element };
               if (inputType === "checkbox" || inputType === "radio") {
-                data.element.checked = t2.checked;
-                data.element.value = t2.checked ? "checked" : "unchecked";
+                element.checked = t2.checked;
+                element.value = t2.checked ? "checked" : "unchecked";
               }
               if (inputType === "number" || inputType === "range") {
-                data.element.value = t2.value;
+                element.value = t2.value;
               }
               emit("input", data);
             } catch (err) {
@@ -1482,9 +1478,10 @@ var TraceBugModule = (() => {
     if (_perfSeen.has(key)) return;
     _perfSeen.add(key);
     const navStart = typeof performance.timeOrigin === "number" ? performance.timeOrigin : Date.now();
+    const ext = e2;
     const initiator = e2.initiatorType || "";
-    const method = (e2.method || "GET").toUpperCase();
-    const status = e2.responseStatus || 0;
+    const method = (ext.method || "GET").toUpperCase();
+    const status = ext.responseStatus || 0;
     const url = sanitizeUrl2(e2.name).slice(0, 500);
     const timestamp = Math.round(navStart + e2.startTime);
     const durationMs = Math.round(e2.duration || 0);
@@ -1851,28 +1848,33 @@ var TraceBugModule = (() => {
   });
 
   // src/voice-recorder.ts
+  function getSpeechRecognitionCtor() {
+    const w = window;
+    return w.SpeechRecognition || w.webkitSpeechRecognition;
+  }
   function isVoiceSupported() {
-    return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    return !!getSpeechRecognitionCtor();
   }
   function startVoiceRecording(options) {
     var _a2;
     if (isRecording) return false;
-    if (!isVoiceSupported()) {
+    const SpeechRecognitionImpl = getSpeechRecognitionCtor();
+    if (!SpeechRecognitionImpl) {
       (_a2 = options == null ? void 0 : options.onStatus) == null ? void 0 : _a2.call(options, "error", "Speech recognition not supported in this browser.");
       return false;
     }
     onTranscriptUpdate = (options == null ? void 0 : options.onUpdate) || null;
     onStatusChange = (options == null ? void 0 : options.onStatus) || null;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = navigator.language || "en-US";
-    recognition.maxAlternatives = 1;
+    const rec = new SpeechRecognitionImpl();
+    recognition = rec;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = navigator.language || "en-US";
+    rec.maxAlternatives = 1;
     transcript = "";
     interimTranscript = "";
     startTime = Date.now();
-    recognition.onresult = (event) => {
+    rec.onresult = (event) => {
       let final = "";
       let interim = "";
       for (let i2 = event.resultIndex; i2 < event.results.length; i2++) {
@@ -1889,7 +1891,7 @@ var TraceBugModule = (() => {
       interimTranscript = interim;
       onTranscriptUpdate == null ? void 0 : onTranscriptUpdate(transcript, interimTranscript);
     };
-    recognition.onerror = (event) => {
+    rec.onerror = (event) => {
       const errorMessages = {
         "not-allowed": "Microphone access denied. Please allow microphone permission.",
         "no-speech": "No speech detected. Try speaking louder.",
@@ -1905,10 +1907,10 @@ var TraceBugModule = (() => {
       onStatusChange = null;
       onTranscriptUpdate = null;
     };
-    recognition.onend = () => {
+    rec.onend = () => {
       if (isRecording) {
         try {
-          recognition.start();
+          rec.start();
         } catch (e2) {
           isRecording = false;
           onStatusChange == null ? void 0 : onStatusChange("stopped");
@@ -1918,12 +1920,12 @@ var TraceBugModule = (() => {
       onStatusChange == null ? void 0 : onStatusChange("stopped");
     };
     try {
-      recognition.start();
+      rec.start();
       isRecording = true;
       onStatusChange == null ? void 0 : onStatusChange("recording");
       return true;
     } catch (err) {
-      onStatusChange == null ? void 0 : onStatusChange("error", err.message || "Failed to start voice recording.");
+      onStatusChange == null ? void 0 : onStatusChange("error", err instanceof Error && err.message || "Failed to start voice recording.");
       return false;
     }
   }
@@ -19988,11 +19990,12 @@ var TraceBugModule = (() => {
       }
       displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
     } catch (err) {
-      if ((err == null ? void 0 : err.name) === "NotAllowedError" || (err == null ? void 0 : err.name) === "AbortError") {
+      const name = err instanceof Error ? err.name : "";
+      if (name === "NotAllowedError" || name === "AbortError") {
         _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
         return false;
       }
-      _onStatus == null ? void 0 : _onStatus("error", (err == null ? void 0 : err.message) || "Could not start screen capture.");
+      _onStatus == null ? void 0 : _onStatus("error", err instanceof Error && err.message || "Could not start screen capture.");
       return false;
     }
     if (options == null ? void 0 : options.withMicrophone) {
@@ -20014,7 +20017,7 @@ var TraceBugModule = (() => {
     } catch (err) {
       _stream.getTracks().forEach((t2) => t2.stop());
       _stream = null;
-      _onStatus == null ? void 0 : _onStatus("error", (err == null ? void 0 : err.message) || "MediaRecorder could not be created.");
+      _onStatus == null ? void 0 : _onStatus("error", err instanceof Error && err.message || "MediaRecorder could not be created.");
       return false;
     }
     _recorder.ondataavailable = (e2) => {
@@ -21158,16 +21161,16 @@ var TraceBugModule = (() => {
     if (el.ariaLabel) return cleanText(el.ariaLabel);
     if (typeof el.value === "string" && el.value && el.value !== "[REDACTED]") return cleanText(el.value);
     if (el.title) return cleanText(el.title);
-    if (el.testId) return cleanText(humanizeIdentifier(el.testId));
-    if (el.id) return cleanText(humanizeIdentifier(el.id));
-    if (el.name) return cleanText(humanizeIdentifier(el.name));
+    if (el.testId) return cleanText(humanizeIdentifier(String(el.testId)));
+    if (el.id) return cleanText(humanizeIdentifier(String(el.id)));
+    if (el.name) return cleanText(humanizeIdentifier(String(el.name)));
     return "";
   }
   function extractFieldTarget(el) {
     if (el.ariaLabel) return cleanText(el.ariaLabel);
     if (el.placeholder) return cleanText(el.placeholder);
-    if (el.name) return cleanText(humanizeIdentifier(el.name));
-    if (el.id) return cleanText(humanizeIdentifier(el.id));
+    if (el.name) return cleanText(humanizeIdentifier(String(el.name)));
+    if (el.id) return cleanText(humanizeIdentifier(String(el.id)));
     return "";
   }
   function extractFormTarget(f2) {
@@ -22377,7 +22380,6 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     var _a2;
     const env = report.environment;
     const session = report.session;
-    const hasError = report.consoleErrors.length > 0;
     let html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <title>TraceBug Report \u2014 ${escapeHtml(report.title)}</title>
@@ -23718,7 +23720,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _cleanup2 = null;
     }
   }
-  function _createToolbar(root2) {
+  function _createToolbar(_root3) {
     const bar = document.createElement("div");
     bar.id = "tracebug-draw-toolbar";
     bar.dataset.tracebug = "draw-toolbar";
@@ -23867,14 +23869,13 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     }
   }
   function _redrawAllRegions(ctx, w, h) {
-    var _a2;
     ctx.clearRect(0, 0, w, h);
     const regions = getDrawRegions();
     const page = window.location.pathname;
     for (let i2 = 0; i2 < regions.length; i2++) {
       const r2 = regions[i2];
       if (r2.page !== page) continue;
-      if (r2.shape === "pen" && ((_a2 = r2.points) == null ? void 0 : _a2.length) >= 2) {
+      if (r2.shape === "pen" && r2.points && r2.points.length >= 2) {
         _drawPath(ctx, r2.color, r2.points, 0.7);
         continue;
       }
@@ -24232,16 +24233,20 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   });
 
   // src/plan.ts
+  function getChrome() {
+    return globalThis.chrome;
+  }
   async function hydratePlan() {
     var _a2, _b;
     if (_hydrated) return _cached;
     _hydrated = true;
     try {
-      const c2 = globalThis.chrome;
+      const c2 = getChrome();
       if ((_b = (_a2 = c2 == null ? void 0 : c2.storage) == null ? void 0 : _a2.local) == null ? void 0 : _b.get) {
+        const local = c2.storage.local;
         const result2 = await new Promise((resolve) => {
           try {
-            c2.storage.local.get(STORAGE_KEY, (r2) => resolve(r2 || {}));
+            local.get(STORAGE_KEY, (r2) => resolve(r2 || {}));
           } catch (e2) {
             resolve({});
           }
@@ -24273,11 +24278,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     _cached = plan;
     _hydrated = true;
     try {
-      const c2 = globalThis.chrome;
+      const c2 = getChrome();
       if ((_b = (_a2 = c2 == null ? void 0 : c2.storage) == null ? void 0 : _a2.local) == null ? void 0 : _b.set) {
+        const local = c2.storage.local;
         await new Promise((resolve) => {
           try {
-            c2.storage.local.set({ [STORAGE_KEY]: plan }, () => resolve());
+            local.set({ [STORAGE_KEY]: plan }, () => resolve());
           } catch (e2) {
             resolve();
           }
@@ -27370,35 +27376,6 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
-  // src/cloud-endpoint.ts
-  function resolveCloudEndpoint(endpoint) {
-    const raw = endpoint == null ? void 0 : endpoint.trim();
-    if (!raw) return DEFAULT_CLOUD_ENDPOINT;
-    try {
-      const url = new URL(raw);
-      const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-      if (url.protocol !== "https:" && !(url.protocol === "http:" && isLocal)) {
-        if (typeof console !== "undefined") {
-          console.warn(`[TraceBug] cloudEndpoint must be HTTPS (or http on localhost) \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
-        }
-        return DEFAULT_CLOUD_ENDPOINT;
-      }
-      return url.href.replace(/\/+$/, "");
-    } catch (e2) {
-      if (typeof console !== "undefined") {
-        console.warn(`[TraceBug] Invalid cloudEndpoint "${raw}" \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
-      }
-      return DEFAULT_CLOUD_ENDPOINT;
-    }
-  }
-  var DEFAULT_CLOUD_ENDPOINT;
-  var init_cloud_endpoint = __esm({
-    "src/cloud-endpoint.ts"() {
-      "use strict";
-      DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
-    }
-  });
-
   // src/exporters/ai-prompt.ts
   function generateAIPrompt(report, options = {}) {
     var _a2, _b;
@@ -28432,8 +28409,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   function setGithubRepo(repo) {
     _githubRepo = repo;
   }
-  function setCloudEndpoint(endpoint) {
-    _cloudEndpoint = resolveCloudEndpoint(endpoint);
+  function setCloudEndpoint(_endpoint) {
   }
   function _loadThemePref() {
     try {
@@ -30972,7 +30948,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey);
   }
-  var _githubRepo, _cloudEndpoint, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _LU, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -30994,7 +30970,6 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_blur_tool();
       init_html_replay();
       init_har_export();
-      init_cloud_endpoint();
       init_ai_prompt();
       init_llm_client();
       init_theme();
@@ -31003,7 +30978,6 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_slack_export();
       init_tracker_client();
       _githubRepo = null;
-      _cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
       MODAL_ID2 = "tracebug-quick-bug-modal";
       DRAFT_KEY = "tracebug_last_bug_draft";
       THEME_PREF_KEY = "tracebug_theme_pref";
@@ -31336,9 +31310,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   });
 
   // src/compact-toolbar.ts
-  function setToolbarRecordingState(isRecording2, onToggle) {
-    _isRecording = isRecording2;
-    _onToggleRecording = onToggle;
+  function setToolbarRecordingState(_isRecording2, _onToggle) {
   }
   function setSessionLifecycleHandlers(onStart, onEnd) {
     _onSessionStart = onStart;
@@ -31348,15 +31320,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     _onNewCapture = fn;
   }
   function updateToolbarRecordingState(isRecording2) {
-    _isRecording = isRecording2;
     const dot = document.getElementById("tracebug-toolbar-rec-dot");
     if (dot) {
       dot.style.background = isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)";
       dot.style.animation = isRecording2 ? "bt-pulse 2s infinite" : "none";
     }
   }
-  function setRenderPanel(fn) {
-    _renderPanel = fn;
+  function setRenderPanel(_fn) {
   }
   function mountCompactToolbar(root2, panel, showToast3, renderAnnotationList2, position = "right", shortcuts) {
     _panelEl = panel;
@@ -32088,7 +32058,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       document.removeEventListener("touchend", onTouchEnd);
     };
   }
-  function _convertToFab(toolbar, root2, panel, showToast3) {
+  function _convertToFab(toolbar, root2, panel, _showToast) {
     const buttons = Array.from(toolbar.children);
     buttons.forEach((b) => {
       const el = b;
@@ -32126,16 +32096,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _panelEl.style.right = _panelOpen ? "0" : "-480px";
     }
   }
-  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _isRecording, _onToggleRecording, _onSessionStart, _onSessionEnd, _onNewCapture, _renderPanel, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
+  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _onSessionStart, _onSessionEnd, _onNewCapture, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
   var init_compact_toolbar = __esm({
     "src/compact-toolbar.ts"() {
       "use strict";
       init_element_annotate();
       init_draw_mode();
-      init_annotation_store();
-      init_screenshot();
-      init_voice_recorder();
-      init_collectors();
       init_screenshot();
       init_region_screenshot();
       init_plan();
@@ -32148,12 +32114,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       TOOLBAR_ID = "tracebug-compact-toolbar";
       SETTINGS_ID = "tracebug-settings-card";
       DRAG_POS_KEY = "tracebug_toolbar_pos";
-      _isRecording = true;
-      _onToggleRecording = null;
       _onSessionStart = null;
       _onSessionEnd = null;
       _onNewCapture = null;
-      _renderPanel = null;
       _panelEl = null;
       _panelOpen = false;
       _toolbar = null;
@@ -32173,70 +32136,53 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       return false;
     }
   }
+  function ensurePulseStyles() {
+    if (document.getElementById(STYLE_ID3)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID3;
+    style.textContent = `
+    @keyframes tracebug-onboard-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+      50% { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.4); }
+    }
+  `;
+    document.head.appendChild(style);
+  }
   function addLogoPulse() {
     if (isComplete()) return;
     const logo = document.getElementById("tracebug-toolbar-panel-btn");
     if (!logo) return;
+    ensurePulseStyles();
     logo.style.animation = "tracebug-onboard-pulse 1.5s ease-in-out 6";
     setTimeout(() => {
       if (logo) logo.style.animation = "";
+      try {
+        localStorage.setItem(STORAGE_KEY4, "true");
+      } catch (e2) {
+      }
     }, 1e4);
   }
   function cleanupOnboarding() {
-    _removeTooltip();
-    if (_cleanup3) {
-      _cleanup3();
-      _cleanup3 = null;
-    }
+    const style = document.getElementById(STYLE_ID3);
+    if (style) style.remove();
   }
-  function _removeTooltip() {
-    const el = document.getElementById(TOOLTIP_ID);
-    if (el) el.remove();
-    STEPS.forEach((s2) => {
-      const btn = document.getElementById(s2.targetId);
-      if (btn) btn.style.boxShadow = "";
-    });
-  }
-  var STORAGE_KEY4, TOOLTIP_ID, STEPS, _cleanup3;
+  var STORAGE_KEY4, STYLE_ID3;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
       STORAGE_KEY4 = "tracebug_onboarding_complete";
-      TOOLTIP_ID = "tracebug-onboarding-tooltip";
-      STEPS = [
-        {
-          targetId: "tracebug-toolbar-panel-btn",
-          text: "TraceBug is recording \u2014 find bugs, we\u2019ll write the report",
-          icon: "\u{1F44B}"
-        },
-        {
-          targetId: "tracebug-toolbar-screenshot-btn",
-          text: "Screenshot anything suspicious",
-          icon: "\u{1F4F7}"
-        },
-        {
-          targetId: "tracebug-toolbar-annotate-btn",
-          text: "Click elements to annotate feedback",
-          icon: "\u{1F3AF}"
-        },
-        {
-          targetId: "tracebug-toolbar-panel-btn",
-          text: "Open here to see sessions & export reports",
-          icon: "\u{1F4CB}"
-        }
-      ];
-      _cleanup3 = null;
+      STYLE_ID3 = "tracebug-onboarding-styles";
     }
   });
 
   // src/dashboard.ts
   function setRecordingState(isRecording2, onToggle) {
-    _isRecording2 = isRecording2;
-    _onToggleRecording2 = onToggle;
+    _isRecording = isRecording2;
+    _onToggleRecording = onToggle;
     setToolbarRecordingState(isRecording2, onToggle);
   }
   function updateRecordingState(isRecording2) {
-    _isRecording2 = isRecording2;
+    _isRecording = isRecording2;
     updateToolbarRecordingState(isRecording2);
     const indicator = document.getElementById("bt-rec-indicator");
     if (indicator) {
@@ -32380,12 +32326,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <div>
         <div style="display:flex;align-items:center;gap:8px">
           <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4F46E5"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</div>
-          <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording2 ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording2 ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording2 ? "Recording" : "Paused"}"></div>
+          <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording ? "Recording" : "Paused"}"></div>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} \xB7 ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
       </div>
       <div style="display:flex;gap:6px">
-        <button id="bt-rec-toggle" style="${smallBtnStyle(_isRecording2 ? "#fbbf24" : "#22c55e")}font-size:10px">${_isRecording2 ? "\u23F8 Pause" : "\u25B6 Record"}</button>
+        <button id="bt-rec-toggle" style="${smallBtnStyle(_isRecording ? "#fbbf24" : "#22c55e")}font-size:10px">${_isRecording ? "\u23F8 Pause" : "\u25B6 Record"}</button>
         <button id="bt-refresh" style="${smallBtnStyle("#3b82f6")}font-size:10px">\u21BB</button>
         <button id="bt-clear" style="${smallBtnStyle("#ef4444")}font-size:10px">Clear</button>
       </div>
@@ -32425,7 +32371,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     });
     panel.querySelector("#bt-rec-toggle").addEventListener("click", () => {
-      if (_onToggleRecording2) _onToggleRecording2();
+      if (_onToggleRecording) _onToggleRecording();
     });
     if (allSessions.length === 0) {
       content.innerHTML = `
@@ -33142,7 +33088,7 @@ ${ticket.description}`;
       });
     }
   }
-  function showNoteDialog(sessionId, panel, session) {
+  function showNoteDialog(sessionId, panel, _session) {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
     overlay.innerHTML = `
@@ -33198,7 +33144,7 @@ ${ticket.description}`;
       }
     });
   }
-  function showVoiceDialog(sessionId, panel, session) {
+  function showVoiceDialog(sessionId, panel, _session) {
     const overlay = document.createElement("div");
     overlay.id = "bt-voice-overlay";
     overlay.dataset.tracebug = "voice-dialog";
@@ -33907,7 +33853,7 @@ ${"-".repeat(40)}
     }, 2e3);
   }
   function showAnnotationEditor(screenshot, root2, onSave) {
-    showAnnotationEditor._onSave = onSave;
+    _annotationEditorOnSave = onSave;
     _showAnnotationEditorImpl(screenshot, root2);
   }
   function _showAnnotationEditorImpl(screenshot, root2) {
@@ -34243,7 +34189,7 @@ ${"-".repeat(40)}
     overlay.querySelector("#bt-ann-save").addEventListener("click", () => {
       const merged = mergeAnnotations(screenshot.dataUrl, canvas, width, height);
       screenshot.dataUrl = merged;
-      const onSave = showAnnotationEditor._onSave;
+      const onSave = _annotationEditorOnSave;
       if (onSave) {
         try {
           onSave({
@@ -34293,7 +34239,7 @@ ${"-".repeat(40)}
   function annActionBtnStyle() {
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
-  var PANEL_ID2, _isRecording2, _onToggleRecording2, eventConfig;
+  var PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
   var init_dashboard = __esm({
     "src/dashboard.ts"() {
       "use strict";
@@ -34313,8 +34259,8 @@ ${"-".repeat(40)}
       init_quick_bug();
       init_helpers();
       PANEL_ID2 = "tracebug-dashboard-panel";
-      _isRecording2 = true;
-      _onToggleRecording2 = null;
+      _isRecording = true;
+      _onToggleRecording = null;
       eventConfig = {
         click: { label: "Click", icon: "\u{1F446}", color: "#60a5fa", bg: "#1e293b" },
         input: { label: "Input", icon: "\u2328\uFE0F", color: "#c084fc", bg: "#1e1533" },
@@ -34376,9 +34322,8 @@ ${"-".repeat(40)}
     }
   }
   function cssEscape(value) {
-    var _a2;
-    if (typeof ((_a2 = window.CSS) == null ? void 0 : _a2.escape) === "function") {
-      return window.CSS.escape(value);
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+      return CSS.escape(value);
     }
     return value.replace(/[^\w-]/g, (ch) => `\\${ch}`);
   }
@@ -67959,7 +67904,7 @@ First element: \`${exampleSnippet}\``,
     }
     return out;
   }
-  function detectFormAbandonment(events, page) {
+  function detectFormAbandonment(events, _page) {
     var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     const out = [];
     const formActivity = {};
@@ -68345,9 +68290,9 @@ First element: \`${exampleSnippet}\``,
     return parts.join("");
   }
   function _injectStyles3() {
-    if (document.getElementById(STYLE_ID3)) return;
+    if (document.getElementById(STYLE_ID4)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID3;
+    style.id = STYLE_ID4;
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -68460,12 +68405,12 @@ First element: \`${exampleSnippet}\``,
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID, STYLE_ID4, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
       CARD_ID = "tracebug-live-bug-card";
-      STYLE_ID3 = "tracebug-live-bug-card-styles";
+      STYLE_ID4 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
       _currentRoot = null;
@@ -68497,9 +68442,9 @@ First element: \`${exampleSnippet}\``,
     _renderBody(getIssues());
   }
   function _injectStyles4() {
-    if (document.getElementById(STYLE_ID4)) return;
+    if (document.getElementById(STYLE_ID5)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID4;
+    style.id = STYLE_ID5;
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }
@@ -68777,14 +68722,14 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID3, STYLE_ID4, _isOpen2, _root2, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID3, STYLE_ID5, _isOpen2, _root2, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
       init_scanner();
       init_helpers();
       PANEL_ID3 = "tracebug-issues-panel";
-      STYLE_ID4 = "tracebug-issues-panel-styles";
+      STYLE_ID5 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
       _root2 = null;
       SEVERITY_COLORS = {
@@ -68910,8 +68855,30 @@ First element: \`${exampleSnippet}\``,
   init_html_replay();
   init_cloud_upload();
 
+  // src/cloud-endpoint.ts
+  var DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
+  function resolveCloudEndpoint(endpoint) {
+    const raw = endpoint == null ? void 0 : endpoint.trim();
+    if (!raw) return DEFAULT_CLOUD_ENDPOINT;
+    try {
+      const url = new URL(raw);
+      const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+      if (url.protocol !== "https:" && !(url.protocol === "http:" && isLocal)) {
+        if (typeof console !== "undefined") {
+          console.warn(`[TraceBug] cloudEndpoint must be HTTPS (or http on localhost) \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
+        }
+        return DEFAULT_CLOUD_ENDPOINT;
+      }
+      return url.href.replace(/\/+$/, "");
+    } catch (e2) {
+      if (typeof console !== "undefined") {
+        console.warn(`[TraceBug] Invalid cloudEndpoint "${raw}" \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
+      }
+      return DEFAULT_CLOUD_ENDPOINT;
+    }
+  }
+
   // src/auth/iframe-bridge.ts
-  init_cloud_endpoint();
   var DEFAULT_TIMEOUT_MS = 6e4;
   var BRIDGE_READY_TIMEOUT_MS = 2e4;
   var SIGN_IN_POLL_INTERVAL_MS = 1500;
@@ -68984,8 +68951,9 @@ First element: \`${exampleSnippet}\``,
     }
     onMessage(e2) {
       if (e2.origin !== this.origin) return;
-      const d = e2.data;
-      if (!d || typeof d !== "object") return;
+      const raw = e2.data;
+      if (!raw || typeof raw !== "object") return;
+      const d = raw;
       if (d.type === "tracebug:auth-changed") {
         const authed = !!d.authed;
         this.authChangeListeners.forEach((cb) => cb(authed));
@@ -68996,10 +68964,11 @@ First element: \`${exampleSnippet}\``,
       if (!p) return;
       clearTimeout(p.timer);
       this.pending.delete(d.requestId);
-      if (d.data && typeof d.data === "object" && "error" in d.data && Object.keys(d.data).length === 1) {
-        p.reject(new Error(String(d.data.error)));
+      const data = d.data;
+      if (data && typeof data === "object" && "error" in data && Object.keys(data).length === 1) {
+        p.reject(new Error(String(data.error)));
       } else {
-        p.resolve(d.data);
+        p.resolve(data);
       }
     }
     async send(type, extra) {
@@ -69072,10 +69041,10 @@ First element: \`${exampleSnippet}\``,
       var _a2;
       const res = await this.send("upload-init", { payload });
       if (res.status >= 400) {
-        const err = new Error(((_a2 = res.body) == null ? void 0 : _a2.error) || `upload-init failed (${res.status})`);
-        err.status = res.status;
-        err.body = res.body;
-        throw err;
+        throw Object.assign(new Error(((_a2 = res.body) == null ? void 0 : _a2.error) || `upload-init failed (${res.status})`), {
+          status: res.status,
+          body: res.body
+        });
       }
       return res.body;
     }
@@ -69234,8 +69203,6 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/exporters/share-link.ts
-  init_cloud_endpoint();
-  init_cloud_endpoint();
   var MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
   var MAX_VIDEO_DURATION_S = 120;
   var MAX_SCREENSHOTS_PER_SHARE = 5;
@@ -69294,7 +69261,6 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/index.ts
-  init_cloud_endpoint();
   init_title_generator();
   init_voice_recorder();
   init_video_recorder();
@@ -69604,7 +69570,7 @@ First element: \`${exampleSnippet}\``,
               const _tbClose = _tbModal.querySelector('[data-action="close"]');
               if (_tbClose) _tbClose.click();
             }
-          } catch (_e2) {
+          } catch (e2) {
           }
         } catch (e2) {
         }
@@ -70393,8 +70359,8 @@ First element: \`${exampleSnippet}\``,
     detectEnvironment() {
       var _a2;
       try {
-        if (typeof (import_meta == null ? void 0 : import_meta.env) !== "undefined") {
-          const meta = import_meta.env;
+        const meta = import_meta.env;
+        if (typeof meta !== "undefined") {
           if (meta.PROD === true) return "production";
           if (meta.DEV === true) return "development";
           if (meta.MODE) return meta.MODE;
