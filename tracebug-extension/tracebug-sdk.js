@@ -450,12 +450,16 @@ var TraceBugModule = (() => {
   function loadHtml2CanvasShared() {
     return loadHtml2Canvas();
   }
+  function html2canvasFromWindow() {
+    const fn = window.html2canvas;
+    return typeof fn === "function" ? fn : null;
+  }
   function loadHtml2Canvas() {
     if (_html2canvasPromise) return _html2canvasPromise;
     _html2canvasPromise = Promise.resolve().then(() => (init_html2canvas(), html2canvas_exports)).then((mod) => {
       const fn = mod.default || mod;
-      return typeof fn === "function" ? fn : null;
-    }).catch(() => null);
+      return typeof fn === "function" ? fn : html2canvasFromWindow();
+    }).catch(() => html2canvasFromWindow());
     return _html2canvasPromise;
   }
   function isNonRenderingLink(el) {
@@ -30856,6 +30860,24 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
          Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} \u2014 use <strong>Export for AI (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;\u25BE</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
+    const MCP_SETUP = {
+      claude: { label: "Claude Code", cmd: "claude mcp add tracebug -- npx -y tracebug mcp" },
+      cursor: {
+        label: "Cursor",
+        cmd: 'Add to .cursor/mcp.json: {"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}'
+      },
+      vscode: {
+        label: "VS Code",
+        cmd: 'code --add-mcp "{\\"name\\":\\"tracebug\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"tracebug\\",\\"mcp\\"]}"'
+      }
+    };
+    let mcpTool = "claude";
+    const toolBtnCss = (active) => `
+    padding:5px 11px;border-radius:999px;cursor:pointer;
+    font:600 11px system-ui,-apple-system,sans-serif;
+    border:1px solid ${active ? "#6366F1" : "rgba(255,255,255,0.14)"};
+    background:${active ? "rgba(99,102,241,0.18)" : "transparent"};
+    color:${active ? "#A5B4FC" : "#A1A1AA"};`;
     const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const overlay = document.createElement("div");
     overlay.id = "tb-mcp-handoff";
@@ -30887,6 +30909,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <div style="font-size:12px;color:#A1A1AA;line-height:1.45">
         \u2713 Prompt copied \xB7 paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.
         The agent reads the .html via TraceBug's local MCP server \u2014 nothing is uploaded.
+      </div>
+      <div style="margin-top:12px">
+        <div style="display:flex;gap:6px;margin-bottom:7px;align-items:center">
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#71717A;margin-right:2px">One-time setup</span>
+          ${Object.entries(MCP_SETUP).map(([key, t2]) => `<button data-mcp-tool="${key}" style="${toolBtnCss(key === "claude")}">${t2.label}</button>`).join("")}
+        </div>
+        <div style="display:flex;gap:6px;align-items:stretch">
+          <code id="tb-mcp-setup-cmd" style="flex:1;overflow-x:auto;white-space:nowrap;padding:8px 10px;border-radius:8px;background:#0B0B10;border:1px solid rgba(255,255,255,0.08);font:11px ui-monospace,'SF Mono',Consolas,monospace;color:#CBD2DA">${MCP_SETUP.claude.cmd}</code>
+          <button data-mcp-action="copy-setup" title="Copy setup command" style="display:inline-flex;align-items:center;padding:0 11px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 12px system-ui,sans-serif">${_ic("copy")}</button>
+        </div>
       </div>
       ${bigFileNote}
     </div>
@@ -30922,9 +30954,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const host2 = document.getElementById(MODAL_ID2) || document.body;
     host2.appendChild(overlay);
     overlay.addEventListener("click", (e2) => {
-      var _a3;
+      var _a3, _b;
       const target = e2.target;
-      const action = (_a3 = target.closest("[data-mcp-action]")) == null ? void 0 : _a3.getAttribute("data-mcp-action");
+      const tool = (_a3 = target.closest("[data-mcp-tool]")) == null ? void 0 : _a3.getAttribute("data-mcp-tool");
+      if (tool && MCP_SETUP[tool]) {
+        mcpTool = tool;
+        const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
+        if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
+        card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
+          b.style.cssText = toolBtnCss(b.getAttribute("data-mcp-tool") === tool);
+        });
+        return;
+      }
+      const action = (_b = target.closest("[data-mcp-action]")) == null ? void 0 : _b.getAttribute("data-mcp-action");
       if (action === "copy") {
         try {
           navigator.clipboard.writeText(prompt);
@@ -30935,6 +30977,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           btn.textContent = "\u2713 Copied";
           setTimeout(() => {
             btn.innerHTML = `${_ic("copy")} Copy prompt again`;
+          }, 1100);
+        }
+      } else if (action === "copy-setup") {
+        try {
+          navigator.clipboard.writeText(MCP_SETUP[mcpTool].cmd);
+        } catch (e3) {
+        }
+        const btn = target.closest("button");
+        if (btn) {
+          btn.textContent = "\u2713";
+          setTimeout(() => {
+            btn.innerHTML = _ic("copy");
           }, 1100);
         }
       } else if (action === "close" || target === overlay) close();

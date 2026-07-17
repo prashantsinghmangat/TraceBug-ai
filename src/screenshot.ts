@@ -21,14 +21,23 @@ export function loadHtml2CanvasShared(): Promise<typeof html2canvasStatic | null
   return loadHtml2Canvas();
 }
 
+// Script-tag consumers (no bundler to resolve the dynamic import — e.g. the
+// website's live sandbox, or anyone loading the IIFE bundle directly) can
+// provide html2canvas themselves via its UMD build; we pick it up from the
+// window global when the import yields nothing.
+function html2canvasFromWindow(): typeof html2canvasStatic | null {
+  const fn = (window as { html2canvas?: unknown }).html2canvas;
+  return typeof fn === "function" ? (fn as typeof html2canvasStatic) : null;
+}
+
 function loadHtml2Canvas(): Promise<typeof html2canvasStatic | null> {
   if (_html2canvasPromise) return _html2canvasPromise;
   _html2canvasPromise = import("html2canvas")
     .then((mod) => {
       const fn: unknown = (mod as { default?: unknown }).default || mod;
-      return typeof fn === "function" ? (fn as typeof html2canvasStatic) : null;
+      return typeof fn === "function" ? (fn as typeof html2canvasStatic) : html2canvasFromWindow();
     })
-    .catch(() => null);
+    .catch(() => html2canvasFromWindow());
   return _html2canvasPromise;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Capture a bug, see the root cause, and create a GitHub issue in 5 seconds. Zero-backend, browser-only debugging assistant. Free Sentry/LogRocket alternative.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -42,6 +42,7 @@
     "build:cli": "npm run gen:rrweb && tsup && node -e \"require('fs').copyFileSync('dist/bin.mjs','packages/tracebug/bin.mjs');console.log('[OK] CLI package: packages/tracebug/bin.mjs')\"",
     "build:example": "npm run gen:rrweb && tsup && cd example-app && npm install && echo [OK] Example app updated",
     "build:ext": "npm run gen:rrweb && tsup && node tracebug-extension/build/build-ext.mjs && node -e \"require('fs').copyFileSync('tracebug-extension/tracebug-sdk.js','website/public/tracebug-sdk.js')\"",
+    "zip:ext": "npm run build:ext && node tracebug-extension/build/zip-ext.mjs",
     "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",
     "dev": "npm run gen:rrweb && tsup --watch",

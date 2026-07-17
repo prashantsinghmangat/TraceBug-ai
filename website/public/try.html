@@ -73,11 +73,20 @@
   <a href="/">← back to tracebug</a>
 </div>
 
-<div class="banner">
+<div class="banner" id="banner">
   <b>This page has real bugs, on purpose.</b> The actual TraceBug widget is live (bug button, bottom-right).
   Trigger a bug below, then capture it and hit <b>Export .html</b> — you'll download a genuine
   self-contained report you can open offline or hand to your AI agent.
 </div>
+<script>
+  // Welcome flow: the extension opens this page on first install.
+  if (new URLSearchParams(location.search).get("welcome") === "extension") {
+    document.getElementById("banner").innerHTML =
+      "<b>🎉 Extension installed — try your first capture right here.</b> " +
+      "This checkout has real bugs, on purpose. Trigger one below, then use the TraceBug toolbar " +
+      "(right edge) or press <b>Ctrl+Shift+B</b> to capture and <b>Export .html</b>.";
+  }
+</script>
 
 <div class="wrap">
   <div class="shop">
@@ -102,6 +111,9 @@
   </div>
 </div>
 
+<!-- html2canvas UMD: the SDK's screenshot capture picks it up from the window
+     global (the IIFE bundle ships without it — extensions use tab capture). -->
+<script src="/html2canvas.min.js"></script>
 <script src="/tracebug-sdk.js"></script>
 <script>
   // The real SDK — same call as the README quick start.
