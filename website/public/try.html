@@ -116,9 +116,11 @@
 <script src="/html2canvas.min.js"></script>
 <script src="/tracebug-sdk.js"></script>
 <script>
-  // The real SDK — same call as the README quick start.
+  // The real SDK — same call as the README quick start, plus enabled:true:
+  // the default "auto" turns the SDK off on production hostnames (correct for
+  // real apps, fatal for a sandbox whose whole job is running on the live site).
   if (window.TraceBug && window.TraceBug.init) {
-    window.TraceBug.init({ projectId: "tracebug-live-sandbox" });
+    window.TraceBug.init({ projectId: "tracebug-live-sandbox", enabled: true });
   }
 
   var toast = document.getElementById("toast");
