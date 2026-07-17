@@ -5,6 +5,15 @@
 // "loaded" state.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// First install: open the live sandbox as the welcome experience — a page
+// with intentional bugs where the user can try a capture immediately, instead
+// of a static "thanks for installing" tab. Updates/reloads don't re-open it.
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
+    chrome.tabs.create({ url: "https://tracebug.netlify.app/try.html?welcome=extension" });
+  }
+});
+
 // Track which tabs have been injected (tab ID → true)
 const injectedTabs = new Set();
 // Tabs where the user has turned TraceBug ON. Unlike injectedTabs (current

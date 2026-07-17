@@ -163,33 +163,42 @@ English (United States)
 
 ## 6. Screenshots (1280×800 each, 5 max)
 
-Upload in this order — the first 3 carry the weight:
+**Ready to upload — real product captures in `releases/store-assets/` (regenerated per release by scripting the live sandbox):**
 
-1. **`01-root-cause-banner.png`** — The Quick Bug modal showing `🔍 Possible Cause (high confidence): ...` — this is the differentiator, shown first
-2. **`02-github-issue-preview.png`** — The auto-filled GitHub issue (title, labels, TL;DR, steps, error, failed requests table)
-3. **`03-bug-capture-flow.png`** — Composite showing the 3-step user flow: error appears → Ctrl+Shift+B → modal opens
-4. **`04-toolbar-compact.png`** — The floating toolbar on a real-looking app
-5. **`05-chrome-ext-popup.png`** — The extension popup with the ON/OFF toggle and recording indicator
+1. **`screenshot-1.jpg`** — The live sandbox with the TraceBug toolbar (the first-install welcome experience)
+2. **`screenshot-2.jpg`** — The live error detector catching an uncaught TypeError with the **Capture Bug** button — the differentiator, shown early
+3. **`screenshot-3.jpg`** — The populated Bug Ticket: auto-generated title, events, Console/Network badges
+4. **`screenshot-4.jpg`** — The Network tab: both failed requests with status + waterfall
+5. **`screenshot-5.jpg`** — The MCP hand-off card with the Claude Code / Cursor / VS Code tool picker
 
-**How to create them:** open `website/public/demo.html` locally (or the live site), pause at the key frames, and screenshot the 1080×720 demo area → scale up to 1280×800 in Figma/Photopea with the dark background extended. Take 5 minutes each.
+These are genuine screenshots of the real UI, not mockups — what reviewers install matches what the listing shows.
+
+---
+
+## 6b. Promo video
+
+Upload `releases/store-assets/tracebug-demo.webm` to YouTube (unlisted is fine) and paste the URL into the listing's video field — the Store only accepts YouTube links. It's the 15-second captioned real-capture demo: crash happens → TraceBug catches it live → one click builds the ticket → export.
 
 ---
 
 ## 7. Promotional Images
 
-### Small promo tile (440×280) — used on Chrome Store promoted-sections
+**Ready to upload from `releases/store-assets/` (Slate Indigo brand, pixel-Trace mascot):**
 
-Design guide:
-- Left half: the TraceBug logo (gradient purple/cyan) + product name
-- Right half: a mini root-cause banner as the "money shot"
-- Dark background (#0B0B0F) matching the product theme
-- One line of copy: **"Root cause in 5 seconds"**
+- **`promo-small.jpg`** (440×280) — Trace + wordmark + "Bug reports your dev can actually open" + capability pills
+- **`promo-marquee.jpg`** (1400×560) — the hero headline treatment, for the featured slot
 
-### Large promo tile (920×680) — optional but recommended
+(The old canvas generators `generate-promo-tiles.html` / `generate-store-screenshots.html` predate the rebrand — don't use their output.)
 
-Same design, scaled. Include the 3-step flow icons: `⚡ Capture → 🔍 Cause → 🔗 GitHub`.
+---
 
-### Marquee (1400×560) — only if you get featured; skip for now
+## 7b. Permission justification (paste into the "Privacy practices" tab)
+
+Chrome flags `<all_urls>` host permissions at review and shows "can read data on all websites" at install. Use this justification:
+
+> **Host permission (`<all_urls>`):** TraceBug is a bug-capture tool — users invoke it on whatever site they are testing, which cannot be known in advance. The SDK is injected **only when the user explicitly clicks a capture action** in the popup (no automatic injection, no background tracking), and all captured data stays in the browser: reports are saved as local files, and nothing is transmitted to any server.
+
+Also justify the others briefly: `scripting` (inject the capture SDK on user action), `storage`/`unlimitedStorage` (recordings are multi-MB and stored locally), `offscreen` (tab recording runs in an offscreen document), `tabs`/`activeTab` (identify the tab being captured).
 
 ---
 
@@ -220,12 +229,13 @@ After the listing is live for ~2 weeks:
 
 - [ ] Name is ≤ 75 chars and contains "Bug" + "GitHub"
 - [ ] Short description is ≤ 132 chars and starts with the 3-step promise
-- [ ] 5 screenshots uploaded, each 1280×800, dark background
-- [ ] Small promo tile (440×280) uploaded
+- [ ] 5 screenshots uploaded from `releases/store-assets/` (real UI, 1280×800)
+- [ ] Promo tiles uploaded from `releases/store-assets/` (small + marquee)
+- [ ] Demo video on YouTube, URL pasted into the listing
+- [ ] `<all_urls>` + permission justifications filled in (section 7b)
 - [ ] Privacy URL points to live `/privacy` page (not `#`)
 - [ ] Category is "Developer Tools"
-- [ ] Extension version in `manifest.json` matches the uploaded `.zip` (currently 1.6.0)
-- [ ] `README.md` GIF in place so the GitHub fallback isn't embarrassing
-- [ ] Live demo at `https://tracebug.netlify.app` is working (your iframe fix is deployed)
+- [ ] Extension version in `manifest.json` matches the uploaded `.zip` (currently 1.7.0 — `releases/tracebug-extension-v1.7.0.zip`)
+- [ ] Live site at `https://tracebug.netlify.app` deployed (demo video + sandbox working)
 
 Review time is typically 1-3 business days. Plan your HN/Reddit/ProductHunt launch for the day after you see "Published" in the dashboard.

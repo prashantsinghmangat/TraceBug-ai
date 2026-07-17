@@ -94,7 +94,7 @@
            the first time recording starts. State persists per user. -->
       <button class="mic-opt" id="micOpt" type="button" aria-pressed="false" title="Toggle microphone for the recording">
         <span class="mic-opt-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg></span>
-        <span class="mic-opt-text">Microphone</span>
+        <span class="mic-opt-text" title="Adds your voice to the recording — Chrome asks for permission once">Microphone — narrate your steps</span>
         <span class="mic-opt-pill" id="micOptState">Off</span>
       </button>
 
@@ -116,7 +116,7 @@
       <!-- Hint (purely informational — no pre-arm step needed) -->
       <div class="hint" id="hint">
         <span class="hint-dot" id="hintDot"></span>
-        <span class="hint-text" id="hintText">Nothing is tracked until you pick an action above.</span>
+        <span class="hint-text" id="hintText">Nothing is tracked until you pick an action above. Tip: once TraceBug is on a page, <b>Ctrl+Shift+B</b> quick-captures anytime.</span>
       </div>
 
     </main>

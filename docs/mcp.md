@@ -45,7 +45,7 @@ You rarely have to type it yourself — TraceBug puts it in front of you at ever
 One-liner (global — works in every project):
 
 ```bash
-claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
+claude mcp add tracebug -- npx -y tracebug mcp
 ```
 
 Or per-project via `.mcp.json` in the repo root (committed, so the whole team gets it):

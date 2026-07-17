@@ -7,11 +7,13 @@
 </p>
 
 <p align="center">
-  <img src="./docs/demo.gif" alt="TraceBug 11-second demo — capture a bug, see the root cause, open a GitHub issue" width="820">
+  <a href="https://tracebug.netlify.app/#demo"><img src="./website/public/tracebug-demo-poster.png" alt="TraceBug 15-second demo — a crash happens, TraceBug catches it live, one click builds the ticket" width="820"></a>
+  <br>
+  <a href="https://tracebug.netlify.app/#demo"><b>▶ Watch the 15-second demo</b></a> · <a href="https://tracebug.netlify.app/try.html">try it live in the sandbox</a>
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/tracebug-%E2%80%94-qa-bug-reporte/fdemmibikigigkfjngclmdheeajhdgaj"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Install Chrome Extension"></a>
+  <a href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Install Chrome Extension"></a>
   <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/badge/npm_install-tracebug--sdk-CB3837?style=for-the-badge&logo=npm&logoColor=white" alt="npm install tracebug-sdk"></a>
   <a href="https://tracebug.netlify.app"><img src="https://img.shields.io/badge/Live_Demo-tracebug.netlify.app-6C5CE7?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
 </p>
@@ -52,7 +54,7 @@ That's it. The CLI detects your framework and prints the exact 2-line snippet. P
 
 **Report a bug in 2 clicks:**
 1. Press **`Ctrl+Shift+B`** (or click the ⚡ button on the toolbar)
-2. Review the auto-filled report, click **"Copy as GitHub Issue"**
+2. Review the auto-filled report, click **"Copy GitHub Issue"**
 3. Paste into your repo. Done.
 
 ## What TraceBug Does

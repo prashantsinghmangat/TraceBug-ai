@@ -12,7 +12,7 @@ matches you.
    [Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)
    (works in Chrome, Edge, Brave, Opera).
 2. Open the site with the bug and click the **TraceBug** icon → **Capture Bug**
-   (or press `Ctrl+Shift+B`). Pick "this tab" when the share picker appears.
+   (or press `Ctrl+Shift+B`). Pick **"this tab"** (not the entire screen) in Chrome's share picker — it captures just the site.
 3. **Reproduce the bug** — click, type, navigate as you normally would. TraceBug
    records the DOM, console, network, and clicks. Clicking a link to another page
    keeps recording.
