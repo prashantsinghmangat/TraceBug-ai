@@ -69,7 +69,7 @@ ${BOLD}Quick Start:${RESET}
   ${DIM}$${RESET} npx tracebug init
   ${DIM}$${RESET} npm run dev
 
-${BOLD}Docs:${RESET} https://tracebug.netlify.app/docs
+${BOLD}Docs:${RESET} https://tracebug.dev/docs
 `)
 }
 
@@ -189,7 +189,7 @@ TraceBug.init({ projectId: "${projectId}", enabled: "auto" });`,
   console.log(`${BOLD}3. Run your app${RESET}, reproduce a bug, then click ${BOLD}Export .html${RESET} on the toolbar.\n`)
 
   console.log(`${DIM}Hand the exported report to your AI agent:${RESET}  ${CYAN}npx tracebug mcp${RESET}`)
-  console.log(`${DIM}Full guide:${RESET}  https://tracebug.netlify.app/docs/getting-started\n`)
+  console.log(`${DIM}Full guide:${RESET}  https://tracebug.dev/docs/getting-started\n`)
 }
 
 main().catch(console.error)

@@ -16,7 +16,7 @@ The agent gets six read tools — `list_bug_reports`, `get_bug_report` (with a p
 
 **Everything stays on your machine.** The server binds to stdio only, opens zero network connections, and reads the report files from your disk. No account, no cloud, no upload.
 
-Full guide: [tracebug.netlify.app/docs/mcp](https://tracebug.netlify.app/docs/mcp)
+Full guide: [tracebug.dev/docs/mcp](https://tracebug.dev/docs/mcp)
 
 ## Project setup
 

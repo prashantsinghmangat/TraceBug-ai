@@ -5,7 +5,7 @@
 // Anything else falls back to the production endpoint rather than throwing —
 // a bad config value must never break the host app.
 
-export const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
+export const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
 
 export function resolveCloudEndpoint(endpoint?: string | null): string {
   const raw = endpoint?.trim();

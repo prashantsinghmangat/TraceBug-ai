@@ -30938,7 +30938,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
         background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy prompt again</button>
-      <a href="https://tracebug.netlify.app/docs/mcp" target="_blank" rel="noopener" style="
+      <a href="https://tracebug.dev/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
         color:#FAFAFA;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
@@ -68910,7 +68910,7 @@ First element: \`${exampleSnippet}\``,
   init_cloud_upload();
 
   // src/cloud-endpoint.ts
-  var DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
+  var DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
   function resolveCloudEndpoint(endpoint) {
     const raw = endpoint == null ? void 0 : endpoint.trim();
     if (!raw) return DEFAULT_CLOUD_ENDPOINT;
@@ -69043,7 +69043,7 @@ First element: \`${exampleSnippet}\``,
       return this.send("check-auth");
     }
     // Opens a popup to /auth. Resolves when the user is authenticated (or
-    // rejects on timeout). The popup itself runs on tracebug.netlify.app and
+    // rejects on timeout). The popup itself runs on tracebug.dev and
     // sets cookies the iframe also sees.
     async signIn() {
       const already = await this.checkAuth();

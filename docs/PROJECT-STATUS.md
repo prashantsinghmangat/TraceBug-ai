@@ -45,7 +45,7 @@ All code exists and compiles; the **UI entry points are commented out with `PHAS
 **What exists:**
 
 - `TraceBug.shareReport()` / `signIn()` / `signOut()` / `getCurrentUser()` / `getCloudQuotas()` / `openCloudDashboard()` — exported API (`src/index.ts`), functional if called programmatically.
-- Hidden-iframe auth bridge to `tracebug.netlify.app/sdk-bridge` (`src/auth/iframe-bridge.ts`) — postMessage with origin validation, ready-timeout, request/reply correlation.
+- Hidden-iframe auth bridge to `tracebug.dev/sdk-bridge` (`src/auth/iframe-bridge.ts`) — postMessage with origin validation, ready-timeout, request/reply correlation.
 - Upload pipeline: sanitize → cap checks (5 screenshots / 2-min video / 50 MB) → thumbnail → signed PUT → share URL (`src/exporters/share-link.ts`).
 - Website portal (`website/`): magic-link auth, `/dashboard` (quotas, thumbnails, extend/delete), public `/share/[token]` viewer, Supabase RLS, retention crons, CORS middleware for extension origins.
 - Screenshot trim modal, share-consent modal, extension popup cloud-account block (also commented out).

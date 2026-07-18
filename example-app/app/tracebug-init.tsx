@@ -8,10 +8,10 @@ export default function TraceBugInit() {
       // cloudEndpoint resolution order:
       //   1. NEXT_PUBLIC_TRACEBUG_CLOUD env var (set this in .env.local for
       //      local dev — typically http://localhost:3001)
-      //   2. Production default — tracebug.netlify.app
+      //   2. Production default — tracebug.dev
       // The previous hardcoded localhost broke any non-localhost deploy.
       const cloudEndpoint =
-        process.env.NEXT_PUBLIC_TRACEBUG_CLOUD || "https://tracebug.netlify.app";
+        process.env.NEXT_PUBLIC_TRACEBUG_CLOUD || "https://tracebug.dev";
       TraceBug.init({
         projectId: "demo-project",
         enabled: "all",

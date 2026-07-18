@@ -15,9 +15,13 @@ const ALLOWED_API_PREFIXES = ["/api/me", "/api/sessions", "/api/share", "/api/up
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 function allowedSameSiteOrigins(): string[] {
-  // We accept the deployment URL + the netlify default, plus localhost for dev.
+  // We accept the custom domain, the netlify default (kept — it 301s to the
+  // custom domain, but old clients may still send it as Origin), the
+  // NEXT_PUBLIC_SITE_URL env, and localhost for dev.
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
   const out = new Set<string>([
+    "https://tracebug.dev",
+    "https://www.tracebug.dev",
     "https://tracebug.netlify.app",
     "http://localhost:3001",
   ]);

@@ -7,7 +7,7 @@ import SpotlightEffect from "@/components/SpotlightEffect";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://tracebug.netlify.app"),
+  metadataBase: new URL("https://tracebug.dev"),
   title: "TraceBug — Bug reports your dev can actually open",
   description:
     "Local-first bug reports. One click → one .html file with the full replay, console errors, network requests, and screenshots. Your dev opens it offline. No account. No SaaS lock-in. Cloud sharing optional.",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     description:
       "Local-first bug reports. One .html file with replay, console errors, network requests, screenshots. No account, no SaaS lock-in.",
     type: "website",
-    url: "https://tracebug.netlify.app",
+    url: "https://tracebug.dev",
     siteName: "TraceBug",
     images: [
       {
@@ -101,7 +101,7 @@ export default function RootLayout({
               operatingSystem: "Any (browser-based)",
               offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
               author: { "@type": "Person", name: "Prashant Singh Mangat", url: "https://github.com/prashantsinghmangat" },
-              url: "https://tracebug.netlify.app",
+              url: "https://tracebug.dev",
               downloadUrl: "https://www.npmjs.com/package/tracebug-sdk",
               softwareVersion: SDK_VERSION,
               license: "https://opensource.org/licenses/MIT",

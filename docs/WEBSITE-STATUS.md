@@ -15,7 +15,7 @@ A single Next.js (App Router) app at `website/` serving **two products in one de
 1. **The marketing site** (live for Phase 1 launch): landing page, pricing, docs, compare pages, privacy policy.
 2. **The cloud portal** (Phase 2, built but disabled in the shipping SDK/extension): auth, dashboard, public share viewer, SDK auth bridge, API routes.
 
-**Stack:** Next.js 14 App Router · TypeScript · Tailwind (custom design tokens: `text-primary`, `surface`, `border`, `aurora` effects) · lucide-react icons · Supabase (Phase 2 only) · deploys to Netlify at `https://tracebug.netlify.app`.
+**Stack:** Next.js 14 App Router · TypeScript · Tailwind (custom design tokens: `text-primary`, `surface`, `border`, `aurora` effects) · lucide-react icons · Supabase (Phase 2 only) · deploys to Netlify at `https://tracebug.dev`.
 
 **Verified state:** `npx tsc --noEmit` clean; `npm run build` succeeds; static routes prerender, Phase-2 routes (`/dashboard`, `/share/[token]`) are dynamic (ƒ).
 
@@ -71,7 +71,7 @@ The site now makes **zero claims about the disabled cloud feature**. Fixed in th
 
 ## 5. Deploy requirements & launch chain
 
-- **Deploying this site is the last Chrome Web Store prerequisite** — the store listing declares `https://tracebug.netlify.app/privacy`, which must resolve. Chain: deploy site → privacy URL live → submit extension.
+- **Deploying this site is the last Chrome Web Store prerequisite** — the store listing declares `https://tracebug.dev/privacy`, which must resolve. Chain: deploy site → privacy URL live → submit extension.
 - **Env vars:** the marketing pages need none. Phase-2 routes reference Supabase env (`NEXT_PUBLIC_SUPABASE_URL/ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SDK_ALLOWED_ORIGINS`, `ANTHROPIC_API_KEY` for AI diagnose). They are unlinked and fail gracefully/closed, so Phase 1 can deploy without them — but **do not** set the old Supabase keys: they were exposed in git history and **must be rotated first** (see PROJECT-STATUS.md §5).
 - `website/.env.local` is untracked (gitignored); `website/.env.example` documents every variable.
 

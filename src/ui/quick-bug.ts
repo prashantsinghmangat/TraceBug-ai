@@ -3004,7 +3004,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
         background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy prompt again</button>
-      <a href="https://tracebug.netlify.app/docs/mcp" target="_blank" rel="noopener" style="
+      <a href="https://tracebug.dev/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;
         color:#FAFAFA;font:600 13px system-ui,-apple-system,sans-serif;text-decoration:none;
