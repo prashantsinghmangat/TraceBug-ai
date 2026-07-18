@@ -34,6 +34,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
   {
     title: "Community",
     links: [
+      { label: "Send feedback", href: "/feedback" },
       { label: "Issues", href: `${REPO}/issues`, external: true },
       { label: "Discussions", href: `${REPO}/discussions`, external: true },
       { label: "Report a bug", href: `${REPO}/issues/new`, external: true },

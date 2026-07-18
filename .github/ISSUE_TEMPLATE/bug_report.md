@@ -5,6 +5,10 @@ title: "[BUG] "
 labels: bug
 ---
 
+> 👾 **Pro move:** capture the bug *with TraceBug* and attach the exported `.html`
+> (drag it into this issue) — it carries the replay, console, network, and repro
+> steps, so we can usually fix it without asking you anything.
+
 **Describe the bug**
 A clear description of the issue.
 
