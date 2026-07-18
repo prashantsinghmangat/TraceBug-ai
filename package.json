@@ -96,7 +96,7 @@
     "type": "git",
     "url": "git+https://github.com/prashantsinghmangat/TraceBug-ai.git"
   },
-  "homepage": "https://github.com/prashantsinghmangat/TraceBug-ai#readme",
+  "homepage": "https://tracebug.dev",
   "bugs": {
     "url": "https://github.com/prashantsinghmangat/TraceBug-ai/issues"
   },
