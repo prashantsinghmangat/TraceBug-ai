@@ -13,10 +13,19 @@ const TYPES = [
   { key: "other", label: "Other", icon: MessageCircle },
 ] as const;
 
+const AREAS = [
+  { key: "extension", label: "Chrome extension" },
+  { key: "npm-sdk", label: "npm SDK" },
+  { key: "website", label: "Website" },
+  { key: "mcp", label: "MCP / AI agents" },
+  { key: "not-sure", label: "Not sure" },
+] as const;
+
 const ISSUES_URL = "https://github.com/prashantsinghmangat/tracebug-ai/issues/new/choose";
 
 export default function FeedbackForm() {
   const [type, setType] = useState<string>("bug");
+  const [area, setArea] = useState<string>("extension");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -24,6 +33,7 @@ export default function FeedbackForm() {
     setStatus("sending");
     const data = new FormData(e.currentTarget);
     data.set("type", type);
+    data.set("area", area);
     data.set("version", `v${SDK_VERSION}`);
     try {
       // POST to the static detection file — Netlify intercepts and stores it.
@@ -111,6 +121,28 @@ export default function FeedbackForm() {
                 }`}
               >
                 <t.icon size={15} /> {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-text-subtle">
+            Where did you hit it?
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {AREAS.map((a) => (
+              <button
+                key={a.key}
+                type="button"
+                onClick={() => setArea(a.key)}
+                className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${
+                  area === a.key
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border bg-background text-text-muted hover:border-border-strong"
+                }`}
+              >
+                {a.label}
               </button>
             ))}
           </div>
