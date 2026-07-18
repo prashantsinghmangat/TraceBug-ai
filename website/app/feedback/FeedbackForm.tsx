@@ -195,8 +195,7 @@ export default function FeedbackForm() {
           )}
         </div>
         <p className="text-[12px] leading-relaxed text-text-subtle">
-          Stored by our host (Netlify Forms) and read by a human. No analytics, no account, nothing
-          else collected.
+          Read by a human — usually the same day. No analytics, no account, nothing else collected.
         </p>
       </form>
     </>
