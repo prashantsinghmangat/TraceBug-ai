@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ChromeIcon, GitHubIcon } from "@/components/ui/brand-icons";
 import { LogoMark } from "@/components/Logo";
+import Mascot from "@/components/Mascot";
 import ThemeToggle from "@/components/ThemeToggle";
 import { SDK_VERSION_TAG } from "@/lib/version";
 
@@ -21,13 +22,16 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // `highlight` renders the link as a Trace-fronted pill so "report an issue"
+  // is findable at a glance from any page — it's a bug-reporting product;
+  // reporting OUR bugs should never take hunting.
   const navLinks = [
     { href: "/#demo", label: "Demo" },
     { href: "/#mcp", label: "AI Agents" },
     { href: "/features", label: "Features" },
     { href: "/pricing", label: "Pricing" },
     { href: "/docs", label: "Docs" },
-    { href: "/feedback", label: "Feedback" },
+    { href: "/feedback", label: "Feedback", highlight: true },
   ];
 
   return (
@@ -50,15 +54,26 @@ export default function Navbar() {
         </Link>
 
         <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              className="px-3 py-2 text-[13.5px] font-medium text-text-muted hover:text-text-primary rounded-lg hover:bg-surface transition-colors duration-150"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {navLinks.map((link) =>
+            link.highlight ? (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="ml-1 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/[0.07] px-3 py-1.5 text-[13px] font-semibold text-primary transition-colors duration-150 hover:bg-primary/[0.14] hover:border-primary/50"
+              >
+                <Mascot size={15} animated={false} />
+                {link.label}
+              </Link>
+            ) : (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="px-3 py-2 text-[13.5px] font-medium text-text-muted hover:text-text-primary rounded-lg hover:bg-surface transition-colors duration-150"
+              >
+                {link.label}
+              </Link>
+            )
+          )}
         </div>
 
         <div className="hidden md:flex items-center gap-1.5">
@@ -112,9 +127,14 @@ export default function Navbar() {
               <Link
                 key={link.label}
                 href={link.href}
-                className="block px-3 py-2.5 text-text-muted hover:text-text-primary hover:bg-surface rounded-lg text-sm font-medium transition-colors"
+                className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  link.highlight
+                    ? "flex items-center gap-2 text-primary bg-primary/[0.07] border border-primary/30"
+                    : "block text-text-muted hover:text-text-primary hover:bg-surface"
+                }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
+                {link.highlight && <Mascot size={15} animated={false} />}
                 {link.label}
               </Link>
             ))}
