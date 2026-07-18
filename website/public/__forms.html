@@ -1,0 +1,21 @@
+<!--
+  Netlify Forms detection file. Netlify's build scans static HTML for
+  form definitions — Next.js renders the real /feedback form client-side,
+  so this hidden twin (matching field names exactly) is what registers the
+  "feedback" form. The React page POSTs URL-encoded data to this path.
+  Not linked from anywhere; noindex.
+-->
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="robots" content="noindex" /><title>forms</title></head>
+<body>
+  <form name="feedback" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input type="hidden" name="form-name" value="feedback" />
+    <input name="bot-field" />
+    <select name="type"><option>bug</option><option>idea</option><option>other</option></select>
+    <textarea name="message"></textarea>
+    <input type="email" name="email" />
+    <input name="version" />
+  </form>
+</body>
+</html>
