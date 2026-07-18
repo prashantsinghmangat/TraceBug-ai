@@ -9,3 +9,13 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# The Next.js runtime handles requests before Netlify's automatic
+# primary-domain redirect, so the netlify.app subdomain would keep serving the
+# site as a duplicate. Force the 301 ourselves — exact host only, so deploy
+# previews (deploy-preview-*--tracebug.netlify.app) are unaffected.
+[[redirects]]
+  from = "https://tracebug.netlify.app/*"
+  to = "https://tracebug.dev/:splat"
+  status = 301
+  force = true
