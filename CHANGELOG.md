@@ -99,8 +99,8 @@ The local `.html` export still works exactly as before — this is an **optional
 
 #### Added
 
-- **`TraceBug.shareReport()`** — uploads the bug report to TraceBug's cloud and returns a public URL like `https://tracebug.netlify.app/share/<id>`. Recipient opens it in a browser without installing anything. (`src/exporters/share-link.ts`)
-- **Sign-in via Supabase magic link** — `TraceBug.signIn()` / `TraceBug.signOut()` / `TraceBug.getCurrentUser()`. Auth happens in a hidden iframe pointed at `tracebug.netlify.app/sdk-bridge`, so the customer's site never sees the auth token. (`src/auth/iframe-bridge.ts`, `website/app/sdk-bridge/page.tsx`)
+- **`TraceBug.shareReport()`** — uploads the bug report to TraceBug's cloud and returns a public URL like `https://tracebug.dev/share/<id>`. Recipient opens it in a browser without installing anything. (`src/exporters/share-link.ts`)
+- **Sign-in via Supabase magic link** — `TraceBug.signIn()` / `TraceBug.signOut()` / `TraceBug.getCurrentUser()`. Auth happens in a hidden iframe pointed at `tracebug.dev/sdk-bridge`, so the customer's site never sees the auth token. (`src/auth/iframe-bridge.ts`, `website/app/sdk-bridge/page.tsx`)
 - **🔗 Share link button** in the Bug Ticket modal next to "📦 Export .html". Shows inline spinner during upload; opens the public viewer in a new tab on success. (`src/ui/quick-bug.ts`)
 - **Per-user quotas**: 5 active video shares + 10 active screenshot shares, max 5 screenshots per share, 50 MB upload cap. Enforced both client- and server-side. (`website/lib/quotas.ts`)
 - **Screenshot trim picker** — when a report has more than 5 screenshots, a modal lets the user choose which 5 to upload (numbered selection, max-cap, grid view). Cancel preserves local report unchanged. (`src/ui/screenshot-trim-modal.ts`)

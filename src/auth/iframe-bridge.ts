@@ -1,5 +1,5 @@
 // ── SDK iframe auth + upload bridge ──────────────────────────────────────
-// The SDK runs on customer.com but auth cookies live on tracebug.netlify.app.
+// The SDK runs on customer.com but auth cookies live on tracebug.dev.
 // We solve that by mounting a hidden iframe of /sdk-bridge — same-origin to
 // the cookies — and talking to it via postMessage. The customer site never
 // sees the auth token.
@@ -177,7 +177,7 @@ export class IframeBridge {
   }
 
   // Opens a popup to /auth. Resolves when the user is authenticated (or
-  // rejects on timeout). The popup itself runs on tracebug.netlify.app and
+  // rejects on timeout). The popup itself runs on tracebug.dev and
   // sets cookies the iframe also sees.
   async signIn(): Promise<BridgeUser> {
     const already = await this.checkAuth();

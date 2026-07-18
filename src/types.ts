@@ -87,7 +87,7 @@ export interface TraceBugConfig {
 
   /**
    * Base URL of the TraceBug cloud (auth, storage, dashboard). Defaults to
-   * `https://tracebug.netlify.app`. Override for local development or
+   * `https://tracebug.dev`. Override for local development or
    * self-hosted deployments. Used by `TraceBug.shareReport()` to mount the
    * hidden iframe bridge.
    */

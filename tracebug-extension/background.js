@@ -10,7 +10,7 @@
 // of a static "thanks for installing" tab. Updates/reloads don't re-open it.
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
-    chrome.tabs.create({ url: "https://tracebug.netlify.app/try.html?welcome=extension" });
+    chrome.tabs.create({ url: "https://tracebug.dev/try.html?welcome=extension" });
   }
 });
 

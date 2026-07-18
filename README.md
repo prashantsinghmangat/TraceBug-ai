@@ -7,15 +7,15 @@
 </p>
 
 <p align="center">
-  <a href="https://tracebug.netlify.app/#demo"><img src="./website/public/tracebug-demo-poster.png" alt="TraceBug 15-second demo — a crash happens, TraceBug catches it live, one click builds the ticket" width="820"></a>
+  <a href="https://tracebug.dev/#demo"><img src="./website/public/tracebug-demo-poster.png" alt="TraceBug 15-second demo — a crash happens, TraceBug catches it live, one click builds the ticket" width="820"></a>
   <br>
-  <a href="https://tracebug.netlify.app/#demo"><b>▶ Watch the 15-second demo</b></a> · <a href="https://tracebug.netlify.app/try.html">try it live in the sandbox</a>
+  <a href="https://tracebug.dev/#demo"><b>▶ Watch the 15-second demo</b></a> · <a href="https://tracebug.dev/try.html">try it live in the sandbox</a>
 </p>
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Install Chrome Extension"></a>
   <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/badge/npm_install-tracebug--sdk-CB3837?style=for-the-badge&logo=npm&logoColor=white" alt="npm install tracebug-sdk"></a>
-  <a href="https://tracebug.netlify.app"><img src="https://img.shields.io/badge/Live_Demo-tracebug.netlify.app-6C5CE7?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
+  <a href="https://tracebug.dev"><img src="https://img.shields.io/badge/Live_Demo-tracebug.dev-6C5CE7?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
 </p>
 
 <p align="center">
@@ -659,9 +659,9 @@ If TraceBug helped you ship faster, a star is the best way to say thanks — it 
 </p>
 
 **Spread the word:**
-- [Share on Twitter/X](https://twitter.com/intent/tweet?text=Stop%20wasting%20time%20debugging%20bugs.%20Capture%20%E2%86%92%20know%20the%20cause%20%E2%86%92%20create%20GitHub%20issue%20in%205%20seconds.&url=https%3A%2F%2Ftracebug.netlify.app)
-- [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Ftracebug.netlify.app)
-- [Share on Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Ftracebug.netlify.app&t=TraceBug%20%E2%80%94%20capture%20a%20bug%20and%20know%20the%20root%20cause%20in%205%20seconds)
+- [Share on Twitter/X](https://twitter.com/intent/tweet?text=Stop%20wasting%20time%20debugging%20bugs.%20Capture%20%E2%86%92%20know%20the%20cause%20%E2%86%92%20create%20GitHub%20issue%20in%205%20seconds.&url=https%3A%2F%2Ftracebug.dev)
+- [Share on LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Ftracebug.dev)
+- [Share on Hacker News](https://news.ycombinator.com/submitlink?u=https%3A%2F%2Ftracebug.dev&t=TraceBug%20%E2%80%94%20capture%20a%20bug%20and%20know%20the%20root%20cause%20in%205%20seconds)
 
 **Found a bug or have a feature idea?** [Open an issue](https://github.com/prashantsinghmangat/tracebug-ai/issues/new) — TraceBug was built because bug reports sucked. We're here to make them suck less.
 

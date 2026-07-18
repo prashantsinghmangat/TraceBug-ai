@@ -89,7 +89,7 @@ export default async function SharePage({ params }: { params: { token: string } 
       {/* sandbox: allow-scripts only.
           NEVER add allow-same-origin here — combined with allow-scripts, it
           disables the sandbox entirely, and the embedded report HTML would
-          be able to read tracebug.netlify.app's localStorage + cookies (the
+          be able to read tracebug.dev's localStorage + cookies (the
           Supabase auth session of whoever is viewing). The replay viewer is
           fully client-side from inlined JSON; it has no need for same-origin
           access. */}

@@ -1,5 +1,5 @@
 // SDK iframe bridge: the TraceBug SDK on customer.com embeds this page as a
-// hidden iframe. We hold Supabase cookies (tracebug.netlify.app origin) and
+// hidden iframe. We hold Supabase cookies (tracebug.dev origin) and
 // proxy postMessage requests to the API on behalf of the SDK — so the customer
 // site never sees the auth token.
 //

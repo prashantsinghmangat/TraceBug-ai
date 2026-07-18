@@ -9,7 +9,7 @@ operator actions remain (below). Last verified **2026-07-18**, HEAD `6d7f671`.
 
 | Surface | Version | Status | Evidence |
 |---|---|---|---|
-| **Website** (tracebug.netlify.app) | v1.7 | 🟢 **LIVE** | Deploys from `main`; 32 pages build; demo video, live sandbox, `/changelog` all verified on the production URL |
+| **Website** (tracebug.dev) | v1.7 | 🟢 **LIVE** | Deploys from `main`; 32 pages build; demo video, live sandbox, `/changelog` all verified on the production URL |
 | **Live sandbox** (/try.html) | — | 🟢 **LIVE** | Full capture flow smoke-tested on the production URL: toolbar → track → bugs fire → live detector → Capture Bug → populated ticket. (Required two hotfixes — see §4) |
 | **Chrome extension** | 1.7.0 | 🟡 **ZIP READY, not uploaded** | `releases/tracebug-extension-v1.7.0.zip` built by `npm run zip:ext`; store assets + listing copy ready (see §3) |
 | **npm: tracebug-sdk** | 1.7.0 local / **1.5.0 on registry** | 🔴 **TWO RELEASES BEHIND** | Registry never got 1.6.0 either. `npm publish` from repo root |

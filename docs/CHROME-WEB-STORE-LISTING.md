@@ -133,7 +133,7 @@ TECHNICAL DETAILS
 LINKS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-• Live demo: https://tracebug.netlify.app
+• Live demo: https://tracebug.dev
 • GitHub: https://github.com/prashantsinghmangat/tracebug-ai
 • npm (for developers): https://www.npmjs.com/package/tracebug-sdk
 • Issues / feedback: https://github.com/prashantsinghmangat/tracebug-ai/issues
@@ -206,9 +206,9 @@ Also justify the others briefly: `scripting` (inject the capture SDK on user act
 
 | Field | URL |
 |---|---|
-| Official website URL | `https://tracebug.netlify.app` |
+| Official website URL | `https://tracebug.dev` |
 | Support URL | `https://github.com/prashantsinghmangat/tracebug-ai/issues` |
-| Privacy policy URL | `https://tracebug.netlify.app/privacy` |
+| Privacy policy URL | `https://tracebug.dev/privacy` |
 
 All three are required by the Chrome Web Store — privacy policy especially. The existing `/privacy` page on the site satisfies the requirement.
 
@@ -236,6 +236,6 @@ After the listing is live for ~2 weeks:
 - [ ] Privacy URL points to live `/privacy` page (not `#`)
 - [ ] Category is "Developer Tools"
 - [ ] Extension version in `manifest.json` matches the uploaded `.zip` (currently 1.7.0 — `releases/tracebug-extension-v1.7.0.zip`)
-- [ ] Live site at `https://tracebug.netlify.app` deployed (demo video + sandbox working)
+- [ ] Live site at `https://tracebug.dev` deployed (demo video + sandbox working)
 
 Review time is typically 1-3 business days. Plan your HN/Reddit/ProductHunt launch for the day after you see "Published" in the dashboard.

@@ -36,7 +36,7 @@
     "url": "git+https://github.com/prashantsinghmangat/tracebug-ai.git",
     "directory": "packages/tracebug"
   },
-  "homepage": "https://tracebug.netlify.app/docs/mcp",
+  "homepage": "https://tracebug.dev/docs/mcp",
   "bugs": {
     "url": "https://github.com/prashantsinghmangat/tracebug-ai/issues"
   }

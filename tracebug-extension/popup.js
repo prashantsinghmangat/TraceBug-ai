@@ -11,7 +11,7 @@ const MIC_KEY = "tracebug_mic_enabled";
 const CLOUD_ENDPOINT_KEY = "tracebug_cloud_endpoint";
 // Production default; override for local dev via:
 //   chrome.storage.local.set({ tracebug_cloud_endpoint: "http://localhost:3001" })
-const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.netlify.app";
+const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
 
 let currentHostname = "";
 let currentTabId = null;
