@@ -198,7 +198,19 @@ Chrome flags `<all_urls>` host permissions at review and shows "can read data on
 
 > **Host permission (`<all_urls>`):** TraceBug is a bug-capture tool — users invoke it on whatever site they are testing, which cannot be known in advance. The SDK is injected **only when the user explicitly clicks a capture action** in the popup (no automatic injection, no background tracking), and all captured data stays in the browser: reports are saved as local files, and nothing is transmitted to any server.
 
-Also justify the others briefly: `scripting` (inject the capture SDK on user action), `storage`/`unlimitedStorage` (recordings are multi-MB and stored locally), `offscreen` (tab recording runs in an offscreen document), `tabs`/`activeTab` (identify the tab being captured).
+The dashboard requires a filled justification box **per permission** — paste-ready:
+
+> **`offscreen`:** Tab recording uses Chrome's MediaRecorder API, which requires a live document context that Manifest V3 service workers do not provide. TraceBug creates an offscreen document solely to run the screen/tab recording session that the user explicitly starts from the popup, and it is closed when the recording stops. No background monitoring occurs.
+
+> **`unlimitedStorage`:** TraceBug stores bug-capture sessions (screen recordings, DOM replay events, and screenshots) locally in the user's browser until the user exports or deletes them. A single capture can be several megabytes, so the default storage quota would truncate recordings mid-session. All data remains on the user's device — nothing is uploaded to any server.
+
+> **`scripting`:** Injects the TraceBug capture SDK into the current tab only when the user clicks a capture action in the popup. No automatic or background injection.
+
+> **`tabs` / `activeTab`:** Used to identify the tab the user chose to capture, show its URL in the popup, and re-attach the recording UI after in-page navigation during an active, user-started session.
+
+> **`storage`:** Persists the user's extension preferences (theme, mic toggle) and active-session state so a capture survives page navigations.
+
+Single-purpose description, if asked: "Capture bug reports — recordings, console, network — locally in the browser." Data-usage checkboxes: all "does not collect" (nothing leaves the device).
 
 ---
 
