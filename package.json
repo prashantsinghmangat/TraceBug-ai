@@ -29,7 +29,7 @@
     }
   },
   "bin": {
-    "tracebug": "./dist/bin.mjs"
+    "tracebug": "dist/bin.mjs"
   },
   "files": [
     "dist"
