@@ -1432,6 +1432,12 @@ class TraceBugSDK {
    * Determine if TraceBug should be active based on the `enabled` config.
    */
   private shouldEnable(mode: TraceBugConfig["enabled"]): boolean {
+    // Booleans are the values people reach for first — honor them as the
+    // obvious aliases instead of silently falling through to "auto" (which
+    // once shipped a sandbox that disabled itself on its own production URL).
+    if (mode === true) return true;
+    if (mode === false) return false;
+
     // Always off
     if (mode === "off") return false;
 
@@ -1442,6 +1448,15 @@ class TraceBugSDK {
     if (Array.isArray(mode)) {
       const host = typeof window !== "undefined" ? window.location.hostname : "";
       return mode.some(h => host === h || host.endsWith("." + h));
+    }
+
+    // Anything else that isn't a recognized mode: warn loudly and fall back
+    // to "auto" — an unnoticed typo here can silently disable the SDK.
+    if (mode !== undefined && mode !== "auto" && mode !== "development" && mode !== "staging") {
+      console.warn(
+        `[TraceBug] Unknown \`enabled\` value ${JSON.stringify(mode)} — treating as "auto". ` +
+          `Valid: "auto" | "development" | "staging" | "all" | "off" | string[] | true | false.`
+      );
     }
 
     // Detect current environment

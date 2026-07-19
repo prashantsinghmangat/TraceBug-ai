@@ -17,8 +17,9 @@ export interface TraceBugConfig {
    * - "all"         → Always enabled, including production (USE WITH CAUTION)
    * - "off"         → Completely disabled — SDK does nothing
    * - string[]      → Custom list of allowed hostnames, e.g. ["localhost", "staging.myapp.com"]
+   * - true / false  → Aliases for "all" / "off" — the values people reach for first
    */
-  enabled?: "auto" | "development" | "staging" | "all" | "off" | string[];
+  enabled?: "auto" | "development" | "staging" | "all" | "off" | string[] | boolean;
 
   /**
    * Color theme. Default: "dark"

@@ -76,15 +76,22 @@ export default function Hero() {
               <ArrowRight size={15} />
             </a>
           </Button>
+          {/* Straight to the receipts: the real Claude-via-MCP transcript,
+              not the setup section — proof converts better than instructions. */}
           <a
-            href="#mcp"
+            href="/proof"
             className="group inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl border border-border-strong bg-background px-5 h-12 text-[14px] font-medium text-text-primary shadow-xs hover:border-primary/40 transition-colors"
           >
             <Sparkles size={15} className="text-primary" />
-            See it debug with AI
+            Watch AI debug a real bug
             <ArrowRight size={15} className="text-text-subtle transition-transform group-hover:translate-x-0.5" />
           </a>
         </div>
+
+        {/* the honest version of "no credit card required" */}
+        <p className="mt-4 text-center text-[12.5px] text-text-subtle">
+          No credit card. No account. No server. Free &amp; open source — forever.
+        </p>
 
         {/* Product visual — light browser frame with the auto-generated report */}
         <div className="relative mx-auto mt-16 max-w-4xl">

@@ -20,6 +20,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     title: "Resources",
     links: [
       { label: "Documentation", href: "/docs" },
+      { label: "Blog", href: "/blog" },
       { label: "Changelog", href: "/changelog" },
       { label: "MCP Server", href: "/docs/mcp" },
       { label: "Playwright Reporter", href: "/docs/playwright" },

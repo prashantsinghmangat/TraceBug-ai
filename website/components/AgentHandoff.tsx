@@ -76,7 +76,10 @@ export default function AgentHandoff() {
           </div>
           <p className="mt-3 text-center text-[12.5px] text-text-subtle">
             One-time setup. No <code className="font-mono text-text-muted">--dir</code> needed — the server
-            auto-finds reports in your Downloads/Desktop.
+            auto-finds reports in your Downloads/Desktop.{" "}
+            <a href="/proof" className="font-medium text-primary hover:underline">
+              See a real transcript →
+            </a>
           </p>
         </div>
 

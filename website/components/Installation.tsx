@@ -203,7 +203,7 @@ TraceBug — the exact setup for your framework
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-white font-medium shadow-glow-sm hover:shadow-glow-primary hover:brightness-110 transition-all"
               >
-                <ChromeIcon size={18} colored /> Install from Chrome Web Store
+                <ChromeIcon size={18} /> Install from Chrome Web Store
               </a>
               <div className="rounded-xl border border-border overflow-hidden text-[13px]">
                 {[
