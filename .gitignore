@@ -27,3 +27,4 @@ releases/
 e2e/bug-reports/
 test-results/
 playwright-report/
+docs-internal/

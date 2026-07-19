@@ -60,7 +60,7 @@ TraceBug.destroy();
 
 ## Plan (Freemium)
 
-> Full details: [docs/freemium.md](freemium.md)
+> All gates are currently dormant — everything is free.
 
 ### `TraceBug.getPlan(): "free" | "premium"`
 Returns the current plan. Hydrated from `chrome.storage.local` (extension) or `localStorage` (web SDK) at init.
@@ -77,7 +77,7 @@ Read storage and cache. Called automatically at `init()`; rarely needed directly
 ### `TraceBug.FREE_LIMITS`
 `{ screenshots: 2 }` — the free-tier caps.
 
-**Free vs premium gates summary** (see [docs/freemium.md](freemium.md) for the full table):
+**Free vs premium gates summary** (all gates currently dormant — everything is free):
 
 > ⚠️ **Gates are currently OFF** — paid plans aren't live yet, so `PLANS_LIVE` is `false` and `isPremium()` returns `true` for everyone. Every method below behaves as the "premium" path today (unlimited screenshots, PDF/Jira generated, full report). The table describes behavior *when plans launch*.
 
@@ -961,7 +961,7 @@ These features were removed from the default toolbar in v1.0 to reduce noise. Th
 | Element Annotate Mode | `TraceBug.activateAnnotateMode()`, `deactivateAnnotateMode()`, `isAnnotateModeActive()` |
 | Draw Mode | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
 | Annotation list / export | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"\|"markdown")`, `clearAnnotations()` |
-| PDF report | `TraceBug.downloadPdf()` (free shows upgrade modal — see [freemium.md](freemium.md)) |
+| PDF report | `TraceBug.downloadPdf()` (free shows upgrade modal) |
 | First-run onboarding tour | Runs automatically on first mount (`src/onboarding.ts`); not a public export |
 | Plain text export | Build manually from `TraceBug.generateReport()` |
 
