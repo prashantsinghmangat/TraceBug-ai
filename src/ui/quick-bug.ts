@@ -2,7 +2,7 @@
 // Zero-friction bug reporting: 1 keystroke → screenshot → auto-filled modal → 1-click copy.
 // Total flow under 5 seconds. Replaces the 6-7 click manual workflow.
 
-import { downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot, pushScreenshot } from "../screenshot";
+import { downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot, pushScreenshot, isExtensionContext } from "../screenshot";
 import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { isPremium } from "../plan";
@@ -56,6 +56,14 @@ export function setCloudEndpoint(_endpoint: string | null | undefined): void {
 }
 
 const MODAL_ID = "tracebug-quick-bug-modal";
+
+// Micro-feedback links at key product moments. Privacy-safe by construction:
+// nothing is sent anywhere — each option is a plain link that opens the
+// feedback page prefilled; submitting is the user's explicit action there.
+function _feedbackUrl(type: "bug" | "idea" | "other", msg: string): string {
+  const area = isExtensionContext() ? "extension" : "npm-sdk";
+  return `https://tracebug.dev/feedback?type=${type}&area=${area}&msg=${encodeURIComponent(msg)}`;
+}
 const DRAFT_KEY = "tracebug_last_bug_draft";
 const THEME_PREF_KEY = "tracebug_theme_pref";
 
@@ -559,7 +567,13 @@ function _openModal(
       </div>
       <div class="tb-qb-tip">
         <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
-        <span class="tb-qb-tip-right"><span>Draft auto-saved</span></span>
+        <span class="tb-qb-tip-right">
+          <span class="tb-qb-fb">Enough info to reproduce?
+            <a href="${_feedbackUrl("other", "Capture quality 👍 — the ticket had enough to reproduce the bug.")}" target="_blank" rel="noopener" title="Yes — send a quick thumbs up">👍</a>
+            <a href="${_feedbackUrl("bug", "Capture quality 👎 — the ticket was missing: ")}" target="_blank" rel="noopener" title="No — tell us what was missing">👎</a>
+          </span>
+          <span>Draft auto-saved</span>
+        </span>
       </div>
     </div>
 
@@ -2735,6 +2749,10 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-more-item { background:transparent; color:var(--tb-text-primary); border:none; border-radius:var(--tb-radius-sm); padding:9px 12px; cursor:pointer; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; display:flex; align-items:center; gap:9px; transition:background 0.12s; }
     #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
+    #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
+    #${MODAL_ID} .tb-qb-fb { color:var(--tb-text-muted); }
+    #${MODAL_ID} .tb-qb-fb a { text-decoration:none; margin-left:4px; opacity:0.75; transition:opacity .15s, transform .15s; display:inline-block; }
+    #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
     #${MODAL_ID} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
     #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
@@ -2998,6 +3016,18 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       white-space:pre-wrap;word-break:break-word;
       border-bottom:1px solid rgba(255,255,255,0.06);
     ">${escaped}</pre>
+    <div style="padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:#11151A">
+      <span style="font-size:11px;font-weight:600;color:#71717A;margin-right:2px">Where's this report headed?</span>
+      ${["a developer", "an AI coding agent", "a GitHub issue", "just testing"]
+        .map(
+          (dest) => `<a href="${_feedbackUrl("other", `After export, this report goes to: ${dest}.`)}" target="_blank" rel="noopener" style="
+            padding:4px 10px;border-radius:999px;text-decoration:none;
+            font:500 11px system-ui,-apple-system,sans-serif;
+            border:1px solid rgba(255,255,255,0.14);color:#A1A1AA;
+          ">${dest}</a>`
+        )
+        .join("")}
+    </div>
     <div style="padding:12px 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#11151A">
       <button data-mcp-action="copy" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;

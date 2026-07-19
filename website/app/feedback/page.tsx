@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -17,7 +18,10 @@ export default function FeedbackPage() {
       <Navbar />
       <section className="pt-32 pb-24">
         <div className="mx-auto max-w-xl px-4 sm:px-6">
-          <FeedbackForm />
+          {/* Suspense required for useSearchParams (prefill deep-links) */}
+          <Suspense fallback={null}>
+            <FeedbackForm />
+          </Suspense>
         </div>
       </section>
       <Footer />
