@@ -65,7 +65,7 @@ All notable changes to TraceBug are documented here.
 
 ## [1.4.0] - 2026-07-06
 
-> Current verified state, launch readiness, and the Phase 1 / Phase 2 split live in **[docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md)**.
+> The hardening pass that made Phase 1 (fully offline) production-ready.
 
 ### Production hardening & bug-fix pass (July 2026)
 
@@ -268,7 +268,7 @@ Local-only Free/Premium split. No backend, no auth, no payment. Plan is a flag i
 - **Dev toggle** — the upgrade modal exposes a small `Dev: enable Premium` button so testers can flip the flag without redeploying. Persists across sessions.
 - **Backwards compat:** `getJiraTicket()` and `downloadPdf()` previously always succeeded for any caller; they now return `null` / open the modal for free users. Existing premium-equivalent flows (programmatic `generateGitHubIssue`, etc.) are unchanged.
 
-See [docs/freemium.md](docs/freemium.md) for the full spec, gate table, and test steps.
+(The full free/premium gate spec lives in internal docs; all gates are currently dormant — everything is free.)
 
 ### Changed — Ticket-First Capture Flow
 

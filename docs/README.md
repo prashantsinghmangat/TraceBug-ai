@@ -33,16 +33,6 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [api-reference.md](api-reference.md) | Public SDK API — methods, types, exports. |
 | [architecture.md](architecture.md) | File-by-file internals (recording pipeline, storage, exporters). |
 
-## Project & release
-
-| Doc | What it covers |
-| --- | --- |
-| [PROJECT-STATUS.md](PROJECT-STATUS.md) | Verified Phase 1 / Phase 2 state and launch readiness. |
-| [WEBSITE-STATUS.md](WEBSITE-STATUS.md) | Marketing site + cloud portal status. |
-| [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md) | Pre-ship checklist. |
-| [freemium.md](freemium.md) | Local free/premium gating (currently all-free, gates dormant). |
-| [CHROME-WEB-STORE-LISTING.md](CHROME-WEB-STORE-LISTING.md) | Store listing copy. |
-
 > The self-contained offline **HTML replay export** (rrweb DOM replay + gzip),
 > the lean **Export for AI (.html)**, and **event capture surviving navigation**
 > are covered in [ticket-flow.md](ticket-flow.md) and the
