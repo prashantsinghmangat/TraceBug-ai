@@ -35,13 +35,25 @@ export default function Navbar() {
   ];
 
   return (
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled
-          ? "h-14 glass border-b border-border shadow-soft"
-          : "h-16 bg-transparent border-b border-transparent"
-      }`}
-    >
+    <nav className="fixed top-0 left-0 right-0 z-50">
+      {/* MCP announcement strip — the one thing competitors can't say: local */}
+      <a
+        href="/proof"
+        className="block bg-[#0B0B10] px-4 py-1.5 text-center text-[12px] font-medium text-[#A5B4FC] transition-colors hover:text-white"
+      >
+        <span aria-hidden="true">👾</span> Let AI fix your bugs —{" "}
+        <span className="font-semibold text-white underline decoration-[#6366F1] underline-offset-2">
+          try TraceBug MCP, 100% local
+        </span>{" "}
+        <span aria-hidden="true">→</span>
+      </a>
+      <div
+        className={`transition-all duration-300 ${
+          isScrolled
+            ? "h-14 glass border-b border-border shadow-soft"
+            : "h-16 bg-background/60 backdrop-blur-sm border-b border-transparent"
+        }`}
+      >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group" aria-label="TraceBug home">
           <LogoMark size={30} className="transition-transform duration-300 group-hover:scale-105" />
@@ -118,6 +130,7 @@ export default function Navbar() {
             )}
           </button>
         </div>
+      </div>
       </div>
 
       {isMobileMenuOpen && (
