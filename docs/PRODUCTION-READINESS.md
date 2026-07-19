@@ -25,23 +25,25 @@ operator actions remain (below). Last verified **2026-07-18**, HEAD `6d7f671`.
 - **Dead weight:** dependency audit found **zero unused packages** (root + website); dead code, stale artifacts, and pre-rebrand assets removed
 - **Adoption audit:** funnel walked end-to-end (land → install → capture → export → MCP); all blockers fixed (broken store badge, dead docs domain, MCP command inconsistency, missing example-app README, popup shortcut/mic guidance)
 
-## 3. Launch checklist — remaining operator actions
+## 3. Launch checklist — status 2026-07-19
 
-1. **🔴 Rotate Supabase keys** — old anon + service-role keys were in git history before the
-   `git filter-repo` scrub; anyone who cloned earlier may hold them. Dashboard → Settings →
-   API → new secret key (or Reset JWT secret) → update Netlify env
-   (`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`) →
-   redeploy → verify old key returns 401. **Do this before announcing.**
-2. **🔴 Publish npm (both packages)** — `npm publish` at root (tracebug-sdk), then
-   `npm run build:cli && cd packages/tracebug && npm publish`. This unblocks the real MCP
-   zero-config story for `npx` users.
-3. **🟡 Upload to Chrome Web Store** — `releases/tracebug-extension-v1.7.0.zip` + everything
-   in `releases/store-assets/` (5 real-UI screenshots, 2 promo tiles). Put
-   `tracebug-demo.webm` on YouTube and paste the URL. Fill the `<all_urls>` justification
-   from `docs/CHROME-WEB-STORE-LISTING.md` §7b. Review typically takes 1–3 business days.
-4. **🟡 Post-deploy smoke** (5 min, after 1–3): install the published extension fresh →
-   welcome tab opens the sandbox → capture → export → `claude mcp add tracebug -- npx -y
-   tracebug mcp` → agent reads the report.
+1. **✅ Supabase keys rotated** (2026-07-19) — legacy anon + service_role JWT keys are
+   **disabled** (verified live: legacy anon → 401 "Invalid API key"); project runs on new
+   `sb_publishable_` / `sb_secret_` keys. Auth Site URL + redirects → tracebug.dev.
+   Netlify env deliberately holds **no** Supabase vars — nothing shipping reads them; add
+   them only when Phase-2 cloud/auth features are enabled.
+2. **✅ npm published** (2026-07-19) — `tracebug-sdk@1.7.0` + `tracebug@1.7.0` on the
+   registry, verified by cold `npx -y tracebug@1.7.0 help` (bin intact after the `./`-prefix
+   fix; homepage → tracebug.dev). Zero-config `npx -y tracebug mcp` story is live.
+3. **🟡 Chrome Web Store** — v1.7.0 submitted with store-icon-128, real-UI screenshots,
+   promo tiles, and per-permission justifications (listing doc §7b). Awaiting review
+   (typically 1–3 business days).
+4. **🟡 Post-approval smoke** (5 min): install the published extension fresh → welcome tab
+   opens the sandbox → capture → export → `claude mcp add tracebug -- npx -y tracebug mcp`
+   → agent reads the report.
+5. Also done: domain migration to **tracebug.dev** (301s, cert, canonical, sitemap, GSC
+   Change of Address validated), feedback pipeline (navbar pill → /feedback → Netlify
+   Forms, verified E2E).
 
 ## 4. Incidents caught pre-launch (and their lessons)
 
