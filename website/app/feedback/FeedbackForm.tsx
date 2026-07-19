@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Bug, Lightbulb, MessageCircle, Send, Check, ArrowUpRight } from "lucide-react";
 import Mascot from "@/components/Mascot";
 import SectionHeading from "@/components/SectionHeading";
@@ -24,8 +25,18 @@ const AREAS = [
 const ISSUES_URL = "https://github.com/prashantsinghmangat/tracebug-ai/issues/new/choose";
 
 export default function FeedbackForm() {
-  const [type, setType] = useState<string>("bug");
-  const [area, setArea] = useState<string>("extension");
+  // In-product micro-feedback (widget tip row, export card, report footer)
+  // deep-links here with everything prefilled — the user just hits Send.
+  const params = useSearchParams();
+  const paramType = params.get("type");
+  const paramArea = params.get("area");
+  const [type, setType] = useState<string>(
+    TYPES.some((t) => t.key === paramType) ? (paramType as string) : "bug"
+  );
+  const [area, setArea] = useState<string>(
+    AREAS.some((a) => a.key === paramArea) ? (paramArea as string) : "extension"
+  );
+  const [message, setMessage] = useState<string>(params.get("msg") ?? "");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -157,6 +168,8 @@ export default function FeedbackForm() {
             name="message"
             required
             rows={5}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
             placeholder={
               type === "bug"
                 ? "What did you do, what did you expect, what happened instead?"
