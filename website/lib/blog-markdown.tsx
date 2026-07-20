@@ -2,8 +2,9 @@ import { type ReactNode } from "react";
 
 // Minimal markdown renderer for blog content — exactly the subset our posts
 // (and any future backend content) use: ## headings, paragraphs, ``` fences,
-// **bold**, `inline code`, [links](url). Deliberately no dependency: the
-// grammar is small and this keeps the payload at zero.
+// **bold**, `inline code`, [links](url), ![images](src) as their own block,
+// and flat "- " lists. Deliberately no dependency: the grammar is small and
+// this keeps the payload at zero.
 
 const P = "mb-4 text-[15px] leading-[1.75] text-text-muted";
 const H2 = "mt-10 mb-3 text-[22px] font-semibold tracking-[-0.02em] text-text-primary";
@@ -70,6 +71,32 @@ export function renderMarkdown(md: string): ReactNode[] {
           <h2 key={key} className={H2}>
             {renderInline(trimmed.slice(3), key)}
           </h2>
+        );
+      } else if (/^!\[[^\]]*\]\([^)]+\)$/.test(trimmed)) {
+        // Block-level image: a line that is exactly ![alt](src)
+        const img = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)!;
+        blocks.push(
+          <figure key={key} className="my-7">
+            {/* eslint-disable-next-line @next/next/no-img-element -- author-controlled static asset */}
+            <img
+              src={img[2]}
+              alt={img[1]}
+              loading="lazy"
+              className="w-full rounded-2xl border border-border"
+            />
+            {img[1] ? (
+              <figcaption className="mt-2 text-center text-[12.5px] text-text-subtle">{img[1]}</figcaption>
+            ) : null}
+          </figure>
+        );
+      } else if (trimmed.split("\n").every((l) => l.trim().startsWith("- "))) {
+        // Flat unordered list: every line of the block starts with "- "
+        blocks.push(
+          <ul key={key} className="mb-4 list-disc space-y-1.5 pl-5 text-[15px] leading-[1.75] text-text-muted">
+            {trimmed.split("\n").map((l, li) => (
+              <li key={`${key}-${li}`}>{renderInline(l.trim().slice(2), `${key}-${li}`)}</li>
+            ))}
+          </ul>
         );
       } else {
         blocks.push(

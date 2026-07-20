@@ -65,6 +65,17 @@ export default function McpDocsPage() {
             </pre>
           </div>
 
+          {/* Per-tool setup guides — long-tail landing pages, linked for crawl discovery */}
+          <p className="mb-12 text-sm text-text-muted">
+            Step-by-step setup for your tool:{" "}
+            <a href="/docs/mcp/claude-code" className="text-primary hover:underline">Claude Code</a>{" · "}
+            <a href="/docs/mcp/cursor" className="text-primary hover:underline">Cursor</a>{" · "}
+            <a href="/docs/mcp/windsurf" className="text-primary hover:underline">Windsurf</a>
+            {" — "}or see{" "}
+            <a href="/proof" className="text-primary hover:underline">the real transcript</a>{" "}
+            of what happens after setup.
+          </p>
+
           {/* The differentiator callout */}
           <div className="bg-surface border border-accent/30 rounded-xl p-6 mb-12">
             <h3 className="text-text-primary font-semibold mb-2">
