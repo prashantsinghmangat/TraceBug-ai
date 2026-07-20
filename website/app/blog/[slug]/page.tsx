@@ -22,7 +22,17 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return {
     title: `${post.title} — TraceBug`,
     description: post.description,
-    openGraph: { title: post.title, description: post.description, type: "article" },
+    alternates: { canonical: `/blog/${post.slug}` },
+    openGraph: {
+      title: post.title,
+      description: post.description,
+      type: "article",
+      url: `https://tracebug.dev/blog/${post.slug}`,
+      ...(post.cover ? { images: [{ url: post.cover, width: 1200, height: 630 }] } : {}),
+    },
+    ...(post.cover
+      ? { twitter: { card: "summary_large_image" as const, title: post.title, description: post.description, images: [post.cover] } }
+      : {}),
   };
 }
 
@@ -46,6 +56,15 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
           <h1 className="mb-6 text-[34px] font-semibold leading-[1.15] tracking-[-0.03em] text-text-primary">
             {post.title}
           </h1>
+
+          {post.cover && (
+            // eslint-disable-next-line @next/next/no-img-element -- author-controlled static hero
+            <img
+              src={post.cover}
+              alt=""
+              className="mb-8 w-full rounded-2xl border border-border"
+            />
+          )}
 
           {renderMarkdown(post.content)}
 
@@ -77,6 +96,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
             datePublished: post.date,
             author: { "@type": "Person", name: "Prashant Singh Mangat" },
             url: `https://tracebug.dev/blog/${post.slug}`,
+            ...(post.cover ? { image: `https://tracebug.dev${post.cover}` } : {}),
           }),
         }}
       />

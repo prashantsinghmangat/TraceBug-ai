@@ -49,7 +49,7 @@ export default function Hero() {
 
         {/* Headline */}
         <h1 className="mx-auto max-w-4xl text-center text-[42px] sm:text-6xl lg:text-[76px] font-semibold leading-[1.04] tracking-[-0.035em] text-text-primary">
-          Bug reports your dev can{" "}
+          Instant bug reports your dev can{" "}
           <span className="gradient-text-anim">actually open</span>
           {/* Trace IS the terminal caret — the bug blinks at the end of the
               line instead of the cursor block */}

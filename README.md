@@ -9,18 +9,18 @@
 <p align="center">
   <a href="https://tracebug.dev/#demo"><img src="./website/public/tracebug-demo-poster.png" alt="TraceBug 15-second demo — a crash happens, TraceBug catches it live, one click builds the ticket" width="820"></a>
   <br>
-  <a href="https://tracebug.dev/#demo"><b>▶ Watch the 15-second demo</b></a> · <a href="https://tracebug.dev/try.html">try it live in the sandbox</a>
+  <a href="https://tracebug.dev/#demo"><b>▶ Watch the 15-second demo</b></a> · <a href="https://tracebug.dev/proof"><b>watch Claude debug a real bug</b></a> · <a href="https://tracebug.dev/try.html">try it live in the sandbox</a>
 </p>
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj"><img src="https://img.shields.io/badge/Chrome_Web_Store-Install-4285F4?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Install Chrome Extension"></a>
   <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/badge/npm_install-tracebug--sdk-CB3837?style=for-the-badge&logo=npm&logoColor=white" alt="npm install tracebug-sdk"></a>
-  <a href="https://tracebug.dev"><img src="https://img.shields.io/badge/Live_Demo-tracebug.dev-6C5CE7?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
+  <a href="https://tracebug.dev"><img src="https://img.shields.io/badge/Live_Demo-tracebug.dev-6366F1?style=for-the-badge&logoColor=white" alt="Live Demo"></a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/v/tracebug-sdk?color=7B61FF" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/dm/tracebug-sdk?color=00D4FF" alt="npm downloads"></a>
+  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/v/tracebug-sdk?color=6366F1" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/tracebug-sdk"><img src="https://img.shields.io/npm/dm/tracebug-sdk?color=818CF8" alt="npm downloads"></a>
   <a href="https://github.com/prashantsinghmangat/tracebug-ai"><img src="https://img.shields.io/github/stars/prashantsinghmangat/tracebug-ai?color=fbbf24" alt="GitHub stars"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
 </p>

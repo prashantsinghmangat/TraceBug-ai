@@ -46,11 +46,11 @@ export async function GET() {
 
         {/* Headline */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 72, fontWeight: 700, color: '#0C0F17', letterSpacing: -2, lineHeight: 1.05 }}>
-            Bug reports your dev
+          <span style={{ fontSize: 66, fontWeight: 700, color: '#0C0F17', letterSpacing: -2, lineHeight: 1.05 }}>
+            Instant bug reports
           </span>
-          <span style={{ fontSize: 72, fontWeight: 700, letterSpacing: -2, lineHeight: 1.05, display: 'flex' }}>
-            <span style={{ color: '#0C0F17' }}>can&nbsp;</span>
+          <span style={{ fontSize: 66, fontWeight: 700, letterSpacing: -2, lineHeight: 1.05, display: 'flex', gap: 15 }}>
+            <span style={{ color: '#0C0F17', display: 'flex' }}>your dev can</span>
             <span style={{ background: 'linear-gradient(120deg, #818CF8, #4F46E5)', backgroundClip: 'text', color: 'transparent', display: 'flex' }}>
               actually open
             </span>

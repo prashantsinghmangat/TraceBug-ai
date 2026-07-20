@@ -11,6 +11,23 @@ export const metadata: Metadata = {
   title: "Real transcript: Claude reads a TraceBug report — TraceBug",
   description:
     "Unedited transcript of an AI coding agent diagnosing a bug from a TraceBug export via MCP: five tool calls from crash to root cause, no human explanation needed.",
+  alternates: { canonical: "/proof" },
+  // /proof is the share target for every community post — it gets its own
+  // transcript-styled card instead of the generic homepage one.
+  openGraph: {
+    title: "Watch Claude debug a real bug — unedited transcript",
+    description:
+      "Five MCP tool calls from crash to root cause, reading a TraceBug report. 100% local — nothing uploaded.",
+    url: "https://tracebug.dev/proof",
+    type: "article",
+    images: [{ url: "/api/og/proof", width: 1200, height: 630, alt: "Real transcript: Claude debugging a bug from a TraceBug report" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Watch Claude debug a real bug — unedited transcript",
+    description: "Five MCP tool calls from crash to root cause. 100% local.",
+    images: ["/api/og/proof"],
+  },
 };
 
 // This page is the proof artifact for the AI-agent story. Everything in the

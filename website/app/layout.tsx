@@ -8,11 +8,14 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tracebug.dev"),
-  title: "TraceBug — Bug reports your dev can actually open",
+  title: "TraceBug — Instant bug reports your dev can actually open",
   description:
-    "Local-first bug reports. One click → one .html file with the full replay, console errors, network requests, and screenshots. Your dev opens it offline. No account. No SaaS lock-in. Cloud sharing optional.",
+    "Instant bug reports, local-first. One click → one .html file with the full replay, console errors, network requests, and screenshots. Your dev opens it offline. No account. No SaaS lock-in. Cloud sharing optional.",
   applicationName: "TraceBug",
   keywords: [
+    "instant bug report",
+    "instant bug reporting",
+    "one-click bug report",
     "bug reporting",
     "QA testing",
     "session recording",
@@ -38,9 +41,9 @@ export const metadata: Metadata = {
     apple: "/apple-icon.svg",
   },
   openGraph: {
-    title: "TraceBug — Bug reports your dev can actually open",
+    title: "TraceBug — Instant bug reports your dev can actually open",
     description:
-      "Local-first bug reports. One .html file with replay, console errors, network requests, screenshots. No account, no SaaS lock-in.",
+      "Instant bug reports, local-first. One .html file with replay, console errors, network requests, screenshots. No account, no SaaS lock-in.",
     type: "website",
     url: "https://tracebug.dev",
     siteName: "TraceBug",
@@ -55,7 +58,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "TraceBug — Bug reports your dev can actually open",
+    title: "TraceBug — Instant bug reports your dev can actually open",
     description:
       "Local-first bug reports. One .html file your dev opens offline. No SaaS lock-in.",
     images: ["/api/og"],
