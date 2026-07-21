@@ -96,6 +96,7 @@ export function buildReport(
     "unhandled_rejection": "error",
     "console_error": "error",
     "console_warn": "warn",
+    "console_info": "info",
     "console_log": "log",
   };
   const consoleLogs = events

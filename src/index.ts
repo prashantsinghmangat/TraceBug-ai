@@ -55,6 +55,7 @@ import {
   collectErrors,
   collectConsoleErrors,
   collectConsoleWarnings,
+  collectConsoleInfo,
   collectConsoleLogs,
   getNetworkFailures,
   clearNetworkFailures,
@@ -235,7 +236,7 @@ class TraceBugSDK {
   // The emit fn is created in init(); cached here so the lazy console
   // collectors attached later can share it without re-wiring.
   private _emit: ((type: EventType, data: TraceBugEvent["data"]) => void) | null = null;
-  private _consoleLevel: "errors" | "warnings" | "all" | "none" = "errors";
+  private _consoleLevel: "errors" | "warnings" | "all" | "none" = "all";
   private _lastErrorMsgPrompted: string | null = null;
 
   /**
@@ -392,7 +393,7 @@ class TraceBugSDK {
 
       // Save references for the lazy attach/detach during session lifecycle.
       this._emit = emit;
-      this._consoleLevel = this.config.captureConsole ?? "errors";
+      this._consoleLevel = this.config.captureConsole ?? "all";
 
       // ── Mount in-browser dashboard ────────────────────────────────────
       if (this.config.enableDashboard) {
@@ -670,6 +671,7 @@ class TraceBugSDK {
     this._consoleCleanups.push(collectConsoleErrors(this._emit));
     if (this._consoleLevel === "warnings" || this._consoleLevel === "all") {
       this._consoleCleanups.push(collectConsoleWarnings(this._emit));
+      this._consoleCleanups.push(collectConsoleInfo(this._emit));
     }
     if (this._consoleLevel === "all") {
       this._consoleCleanups.push(collectConsoleLogs(this._emit));

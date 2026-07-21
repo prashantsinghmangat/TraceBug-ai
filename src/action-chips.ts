@@ -420,7 +420,8 @@ export function buildActionChips(events: TraceBugEvent[]): ActionChip[] {
         });
         break;
       }
-      // console_log intentionally skipped — too noisy for the Actions tab.
+      // console_info / console_log intentionally skipped — breadcrumb noise
+      // for the Actions story; they stay visible in the timeline + Console tab.
       default:
         break;
     }

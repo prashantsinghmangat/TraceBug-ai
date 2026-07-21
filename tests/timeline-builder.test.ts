@@ -93,6 +93,39 @@ describe('buildTimeline', () => {
   });
 });
 
+describe('buildTimeline — console levels (PH feedback: warn/info in the timeline)', () => {
+  it('renders console_warn as its message, not a JSON dump', () => {
+    const t = buildTimeline([
+      ev('console_warn', { error: { message: 'cart state stale after coupon apply' } }, 1),
+    ]);
+    expect(t[0].description).toContain('cart state stale after coupon apply');
+    expect(t[0].description).not.toContain('{"error"');
+    expect(t[0].isError).toBe(false);
+  });
+
+  it('renders console_info as its message', () => {
+    const t = buildTimeline([
+      ev('console_info', { error: { message: 'checkout step 2 mounted' } }, 1),
+    ]);
+    expect(t[0].description).toContain('checkout step 2 mounted');
+    expect(t[0].description).not.toContain('{"error"');
+  });
+
+  it('renders console_log as its message', () => {
+    const t = buildTimeline([
+      ev('console_log', { error: { message: 'payload received' } }, 1),
+    ]);
+    expect(t[0].description).toContain('payload received');
+    expect(t[0].description).not.toContain('{"error"');
+  });
+
+  it('truncates long console messages at 80 chars', () => {
+    const long = 'x'.repeat(200);
+    const t = buildTimeline([ev('console_warn', { error: { message: long } }, 1)]);
+    expect(t[0].description.length).toBeLessThanOrEqual(84); // "⚠ " prefix + 80
+  });
+});
+
 describe('formatTimelineText', () => {
   it('returns the empty-session fallback when no entries', () => {
     expect(formatTimelineText([])).toBe('(empty session)');

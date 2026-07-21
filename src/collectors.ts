@@ -739,42 +739,52 @@ export function collectConsoleErrors(emit: Emit): () => void {
   };
 }
 
-/**
- * Capture console.warn events.
- */
-export function collectConsoleWarnings(emit: Emit): () => void {
-  const origWarn = console.warn;
-  let _inside = false;
-  console.warn = function (...args: unknown[]) {
-    if (_inside) { origWarn.apply(console, args); return; }
-    _inside = true;
-    try {
-      emit("console_warn", {
-        error: { message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ") },
-      });
-    } catch {} finally { _inside = false; }
-    origWarn.apply(console, args); // ALWAYS call original
-  };
-  return () => { console.warn = origWarn; };
-}
+/** Per-session capture cap for each non-error console level (warn/info/log)
+ *  so a chatty app can't bloat the report — the level keeps working in
+ *  DevTools after the cap, we just stop recording it. */
+const CONSOLE_LEVEL_CAP = 50;
 
 /**
- * Capture console.log events (capped at last 50 in storage).
+ * Shared wrapper for console.warn/info/log capture. Skips TraceBug's own
+ * "[TraceBug]" diagnostics — with warn captured by default, our own status
+ * messages must never end up inside the bug report.
  */
-export function collectConsoleLogs(emit: Emit): () => void {
-  const origLog = console.log;
+function wrapConsoleLevel(method: "warn" | "info" | "log", type: EventType, emit: Emit): () => void {
+  const orig = console[method];
   let _inside = false;
   let _count = 0;
-  console.log = function (...args: unknown[]) {
-    if (_inside || _count >= 50) { origLog.apply(console, args); return; }
+  console[method] = function (...args: unknown[]) {
+    const own = typeof args[0] === "string" && args[0].startsWith("[TraceBug]");
+    if (_inside || own || _count >= CONSOLE_LEVEL_CAP) { orig.apply(console, args); return; }
     _inside = true;
     _count++;
     try {
-      emit("console_log", {
+      emit(type, {
         error: { message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ") },
       });
     } catch {} finally { _inside = false; }
-    origLog.apply(console, args); // ALWAYS call original
+    orig.apply(console, args); // ALWAYS call original
   };
-  return () => { console.log = origLog; };
+  return () => { console[method] = orig; };
+}
+
+/**
+ * Capture console.warn events (capped at CONSOLE_LEVEL_CAP per session).
+ */
+export function collectConsoleWarnings(emit: Emit): () => void {
+  return wrapConsoleLevel("warn", "console_warn", emit);
+}
+
+/**
+ * Capture console.info events (capped at CONSOLE_LEVEL_CAP per session).
+ */
+export function collectConsoleInfo(emit: Emit): () => void {
+  return wrapConsoleLevel("info", "console_info", emit);
+}
+
+/**
+ * Capture console.log events (capped at CONSOLE_LEVEL_CAP per session).
+ */
+export function collectConsoleLogs(emit: Emit): () => void {
+  return wrapConsoleLevel("log", "console_log", emit);
 }

@@ -16,8 +16,8 @@ TraceBug silently captures these events as users interact with the app:
 | **API Requests** | URL, method, status code, duration (fetch + XMLHttpRequest) |
 | **Errors** | Message, stack trace, source file, line, column |
 | **Console Errors** | console.error() arguments |
-| **Console Warnings** | console.warn() arguments (when `captureConsole: "warnings"` or `"all"`) |
-| **Console Logs** | console.log() arguments, last 50 (when `captureConsole: "all"`) |
+| **Console Warnings** | console.warn() + console.info() arguments, 50 each (when `captureConsole: "warnings"` or `"all"`) |
+| **Console Logs** | console.log() arguments, first 50 (when `captureConsole: "all"`) |
 | **Promise Rejections** | Rejection reason + stack trace |
 
 ### Privacy

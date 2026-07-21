@@ -62,10 +62,13 @@ export interface TraceBugConfig {
   githubRepo?: string;
 
   /**
-   * Console log capture level. Default: "errors"
-   * - "errors"   → Only console.error (backward compatible)
-   * - "warnings" → console.error + console.warn
-   * - "all"      → console.error + console.warn + console.log (capped at last 50)
+   * Console log capture level. Default: "all" — warn/info often hold the
+   * state-transition breadcrumbs that explain an error, so the repro
+   * timeline and Console tab get DevTools parity out of the box. Drop to
+   * "warnings" or "errors" for chatty or PII-heavy apps.
+   * - "errors"   → Only console.error
+   * - "warnings" → console.error + console.warn + console.info
+   * - "all"      → adds console.log (default; each non-error level capped at 50/session)
    * - "none"     → No console interception
    */
   captureConsole?: "errors" | "warnings" | "all" | "none";
@@ -107,6 +110,7 @@ export type EventType =
   | "error"
   | "console_error"
   | "console_warn"
+  | "console_info"
   | "console_log"
   | "unhandled_rejection"
   /** Developer breadcrumb (`TraceBug.mark()`) — manually-placed semantic checkpoint. */

@@ -330,3 +330,21 @@ describe('extractClickedElement', () => {
     ])).toBeNull();
   });
 });
+
+describe('consoleLogs level mapping', () => {
+  it('maps warn/info/log events to their console levels', () => {
+    const r = buildReport(session([
+      ev('console_error', { error: { message: 'boom' } }),
+      ev('console_warn', { error: { message: 'stale state' } }),
+      ev('console_info', { error: { message: 'step mounted' } }),
+      ev('console_log', { error: { message: 'payload' } }),
+    ]));
+    const levels = (r.consoleLogs || []).map(l => l.level);
+    expect(levels).toContain('error');
+    expect(levels).toContain('warn');
+    expect(levels).toContain('info');
+    expect(levels).toContain('log');
+    const info = (r.consoleLogs || []).find(l => l.level === 'info');
+    expect(info?.message).toBe('step mounted');
+  });
+});
