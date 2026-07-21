@@ -39,11 +39,16 @@ show a summary line — e.g. `🛡 4 sensitive values auto-masked (2 tokens,
 1 URL param, 1 form field)` — so you know the pipeline ran before you share
 the file.
 
+**App-specific PII** (customer emails, account numbers, internal IDs) can't
+be detected by shape — declare it instead with the
+[`redact` config option](configuration.md#redact): field names and custom
+regexes that are masked at capture across all the surfaces above.
+
 **Limitations (please read before sharing reports externally):** masking is
-pattern-based. Free-form PII in network payloads (names, emails, addresses)
-and anything visible in screenshots, video frames, or the DOM replay is
-**not** detected. Use the blur tool for on-screen PII, and review the Network
-tab before sharing a report outside your team.
+pattern-based. Free-form PII in network payloads that you haven't declared
+via `redact`, and anything visible in screenshots, video frames, or the DOM
+replay, is **not** detected. Use the blur tool for on-screen PII, and review
+the Network tab before sharing a report outside your team.
 
 ### Framework Noise Filtering
 

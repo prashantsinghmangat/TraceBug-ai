@@ -6,6 +6,7 @@
 // defense-in-depth.
 
 import { StorageEntry, StorageSnapshot } from "./types";
+import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
 
 // Cap per storage area so a page with thousands of keys can't bloat the report.
 const MAX_ENTRIES_PER_AREA = 50;
@@ -55,7 +56,7 @@ function readArea(area: Storage): { entries: StorageEntry[]; truncated: number }
       truncated++;
       continue;
     }
-    const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+    const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
     let outValue: string;
     let redacted = false;
     if (sensitive) {
@@ -93,7 +94,7 @@ function readCookies(): { entries: StorageEntry[]; truncated: number } {
       truncated++;
       continue;
     }
-    const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+    const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
     if (sensitive) {
       entries.push({ key, value: maskValue(value), redacted: true });
     } else {

@@ -35,6 +35,20 @@ describe('captureStorageSnapshot', () => {
     expect(pw.value).not.toContain('hunter2');
   });
 
+  it('redacts values under user-declared redact fields', async () => {
+    const { setRedactRules } = await import('../src/sanitize/custom-redaction');
+    setRedactRules({ fields: ['customer'] });
+    try {
+      localStorage.setItem('customer_email', 'jane@acme.com');
+      const snap = captureStorageSnapshot();
+      const e = snap.local.find((x) => x.key === 'customer_email')!;
+      expect(e.redacted).toBe(true);
+      expect(e.value).not.toContain('jane@acme.com');
+    } finally {
+      setRedactRules(undefined);
+    }
+  });
+
   it('redacts token-shaped values even under innocuous keys', () => {
     localStorage.setItem('cache', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9abcdefg');
     localStorage.setItem('blobRef', 'sk-abcdefghijklmnopqrstuvwxyz0123');

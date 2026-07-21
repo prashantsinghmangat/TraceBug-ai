@@ -74,6 +74,16 @@ export interface TraceBugConfig {
   captureConsole?: "errors" | "warnings" | "all" | "none";
 
   /**
+   * App-specific redaction rules, applied at capture time on top of the
+   * built-in token/secret masking. Use for PII the built-ins can't know
+   * about — customer emails, account numbers, internal IDs.
+   *
+   * Example: TraceBug.init({ projectId: "my-app",
+   *   redact: { fields: ["email", "customer_id"], patterns: ["\\b\\d{10}\\b"] } })
+   */
+  redact?: RedactRules;
+
+  /**
    * Capture a snapshot of localStorage + sessionStorage in each report.
    * Default: true. Values under sensitive-looking keys (token, secret, auth,
    * password, jwt, session, key, …) are redacted before storing. Set false to
@@ -96,6 +106,20 @@ export interface TraceBugConfig {
    * hidden iframe bridge.
    */
   cloudEndpoint?: string;
+}
+
+/**
+ * User-declared redaction rules — see `TraceBugConfig.redact`.
+ * Enforced by sanitize/custom-redaction.ts at capture time.
+ */
+export interface RedactRules {
+  /** Sensitive field names, matched case-insensitively as substrings against
+   *  form/input names, storage keys, URL query params, and JSON/urlencoded
+   *  keys inside captured text ("email" also covers "customer_email"). */
+  fields?: string[];
+  /** Custom regexes (string or RegExp) masked wherever they appear in
+   *  captured text. Strings compile case-insensitive; invalid ones are skipped. */
+  patterns?: (string | RegExp)[];
 }
 
 // ── Event types ───────────────────────────────────────────────────────────

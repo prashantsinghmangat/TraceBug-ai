@@ -847,10 +847,68 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/sanitize/custom-redaction.ts
+  function escapeRe(s2) {
+    return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  function setRedactRules(rules2) {
+    _fieldRe = null;
+    _fieldTextRes = [];
+    _patterns = [];
+    if (!rules2) return;
+    const fields = (rules2.fields || []).filter((f2) => typeof f2 === "string" && f2.trim().length > 0);
+    if (fields.length > 0) {
+      const alts = fields.map((f2) => escapeRe(f2.trim())).join("|");
+      _fieldRe = new RegExp(alts, "i");
+      for (const f2 of fields) {
+        const k = escapeRe(f2.trim());
+        _fieldTextRes.push({
+          re: new RegExp(`("([^"]*${k}[^"]*)"\\s*:\\s*)("(?:[^"\\\\]|\\\\.)*"|-?\\d[\\d.eE+-]*|true|false)`, "gi"),
+          replace: `$1"${REDACTED}"`
+        });
+        _fieldTextRes.push({
+          re: new RegExp(`\\b([\\w.-]*${k}[\\w.-]*)=([^&\\s"']+)`, "gi"),
+          replace: `$1=${REDACTED}`
+        });
+      }
+    }
+    for (const p of rules2.patterns || []) {
+      try {
+        if (typeof p === "string") {
+          _patterns.push(new RegExp(p, "gi"));
+        } else if (p instanceof RegExp) {
+          _patterns.push(p.flags.includes("g") ? p : new RegExp(p.source, p.flags + "g"));
+        }
+      } catch (e2) {
+      }
+    }
+  }
+  function isCustomSensitiveKey(key) {
+    if (!key || !_fieldRe) return false;
+    return _fieldRe.test(key);
+  }
+  function applyCustomRedaction(s2) {
+    if (!s2 || _fieldTextRes.length === 0 && _patterns.length === 0) return s2;
+    let out = s2;
+    for (const { re, replace } of _fieldTextRes) out = out.replace(re, replace);
+    for (const re of _patterns) out = out.replace(re, REDACTED);
+    return out;
+  }
+  var REDACTED, _fieldRe, _fieldTextRes, _patterns;
+  var init_custom_redaction = __esm({
+    "src/sanitize/custom-redaction.ts"() {
+      "use strict";
+      REDACTED = "[REDACTED]";
+      _fieldRe = null;
+      _fieldTextRes = [];
+      _patterns = [];
+    }
+  });
+
   // src/sanitize/cloud-upload.ts
   function mask(s2) {
-    if (s2.length <= 12) return REDACTED;
-    return `${s2.slice(0, 4)}\u2026${REDACTED}\u2026${s2.slice(-4)}`;
+    if (s2.length <= 12) return REDACTED2;
+    return `${s2.slice(0, 4)}\u2026${REDACTED2}\u2026${s2.slice(-4)}`;
   }
   function sanitizeUrl(url) {
     if (typeof url !== "string" || url.length === 0) return url;
@@ -859,8 +917,8 @@ var TraceBugModule = (() => {
       const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
       let changed = false;
       u2.searchParams.forEach((_v, k) => {
-        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) {
-          u2.searchParams.set(k, REDACTED);
+        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase()) || isCustomSensitiveKey(k)) {
+          u2.searchParams.set(k, REDACTED2);
           changed = true;
         }
       });
@@ -875,7 +933,7 @@ var TraceBugModule = (() => {
     if (s2 == null) return s2;
     let out = String(s2);
     for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
-    return out;
+    return applyCustomRedaction(out);
   }
   function sanitizeTokenShapes(s2) {
     return sanitizeText(s2);
@@ -953,14 +1011,15 @@ var TraceBugModule = (() => {
     }
     return out;
   }
-  var REDACTED, TOKEN_PATTERNS, SENSITIVE_QUERY_KEYS;
+  var REDACTED2, TOKEN_PATTERNS, SENSITIVE_QUERY_KEYS;
   var init_cloud_upload = __esm({
     "src/sanitize/cloud-upload.ts"() {
       "use strict";
-      REDACTED = "[REDACTED]";
+      init_custom_redaction();
+      REDACTED2 = "[REDACTED]";
       TOKEN_PATTERNS = [
         // Bearer <token> in headers, console output, anywhere
-        { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED },
+        { name: "bearer", re: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, replace: () => "Bearer " + REDACTED2 },
         // JWT (3 base64url segments separated by dots, leading with eyJ which is `{"` in base64)
         { name: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, replace: mask },
         // OpenAI / Stripe sk_*
@@ -994,7 +1053,7 @@ var TraceBugModule = (() => {
         // session IDs, etc. that don't carry a recognizable prefix. Conservative:
         // only triggers when preceded by a common secret-y keyword to avoid
         // mangling legitimate hex like git SHAs.
-        { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s2) => s2.replace(/[a-fA-F0-9]{32,}/, REDACTED) }
+        { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s2) => s2.replace(/[a-fA-F0-9]{32,}/, REDACTED2) }
       ];
       SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
         "token",
@@ -1048,7 +1107,7 @@ var TraceBugModule = (() => {
         const eqIdx = part.indexOf("=");
         if (eqIdx === -1) return part;
         const key = part.slice(0, eqIdx);
-        if (SENSITIVE_PARAM_RE.test(key)) return `${key}=[REDACTED]`;
+        if (SENSITIVE_PARAM_RE.test(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
         return part;
       }).join("&");
       return `${base}?${redacted}${hash}`;
@@ -1209,7 +1268,7 @@ var TraceBugModule = (() => {
             try {
               const tag = t2.tagName.toLowerCase();
               const inputType = t2.type || "";
-              const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) || /password|secret|token|ssn|credit/i.test(t2.name || t2.id || "");
+              const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) || /password|secret|token|ssn|credit/i.test(t2.name || t2.id || "") || isCustomSensitiveKey(t2.name || t2.id);
               const element = {
                 tag,
                 name: t2.name || t2.id || "",
@@ -1277,7 +1336,7 @@ var TraceBugModule = (() => {
         for (let i2 = 0; i2 < elements.length; i2++) {
           const el = elements[i2];
           if (!el.name) continue;
-          const isSensitive = ["password"].includes(el.type) || /password|secret|token|ssn|credit/i.test(el.name);
+          const isSensitive = ["password"].includes(el.type) || /password|secret|token|ssn|credit/i.test(el.name) || isCustomSensitiveKey(el.name);
           if (el.type === "submit" || el.type === "button") continue;
           formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
         }
@@ -1636,6 +1695,7 @@ var TraceBugModule = (() => {
     "src/collectors.ts"() {
       "use strict";
       init_cloud_upload();
+      init_custom_redaction();
       ROOT_ID = "tracebug-root";
       PANEL_ID = "tracebug-dashboard-panel";
       BTN_ID = "tracebug-dashboard-btn";
@@ -1768,7 +1828,7 @@ var TraceBugModule = (() => {
         truncated++;
         continue;
       }
-      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
       let outValue;
       let redacted = false;
       if (sensitive) {
@@ -1803,7 +1863,7 @@ var TraceBugModule = (() => {
         truncated++;
         continue;
       }
-      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value);
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
       if (sensitive) {
         entries.push({ key, value: maskValue(value), redacted: true });
       } else {
@@ -1839,6 +1899,7 @@ var TraceBugModule = (() => {
   var init_storage_capture = __esm({
     "src/storage-capture.ts"() {
       "use strict";
+      init_custom_redaction();
       MAX_ENTRIES_PER_AREA = 50;
       MAX_VALUE_LEN = 300;
       SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
@@ -24505,12 +24566,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
       if (ev.type === "input") {
         const el = (_d = ev.data) == null ? void 0 : _d.element;
-        if ((el == null ? void 0 : el.value) === REDACTED2) seenFields.add(`input:${el.name || el.id || "field"}`);
+        if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
       } else if (ev.type === "form_submit") {
         const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
         if (fields && typeof fields === "object") {
           for (const [name, v2] of Object.entries(fields)) {
-            if (v2 === REDACTED2) seenFields.add(`form:${name}`);
+            if (v2 === REDACTED3) seenFields.add(`form:${name}`);
           }
         }
       }
@@ -24541,11 +24602,11 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     ].filter(Boolean);
     return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
   }
-  var REDACTED2, TOKEN_RE, PARAM_RE;
+  var REDACTED3, TOKEN_RE, PARAM_RE;
   var init_redaction_summary = __esm({
     "src/redaction-summary.ts"() {
       "use strict";
-      REDACTED2 = "[REDACTED]";
+      REDACTED3 = "[REDACTED]";
       TOKEN_RE = /\[REDACTED\]/g;
       PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
     }
@@ -69186,6 +69247,7 @@ First element: \`${exampleSnippet}\``,
     setAIConfig: () => setAIConfig,
     setIntegrationsConfig: () => setIntegrationsConfig,
     setPlan: () => setPlan,
+    setRedactRules: () => setRedactRules,
     startVideoRecording: () => startVideoRecording,
     startVoiceRecording: () => startVoiceRecording,
     stopVideoRecording: () => stopVideoRecording,
@@ -69197,6 +69259,7 @@ First element: \`${exampleSnippet}\``,
   init_repro_generator();
   init_dashboard();
   init_collectors();
+  init_custom_redaction();
   init_environment();
   init_screenshot();
   init_region_screenshot();
@@ -69692,6 +69755,7 @@ First element: \`${exampleSnippet}\``,
   init_plan();
   init_report_builder();
   init_collectors();
+  init_custom_redaction();
   init_github_issue();
   init_jira_issue();
   init_ai_prompt();
@@ -69779,6 +69843,7 @@ First element: \`${exampleSnippet}\``,
           captureConsole: "all",
           ...config
         };
+        setRedactRules(this.config.redact);
         this.initialized = true;
         this.sessionId = getActiveSessionId();
         this.recording = !!this.sessionId;
@@ -70919,6 +70984,7 @@ First element: \`${exampleSnippet}\``,
       clearVideoRecording();
       hideRecordingHUD();
       clearNetworkFailures();
+      setRedactRules(void 0);
       deactivateElementAnnotateMode();
       deactivateDrawMode();
       clearAllAnnotations();
