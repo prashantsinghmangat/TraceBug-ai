@@ -20,13 +20,30 @@ TraceBug silently captures these events as users interact with the app:
 | **Console Logs** | console.log() arguments, first 50 (when `captureConsole: "all"`) |
 | **Promise Rejections** | Rejection reason + stack trace |
 
-### Privacy
+### Privacy — what gets redacted
 
-Sensitive data is **automatically redacted**:
-- Password fields → `[REDACTED]`
-- Credit card numbers → `[REDACTED]`
-- SSN patterns → `[REDACTED]`
-- Token/secret fields → `[REDACTED]`
+Sensitive data is **automatically masked at capture time**, before it ever
+enters the report object — so it can't reach the offline `.html` export, the
+clipboard exports, or an AI agent reading the file over MCP.
+
+| Where | What's masked |
+|-------|---------------|
+| **Form & input fields** | Password / credit-card / SSN input types, plus any field whose name matches `password`, `secret`, `token`, `ssn`, `credit` → `[REDACTED]` |
+| **Request URLs** | Query params named `token`, `key`, `secret`, `auth`, `password`, `sig`, `signature`, … → `?api_key=[REDACTED]` |
+| **Console output & error messages** | Token shapes: JWTs, `Bearer` headers, `sk-` keys, Stripe, GitHub PATs, AWS, Slack, Google API, Twilio, SendGrid, Mailgun, Postmark, Linear, Discord tokens, and labeled high-entropy hex secrets |
+| **Network response snippets** | Same token-shape patterns as console output |
+| **localStorage / sessionStorage / cookies** | Values under sensitive-looking keys (`token`, `jwt`, `session`, `auth`, …) and values that themselves look like tokens → first/last 4 chars kept, middle `[REDACTED]` |
+
+When anything was masked, the export modal and the exported report's Info tab
+show a summary line — e.g. `🛡 4 sensitive values auto-masked (2 tokens,
+1 URL param, 1 form field)` — so you know the pipeline ran before you share
+the file.
+
+**Limitations (please read before sharing reports externally):** masking is
+pattern-based. Free-form PII in network payloads (names, emails, addresses)
+and anything visible in screenshots, video frames, or the DOM replay is
+**not** detected. Use the blur tool for on-screen PII, and review the Network
+tab before sharing a report outside your team.
 
 ### Framework Noise Filtering
 

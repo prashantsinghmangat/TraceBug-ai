@@ -10,6 +10,7 @@ import { BugReport, StoredSession, StorageEntry } from "../types";
 import { buildTimeline } from "../timeline-builder";
 import { buildReplayHtml, BundlePayload } from "./html-template";
 import { priorityLabel } from "../report-builder";
+import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -176,6 +177,11 @@ async function buildReplayPayload(
       info.push({ k, v: String(report.context[k]) });
     }
   }
+
+  // Trust signal for whoever receives this file: say what the sanitizers
+  // masked before export. Omitted at zero — regexes can't promise "clean".
+  const redactionLine = formatRedactionSummary(summarizeRedactions(report));
+  if (redactionLine) info.push({ k: "Privacy", v: `🛡 ${redactionLine}`, i: "" });
 
   // Web Storage snapshot — each entry as its own kv row (capped for display).
   // Values are already redacted at capture for sensitive keys.
