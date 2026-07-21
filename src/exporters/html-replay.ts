@@ -283,7 +283,7 @@ function defaultFilename(sessionId: string): string {
   return `tracebug-replay-${sessionId.slice(0, 8)}-${stamp}.html`;
 }
 
-function triggerDownload(url: string, filename: string): void {
+export function triggerDownload(url: string, filename: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;

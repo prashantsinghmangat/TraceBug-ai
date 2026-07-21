@@ -241,6 +241,13 @@ export function generateGitHubIssue(report: BugReport): string {
     md += `</details>\n\n`;
   }
 
+  // Full repro attachment — GitHub accepts .zip by drag-and-drop (not .html),
+  // so point the reporter at the zip export. Same pattern as the recording
+  // and screenshot sections above.
+  md += `### Full Repro Replay\n\n`;
+  md += `> Drag and drop the TraceBug \`.zip\` export here (Quick Bug → More → Download .zip). `;
+  md += `It contains the offline \`.html\` replay: session recording, console, network, and timeline in one file.\n\n`;
+
   // Footer
   md += `---\n`;
   md += `_[TraceBug SDK](https://www.npmjs.com/package/tracebug-sdk) · Session: \`${report.session.sessionId.slice(0, 8)}\`_\n`;
