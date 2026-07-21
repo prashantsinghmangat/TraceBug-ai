@@ -2,6 +2,30 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.8.0] - 2026-07-21
+
+> The launch-feedback release — every feature here traces to a Product Hunt comment. **Visible, configurable redaction** (a masked-values summary in the export flow, app-specific `redact` rules for PII the token patterns can't know), `console.info` capture with warn/info rendered properly in the repro timeline, a **`.zip` export** because GitHub issues accept `.zip` but reject `.html`, and **issue actions inside the exported report** so the file's recipient can file the ticket, not just read the evidence.
+
+### Added
+
+- **Redaction summary — the pipeline is finally visible** (`src/redaction-summary.ts`, `src/ui/quick-bug.ts`, `src/exporters/html-replay.ts`) — the export modal footer and the exported report's Info tab now show exactly what the sanitizers masked, e.g. `🛡 3 sensitive values auto-masked (1 token, 2 URL params)`, counted by category (tokens, URL params, form fields, storage values) by scanning the built report for the `[REDACTED]` markers. Omitted at zero — pattern matching can't promise a clean bill of health. New SDK exports: `summarizeRedactions`, `formatRedactionSummary`.
+- **Configurable redaction rules** (`src/sanitize/custom-redaction.ts`, `redact` in `TraceBugConfig`) — declare app-specific PII the built-in token shapes can't know about: `redact.fields` (name-based, case-insensitive substring — covers form/input names, storage keys, URL query params, and JSON/urlencoded keys inside console output and response snippets) and `redact.patterns` (custom regexes masked anywhere in captured text). Applied at capture time on top of the built-in masking; counted in the auto-masked summary; invalid patterns are skipped so a typo can't break capture. New exports: `setRedactRules`, `RedactRules`.
+- **`console.info` capture + warn/info in the repro timeline** (`src/collectors.ts`, `src/timeline-builder.ts`) — info was previously not captured at any level; it now rides the `"warnings"` tier (error + warn + info). Warn/info/log events render as their message in the timeline (`⚠` / `ℹ` prefixes) instead of a raw JSON dump. Each non-error level is capped at the first 50 calls per session, and TraceBug's own `[TraceBug]` diagnostics are never captured.
+- **Download .zip (attach to GitHub)** (`src/exporters/zip-export.ts`, More menu) — the same offline replay wrapped in a `.zip`, because GitHub issues accept `.zip` attachments by drag-and-drop but reject bare `.html`. Zero-dependency ZIP writer (~150 lines): `CompressionStream("deflate-raw")` when available, STORE fallback, CRC-32, UTF-8 names. Generated GitHub issues now end with a **Full Repro Replay** section telling the reporter to drag the `.zip` in. New exports: `exportSessionAsZip`, `buildZipBlob`.
+- **Issue actions in the exported report** (`src/exporters/html-template.ts`, `src/exporters/html-replay.ts`) — the file's recipient is usually the person who files the ticket, but the viewer was read-only. The header now has **Open GitHub issue** (prefilled `github.com/…/issues/new` URL, shown when the exporter configured `githubRepo`) and **Copy issue markdown** (fully offline, pastes into any tracker). Both are precomputed at export time — zero issue-builder code ships in the viewer, and the markdown derives from the already-redacted report. Token-based integrations deliberately stay out of the shareable file. `HtmlReplayOptions.githubRepo` added.
+- **Official MCP Registry metadata** (`packages/tracebug/server.json`, `mcpName` in the CLI package) — the `tracebug` npm package now carries the registry's verification marker and a `server.json` for `mcp-publisher publish` under `io.github.prashantsinghmangat/tracebug`.
+- **Marketing screenshot pipeline** (`e2e/marketing-screenshots.mjs`) — Playwright script that drives the live sandbox (record → trigger bugs → Quick Bug modal → region screenshot → export) and screenshots the exported viewer, producing current-build product shots on demand.
+
+### Changed
+
+- **Severity is labeled as machine-classified** — the modal Info tab, exported Info rows, and the viewer's header badge tooltip now say **"Severity (auto)"**; the modal's Priority dropdown placeholder shows the severity-derived suggestion (`Priority (auto: Medium)`) with a tooltip clarifying it isn't exported unless explicitly picked. Auto severity kept being mistaken for a tester's triage call.
+- **Docs match the shipped `captureConsole` default** (`docs/api-reference.md`, `docs/configuration.md`, `docs/bug-reporting.md`) — the default has been `"all"` since 1.7.0 but the docs still claimed `"errors"`; the tier table now includes `console.info` and the per-level caps, and the privacy section gained a full **"what gets redacted"** table with honest limitations.
+
+### Fixed
+
+- **Tokens logged to the console reached the offline export unmasked** (`src/collectors.ts`) — the token-shape scrub ran at capture only for network response snippets; console messages and error stacks were scrubbed only on the cloud-upload path, which the offline `.html` export never runs. `sanitizeTokenShapes` now applies at capture to console error/warn/info/log messages and to `window.onerror` / unhandled-rejection messages and stacks — a logged `Bearer`/JWT can no longer enter the report object at all.
+- **`console_warn`/`console_log` rendered as truncated JSON in the timeline** (`src/timeline-builder.ts`) — they fell into the default `JSON.stringify` case instead of showing the message.
+
 ## [1.7.0] - 2026-07-17
 
 > The launch-polish release. A full **Slate Indigo rebrand** across every surface (widget, exports, extension, website — with "Trace", the pixel-sprite mascot), the exported replay slims down ~3–4× via gzip, issue-tracker exports file **real** GitHub/Linear/Slack items with your own token, and the website gains a live sandbox running the actual SDK plus a 15-second real-capture demo video. Zero lint warnings, dead code removed, adoption friction audited and fixed.
