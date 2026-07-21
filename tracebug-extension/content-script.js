@@ -66,6 +66,21 @@ function safeRun(fn) {
   }
 }
 
+// ── CSP-proof player URL hand-off ───────────────────────────────────────────
+// The ticket modal's inline <video> is governed by the HOST page's CSP, which
+// on strict sites (GitHub, HN) blocks blob: media. player.html is an extension
+// page (extension CSP → always plays), embedded as an iframe. The page world
+// has no chrome.* access, so we publish the URL on <html data-tb-player-url>
+// where the SDK can read it synchronously whenever the modal renders.
+safeRun(function () {
+  if (isExtAlive() && document.documentElement) {
+    document.documentElement.setAttribute(
+      "data-tb-player-url",
+      chrome.runtime.getURL("player.html")
+    );
+  }
+});
+
 // ── Listen for SDK requesting a screenshot (toolbar camera button) ──────────
 // The SDK dispatches this event when it detects it's in an extension context.
 // We route it to background.js which calls chrome.tabs.captureVisibleTab,

@@ -33,7 +33,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["tracebug-sdk.js", "tracebug-init.js"],
+      "resources": ["tracebug-sdk.js", "tracebug-init.js", "player.html", "player.js"],
       "matches": ["<all_urls>"]
     }
   ],

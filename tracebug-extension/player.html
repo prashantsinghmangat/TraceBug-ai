@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- TraceBug recording player — an EXTENSION page embedded as an iframe inside
+     the ticket modal. Host pages with strict CSP (GitHub, HN, corporate apps)
+     block blob: video in their DOM; this page runs under the extension's own
+     origin, so the recording plays everywhere. The embedding page talks to us
+     via postMessage:
+       in : tb:player:load  {dataUrl, durationMs}   — mount the recording
+       in : tb:player:seek  {seconds}               — jump + play
+       in : tb:player:grab-frame {}                 — capture current frame
+       out: tb:player:ready                         — we're listening
+       out: tb:player:frame {dataUrl,width,height,currentTime}
+       out: tb:player:error {message}
+     We only reply to the origin that sent tb:player:load. Logic lives in
+     player.js (MV3 extension-page CSP forbids inline scripts). -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: #0B0B10; height: 100%; overflow: hidden; }
+  video { display: block; width: 100%; height: 100%; background: #0B0B10; outline: none; }
+  #err {
+    display: none; height: 100%; align-items: center; justify-content: center;
+    color: #9aa0aa; font: 12px system-ui, sans-serif; padding: 0 16px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<video id="v" controls preload="auto"></video>
+<div id="err">Couldn't load the recording — use Download .webm in the ticket instead.</div>
+<script src="player.js"></script>
+</body>
+</html>

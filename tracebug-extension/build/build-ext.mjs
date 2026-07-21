@@ -33,6 +33,8 @@ const SHARED_FILES = [
   "offscreen.html",
   "popup.js",
   "popup.html",
+  "player.js",
+  "player.html",
   "styles.css",
   "tracebug-init.js",
   "tracebug-sdk.js",

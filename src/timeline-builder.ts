@@ -3,6 +3,7 @@
 // Shows elapsed time from session start for each event.
 
 import { TraceBugEvent, TimelineEntry } from "./types";
+import { isNoiseRequest, isStaticResource } from "./url-hygiene";
 
 export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
   if (events.length === 0) return [];
@@ -21,6 +22,15 @@ export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
     const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
     const isApiError = ev.type === "api_request" &&
       (ev.data.request?.statusCode >= 400 || ev.data.request?.statusCode === 0);
+
+    // Same story-vs-mechanics rule as the Actions tab: beacons/analytics are
+    // skipped, successful asset loads are skipped, failed first-party
+    // resources stay. The Network tab remains the complete request log.
+    if (ev.type === "api_request") {
+      const reqUrl = ev.data.request?.url;
+      if (isNoiseRequest(reqUrl)) continue;
+      if (!isApiError && isStaticResource(reqUrl)) continue;
+    }
 
     const description = describeTimelineEvent(ev);
 

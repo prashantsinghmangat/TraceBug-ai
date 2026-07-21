@@ -116,3 +116,35 @@ describe('generateFlowSummary', () => {
     expect(flow).not.toContain('btn-0');
   });
 });
+
+describe('generateBugTitle — asset-noise filtering (camo badge regression)', () => {
+  const CAMO_URL =
+    'https://camo.githubusercontent.com/7201bf24b202a60bfb5d8e83c47b2fe353cc8a693cfc106b0b02a0d9763042f0/68747470733a2f2f696d672e736869656c64732e696f2f';
+
+  it('a session where ONLY a badge image failed gets a flow title, not "API Failure: <hex>"', () => {
+    const events = [
+      ev('click', { element: { text: 'Star' } }, '/repo'),
+      ev('api_request', { request: { method: 'GET', url: CAMO_URL, statusCode: 404, durationMs: 12 } }, '/repo'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).not.toContain('API Failure');
+    expect(title).not.toContain('7201bf24b202a60bfb5d8e83c47b2fe353cc8a693cfc106b0b02a0d9763042f0');
+  });
+
+  it('a real API failure still titles as API even when asset noise failed first', () => {
+    const events = [
+      ev('api_request', { request: { method: 'GET', url: CAMO_URL, statusCode: 404, durationMs: 12 } }, '/checkout'),
+      ev('api_request', { request: { method: 'POST', url: '/api/orders', statusCode: 500, durationMs: 90 } }, '/checkout'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).toMatch(/500|API/);
+    expect(title).not.toContain('camo');
+  });
+
+  it('bug titles never exceed a sane length even with pathological URLs', () => {
+    const events = [
+      ev('api_request', { request: { method: 'GET', url: '/x/' + 'a'.repeat(500), statusCode: 500, durationMs: 5 } }, '/'),
+    ];
+    expect(generateBugTitle(session(events)).length).toBeLessThan(120);
+  });
+});

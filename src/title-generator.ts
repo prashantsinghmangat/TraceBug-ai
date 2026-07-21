@@ -3,6 +3,7 @@
 // Uses heuristic rules — no AI API needed.
 
 import { TraceBugEvent, StoredSession } from "./types";
+import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 
 export function generateBugTitle(session: StoredSession): string {
   const events = session.events;
@@ -52,8 +53,12 @@ export function generateFlowSummary(events: TraceBugEvent[]): string {
 }
 
 function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEvent[]): string {
+  // Failed badge/image/analytics requests are page noise — a session where
+  // ONLY those failed gets a flow title, never "API Failure: <500-char hash>".
   const failedApis = allEvents.filter(e =>
-    e.type === "api_request" && (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0)
+    e.type === "api_request" &&
+    (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0) &&
+    !isNoiseRequest(e.data.request?.url)
   );
 
   if (failedApis.length > 0) {
@@ -165,10 +170,7 @@ function truncate(str: string, len: number): string {
 }
 
 function shortenUrl(url: string | undefined): string {
-  if (!url) return "";
-  try {
-    return new URL(url, window.location.origin).pathname;
-  } catch {
-    return url.slice(0, 40);
-  }
+  // Shared hygiene: middle-ellipsizes hash-like segments and caps the length,
+  // so no URL shape can flood a bug title.
+  return shortDisplayPath(url);
 }

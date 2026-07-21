@@ -202,10 +202,54 @@ describe('generateRootCauseHint (confidence tiers)', () => {
     expect(hint.hint).toContain('Submit');
   });
 
+  it('link clicks are NOT called "no observable effect" — links navigate', () => {
+    const hint = generateRootCauseHint(r({
+      clickedElement: { tag: 'a', text: 'Hacker News', page: '/' } as ClickedElementSummary,
+    }));
+    expect(hint.confidence).toBe('low');
+    expect(hint.hint).not.toMatch(/observable effect/i);
+    expect(hint.hint).toContain('Hacker News');
+    expect(hint.hint).toMatch(/link|navigation/i);
+  });
+
   it('LOW confidence fallback message when no signals exist', () => {
     const hint = generateRootCauseHint(r({}));
     expect(hint.confidence).toBe('low');
     expect(hint.hint.length).toBeGreaterThan(0);
+  });
+
+  // Regression: a failed shields.io badge behind GitHub's camo proxy was
+  // reported as "API Failure (high confidence)" with a 500-char hex path.
+  const CAMO_URL =
+    'https://camo.githubusercontent.com/7201bf24b202a60bfb5d8e83c47b2fe353cc8a693cfc106b0b02a0d9763042f0/68747470733a2f2f696d672e736869656c64732e696f2f';
+
+  it('a real API failure outranks earlier asset noise', () => {
+    const hint = generateRootCauseHint(r({
+      networkErrors: [
+        { method: 'GET', url: CAMO_URL, status: 404, duration: 0, timestamp: 0 },
+        { method: 'POST', url: '/api/orders', status: 500, duration: 0, timestamp: 1 },
+      ],
+    }));
+    expect(hint.confidence).toBe('high');
+    expect(hint.hint).toContain('/api/orders');
+    expect(hint.hint).not.toContain('camo');
+  });
+
+  it('noise-only failures report LOW confidence as a resource issue, never "API"-high', () => {
+    const hint = generateRootCauseHint(r({
+      networkErrors: [{ method: 'GET', url: CAMO_URL, status: 404, duration: 0, timestamp: 0 }],
+    }));
+    expect(hint.confidence).toBe('low');
+    expect(hint.hint).toMatch(/resource/i);
+    expect(hint.hint.length).toBeLessThan(200); // hex path must be ellipsized
+  });
+
+  it('a runtime error outranks noise-only network failures', () => {
+    const hint = generateRootCauseHint(r({
+      networkErrors: [{ method: 'GET', url: CAMO_URL, status: 404, duration: 0, timestamp: 0 }],
+      consoleErrors: [{ message: 'TypeError: Cannot read prop', timestamp: 0 }],
+    }));
+    expect(hint.confidence).toBe('medium');
   });
 });
 
