@@ -394,6 +394,18 @@ export default function McpDocsPage() {
                   sig: "get_screenshot",
                   desc: "A screenshot as real image content the agent can see. Screenshots are auto-named from the triggering action (01_click_save.png).",
                 },
+                {
+                  sig: "get_playwright_test",
+                  desc: "The generated failing test — a runnable Playwright spec that replays the captured session and asserts the failure is gone. Red while the bug exists, green after the fix. (Exports from SDK 1.9+.)",
+                },
+                {
+                  sig: "resolve_stack",
+                  desc: "Maps the report's minified stack frames to original source files/lines using .map files found in the current repo — run the server from the project that built the app.",
+                },
+                {
+                  sig: "get_fix_context",
+                  desc: "One-call fix starter: the failing request (with response snippet), the user action that triggered it, the first error with source-map-resolved top frames, and whether a generated failing test is available.",
+                },
               ].map((tool) => (
                 <div
                   key={tool.sig}

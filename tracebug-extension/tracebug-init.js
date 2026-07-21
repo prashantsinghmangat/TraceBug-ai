@@ -14,12 +14,41 @@
     return;
   }
 
+  // User-configured redaction rules, published by the content script on
+  // <html data-tb-redact> (page world has no chrome.storage access).
+  function readRedactRules() {
+    try {
+      var raw = document.documentElement.getAttribute("data-tb-redact");
+      if (!raw) return undefined;
+      var parsed = JSON.parse(raw);
+      if (parsed && (Array.isArray(parsed.fields) || Array.isArray(parsed.patterns))) return parsed;
+    } catch (e) {}
+    return undefined;
+  }
+
   // Initialize the SDK
   window.TraceBug.init({
     projectId: "tracebug-extension",
     enabled: "all",
     enableDashboard: true,
+    redact: readRedactRules(),
   });
+
+  // Rules edited in the popup mid-session reach the running SDK live: the
+  // content script rewrites the attribute; we push it into the sanitizers.
+  function syncRedactRules() {
+    if (window.TraceBugSDK && window.TraceBugSDK.setRedactRules) {
+      window.TraceBugSDK.setRedactRules(readRedactRules());
+    }
+  }
+  try {
+    new MutationObserver(syncRedactRules)
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-tb-redact"] });
+  } catch (e) {}
+  // The content script publishes the attribute from an ASYNC storage read,
+  // which can land between init() reading it and the observer attaching —
+  // one explicit sync now closes that gap.
+  syncRedactRules();
 
   console.info("[TraceBug Extension] Active on " + window.location.hostname);
 
@@ -44,7 +73,7 @@
   function ensureActive() {
     try {
       if (!document.getElementById("tracebug-root") && window.TraceBug && window.TraceBug.init) {
-        window.TraceBug.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true });
+        window.TraceBug.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true, redact: readRedactRules() });
       }
     } catch (e) {}
   }

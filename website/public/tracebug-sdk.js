@@ -1277,6 +1277,10 @@ var TraceBugModule = (() => {
                 value: isSensitive ? "[REDACTED]" : (t2.value || "").slice(0, 200),
                 placeholder: t2.placeholder || ""
               };
+              try {
+                element.selector = buildSelector(t2);
+              } catch (e3) {
+              }
               const data = { element };
               if (inputType === "checkbox" || inputType === "radio") {
                 element.checked = t2.checked;
@@ -1308,6 +1312,11 @@ var TraceBugModule = (() => {
         const t2 = e2.target;
         if (!t2 || t2.tagName.toLowerCase() !== "select" || isTraceBugElement(t2)) return;
         const selectedOption = t2.options[t2.selectedIndex];
+        let selector = "";
+        try {
+          selector = buildSelector(t2);
+        } catch (e3) {
+        }
         emit("select_change", {
           element: {
             tag: "select",
@@ -1316,7 +1325,8 @@ var TraceBugModule = (() => {
             selectedText: selectedOption ? selectedOption.text : "",
             selectedIndex: t2.selectedIndex,
             optionCount: t2.options.length,
-            allOptions: Array.from(t2.options).map((o2) => o2.text).slice(0, 20)
+            allOptions: Array.from(t2.options).map((o2) => o2.text).slice(0, 20),
+            selector
           }
         });
       } catch (err) {
@@ -6174,30 +6184,30 @@ var TraceBugModule = (() => {
         let token, type;
         let length = tokens.length;
         let value = "";
-        let clean = true;
+        let clean2 = true;
         let next, prev;
         for (let i2 = 0; i2 < length; i2 += 1) {
           token = tokens[i2];
           type = token[0];
           if (type === "space" && i2 === length - 1 && !customProperty) {
-            clean = false;
+            clean2 = false;
           } else if (type === "comment") {
             prev = tokens[i2 - 1] ? tokens[i2 - 1][0] : "empty";
             next = tokens[i2 + 1] ? tokens[i2 + 1][0] : "empty";
             if (!SAFE_COMMENT_NEIGHBOR[prev] && !SAFE_COMMENT_NEIGHBOR[next]) {
               if (value.slice(-1) === ",") {
-                clean = false;
+                clean2 = false;
               } else {
                 value += token[1];
               }
             } else {
-              clean = false;
+              clean2 = false;
             }
           } else {
             value += token[1];
           }
         }
-        if (!clean) {
+        if (!clean2) {
           let raw = tokens.reduce((all, i2) => all + i2[1], "");
           node2.raws[prop] = { raw, value };
         }
@@ -10260,30 +10270,30 @@ var TraceBugModule = (() => {
         let token, type;
         let length = tokens.length;
         let value = "";
-        let clean = true;
+        let clean2 = true;
         let next, prev;
         for (let i2 = 0; i2 < length; i2 += 1) {
           token = tokens[i2];
           type = token[0];
           if (type === "space" && i2 === length - 1 && !customProperty) {
-            clean = false;
+            clean2 = false;
           } else if (type === "comment") {
             prev = tokens[i2 - 1] ? tokens[i2 - 1][0] : "empty";
             next = tokens[i2 + 1] ? tokens[i2 + 1][0] : "empty";
             if (!SAFE_COMMENT_NEIGHBOR[prev] && !SAFE_COMMENT_NEIGHBOR[next]) {
               if (value.slice(-1) === ",") {
-                clean = false;
+                clean2 = false;
               } else {
                 value += token[1];
               }
             } else {
-              clean = false;
+              clean2 = false;
             }
           } else {
             value += token[1];
           }
         }
-        if (!clean) {
+        if (!clean2) {
           let raw = tokens.reduce((all, i2) => all + i2[1], "");
           node2.raws[prop] = { raw, value };
         }
@@ -14315,11 +14325,11 @@ var TraceBugModule = (() => {
               return true;
             } : N, _ = void 0 === j, k = null != j ? j : p, T = n2.states[k];
             if (O(g, d)) {
-              var q = t(f((_ ? r(R) : [].concat(x.exit, R, T.entry).filter(function(t2) {
+              var q2 = t(f((_ ? r(R) : [].concat(x.exit, R, T.entry).filter(function(t2) {
                 return t2;
               })).map(function(t2) {
                 return i(t2, y._options.actions);
-              }), g, d), 3), z = q[0], A = q[1], B = q[2], C = null != j ? j : p;
+              }), g, d), 3), z = q2[0], A = q2[1], B = q2[2], C = null != j ? j : p;
               return { value: C, context: A, actions: z, changed: j !== p || z.length > 0 || B, matches: a(C) };
             }
           }
@@ -27203,6 +27213,164 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/exporters/playwright-test.ts
+  function q(s2) {
+    return "'" + String(s2).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, " ") + "'";
+  }
+  function clean(s2) {
+    return (s2 || "").replace(/\s+/g, " ").trim();
+  }
+  function locatorFor(el) {
+    var _a2;
+    if (el.testId) return `page.getByTestId(${q(el.testId)})`;
+    if (el.id) return `page.locator(${q("#" + el.id)})`;
+    if (el.ariaLabel) return `page.getByLabel(${q(clean(el.ariaLabel))})`;
+    const text = (_a2 = clean(el.text)) == null ? void 0 : _a2.split("\n")[0].slice(0, 60);
+    const role = el.role || (el.tag === "button" || el.buttonType ? "button" : el.tag === "a" ? "link" : null);
+    if (role && text) return `page.getByRole(${q(role)}, { name: ${q(text)} })`;
+    if (el.selector) return `page.locator(${q(el.selector)})`;
+    if (text) return `page.getByText(${q(text)}, { exact: false }).first()`;
+    return null;
+  }
+  function fieldLocatorFor(el) {
+    if (el.selector) return `page.locator(${q(el.selector)})`;
+    if (el.name) return `page.locator(${q(`[name="${el.name}"], #${el.name}`)}).first()`;
+    return null;
+  }
+  function pickPrimaryFailure(report) {
+    const failing = (report.networkErrors || []).find((r2) => !isNoiseRequest(r2.url));
+    if (failing) {
+      let needle = failing.url;
+      try {
+        needle = new URL(failing.url, "http://x.local").pathname;
+      } catch (e2) {
+      }
+      return {
+        kind: "network",
+        needle,
+        display: `${failing.method} ${failing.url} \u2192 ${failing.status === 0 ? "NETWORK_ERROR" : failing.status}`
+      };
+    }
+    const err = (report.consoleErrors || [])[0];
+    if (err == null ? void 0 : err.message) {
+      return { kind: "console", needle: clean(err.message).slice(0, 60), display: clean(err.message).slice(0, 120) };
+    }
+    return { kind: "none", needle: "", display: "" };
+  }
+  function generatePlaywrightTest(report) {
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
+    const events = [...((_a2 = report.session) == null ? void 0 : _a2.events) || []].sort(
+      (a2, b) => a2.timestamp - b.timestamp
+    );
+    const steps = [];
+    let lastStep = "";
+    const push = (line) => {
+      if (line === lastStep) return;
+      steps.push(line);
+      lastStep = line;
+    };
+    for (const ev of events) {
+      const el = ((_b = ev.data) == null ? void 0 : _b.element) || {};
+      switch (ev.type) {
+        case "click": {
+          const loc = locatorFor(el);
+          if (loc) push(`  await ${loc}.click();`);
+          break;
+        }
+        case "input": {
+          const loc = fieldLocatorFor(el);
+          if (!loc) break;
+          if (el.type === "checkbox" || el.type === "radio") {
+            push(`  await ${loc}.${el.value === "unchecked" ? "uncheck" : "check"}();`);
+          } else if (el.value === "[REDACTED]") {
+            push(`  await ${loc}.fill(${q("TODO-redacted-value")}); // value was masked at capture \u2014 fill in a test value`);
+          } else if (el.value) {
+            push(`  await ${loc}.fill(${q(el.value)});`);
+          }
+          break;
+        }
+        case "select_change": {
+          const loc = fieldLocatorFor(el);
+          if (loc && el.selectedText) {
+            push(`  await ${loc}.selectOption({ label: ${q(clean(el.selectedText))} });`);
+          }
+          break;
+        }
+        case "route_change": {
+          if ((_c = ev.data) == null ? void 0 : _c.to) push(`  // \u2192 navigated to ${ev.data.to}`);
+          break;
+        }
+      }
+    }
+    const hasActions = steps.some((s2) => s2.trimStart().startsWith("await"));
+    if (!hasActions) return null;
+    let origin = "http://localhost:3000";
+    let startPath = ((_d = events[0]) == null ? void 0 : _d.page) || "/";
+    try {
+      const u2 = new URL(((_e = report.environment) == null ? void 0 : _e.url) || "");
+      origin = u2.origin;
+      if (!((_f = events[0]) == null ? void 0 : _f.page)) startPath = u2.pathname;
+    } catch (e2) {
+    }
+    const failure = pickPrimaryFailure(report);
+    const title = clean(report.title) || "TraceBug captured bug";
+    const lines = [];
+    lines.push(`import { test, expect } from '@playwright/test';`);
+    lines.push(``);
+    lines.push(`// Generated by TraceBug from bug report: ${title}`);
+    lines.push(`// Session ${((_h = (_g = report.session) == null ? void 0 : _g.sessionId) == null ? void 0 : _h.slice(0, 8)) || "?"} \xB7 captured ${new Date(report.generatedAt).toISOString()}`);
+    lines.push(`//`);
+    lines.push(`// This test REPRODUCES the captured bug \u2014 expect it to FAIL until the bug`);
+    lines.push(`// is fixed, then pass. Point BASE_URL at your running dev server.`);
+    lines.push(`const BASE_URL = process.env.BASE_URL || ${q(origin)};`);
+    lines.push(``);
+    lines.push(`test(${q(title)}, async ({ page }) => {`);
+    if (failure.kind === "network") {
+      lines.push(`  // Captured failure: ${failure.display}`);
+      lines.push(`  const failedRequests: string[] = [];`);
+      lines.push(`  page.on('response', (r) => {`);
+      lines.push(`    if (r.status() >= 400) failedRequests.push(\`\${r.request().method()} \${r.url()} \u2192 \${r.status()}\`);`);
+      lines.push(`  });`);
+      lines.push(`  page.on('requestfailed', (r) => {`);
+      lines.push(`    failedRequests.push(\`\${r.method()} \${r.url()} \u2192 \${r.failure()?.errorText ?? 'FAILED'}\`);`);
+      lines.push(`  });`);
+    } else {
+      lines.push(failure.kind === "console" ? `  // Captured failure: ${failure.display}` : `  // No single captured failure \u2014 asserting the flow completes without page errors.`);
+      lines.push(`  const pageErrors: string[] = [];`);
+      lines.push(`  page.on('pageerror', (e) => pageErrors.push(e.message));`);
+      lines.push(`  page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text()); });`);
+    }
+    lines.push(``);
+    lines.push(`  await page.goto(BASE_URL + ${q(startPath)});`);
+    lines.push(...steps);
+    lines.push(``);
+    lines.push(`  // Give in-flight requests/errors a moment to land before asserting.`);
+    lines.push(`  await page.waitForLoadState('networkidle').catch(() => {});`);
+    lines.push(``);
+    if (failure.kind === "network") {
+      lines.push(`  const stillFailing = failedRequests.filter((f) => f.includes(${q(failure.needle)}));`);
+      lines.push(`  expect(stillFailing, 'Bug reproduced \u2014 this request failed during capture and is still failing').toEqual([]);`);
+    } else if (failure.kind === "console") {
+      lines.push(`  const stillFailing = pageErrors.filter((e) => e.includes(${q(failure.needle)}));`);
+      lines.push(`  expect(stillFailing, 'Bug reproduced \u2014 this error was captured and is still thrown').toEqual([]);`);
+    } else {
+      lines.push(`  expect(pageErrors, 'The captured flow should complete without page errors').toEqual([]);`);
+    }
+    lines.push(`});`);
+    lines.push(``);
+    return lines.join("\n");
+  }
+  function playwrightTestFilename(report) {
+    const slug = (clean(report.title) || "tracebug-bug").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "tracebug-bug";
+    return `${slug}.spec.ts`;
+  }
+  var init_playwright_test = __esm({
+    "src/exporters/playwright-test.ts"() {
+      "use strict";
+      init_url_hygiene();
+    }
+  });
+
   // src/exporters/rrweb-runtime.generated.ts
   var rrweb_runtime_generated_exports = {};
   __export(rrweb_runtime_generated_exports, {
@@ -27395,7 +27563,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       // Issue-filing helpers for the file's RECIPIENT — precomputed here so
       // the viewer ships zero issue-builder code. Token-free actions only;
       // API-token integrations stay in the exporter's modal.
-      github: buildGithubPayload(report, options == null ? void 0 : options.githubRepo)
+      github: buildGithubPayload(report, options == null ? void 0 : options.githubRepo),
+      ...buildPlaywrightPayload(report)
     };
     if (hasRrweb && rrwebEvents) {
       const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
@@ -27414,6 +27583,15 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     const html = buildReplayHtml(payload, rrwebExtras);
     const blob2 = new Blob([html], { type: "text/html;charset=utf-8" });
     return { blob: blob2, html };
+  }
+  function buildPlaywrightPayload(report) {
+    try {
+      const spec = generatePlaywrightTest(report);
+      if (!spec) return {};
+      return { playwrightTest: spec, playwrightTestFilename: playwrightTestFilename(report) };
+    } catch (e2) {
+      return {};
+    }
   }
   function buildGithubPayload(report, repo) {
     let markdown;
@@ -27507,6 +27685,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_report_builder();
       init_redaction_summary();
       init_github_issue();
+      init_playwright_test();
     }
   });
 
@@ -27712,9 +27891,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }, 3e4);
   }
   function parseQueryString(url) {
-    const q = url.indexOf("?");
-    if (q === -1) return [];
-    const search = url.slice(q + 1).split("#")[0];
+    const q2 = url.indexOf("?");
+    if (q2 === -1) return [];
+    const search = url.slice(q2 + 1).split("#")[0];
     if (!search) return [];
     const out = [];
     for (const pair of search.split("&")) {
@@ -28973,7 +29152,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -29185,6 +29364,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More \u25BE</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
             <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip \u2014 GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
+            <button data-action="export-spec" class="tb-qb-more-item" role="menuitem" title="A runnable Playwright test that replays this session and asserts the captured failure is gone \u2014 fails until the bug is fixed, passes after">${_ic("fileCode")} Download failing test (.spec.ts)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report \u2014 upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots2.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots2.length === 1 ? "" : "s"} as image file${screenshots2.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots2.length === 1 ? "" : "s"}</button>` : ""}
@@ -29534,7 +29714,30 @@ ${report.steps}` : userDesc : void 0,
         showToast("Replay export failed", root2);
       }
     });
-    (_z = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _z.addEventListener("click", async () => {
+    (_z = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _z.addEventListener("click", () => {
+      if (!data.currentSession) {
+        showToast("No session to export yet", root2);
+        return;
+      }
+      try {
+        const report = buildReport(data.currentSession);
+        const draft = getDraft();
+        if (draft.title.trim()) report.title = draft.title.trim();
+        const spec = generatePlaywrightTest(report);
+        if (!spec) {
+          showToast("No replayable user actions in this session", root2);
+          return;
+        }
+        const blob2 = new Blob([spec], { type: "text/plain;charset=utf-8" });
+        const filename = playwrightTestFilename(report);
+        triggerDownload(URL.createObjectURL(blob2), filename);
+        showToast(`\u2713 ${filename} \u2014 run with: npx playwright test ${filename}`, root2);
+      } catch (err) {
+        console.warn("[TraceBug] Failing-test export failed:", err);
+        showToast("Test export failed", root2);
+      }
+    });
+    (_A = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _A.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29563,7 +29766,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("ZIP export failed", root2);
       }
     });
-    (_A = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_B = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _B.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29583,7 +29786,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("HAR export failed", root2);
       }
     });
-    (_B = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _B.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _C.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29603,7 +29806,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Report export failed", root2);
       }
     });
-    (_C = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_D = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _D.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29630,7 +29833,7 @@ ${report.steps}` : userDesc : void 0,
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_D = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _D.addEventListener("click", (e2) => {
+    (_E = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _E.addEventListener("click", (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root2);
         return;
@@ -29678,7 +29881,7 @@ ${report.steps}` : userDesc : void 0,
       const pills = netPanel.querySelectorAll(".tb-qb-net-pill");
       let activeType = "all";
       const applyNetFilter = () => {
-        const q = ((searchEl == null ? void 0 : searchEl.value) || "").trim().toLowerCase();
+        const q2 = ((searchEl == null ? void 0 : searchEl.value) || "").trim().toLowerCase();
         const errOnly = !!(errorsOnlyEl == null ? void 0 : errorsOnlyEl.checked);
         netPanel.querySelectorAll(".tb-qb-net-row").forEach((row) => {
           if (row.classList.contains("tb-qb-net-head")) return;
@@ -29687,7 +29890,7 @@ ${report.steps}` : userDesc : void 0,
           const hay = row.dataset.search || "";
           const typeMatch = activeType === "all" || t2 === activeType;
           const errMatch = !errOnly || isErr;
-          const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          const searchMatch = q2.length === 0 || hay.indexOf(q2) !== -1;
           const show = typeMatch && errMatch && searchMatch;
           row.style.display = show ? "" : "none";
         });
@@ -29697,7 +29900,7 @@ ${report.steps}` : userDesc : void 0,
       pills.forEach((p) => {
         p.addEventListener("click", () => {
           activeType = p.dataset.type || "all";
-          pills.forEach((q) => q.classList.toggle("tb-qb-net-pill-active", q === p));
+          pills.forEach((q2) => q2.classList.toggle("tb-qb-net-pill-active", q2 === p));
           applyNetFilter();
         });
       });
@@ -29709,14 +29912,14 @@ ${report.steps}` : userDesc : void 0,
       const pills = conPanel.querySelectorAll(".tb-qb-feed-pill");
       let activeCat = "all";
       const applyFeedFilter = () => {
-        const q = ((conSearch == null ? void 0 : conSearch.value) || "").trim().toLowerCase();
+        const q2 = ((conSearch == null ? void 0 : conSearch.value) || "").trim().toLowerCase();
         const errOnly = !!(conErrOnly == null ? void 0 : conErrOnly.checked);
         conPanel.querySelectorAll(".tb-qb-feed-row").forEach((row) => {
           const cat = row.dataset.cat || "";
           const hay = row.dataset.search || "";
           const isErr = row.dataset.err === "1";
           const catMatch = activeCat === "all" || cat === activeCat;
-          const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          const searchMatch = q2.length === 0 || hay.indexOf(q2) !== -1;
           const errMatch = !errOnly || isErr;
           row.style.display = catMatch && searchMatch && errMatch ? "" : "none";
         });
@@ -29726,7 +29929,7 @@ ${report.steps}` : userDesc : void 0,
       pills.forEach((p) => {
         p.addEventListener("click", () => {
           activeCat = p.dataset.cat || "all";
-          pills.forEach((q) => q.classList.toggle("tb-qb-feed-pill-active", q === p));
+          pills.forEach((q2) => q2.classList.toggle("tb-qb-feed-pill-active", q2 === p));
           applyFeedFilter();
         });
       });
@@ -29795,7 +29998,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_E = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _E.addEventListener("click", () => {
+    (_F = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _F.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -29826,7 +30029,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_F = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _F.addEventListener("click", async () => {
+    (_G = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _G.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -29850,7 +30053,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_G = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _G.addEventListener("click", async () => {
+    (_H = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _H.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -31597,6 +31800,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_blur_tool();
       init_html_replay();
       init_zip_export();
+      init_playwright_test();
       init_har_export();
       init_ai_prompt();
       init_llm_client();
@@ -33041,20 +33245,20 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (filter === "errors") filtered = filtered.filter((s2) => s2.errorMessage);
       if (filter === "healthy") filtered = filtered.filter((s2) => !s2.errorMessage);
       if (search) {
-        const q = search.toLowerCase();
+        const q2 = search.toLowerCase();
         filtered = filtered.filter((s2) => {
           var _a2;
-          if (s2.sessionId.toLowerCase().includes(q)) return true;
-          if (s2.errorMessage && s2.errorMessage.toLowerCase().includes(q)) return true;
-          if (s2.reproSteps && s2.reproSteps.toLowerCase().includes(q)) return true;
+          if (s2.sessionId.toLowerCase().includes(q2)) return true;
+          if (s2.errorMessage && s2.errorMessage.toLowerCase().includes(q2)) return true;
+          if (s2.reproSteps && s2.reproSteps.toLowerCase().includes(q2)) return true;
           for (const e2 of s2.events) {
-            if (e2.page && e2.page.toLowerCase().includes(q)) return true;
+            if (e2.page && e2.page.toLowerCase().includes(q2)) return true;
             const d = e2.data || {};
             const el = d.element || {};
-            if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
-            if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
-            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q)) return true;
-            if (((_a2 = d.request) == null ? void 0 : _a2.url) && String(d.request.url).toLowerCase().includes(q)) return true;
+            if (typeof el.text === "string" && el.text.toLowerCase().includes(q2)) return true;
+            if (typeof el.value === "string" && el.value.toLowerCase().includes(q2)) return true;
+            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q2)) return true;
+            if (((_a2 = d.request) == null ? void 0 : _a2.url) && String(d.request.url).toLowerCase().includes(q2)) return true;
           }
           return false;
         });
@@ -46843,7 +47047,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               }
             }
-            var q = {
+            var q2 = {
               defer: function defer(fn) {
                 if (_typeof(fn) === "object" && fn.then && fn["catch"]) {
                   var defer2 = fn;
@@ -46860,7 +47064,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 tasks.push(fn);
                 ++remaining;
                 pop();
-                return q;
+                return q2;
               },
               then: function then(fn) {
                 funcGuard(fn);
@@ -46874,7 +47078,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                     completeQueue(tasks);
                   }
                 }
-                return q;
+                return q2;
               },
               catch: function _catch(fn) {
                 funcGuard(fn);
@@ -46887,11 +47091,11 @@ Response: ${match.response.slice(0, 160)}` : "";
                   fn(err2);
                   err2 = null;
                 }
-                return q;
+                return q2;
               },
               abort
             };
-            return q;
+            return q2;
           }
           var queue_default = queue;
           var uuid;
@@ -47527,11 +47731,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             options = _extends({}, options, {
               elementRef: false
             });
-            var q = queue_default();
+            var q2 = queue_default();
             var frames = parentContent.frames;
             frames.forEach(function(_ref35) {
               var frameElement = _ref35.node, context2 = _objectWithoutProperties(_ref35, _excluded8);
-              q.defer(function(res, rej) {
+              q2.defer(function(res, rej) {
                 var params = {
                   options,
                   command,
@@ -47550,7 +47754,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 _sendCommandToFrame(frameElement, params, callback, rej);
               });
             });
-            q.then(function(data) {
+            q2.then(function(data) {
               resolve(merge_results_default(data, options));
             })["catch"](reject);
           }
@@ -55514,10 +55718,10 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (!axe._audit) {
               throw new Error("No audit configured");
             }
-            var q = axe.utils.queue();
+            var q2 = axe.utils.queue();
             var cleanupErrors = [];
             Object.keys(axe.plugins).forEach(function(key2) {
-              q.defer(function(res) {
+              q2.defer(function(res) {
                 var rej = function rej2(err2) {
                   cleanupErrors.push(err2);
                   res();
@@ -55531,13 +55735,13 @@ Response: ${match.response.slice(0, 160)}` : "";
             });
             var flattenedTree = axe.utils.getFlattenedTree(document2.body);
             axe.utils.querySelectorAll(flattenedTree, "iframe, frame").forEach(function(node2) {
-              q.defer(function(res, rej) {
+              q2.defer(function(res, rej) {
                 return axe.utils.sendCommandToFrame(node2.actualNode, {
                   command: "cleanup-plugin"
                 }, res, rej);
               });
             });
-            q.then(function(results) {
+            q2.then(function(results) {
               if (cleanupErrors.length === 0) {
                 resolve(results);
               } else {
@@ -63405,7 +63609,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (options.performanceTimer) {
               this._trackPerformance();
             }
-            var q = queue_default();
+            var q2 = queue_default();
             var ruleResult = new rule_result_default(this);
             var nodes;
             try {
@@ -63418,7 +63622,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               this._logGatherPerformance(nodes);
             }
             nodes.forEach(function(node2) {
-              q.defer(function(resolveNode, rejectNode) {
+              q2.defer(function(resolveNode, rejectNode) {
                 var checkQueue = queue_default();
                 ["any", "all", "none"].forEach(function(type2) {
                   checkQueue.defer(function(res, rej) {
@@ -63451,7 +63655,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 });
               });
             });
-            q.then(function() {
+            q2.then(function() {
               if (options.performanceTimer) {
                 _this1._logRulePerformance();
               }
@@ -64288,20 +64492,20 @@ Response: ${match.response.slice(0, 160)}` : "";
               teardown_default();
               return reject(e2);
             }
-            var q = queue_default();
+            var q2 = queue_default();
             var audit = axe._audit;
             if (options.performanceTimer) {
               performance_timer_default.auditStart();
             }
             if (context2.frames.length && options.iframes !== false) {
-              q.defer(function(res, rej) {
+              q2.defer(function(res, rej) {
                 _collectResultsFromFrames(context2, options, "rules", null, res, rej);
               });
             }
-            q.defer(function(res, rej) {
+            q2.defer(function(res, rej) {
               audit.run(context2, options, res, rej);
             });
-            q.then(function(data) {
+            q2.then(function(data) {
               try {
                 if (options.performanceTimer) {
                   performance_timer_default.auditEnd();
@@ -64393,14 +64597,14 @@ Response: ${match.response.slice(0, 160)}` : "";
             return this._collect.apply(this, arguments);
           };
           Plugin.prototype.cleanup = function cleanup2(done) {
-            var q = axe.utils.queue();
+            var q2 = axe.utils.queue();
             var that = this;
             Object.keys(this._registry).forEach(function(key2) {
-              q.defer(function(_done) {
+              q2.defer(function(_done) {
                 that._registry[key2].cleanup(_done);
               });
             });
-            q.then(done);
+            q2.then(done);
           };
           Plugin.prototype.add = function add(impl) {
             this._registry[impl.id] = impl;
@@ -69427,6 +69631,7 @@ First element: \`${exampleSnippet}\``,
     generateJiraTicket: () => generateJiraTicket,
     generateMcpPrompt: () => generateMcpPrompt,
     generatePdfReport: () => generatePdfReport,
+    generatePlaywrightTest: () => generatePlaywrightTest,
     generateReproSteps: () => generateReproSteps,
     generateRootCauseHint: () => generateRootCauseHint,
     generateSessionSteps: () => generateSessionSteps,
@@ -69456,6 +69661,7 @@ First element: \`${exampleSnippet}\``,
     openGitHubIssue: () => openGitHubIssue,
     openInChatGPT: () => openInChatGPT,
     openInClaude: () => openInClaude,
+    playwrightTestFilename: () => playwrightTestFilename,
     runLLMAnalysis: () => runLLMAnalysis,
     scan: () => scan,
     sendSlackMessage: () => sendSlackMessage,
@@ -69976,6 +70182,7 @@ First element: \`${exampleSnippet}\``,
   init_ai_prompt();
   init_har_export();
   init_zip_export();
+  init_playwright_test();
   init_llm_client();
   init_tracker_client();
   init_pdf_generator();

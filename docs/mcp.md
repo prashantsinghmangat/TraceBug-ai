@@ -106,8 +106,19 @@ npx -y tracebug mcp [--dir <path>]
 | `get_network_activity` | Failed requests with response-body snippets by default; pass `failuresOnly: false` for every captured request. |
 | `get_repro_steps` | Plain-English reproduction steps, structured user actions (including rage-click / dead-click frustration signals), and the full session timeline. |
 | `get_screenshot` | A screenshot as real image content the agent can see. Screenshots are auto-named from the triggering action (`01_click_save.png`). |
+| `get_playwright_test` | The **generated failing test** — a runnable Playwright spec that replays the captured session and asserts the failure is gone. Red while the bug exists, green after the fix. (Exports from SDK 1.9+.) |
+| `resolve_stack` | Maps the report's minified stack frames to **original source files/lines** using `.map` files found in the current repo — run the server from the project that built the app. `searchDir` points it at a custom build-output folder. |
+| `get_fix_context` | One-call fix starter: the failing request (with response snippet), the user action that triggered it, the first error with source-map-resolved top frames, and whether a generated failing test is available. |
 
 Screenshots and video are deliberately excluded from the text tools (they're token-heavy); `get_screenshot` delivers images on demand.
+
+### The fix loop
+
+Diagnosis tools tell the agent *what broke*; the fix-loop tools close the rest:
+
+1. `get_fix_context` — where to look: original source positions plus the failing endpoint.
+2. `get_playwright_test` — save the spec, run it: **red** confirms the reproduction.
+3. Patch the code, re-run: **green** proves the captured failure is gone.
 
 Every tool's `file` argument is forgiving: pass a path, a bare filename (found anywhere under the scan dir), or a case-insensitive fragment of the filename or report title — `get_bug_report("vendor update")` works. Unresolvable names error with the list of available reports.
 

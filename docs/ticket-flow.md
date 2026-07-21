@@ -171,6 +171,7 @@ The modal footer exposes the primary exports, with the rest under **More ▾**:
 | **Fix with AI** | Builds the structured prompt and opens Claude / ChatGPT (or runs BYO-key analysis in the AI tab). |
 | **Open in GitHub** _(if `githubRepo` set)_ | Prefilled GitHub issue, or files a real one with a configured token. |
 | **Download .zip (attach to GitHub)** _(More)_ | The same replay `.html` wrapped in a `.zip` — GitHub issues accept `.zip` attachments by drag-and-drop but reject bare `.html`. The prefilled issue body includes a "drag the zip here" placeholder. |
+| **Download failing test (.spec.ts)** _(More)_ | A runnable Playwright spec that replays the session and asserts the captured failure is gone — red until the bug is fixed, green after. Also embedded in the `.html` export for the MCP `get_playwright_test` tool. |
 | **Export for AI (.html)** _(More)_ | Tiny (~5 KB) text-only HTML — paste/upload into a chat, no MCP needed. |
 | **Download report (.md)** _(More)_ | Compact markdown report. |
 | **Download screenshots** _(More)_ | Raw PNG(s) to attach alongside the `.md`. |

@@ -21,8 +21,9 @@ import { showToast } from "./toast";
 import { escapeHtml, tbIsolationCss } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
-import { exportSessionAsHtml } from "../exporters/html-replay";
+import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
 import { exportSessionAsZip } from "../exporters/zip-export";
+import { generatePlaywrightTest, playwrightTestFilename } from "../exporters/playwright-test";
 import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 // PHASE2-CLOUD: import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
@@ -574,6 +575,7 @@ function _openModal(
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
             <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip — GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
+            <button data-action="export-spec" class="tb-qb-more-item" role="menuitem" title="A runnable Playwright test that replays this session and asserts the captured failure is gone — fails until the bug is fixed, passes after">${_ic("fileCode")} Download failing test (.spec.ts)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report — upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
@@ -966,6 +968,32 @@ function _openModal(
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
+    }
+  });
+
+  // Download failing test — a Playwright spec that replays the session and
+  // asserts the captured failure is gone. Red until fixed, green after.
+  modal.querySelector('[data-action="export-spec"]')?.addEventListener("click", () => {
+    if (!data.currentSession) {
+      showToast("No session to export yet", root);
+      return;
+    }
+    try {
+      const report = buildReport(data.currentSession);
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const spec = generatePlaywrightTest(report);
+      if (!spec) {
+        showToast("No replayable user actions in this session", root);
+        return;
+      }
+      const blob = new Blob([spec], { type: "text/plain;charset=utf-8" });
+      const filename = playwrightTestFilename(report);
+      triggerDownload(URL.createObjectURL(blob), filename);
+      showToast(`✓ ${filename} — run with: npx playwright test ${filename}`, root);
+    } catch (err) {
+      console.warn("[TraceBug] Failing-test export failed:", err);
+      showToast("Test export failed", root);
     }
   });
 

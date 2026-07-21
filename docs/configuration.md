@@ -193,6 +193,11 @@ Everything masked is counted in the export flow's `🛡 N sensitive values
 auto-masked` summary. Rules can also be swapped at runtime with the
 `setRedactRules({...})` named export (`import { setRedactRules } from "tracebug-sdk"`).
 
+**Chrome extension users** don't need code: the popup's **🛡 Redaction
+rules** section takes the same field names and patterns, syncs them via
+`chrome.storage.sync`, and applies them live — even to a page that's
+already recording.
+
 ```typescript
 TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
 ```
