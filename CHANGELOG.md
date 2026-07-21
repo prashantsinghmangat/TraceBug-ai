@@ -2,6 +2,17 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased]
+
+> The fix-loop release: the report stops being evidence an agent *reads* and becomes something it *iterates against* — run the generated failing test, patch, re-run until green.
+
+### Added
+
+- **Generated failing Playwright test** (`src/exporters/playwright-test.ts`) — every export now embeds a runnable spec that replays the captured session (locator preference: `data-testid` → id → aria-label → role+name → captured CSS selector) and asserts the captured failure is gone: failed requests are collected and the specific endpoint must stop failing; console errors must stop being thrown. Red while the bug exists, green after the fix. Redacted input values become `TODO` placeholders with a comment. Available three ways: **Download failing test (.spec.ts)** in the Quick Bug More menu, embedded in the `.html` export payload, and via the MCP `get_playwright_test` tool. New SDK exports: `generatePlaywrightTest`, `playwrightTestFilename`. Input/select events now also capture a stable CSS selector (clicks already did).
+- **Source-map stack resolution** (`cli/source-map.ts`, MCP `resolve_stack`) — maps the report's minified stack frames (`assets/index-ab12.js:1:43210`) to original source files/lines using `.map` files discovered in the repo the MCP server runs from. Dependency-free V3 decoder (base64 VLQ, ~150 lines) keeps the published CLI at zero runtime dependencies. `searchDir` targets a custom build-output folder.
+- **MCP tool `get_fix_context`** — one-call fix starter: the failing request with response snippet, the user action that triggered it, the first error with source-map-resolved top frames, and whether a generated failing test is available. The investigation guide now routes agents to the new tools; the server exposes nine tools total.
+- **Extension UI for redaction rules** (`tracebug-extension/popup.*`, `content-script.js`, `tracebug-init.js`) — the popup gains a collapsible **🛡 Redaction rules** section (field names + regex patterns, validated on save) so extension users get the 1.8.0 `redact` config without writing code. Rules sync via `chrome.storage.sync` and reach the page-world SDK through `<html data-tb-redact>` (the same bridge as the CSP-proof player URL); a MutationObserver pushes edits into an already-running SDK live via `setRedactRules`.
+
 ## [1.8.0] - 2026-07-21
 
 > The launch-feedback release — every feature here traces to a Product Hunt comment. **Visible, configurable redaction** (a masked-values summary in the export flow, app-specific `redact` rules for PII the token patterns can't know), `console.info` capture with warn/info rendered properly in the repro timeline, a **`.zip` export** because GitHub issues accept `.zip` but reject `.html`, and **issue actions inside the exported report** so the file's recipient can file the ticket, not just read the evidence.

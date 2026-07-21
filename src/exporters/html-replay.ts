@@ -12,6 +12,7 @@ import { buildReplayHtml, BundlePayload } from "./html-template";
 import { priorityLabel } from "../report-builder";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 import { generateGitHubIssue, generateGitHubIssueUrl } from "../github-issue";
+import { generatePlaywrightTest, playwrightTestFilename } from "./playwright-test";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -259,6 +260,7 @@ async function buildReplayPayload(
     // the viewer ships zero issue-builder code. Token-free actions only;
     // API-token integrations stay in the exporter's modal.
     github: buildGithubPayload(report, options?.githubRepo),
+    ...buildPlaywrightPayload(report),
   };
 
   // Compress the DOM-replay stream. It's repetitive text and gzips ~8–12×, so
@@ -287,6 +289,18 @@ async function buildReplayPayload(
   const html = buildReplayHtml(payload, rrwebExtras);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   return { blob, html };
+}
+
+function buildPlaywrightPayload(
+  report: BugReport
+): Pick<BundlePayload, "playwrightTest" | "playwrightTestFilename"> {
+  try {
+    const spec = generatePlaywrightTest(report);
+    if (!spec) return {};
+    return { playwrightTest: spec, playwrightTestFilename: playwrightTestFilename(report) };
+  } catch {
+    return {};
+  }
 }
 
 function buildGithubPayload(

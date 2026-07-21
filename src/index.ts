@@ -170,6 +170,7 @@ export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
 export { buildHar, exportSessionAsHar } from "./exporters/har-export";
 export { exportSessionAsZip, buildZipBlob } from "./exporters/zip-export";
+export { generatePlaywrightTest, playwrightTestFilename } from "./exporters/playwright-test";
 export type { HarLog, HarExportResult } from "./exporters/har-export";
 export {
   runLLMAnalysis, buildAnalysisPrompt,

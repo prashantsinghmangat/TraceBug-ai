@@ -312,6 +312,8 @@ export function collectInputs(emit: Emit): () => void {
               value: isSensitive ? "[REDACTED]" : (t.value || "").slice(0, 200),
               placeholder: t.placeholder || "",
             };
+            // Stable selector so generated repro tests can target the field.
+            try { element.selector = buildSelector(t); } catch {}
             const data: Record<string, unknown> = { element };
             if (inputType === "checkbox" || inputType === "radio") {
               element.checked = (t as HTMLInputElement).checked;
@@ -345,12 +347,15 @@ export function collectSelectChanges(emit: Emit): () => void {
       const t = e.target as HTMLSelectElement;
       if (!t || t.tagName.toLowerCase() !== "select" || isTraceBugElement(t)) return;
       const selectedOption = t.options[t.selectedIndex];
+      let selector = "";
+      try { selector = buildSelector(t); } catch {}
       emit("select_change", {
         element: {
           tag: "select", name: t.name || t.id || "", value: t.value,
           selectedText: selectedOption ? selectedOption.text : "",
           selectedIndex: t.selectedIndex, optionCount: t.options.length,
           allOptions: Array.from(t.options).map(o => o.text).slice(0, 20),
+          selector,
         },
       });
     } catch (err) {

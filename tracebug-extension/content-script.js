@@ -81,6 +81,40 @@ safeRun(function () {
   }
 });
 
+// ── Redaction-rules hand-off ────────────────────────────────────────────────
+// User-configured redact rules (popup → chrome.storage.sync) reach the
+// page-world SDK the same way as the player URL: published on <html
+// data-tb-redact>, read by tracebug-init.js at TraceBug.init() time. The
+// page world has no chrome.* access, so this bridge is required.
+safeRun(function () {
+  if (!isExtAlive() || !document.documentElement) return;
+
+  function publishRedactRules(rules) {
+    try {
+      var hasRules = rules && ((rules.fields || []).length || (rules.patterns || []).length);
+      if (hasRules) {
+        document.documentElement.setAttribute("data-tb-redact", JSON.stringify(rules));
+      } else {
+        document.documentElement.removeAttribute("data-tb-redact");
+      }
+    } catch (e) {}
+  }
+
+  try {
+    chrome.storage.sync.get("tracebug_redact", function (r) {
+      var _ = chrome.runtime.lastError;
+      publishRedactRules(r && r.tracebug_redact);
+    });
+    // Live updates: tracebug-init.js observes the attribute, so a change here
+    // reaches an already-initialized SDK without a reload.
+    chrome.storage.onChanged.addListener(function (changes, area) {
+      if (area === "sync" && changes.tracebug_redact) {
+        publishRedactRules(changes.tracebug_redact.newValue);
+      }
+    });
+  } catch (e) {}
+});
+
 // ── Listen for SDK requesting a screenshot (toolbar camera button) ──────────
 // The SDK dispatches this event when it detects it's in an extension context.
 // We route it to background.js which calls chrome.tabs.captureVisibleTab,

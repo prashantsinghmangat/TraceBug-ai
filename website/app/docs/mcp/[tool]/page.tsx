@@ -84,7 +84,7 @@ const TOOLS: Record<string, ToolGuide> = {
       },
     ],
     verify:
-      "Settings → MCP shows tracebug with a green dot and six tools. In agent chat, ask \"what MCP tools do you have?\" and look for list_bug_reports.",
+      "Settings → MCP shows tracebug with a green dot and nine tools. In agent chat, ask \"what MCP tools do you have?\" and look for list_bug_reports.",
     troubleshooting: [
       { problem: "Server shows a red/yellow status", fix: "Cursor launches the server with your shell's PATH — make sure npx (Node 18+) resolves. On Windows, fully restart Cursor after creating the file." },
       { problem: "Agent ignores the tools", fix: "MCP tools are used by the Agent mode, not plain chat — make sure you're in agent/composer mode." },
@@ -107,7 +107,7 @@ const TOOLS: Record<string, ToolGuide> = {
       },
       {
         title: "Refresh the servers",
-        body: "In the Cascade panel, open the MCP toolbar and hit Refresh (or restart Windsurf). tracebug should appear in the server list with its six tools.",
+        body: "In the Cascade panel, open the MCP toolbar and hit Refresh (or restart Windsurf). tracebug should appear in the server list with its nine tools.",
       },
       {
         title: "Capture a bug and ask",

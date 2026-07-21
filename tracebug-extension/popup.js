@@ -8,6 +8,7 @@
 const STORAGE_KEY = "tracebug_enabled_sites";
 const THEME_KEY = "tracebug_popup_theme";
 const MIC_KEY = "tracebug_mic_enabled";
+const REDACT_KEY = "tracebug_redact";
 const CLOUD_ENDPOINT_KEY = "tracebug_cloud_endpoint";
 // Production default; override for local dev via:
 //   chrome.storage.local.set({ tracebug_cloud_endpoint: "http://localhost:3001" })
@@ -127,6 +128,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // await loadCloudEndpoint();
   // wireAccountButtons();
   // void refreshAccount();
+
+  void initRedactionUI();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -275,4 +278,69 @@ function showToast(msg, isError) {
   t.className = "toast" + (isError ? " error" : "");
   t.style.display = "block";
   setTimeout(() => { t.style.display = "none"; }, 2500);
+}
+
+// ── Redaction rules ─────────────────────────────────────────────────────────
+// App-specific PII fields/patterns masked at capture, on top of the built-in
+// token/secret patterns. Synced via chrome.storage.sync; the content script
+// hands them to the SDK through <html data-tb-redact>.
+
+function parseRedactFields(raw) {
+  return String(raw || "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+function parseRedactPatterns(raw) {
+  return String(raw || "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function redactStateLabel(rules) {
+  const n = (rules?.fields?.length || 0) + (rules?.patterns?.length || 0);
+  return n > 0 ? `${n} rule${n === 1 ? "" : "s"}` : "";
+}
+
+async function initRedactionUI() {
+  const fieldsTa = document.getElementById("redactFields");
+  const patternsTa = document.getElementById("redactPatterns");
+  const saveBtn = document.getElementById("redactSave");
+  const state = document.getElementById("redactState");
+  if (!fieldsTa || !patternsTa || !saveBtn) return;
+
+  try {
+    const r = await chrome.storage.sync.get(REDACT_KEY);
+    const rules = r?.[REDACT_KEY];
+    if (rules) {
+      fieldsTa.value = (rules.fields || []).join(", ");
+      patternsTa.value = (rules.patterns || []).join("\n");
+      state.textContent = redactStateLabel(rules);
+    }
+  } catch {}
+
+  saveBtn.addEventListener("click", async () => {
+    const fields = parseRedactFields(fieldsTa.value);
+    const patterns = parseRedactPatterns(patternsTa.value);
+    // Reject regexes that don't compile so a typo can't silently no-op.
+    const bad = patterns.find((p) => { try { new RegExp(p, "gi"); return false; } catch { return true; } });
+    if (bad) {
+      showToast(`Invalid regex: ${bad}`, true);
+      return;
+    }
+    const rules = { fields, patterns };
+    try {
+      await chrome.storage.sync.set({ [REDACT_KEY]: rules });
+      state.textContent = redactStateLabel(rules);
+      showToast(fields.length + patterns.length > 0
+        ? "Redaction rules saved — applies to new captures"
+        : "Redaction rules cleared");
+    } catch (err) {
+      showToast("Save failed: " + (err?.message || err), true);
+    }
+  });
 }
