@@ -9,6 +9,7 @@
 // this limitation in the share-modal copy.
 
 import type { BugReport, ContextData, StorageEntry } from "../types";
+import { isCustomSensitiveKey, applyCustomRedaction } from "./custom-redaction";
 
 const REDACTED = "[REDACTED]";
 
@@ -75,7 +76,7 @@ function sanitizeUrl(url: string): string {
     const u = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
     let changed = false;
     u.searchParams.forEach((_v, k) => {
-      if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase())) {
+      if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase()) || isCustomSensitiveKey(k)) {
         u.searchParams.set(k, REDACTED);
         changed = true;
       }
@@ -95,7 +96,9 @@ function sanitizeText(s: string | undefined | null): string | undefined | null {
   if (s == null) return s;
   let out = String(s);
   for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
-  return out;
+  // User-declared fields/patterns ride the same pipe — every caller of the
+  // token-shape scrub (capture-time console/network + upload pass) gets them.
+  return applyCustomRedaction(out);
 }
 
 /**

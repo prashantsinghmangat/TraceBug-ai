@@ -4,6 +4,7 @@
 
 import { EventType } from "./types";
 import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
+import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
 
 type Emit = (type: EventType, data: Record<string, unknown>) => void;
 
@@ -82,7 +83,7 @@ function sanitizeUrl(url: string): string {
       const eqIdx = part.indexOf("=");
       if (eqIdx === -1) return part;
       const key = part.slice(0, eqIdx);
-      if (SENSITIVE_PARAM_RE.test(key)) return `${key}=[REDACTED]`;
+      if (SENSITIVE_PARAM_RE.test(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
       return part;
     }).join("&");
 
@@ -302,7 +303,8 @@ export function collectInputs(emit: Emit): () => void {
             const tag = t.tagName.toLowerCase();
             const inputType = (t as HTMLInputElement).type || "";
             const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) ||
-              /password|secret|token|ssn|credit/i.test(t.name || t.id || "");
+              /password|secret|token|ssn|credit/i.test(t.name || t.id || "") ||
+              isCustomSensitiveKey(t.name || t.id);
 
             const element: Record<string, unknown> = {
               tag, name: t.name || t.id || "", type: inputType,
@@ -371,7 +373,8 @@ export function collectFormSubmits(emit: Emit): () => void {
       for (let i = 0; i < elements.length; i++) {
         const el = elements[i] as HTMLInputElement;
         if (!el.name) continue;
-        const isSensitive = ["password"].includes(el.type) || /password|secret|token|ssn|credit/i.test(el.name);
+        const isSensitive = ["password"].includes(el.type) ||
+          /password|secret|token|ssn|credit/i.test(el.name) || isCustomSensitiveKey(el.name);
         if (el.type === "submit" || el.type === "button") continue;
         formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
       }

@@ -60,6 +60,7 @@ import {
   getNetworkFailures,
   clearNetworkFailures,
 } from "./collectors";
+import { setRedactRules } from "./sanitize/custom-redaction";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
@@ -162,7 +163,8 @@ export {
 } from "./report-builder";
 export { getNetworkFailures } from "./collectors";
 export type { NetworkFailure } from "./collectors";
-export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint } from "./types";
+export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint, RedactRules } from "./types";
+export { setRedactRules } from "./sanitize/custom-redaction";
 export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
@@ -294,6 +296,10 @@ class TraceBugSDK {
         captureConsole: "all",
         ...config,
       };
+
+      // Install app-specific redaction rules before any collector attaches —
+      // rules must be live for the first captured event.
+      setRedactRules(this.config.redact);
 
       this.initialized = true;
       // Restore the active session ID if a recording survived a reload.
@@ -1714,6 +1720,7 @@ class TraceBugSDK {
     clearVideoRecording();
     hideRecordingHUD();
     clearNetworkFailures();
+    setRedactRules(undefined);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
     clearAllAnnotations();

@@ -164,6 +164,35 @@ Warn, info, and log are each capped at the first 50 calls per session so a
 chatty app can't bloat the report. TraceBug's own `[TraceBug]` status
 messages are never captured.
 
+### `redact`
+
+App-specific redaction rules, applied **at capture time** on top of the
+built-in token/secret masking (see [bug-reporting.md → Privacy](bug-reporting.md#privacy--what-gets-redacted)).
+Use this for PII the built-ins can't know about — customer emails, account
+numbers, internal IDs.
+
+```typescript
+TraceBug.init({
+  projectId: "my-app",
+  redact: {
+    // Field names, matched case-insensitively as substrings. Covers
+    // form/input names, storage keys, URL query params, and JSON /
+    // urlencoded keys inside console output and network response snippets
+    // ("email" also covers "customer_email" and "emailAddress").
+    fields: ["email", "customer_id", "phone"],
+    // Custom regexes masked wherever they appear in captured text.
+    // Strings compile case-insensitive; invalid patterns are skipped.
+    patterns: ["\\b\\d{3}-\\d{2}-\\d{4}\\b"],   // e.g. SSN shape
+  },
+});
+```
+
+A matched form field or storage value becomes `[REDACTED]`; a matched field
+inside a JSON response snippet becomes `"customer_email": "[REDACTED]"`.
+Everything masked is counted in the export flow's `🛡 N sensitive values
+auto-masked` summary. Rules can also be swapped at runtime with the
+`setRedactRules({...})` named export (`import { setRedactRules } from "tracebug-sdk"`).
+
 ```typescript
 TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
 ```
