@@ -1588,55 +1588,42 @@ var TraceBugModule = (() => {
       console.error = origConsoleError;
     };
   }
-  function collectConsoleWarnings(emit) {
-    const origWarn = console.warn;
-    let _inside = false;
-    console.warn = function(...args) {
-      if (_inside) {
-        origWarn.apply(console, args);
-        return;
-      }
-      _inside = true;
-      try {
-        emit("console_warn", {
-          error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
-        });
-      } catch (e2) {
-      } finally {
-        _inside = false;
-      }
-      origWarn.apply(console, args);
-    };
-    return () => {
-      console.warn = origWarn;
-    };
-  }
-  function collectConsoleLogs(emit) {
-    const origLog = console.log;
+  function wrapConsoleLevel(method, type, emit) {
+    const orig = console[method];
     let _inside = false;
     let _count = 0;
-    console.log = function(...args) {
-      if (_inside || _count >= 50) {
-        origLog.apply(console, args);
+    console[method] = function(...args) {
+      const own = typeof args[0] === "string" && args[0].startsWith("[TraceBug]");
+      if (_inside || own || _count >= CONSOLE_LEVEL_CAP) {
+        orig.apply(console, args);
         return;
       }
       _inside = true;
       _count++;
       try {
-        emit("console_log", {
+        emit(type, {
           error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
         });
       } catch (e2) {
       } finally {
         _inside = false;
       }
-      origLog.apply(console, args);
+      orig.apply(console, args);
     };
     return () => {
-      console.log = origLog;
+      console[method] = orig;
     };
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, SENSITIVE_PARAM_RE, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen;
+  function collectConsoleWarnings(emit) {
+    return wrapConsoleLevel("warn", "console_warn", emit);
+  }
+  function collectConsoleInfo(emit) {
+    return wrapConsoleLevel("info", "console_info", emit);
+  }
+  function collectConsoleLogs(emit) {
+    return wrapConsoleLevel("log", "console_log", emit);
+  }
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, SENSITIVE_PARAM_RE, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -1664,6 +1651,7 @@ var TraceBugModule = (() => {
         /\/@react-refresh/
       ];
       _perfSeen = /* @__PURE__ */ new Set();
+      CONSOLE_LEVEL_CAP = 50;
     }
   });
 
@@ -21083,7 +21071,7 @@ var TraceBugModule = (() => {
     return lines.join("\n");
   }
   function describeTimelineEvent(ev) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
     switch (ev.type) {
       case "click": {
         const el = ev.data.element;
@@ -21118,9 +21106,17 @@ var TraceBugModule = (() => {
         return ((_i = ev.data.error) == null ? void 0 : _i.message) || "Unknown error";
       case "console_error":
         return (((_j = ev.data.error) == null ? void 0 : _j.message) || "").slice(0, 80);
+      // warn/info/log carry the state-transition breadcrumbs devs use to
+      // debug — without these cases they fell into the default JSON dump.
+      case "console_warn":
+        return `\u26A0 ${(((_k = ev.data.error) == null ? void 0 : _k.message) || "").slice(0, 80)}`;
+      case "console_info":
+        return `\u2139 ${(((_l = ev.data.error) == null ? void 0 : _l.message) || "").slice(0, 80)}`;
+      case "console_log":
+        return (((_m = ev.data.error) == null ? void 0 : _m.message) || "").slice(0, 80);
       case "mark": {
-        const label = ((_k = ev.data) == null ? void 0 : _k.label) || "mark";
-        const payload = (_l = ev.data) == null ? void 0 : _l.payload;
+        const label = ((_n = ev.data) == null ? void 0 : _n.label) || "mark";
+        const payload = (_o = ev.data) == null ? void 0 : _o.payload;
         if (payload && Object.keys(payload).length > 0) {
           try {
             return `\u{1F4CC} ${label} ${JSON.stringify(payload).slice(0, 60)}`;
@@ -21471,7 +21467,8 @@ var TraceBugModule = (() => {
           });
           break;
         }
-        // console_log intentionally skipped — too noisy for the Actions tab.
+        // console_info / console_log intentionally skipped — breadcrumb noise
+        // for the Actions story; they stay visible in the timeline + Console tab.
         default:
           break;
       }
@@ -21548,6 +21545,7 @@ var TraceBugModule = (() => {
       "unhandled_rejection": "error",
       "console_error": "error",
       "console_warn": "warn",
+      "console_info": "info",
       "console_log": "log"
     };
     const consoleLogs = events.filter((e2) => e2.type in levelMap).map((e2) => {
@@ -69651,7 +69649,7 @@ First element: \`${exampleSnippet}\``,
       // The emit fn is created in init(); cached here so the lazy console
       // collectors attached later can share it without re-wiring.
       this._emit = null;
-      this._consoleLevel = "errors";
+      this._consoleLevel = "all";
       this._lastErrorMsgPrompted = null;
     }
     /**
@@ -69769,7 +69767,7 @@ First element: \`${exampleSnippet}\``,
         this.cleanups.push(collectPerformanceNetwork(emit));
         this.cleanups.push(collectErrors(emit));
         this._emit = emit;
-        this._consoleLevel = (_b = this.config.captureConsole) != null ? _b : "errors";
+        this._consoleLevel = (_b = this.config.captureConsole) != null ? _b : "all";
         if (this.config.enableDashboard) {
           try {
             setRecordingState(this.recording, () => {
@@ -69953,6 +69951,7 @@ First element: \`${exampleSnippet}\``,
       this._consoleCleanups.push(collectConsoleErrors(this._emit));
       if (this._consoleLevel === "warnings" || this._consoleLevel === "all") {
         this._consoleCleanups.push(collectConsoleWarnings(this._emit));
+        this._consoleCleanups.push(collectConsoleInfo(this._emit));
       }
       if (this._consoleLevel === "all") {
         this._consoleCleanups.push(collectConsoleLogs(this._emit));

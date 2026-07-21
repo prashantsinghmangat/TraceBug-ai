@@ -28,7 +28,7 @@ TraceBug.init({
   theme: "dark",              // Default: "dark"
   toolbarPosition: "right",   // Default: "right"
   minimized: false,           // Default: false
-  captureConsole: "errors",   // Default: "errors"
+  captureConsole: "all",      // Default: "all"
   shortcuts: { ... },         // Custom keyboard shortcuts
 });
 ```
@@ -45,7 +45,7 @@ TraceBug.init({
 | `theme` | `"dark" \| "light" \| "auto"` | `"dark"` | Color theme (`"auto"` follows system preference) |
 | `toolbarPosition` | `"right" \| "left" \| "bottom-right" \| "bottom-left"` | `"right"` | Toolbar position on screen |
 | `minimized` | `boolean` | `false` | Start in minimized FAB mode |
-| `captureConsole` | `"errors" \| "warnings" \| "all" \| "none"` | `"errors"` | Console capture level |
+| `captureConsole` | `"errors" \| "warnings" \| "all" \| "none"` | `"all"` | Console capture level (see [Configuration](configuration.md)) |
 | `shortcuts` | `object` | `{}` | Custom keyboard shortcuts |
 
 ### `TraceBug.destroy()`

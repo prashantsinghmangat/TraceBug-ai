@@ -155,10 +155,14 @@ Controls which console methods are captured as events.
 
 | Value | Behavior |
 |-------|----------|
-| `"all"` | `console.error` + `console.warn` + `console.log` (last 50 logs) — **default** |
-| `"warnings"` | `console.error` + `console.warn` |
+| `"all"` | `console.error` + `console.warn` + `console.info` + `console.log` — **default** |
+| `"warnings"` | `console.error` + `console.warn` + `console.info` |
 | `"errors"` | Only `console.error` |
 | `"none"` | No console interception (runtime errors still captured) |
+
+Warn, info, and log are each capped at the first 50 calls per session so a
+chatty app can't bloat the report. TraceBug's own `[TraceBug]` status
+messages are never captured.
 
 ```typescript
 TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });

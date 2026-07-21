@@ -101,6 +101,14 @@ function describeTimelineEvent(ev: TraceBugEvent): string {
       return ev.data.error?.message || "Unknown error";
     case "console_error":
       return (ev.data.error?.message || "").slice(0, 80);
+    // warn/info/log carry the state-transition breadcrumbs devs use to
+    // debug — without these cases they fell into the default JSON dump.
+    case "console_warn":
+      return `⚠ ${(ev.data.error?.message || "").slice(0, 80)}`;
+    case "console_info":
+      return `ℹ ${(ev.data.error?.message || "").slice(0, 80)}`;
+    case "console_log":
+      return (ev.data.error?.message || "").slice(0, 80);
     case "mark": {
       const label = ev.data?.label || "mark";
       const payload = ev.data?.payload;
