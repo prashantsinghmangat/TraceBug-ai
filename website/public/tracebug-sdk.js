@@ -25582,6 +25582,8 @@ ${rrwebCssTag}
     <span class="tb-vh-title" id="title"></span>
     <span class="tb-vh-sev" id="sev"></span>
     <span class="tb-vh-sev tb-vh-prio" id="prio" style="display:none"></span>
+    <a class="tb-vh-issue" id="gh-open" style="display:none" target="_blank" rel="noopener noreferrer" title="Open a prefilled GitHub issue \u2014 opens github.com in a new tab; nothing is uploaded from this file">Open GitHub issue</a>
+    <button class="tb-vh-issue" id="gh-copy" style="display:none" title="Copy this report as issue markdown \u2014 paste into GitHub, GitLab, Jira, anywhere">Copy issue markdown</button>
     <button class="tb-vh-toggle" id="compact-toggle" title="Toggle compact mode (F)" aria-label="Toggle compact mode">\u26F6</button>
     <button class="tb-vh-toggle" id="theme-toggle" title="Toggle theme (auto / light / dark)" aria-label="Toggle theme">\u{1F317}</button>
     <button class="tb-vh-toggle" id="help-toggle" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
@@ -25769,6 +25771,8 @@ body { min-height: 100vh; }
 .tb-vh-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 6px; max-width: 1400px; margin-left: auto; margin-right: auto; font-weight: 500; }
 .tb-vh-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font-size: 14px; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
 .tb-vh-toggle:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
+.tb-vh-issue { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; padding: 0 12px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; transition: all .15s; }
+.tb-vh-issue:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
 
 /* \u2500\u2500 Layout \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 .tb-vmain { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 22px; padding: 22px 24px; max-width: 1400px; margin: 0 auto; }
@@ -26082,6 +26086,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   if (data.meta.severity) {
     sevEl.textContent = SEV[data.meta.severity] || data.meta.severity;
     sevEl.className = "tb-vh-sev tb-sev-" + data.meta.severity;
+    sevEl.title = "Severity (auto) \u2014 classified from session signals, not a tester's triage call";
   }
   // Tester-assigned priority \u2014 their triage call, distinct from auto severity.
   if (data.meta.priority) {
@@ -26089,6 +26094,40 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     if (prioEl) {
       prioEl.textContent = "\u{1F6A9} " + data.meta.priority + " priority";
       prioEl.style.display = "";
+    }
+  }
+
+  // Issue actions \u2014 precomputed at export time, no issue-builder code here.
+  // Token-free only: a prefilled github.com URL (explicit navigation, nothing
+  // uploaded) and clipboard markdown that pastes into any tracker.
+  if (data.github && data.github.issueUrl) {
+    var ghOpen = document.getElementById("gh-open");
+    if (ghOpen) { ghOpen.href = data.github.issueUrl; ghOpen.style.display = ""; }
+  }
+  if (data.github && data.github.markdown) {
+    var ghCopy = document.getElementById("gh-copy");
+    if (ghCopy) {
+      ghCopy.style.display = "";
+      ghCopy.addEventListener("click", function () {
+        var done = function (ok) {
+          ghCopy.textContent = ok ? "\u2713 Copied" : "Copy failed";
+          setTimeout(function () { ghCopy.textContent = "Copy issue markdown"; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(data.github.markdown).then(function () { done(true); }, function () { done(false); });
+        } else {
+          // file:// in older browsers \u2014 execCommand fallback.
+          try {
+            var ta = document.createElement("textarea");
+            ta.value = data.github.markdown;
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            done(ok);
+          } catch (e) { done(false); }
+        }
+      });
     }
   }
   var metaParts = [
@@ -27278,7 +27317,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       { k: "Timezone", v: env.timezone, i: ic("globe") },
       { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
       { k: "Session", v: session.sessionId.slice(0, 12), i: ic("hash") },
-      { k: "Severity", v: report.severity },
+      // "(auto)" because this is machine-classified from session signals —
+      // recipients kept mistaking it for a tester's triage call (Priority).
+      { k: "Severity (auto)", v: report.severity },
       // Tester-set only — the severity-derived fallback isn't their triage call.
       ...session.priority ? [{ k: "Priority", v: priorityLabel(session.priority), i: ic("flag") }] : []
     ];
@@ -27350,7 +27391,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       rootCauseHint: report.rootCause ? {
         hint: report.rootCause.hint,
         confidence: report.rootCause.confidence
-      } : void 0
+      } : void 0,
+      // Issue-filing helpers for the file's RECIPIENT — precomputed here so
+      // the viewer ships zero issue-builder code. Token-free actions only;
+      // API-token integrations stay in the exporter's modal.
+      github: buildGithubPayload(report, options == null ? void 0 : options.githubRepo)
     };
     if (hasRrweb && rrwebEvents) {
       const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
@@ -27369,6 +27414,22 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     const html = buildReplayHtml(payload, rrwebExtras);
     const blob2 = new Blob([html], { type: "text/html;charset=utf-8" });
     return { blob: blob2, html };
+  }
+  function buildGithubPayload(report, repo) {
+    let markdown;
+    try {
+      markdown = generateGitHubIssue(report);
+    } catch (e2) {
+    }
+    let issueUrl;
+    if (repo) {
+      try {
+        issueUrl = generateGitHubIssueUrl(repo, report);
+      } catch (e2) {
+      }
+    }
+    if (!markdown && !issueUrl) return void 0;
+    return { repo, issueUrl, markdown };
   }
   function defaultFilename(sessionId) {
     const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -27445,6 +27506,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_html_template();
       init_report_builder();
       init_redaction_summary();
+      init_github_issue();
     }
   });
 
@@ -28911,7 +28973,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -28961,8 +29023,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <div class="tb-qb-titletext">Bug Ticket \u2014 Review &amp; Export</div>
         <div class="tb-qb-sub">${ssCountLabel} \xB7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
-      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority \u2014 your triage call">
-        <option value="" disabled hidden${userPriority ? "" : " selected"}>Priority</option>
+      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority \u2014 your triage call. The auto value is derived from severity and is only a suggestion; it is not exported unless you pick one.">
+        <option value="" disabled hidden${userPriority ? "" : " selected"}>${((_r = data.report) == null ? void 0 : _r.priority) ? `Priority (auto: ${priorityLabel(data.report.priority)})` : "Priority"}</option>
         ${["high", "medium", "low"].map((p) => `<option value="${p}"${userPriority === p ? " selected" : ""}>${priorityLabel(p)}</option>`).join("")}
       </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
@@ -29106,8 +29168,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     <!-- Footer: export actions -->
     <div class="tb-qb-footer">
       <div class="tb-qb-actions">
-        <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_r = data.currentSession) == null ? void 0 : _r.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
-          ${((_s = data.currentSession) == null ? void 0 : _s.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
+        <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_s = data.currentSession) == null ? void 0 : _s.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
+          ${((_t = data.currentSession) == null ? void 0 : _t.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
         <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -29255,12 +29317,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     overlay.addEventListener("click", (e2) => {
       if (e2.target === overlay) close();
     });
-    (_t = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _t.addEventListener("click", () => {
+    (_u = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _u.addEventListener("click", () => {
       _cycleTheme();
       const btn = modal.querySelector('[data-action="theme-toggle"]');
       if (btn) btn.innerHTML = _themeIcon();
     });
-    (_u = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _u.addEventListener("change", (e2) => {
+    (_v = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _v.addEventListener("change", (e2) => {
       var _a3, _b2;
       const val = e2.target.value;
       const sid = (_a3 = data.currentSession) == null ? void 0 : _a3.sessionId;
@@ -29275,8 +29337,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const open = force !== void 0 ? force : helpEl.style.display === "none";
       helpEl.style.display = open ? "flex" : "none";
     };
-    (_v = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _v.addEventListener("click", () => toggleHelp());
-    (_w = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _w.addEventListener("click", () => toggleHelp(false));
+    (_w = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _w.addEventListener("click", () => toggleHelp());
+    (_x = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _x.addEventListener("click", () => toggleHelp(false));
     helpEl == null ? void 0 : helpEl.addEventListener("click", (e2) => {
       if (e2.target === helpEl) toggleHelp(false);
     });
@@ -29442,7 +29504,7 @@ ${description}`;
         if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
       });
     }
-    (_x = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _x.addEventListener("click", async () => {
+    (_y = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _y.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29461,7 +29523,8 @@ ${description}`;
         const result2 = await exportSessionAsHtml(data.currentSession, report, {
           descriptionOverride: userDesc ? report.steps ? `${userDesc}
 
-${report.steps}` : userDesc : void 0
+${report.steps}` : userDesc : void 0,
+          githubRepo: _githubRepo || void 0
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 Replay exported \xB7 ${sizeMb} MB`, root2);
@@ -29471,7 +29534,7 @@ ${report.steps}` : userDesc : void 0
         showToast("Replay export failed", root2);
       }
     });
-    (_y = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _y.addEventListener("click", async () => {
+    (_z = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _z.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29490,7 +29553,8 @@ ${report.steps}` : userDesc : void 0
         const result2 = await exportSessionAsZip(data.currentSession, report, {
           descriptionOverride: userDesc ? report.steps ? `${userDesc}
 
-${report.steps}` : userDesc : void 0
+${report.steps}` : userDesc : void 0,
+          githubRepo: _githubRepo || void 0
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 .zip exported \xB7 ${sizeMb} MB \u2014 drag it onto a GitHub issue to attach`, root2);
@@ -29499,7 +29563,7 @@ ${report.steps}` : userDesc : void 0
         showToast("ZIP export failed", root2);
       }
     });
-    (_z = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _z.addEventListener("click", () => {
+    (_A = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _A.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29519,7 +29583,7 @@ ${report.steps}` : userDesc : void 0
         showToast("HAR export failed", root2);
       }
     });
-    (_A = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_B = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _B.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29539,7 +29603,7 @@ ${report.steps}` : userDesc : void 0
         showToast("Report export failed", root2);
       }
     });
-    (_B = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _B.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _C.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29566,7 +29630,7 @@ ${report.steps}` : userDesc : void 0
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_C = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _C.addEventListener("click", (e2) => {
+    (_D = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _D.addEventListener("click", (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root2);
         return;
@@ -29731,7 +29795,7 @@ ${report.steps}` : userDesc : void 0
         }
       });
     });
-    (_D = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _D.addEventListener("click", () => {
+    (_E = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _E.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -29762,7 +29826,7 @@ ${report.steps}` : userDesc : void 0
         });
       });
     });
-    (_E = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _E.addEventListener("click", async () => {
+    (_F = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _F.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -29786,7 +29850,7 @@ ${report.steps}` : userDesc : void 0
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_F = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _F.addEventListener("click", async () => {
+    (_G = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _G.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -30176,7 +30240,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     rows.push(_kvRow("Timezone", env.timezone || "", _ic("globe")));
     rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
     rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), _ic("hash")));
-    rows.push(_kvRow("Severity", sevLabel));
+    rows.push(_kvRow("Severity (auto)", sevLabel));
     if (session == null ? void 0 : session.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
     const ctxKeys = Object.keys(ctx);
     if (ctxKeys.length > 0) {

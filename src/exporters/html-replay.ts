@@ -11,6 +11,7 @@ import { buildTimeline } from "../timeline-builder";
 import { buildReplayHtml, BundlePayload } from "./html-template";
 import { priorityLabel } from "../report-builder";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
+import { generateGitHubIssue, generateGitHubIssueUrl } from "../github-issue";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -19,6 +20,10 @@ export interface HtmlReplayOptions {
   filename?: string;
   /** Additional description (markdown) to prepend to the report panel. */
   descriptionOverride?: string;
+  /** "owner/repo" — when set, the exported viewer gets an "Open GitHub
+   *  issue" button with a prefilled URL. The copy-markdown button is
+   *  included regardless. */
+  githubRepo?: string;
 }
 
 export interface ExportedReplay {
@@ -168,7 +173,9 @@ async function buildReplayPayload(
     { k: "Timezone", v: env.timezone, i: ic("globe") },
     { k: "Connection", v: env.connectionType, i: connectionIcon(env.connectionType) },
     { k: "Session", v: session.sessionId.slice(0, 12), i: ic("hash") },
-    { k: "Severity", v: report.severity },
+    // "(auto)" because this is machine-classified from session signals —
+    // recipients kept mistaking it for a tester's triage call (Priority).
+    { k: "Severity (auto)", v: report.severity },
     // Tester-set only — the severity-derived fallback isn't their triage call.
     ...(session.priority ? [{ k: "Priority", v: priorityLabel(session.priority), i: ic("flag") }] : []),
   ];
@@ -248,6 +255,10 @@ async function buildReplayPayload(
       hint: report.rootCause.hint,
       confidence: report.rootCause.confidence,
     } : undefined,
+    // Issue-filing helpers for the file's RECIPIENT — precomputed here so
+    // the viewer ships zero issue-builder code. Token-free actions only;
+    // API-token integrations stay in the exporter's modal.
+    github: buildGithubPayload(report, options?.githubRepo),
   };
 
   // Compress the DOM-replay stream. It's repetitive text and gzips ~8–12×, so
@@ -276,6 +287,20 @@ async function buildReplayPayload(
   const html = buildReplayHtml(payload, rrwebExtras);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   return { blob, html };
+}
+
+function buildGithubPayload(
+  report: BugReport,
+  repo: string | undefined
+): BundlePayload["github"] {
+  let markdown: string | undefined;
+  try { markdown = generateGitHubIssue(report); } catch {}
+  let issueUrl: string | undefined;
+  if (repo) {
+    try { issueUrl = generateGitHubIssueUrl(repo, report); } catch {}
+  }
+  if (!markdown && !issueUrl) return undefined;
+  return { repo, issueUrl, markdown };
 }
 
 function defaultFilename(sessionId: string): string {

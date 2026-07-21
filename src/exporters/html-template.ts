@@ -52,6 +52,11 @@ export interface BundlePayload {
    *  ~4×. The viewer inflates it with the native `DecompressionStream` at load.
    *  `rrwebEvents` is the uncompressed fallback for old browsers on either end. */
   rrwebEventsGz?: string;
+  /** Precomputed issue-filing helpers — the file's recipient is often the
+   *  person who files the ticket. Only token-free actions belong in a
+   *  shareable file: a prefilled github.com URL and copyable markdown.
+   *  Generated at export time so no issue-builder code ships in the viewer. */
+  github?: { repo?: string; issueUrl?: string; markdown?: string };
   // Tabbed-viewer data — populated in html-replay.ts from BugReport.
   info?: Array<{ k: string; v: string; i?: string }>;
   consoleErrors?: Array<{ message: string; stack?: string; timestamp: number }>;
@@ -162,6 +167,8 @@ ${rrwebCssTag}
     <span class="tb-vh-title" id="title"></span>
     <span class="tb-vh-sev" id="sev"></span>
     <span class="tb-vh-sev tb-vh-prio" id="prio" style="display:none"></span>
+    <a class="tb-vh-issue" id="gh-open" style="display:none" target="_blank" rel="noopener noreferrer" title="Open a prefilled GitHub issue — opens github.com in a new tab; nothing is uploaded from this file">Open GitHub issue</a>
+    <button class="tb-vh-issue" id="gh-copy" style="display:none" title="Copy this report as issue markdown — paste into GitHub, GitLab, Jira, anywhere">Copy issue markdown</button>
     <button class="tb-vh-toggle" id="compact-toggle" title="Toggle compact mode (F)" aria-label="Toggle compact mode">⛶</button>
     <button class="tb-vh-toggle" id="theme-toggle" title="Toggle theme (auto / light / dark)" aria-label="Toggle theme">🌗</button>
     <button class="tb-vh-toggle" id="help-toggle" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">?</button>
@@ -357,6 +364,8 @@ body { min-height: 100vh; }
 .tb-vh-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 6px; max-width: 1400px; margin-left: auto; margin-right: auto; font-weight: 500; }
 .tb-vh-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font-size: 14px; width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
 .tb-vh-toggle:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
+.tb-vh-issue { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; padding: 0 12px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; text-decoration: none; white-space: nowrap; transition: all .15s; }
+.tb-vh-issue:hover { background: var(--tb-bg-3); border-color: var(--tb-border-hover); color: var(--tb-text); }
 
 /* ── Layout ───────────────────────────────────────── */
 .tb-vmain { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 22px; padding: 22px 24px; max-width: 1400px; margin: 0 auto; }
@@ -675,6 +684,7 @@ const REPLAY_RUNTIME = `(function(){
   if (data.meta.severity) {
     sevEl.textContent = SEV[data.meta.severity] || data.meta.severity;
     sevEl.className = "tb-vh-sev tb-sev-" + data.meta.severity;
+    sevEl.title = "Severity (auto) — classified from session signals, not a tester's triage call";
   }
   // Tester-assigned priority — their triage call, distinct from auto severity.
   if (data.meta.priority) {
@@ -682,6 +692,40 @@ const REPLAY_RUNTIME = `(function(){
     if (prioEl) {
       prioEl.textContent = "🚩 " + data.meta.priority + " priority";
       prioEl.style.display = "";
+    }
+  }
+
+  // Issue actions — precomputed at export time, no issue-builder code here.
+  // Token-free only: a prefilled github.com URL (explicit navigation, nothing
+  // uploaded) and clipboard markdown that pastes into any tracker.
+  if (data.github && data.github.issueUrl) {
+    var ghOpen = document.getElementById("gh-open");
+    if (ghOpen) { ghOpen.href = data.github.issueUrl; ghOpen.style.display = ""; }
+  }
+  if (data.github && data.github.markdown) {
+    var ghCopy = document.getElementById("gh-copy");
+    if (ghCopy) {
+      ghCopy.style.display = "";
+      ghCopy.addEventListener("click", function () {
+        var done = function (ok) {
+          ghCopy.textContent = ok ? "✓ Copied" : "Copy failed";
+          setTimeout(function () { ghCopy.textContent = "Copy issue markdown"; }, 1600);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(data.github.markdown).then(function () { done(true); }, function () { done(false); });
+        } else {
+          // file:// in older browsers — execCommand fallback.
+          try {
+            var ta = document.createElement("textarea");
+            ta.value = data.github.markdown;
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            done(ok);
+          } catch (e) { done(false); }
+        }
+      });
     }
   }
   var metaParts = [
