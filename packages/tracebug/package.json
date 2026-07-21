@@ -1,6 +1,7 @@
 {
   "name": "tracebug",
-  "version": "1.7.0",
+  "version": "1.8.0",
+  "mcpName": "io.github.prashantsinghmangat/tracebug",
   "description": "TraceBug CLI — local MCP server that lets AI coding agents (Claude Code, Cursor, VS Code) debug TraceBug bug-report exports, plus framework setup via `tracebug init`. Zero dependencies.",
   "type": "module",
   "bin": {

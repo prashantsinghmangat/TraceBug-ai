@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.prashantsinghmangat/tracebug",
+  "description": "Local stdio MCP server exposing TraceBug bug-report .html files (session replay, console errors, network activity, repro timeline, screenshots) to AI coding agents. All data is read from local disk — zero network connections.",
+  "repository": {
+    "url": "https://github.com/prashantsinghmangat/tracebug-ai",
+    "source": "github"
+  },
+  "websiteUrl": "https://tracebug.dev",
+  "version": "1.8.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "tracebug",
+      "version": "1.8.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "description": "Subcommand that starts the MCP server",
+          "isRequired": true
+        },
+        {
+          "type": "named",
+          "name": "--dir",
+          "description": "Directory containing TraceBug .html bug-report exports (defaults to the current working directory)",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
