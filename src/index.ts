@@ -187,6 +187,8 @@ export type { JiraTicket } from "./jira-issue";
 export { generatePdfReport, downloadPdfAsHtml } from "./pdf-generator";
 export { generateBugTitle, generateFlowSummary } from "./title-generator";
 export { buildTimeline, formatTimelineText } from "./timeline-builder";
+export { summarizeRedactions, formatRedactionSummary } from "./redaction-summary";
+export type { RedactionSummary } from "./redaction-summary";
 export { startVoiceRecording, stopVoiceRecording, isVoiceSupported, isVoiceRecording, getVoiceTranscripts, clearVoiceTranscripts } from "./voice-recorder";
 export type { VoiceTranscript } from "./voice-recorder";
 export {

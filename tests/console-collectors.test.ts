@@ -52,6 +52,17 @@ describe.each([
     expect((emitted[49].data as any).error.message).toBe('m49');
   });
 
+  it('masks token shapes at capture so the offline export never sees them', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQssw5c';
+    const { emitted, cleanup, call } = capture(collect, method);
+    try {
+      call('auth header:', `Bearer ${jwt}`);
+    } finally { cleanup(); }
+    const msg = (emitted[0].data as any).error.message as string;
+    expect(msg).toContain('[REDACTED]');
+    expect(msg).not.toContain(jwt);
+  });
+
   it('restores the original console method on cleanup', () => {
     const orig = console[method];
     const { cleanup } = capture(collect, method);

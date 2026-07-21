@@ -690,8 +690,8 @@ export function collectErrors(emit: Emit): () => void {
     try {
       emit("error", {
         error: {
-          message: typeof msg === "string" ? msg : "Unknown error",
-          stack: error?.stack, source, line, column: col,
+          message: sanitizeTokenShapes(typeof msg === "string" ? msg : "Unknown error"),
+          stack: error?.stack && sanitizeTokenShapes(error.stack), source, line, column: col,
         },
       });
     } catch {}
@@ -701,7 +701,10 @@ export function collectErrors(emit: Emit): () => void {
   const onRejection = (e: PromiseRejectionEvent) => {
     try {
       emit("unhandled_rejection", {
-        error: { message: e.reason?.message || String(e.reason), stack: e.reason?.stack },
+        error: {
+          message: sanitizeTokenShapes(e.reason?.message || String(e.reason)),
+          stack: e.reason?.stack && sanitizeTokenShapes(e.reason.stack),
+        },
       });
     } catch {}
   };
@@ -728,7 +731,10 @@ export function collectConsoleErrors(emit: Emit): () => void {
     _insideEmit = true;
     try {
       emit("console_error", {
-        error: { message: args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ") },
+        // Token-shape scrub at capture — a token logged to the console must
+        // never reach the offline .html export unmasked (the cloud sanitizer
+        // only covers the upload path).
+        error: { message: sanitizeTokenShapes(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")) },
       });
     } catch {} finally { _insideEmit = false; }
     origConsoleError.apply(console, args);
@@ -760,7 +766,9 @@ function wrapConsoleLevel(method: "warn" | "info" | "log", type: EventType, emit
     _count++;
     try {
       emit(type, {
-        error: { message: args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ") },
+        // Same capture-time token scrub as console_error — the offline
+        // export path never runs the cloud sanitizer.
+        error: { message: sanitizeTokenShapes(args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")) },
       });
     } catch {} finally { _inside = false; }
     orig.apply(console, args); // ALWAYS call original

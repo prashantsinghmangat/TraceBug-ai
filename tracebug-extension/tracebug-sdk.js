@@ -1534,8 +1534,8 @@ var TraceBugModule = (() => {
       try {
         emit("error", {
           error: {
-            message: typeof msg === "string" ? msg : "Unknown error",
-            stack: error == null ? void 0 : error.stack,
+            message: sanitizeTokenShapes(typeof msg === "string" ? msg : "Unknown error"),
+            stack: (error == null ? void 0 : error.stack) && sanitizeTokenShapes(error.stack),
             source,
             line,
             column: col
@@ -1554,7 +1554,10 @@ var TraceBugModule = (() => {
       var _a2, _b;
       try {
         emit("unhandled_rejection", {
-          error: { message: ((_a2 = e2.reason) == null ? void 0 : _a2.message) || String(e2.reason), stack: (_b = e2.reason) == null ? void 0 : _b.stack }
+          error: {
+            message: sanitizeTokenShapes(((_a2 = e2.reason) == null ? void 0 : _a2.message) || String(e2.reason)),
+            stack: ((_b = e2.reason) == null ? void 0 : _b.stack) && sanitizeTokenShapes(e2.reason.stack)
+          }
         });
       } catch (e3) {
       }
@@ -1576,7 +1579,10 @@ var TraceBugModule = (() => {
       _insideEmit = true;
       try {
         emit("console_error", {
-          error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
+          // Token-shape scrub at capture — a token logged to the console must
+          // never reach the offline .html export unmasked (the cloud sanitizer
+          // only covers the upload path).
+          error: { message: sanitizeTokenShapes(args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ")) }
         });
       } catch (e2) {
       } finally {
@@ -1602,7 +1608,9 @@ var TraceBugModule = (() => {
       _count++;
       try {
         emit(type, {
-          error: { message: args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ") }
+          // Same capture-time token scrub as console_error — the offline
+          // export path never runs the cloud sanitizer.
+          error: { message: sanitizeTokenShapes(args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ")) }
         });
       } catch (e2) {
       } finally {
@@ -12976,8 +12984,8 @@ var TraceBugModule = (() => {
       if (!selection || collapsed && (selection == null ? void 0 : selection.isCollapsed)) return;
       collapsed = selection.isCollapsed || false;
       const ranges = [];
-      const count = selection.rangeCount || 0;
-      for (let i2 = 0; i2 < count; i2++) {
+      const count2 = selection.rangeCount || 0;
+      for (let i2 = 0; i2 < count2; i2++) {
         const range = selection.getRangeAt(i2);
         const { startContainer, startOffset, endContainer, endOffset } = range;
         const blocked = isBlocked(startContainer, blockClass, blockSelector, true) || isBlocked(endContainer, blockClass, blockSelector, true);
@@ -19322,19 +19330,19 @@ var TraceBugModule = (() => {
             }
           });
           const MAX_RETRY_TIME = 10;
-          let count = 0;
+          let count2 = 0;
           const adoptStyleSheets = (targetHost2, styleIds) => {
             const stylesToAdopt = styleIds.map((styleId) => this.styleMirror.getStyle(styleId)).filter((style) => style !== null);
             if (hasShadowRoot(targetHost2))
               targetHost2.shadowRoot.adoptedStyleSheets = stylesToAdopt;
             else if (targetHost2.nodeName === "#document")
               targetHost2.adoptedStyleSheets = stylesToAdopt;
-            if (stylesToAdopt.length !== styleIds.length && count < MAX_RETRY_TIME) {
+            if (stylesToAdopt.length !== styleIds.length && count2 < MAX_RETRY_TIME) {
               setTimeout(
                 () => adoptStyleSheets(targetHost2, styleIds),
-                0 + 100 * count
+                0 + 100 * count2
               );
-              count++;
+              count2++;
             }
           };
           adoptStyleSheets(targetHost, data.styleIds);
@@ -21290,11 +21298,11 @@ var TraceBugModule = (() => {
       if (e2.type !== "click") continue;
       const sel = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.selector) || "";
       if (!sel) continue;
-      let count = 1;
+      let count2 = 1;
       for (let j = i2 - 1; j >= 0 && events[i2].timestamp - events[j].timestamp <= RAGE_WINDOW_MS; j--) {
-        if (events[j].type === "click" && (((_d = (_c = events[j].data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || "") === sel) count += 1;
+        if (events[j].type === "click" && (((_d = (_c = events[j].data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || "") === sel) count2 += 1;
       }
-      if (count >= RAGE_MIN_CLICKS) map.set(i2, "rage");
+      if (count2 >= RAGE_MIN_CLICKS) map.set(i2, "rage");
     }
     for (let i2 = 0; i2 < events.length; i2++) {
       if (events[i2].type !== "click") continue;
@@ -23153,10 +23161,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   }
   function _updateBannerCount() {
     if (!_modeBanner) return;
-    const count = _selectedElements.size;
-    if (count > 1) {
+    const count2 = _selectedElements.size;
+    if (count2 > 1) {
       const textEl = _modeBanner.querySelector("span:nth-child(3)");
-      if (textEl) textEl.textContent = `${count} elements selected. Right-click to add feedback.`;
+      if (textEl) textEl.textContent = `${count2} elements selected. Right-click to add feedback.`;
     }
   }
   function _isOurElement(el) {
@@ -24479,6 +24487,67 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       "use strict";
       init_plan();
       MODAL_ID = "tracebug-upgrade-modal";
+    }
+  });
+
+  // src/redaction-summary.ts
+  function count(s2, re) {
+    if (!s2) return 0;
+    const m = s2.match(re);
+    return m ? m.length : 0;
+  }
+  function summarizeRedactions(report) {
+    var _a2, _b, _c, _d, _e, _f, _g;
+    const requests = (((_a2 = report.networkRequests) == null ? void 0 : _a2.length) ? report.networkRequests : report.networkErrors) || [];
+    let urlParams = count((_b = report.environment) == null ? void 0 : _b.url, PARAM_RE);
+    for (const r2 of requests) urlParams += count(r2.url, PARAM_RE);
+    const seenFields = /* @__PURE__ */ new Set();
+    for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
+      if (ev.type === "input") {
+        const el = (_d = ev.data) == null ? void 0 : _d.element;
+        if ((el == null ? void 0 : el.value) === REDACTED2) seenFields.add(`input:${el.name || el.id || "field"}`);
+      } else if (ev.type === "form_submit") {
+        const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
+        if (fields && typeof fields === "object") {
+          for (const [name, v2] of Object.entries(fields)) {
+            if (v2 === REDACTED2) seenFields.add(`form:${name}`);
+          }
+        }
+      }
+    }
+    const formFields = seenFields.size;
+    let storageKeys = 0;
+    const st = report.storage;
+    for (const list of [st == null ? void 0 : st.local, st == null ? void 0 : st.session, st == null ? void 0 : st.cookies]) {
+      if (!list) continue;
+      for (const e2 of list) if (e2.redacted) storageKeys++;
+    }
+    const consoleTexts = (((_g = report.consoleLogs) == null ? void 0 : _g.length) ? report.consoleLogs : report.consoleErrors) || [];
+    let tokens = 0;
+    for (const c2 of consoleTexts) {
+      tokens += count(c2.message, TOKEN_RE) + count(c2.stack, TOKEN_RE);
+    }
+    for (const r2 of requests) tokens += count(r2.response, TOKEN_RE);
+    return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
+  }
+  function formatRedactionSummary(s2) {
+    if (s2.total === 0) return null;
+    const part = (n2, singular, plural = singular + "s") => n2 > 0 ? `${n2} ${n2 === 1 ? singular : plural}` : null;
+    const parts = [
+      part(s2.tokens, "token"),
+      part(s2.urlParams, "URL param"),
+      part(s2.formFields, "form field"),
+      part(s2.storageKeys, "storage value")
+    ].filter(Boolean);
+    return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
+  }
+  var REDACTED2, TOKEN_RE, PARAM_RE;
+  var init_redaction_summary = __esm({
+    "src/redaction-summary.ts"() {
+      "use strict";
+      REDACTED2 = "[REDACTED]";
+      TOKEN_RE = /\[REDACTED\]/g;
+      PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
     }
   });
 
@@ -27150,6 +27219,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         info.push({ k, v: String(report.context[k]) });
       }
     }
+    const redactionLine = formatRedactionSummary(summarizeRedactions(report));
+    if (redactionLine) info.push({ k: "Privacy", v: `\u{1F6E1} ${redactionLine}`, i: "" });
     const STORAGE_DISPLAY_CAP = 20;
     function pushStorageRows(label, entries, droppedAtCapture) {
       if (!entries || entries.length === 0) return;
@@ -27305,6 +27376,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_timeline_builder();
       init_html_template();
       init_report_builder();
+      init_redaction_summary();
     }
   });
 
@@ -28700,6 +28772,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const networkCount = (_k = (_j = (_g = (_f = data.report) == null ? void 0 : _f.networkRequests) == null ? void 0 : _g.length) != null ? _j : (_i = (_h = data.report) == null ? void 0 : _h.networkErrors) == null ? void 0 : _i.length) != null ? _k : 0;
     const actionsCount = (_n = (_m = (_l = data.report) == null ? void 0 : _l.sessionSteps) == null ? void 0 : _m.length) != null ? _n : 0;
     const annotationsCount = ((_q = (_p = (_o = data.currentSession) == null ? void 0 : _o.annotations) == null ? void 0 : _p.length) != null ? _q : 0) + _getElementAnnotationCount();
+    const redactionLine = data.report ? formatRedactionSummary(summarizeRedactions(data.report)) : null;
     modal.innerHTML = `
     <!-- Header -->
     <div class="tb-qb-header">
@@ -28881,7 +28954,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         </div>
       </div>
       <div class="tb-qb-tip">
-        <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
+        <span>${redactionLine ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture \u2014 they never enter the report. See docs \u2192 Privacy for the full pattern list.">\u{1F6E1} ${escapeHtml2(redactionLine)}</span>` : `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`}</span>
         <span class="tb-qb-tip-right">
           <span class="tb-qb-fb">Enough info to reproduce?
             <a href="${_feedbackUrl("other", "Capture quality \u{1F44D} \u2014 the ticket had enough to reproduce the bug.")}" target="_blank" rel="noopener" title="Yes \u2014 send a quick thumbs up">\u{1F44D}</a>
@@ -30902,6 +30975,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID2} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID2} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID2} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
+    #${MODAL_ID2} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }
     #${MODAL_ID2} .tb-qb-fb { color:var(--tb-text-muted); }
     #${MODAL_ID2} .tb-qb-fb a { text-decoration:none; margin-left:4px; opacity:0.75; transition:opacity .15s, transform .15s; display:inline-block; }
     #${MODAL_ID2} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
@@ -31242,6 +31316,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_github_issue();
       init_jira_issue();
       init_title_generator();
+      init_redaction_summary();
       init_environment();
       init_toast();
       init_helpers();
@@ -41179,16 +41254,16 @@ Response: ${match.response.slice(0, 160)}` : "";
                 waiting[id2] = 1;
                 promises[id2] = promise;
                 var onSuccess = function onSuccess2(result2) {
-                  var count = waiting[id2];
+                  var count2 = waiting[id2];
                   if (isFailed) {
                     throw new Error("Memoizee error: Detected unordered then|done & finally resolution, which in turn makes proper detection of success/failure impossible (when in 'done:finally' mode)\nConsider to rely on 'then' or 'done' mode instead.");
                   }
-                  if (!count) {
+                  if (!count2) {
                     return;
                   }
                   delete waiting[id2];
                   cache2[id2] = result2;
-                  conf.emit("setasync", id2, count);
+                  conf.emit("setasync", id2, count2);
                 };
                 var onFailure = function onFailure2() {
                   isFailed = true;
@@ -45915,7 +45990,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             return _getShadowSelector(generateAncestry, elm, options);
           }
           function getXPathArray(node2, path) {
-            var sibling, count;
+            var sibling, count2;
             if (!node2) {
               return [];
             }
@@ -45930,25 +46005,25 @@ Response: ${match.response.slice(0, 160)}` : "";
               path = getXPathArray(node2.parentNode, path);
             }
             if (node2.previousSibling) {
-              count = 1;
+              count2 = 1;
               sibling = node2.previousSibling;
               do {
                 if (sibling.nodeType === 1 && sibling.nodeName === node2.nodeName) {
-                  count++;
+                  count2++;
                 }
                 sibling = sibling.previousSibling;
               } while (sibling);
-              if (count === 1) {
-                count = null;
+              if (count2 === 1) {
+                count2 = null;
               }
             } else if (node2.nextSibling) {
               sibling = node2.nextSibling;
               do {
                 if (sibling.nodeType === 1 && sibling.nodeName === node2.nodeName) {
-                  count = 1;
+                  count2 = 1;
                   sibling = null;
                 } else {
-                  count = null;
+                  count2 = null;
                   sibling = sibling.previousSibling;
                 }
               } while (sibling);
@@ -45960,8 +46035,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               if (_id2 && node2.ownerDocument.querySelectorAll("#" + _id2).length === 1) {
                 element.id = node2.getAttribute("id");
               }
-              if (count > 1) {
-                element.count = count;
+              if (count2 > 1) {
+                element.count = count2;
               }
               path.push(element);
             }
@@ -69065,6 +69140,7 @@ First element: \`${exampleSnippet}\``,
     downloadVideoRecording: () => downloadVideoRecording,
     exportSessionAsHar: () => exportSessionAsHar,
     extractClickedElement: () => extractClickedElement,
+    formatRedactionSummary: () => formatRedactionSummary,
     formatRootCauseLine: () => formatRootCauseLine,
     formatTimelineText: () => formatTimelineText,
     generateAIPrompt: () => generateAIPrompt,
@@ -69114,6 +69190,7 @@ First element: \`${exampleSnippet}\``,
     startVoiceRecording: () => startVoiceRecording,
     stopVideoRecording: () => stopVideoRecording,
     stopVoiceRecording: () => stopVoiceRecording,
+    summarizeRedactions: () => summarizeRedactions,
     undismissIssue: () => undismissIssue
   });
   init_storage();
@@ -69624,6 +69701,7 @@ First element: \`${exampleSnippet}\``,
   init_pdf_generator();
   init_title_generator();
   init_timeline_builder();
+  init_redaction_summary();
   init_voice_recorder();
   init_video_recorder();
   init_scanner();

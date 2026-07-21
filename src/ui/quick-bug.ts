@@ -14,6 +14,7 @@ import type { VideoRecording } from "../video-recorder";
 import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
 import { generateBugTitle, generateFlowSummary } from "../title-generator";
+import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast } from "./toast";
@@ -397,6 +398,9 @@ function _openModal(
   const annotationsCount =
     (data.currentSession?.annotations?.length ?? 0) +
     _getElementAnnotationCount();
+  // Surface what the sanitizers masked — the redaction pipeline is invisible
+  // otherwise, and "is this file safe to share?" is the #1 question at export.
+  const redactionLine = data.report ? formatRedactionSummary(summarizeRedactions(data.report)) : null;
 
   modal.innerHTML = `
     <!-- Header -->
@@ -580,7 +584,9 @@ function _openModal(
         </div>
       </div>
       <div class="tb-qb-tip">
-        <span>Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime</span>
+        <span>${redactionLine
+          ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture — they never enter the report. See docs → Privacy for the full pattern list.">🛡 ${escapeHtml(redactionLine)}</span>`
+          : `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`}</span>
         <span class="tb-qb-tip-right">
           <span class="tb-qb-fb">Enough info to reproduce?
             <a href="${_feedbackUrl("other", "Capture quality 👍 — the ticket had enough to reproduce the bug.")}" target="_blank" rel="noopener" title="Yes — send a quick thumbs up">👍</a>
@@ -2874,6 +2880,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-more-item:hover { background:var(--tb-accent-subtle); }
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
+    #${MODAL_ID} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }
     #${MODAL_ID} .tb-qb-fb { color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-fb a { text-decoration:none; margin-left:4px; opacity:0.75; transition:opacity .15s, transform .15s; display:inline-block; }
     #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
