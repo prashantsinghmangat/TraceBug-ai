@@ -464,6 +464,20 @@ function _openModal(
           <div id="tb-qb-scrubber" class="tb-qb-scrubber-wrap"></div>
         ` : ""}
 
+        ${ssCount === 0 && video ? `
+          <!-- Video present but no screenshots: without this row there is NO
+               screenshot affordance at all (the empty-state "Take screenshot"
+               block only renders when there's no video, and "Grab frame" needs
+               a playable preview — CSP-blocked pages have neither). -->
+          <div class="tb-qb-ss-header">
+            <span class="tb-qb-ss-count">No screenshots</span>
+            <button data-action="add-screenshot" class="tb-qb-ss-add" title="Capture a fresh screenshot of the current page">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Add page shot
+            </button>
+          </div>
+        ` : ""}
+
         ${ssCount > 0 ? `
           <div class="tb-qb-ss-header">
             <span class="tb-qb-ss-count">${ssCount} screenshot${ssCount === 1 ? "" : "s"}</span>
@@ -1352,11 +1366,50 @@ function _openModal(
     }
   });
 
+  // ── Extension-iframe player state ───────────────────────────────────────
+  // When the host page's CSP blocks the inline blob video, we swap in an
+  // iframe pointing at the extension's player.html (extension origin →
+  // extension CSP → plays everywhere). Seek and grab-frame then travel over
+  // postMessage instead of touching a <video> element directly.
+  const _ifr: { win: Window | null; origin: string } = { win: null, origin: "" };
+  let _ifrFramePending:
+    | ((d: { dataUrl?: string; width?: number; height?: number; currentTime?: number } | null) => void)
+    | null = null;
+
   // "Grab frame" — captures the CURRENT video frame (pausing first so the saved
   // image matches exactly what the reviewer sees) and adds it as a screenshot.
   // This is the useful capture while reviewing a recording; the page-shot button
   // above just snaps the live page.
-  modal.querySelector('[data-action="grab-frame"]')?.addEventListener("click", () => {
+  modal.querySelector('[data-action="grab-frame"]')?.addEventListener("click", async () => {
+    // Iframe-player path: ask the extension page for the frame.
+    if (_ifr.win) {
+      const data = await new Promise<{ dataUrl?: string; width?: number; height?: number; currentTime?: number } | null>((resolve) => {
+        _ifrFramePending = resolve;
+        _ifr.win!.postMessage({ type: "tb:player:grab-frame" }, _ifr.origin);
+        setTimeout(() => { if (_ifrFramePending) { _ifrFramePending = null; resolve(null); } }, 3000);
+      });
+      if (data?.dataUrl) {
+        const t = Math.floor(data.currentTime || 0);
+        const mm = String(Math.floor(t / 60)).padStart(2, "0");
+        const ss2 = String(t % 60).padStart(2, "0");
+        const n = getScreenshots().length + 1;
+        pushScreenshot({
+          id: `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          timestamp: Date.now(),
+          dataUrl: data.dataUrl,
+          filename: `${String(n).padStart(2, "0")}_frame_${mm}-${ss2}.png`,
+          eventContext: `Video frame at ${mm}:${ss2}`,
+          page: window.location.pathname,
+          width: data.width || 0,
+          height: data.height || 0,
+        });
+        showToast(`✓ Frame at ${mm}:${ss2} added`, root);
+        refreshQuickBugCapture(root).catch(() => {});
+      } else {
+        showToast("Couldn't grab that frame", root);
+      }
+      return;
+    }
     const v = modal.querySelector<HTMLVideoElement>("#tb-qb-video");
     if (!v) return;
     if (!v.paused) { try { v.pause(); } catch {} }
@@ -1443,11 +1496,77 @@ function _openModal(
     // replace the black box with a clear explanation instead of a mystery.
     const preview = videoEl.closest(".tb-qb-preview") as HTMLElement | null;
     let _blockedShown = false;
+
+    // Extension path: replace the blocked <video> with an iframe onto the
+    // extension's player.html. The iframe document runs under the EXTENSION's
+    // CSP, so the blob plays no matter how strict the host page is. The
+    // content script publishes the URL on <html data-tb-player-url>; npm-SDK
+    // pages don't have it and keep the explanatory fallback card.
+    const mountIframePlayer = (host: HTMLElement): boolean => {
+      const playerUrl = document.documentElement.getAttribute("data-tb-player-url");
+      if (!playerUrl || !video || (!video.dataUrl && !video.blob)) {
+        console.info("[TraceBug] CSP block: extension player unavailable (url:", !!playerUrl, "dataUrl:", !!video?.dataUrl, "blob:", !!video?.blob, ") — showing fallback card");
+        return false;
+      }
+      let playerOrigin: string;
+      try { playerOrigin = new URL(playerUrl).origin; } catch { return false; }
+      console.info("[TraceBug] CSP block detected — mounting extension iframe player");
+      // The recording travels as RAW BYTES (ArrayBuffer, transferable), never
+      // as a data: URL string — Chromium caps every URL at 2MB, so any
+      // recording over ~1.5MB makes fetch(dataUrl) AND <video src=data:...>
+      // fail with an invalid URL. Structured clone has no such cap.
+      const bytesPromise: Promise<ArrayBuffer | null> = video.blob
+        ? video.blob.arrayBuffer().catch(() => null)
+        : video.dataUrl
+          ? Promise.resolve().then(() => {
+              const b64 = video.dataUrl!.slice(video.dataUrl!.indexOf(",") + 1);
+              const bin = atob(b64);
+              const bytes = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              return bytes.buffer as ArrayBuffer;
+            }).catch(() => null)
+          : Promise.resolve(null);
+      host.style.background = "#0B0B10";
+      host.innerHTML = "";
+      const iframe = document.createElement("iframe");
+      iframe.src = playerUrl;
+      iframe.title = "TraceBug recording";
+      iframe.style.cssText = "display:block;width:100%;aspect-ratio:16/9;border:0;background:#0B0B10";
+      host.appendChild(iframe);
+      const onMsg = (e: MessageEvent) => {
+        if (!iframe.isConnected) { window.removeEventListener("message", onMsg); return; }
+        if (e.origin !== playerOrigin || e.source !== iframe.contentWindow) return;
+        const t = (e.data && e.data.type) || "";
+        if (t === "tb:player:ready") {
+          bytesPromise.then((buf) => {
+            if (!buf) { console.warn("[TraceBug] could not get recording bytes for player"); return; }
+            console.info("[TraceBug] sending", Math.round(buf.byteLength / 1024), "KB to player");
+            iframe.contentWindow?.postMessage(
+              { type: "tb:player:load", buffer: buf, mimeType: video.mimeType || "video/webm", durationMs: video.durationMs },
+              playerOrigin,
+              [buf]
+            );
+          });
+          _ifr.win = iframe.contentWindow;
+          _ifr.origin = playerOrigin;
+        } else if (t === "tb:player:frame" && _ifrFramePending) {
+          _ifrFramePending(e.data);
+          _ifrFramePending = null;
+        } else if (t === "tb:player:error" && _ifrFramePending) {
+          _ifrFramePending(null);
+          _ifrFramePending = null;
+        }
+      };
+      window.addEventListener("message", onMsg);
+      return true;
+    };
+
     const showBlockedNotice = () => {
       if (_blockedShown || !preview) return;
       // networkState 3 = NETWORK_NO_SOURCE; a valid-but-slow local blob reaches
       // readyState>=1 well within the timeout, so this only trips on a real block.
       _blockedShown = true;
+      if (mountIframePlayer(preview)) return;
       preview.style.background = "var(--tb-bg-secondary)";
       preview.innerHTML = `
         <div style="padding:26px 18px;text-align:center;color:var(--tb-text-secondary,#9aa0aa);font-size:12px;line-height:1.65">
@@ -1474,6 +1593,11 @@ function _openModal(
       btn.addEventListener("click", () => {
         const seconds = Number(btn.dataset.videoSeek);
         if (!Number.isFinite(seconds)) return;
+        // Iframe-player path (CSP-blocked host): seek over postMessage.
+        if (_ifr.win) {
+          _ifr.win.postMessage({ type: "tb:player:seek", seconds }, _ifr.origin);
+          return;
+        }
         videoEl.currentTime = seconds;
         videoEl.play().catch(() => {});
       });

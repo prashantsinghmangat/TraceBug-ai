@@ -20824,6 +20824,72 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/url-hygiene.ts
+  function isNoiseRequest(url) {
+    if (!url) return false;
+    if (ASSET_EXT_RE.test(url)) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    try {
+      const u2 = new URL(url);
+      const host2 = u2.hostname.toLowerCase();
+      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
+      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
+      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
+      if (pageHost && host2 === pageHost) return false;
+      return NOISE_PATH_RE.test(u2.pathname);
+    } catch (e2) {
+      return false;
+    }
+  }
+  function isStaticResource(url) {
+    if (!url) return false;
+    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
+  }
+  function shortDisplayPath(url, base) {
+    if (!url) return "";
+    let pathname;
+    try {
+      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
+      pathname = new URL(url, origin).pathname || url;
+    } catch (e2) {
+      pathname = url;
+    }
+    const segments = pathname.split("/").map(
+      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
+    );
+    let out = segments.join("/");
+    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
+    return out;
+  }
+  var ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
+  var init_url_hygiene = __esm({
+    "src/url-hygiene.ts"() {
+      "use strict";
+      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
+      NOISE_HOSTS = [
+        "camo.githubusercontent.com",
+        "avatars.githubusercontent.com",
+        "img.shields.io",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "google-analytics.com",
+        "www.google-analytics.com",
+        "googletagmanager.com",
+        "www.googletagmanager.com",
+        "stats.g.doubleclick.net",
+        "connect.facebook.net",
+        "cdn.segment.com",
+        "api.segment.io",
+        "gravatar.com",
+        "www.gravatar.com"
+      ];
+      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
+      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
+      SEGMENT_MAX = 24;
+      PATH_MAX = 60;
+    }
+  });
+
   // src/title-generator.ts
   function generateBugTitle(session) {
     var _a2;
@@ -20866,8 +20932,8 @@ var TraceBugModule = (() => {
   function generateFlowTitle(userActions, allEvents) {
     const failedApis = allEvents.filter(
       (e2) => {
-        var _a2, _b;
-        return e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0);
+        var _a2, _b, _c;
+        return e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0) && !isNoiseRequest((_c = e2.data.request) == null ? void 0 : _c.url);
       }
     );
     if (failedApis.length > 0) {
@@ -20966,22 +21032,18 @@ var TraceBugModule = (() => {
     return str.length > len ? str.slice(0, len) + "..." : str;
   }
   function shortenUrl2(url) {
-    if (!url) return "";
-    try {
-      return new URL(url, window.location.origin).pathname;
-    } catch (e2) {
-      return url.slice(0, 40);
-    }
+    return shortDisplayPath(url);
   }
   var init_title_generator = __esm({
     "src/title-generator.ts"() {
       "use strict";
+      init_url_hygiene();
     }
   });
 
   // src/timeline-builder.ts
   function buildTimeline(events) {
-    var _a2, _b;
+    var _a2, _b, _c;
     if (events.length === 0) return [];
     const ordered = [...events].sort((a2, b) => a2.timestamp - b.timestamp);
     const startTs = ordered[0].timestamp;
@@ -20991,6 +21053,11 @@ var TraceBugModule = (() => {
       const elapsed = formatElapsed(ev.timestamp - startTs);
       const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
       const isApiError = ev.type === "api_request" && (((_a2 = ev.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = ev.data.request) == null ? void 0 : _b.statusCode) === 0);
+      if (ev.type === "api_request") {
+        const reqUrl = (_c = ev.data.request) == null ? void 0 : _c.url;
+        if (isNoiseRequest(reqUrl)) continue;
+        if (!isApiError && isStaticResource(reqUrl)) continue;
+      }
       const description = describeTimelineEvent(ev);
       const entryKey = `${ev.type}:${description}`;
       if (entryKey === lastDescription) continue;
@@ -21084,6 +21151,7 @@ var TraceBugModule = (() => {
   var init_timeline_builder = __esm({
     "src/timeline-builder.ts"() {
       "use strict";
+      init_url_hygiene();
     }
   });
 
@@ -21358,10 +21426,13 @@ var TraceBugModule = (() => {
           const r2 = ((_g = e2.data) == null ? void 0 : _g.request) || {};
           const status = Number(r2.statusCode || 0);
           const isError = status === 0 || status >= 400;
+          const url = String(r2.url || "");
+          if (isNoiseRequest(url)) break;
+          if (!isError && isStaticResource(url)) break;
           chips.push({
             verb: isError ? "Request failed" : "Request",
             kind: "api",
-            detail: `${String(r2.method || "GET").toUpperCase()} ${truncate2(String(r2.url || ""), MAX_DETAIL_LEN)} \u2192 ${status === 0 ? "ERR" : status}`,
+            detail: `${String(r2.method || "GET").toUpperCase()} ${truncate2(url, MAX_DETAIL_LEN)} \u2192 ${status === 0 ? "ERR" : status}`,
             timestamp: e2.timestamp,
             isError
           });
@@ -21411,6 +21482,7 @@ var TraceBugModule = (() => {
   var init_action_chips = __esm({
     "src/action-chips.ts"() {
       "use strict";
+      init_url_hygiene();
       MAX_CHIPS = 60;
       MAX_INLINE_ATTRS = 4;
       MAX_VALUE_LEN2 = 60;
@@ -21627,13 +21699,7 @@ var TraceBugModule = (() => {
     return String(status);
   }
   function shortPath(url) {
-    if (!url) return "";
-    try {
-      const u2 = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost");
-      return u2.pathname || url.slice(0, 40);
-    } catch (e2) {
-      return url.length > 40 ? url.slice(0, 40) + "\u2026" : url;
-    }
+    return shortDisplayPath(url);
   }
   function safePath(url) {
     try {
@@ -21708,7 +21774,9 @@ var TraceBugModule = (() => {
     return null;
   }
   function generateRootCauseHint(report) {
-    const firstNet = report.networkErrors && report.networkErrors[0];
+    const netErrors = report.networkErrors || [];
+    const firstNet = netErrors.find((n2) => !isNoiseRequest(n2.url));
+    const firstNoise = firstNet ? null : netErrors[0];
     const firstErr = report.consoleErrors && report.consoleErrors[0];
     const click = report.clickedElement;
     if (firstNet) {
@@ -21729,7 +21797,19 @@ var TraceBugModule = (() => {
         confidence: "medium"
       };
     }
+    if (firstNoise) {
+      return {
+        hint: `A page resource failed to load (${shortDisplayPath(firstNoise.url)}) \u2014 likely a third-party image/analytics asset, not the bug's cause`,
+        confidence: "low"
+      };
+    }
     if (click) {
+      if ((click.tag || "").toLowerCase() === "a") {
+        return {
+          hint: `No errors captured \u2014 last action was clicking the link '${clickLabel(click)}' (navigation)`,
+          confidence: "low"
+        };
+      }
       return {
         hint: `Click on '${clickLabel(click)}' did not trigger any observable effect`,
         confidence: "low"
@@ -21824,6 +21904,7 @@ var TraceBugModule = (() => {
       init_repro_generator();
       init_collectors();
       init_action_chips();
+      init_url_hygiene();
       VIDEO_SESSION_GRACE_MS = 1e4;
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
@@ -28687,6 +28768,20 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <div id="tb-qb-scrubber" class="tb-qb-scrubber-wrap"></div>
         ` : ""}
 
+        ${ssCount === 0 && video ? `
+          <!-- Video present but no screenshots: without this row there is NO
+               screenshot affordance at all (the empty-state "Take screenshot"
+               block only renders when there's no video, and "Grab frame" needs
+               a playable preview \u2014 CSP-blocked pages have neither). -->
+          <div class="tb-qb-ss-header">
+            <span class="tb-qb-ss-count">No screenshots</span>
+            <button data-action="add-screenshot" class="tb-qb-ss-add" title="Capture a fresh screenshot of the current page">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Add page shot
+            </button>
+          </div>
+        ` : ""}
+
         ${ssCount > 0 ? `
           <div class="tb-qb-ss-header">
             <span class="tb-qb-ss-count">${ssCount} screenshot${ssCount === 1 ? "" : "s"}</span>
@@ -29409,7 +29504,43 @@ ${report.steps}` : userDesc : void 0
         showToast("Screenshot cancelled", root2);
       }
     });
-    (_E = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _E.addEventListener("click", () => {
+    const _ifr = { win: null, origin: "" };
+    let _ifrFramePending = null;
+    (_E = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _E.addEventListener("click", async () => {
+      if (_ifr.win) {
+        const data2 = await new Promise((resolve) => {
+          _ifrFramePending = resolve;
+          _ifr.win.postMessage({ type: "tb:player:grab-frame" }, _ifr.origin);
+          setTimeout(() => {
+            if (_ifrFramePending) {
+              _ifrFramePending = null;
+              resolve(null);
+            }
+          }, 3e3);
+        });
+        if (data2 == null ? void 0 : data2.dataUrl) {
+          const t2 = Math.floor(data2.currentTime || 0);
+          const mm = String(Math.floor(t2 / 60)).padStart(2, "0");
+          const ss2 = String(t2 % 60).padStart(2, "0");
+          const n2 = getScreenshots().length + 1;
+          pushScreenshot({
+            id: `ss_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            timestamp: Date.now(),
+            dataUrl: data2.dataUrl,
+            filename: `${String(n2).padStart(2, "0")}_frame_${mm}-${ss2}.png`,
+            eventContext: `Video frame at ${mm}:${ss2}`,
+            page: window.location.pathname,
+            width: data2.width || 0,
+            height: data2.height || 0
+          });
+          showToast(`\u2713 Frame at ${mm}:${ss2} added`, root2);
+          refreshQuickBugCapture(root2).catch(() => {
+          });
+        } else {
+          showToast("Couldn't grab that frame", root2);
+        }
+        return;
+      }
       const v2 = modal.querySelector("#tb-qb-video");
       if (!v2) return;
       if (!v2.paused) {
@@ -29492,9 +29623,71 @@ ${report.steps}` : userDesc : void 0
       else videoEl.addEventListener("loadeddata", paintFirstFrame, { once: true });
       const preview = videoEl.closest(".tb-qb-preview");
       let _blockedShown = false;
+      const mountIframePlayer = (host2) => {
+        const playerUrl = document.documentElement.getAttribute("data-tb-player-url");
+        if (!playerUrl || !video || !video.dataUrl && !video.blob) {
+          console.info("[TraceBug] CSP block: extension player unavailable (url:", !!playerUrl, "dataUrl:", !!(video == null ? void 0 : video.dataUrl), "blob:", !!(video == null ? void 0 : video.blob), ") \u2014 showing fallback card");
+          return false;
+        }
+        let playerOrigin;
+        try {
+          playerOrigin = new URL(playerUrl).origin;
+        } catch (e2) {
+          return false;
+        }
+        console.info("[TraceBug] CSP block detected \u2014 mounting extension iframe player");
+        const bytesPromise = video.blob ? video.blob.arrayBuffer().catch(() => null) : video.dataUrl ? Promise.resolve().then(() => {
+          const b64 = video.dataUrl.slice(video.dataUrl.indexOf(",") + 1);
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i2 = 0; i2 < bin.length; i2++) bytes[i2] = bin.charCodeAt(i2);
+          return bytes.buffer;
+        }).catch(() => null) : Promise.resolve(null);
+        host2.style.background = "#0B0B10";
+        host2.innerHTML = "";
+        const iframe = document.createElement("iframe");
+        iframe.src = playerUrl;
+        iframe.title = "TraceBug recording";
+        iframe.style.cssText = "display:block;width:100%;aspect-ratio:16/9;border:0;background:#0B0B10";
+        host2.appendChild(iframe);
+        const onMsg = (e2) => {
+          if (!iframe.isConnected) {
+            window.removeEventListener("message", onMsg);
+            return;
+          }
+          if (e2.origin !== playerOrigin || e2.source !== iframe.contentWindow) return;
+          const t2 = e2.data && e2.data.type || "";
+          if (t2 === "tb:player:ready") {
+            bytesPromise.then((buf) => {
+              var _a3;
+              if (!buf) {
+                console.warn("[TraceBug] could not get recording bytes for player");
+                return;
+              }
+              console.info("[TraceBug] sending", Math.round(buf.byteLength / 1024), "KB to player");
+              (_a3 = iframe.contentWindow) == null ? void 0 : _a3.postMessage(
+                { type: "tb:player:load", buffer: buf, mimeType: video.mimeType || "video/webm", durationMs: video.durationMs },
+                playerOrigin,
+                [buf]
+              );
+            });
+            _ifr.win = iframe.contentWindow;
+            _ifr.origin = playerOrigin;
+          } else if (t2 === "tb:player:frame" && _ifrFramePending) {
+            _ifrFramePending(e2.data);
+            _ifrFramePending = null;
+          } else if (t2 === "tb:player:error" && _ifrFramePending) {
+            _ifrFramePending(null);
+            _ifrFramePending = null;
+          }
+        };
+        window.addEventListener("message", onMsg);
+        return true;
+      };
       const showBlockedNotice = () => {
         if (_blockedShown || !preview) return;
         _blockedShown = true;
+        if (mountIframePlayer(preview)) return;
         preview.style.background = "var(--tb-bg-secondary)";
         preview.innerHTML = `
         <div style="padding:26px 18px;text-align:center;color:var(--tb-text-secondary,#9aa0aa);font-size:12px;line-height:1.65">
@@ -29521,6 +29714,10 @@ ${report.steps}` : userDesc : void 0
         btn.addEventListener("click", () => {
           const seconds = Number(btn.dataset.videoSeek);
           if (!Number.isFinite(seconds)) return;
+          if (_ifr.win) {
+            _ifr.win.postMessage({ type: "tb:player:seek", seconds }, _ifr.origin);
+            return;
+          }
           videoEl.currentTime = seconds;
           videoEl.play().catch(() => {
           });
@@ -70417,11 +70614,18 @@ First element: \`${exampleSnippet}\``,
      * Determine if TraceBug should be active based on the `enabled` config.
      */
     shouldEnable(mode) {
+      if (mode === true) return true;
+      if (mode === false) return false;
       if (mode === "off") return false;
       if (mode === "all") return true;
       if (Array.isArray(mode)) {
         const host3 = typeof window !== "undefined" ? window.location.hostname : "";
         return mode.some((h) => host3 === h || host3.endsWith("." + h));
+      }
+      if (mode !== void 0 && mode !== "auto" && mode !== "development" && mode !== "staging") {
+        console.warn(
+          `[TraceBug] Unknown \`enabled\` value ${JSON.stringify(mode)} \u2014 treating as "auto". Valid: "auto" | "development" | "staging" | "all" | "off" | string[] | true | false.`
+        );
       }
       const env = this.detectEnvironment();
       const host2 = typeof window !== "undefined" ? window.location.hostname : "";

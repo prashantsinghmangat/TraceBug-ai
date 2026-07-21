@@ -123,3 +123,31 @@ describe('formatTimelineText', () => {
     expect(text).not.toContain('!!');
   });
 });
+
+describe('buildTimeline — story vs page mechanics (githubassets regression)', () => {
+  it('drops successful static-asset loads from the timeline', () => {
+    const t = buildTimeline([
+      ev('click', { element: { text: 'Star' } }, 0),
+      ev('api_request', { request: { method: 'GET', url: 'https://github.githubassets.com/assets/43223-d8967b.js', statusCode: 200, durationMs: 5 } }, 1),
+      ev('api_request', { request: { method: 'GET', url: '/api/orders', statusCode: 200, durationMs: 90 } }, 2),
+    ]);
+    const descs = t.map(e => e.description).join('\n');
+    expect(descs).not.toContain('githubassets');
+    expect(descs).toContain('/api/orders');
+  });
+
+  it('drops analytics beacons even when they failed (ad-blocker noise)', () => {
+    const t = buildTimeline([
+      ev('click', { element: { text: 'Star' } }, 0),
+      ev('api_request', { request: { method: 'GET', url: 'https://collector.github.com/github/collect', statusCode: 0, durationMs: 1 } }, 1),
+    ]);
+    expect(t.map(e => e.description).join('\n')).not.toContain('collect');
+  });
+
+  it('keeps FAILED first-party script loads — a broken chunk is a real signal', () => {
+    const t = buildTimeline([
+      ev('api_request', { request: { method: 'GET', url: '/assets/chunk-89194.js', statusCode: 404, durationMs: 8 } }, 0),
+    ]);
+    expect(t.map(e => e.description).join('\n')).toContain('chunk-89194');
+  });
+});

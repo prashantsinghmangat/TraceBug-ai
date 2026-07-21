@@ -25,6 +25,7 @@ import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
 import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
+import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 
 // getLastVideoRecording() is a global "most recent recording" — it says
 // nothing about WHICH session it was recorded in. A recording belongs to a
@@ -327,13 +328,9 @@ function formatStatus(status: number): string {
 }
 
 function shortPath(url: string): string {
-  if (!url) return "";
-  try {
-    const u = new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost");
-    return u.pathname || url.slice(0, 40);
-  } catch {
-    return url.length > 40 ? url.slice(0, 40) + "…" : url;
-  }
+  // Delegates to the shared hygiene helper: hash-like segments get a middle
+  // ellipsis so no URL shape (camo hex, content hashes) can flood a hint.
+  return shortDisplayPath(url);
 }
 
 function safePath(url: string): string {
@@ -437,11 +434,15 @@ const RC_LABEL_MAX = 40;
  * that are already computed — no event scans, no async.
  */
 export function generateRootCauseHint(report: BugReport): RootCauseHint {
-  const firstNet = report.networkErrors && report.networkErrors[0];
+  const netErrors = report.networkErrors || [];
+  // A failed badge/image/font/analytics request is page noise — it must never
+  // outrank a real API failure, and never claim high confidence on its own.
+  const firstNet = netErrors.find(n => !isNoiseRequest(n.url));
+  const firstNoise = firstNet ? null : netErrors[0];
   const firstErr = report.consoleErrors && report.consoleErrors[0];
   const click = report.clickedElement;
 
-  // ── HIGH confidence ── Network failure tells us exactly what broke ──────
+  // ── HIGH confidence ── Application network failure tells us what broke ──
   if (firstNet) {
     const endpoint = shortPath(firstNet.url);
     const status = firstNet.status === 0 ? "Network Error" : String(firstNet.status);
@@ -463,8 +464,25 @@ export function generateRootCauseHint(report: BugReport): RootCauseHint {
     };
   }
 
+  // ── LOW confidence ── Only asset/third-party failures — say so honestly ─
+  if (firstNoise) {
+    return {
+      hint: `A page resource failed to load (${shortDisplayPath(firstNoise.url)}) — likely a third-party image/analytics asset, not the bug's cause`,
+      confidence: "low",
+    };
+  }
+
   // ── LOW confidence ── Click with no error / network signal ──────────────
   if (click) {
+    // "Did not trigger any observable effect" is a real diagnosis for a dead
+    // button — but a link click navigates (on MPAs it unloads the page), so
+    // claiming "no effect" there is false. Links get honest phrasing instead.
+    if ((click.tag || "").toLowerCase() === "a") {
+      return {
+        hint: `No errors captured — last action was clicking the link '${clickLabel(click)}' (navigation)`,
+        confidence: "low",
+      };
+    }
     return {
       hint: `Click on '${clickLabel(click)}' did not trigger any observable effect`,
       confidence: "low",

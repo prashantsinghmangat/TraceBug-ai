@@ -10,6 +10,7 @@
 // `sessionSteps` strings — this module is parallel, not a replacement.
 
 import { ActionChip, ActionChipAttr, TraceBugEvent } from "./types";
+import { isNoiseRequest, isStaticResource } from "./url-hygiene";
 
 const MAX_CHIPS = 60;
 const MAX_INLINE_ATTRS = 4;
@@ -369,10 +370,18 @@ export function buildActionChips(events: TraceBugEvent[]): ActionChip[] {
         const r = e.data?.request || {};
         const status = Number(r.statusCode || 0);
         const isError = status === 0 || status >= 400;
+        const url = String(r.url || "");
+        // The Actions tab is the USER'S story — page mechanics don't belong.
+        // Beacons/analytics/badges are skipped outright (their failures are
+        // usually just an ad-blocker), and successful script/style/image
+        // loads are skipped too. A FAILED first-party chunk stays: that's a
+        // real signal. The Network tab still lists every request.
+        if (isNoiseRequest(url)) break;
+        if (!isError && isStaticResource(url)) break;
         chips.push({
           verb: isError ? "Request failed" : "Request",
           kind: "api",
-          detail: `${String(r.method || "GET").toUpperCase()} ${truncate(String(r.url || ""), MAX_DETAIL_LEN)} → ${status === 0 ? "ERR" : status}`,
+          detail: `${String(r.method || "GET").toUpperCase()} ${truncate(url, MAX_DETAIL_LEN)} → ${status === 0 ? "ERR" : status}`,
           timestamp: e.timestamp,
           isError,
         });
