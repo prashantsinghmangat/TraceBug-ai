@@ -411,8 +411,8 @@ function _openModal(
         <div class="tb-qb-titletext">Bug Ticket \u2014 Review &amp; Export</div>
         <div class="tb-qb-sub">${ssCountLabel} \u00B7 ${data.timeline.length} event${data.timeline.length === 1 ? "" : "s"}</div>
       </div>
-      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority — your triage call">
-        <option value="" disabled hidden${userPriority ? "" : " selected"}>Priority</option>
+      <select data-action="set-priority" class="tb-qb-priority" aria-label="Priority" title="Priority — your triage call. The auto value is derived from severity and is only a suggestion; it is not exported unless you pick one.">
+        <option value="" disabled hidden${userPriority ? "" : " selected"}>${data.report?.priority ? `Priority (auto: ${priorityLabel(data.report.priority)})` : "Priority"}</option>
         ${(["high", "medium", "low"] as const).map((p) => `<option value="${p}"${userPriority === p ? " selected" : ""}>${priorityLabel(p)}</option>`).join("")}
       </select>
       <button data-action="theme-toggle" class="tb-qb-theme-toggle" aria-label="Toggle theme" title="Toggle theme (light / dark / auto)">${_themeIcon()}</button>
@@ -955,6 +955,7 @@ function _openModal(
         descriptionOverride: userDesc
           ? (report.steps ? `${userDesc}\n\n${report.steps}` : userDesc)
           : undefined,
+        githubRepo: _githubRepo || undefined,
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`\u2713 Replay exported \u00b7 ${sizeMb} MB`, root);
@@ -987,6 +988,7 @@ function _openModal(
         descriptionOverride: userDesc
           ? (report.steps ? `${userDesc}\n\n${report.steps}` : userDesc)
           : undefined,
+        githubRepo: _githubRepo || undefined,
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`✓ .zip exported · ${sizeMb} MB — drag it onto a GitHub issue to attach`, root);
@@ -1852,7 +1854,7 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   rows.push(_kvRow("Timezone", env.timezone || "", _ic("globe")));
   rows.push(_kvRow("Connection", env.connectionType || "", _connectionIcon(env.connectionType)));
   rows.push(_kvRow("Session", (session?.sessionId || "").slice(0, 12), _ic("hash")));
-  rows.push(_kvRow("Severity", sevLabel));
+  rows.push(_kvRow("Severity (auto)", sevLabel));
   // Priority appears only when the tester explicitly picked one — the
   // report-level fallback (derived from severity) is not their triage call.
   if (session?.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
