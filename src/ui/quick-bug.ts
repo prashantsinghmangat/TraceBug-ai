@@ -22,6 +22,7 @@ import { escapeHtml, tbIsolationCss } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml } from "../exporters/html-replay";
+import { exportSessionAsZip } from "../exporters/zip-export";
 import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 // PHASE2-CLOUD: import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
@@ -572,6 +573,7 @@ function _openModal(
         <div class="tb-qb-more">
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
+            <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip — GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report — upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
@@ -963,6 +965,34 @@ function _openModal(
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
+    }
+  });
+
+  // Download .zip — same replay bundle, wrapped so GitHub issues accept it
+  // as a drag-and-drop attachment (GitHub rejects bare .html files).
+  modal.querySelector('[data-action="export-zip"]')?.addEventListener("click", async () => {
+    if (!data.currentSession) {
+      showToast("No session to export yet", root);
+      return;
+    }
+    showToast("Bundling .zip…", root);
+    try {
+      try { await restoreLastRecordingFromOffscreen(); } catch {}
+      const report = buildReport(data.currentSession);
+      if (data.suppressVideo) report.video = undefined;
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const userDesc = draft.description.trim();
+      const result = await exportSessionAsZip(data.currentSession, report, {
+        descriptionOverride: userDesc
+          ? (report.steps ? `${userDesc}\n\n${report.steps}` : userDesc)
+          : undefined,
+      });
+      const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+      showToast(`✓ .zip exported · ${sizeMb} MB — drag it onto a GitHub issue to attach`, root);
+    } catch (err) {
+      console.warn("[TraceBug] ZIP export failed:", err);
+      showToast("ZIP export failed", root);
     }
   });
 

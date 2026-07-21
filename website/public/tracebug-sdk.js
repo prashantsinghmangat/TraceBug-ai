@@ -22243,6 +22243,13 @@ ${(req.response || "").replace(/```/g, "` ` `")}
 
 `;
     }
+    md += `### Full Repro Replay
+
+`;
+    md += `> Drag and drop the TraceBug \`.zip\` export here (Quick Bug \u2192 More \u2192 Download .zip). `;
+    md += `It contains the offline \`.html\` replay: session recording, console, network, and timeline in one file.
+
+`;
     md += `---
 `;
     md += `_[TraceBug SDK](https://www.npmjs.com/package/tracebug-sdk) \xB7 Session: \`${report.session.sessionId.slice(0, 8)}\`_
@@ -27441,6 +27448,118 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/exporters/zip-export.ts
+  function crc32(bytes) {
+    if (!_crcTable) {
+      _crcTable = new Uint32Array(256);
+      for (let n2 = 0; n2 < 256; n2++) {
+        let c2 = n2;
+        for (let k = 0; k < 8; k++) c2 = c2 & 1 ? 3988292384 ^ c2 >>> 1 : c2 >>> 1;
+        _crcTable[n2] = c2 >>> 0;
+      }
+    }
+    let crc = 4294967295;
+    for (let i2 = 0; i2 < bytes.length; i2++) {
+      crc = _crcTable[(crc ^ bytes[i2]) & 255] ^ crc >>> 8;
+    }
+    return (crc ^ 4294967295) >>> 0;
+  }
+  async function deflateRaw(bytes) {
+    try {
+      const CS = globalThis.CompressionStream;
+      if (typeof CS !== "function") return null;
+      const stream = new Blob([bytes]).stream().pipeThrough(new CS("deflate-raw"));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch (e2) {
+      return null;
+    }
+  }
+  function dosDateTime(ts) {
+    const d = new Date(ts);
+    return {
+      time: d.getHours() << 11 | d.getMinutes() << 5 | d.getSeconds() >> 1,
+      date: (d.getFullYear() - 1980 & 127) << 9 | d.getMonth() + 1 << 5 | d.getDate()
+    };
+  }
+  async function buildZipBlob(entries) {
+    var _a2;
+    const parts = [];
+    const central = [];
+    let offset = 0;
+    for (const entry of entries) {
+      const nameBytes = new TextEncoder().encode(entry.name);
+      const { time, date } = dosDateTime((_a2 = entry.mtime) != null ? _a2 : Date.now());
+      const crc = crc32(entry.data);
+      const deflated = await deflateRaw(entry.data);
+      const useDeflate = deflated !== null && deflated.length < entry.data.length;
+      const stored = useDeflate ? deflated : entry.data;
+      const method = useDeflate ? 8 : 0;
+      const local = new Uint8Array(30 + nameBytes.length);
+      const lv = new DataView(local.buffer);
+      lv.setUint32(0, 67324752, true);
+      lv.setUint16(4, 20, true);
+      lv.setUint16(6, 2048, true);
+      lv.setUint16(8, method, true);
+      lv.setUint16(10, time, true);
+      lv.setUint16(12, date, true);
+      lv.setUint32(14, crc, true);
+      lv.setUint32(18, stored.length, true);
+      lv.setUint32(22, entry.data.length, true);
+      lv.setUint16(26, nameBytes.length, true);
+      lv.setUint16(28, 0, true);
+      local.set(nameBytes, 30);
+      const cdir = new Uint8Array(46 + nameBytes.length);
+      const cv = new DataView(cdir.buffer);
+      cv.setUint32(0, 33639248, true);
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 2048, true);
+      cv.setUint16(10, method, true);
+      cv.setUint16(12, time, true);
+      cv.setUint16(14, date, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, stored.length, true);
+      cv.setUint32(24, entry.data.length, true);
+      cv.setUint16(28, nameBytes.length, true);
+      cv.setUint32(42, offset, true);
+      cdir.set(nameBytes, 46);
+      parts.push(local, stored);
+      central.push(cdir);
+      offset += local.length + stored.length;
+    }
+    const cdSize = central.reduce((n2, c2) => n2 + c2.length, 0);
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 101010256, true);
+    ev.setUint16(8, entries.length, true);
+    ev.setUint16(10, entries.length, true);
+    ev.setUint32(12, cdSize, true);
+    ev.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, eocd], { type: "application/zip" });
+  }
+  async function exportSessionAsZip(session, report, options) {
+    const htmlBlob = await buildReplayBlob(session, report, options);
+    const htmlBytes = new Uint8Array(await htmlBlob.arrayBuffer());
+    const base = ((options == null ? void 0 : options.filename) || defaultZipBase(session.sessionId)).replace(/\.(zip|html)$/i, "");
+    const blob2 = await buildZipBlob([{ name: base + ".html", data: htmlBytes, mtime: report.generatedAt }]);
+    const filename = base + ".zip";
+    const url = URL.createObjectURL(blob2);
+    triggerDownload(url, filename);
+    return { filename, blob: blob2, url, sizeBytes: blob2.size };
+  }
+  function defaultZipBase(sessionId) {
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    return `tracebug-replay-${sessionId.slice(0, 8)}-${stamp}`;
+  }
+  var _crcTable;
+  var init_zip_export = __esm({
+    "src/exporters/zip-export.ts"() {
+      "use strict";
+      init_html_replay();
+      _crcTable = null;
+    }
+  });
+
   // src/exporters/har-export.ts
   function buildHar(report, creatorVersion = "0.0.0") {
     const env = report.environment;
@@ -28792,7 +28911,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -29003,6 +29122,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <div class="tb-qb-more">
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More \u25BE</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
+            <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip \u2014 GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report \u2014 upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots2.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots2.length === 1 ? "" : "s"} as image file${screenshots2.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots2.length === 1 ? "" : "s"}</button>` : ""}
@@ -29351,7 +29471,35 @@ ${report.steps}` : userDesc : void 0
         showToast("Replay export failed", root2);
       }
     });
-    (_y = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _y.addEventListener("click", () => {
+    (_y = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _y.addEventListener("click", async () => {
+      if (!data.currentSession) {
+        showToast("No session to export yet", root2);
+        return;
+      }
+      showToast("Bundling .zip\u2026", root2);
+      try {
+        try {
+          await restoreLastRecordingFromOffscreen();
+        } catch (e2) {
+        }
+        const report = buildReport(data.currentSession);
+        if (data.suppressVideo) report.video = void 0;
+        const draft = getDraft();
+        if (draft.title.trim()) report.title = draft.title.trim();
+        const userDesc = draft.description.trim();
+        const result2 = await exportSessionAsZip(data.currentSession, report, {
+          descriptionOverride: userDesc ? report.steps ? `${userDesc}
+
+${report.steps}` : userDesc : void 0
+        });
+        const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
+        showToast(`\u2713 .zip exported \xB7 ${sizeMb} MB \u2014 drag it onto a GitHub issue to attach`, root2);
+      } catch (err) {
+        console.warn("[TraceBug] ZIP export failed:", err);
+        showToast("ZIP export failed", root2);
+      }
+    });
+    (_z = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _z.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29371,7 +29519,7 @@ ${report.steps}` : userDesc : void 0
         showToast("HAR export failed", root2);
       }
     });
-    (_z = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _z.addEventListener("click", () => {
+    (_A = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _A.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29391,7 +29539,7 @@ ${report.steps}` : userDesc : void 0
         showToast("Report export failed", root2);
       }
     });
-    (_A = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_B = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _B.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29418,7 +29566,7 @@ ${report.steps}` : userDesc : void 0
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_B = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _B.addEventListener("click", (e2) => {
+    (_C = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _C.addEventListener("click", (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root2);
         return;
@@ -29583,7 +29731,7 @@ ${report.steps}` : userDesc : void 0
         }
       });
     });
-    (_C = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_D = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _D.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -29614,7 +29762,7 @@ ${report.steps}` : userDesc : void 0
         });
       });
     });
-    (_D = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _D.addEventListener("click", async () => {
+    (_E = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _E.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -29638,7 +29786,7 @@ ${report.steps}` : userDesc : void 0
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_E = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _E.addEventListener("click", async () => {
+    (_F = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _F.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -31384,6 +31532,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_replay_scrubber();
       init_blur_tool();
       init_html_replay();
+      init_zip_export();
       init_har_export();
       init_ai_prompt();
       init_llm_client();
@@ -69180,6 +69329,7 @@ First element: \`${exampleSnippet}\``,
     buildHar: () => buildHar,
     buildReport: () => buildReport,
     buildTimeline: () => buildTimeline,
+    buildZipBlob: () => buildZipBlob,
     captureEnvironment: () => captureEnvironment,
     captureRegionScreenshot: () => captureRegionScreenshot,
     captureRollingBuffer: () => captureRollingBuffer,
@@ -69200,6 +69350,7 @@ First element: \`${exampleSnippet}\``,
     downloadPdfAsHtml: () => downloadPdfAsHtml,
     downloadVideoRecording: () => downloadVideoRecording,
     exportSessionAsHar: () => exportSessionAsHar,
+    exportSessionAsZip: () => exportSessionAsZip,
     extractClickedElement: () => extractClickedElement,
     formatRedactionSummary: () => formatRedactionSummary,
     formatRootCauseLine: () => formatRootCauseLine,
@@ -69760,6 +69911,7 @@ First element: \`${exampleSnippet}\``,
   init_jira_issue();
   init_ai_prompt();
   init_har_export();
+  init_zip_export();
   init_llm_client();
   init_tracker_client();
   init_pdf_generator();
