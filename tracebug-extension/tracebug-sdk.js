@@ -70769,31 +70769,12 @@ ${summary}`;
      *  - enabled:         Control when SDK is active (default "auto").
      */
     init(config) {
-      var _a2, _b;
+      var _a2;
       if (this.initialized) {
         console.warn("[TraceBug] Already initialized.");
         return;
       }
-      if (!config || typeof config !== "object") {
-        console.warn("[TraceBug] init() requires a config object.");
-        return;
-      }
-      if (!config.projectId || typeof config.projectId !== "string") {
-        console.warn("[TraceBug] init() requires a projectId string.");
-        return;
-      }
-      if (config.maxEvents !== void 0 && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
-        console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
-        config.maxEvents = 200;
-      }
-      if (config.maxSessions !== void 0 && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
-        console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
-        config.maxSessions = 50;
-      }
-      if (!this.shouldEnable((_a2 = config.enabled) != null ? _a2 : "auto")) {
-        console.info("[TraceBug] Disabled in this environment.");
-        return;
-      }
+      if (!this._validateConfig(config)) return;
       try {
         this.config = {
           maxEvents: 200,
@@ -70809,124 +70790,22 @@ ${summary}`;
         this.initialized = true;
         this.sessionId = getActiveSessionId();
         this.recording = !!this.sessionId;
-        let themeMode = this.config.theme;
-        try {
-          const saved = localStorage.getItem("tracebug_theme_pref");
-          if (saved === "light" || saved === "dark" || saved === "auto") {
-            themeMode = saved;
-          }
-        } catch (e2) {
-        }
-        try {
-          injectTheme(themeMode);
-        } catch (e2) {
-        }
+        this._applyThemeFromConfig();
         hydratePlan().catch(() => {
         });
-        Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
-          var _a3, _b2;
-          if ((_a3 = this.config) == null ? void 0 : _a3.githubRepo) m.setGithubRepo(this.config.githubRepo);
-          m.setCloudEndpoint((_b2 = this.config) == null ? void 0 : _b2.cloudEndpoint);
-        }).catch(() => {
-        });
-        const emit = (type, data) => {
-          var _a3, _b2, _c, _d;
-          try {
-            if (!this.recording) return;
-            const sid = this.sessionId;
-            if (!sid) return;
-            let event = {
-              id: Math.random().toString(36).slice(2, 10),
-              sessionId: sid,
-              projectId: this.config.projectId,
-              type,
-              page: window.location.pathname,
-              timestamp: Date.now(),
-              data
-            };
-            event = runEventPlugins(event);
-            if (!event) return;
-            appendEvent(sid, event, this.config.maxEvents, this.config.maxSessions);
-            if (type === "error" || type === "unhandled_rejection") {
-              this.processError(sid, (_a3 = data.error) == null ? void 0 : _a3.message, (_b2 = data.error) == null ? void 0 : _b2.stack);
-              emitHook("error:captured", event);
-              this.maybePromptErrorCapture((_c = data.error) == null ? void 0 : _c.message, (_d = data.error) == null ? void 0 : _d.stack);
-            }
-          } catch (err) {
-            if (typeof console !== "undefined") console.warn("[TraceBug] Event emit error:", err);
-          }
-        };
+        this._wireQuickBugConfig();
+        const emit = this._buildEmit();
         setDevApiHooks({
           emit,
           processError: (msg, stack) => {
             if (this.sessionId) this.processError(this.sessionId, msg, stack);
           }
         });
-        this.cleanups.push(collectClicks(emit));
-        this.cleanups.push(collectInputs(emit));
-        this.cleanups.push(collectSelectChanges(emit));
-        this.cleanups.push(collectFormSubmits(emit));
-        this.cleanups.push(collectRouteChanges(emit));
-        this.cleanups.push(collectApiRequests(emit));
-        this.cleanups.push(collectXhrRequests(emit));
-        this.cleanups.push(collectPerformanceNetwork(emit));
-        this.cleanups.push(collectErrors(emit));
+        this._startCollectors(emit);
         this._emit = emit;
-        this._consoleLevel = (_b = this.config.captureConsole) != null ? _b : "all";
-        if (this.config.enableDashboard) {
-          try {
-            setRecordingState(this.recording, () => {
-              if (this.recording) {
-                this.pauseRecording();
-              } else {
-                this.resumeRecording();
-              }
-              updateRecordingState(this.recording);
-            });
-            setSessionLifecycleHandlers(
-              () => this._startActiveSession(),
-              () => this._endActiveSession()
-            );
-            setNewCaptureHandler(() => {
-              try {
-                this._startActiveSession();
-              } catch (e2) {
-              }
-            });
-            this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
-          } catch (err) {
-            console.warn("[TraceBug] Dashboard mount failed:", err);
-          }
-        }
-        wireAutoStopListener();
-        setAutoStopHandler((recording2) => this._handleAutoStop(recording2));
-        wireStartedListener();
-        setStartedHandler(() => this._handleRecordingStarted());
-        if (this.config.enableDashboard) {
-          const restoredSessionId = this.sessionId;
-          restoreFromOffscreenIfActive().then((wasActive) => {
-            if (wasActive) {
-              this._remountRecordingHud();
-              this._attachConsoleCollectors();
-            } else if (restoredSessionId && this.sessionId === restoredSessionId) {
-              if (getActiveCaptureMode() !== "events") {
-                clearActiveSessionId();
-                this.sessionId = null;
-                this.recording = false;
-                updateRecordingState(false);
-                restoreLastRecordingFromOffscreen().then((rec) => {
-                  if (rec) this._handleAutoStop(rec);
-                }).catch(() => {
-                });
-              } else {
-                this._attachConsoleCollectors();
-                if (this._emit) drainPerformanceNetwork(this._emit);
-                updateRecordingState(true);
-              }
-            }
-          }).catch(() => {
-          });
-        }
+        this._consoleLevel = (_a2 = this.config.captureConsole) != null ? _a2 : "all";
+        this._mountDashboardIfEnabled();
+        this._restoreVideoSessionOnInit();
         if (this.sessionId && getActiveCaptureMode() !== "events") {
           emitHook("session:start", this.sessionId);
         }
@@ -70938,6 +70817,167 @@ ${summary}`;
         this.initialized = false;
         return;
       }
+    }
+    // ── init() phases ─────────────────────────────────────────────────
+    // Extracted from init() for testability and readability. Each is a pure
+    // side-effecting phase; init() is the orchestrator. Behavior is unchanged.
+    /** Validate the config object and environment gate. Returns false (and logs)
+     *  when init should abort; may normalize invalid maxEvents/maxSessions. */
+    _validateConfig(config) {
+      var _a2;
+      if (!config || typeof config !== "object") {
+        console.warn("[TraceBug] init() requires a config object.");
+        return false;
+      }
+      if (!config.projectId || typeof config.projectId !== "string") {
+        console.warn("[TraceBug] init() requires a projectId string.");
+        return false;
+      }
+      if (config.maxEvents !== void 0 && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
+        console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
+        config.maxEvents = 200;
+      }
+      if (config.maxSessions !== void 0 && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
+        console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
+        config.maxSessions = 50;
+      }
+      if (!this.shouldEnable((_a2 = config.enabled) != null ? _a2 : "auto")) {
+        console.info("[TraceBug] Disabled in this environment.");
+        return false;
+      }
+      return true;
+    }
+    /** Inject theme CSS custom properties, honoring a per-origin user preference
+     *  saved by the modal's theme toggle; falls back to the config default. */
+    _applyThemeFromConfig() {
+      let themeMode = this.config.theme;
+      try {
+        const saved = localStorage.getItem("tracebug_theme_pref");
+        if (saved === "light" || saved === "dark" || saved === "auto") {
+          themeMode = saved;
+        }
+      } catch (e2) {
+      }
+      try {
+        injectTheme(themeMode);
+      } catch (e2) {
+      }
+    }
+    /** Wire githubRepo + cloudEndpoint into the (lazy-loaded) Quick Bug modal.
+     *  cloudEndpoint always wires through so Share reads the override even with
+     *  no githubRepo set. */
+    _wireQuickBugConfig() {
+      Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
+        var _a2, _b;
+        if ((_a2 = this.config) == null ? void 0 : _a2.githubRepo) m.setGithubRepo(this.config.githubRepo);
+        m.setCloudEndpoint((_b = this.config) == null ? void 0 : _b.cloudEndpoint);
+      }).catch(() => {
+      });
+    }
+    /** The emit function collectors call with raw event data. Reads
+     *  sessionId / recording dynamically from `this` so toggling record state
+     *  mid-session takes effect without re-wiring collectors. */
+    _buildEmit() {
+      return (type, data) => {
+        var _a2, _b, _c, _d;
+        try {
+          if (!this.recording) return;
+          const sid = this.sessionId;
+          if (!sid) return;
+          let event = {
+            id: Math.random().toString(36).slice(2, 10),
+            sessionId: sid,
+            projectId: this.config.projectId,
+            type,
+            page: window.location.pathname,
+            timestamp: Date.now(),
+            data
+          };
+          event = runEventPlugins(event);
+          if (!event) return;
+          appendEvent(sid, event, this.config.maxEvents, this.config.maxSessions);
+          if (type === "error" || type === "unhandled_rejection") {
+            this.processError(sid, (_a2 = data.error) == null ? void 0 : _a2.message, (_b = data.error) == null ? void 0 : _b.stack);
+            emitHook("error:captured", event);
+            this.maybePromptErrorCapture((_c = data.error) == null ? void 0 : _c.message, (_d = data.error) == null ? void 0 : _d.stack);
+          }
+        } catch (err) {
+          if (typeof console !== "undefined") console.warn("[TraceBug] Event emit error:", err);
+        }
+      };
+    }
+    /** Attach all event collectors, pushing their cleanups. */
+    _startCollectors(emit) {
+      this.cleanups.push(collectClicks(emit));
+      this.cleanups.push(collectInputs(emit));
+      this.cleanups.push(collectSelectChanges(emit));
+      this.cleanups.push(collectFormSubmits(emit));
+      this.cleanups.push(collectRouteChanges(emit));
+      this.cleanups.push(collectApiRequests(emit));
+      this.cleanups.push(collectXhrRequests(emit));
+      this.cleanups.push(collectPerformanceNetwork(emit));
+      this.cleanups.push(collectErrors(emit));
+    }
+    /** Mount the in-browser dashboard toolbar and wire its session handlers. */
+    _mountDashboardIfEnabled() {
+      if (!this.config.enableDashboard) return;
+      try {
+        setRecordingState(this.recording, () => {
+          if (this.recording) {
+            this.pauseRecording();
+          } else {
+            this.resumeRecording();
+          }
+          updateRecordingState(this.recording);
+        });
+        setSessionLifecycleHandlers(
+          () => this._startActiveSession(),
+          () => this._endActiveSession()
+        );
+        setNewCaptureHandler(() => {
+          try {
+            this._startActiveSession();
+          } catch (e2) {
+          }
+        });
+        this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
+      } catch (err) {
+        console.warn("[TraceBug] Dashboard mount failed:", err);
+      }
+    }
+    /** Reconnect to a live screen recording that survived a page reload.
+     *  Extension transport keeps the recording in an offscreen document, so a
+     *  reload doesn't kill it: ping for status, re-mount the HUD if still armed,
+     *  otherwise clear a stale active-session id so the next Record starts fresh. */
+    _restoreVideoSessionOnInit() {
+      wireAutoStopListener();
+      setAutoStopHandler((recording2) => this._handleAutoStop(recording2));
+      wireStartedListener();
+      setStartedHandler(() => this._handleRecordingStarted());
+      if (!this.config.enableDashboard) return;
+      const restoredSessionId = this.sessionId;
+      restoreFromOffscreenIfActive().then((wasActive) => {
+        if (wasActive) {
+          this._remountRecordingHud();
+          this._attachConsoleCollectors();
+        } else if (restoredSessionId && this.sessionId === restoredSessionId) {
+          if (getActiveCaptureMode() !== "events") {
+            clearActiveSessionId();
+            this.sessionId = null;
+            this.recording = false;
+            updateRecordingState(false);
+            restoreLastRecordingFromOffscreen().then((rec) => {
+              if (rec) this._handleAutoStop(rec);
+            }).catch(() => {
+            });
+          } else {
+            this._attachConsoleCollectors();
+            if (this._emit) drainPerformanceNetwork(this._emit);
+            updateRecordingState(true);
+          }
+        }
+      }).catch(() => {
+      });
     }
     /**
      * Begin a fresh record-driven session: mints a session ID, persists it so
