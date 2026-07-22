@@ -32,6 +32,10 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | --- | --- |
 | [api-reference.md](api-reference.md) | Public SDK API — methods, types, exports. |
 | [architecture.md](architecture.md) | File-by-file internals (recording pipeline, storage, exporters). |
+| [adr/](adr/README.md) | **Architecture Decision Records** — why local-first, single-file HTML, rrweb, MV3, zero deps, stdio-only MCP. |
+| [performance.md](performance.md) | Measured numbers (init, capture overhead, export time/size) + the reproducible benchmark. |
+| [compatibility.md](compatibility.md) | Browser matrix, version support policy, and known limitations. |
+| [migrating.md](migrating.md) | Upgrade notes 1.6 → 1.9; API stability guarantees. |
 
 > The self-contained offline **HTML replay export** (rrweb DOM replay + gzip),
 > the lean **Export for AI (.html)**, and **event capture surviving navigation**

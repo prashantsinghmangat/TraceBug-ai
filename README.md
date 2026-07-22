@@ -558,6 +558,11 @@ Full documentation is in the [`docs/`](docs/) folder:
 - [Annotate & Draw](docs/annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](docs/chrome-extension.md) — Extension install & usage
 - [Architecture](docs/architecture.md) — How TraceBug works internally
+- [ADRs](docs/adr/README.md) — Why local-first, single-file HTML, rrweb, MV3, zero deps
+- [Performance](docs/performance.md) — Measured numbers + the reproducible benchmark
+- [Compatibility](docs/compatibility.md) — Browser matrix, support policy, known limitations
+- [Migration Guide](docs/migrating.md) — Upgrade notes and API stability
+- [Roadmap](ROADMAP.md) — Shipped · in progress · planned · long-term
 
 ## Chrome Extension
 
