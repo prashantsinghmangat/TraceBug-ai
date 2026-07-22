@@ -1,25 +1,36 @@
 // ── Blur / Redact Tool ────────────────────────────────────────────────────
-// Drag rectangles over sensitive content to redact it. The boxes use a REAL
-// backdrop blur (with a frosted fill fallback) so that SCREEN RECORDINGS and
-// screenshots capture the redacted pixels — the underlying text never appears
-// in any artifact. Used live during a recording (via the HUD "Blur" button)
-// and persists on the page until the recording ends or the user clears it.
+// ELEMENT-LEVEL blur: click an element to blur it, click again to unblur.
+// The blur is a CSS filter applied to the element ITSELF, so it renders in
+// the same paint as the content — it physically cannot lag behind scrolling
+// (the old overlay-box approach repositioned via rAF and flashed the
+// underlying text during fast scrolls). Screen recordings and screenshots
+// capture the blurred pixels; the `tb-mask` class additionally masks the
+// element's text in the rrweb DOM replay.
 //
-// Each placed box records a timestamped BlurEvent so the replay timeline can
-// show a "blur added" marker (parity with jam.dev's redaction markers).
+// Each blur records a timestamped BlurEvent so the replay timeline can show
+// a "blur added" marker. Blurs persist after the picker mode exits (that's
+// the point — they redact the recording) until removeAllBlurBoxes().
 
 export interface BlurEvent {
   id: string;
   timestamp: number;
 }
 
-const BOX_LAYER_ID = "tracebug-blur-layer";
-const DRAW_OVERLAY_ID = "tracebug-blur-draw";
-const STYLE_ID = "tracebug-blur-styles";
+const HINT_ID = "tracebug-blur-hint";
+const OUTLINE_ID = "tracebug-blur-outline";
+const BLUR_FILTER = "blur(12px)";
 
 let _active = false;
 let _onExit: (() => void) | null = null;
 const _events: BlurEvent[] = [];
+
+interface BlurredEl {
+  el: HTMLElement;
+  prevFilter: string;
+  prevPriority: string;
+  evtId: string;
+}
+let _blurred: BlurredEl[] = [];
 
 export function isBlurModeActive(): boolean {
   return _active;
@@ -30,183 +41,153 @@ export function getBlurEvents(): BlurEvent[] {
   return [..._events];
 }
 
-/** Reset the event log (call when a ticket/session is cleared). Also removes
- *  any visible boxes. */
+/** Number of currently-blurred elements (arming-bar badge). */
+export function getBlurredCount(): number {
+  return _blurred.length;
+}
+
+/** Reset the event log and unblur everything. */
 export function clearBlurEvents(): void {
   _events.length = 0;
   removeAllBlurBoxes();
 }
 
-/** Remove the visible blur boxes from the page but keep the event log (used
- *  when a recording stops — the video already captured them). */
+/** Unblur every element (used when a recording stops — the video already
+ *  captured them blurred). Name kept from the box era for API stability. */
 export function removeAllBlurBoxes(): void {
-  document.getElementById(BOX_LAYER_ID)?.remove();
+  while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
 }
 
-function _ensureStyles(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const supportsBackdrop =
-    typeof CSS !== "undefined" &&
-    (CSS.supports?.("backdrop-filter", "blur(8px)") || CSS.supports?.("-webkit-backdrop-filter", "blur(8px)"));
-  const s = document.createElement("style");
-  s.id = STYLE_ID;
-  s.textContent = `
-    #${BOX_LAYER_ID} { position: fixed !important; inset: 0 !important; z-index: 2147483646 !important; pointer-events: none !important; }
-    #${BOX_LAYER_ID} .tb-blur-box {
-      position: fixed !important;
-      ${supportsBackdrop
-        ? "backdrop-filter: blur(12px) saturate(0.6) !important; -webkit-backdrop-filter: blur(12px) saturate(0.6) !important; background: rgba(20,20,28,0.18) !important;"
-        : "background: rgba(28,28,38,0.96) !important;"}
-      border: 1px solid rgba(255,255,255,0.35) !important;
-      border-radius: 4px !important;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.25) !important;
-      pointer-events: none !important;
-      overflow: visible !important;
-    }
-    #${BOX_LAYER_ID} .tb-blur-x {
-      position: absolute !important; top: -9px !important; right: -9px !important;
-      width: 18px !important; height: 18px !important; border-radius: 50% !important;
-      background: #1b1d24 !important; color: #fff !important; border: 1px solid rgba(255,255,255,0.4) !important;
-      font: 700 11px/1 system-ui, sans-serif !important; cursor: pointer !important;
-      display: flex !important; align-items: center !important; justify-content: center !important;
-      pointer-events: auto !important; padding: 0 !important;
-    }
-    #${DRAW_OVERLAY_ID} {
-      position: fixed !important; inset: 0 !important; z-index: 2147483646 !important;
-      cursor: crosshair !important; background: rgba(10,12,18,0.12) !important;
-      user-select: none !important; touch-action: none !important;
-    }
-    #${DRAW_OVERLAY_ID} .tb-blur-hint {
-      position: fixed !important; top: 64px !important; left: 50% !important; transform: translateX(-50%) !important;
-      background: #1b1d24 !important; color: #e9eaee !important; border: 1px solid rgba(255,255,255,0.12) !important;
-      padding: 7px 14px !important; border-radius: 999px !important; font: 600 12px/1 system-ui, sans-serif !important;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; pointer-events: none !important; white-space: nowrap !important;
-    }
-    #${DRAW_OVERLAY_ID} .tb-blur-rubber {
-      position: fixed !important; border: 1.5px dashed #6366F1 !important;
-      background: rgba(99,102,241,0.12) !important; border-radius: 4px !important; pointer-events: none !important;
-    }
-  `;
-  document.head.appendChild(s);
+/** Unblur the most recently blurred element. Returns the remaining count. */
+export function undoLastBlur(): number {
+  const last = _blurred[_blurred.length - 1];
+  if (last) _unblur(last);
+  return _blurred.length;
 }
 
-function _boxLayer(): HTMLElement {
-  let layer = document.getElementById(BOX_LAYER_ID);
-  if (!layer) {
-    layer = document.createElement("div");
-    layer.id = BOX_LAYER_ID;
-    layer.dataset.tracebug = "blur-layer";
-    document.body.appendChild(layer);
+function _isOurNode(el: Element | null): boolean {
+  let node: Element | null = el;
+  while (node) {
+    const id = (node as HTMLElement).id || "";
+    if (id.startsWith("tracebug-")) return true;
+    const cn = typeof (node as HTMLElement).className === "string" ? (node as HTMLElement).className : "";
+    if (cn.includes("tracebug-") || cn.includes("tb-qb") || cn.includes("tb-hud")) return true;
+    if ((node as HTMLElement).dataset?.tracebug) return true;
+    node = node.parentElement;
   }
-  return layer;
+  return false;
 }
 
-function _addBox(x: number, y: number, w: number, h: number): void {
-  if (w < 6 || h < 6) return; // ignore stray clicks
-  const layer = _boxLayer();
-  const box = document.createElement("div");
-  box.className = "tb-blur-box";
-  box.style.setProperty("left", x + "px", "important");
-  box.style.setProperty("top", y + "px", "important");
-  box.style.setProperty("width", w + "px", "important");
-  box.style.setProperty("height", h + "px", "important");
+function _findBlurred(el: Element): BlurredEl | undefined {
+  return _blurred.find((b) => b.el === el);
+}
+
+function _blur(el: HTMLElement): void {
+  const prevFilter = el.style.getPropertyValue("filter");
+  const prevPriority = el.style.getPropertyPriority("filter");
+  el.style.setProperty("filter", BLUR_FILTER, "important");
+  // Mask the text in the rrweb DOM replay too — the visual blur only covers
+  // pixels; tb-mask covers the recorded DOM.
+  el.classList.add("tb-mask");
+  el.setAttribute("data-tb-blurred", "1");
   const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  const del = document.createElement("button");
-  del.className = "tb-blur-x";
-  del.type = "button";
-  del.textContent = "✕";
-  del.title = "Remove this blur";
-  del.addEventListener("click", (e) => {
-    e.stopPropagation();
-    box.remove();
-    // Drop its timeline event too, so removed blurs don't leave phantom
-    // "Blur added" chips on the replay scrubber.
-    const i = _events.findIndex((ev) => ev.id === evtId);
-    if (i >= 0) _events.splice(i, 1);
-  });
-  box.appendChild(del);
-  layer.appendChild(box);
+  _blurred.push({ el, prevFilter, prevPriority, evtId });
   _events.push({ id: evtId, timestamp: Date.now() });
 }
 
+function _unblur(entry: BlurredEl): void {
+  const { el, prevFilter, prevPriority, evtId } = entry;
+  try {
+    if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
+    else el.style.removeProperty("filter");
+    el.classList.remove("tb-mask");
+    el.removeAttribute("data-tb-blurred");
+  } catch {}
+  _blurred = _blurred.filter((b) => b !== entry);
+  const i = _events.findIndex((ev) => ev.id === evtId);
+  if (i >= 0) _events.splice(i, 1);
+}
+
+// ── Picker mode ───────────────────────────────────────────────────────────
+
+let _onMove: ((e: MouseEvent) => void) | null = null;
+let _onClick: ((e: MouseEvent) => void) | null = null;
+let _onKey: ((e: KeyboardEvent) => void) | null = null;
+
 /**
- * Enter blur-draw mode. The user drags rectangles to redact regions; each one
- * persists on the page. Press Esc (or call deactivate) to finish.
+ * Enter blur-picker mode: hover highlights an element, click toggles its
+ * blur. Esc (or deactivate) exits — placed blurs persist on the page.
  */
 export function activateBlurMode(_root: HTMLElement, onExit?: () => void): void {
   if (_active) return;
   _active = true;
   _onExit = onExit || null;
-  _ensureStyles();
-  _boxLayer(); // ensure layer exists below the draw overlay
 
-  const overlay = document.createElement("div");
-  overlay.id = DRAW_OVERLAY_ID;
-  overlay.dataset.tracebug = "blur-draw";
+  const outline = document.createElement("div");
+  outline.id = OUTLINE_ID;
+  outline.setAttribute(
+    "style",
+    "position:fixed;display:none;pointer-events:none;z-index:2147483646;" +
+      "outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
+  );
+  document.body.appendChild(outline);
+
   const hint = document.createElement("div");
-  hint.className = "tb-blur-hint";
-  hint.textContent = "Drag to blur sensitive areas · Esc to finish";
-  overlay.appendChild(hint);
-  document.body.appendChild(overlay);
+  hint.id = HINT_ID;
+  hint.setAttribute(
+    "style",
+    "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;" +
+      "background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);" +
+      "padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;" +
+      "box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
+  );
+  hint.textContent = "Click elements to blur · click again to unblur · Esc to finish";
+  document.body.appendChild(hint);
+  document.body.style.cursor = "crosshair";
 
-  let startX = 0, startY = 0, drawing = false;
-  let rubber: HTMLDivElement | null = null;
-
-  const onDown = (e: PointerEvent) => {
-    if ((e.target as HTMLElement).classList?.contains("tb-blur-x")) return;
-    drawing = true;
-    startX = e.clientX; startY = e.clientY;
-    rubber = document.createElement("div");
-    rubber.className = "tb-blur-rubber";
-    overlay.appendChild(rubber);
-    overlay.setPointerCapture(e.pointerId);
+  _onMove = (e: MouseEvent) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
+      outline.style.display = "none";
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    outline.style.display = "block";
+    outline.style.left = r.left + "px";
+    outline.style.top = r.top + "px";
+    outline.style.width = r.width + "px";
+    outline.style.height = r.height + "px";
+  };
+  _onClick = (e: MouseEvent) => {
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
     e.preventDefault();
+    e.stopPropagation();
+    (e as Event).stopImmediatePropagation?.();
+    const existing = _findBlurred(el);
+    if (existing) _unblur(existing);
+    else _blur(el);
   };
-  const onMove = (e: PointerEvent) => {
-    if (!drawing || !rubber) return;
-    const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
-    const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
-    rubber.style.setProperty("left", x + "px", "important");
-    rubber.style.setProperty("top", y + "px", "important");
-    rubber.style.setProperty("width", w + "px", "important");
-    rubber.style.setProperty("height", h + "px", "important");
-  };
-  const onUp = (e: PointerEvent) => {
-    if (!drawing) return;
-    drawing = false;
-    const x = Math.min(startX, e.clientX), y = Math.min(startY, e.clientY);
-    const w = Math.abs(e.clientX - startX), h = Math.abs(e.clientY - startY);
-    rubber?.remove(); rubber = null;
-    try { overlay.releasePointerCapture(e.pointerId); } catch {}
-    _addBox(x, y, w, h);
-  };
-  const onKey = (e: KeyboardEvent) => {
+  _onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") { e.preventDefault(); deactivateBlurMode(); }
   };
 
-  overlay.addEventListener("pointerdown", onDown);
-  overlay.addEventListener("pointermove", onMove);
-  overlay.addEventListener("pointerup", onUp);
-  document.addEventListener("keydown", onKey, true);
-
-  // Stash the key handler so deactivate can remove it.
-  (overlay as BlurOverlayElement)._tbKey = onKey;
+  document.addEventListener("mousemove", _onMove, true);
+  document.addEventListener("click", _onClick, true);
+  document.addEventListener("keydown", _onKey, true);
 }
 
-/** The draw overlay, with the keydown handler stashed on it so
- *  deactivateBlurMode can detach the listener it didn't register itself. */
-type BlurOverlayElement = HTMLElement & { _tbKey?: (e: KeyboardEvent) => void };
-
-/** Exit blur-draw mode. Placed boxes stay on the page. */
+/** Exit blur-picker mode. Blurred elements STAY blurred. */
 export function deactivateBlurMode(): void {
   if (!_active) return;
   _active = false;
-  const overlay = document.getElementById(DRAW_OVERLAY_ID);
-  if (overlay) {
-    const onKey = (overlay as BlurOverlayElement)._tbKey;
-    if (onKey) document.removeEventListener("keydown", onKey, true);
-    overlay.remove();
-  }
+  if (_onMove) document.removeEventListener("mousemove", _onMove, true);
+  if (_onClick) document.removeEventListener("click", _onClick, true);
+  if (_onKey) document.removeEventListener("keydown", _onKey, true);
+  _onMove = _onClick = _onKey = null;
+  document.getElementById(OUTLINE_ID)?.remove();
+  document.getElementById(HINT_ID)?.remove();
+  document.body.style.cursor = "";
   const cb = _onExit;
   _onExit = null;
   cb?.();

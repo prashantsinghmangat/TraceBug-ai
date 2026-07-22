@@ -15,6 +15,7 @@ import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
 import { generateBugTitle, generateFlowSummary } from "../title-generator";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
+import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast } from "./toast";
@@ -2556,6 +2557,27 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   });
 }
 
+function _styleSummaryLine(s: import("../style-evidence").StyleEvidence): string {
+  try { return "Styles: " + formatStyleSummary(s); } catch { return "Styles captured"; }
+}
+
+function _styleDetails(s: import("../style-evidence").StyleEvidence): string {
+  const rows: string[] = [];
+  const add = (group: string, obj: Record<string, string>) => {
+    for (const [k, v] of Object.entries(obj)) rows.push(`${group}.${k}: ${v}`);
+  };
+  try {
+    add("font", s.typography as unknown as Record<string, string>);
+    add("color", s.colors as unknown as Record<string, string>);
+    add("box", s.box as unknown as Record<string, string>);
+    add("layout", s.layout as unknown as Record<string, string>);
+    if (s.contrast) {
+      rows.push(`contrast: ${s.contrast.ratio}:1 (${s.contrast.aa ? "passes" : "FAILS"} WCAG AA) — ${s.contrast.foreground} on ${s.contrast.background}`);
+    }
+  } catch {}
+  return rows.join("\n");
+}
+
 function _buildAnnotationsTab(session: StoredSession | null): string {
   const sessAnn = session?.annotations || [];
   let els: import("../types").ElementAnnotation[] = [];
@@ -2583,6 +2605,11 @@ function _buildAnnotationsTab(session: StoredSession | null): string {
         <div class="tb-qb-note-sev">${escapeHtml(e.intent)} \u00b7 ${escapeHtml(e.severity)}</div>
         <div class="tb-qb-note-text">${escapeHtml(e.comment || "")}</div>
         <div class="tb-qb-note-line"><code>${escapeHtml(e.selector)}</code> \u2014 ${escapeHtml((e.innerText || "").slice(0, 60))}</div>
+        ${e.styles ? `
+        <details class="tb-qb-note-styles">
+          <summary>${escapeHtml(_styleSummaryLine(e.styles))}</summary>
+          <pre class="tb-qb-note-styles-pre">${escapeHtml(_styleDetails(e.styles))}</pre>
+        </details>` : ""}
       </div>
     `).join("")}
   ` : "";
@@ -2941,6 +2968,10 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
     #${MODAL_ID} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }
+    #${MODAL_ID} .tb-qb-note-styles { margin-top:6px; }
+    #${MODAL_ID} .tb-qb-note-styles summary { font-size:11px; color:var(--tb-text-muted); cursor:pointer; font-family:var(--tb-font-mono); }
+    #${MODAL_ID} .tb-qb-note-styles summary:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-note-styles-pre { margin:6px 0 0; padding:8px 10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:8px; font-family:var(--tb-font-mono); font-size:10.5px; line-height:1.6; white-space:pre-wrap; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-fb { color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-fb a { text-decoration:none; margin-left:4px; opacity:0.75; transition:opacity .15s, transform .15s; display:inline-block; }
     #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }

@@ -215,8 +215,45 @@ document.addEventListener("DOMContentLoaded", async () => {
   // HUD; modal opens with video + screenshot + console + network. Matches
   // Jam's "video is always there" default — the screenshot-only path is a
   // secondary option for users who just want a quick snap.
+  // ── Record options — persisted, passed with the record message ───────
+  const OPTS_KEY = "tracebug_record_opts";
+  const surfaceSel = document.getElementById("optSurface");
+  const delaySel = document.getElementById("optDelay");
+  const blurCb = document.getElementById("optBlurFirst");
+  const optsState = document.getElementById("recordOptsState");
+  function loadRecordOpts() {
+    try { return JSON.parse(localStorage.getItem(OPTS_KEY)) || {}; } catch { return {}; }
+  }
+  function saveRecordOpts() {
+    const o = { surfaceMode: surfaceSel.value, delaySec: Number(delaySel.value) || 0, blurFirst: !!blurCb.checked };
+    try { localStorage.setItem(OPTS_KEY, JSON.stringify(o)); } catch {}
+    updateOptsState(o);
+    return o;
+  }
+  function updateOptsState(o) {
+    const bits = [];
+    if (o.surfaceMode === "desktop") bits.push("desktop");
+    if (o.delaySec > 0) bits.push(`${o.delaySec}s delay`);
+    if (o.blurFirst) bits.push("blur first");
+    if (optsState) optsState.textContent = bits.join(" · ");
+  }
+  {
+    const o = loadRecordOpts();
+    if (o.surfaceMode) surfaceSel.value = o.surfaceMode;
+    if (o.delaySec) delaySel.value = String(o.delaySec);
+    blurCb.checked = !!o.blurFirst;
+    updateOptsState({ surfaceMode: surfaceSel.value, delaySec: Number(delaySel.value) || 0, blurFirst: blurCb.checked });
+    [surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
+  }
+
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {
-    await runCombo("TB_START_RECORDING", "Starting recording…", { withMic: micOn });
+    const o = saveRecordOpts();
+    await runCombo("TB_START_RECORDING", "Starting recording…", {
+      withMic: micOn,
+      blurFirst: o.blurFirst,
+      delaySec: o.delaySec,
+      surfaceMode: o.surfaceMode,
+    });
   });
 
   // ── Secondary: Screenshot only — old one-shot Capture flow ──────────
@@ -227,6 +264,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── Secondary: View tickets ──────────────────────────────────────────
   document.getElementById("btnViewTickets").addEventListener("click", async () => {
     await runCombo("TB_VIEW_TICKETS", "Opening tickets…");
+  });
+
+  // ── Secondary: Inspect element — style evidence for design-QA bugs ───
+  document.getElementById("btnInspect").addEventListener("click", async () => {
+    await runCombo("TB_INSPECT", "Starting inspect…");
   });
 });
 
@@ -253,7 +295,7 @@ async function runCombo(messageType, busyText, extra) {
 }
 
 function setBusy(busy) {
-  ["btnCaptureBug", "btnScreenshot", "btnViewTickets"].forEach((id) => {
+  ["btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });

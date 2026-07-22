@@ -350,6 +350,12 @@ describe('fix-loop tools (get_playwright_test / resolve_stack / get_fix_context)
     const payload = fixturePayload();
     payload.playwrightTest = SPEC;
     payload.playwrightTestFilename = 'vendor-update-fails.spec.ts';
+    payload.elementAnnotations = [{
+      selector: '#save-btn', tagName: 'button', intent: 'inspect', severity: 'info',
+      comment: 'Style evidence captured via Inspect',
+      styleSummary: '14px/20px 600 Inter · color #ffffff on #6366f1 · 120px×36px · pad 8px 16px · contrast 3.9:1 ⚠ fails AA',
+      styles: { contrast: { ratio: 3.9, aa: false } },
+    }];
     payload.consoleLogs![1].stack = '    at save (http://localhost:5173/assets/vendor-77aa.js:1:9)';
     specReport = path.join(tmpDir, 'spec-report.html');
     fs.writeFileSync(specReport, buildReplayHtml(payload), 'utf8');
@@ -399,6 +405,14 @@ describe('fix-loop tools (get_playwright_test / resolve_stack / get_fix_context)
     expect(r.error!.topFrames[0].original).toContain('src/vendor.ts');
     expect(r.failingTest.available).toBe(true);
     expect(r.nextStep).toContain('get_playwright_test');
+  });
+
+  it('get_bug_report surfaces element annotations with style evidence', () => {
+    const r = toolGetBugReport(tmpDir, { file: 'spec-report.html' });
+    expect(r.elementAnnotations).toHaveLength(1);
+    expect(r.elementAnnotations[0].selector).toBe('#save-btn');
+    expect(r.elementAnnotations[0].styleSummary).toContain('fails AA');
+    expect(r.investigationGuide.join(' ')).toContain('computed-style evidence');
   });
 
   it('tools are registered in definitions and dispatch', () => {

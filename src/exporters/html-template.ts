@@ -111,6 +111,19 @@ export interface BundlePayload {
     expected?: string;
     actual?: string;
   }>;
+  /** Element-level annotations (annotate/inspect modes) with computed-style
+   *  evidence — the receipts for design-QA bugs. Structured for MCP agents;
+   *  the human-readable version rides in `description`. */
+  elementAnnotations?: Array<{
+    selector: string;
+    tagName: string;
+    innerText?: string;
+    intent: string;
+    severity: string;
+    comment: string;
+    styleSummary?: string;
+    styles?: unknown;
+  }>;
   rootCauseHint?: { hint: string; confidence: string };
 }
 

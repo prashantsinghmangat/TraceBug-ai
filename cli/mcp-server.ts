@@ -44,6 +44,17 @@ interface ReportPayload {
   actions?: string[];
   actionChips?: Array<{ verb: string; kind: string; target?: string; nounLabel?: string; detail?: string; frustration?: string; timestamp: number; isError?: boolean }>;
   annotations?: Array<{ severity: string; text: string; expected?: string; actual?: string }>;
+  /** Element-level annotations with computed-style evidence (SDK 1.9+). */
+  elementAnnotations?: Array<{
+    selector: string;
+    tagName: string;
+    innerText?: string;
+    intent: string;
+    severity: string;
+    comment: string;
+    styleSummary?: string;
+    styles?: unknown;
+  }>;
   rootCauseHint?: { hint: string; confidence: string };
   /** Generated failing Playwright spec (exports from SDK v1.9+). */
   playwrightTest?: string;
@@ -276,6 +287,12 @@ export function buildInvestigationGuide(p: ReportPayload): string[] {
       "[HIGH] get_playwright_test — this report includes a generated Playwright spec that REPLAYS the session and asserts the captured failure is gone. Save it, run it to reproduce (red), then use it to verify your fix (green)."
     );
   }
+  if ((p.elementAnnotations ?? []).length > 0) {
+    const n = p.elementAnnotations!.length;
+    steps.push(
+      `[HIGH] This report carries ${n} element annotation${n === 1 ? "" : "s"} with computed-style evidence (included in get_bug_report) — for visual bugs, diff the captured typography/colors/spacing against the design tokens or CSS in this codebase.`
+    );
+  }
   if ((p.consoleErrors ?? []).some((e) => e.stack) || (p.consoleLogs ?? []).some((e) => e.stack)) {
     steps.push(
       "[MEDIUM] resolve_stack — maps minified stack frames to original source files/lines using .map files found in this repo (run from the project that built the app)."
@@ -342,6 +359,9 @@ export function toolGetBugReport(baseDir: string, args: { file: string }) {
     description: p.description || null,
     rootCause: p.rootCauseHint ?? p.meta.rootCause ?? null,
     annotations: p.annotations ?? [],
+    // Computed-style receipts for design-QA bugs (selector, typography,
+    // colors, box model, WCAG contrast) — diff these against the codebase.
+    elementAnnotations: p.elementAnnotations ?? [],
     consoleErrorCount: p.consoleErrors?.length ?? 0,
     networkFailureCount: p.networkErrors?.length ?? 0,
     screenshotCount: p.screenshots?.length ?? 0,
@@ -502,9 +522,14 @@ export function toolGetFixContext(baseDir: string, args: { file: string; searchD
   const { payload: p } = requireReport(baseDir, args.file);
 
   const failingRequest = (p.networkErrors ?? [])[0] ?? null;
-  // The last user action at-or-before the failure is the trigger.
+  // The last USER action at-or-before the failure is the trigger. Whitelist
+  // genuine user-interaction kinds — api/error chips share the failure's own
+  // timestamp and would otherwise win the ≤ comparison over the real click.
+  const USER_KINDS = new Set(["click", "input", "select", "submit", "navigate"]);
   const failureTs = failingRequest?.timestamp ?? (p.consoleErrors ?? [])[0]?.timestamp ?? Infinity;
-  const userChips = (p.actionChips ?? []).filter((c) => c.kind !== "error");
+  // Note: keep chips with isError=true — a click flagged as error-causing IS
+  // the triggering action; only non-interaction kinds (api/error) are noise.
+  const userChips = (p.actionChips ?? []).filter((c) => USER_KINDS.has(c.kind));
   const triggeringAction =
     [...userChips].reverse().find((c) => c.timestamp <= failureTs) ?? userChips[userChips.length - 1] ?? null;
 
