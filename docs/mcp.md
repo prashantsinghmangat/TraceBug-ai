@@ -101,7 +101,7 @@ npx -y tracebug mcp [--dir <path>]
 | Tool | What it returns |
 |---|---|
 | `list_bug_reports` | Every TraceBug export under the directory: title, summary, severity, priority, root-cause hint, and counts of captured data. **Agents start here.** |
-| `get_bug_report` | Overview of one report: environment, tester annotations, description, plus the **investigation guide** — a prioritized list of which tools to call next for this specific bug. |
+| `get_bug_report` | Overview of one report: environment, tester annotations (including element-level **style evidence** — computed typography/colors/box model + WCAG contrast for annotated elements), description, plus the **investigation guide** — a prioritized list of which tools to call next for this specific bug. |
 | `get_console_errors` | Full console capture (errors / warnings / logs) with stack traces. |
 | `get_network_activity` | Failed requests with response-body snippets by default; pass `failuresOnly: false` for every captured request. |
 | `get_repro_steps` | Plain-English reproduction steps, structured user actions (including rage-click / dead-click frustration signals), and the full session timeline. |

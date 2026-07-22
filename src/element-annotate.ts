@@ -4,6 +4,7 @@
 
 import { ElementAnnotation, AnnotationIntent } from "./types";
 import { addElementAnnotation, getElementAnnotations } from "./annotation-store";
+import { captureStyleEvidence } from "./style-evidence";
 import { escapeHtml } from "./ui/helpers";
 
 let _active = false;
@@ -421,6 +422,11 @@ function _isOurElement(el: HTMLElement | null): boolean {
   return false;
 }
 
+/** Stable selector for annotated/inspected elements — shared with inspect mode. */
+export function computeElementSelector(el: Element): string {
+  return _computeSelector(el);
+}
+
 function _computeSelector(el: Element): string {
   if (el.id && !el.id.startsWith("tracebug-") && !el.id.startsWith("bt-")) {
     return `#${CSS.escape(el.id)}`;
@@ -635,6 +641,9 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
         scrollX: window.scrollX,
         scrollY: window.scrollY,
       };
+      // Style receipts for design-QA — never let a style snapshot failure
+      // block the annotation itself.
+      try { annotation.styles = captureStyleEvidence(el); } catch {}
 
       addElementAnnotation(annotation);
     }
@@ -665,5 +674,6 @@ function _intentColor(intent: AnnotationIntent): string {
     case "redesign": return "#6366F1";
     case "remove": return "#f97316";
     case "question": return "#3b82f6";
+    case "inspect": return "#10b981";
   }
 }

@@ -140,6 +140,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Secondary row ──────────────────────────────────── */
 .cta-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#btnInspect { grid-column: 1 / -1; }
 .cta-secondary {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px;

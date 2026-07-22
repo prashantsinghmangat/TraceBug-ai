@@ -89,6 +89,33 @@
         <svg class="cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
       </button>
 
+      <!-- Record options — what happens BEFORE the recording rolls. All
+           persisted per user; passed with TB_START_RECORDING. -->
+      <details class="redact" id="recordOptsBox">
+        <summary class="redact-sum">
+          <span class="redact-sum-label">⚙ Record options</span>
+          <span class="redact-state" id="recordOptsState"></span>
+        </summary>
+        <div class="redact-body">
+          <label class="redact-label" for="optSurface">Capture</label>
+          <select id="optSurface" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
+            <option value="tab" selected>Current tab</option>
+            <option value="desktop">Desktop / window (picker)</option>
+          </select>
+          <label class="redact-label" for="optDelay">Start delay</label>
+          <select id="optDelay" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
+            <option value="0" selected>No delay</option>
+            <option value="3">After 3 seconds</option>
+            <option value="5">After 5 seconds</option>
+          </select>
+          <label class="redact-label" style="display:flex;align-items:center;gap:7px;margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="optBlurFirst" style="accent-color:#6366F1" />
+            Blur before recording
+          </label>
+          <div class="redact-help">Pick sensitive areas to blur first — the blur is captured into the video, so redacted pixels never leave the page.</div>
+        </div>
+      </details>
+
       <!-- Microphone toggle. Default off so no mic permission prompt fires.
            Turn on to narrate the recording — adds a mic permission prompt
            the first time recording starts. State persists per user. -->
@@ -107,6 +134,10 @@
         <button class="cta-secondary" id="btnViewTickets">
           <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
           <span class="cta2-label">View tickets</span>
+        </button>
+        <button class="cta-secondary" id="btnInspect" title="Hover elements to see their computed styles; click to attach the style evidence to a bug report">
+          <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
+          <span class="cta2-label">Inspect element</span>
         </button>
       </div>
 

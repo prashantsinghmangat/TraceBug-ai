@@ -144,6 +144,17 @@
         }
         break;
 
+      case "inspect":
+        if (window.TraceBug.isInspectModeActive && window.TraceBug.isInspectModeActive()) {
+          window.TraceBug.deactivateInspectMode();
+          showToast("Inspect mode deactivated");
+        } else if (window.TraceBug.activateInspectMode) {
+          window.TraceBug.activateInspectMode();
+        } else {
+          showToast("Inspect requires the latest extension build");
+        }
+        break;
+
       case "export_annotations":
         if (window.TraceBug.exportAnnotationsMarkdown) {
           var md = window.TraceBug.exportAnnotationsMarkdown();
@@ -190,7 +201,15 @@
       // content-script; offscreen.js calls getUserMedia({audio: true}) when
       // it's truthy, adding a mic track to the recording.
       case "record":
-        if (window.TraceBug.startVideoRecording) {
+        if (window.TraceBug.prepareRecording) {
+          // Pre-record flow: optional blur-first pass + countdown, then roll.
+          window.TraceBug.prepareRecording({
+            withMicrophone: !!(e.detail && e.detail.withMic),
+            blurFirst: !!(e.detail && e.detail.blurFirst),
+            delaySec: (e.detail && e.detail.delaySec) || 0,
+            surfaceMode: (e.detail && e.detail.surfaceMode) || undefined,
+          });
+        } else if (window.TraceBug.startVideoRecording) {
           window.TraceBug.startVideoRecording({ withMicrophone: !!(e.detail && e.detail.withMic) });
         } else {
           showToast("Recording requires the latest extension build");

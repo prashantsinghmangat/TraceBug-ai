@@ -26,6 +26,17 @@ import { generateReproSteps } from "./repro-generator";
 import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
+import { getElementAnnotations } from "./annotation-store";
+
+/** Element annotations from the in-memory store — [] outside the browser. */
+function safeElementAnnotations() {
+  try {
+    const anns = getElementAnnotations();
+    return anns.length ? [...anns] : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // getLastVideoRecording() is a global "most recent recording" — it says
 // nothing about WHICH session it was recorded in. A recording belongs to a
@@ -213,6 +224,8 @@ export function buildReport(
     priority: "low",
     storage: captureStorageSnapshot(),
     annotations: session.annotations || [],
+    // Element-level markup (annotate/inspect) with computed-style evidence.
+    elementAnnotations: safeElementAnnotations(),
     screenshots,
     timeline,
     voiceTranscripts,

@@ -212,7 +212,7 @@ export interface Annotation {
 
 // ── Element Annotation (onUI-style element feedback) ─────────────────────
 
-export type AnnotationIntent = "fix" | "redesign" | "remove" | "question";
+export type AnnotationIntent = "fix" | "redesign" | "remove" | "question" | "inspect";
 
 export interface ElementAnnotation {
   id: string;
@@ -227,6 +227,9 @@ export interface ElementAnnotation {
   page: string;
   scrollX: number;
   scrollY: number;
+  /** Computed-style snapshot taken at annotation time — the "receipts" for
+   *  design-QA bugs (typography, colors as hex, box model, WCAG contrast). */
+  styles?: import("./style-evidence").StyleEvidence;
 }
 
 // ── Draw Region (layout/spacing markup) ──────────────────────────────────
@@ -456,6 +459,9 @@ export interface BugReport {
    *  Omitted when capture is disabled via `captureStorage: false`. */
   storage?: StorageSnapshot;
   annotations: Annotation[];
+  /** Element-level annotations (annotate + inspect modes) with their
+   *  computed-style evidence — surfaced in exports and over MCP. */
+  elementAnnotations?: ElementAnnotation[];
   screenshots: ScreenshotData[];
   timeline: TimelineEntry[];
   voiceTranscripts: VoiceTranscriptData[];

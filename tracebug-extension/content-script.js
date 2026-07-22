@@ -348,7 +348,13 @@ if (isExtAlive()) {
       case "TB_START_RECORDING":
         window.dispatchEvent(
           new CustomEvent("tracebug-ext-action", {
-            detail: { action: "record", withMic: !!message.withMic },
+            detail: {
+              action: "record",
+              withMic: !!message.withMic,
+              blurFirst: !!message.blurFirst,
+              delaySec: message.delaySec || 0,
+              surfaceMode: message.surfaceMode || undefined,
+            },
           })
         );
         sendResponse({ ok: true });
@@ -357,6 +363,13 @@ if (isExtAlive()) {
       case "TB_VIEW_TICKETS":
         window.dispatchEvent(
           new CustomEvent("tracebug-ext-action", { detail: { action: "view-tickets" } })
+        );
+        sendResponse({ ok: true });
+        break;
+
+      case "TB_INSPECT":
+        window.dispatchEvent(
+          new CustomEvent("tracebug-ext-action", { detail: { action: "inspect" } })
         );
         sendResponse({ ok: true });
         break;

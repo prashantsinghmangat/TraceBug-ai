@@ -117,6 +117,8 @@ import {
 } from "./scanner";
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
+import { activateInspectMode, deactivateInspectMode, isInspectModeActive } from "./inspect-mode";
+import { runRecordCountdown, startBlurThenRecord } from "./ui/pre-record";
 import {
   getAnnotationReport,
   exportAsJSON as exportAnnotationsJSON, exportAsMarkdown as exportAnnotationsMD,
@@ -171,6 +173,10 @@ export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from
 export { buildHar, exportSessionAsHar } from "./exporters/har-export";
 export { exportSessionAsZip, buildZipBlob } from "./exporters/zip-export";
 export { generatePlaywrightTest, playwrightTestFilename } from "./exporters/playwright-test";
+export { captureStyleEvidence, formatStyleSummary, contrastRatio, cssColorToHex } from "./style-evidence";
+export type { StyleEvidence } from "./style-evidence";
+export { runRecordCountdown, startBlurThenRecord } from "./ui/pre-record";
+export { isBlurModeActive, removeAllBlurBoxes } from "./ui/blur-tool";
 export type { HarLog, HarExportResult } from "./exporters/har-export";
 export {
   runLLMAnalysis, buildAnalysisPrompt,
@@ -910,6 +916,32 @@ class TraceBugSDK {
    * comments without breaking flow. Comments are synced to video time and
    * attached to the bug report.
    */
+  /**
+   * Pre-recording flow: optionally let the user BLUR sensitive areas first
+   * (the blur is real backdrop blur — the redacted pixels are what the
+   * recording captures), then an optional 3-2-1 countdown, then record.
+   */
+  prepareRecording(opts: {
+    blurFirst?: boolean;
+    delaySec?: number;
+    withMicrophone?: boolean;
+    surfaceMode?: "tab" | "desktop";
+  } = {}): void {
+    const begin = () => {
+      const go = () => {
+        void this.startVideoRecording({
+          withMicrophone: !!opts.withMicrophone,
+          surfaceMode: opts.surfaceMode,
+        });
+      };
+      const d = Number(opts.delaySec) || 0;
+      if (d > 0) void runRecordCountdown(d).then(go);
+      else go();
+    };
+    if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
+    else begin();
+  }
+
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
     surfaceMode?: "tab" | "desktop";
@@ -1237,6 +1269,27 @@ class TraceBugSDK {
   /** Check if draw mode is active */
   isDrawModeActive(): boolean {
     return isDrawModeActive();
+  }
+
+  // ── Inspect mode ───────────────────────────────────────────────────
+
+  /** Activate inspect mode — hover shows the box model + computed-style
+   *  summary; click attaches the element's style evidence to the report. */
+  activateInspectMode(): void {
+    // Modes are mutually exclusive — same rule as annotate vs draw.
+    deactivateElementAnnotateMode();
+    deactivateDrawMode();
+    activateInspectMode();
+  }
+
+  /** Deactivate inspect mode */
+  deactivateInspectMode(): void {
+    deactivateInspectMode();
+  }
+
+  /** Check if inspect mode is active */
+  isInspectModeActive(): boolean {
+    return isInspectModeActive();
   }
 
   // ── UI Annotations ─────────────────────────────────────────────────
@@ -1725,6 +1778,7 @@ class TraceBugSDK {
     setRedactRules(undefined);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
+    deactivateInspectMode();
     clearAllAnnotations();
     clearAllPlugins();
     _clearIssues();
