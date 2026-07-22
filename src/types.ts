@@ -22,9 +22,9 @@ export interface TraceBugConfig {
   enabled?: "auto" | "development" | "staging" | "all" | "off" | string[] | boolean;
 
   /**
-   * Color theme. Default: "dark"
-   * - "dark"  → Dark navy background (default)
-   * - "light" → Light background
+   * Color theme. Default: "light"
+   * - "light" → Light background (default)
+   * - "dark"  → Dark (cyber-graphite) background
    * - "auto"  → Follows system prefers-color-scheme
    */
   theme?: "light" | "dark" | "auto";

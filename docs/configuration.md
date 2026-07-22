@@ -164,6 +164,10 @@ Warn, info, and log are each capped at the first 50 calls per session so a
 chatty app can't bloat the report. TraceBug's own `[TraceBug]` status
 messages are never captured.
 
+```typescript
+TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
+```
+
 ### `redact`
 
 App-specific redaction rules, applied **at capture time** on top of the
@@ -197,10 +201,6 @@ auto-masked` summary. Rules can also be swapped at runtime with the
 rules** section takes the same field names and patterns, syncs them via
 `chrome.storage.sync`, and applies them live — even to a page that's
 already recording.
-
-```typescript
-TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
-```
 
 ### `shortcuts`
 
