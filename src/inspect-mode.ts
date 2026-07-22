@@ -10,6 +10,7 @@
 import { captureStyleEvidence, formatStyleSummary } from "./style-evidence";
 import { addElementAnnotation } from "./annotation-store";
 import { computeElementSelector } from "./element-annotate";
+import { isTraceBugUiElement } from "./dom-helpers";
 import { ElementAnnotation } from "./types";
 
 let _active = false;
@@ -61,15 +62,7 @@ export function deactivateInspectMode(): void {
 }
 
 function isOurs(el: Element | null): boolean {
-  let node: Element | null = el;
-  while (node) {
-    const id = (node as HTMLElement).id || "";
-    if (id.startsWith("tracebug-")) return true;
-    const cn = typeof (node as HTMLElement).className === "string" ? (node as HTMLElement).className : "";
-    if (cn.includes("tracebug-") || cn.includes("tb-")) return true;
-    node = node.parentElement;
-  }
-  return false;
+  return isTraceBugUiElement(el);
 }
 
 function box(name: string): HTMLElement | null {
