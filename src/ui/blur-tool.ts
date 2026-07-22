@@ -11,6 +11,8 @@
 // a "blur added" marker. Blurs persist after the picker mode exits (that's
 // the point — they redact the recording) until removeAllBlurBoxes().
 
+import { isTraceBugUiElement } from "../dom-helpers";
+
 export interface BlurEvent {
   id: string;
   timestamp: number;
@@ -66,16 +68,7 @@ export function undoLastBlur(): number {
 }
 
 function _isOurNode(el: Element | null): boolean {
-  let node: Element | null = el;
-  while (node) {
-    const id = (node as HTMLElement).id || "";
-    if (id.startsWith("tracebug-")) return true;
-    const cn = typeof (node as HTMLElement).className === "string" ? (node as HTMLElement).className : "";
-    if (cn.includes("tracebug-") || cn.includes("tb-qb") || cn.includes("tb-hud")) return true;
-    if ((node as HTMLElement).dataset?.tracebug) return true;
-    node = node.parentElement;
-  }
-  return false;
+  return isTraceBugUiElement(el);
 }
 
 function _findBlurred(el: Element): BlurredEl | undefined {
