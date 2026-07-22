@@ -5,6 +5,7 @@
 import { EventType } from "./types";
 import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
+import { isSensitiveParamName } from "./url-hygiene";
 
 type Emit = (type: EventType, data: Record<string, unknown>) => void;
 
@@ -54,10 +55,8 @@ export function clearNetworkFailures(): void {
 
 // ── URL redaction ─────────────────────────────────────────────────────────
 // Strip sensitive query params before URLs are captured into events/reports.
-// Matches param NAMES (case-insensitive) against this pattern — values are
-// replaced with [REDACTED]. Prevents tokens leaking into exported bug reports.
-
-const SENSITIVE_PARAM_RE = /token|key|secret|auth|password|sig|signature/i;
+// The sensitive-name matcher lives in url-hygiene (isSensitiveParamName) so
+// this capture path and the upload sanitizer share one list, no drift.
 
 /**
  * Redact sensitive query-string values in a URL.
@@ -83,7 +82,7 @@ function sanitizeUrl(url: string): string {
       const eqIdx = part.indexOf("=");
       if (eqIdx === -1) return part;
       const key = part.slice(0, eqIdx);
-      if (SENSITIVE_PARAM_RE.test(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
+      if (isSensitiveParamName(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
       return part;
     }).join("&");
 
@@ -686,6 +685,35 @@ export function collectPerformanceNetwork(emit: Emit): () => void {
 
 // ── Errors (window.onerror + unhandledrejection + console.error) ──────────
 
+/** Max chars for a single captured console/error message. A logged object can
+ *  serialize to megabytes; capping here bounds report size and memory
+ *  (a P1: `console.error("x", hugeResponse)` otherwise retained the whole
+ *  serialized object in the event buffer and localStorage). */
+export const CONSOLE_MSG_MAX = 10_000;
+
+/** Cap a captured message/stack string, appending an explicit marker so a
+ *  reader knows it was cut (rather than silently losing the tail). */
+export function capMessage(s: string, max = CONSOLE_MSG_MAX): string {
+  return s.length > max ? s.slice(0, max) + "…[truncated]" : s;
+}
+
+/** Stringify console args safely: strings pass through, others are JSON-encoded
+ *  but circular refs / throwers degrade to a tag instead of throwing (the old
+ *  bare `JSON.stringify` threw on circular objects → the whole event was
+ *  silently dropped by the caller's try/catch). The joined result is capped. */
+export function formatConsoleArgs(args: unknown[]): string {
+  const parts = args.map((a) => {
+    if (typeof a === "string") return a;
+    try {
+      const s = JSON.stringify(a);
+      return s === undefined ? String(a) : s;
+    } catch {
+      return "[unserializable]";
+    }
+  });
+  return capMessage(parts.join(" "));
+}
+
 /**
  * Eager error capture — window.onerror + unhandledrejection. Cheap; both
  * are passive callbacks, neither pollutes the call stack of unrelated code.
@@ -698,8 +726,8 @@ export function collectErrors(emit: Emit): () => void {
     try {
       emit("error", {
         error: {
-          message: sanitizeTokenShapes(typeof msg === "string" ? msg : "Unknown error"),
-          stack: error?.stack && sanitizeTokenShapes(error.stack), source, line, column: col,
+          message: sanitizeTokenShapes(capMessage(typeof msg === "string" ? msg : "Unknown error")),
+          stack: error?.stack && sanitizeTokenShapes(capMessage(error.stack)), source, line, column: col,
         },
       });
     } catch {}
@@ -710,8 +738,8 @@ export function collectErrors(emit: Emit): () => void {
     try {
       emit("unhandled_rejection", {
         error: {
-          message: sanitizeTokenShapes(e.reason?.message || String(e.reason)),
-          stack: e.reason?.stack && sanitizeTokenShapes(e.reason.stack),
+          message: sanitizeTokenShapes(capMessage(e.reason?.message || String(e.reason))),
+          stack: e.reason?.stack && sanitizeTokenShapes(capMessage(e.reason.stack)),
         },
       });
     } catch {}
@@ -741,8 +769,8 @@ export function collectConsoleErrors(emit: Emit): () => void {
       emit("console_error", {
         // Token-shape scrub at capture — a token logged to the console must
         // never reach the offline .html export unmasked (the cloud sanitizer
-        // only covers the upload path).
-        error: { message: sanitizeTokenShapes(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ")) },
+        // only covers the upload path). formatConsoleArgs caps + is circular-safe.
+        error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) },
       });
     } catch {} finally { _insideEmit = false; }
     origConsoleError.apply(console, args);
@@ -775,8 +803,8 @@ function wrapConsoleLevel(method: "warn" | "info" | "log", type: EventType, emit
     try {
       emit(type, {
         // Same capture-time token scrub as console_error — the offline
-        // export path never runs the cloud sanitizer.
-        error: { message: sanitizeTokenShapes(args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")) },
+        // export path never runs the cloud sanitizer. Capped + circular-safe.
+        error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) },
       });
     } catch {} finally { _inside = false; }
     orig.apply(console, args); // ALWAYS call original

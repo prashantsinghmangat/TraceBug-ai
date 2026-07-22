@@ -6,9 +6,10 @@
 import { chromium } from "playwright";
 import { readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
-import { join, extname } from "node:path";
+import { join, extname, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PUBLIC_DIR = "D:/Project/TraceBug-ai/website/public";
+const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "website", "public");
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 const server = createServer((req, res) => {
   const p = join(PUBLIC_DIR, decodeURIComponent(new URL(req.url, "http://x").pathname));

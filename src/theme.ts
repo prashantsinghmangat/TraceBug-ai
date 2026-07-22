@@ -132,7 +132,9 @@ const LIGHT_THEME: ThemeTokens = {
   "--tb-bg-overlay": "#ffffffee",
   "--tb-text-primary": "#111113",
   "--tb-text-secondary": "#52525B",
-  "--tb-text-muted": "#82828C",
+  // #82828C was 3.8:1 on white — fails WCAG AA for normal text. #75757E is
+  // 4.56:1, the minimal darkening that clears the 4.5:1 bar.
+  "--tb-text-muted": "#75757E",
   "--tb-accent": "#4F46E5",
   "--tb-accent-hover": "#4338CA",
   "--tb-accent-subtle": "#4F46E514",

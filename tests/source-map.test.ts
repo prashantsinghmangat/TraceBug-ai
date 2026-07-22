@@ -7,6 +7,7 @@ import {
   resolvePosition,
   findMapFile,
   resolveStackWithMaps,
+  clearSourceMapCache,
   type SourceMapV3,
 } from '../cli/source-map';
 
@@ -75,6 +76,19 @@ describe('resolvePosition', () => {
   it('applies sourceRoot as a prefix', () => {
     const rooted: SourceMapV3 = { ...MAP, sourceRoot: 'webpack://myapp' };
     expect(resolvePosition(rooted, 1, 9)!.source).toBe('webpack://myapp/src/app.ts');
+  });
+
+  it('returns identical results on repeated lookups (decode cached per map)', () => {
+    const a = resolvePosition(MAP, 1, 9);
+    const b = resolvePosition(MAP, 1, 9);
+    expect(b).toEqual(a);
+    // A different map object decodes independently.
+    const other: SourceMapV3 = { version: 3, sources: ['x.ts'], mappings: 'AAAA' };
+    expect(resolvePosition(other, 1, 1)!.source).toBe('x.ts');
+  });
+
+  it('clearSourceMapCache is callable', () => {
+    expect(() => clearSourceMapCache()).not.toThrow();
   });
 });
 

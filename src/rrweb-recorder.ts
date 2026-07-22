@@ -28,6 +28,57 @@ let _loadPromise: Promise<RecordFn | null> | null = null;
 let _events: RrwebEvent[] = [];
 let _stopFn: (() => void) | null = null;
 let _recording = false;
+let _trimmed = false;
+
+// ── Buffer bounds ─────────────────────────────────────────────────────────
+// rrweb emits continuously (50–200 mutations/s on dynamic apps), so a
+// multi-hour "record all day" session would grow this array without limit and
+// eventually OOM the tab. We bound it two ways that preserve replayability:
+//
+// 1. `checkoutEveryNms` makes rrweb emit a fresh FULL snapshot periodically.
+//    A full snapshot is self-contained; everything after it replays from it.
+// 2. When the buffer exceeds SOFT_MAX we drop everything *before* the most
+//    recent full snapshot — the retained tail still replays cleanly, just
+//    covering a shorter window. HARD_MAX is a floor-guarantee: if a single
+//    checkpoint interval is itself enormous, we drop oldest events past it
+//    (replay may skip early frames, but memory stays bounded — never OOM).
+//
+// rrweb EventType.FullSnapshot === 2.
+const FULL_SNAPSHOT = 2;
+const CHECKOUT_EVERY_MS = 120_000; // fresh full snapshot every ~2 min of activity
+const SOFT_MAX = 30_000;           // trim-to-last-snapshot threshold
+const HARD_MAX = 60_000;           // absolute ceiling
+
+/**
+ * Bound an rrweb event buffer in place, preserving replayability. Pure except
+ * for the in-place splice; returns true if it dropped anything. Exported for
+ * tests. `softMax`/`hardMax` are injectable so tests don't need 30k events.
+ */
+export function trimEventBuffer(
+  events: RrwebEvent[],
+  softMax = SOFT_MAX,
+  hardMax = HARD_MAX
+): boolean {
+  if (events.length <= softMax) return false;
+  let trimmed = false;
+  // Drop the stale segment before the most recent full snapshot — the tail
+  // still replays from that self-contained snapshot.
+  let lastFull = -1;
+  for (let i = events.length - 1; i >= 0; i--) {
+    if ((events[i] as { type?: number }).type === FULL_SNAPSHOT) { lastFull = i; break; }
+  }
+  if (lastFull > 0) { events.splice(0, lastFull); trimmed = true; }
+  // Floor guarantee: even one enormous checkpoint interval can't grow past
+  // hardMax (replay may skip early frames, but memory stays bounded).
+  if (events.length > hardMax) { events.splice(0, events.length - hardMax); trimmed = true; }
+  return trimmed;
+}
+
+/** True when the DOM buffer was trimmed during this session — the exported
+ *  replay covers only the most recent window, not the whole (long) session. */
+export function wasDomBufferTrimmed(): boolean {
+  return _trimmed;
+}
 
 function loadRrweb(): Promise<RecordFn | null> {
   if (_recordFn !== undefined) return Promise.resolve(_recordFn);
@@ -58,9 +109,13 @@ export async function startDomRecording(): Promise<boolean> {
   const record = await loadRrweb();
   if (!record) return false;
   _events = [];
+  _trimmed = false;
   try {
     const stop = record({
-      emit: (event: RrwebEvent) => { _events.push(event); },
+      emit: (event: RrwebEvent) => { _events.push(event); if (trimEventBuffer(_events)) _trimmed = true; },
+      // Periodic full snapshots keep the buffer trimmable without losing
+      // replayability, and also speed up seeking in long recordings.
+      checkoutEveryNms: CHECKOUT_EVERY_MS,
       maskAllInputs: true,
       recordCanvas: false,
       collectFonts: false,

@@ -122,6 +122,36 @@ export function isQuickBugOpen(): boolean {
   return _isOpen;
 }
 
+/** Visible, focusable descendants of a container, in DOM order — the tab ring
+ *  for the modal's focus trap. Hidden tab-panels (display:none) are excluded
+ *  because their controls have no client rects. Exported for tests. */
+export function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  const sel =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+    'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return Array.from(container.querySelectorAll<HTMLElement>(sel)).filter(
+    (el) => el.getClientRects().length > 0
+  );
+}
+
+/** Keep Tab / Shift+Tab focus inside the modal (WCAG 2.4.3 / 2.1.2). Returns
+ *  true if it handled the event (caller should stop). Exported for tests. */
+export function trapModalTab(e: KeyboardEvent, modal: HTMLElement): boolean {
+  if (e.key !== "Tab") return false;
+  const f = getFocusableElements(modal);
+  if (f.length === 0) { e.preventDefault(); return true; }
+  const first = f[0];
+  const last = f[f.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  const inside = active && modal.contains(active);
+  if (e.shiftKey) {
+    if (!inside || active === first) { e.preventDefault(); last.focus(); return true; }
+  } else {
+    if (!inside || active === last) { e.preventDefault(); first.focus(); return true; }
+  }
+  return false;
+}
+
 /** Force the modal to re-render with fresh state. Used after a screenshot
  *  is added / deleted / annotated so the user sees the change immediately.
  *  No-op when the modal isn't already open. */
@@ -778,6 +808,9 @@ function _openModal(
       if (e.key === "Escape" || e.key === "?") { e.preventDefault(); toggleHelp(false); }
       return;
     }
+    // Focus trap runs BEFORE the typing-target guard — Tab must be caught even
+    // when focus is in a field (that's exactly the escape case to prevent).
+    if (trapModalTab(e, modal)) return;
     if (isTypingTarget(e.target)) return;
     if (e.key === "?" || (e.shiftKey && e.key === "/")) { e.preventDefault(); toggleHelp(true); return; }
     if (e.key === "t" || e.key === "T") {
