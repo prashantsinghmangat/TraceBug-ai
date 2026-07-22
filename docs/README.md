@@ -13,7 +13,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [configuration.md](configuration.md) | Every `TraceBug.init()` option and defaults; session behavior. |
 | [bug-reporting.md](bug-reporting.md) | The Quick Bug modal and Saved Tickets. |
 | [ticket-flow.md](ticket-flow.md) | Capture → review → export, step by step (incl. all export formats). |
-| [annotate-and-draw.md](annotate-and-draw.md) | Element annotation + draw/redact modes (programmatic in v1.0). |
+| [annotate-and-draw.md](annotate-and-draw.md) | Inspect mode (style evidence), element annotation, draw mode, and click-to-blur redaction. |
 | [chrome-extension.md](chrome-extension.md) | Using TraceBug as a browser extension. |
 
 ## Exports, agents & integrations
@@ -24,7 +24,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [ai-debugger.md](ai-debugger.md) | BYO-key LLM root-cause analysis (Anthropic / OpenAI / Ollama). |
 | [integrations.md](integrations.md) | File real GitHub / Linear / Slack / Jira issues from a report. |
 | [har-export.md](har-export.md) | Export captured network activity as a standard `.har`. |
-| [playwright.md](playwright.md) | Playwright reporter — failing tests become TraceBug reports. |
+| [playwright.md](playwright.md) | Playwright reporter — failing tests become TraceBug reports (and every report embeds a failing spec). |
 
 ## Reference
 

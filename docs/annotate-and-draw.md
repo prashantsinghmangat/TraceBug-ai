@@ -36,7 +36,7 @@ automatically.
 > TraceBug.deactivateDrawMode();
 > ```
 
-TraceBug provides two visual feedback modes for marking up UI issues directly on the live page — no screenshots needed.
+TraceBug also provides visual feedback modes for marking up UI issues directly on the live page — no screenshots needed: annotate, draw, and the element-level blur tool.
 
 ## Element Annotate Mode
 
@@ -80,6 +80,7 @@ Each element annotation records:
 | Comment | Your description of the issue |
 | Page URL | Which page the annotation is on |
 | Scroll position | Where the page was scrolled to |
+| Style snapshot | The same curated computed-style evidence as inspect mode (typography, colors as hex, box model, WCAG contrast) — captured automatically on save |
 
 ### Persistent Badges
 
@@ -136,6 +137,30 @@ Each draw region records:
 Saved regions display on the canvas with:
 - A **colored number pill** in the top-left corner
 - A **comment preview** next to the number (first 40 characters)
+
+## Blur Tool (element-level redaction)
+
+The blur tool redacts sensitive on-screen content before or during a
+recording. Unlike draw mode, it is **element-level — no dragging**:
+
+1. **Activate** — the recording HUD's droplet **Blur** button, the extension
+   popup's **Blur before recording** option, or programmatically via
+   `TraceBug.prepareRecording({ blurFirst: true })` /
+   `startBlurThenRecord(...)`
+2. **Hover** highlights an element; **click** applies `filter: blur(12px)`
+   to the element itself. Because the blur is part of the element's own
+   rendering it moves in the same paint as the content — it can't lag
+   behind scrolling the way overlay boxes did
+3. **Click again** to unblur; **Undo** on the pre-record arming bar removes
+   the most recent blur
+4. **Esc** (or deactivating) exits the picker — placed blurs stay
+
+Blurred elements also get the `tb-mask` class, so the rrweb DOM replay
+masks their text — not just the video pixels. Blurs persist through the
+recording and are removed (original inline `filter` restored) when it
+stops.
+
+Named exports: `isBlurModeActive()`, `removeAllBlurBoxes()`.
 
 ## Viewing Annotations
 

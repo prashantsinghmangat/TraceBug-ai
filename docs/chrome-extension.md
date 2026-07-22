@@ -32,21 +32,39 @@ After code changes, run `npm run build` and click the **reload** icon on the Tra
 
 ## Usage
 
-The extension popup has three actions:
+The extension popup has four actions:
 
 | Action | What it does |
 |--------|--------------|
-| **Capture Bug** (primary) | Starts a screen recording. Chrome's native share-picker appears so you can pick a tab, window, or the whole screen. A floating HUD shows the recording timer plus Draw and Stop buttons. |
+| **Capture Bug** (primary) | Starts a screen recording. A floating HUD shows the recording timer plus Pause, Mic, Screenshot, Draw, Blur (droplet icon — click an element to blur it, click again to unblur; captured into the recording), and Stop. |
 | **Screenshot** | One-shot capture of the current viewport. Opens the ticket modal directly with the screenshot attached. |
 | **View tickets** | Opens the dashboard panel on the current page. |
+| **Inspect element** | DevTools-style inspection: hover shows a box-model highlight + computed-style tooltip; click attaches the element with its full style evidence (typography, colors as hex, box model, WCAG contrast) to the report as an `inspect` annotation. |
 
 A 🎤 toggle in the popup adds microphone audio to the recording.
 
+### ⚙ Record options
+
+A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`:
+
+- **Capture** — record the **current tab** directly, or open Chrome's **desktop / window picker**.
+- **Start delay** — none, **3 s**, or **5 s**, with an on-page 3-2-1 countdown overlay before recording rolls.
+- **Blur before recording** — arms the element-level blur tool *before* capture starts: click elements to blur/unblur, then a floating **"● Start recording / Cancel"** bar (with **Undo** for the last blur) begins the recording with the redaction applied from the very first frame. Cancel clears the blurs.
+
+### 🛡 Redaction rules
+
+A collapsible panel for app-specific PII the built-in token patterns can't know about:
+
+- **Sensitive field names** — comma/newline separated; matches form fields, storage keys, URL params, and JSON keys in captured data (`email` also covers `customer_email`).
+- **Mask patterns** — one regex per line, case-insensitive, masked anywhere in captured text.
+
+Rules are validated on save, synced across your browsers via `chrome.storage.sync`, and applied **live** — even to a page that's already recording. Same engine as the SDK's [`redact` config](configuration.md#redact); the content script hands them to the page-world SDK via `<html data-tb-redact>`.
+
 ### Recording flow
 
-1. Click **Capture Bug**.
-2. The share-picker appears — pick what to record. "Current tab" is usually right; for flows that span tab navigation, pick "Window" or "Entire screen".
-3. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements during recording.
+1. Click **Capture Bug**. (Optionally set a capture surface, start delay, or blur-first in **⚙ Record options**.)
+2. The share-picker appears — with **Capture: Current tab** it's pre-selected to the tab you're on; for flows that span tab navigation, pick **Desktop / window** in Record options (or "Window" / "Entire screen" in the picker).
+3. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements, or the droplet **Blur** button to click-blur sensitive elements (captured into the recording, masked in the DOM replay).
 4. Click **Stop** in the HUD (or Chrome's native "Stop sharing" button).
 5. The ticket modal opens with video, screenshots, console, network, and action chips all populated. Fill in title/description and export as HTML, GitHub issue, Jira ticket, Linear issue, or Slack message.
 

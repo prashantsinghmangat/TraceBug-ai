@@ -108,10 +108,16 @@ falls back to the screenshot gallery.
 | Export | File | Best for |
 | --- | --- | --- |
 | **Export .html** | self-contained replay | Handing to a developer or an MCP-connected coding agent. |
+| **Download .zip** | replay wrapped in `.zip` | Attaching to GitHub issues (which reject bare `.html`) — `src/exporters/zip-export.ts`, zero-dep ZIP writer. |
+| **Download failing test** | `.spec.ts` | A generated Playwright spec that replays the session and asserts the captured failure is gone — `src/exporters/playwright-test.ts`. Also embedded in the `.html` payload for the MCP `get_playwright_test` tool. |
 | **Export for AI (.html)** | tiny text-only report | Pasting/uploading into a chat (Claude/ChatGPT) — a few KB, no MCP needed. |
 | **Download report (.md)** | markdown | Same as above, plain markdown. |
 | **Export HAR** | `.har` | Opening network activity in DevTools / Charles / Postman. |
 | **GitHub / Linear / Slack / Jira** | real issue/message | Filing directly via API (`src/integrations/tracker-client.ts`). |
+
+The exported viewer itself also carries recipient-side actions (Open GitHub
+issue / Copy issue markdown — precomputed at export, token-free only) and a
+`Privacy` row summarizing what the sanitizers masked.
 
 The full replay `.html` is built for a human browser and the MCP reader; the
 **AI/`.md`** exports are the small, chat-safe artifacts. The `.html` replay and
@@ -147,6 +153,13 @@ reads `--tb-*` variables.
 - **Quick Bug modal** (`src/ui/quick-bug.ts`): review/edit the ticket and export.
 - **Recording HUD, live bug card, replay scrubber, draw/annotate tools, toasts**
   round out the surface.
+- **Inspect mode** (`src/inspect-mode.ts`): hover box-model highlight + computed
+  style tooltip; click attaches `StyleEvidence` (`src/style-evidence.ts`) to the
+  report as an `inspect` annotation.
+- **Pre-record flow** (`src/ui/pre-record.ts`): blur-first arming bar + 3-2-1
+  countdown before `startVideoRecording`. Blur (`src/ui/blur-tool.ts`) is
+  element-level — a CSS filter on the element itself plus `tb-mask` for the
+  DOM replay, so it cannot lag behind scrolling.
 
 ---
 
