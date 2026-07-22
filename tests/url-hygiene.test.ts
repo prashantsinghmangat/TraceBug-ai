@@ -1,11 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { isNoiseRequest, isStaticResource, shortDisplayPath } from '../src/url-hygiene';
+import { isNoiseRequest, isStaticResource, shortDisplayPath, isSensitiveParamName } from '../src/url-hygiene';
 
 // The real-world case that motivated this module: a failed shields.io badge
 // behind GitHub's camo proxy was reported as "API Failure (high confidence)"
 // with a ~500-char hex path as the bug title.
 const CAMO_URL =
   'https://camo.githubusercontent.com/7201bf24b202a60bfb5d8e83c47b2fe353cc8a693cfc106b0b02a0d9763042f0/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f';
+
+describe('isSensitiveParamName (unified capture + upload matcher)', () => {
+  it('catches the names the capture-path regex historically covered', () => {
+    for (const k of ['token', 'access_token', 'api_key', 'x-api-key', 'secret', 'authorization', 'password', 'sig', 'signature']) {
+      expect(isSensitiveParamName(k)).toBe(true);
+    }
+  });
+
+  it('catches the names only the upload Set covered (the drift the merge closes)', () => {
+    // These previously slipped through the capture-time redactor.
+    for (const k of ['session', 'sid', 'csrf', 'passwd', 'pwd']) {
+      expect(isSensitiveParamName(k)).toBe(true);
+    }
+  });
+
+  it('catches sig/signature that the upload Set missed (AWS presigned URLs)', () => {
+    expect(isSensitiveParamName('X-Amz-Signature')).toBe(true);
+    expect(isSensitiveParamName('sig')).toBe(true);
+  });
+
+  it('leaves ordinary params alone', () => {
+    for (const k of ['q', 'page', 'limit', 'lang', 'id', 'name']) {
+      expect(isSensitiveParamName(k)).toBe(false);
+    }
+    expect(isSensitiveParamName(undefined)).toBe(false);
+  });
+});
 
 describe('isNoiseRequest', () => {
   it('flags GitHub camo image-proxy URLs as noise', () => {

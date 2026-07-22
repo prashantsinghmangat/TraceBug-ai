@@ -10,6 +10,7 @@
 
 import type { BugReport, ContextData, StorageEntry } from "../types";
 import { isCustomSensitiveKey, applyCustomRedaction } from "./custom-redaction";
+import { isSensitiveParamName } from "../url-hygiene";
 
 const REDACTED = "[REDACTED]";
 
@@ -61,13 +62,6 @@ function mask(s: string): string {
   return `${s.slice(0, 4)}…${REDACTED}…${s.slice(-4)}`;
 }
 
-// Sensitive query-param names (case-insensitive). Strip the value.
-const SENSITIVE_QUERY_KEYS = new Set([
-  "token", "access_token", "id_token", "refresh_token", "api_key",
-  "apikey", "secret", "password", "passwd", "pwd", "auth",
-  "authorization", "x-api-key", "session", "sid", "csrf",
-]);
-
 function sanitizeUrl(url: string): string {
   if (typeof url !== "string" || url.length === 0) return url;
   try {
@@ -76,7 +70,8 @@ function sanitizeUrl(url: string): string {
     const u = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
     let changed = false;
     u.searchParams.forEach((_v, k) => {
-      if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase()) || isCustomSensitiveKey(k)) {
+      // Shared matcher with the capture path (url-hygiene) — no list drift.
+      if (isSensitiveParamName(k) || isCustomSensitiveKey(k)) {
         u.searchParams.set(k, REDACTED);
         changed = true;
       }

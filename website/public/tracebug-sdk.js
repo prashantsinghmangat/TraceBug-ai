@@ -905,6 +905,76 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/url-hygiene.ts
+  function isSensitiveParamName(name) {
+    return !!name && SENSITIVE_PARAM_RE.test(name);
+  }
+  function isNoiseRequest(url) {
+    if (!url) return false;
+    if (ASSET_EXT_RE.test(url)) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    try {
+      const u2 = new URL(url);
+      const host2 = u2.hostname.toLowerCase();
+      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
+      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
+      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
+      if (pageHost && host2 === pageHost) return false;
+      return NOISE_PATH_RE.test(u2.pathname);
+    } catch (e2) {
+      return false;
+    }
+  }
+  function isStaticResource(url) {
+    if (!url) return false;
+    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
+  }
+  function shortDisplayPath(url, base) {
+    if (!url) return "";
+    let pathname;
+    try {
+      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
+      pathname = new URL(url, origin).pathname || url;
+    } catch (e2) {
+      pathname = url;
+    }
+    const segments = pathname.split("/").map(
+      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
+    );
+    let out = segments.join("/");
+    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
+    return out;
+  }
+  var SENSITIVE_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
+  var init_url_hygiene = __esm({
+    "src/url-hygiene.ts"() {
+      "use strict";
+      SENSITIVE_PARAM_RE = /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
+      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
+      NOISE_HOSTS = [
+        "camo.githubusercontent.com",
+        "avatars.githubusercontent.com",
+        "img.shields.io",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "google-analytics.com",
+        "www.google-analytics.com",
+        "googletagmanager.com",
+        "www.googletagmanager.com",
+        "stats.g.doubleclick.net",
+        "connect.facebook.net",
+        "cdn.segment.com",
+        "api.segment.io",
+        "gravatar.com",
+        "www.gravatar.com"
+      ];
+      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
+      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
+      SEGMENT_MAX = 24;
+      PATH_MAX = 60;
+    }
+  });
+
   // src/sanitize/cloud-upload.ts
   function mask(s2) {
     if (s2.length <= 12) return REDACTED2;
@@ -917,7 +987,7 @@ var TraceBugModule = (() => {
       const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
       let changed = false;
       u2.searchParams.forEach((_v, k) => {
-        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase()) || isCustomSensitiveKey(k)) {
+        if (isSensitiveParamName(k) || isCustomSensitiveKey(k)) {
           u2.searchParams.set(k, REDACTED2);
           changed = true;
         }
@@ -1011,11 +1081,12 @@ var TraceBugModule = (() => {
     }
     return out;
   }
-  var REDACTED2, TOKEN_PATTERNS, SENSITIVE_QUERY_KEYS;
+  var REDACTED2, TOKEN_PATTERNS;
   var init_cloud_upload = __esm({
     "src/sanitize/cloud-upload.ts"() {
       "use strict";
       init_custom_redaction();
+      init_url_hygiene();
       REDACTED2 = "[REDACTED]";
       TOKEN_PATTERNS = [
         // Bearer <token> in headers, console output, anywhere
@@ -1055,24 +1126,6 @@ var TraceBugModule = (() => {
         // mangling legitimate hex like git SHAs.
         { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s2) => s2.replace(/[a-fA-F0-9]{32,}/, REDACTED2) }
       ];
-      SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
-        "token",
-        "access_token",
-        "id_token",
-        "refresh_token",
-        "api_key",
-        "apikey",
-        "secret",
-        "password",
-        "passwd",
-        "pwd",
-        "auth",
-        "authorization",
-        "x-api-key",
-        "session",
-        "sid",
-        "csrf"
-      ]);
     }
   });
 
@@ -1107,7 +1160,7 @@ var TraceBugModule = (() => {
         const eqIdx = part.indexOf("=");
         if (eqIdx === -1) return part;
         const key = part.slice(0, eqIdx);
-        if (SENSITIVE_PARAM_RE.test(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
+        if (isSensitiveParamName(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
         return part;
       }).join("&");
       return `${base}?${redacted}${hash}`;
@@ -1597,14 +1650,29 @@ var TraceBugModule = (() => {
       }
     };
   }
+  function capMessage(s2, max = CONSOLE_MSG_MAX) {
+    return s2.length > max ? s2.slice(0, max) + "\u2026[truncated]" : s2;
+  }
+  function formatConsoleArgs(args) {
+    const parts = args.map((a2) => {
+      if (typeof a2 === "string") return a2;
+      try {
+        const s2 = JSON.stringify(a2);
+        return s2 === void 0 ? String(a2) : s2;
+      } catch (e2) {
+        return "[unserializable]";
+      }
+    });
+    return capMessage(parts.join(" "));
+  }
   function collectErrors(emit) {
     const prevOnError = window.onerror;
     window.onerror = (msg, source, line, col, error) => {
       try {
         emit("error", {
           error: {
-            message: sanitizeTokenShapes(typeof msg === "string" ? msg : "Unknown error"),
-            stack: (error == null ? void 0 : error.stack) && sanitizeTokenShapes(error.stack),
+            message: sanitizeTokenShapes(capMessage(typeof msg === "string" ? msg : "Unknown error")),
+            stack: (error == null ? void 0 : error.stack) && sanitizeTokenShapes(capMessage(error.stack)),
             source,
             line,
             column: col
@@ -1624,8 +1692,8 @@ var TraceBugModule = (() => {
       try {
         emit("unhandled_rejection", {
           error: {
-            message: sanitizeTokenShapes(((_a2 = e2.reason) == null ? void 0 : _a2.message) || String(e2.reason)),
-            stack: ((_b = e2.reason) == null ? void 0 : _b.stack) && sanitizeTokenShapes(e2.reason.stack)
+            message: sanitizeTokenShapes(capMessage(((_a2 = e2.reason) == null ? void 0 : _a2.message) || String(e2.reason))),
+            stack: ((_b = e2.reason) == null ? void 0 : _b.stack) && sanitizeTokenShapes(capMessage(e2.reason.stack))
           }
         });
       } catch (e3) {
@@ -1650,8 +1718,8 @@ var TraceBugModule = (() => {
         emit("console_error", {
           // Token-shape scrub at capture — a token logged to the console must
           // never reach the offline .html export unmasked (the cloud sanitizer
-          // only covers the upload path).
-          error: { message: sanitizeTokenShapes(args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ")) }
+          // only covers the upload path). formatConsoleArgs caps + is circular-safe.
+          error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) }
         });
       } catch (e2) {
       } finally {
@@ -1678,8 +1746,8 @@ var TraceBugModule = (() => {
       try {
         emit(type, {
           // Same capture-time token scrub as console_error — the offline
-          // export path never runs the cloud sanitizer.
-          error: { message: sanitizeTokenShapes(args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ")) }
+          // export path never runs the cloud sanitizer. Capped + circular-safe.
+          error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) }
         });
       } catch (e2) {
       } finally {
@@ -1700,19 +1768,19 @@ var TraceBugModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, SENSITIVE_PARAM_RE, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
       init_cloud_upload();
       init_custom_redaction();
+      init_url_hygiene();
       ROOT_ID = "tracebug-root";
       PANEL_ID = "tracebug-dashboard-panel";
       BTN_ID = "tracebug-dashboard-btn";
       NETWORK_FAILURE_LIMIT = 10;
       RESPONSE_SNIPPET_CHARS = 200;
       _networkFailures = [];
-      SENSITIVE_PARAM_RE = /token|key|secret|auth|password|sig|signature/i;
       MAX_BODY_BYTES = 10 * 1024;
       BINARY_CONTENT_TYPE_RE = /^(image|video|audio)\/|^application\/(octet-stream|pdf|zip|x-protobuf|x-msgpack|wasm|vnd\.)/i;
       INTERNAL_URL_PATTERNS = [
@@ -1729,6 +1797,7 @@ var TraceBugModule = (() => {
         /\/@react-refresh/
       ];
       _perfSeen = /* @__PURE__ */ new Set();
+      CONSOLE_MSG_MAX = 1e4;
       CONSOLE_LEVEL_CAP = 50;
     }
   });
@@ -19547,6 +19616,26 @@ var TraceBugModule = (() => {
   });
 
   // src/rrweb-recorder.ts
+  function trimEventBuffer(events, softMax = SOFT_MAX, hardMax = HARD_MAX) {
+    if (events.length <= softMax) return false;
+    let trimmed = false;
+    let lastFull = -1;
+    for (let i2 = events.length - 1; i2 >= 0; i2--) {
+      if (events[i2].type === FULL_SNAPSHOT) {
+        lastFull = i2;
+        break;
+      }
+    }
+    if (lastFull > 0) {
+      events.splice(0, lastFull);
+      trimmed = true;
+    }
+    if (events.length > hardMax) {
+      events.splice(0, events.length - hardMax);
+      trimmed = true;
+    }
+    return trimmed;
+  }
   function loadRrweb() {
     if (_recordFn !== void 0) return Promise.resolve(_recordFn);
     if (!_loadPromise) {
@@ -19568,11 +19657,16 @@ var TraceBugModule = (() => {
     const record2 = await loadRrweb();
     if (!record2) return false;
     _events = [];
+    _trimmed = false;
     try {
       const stop = record2({
         emit: (event) => {
           _events.push(event);
+          if (trimEventBuffer(_events)) _trimmed = true;
         },
+        // Periodic full snapshots keep the buffer trimmable without losing
+        // replayability, and also speed up seeking in long recordings.
+        checkoutEveryNms: CHECKOUT_EVERY_MS,
         maskAllInputs: true,
         recordCanvas: false,
         collectFonts: false,
@@ -19617,7 +19711,7 @@ var TraceBugModule = (() => {
   function snapshotDomEvents() {
     return _events.slice();
   }
-  var _recordFn, _loadPromise, _events, _stopFn, _recording;
+  var _recordFn, _loadPromise, _events, _stopFn, _recording, _trimmed, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX;
   var init_rrweb_recorder = __esm({
     "src/rrweb-recorder.ts"() {
       "use strict";
@@ -19625,6 +19719,11 @@ var TraceBugModule = (() => {
       _events = [];
       _stopFn = null;
       _recording = false;
+      _trimmed = false;
+      FULL_SNAPSHOT = 2;
+      CHECKOUT_EVERY_MS = 12e4;
+      SOFT_MAX = 3e4;
+      HARD_MAX = 6e4;
     }
   });
 
@@ -20888,72 +20987,6 @@ var TraceBugModule = (() => {
         storagePatterns,
         generalPatterns
       ];
-    }
-  });
-
-  // src/url-hygiene.ts
-  function isNoiseRequest(url) {
-    if (!url) return false;
-    if (ASSET_EXT_RE.test(url)) return true;
-    if (!/^https?:\/\//i.test(url)) return false;
-    try {
-      const u2 = new URL(url);
-      const host2 = u2.hostname.toLowerCase();
-      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
-      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
-      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
-      if (pageHost && host2 === pageHost) return false;
-      return NOISE_PATH_RE.test(u2.pathname);
-    } catch (e2) {
-      return false;
-    }
-  }
-  function isStaticResource(url) {
-    if (!url) return false;
-    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
-  }
-  function shortDisplayPath(url, base) {
-    if (!url) return "";
-    let pathname;
-    try {
-      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
-      pathname = new URL(url, origin).pathname || url;
-    } catch (e2) {
-      pathname = url;
-    }
-    const segments = pathname.split("/").map(
-      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
-    );
-    let out = segments.join("/");
-    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
-    return out;
-  }
-  var ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
-  var init_url_hygiene = __esm({
-    "src/url-hygiene.ts"() {
-      "use strict";
-      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
-      NOISE_HOSTS = [
-        "camo.githubusercontent.com",
-        "avatars.githubusercontent.com",
-        "img.shields.io",
-        "fonts.googleapis.com",
-        "fonts.gstatic.com",
-        "google-analytics.com",
-        "www.google-analytics.com",
-        "googletagmanager.com",
-        "www.googletagmanager.com",
-        "stats.g.doubleclick.net",
-        "connect.facebook.net",
-        "cdn.segment.com",
-        "api.segment.io",
-        "gravatar.com",
-        "www.gravatar.com"
-      ];
-      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
-      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
-      SEGMENT_MAX = 24;
-      PATH_MAX = 60;
     }
   });
 
@@ -28754,7 +28787,9 @@ ${vars}
         "--tb-bg-overlay": "#ffffffee",
         "--tb-text-primary": "#111113",
         "--tb-text-secondary": "#52525B",
-        "--tb-text-muted": "#82828C",
+        // #82828C was 3.8:1 on white — fails WCAG AA for normal text. #75757E is
+        // 4.56:1, the minimal darkening that clears the 4.5:1 bar.
+        "--tb-text-muted": "#75757E",
         "--tb-accent": "#4F46E5",
         "--tb-accent-hover": "#4338CA",
         "--tb-accent-subtle": "#4F46E514",
@@ -29139,11 +29174,13 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   // src/ui/quick-bug.ts
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
+    getFocusableElements: () => getFocusableElements,
     isQuickBugOpen: () => isQuickBugOpen,
     refreshQuickBugCapture: () => refreshQuickBugCapture,
     setCloudEndpoint: () => setCloudEndpoint,
     setGithubRepo: () => setGithubRepo,
-    showQuickBugCapture: () => showQuickBugCapture
+    showQuickBugCapture: () => showQuickBugCapture,
+    trapModalTab: () => trapModalTab
   });
   function setGithubRepo(repo) {
     _githubRepo = repo;
@@ -29182,6 +29219,38 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   }
   function isQuickBugOpen() {
     return _isOpen;
+  }
+  function getFocusableElements(container2) {
+    const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(container2.querySelectorAll(sel)).filter(
+      (el) => el.getClientRects().length > 0
+    );
+  }
+  function trapModalTab(e2, modal) {
+    if (e2.key !== "Tab") return false;
+    const f2 = getFocusableElements(modal);
+    if (f2.length === 0) {
+      e2.preventDefault();
+      return true;
+    }
+    const first = f2[0];
+    const last = f2[f2.length - 1];
+    const active = document.activeElement;
+    const inside = active && modal.contains(active);
+    if (e2.shiftKey) {
+      if (!inside || active === first) {
+        e2.preventDefault();
+        last.focus();
+        return true;
+      }
+    } else {
+      if (!inside || active === last) {
+        e2.preventDefault();
+        first.focus();
+        return true;
+      }
+    }
+    return false;
   }
   async function refreshQuickBugCapture(root2) {
     if (!_isOpen) return;
@@ -29697,6 +29766,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         }
         return;
       }
+      if (trapModalTab(e2, modal)) return;
       if (isTypingTarget(e2.target)) return;
       if (e2.key === "?" || e2.shiftKey && e2.key === "/") {
         e2.preventDefault();
