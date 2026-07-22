@@ -172,6 +172,7 @@ export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
 export { buildHar, exportSessionAsHar } from "./exporters/har-export";
 export { exportSessionAsZip, buildZipBlob } from "./exporters/zip-export";
+export { exportSessionAsHtml, buildReplayBlob } from "./exporters/html-replay";
 export { generatePlaywrightTest, playwrightTestFilename } from "./exporters/playwright-test";
 export { captureStyleEvidence, formatStyleSummary, contrastRatio, cssColorToHex } from "./style-evidence";
 export type { StyleEvidence } from "./style-evidence";

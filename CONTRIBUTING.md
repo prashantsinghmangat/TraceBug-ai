@@ -67,6 +67,20 @@ npx tsc --noEmit     # Type check without emitting
 - **Update docs** if you add/change public API or config options
 - **No new runtime dependencies** without prior discussion
 
+## Commit Messages
+
+Conventional-commits style, matching the existing history:
+
+```
+<type>(<optional scope>): <imperative summary>
+```
+
+- Types in use: `feat`, `fix`, `chore`, `docs`, `release`. Scopes when they
+  add clarity: `feat(export):`, `fix(extension):`, `feat(site):`.
+- The summary states the user-visible change; the body (optional) states
+  the *why* — constraints and trade-offs, not a diff narration.
+- No AI co-author trailers; release commits reference the CHANGELOG entry.
+
 ## Code Style
 
 - TypeScript strict mode
@@ -74,6 +88,51 @@ npx tsc --noEmit     # Type check without emitting
 - Small, focused functions
 - Self-documenting code over comments
 - `data-tracebug` attribute on every TraceBug DOM element
+
+## Coding Standards
+
+Beyond the architecture rules above:
+
+- **Tests accompany behavior.** New sanitizers, exporters, parsers, and MCP
+  tools ship with unit tests (`tests/`); user-visible flows get a Playwright
+  e2e in `e2e/` (see `blur-tracking.e2e.mjs` for the pattern). `npm test`,
+  `npm run typecheck`, and `npm run lint` must all pass — the bar is zero
+  warnings, no `eslint-disable`, no `as any`.
+- **Comments explain constraints, not narration** — why a guard exists, what
+  breaks without it. The codebase's header comments are the convention.
+- **Fail soft in collectors**: capture code must never throw into the host
+  app; degrade (skip the event) instead.
+- **Naming**: modules are kebab-case, exported helpers are verbs
+  (`buildReport`, `captureStyleEvidence`), private module state is
+  `_underscored`.
+
+## API Stability & Versioning
+
+The public SDK API (everything exported from `src/index.ts` and documented
+in [docs/api-reference.md](docs/api-reference.md)) follows **semver**:
+
+- **Patch/minor** releases never break the public API. Behavior changes are
+  called out in [docs/migrating.md](docs/migrating.md) and the CHANGELOG.
+- Renames keep a compatibility alias for at least one minor (e.g.
+  `removeAllBlurBoxes` survived the blur rewrite).
+- The exported `.html` report format is **forward-readable**: newer
+  viewers/MCP servers must handle older payloads; new payload fields must
+  be optional.
+- Internal modules (not exported from `src/index.ts`) may change freely.
+
+## Project Health
+
+How to check the project is alive and healthy:
+
+- **CI**: `.github/workflows/ci.yml` runs tests/typecheck/lint on every
+  push — the badge on the README reflects `main`.
+- **Releases**: versioned tags + [CHANGELOG.md](CHANGELOG.md) with dated
+  entries; npm (`tracebug-sdk`, `tracebug`) and the Chrome Web Store ship
+  from the same tagged commit.
+- **Benchmarks**: `node e2e/benchmark.mjs` reproduces the numbers in
+  [docs/performance.md](docs/performance.md).
+- **Issue response target**: first response within 72 hours on weekdays;
+  security reports via [SECURITY.md](SECURITY.md) get priority.
 
 ## Issue Templates
 

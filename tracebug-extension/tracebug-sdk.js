@@ -69786,6 +69786,7 @@ First element: \`${exampleSnippet}\``,
     TRACKER_LABELS: () => TRACKER_LABELS,
     buildAnalysisPrompt: () => buildAnalysisPrompt,
     buildHar: () => buildHar,
+    buildReplayBlob: () => buildReplayBlob,
     buildReport: () => buildReport,
     buildTimeline: () => buildTimeline,
     buildZipBlob: () => buildZipBlob,
@@ -69812,6 +69813,7 @@ First element: \`${exampleSnippet}\``,
     downloadPdfAsHtml: () => downloadPdfAsHtml,
     downloadVideoRecording: () => downloadVideoRecording,
     exportSessionAsHar: () => exportSessionAsHar,
+    exportSessionAsHtml: () => exportSessionAsHtml,
     exportSessionAsZip: () => exportSessionAsZip,
     extractClickedElement: () => extractClickedElement,
     formatRedactionSummary: () => formatRedactionSummary,
@@ -70646,6 +70648,7 @@ ${summary}`;
   init_ai_prompt();
   init_har_export();
   init_zip_export();
+  init_html_replay();
   init_playwright_test();
   init_style_evidence();
   init_blur_tool();
