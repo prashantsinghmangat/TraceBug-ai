@@ -36,3 +36,26 @@ jobs:
           if [ $ESM_SIZE -gt 300000 ]; then
             echo "::warning::ESM bundle exceeds 300KB ($ESM_SIZE bytes)"
           fi
+
+  e2e:
+    # Browser-driven checks against the real built SDK. The extension-loading
+    # e2e scripts (ext-*.e2e.mjs) are headful and stay local-only; these three
+    # run headless against website/public/tracebug-sdk.js.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - name: Build extension bundle (produces website/public/tracebug-sdk.js)
+        run: npm run build:ext
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E — blur tracking
+        run: node e2e/blur-tracking.e2e.mjs
+      - name: E2E — pre-record flow
+        run: node e2e/pre-record.e2e.mjs
+      - name: E2E — inspect mode
+        run: node e2e/inspect-mode.e2e.mjs

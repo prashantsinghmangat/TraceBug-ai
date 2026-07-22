@@ -140,6 +140,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Secondary row ──────────────────────────────────── */
 .cta-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#btnInspect { grid-column: 1 / -1; }
 .cta-secondary {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 12px;
@@ -165,6 +166,43 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-size: 12px; font-weight: 500;
 }
 .toast.error { background: rgba(239, 68, 68, 0.10); color: var(--error); border-color: var(--error); }
+
+/* ── Redaction rules (collapsible) ───────────────────── */
+.redact {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.redact-sum {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px;
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+  cursor: pointer; list-style: none; user-select: none;
+}
+.redact-sum::-webkit-details-marker { display: none; }
+.redact-sum:hover { color: var(--text); }
+.redact-state { font-size: 10.5px; font-weight: 600; color: var(--success); }
+.redact-body { padding: 0 12px 12px; }
+.redact-label {
+  display: block; font-size: 11px; font-weight: 600; color: var(--text-2);
+  margin: 8px 0 2px;
+}
+.redact-help { font-size: 10.5px; color: var(--text-3); line-height: 1.4; margin-bottom: 5px; }
+.redact-ta {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
+  padding: 6px 8px;
+}
+.redact-ta:focus { outline: none; border-color: var(--border-hover); }
+.redact-save {
+  margin-top: 8px; padding: 6px 14px;
+  background: transparent; color: var(--text-2);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.redact-save:hover { background: var(--bg); border-color: var(--border-hover); color: var(--text); }
 
 /* ── Hint row (informational, no action) ────────────── */
 .hint {

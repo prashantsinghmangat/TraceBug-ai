@@ -8,6 +8,7 @@
 const STORAGE_KEY = "tracebug_enabled_sites";
 const THEME_KEY = "tracebug_popup_theme";
 const MIC_KEY = "tracebug_mic_enabled";
+const REDACT_KEY = "tracebug_redact";
 const CLOUD_ENDPOINT_KEY = "tracebug_cloud_endpoint";
 // Production default; override for local dev via:
 //   chrome.storage.local.set({ tracebug_cloud_endpoint: "http://localhost:3001" })
@@ -128,6 +129,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // wireAccountButtons();
   // void refreshAccount();
 
+  void initRedactionUI();
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   // Bail out on chrome:// pages, the new-tab page, etc.
@@ -212,8 +215,45 @@ document.addEventListener("DOMContentLoaded", async () => {
   // HUD; modal opens with video + screenshot + console + network. Matches
   // Jam's "video is always there" default — the screenshot-only path is a
   // secondary option for users who just want a quick snap.
+  // ── Record options — persisted, passed with the record message ───────
+  const OPTS_KEY = "tracebug_record_opts";
+  const surfaceSel = document.getElementById("optSurface");
+  const delaySel = document.getElementById("optDelay");
+  const blurCb = document.getElementById("optBlurFirst");
+  const optsState = document.getElementById("recordOptsState");
+  function loadRecordOpts() {
+    try { return JSON.parse(localStorage.getItem(OPTS_KEY)) || {}; } catch { return {}; }
+  }
+  function saveRecordOpts() {
+    const o = { surfaceMode: surfaceSel.value, delaySec: Number(delaySel.value) || 0, blurFirst: !!blurCb.checked };
+    try { localStorage.setItem(OPTS_KEY, JSON.stringify(o)); } catch {}
+    updateOptsState(o);
+    return o;
+  }
+  function updateOptsState(o) {
+    const bits = [];
+    if (o.surfaceMode === "desktop") bits.push("desktop");
+    if (o.delaySec > 0) bits.push(`${o.delaySec}s delay`);
+    if (o.blurFirst) bits.push("blur first");
+    if (optsState) optsState.textContent = bits.join(" · ");
+  }
+  {
+    const o = loadRecordOpts();
+    if (o.surfaceMode) surfaceSel.value = o.surfaceMode;
+    if (o.delaySec) delaySel.value = String(o.delaySec);
+    blurCb.checked = !!o.blurFirst;
+    updateOptsState({ surfaceMode: surfaceSel.value, delaySec: Number(delaySel.value) || 0, blurFirst: blurCb.checked });
+    [surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
+  }
+
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {
-    await runCombo("TB_START_RECORDING", "Starting recording…", { withMic: micOn });
+    const o = saveRecordOpts();
+    await runCombo("TB_START_RECORDING", "Starting recording…", {
+      withMic: micOn,
+      blurFirst: o.blurFirst,
+      delaySec: o.delaySec,
+      surfaceMode: o.surfaceMode,
+    });
   });
 
   // ── Secondary: Screenshot only — old one-shot Capture flow ──────────
@@ -224,6 +264,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── Secondary: View tickets ──────────────────────────────────────────
   document.getElementById("btnViewTickets").addEventListener("click", async () => {
     await runCombo("TB_VIEW_TICKETS", "Opening tickets…");
+  });
+
+  // ── Secondary: Inspect element — style evidence for design-QA bugs ───
+  document.getElementById("btnInspect").addEventListener("click", async () => {
+    await runCombo("TB_INSPECT", "Starting inspect…");
   });
 });
 
@@ -250,7 +295,7 @@ async function runCombo(messageType, busyText, extra) {
 }
 
 function setBusy(busy) {
-  ["btnCaptureBug", "btnScreenshot", "btnViewTickets"].forEach((id) => {
+  ["btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
@@ -275,4 +320,69 @@ function showToast(msg, isError) {
   t.className = "toast" + (isError ? " error" : "");
   t.style.display = "block";
   setTimeout(() => { t.style.display = "none"; }, 2500);
+}
+
+// ── Redaction rules ─────────────────────────────────────────────────────────
+// App-specific PII fields/patterns masked at capture, on top of the built-in
+// token/secret patterns. Synced via chrome.storage.sync; the content script
+// hands them to the SDK through <html data-tb-redact>.
+
+function parseRedactFields(raw) {
+  return String(raw || "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+function parseRedactPatterns(raw) {
+  return String(raw || "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function redactStateLabel(rules) {
+  const n = (rules?.fields?.length || 0) + (rules?.patterns?.length || 0);
+  return n > 0 ? `${n} rule${n === 1 ? "" : "s"}` : "";
+}
+
+async function initRedactionUI() {
+  const fieldsTa = document.getElementById("redactFields");
+  const patternsTa = document.getElementById("redactPatterns");
+  const saveBtn = document.getElementById("redactSave");
+  const state = document.getElementById("redactState");
+  if (!fieldsTa || !patternsTa || !saveBtn) return;
+
+  try {
+    const r = await chrome.storage.sync.get(REDACT_KEY);
+    const rules = r?.[REDACT_KEY];
+    if (rules) {
+      fieldsTa.value = (rules.fields || []).join(", ");
+      patternsTa.value = (rules.patterns || []).join("\n");
+      state.textContent = redactStateLabel(rules);
+    }
+  } catch {}
+
+  saveBtn.addEventListener("click", async () => {
+    const fields = parseRedactFields(fieldsTa.value);
+    const patterns = parseRedactPatterns(patternsTa.value);
+    // Reject regexes that don't compile so a typo can't silently no-op.
+    const bad = patterns.find((p) => { try { new RegExp(p, "gi"); return false; } catch { return true; } });
+    if (bad) {
+      showToast(`Invalid regex: ${bad}`, true);
+      return;
+    }
+    const rules = { fields, patterns };
+    try {
+      await chrome.storage.sync.set({ [REDACT_KEY]: rules });
+      state.textContent = redactStateLabel(rules);
+      showToast(fields.length + patterns.length > 0
+        ? "Redaction rules saved — applies to new captures"
+        : "Redaction rules cleared");
+    } catch (err) {
+      showToast("Save failed: " + (err?.message || err), true);
+    }
+  });
 }

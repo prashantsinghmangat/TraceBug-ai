@@ -4,6 +4,8 @@
 
 import { ElementAnnotation, AnnotationIntent } from "./types";
 import { addElementAnnotation, getElementAnnotations } from "./annotation-store";
+import { captureStyleEvidence } from "./style-evidence";
+import { isTraceBugUiElement } from "./dom-helpers";
 import { escapeHtml } from "./ui/helpers";
 
 let _active = false;
@@ -407,18 +409,12 @@ function _updateBannerCount(): void {
 }
 
 function _isOurElement(el: HTMLElement | null): boolean {
-  if (!el) return false;
-  if (el.dataset?.tracebug) return true;
-  const root = document.getElementById("tracebug-root");
-  if (root && root.contains(el)) return true;
-  let node: HTMLElement | null = el;
-  while (node) {
-    if (node.id?.startsWith("tracebug-") || node.id?.startsWith("bt-")) return true;
-    const cn = typeof node.className === "string" ? node.className : "";
-    if (cn.includes("tracebug-")) return true;
-    node = node.parentElement;
-  }
-  return false;
+  return isTraceBugUiElement(el);
+}
+
+/** Stable selector for annotated/inspected elements — shared with inspect mode. */
+export function computeElementSelector(el: Element): string {
+  return _computeSelector(el);
 }
 
 function _computeSelector(el: Element): string {
@@ -635,6 +631,9 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
         scrollX: window.scrollX,
         scrollY: window.scrollY,
       };
+      // Style receipts for design-QA — never let a style snapshot failure
+      // block the annotation itself.
+      try { annotation.styles = captureStyleEvidence(el); } catch {}
 
       addElementAnnotation(annotation);
     }
@@ -665,5 +664,6 @@ function _intentColor(intent: AnnotationIntent): string {
     case "redesign": return "#6366F1";
     case "remove": return "#f97316";
     case "question": return "#3b82f6";
+    case "inspect": return "#10b981";
   }
 }

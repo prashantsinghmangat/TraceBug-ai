@@ -905,6 +905,76 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/url-hygiene.ts
+  function isSensitiveParamName(name) {
+    return !!name && SENSITIVE_PARAM_RE.test(name);
+  }
+  function isNoiseRequest(url) {
+    if (!url) return false;
+    if (ASSET_EXT_RE.test(url)) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    try {
+      const u2 = new URL(url);
+      const host2 = u2.hostname.toLowerCase();
+      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
+      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
+      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
+      if (pageHost && host2 === pageHost) return false;
+      return NOISE_PATH_RE.test(u2.pathname);
+    } catch (e2) {
+      return false;
+    }
+  }
+  function isStaticResource(url) {
+    if (!url) return false;
+    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
+  }
+  function shortDisplayPath(url, base) {
+    if (!url) return "";
+    let pathname;
+    try {
+      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
+      pathname = new URL(url, origin).pathname || url;
+    } catch (e2) {
+      pathname = url;
+    }
+    const segments = pathname.split("/").map(
+      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
+    );
+    let out = segments.join("/");
+    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
+    return out;
+  }
+  var SENSITIVE_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
+  var init_url_hygiene = __esm({
+    "src/url-hygiene.ts"() {
+      "use strict";
+      SENSITIVE_PARAM_RE = /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
+      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
+      NOISE_HOSTS = [
+        "camo.githubusercontent.com",
+        "avatars.githubusercontent.com",
+        "img.shields.io",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "google-analytics.com",
+        "www.google-analytics.com",
+        "googletagmanager.com",
+        "www.googletagmanager.com",
+        "stats.g.doubleclick.net",
+        "connect.facebook.net",
+        "cdn.segment.com",
+        "api.segment.io",
+        "gravatar.com",
+        "www.gravatar.com"
+      ];
+      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
+      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
+      SEGMENT_MAX = 24;
+      PATH_MAX = 60;
+    }
+  });
+
   // src/sanitize/cloud-upload.ts
   function mask(s2) {
     if (s2.length <= 12) return REDACTED2;
@@ -917,7 +987,7 @@ var TraceBugModule = (() => {
       const u2 = new URL(isAbs ? url : `http://_placeholder_${url.startsWith("/") ? "" : "/"}${url}`);
       let changed = false;
       u2.searchParams.forEach((_v, k) => {
-        if (SENSITIVE_QUERY_KEYS.has(k.toLowerCase()) || isCustomSensitiveKey(k)) {
+        if (isSensitiveParamName(k) || isCustomSensitiveKey(k)) {
           u2.searchParams.set(k, REDACTED2);
           changed = true;
         }
@@ -1011,11 +1081,12 @@ var TraceBugModule = (() => {
     }
     return out;
   }
-  var REDACTED2, TOKEN_PATTERNS, SENSITIVE_QUERY_KEYS;
+  var REDACTED2, TOKEN_PATTERNS;
   var init_cloud_upload = __esm({
     "src/sanitize/cloud-upload.ts"() {
       "use strict";
       init_custom_redaction();
+      init_url_hygiene();
       REDACTED2 = "[REDACTED]";
       TOKEN_PATTERNS = [
         // Bearer <token> in headers, console output, anywhere
@@ -1055,24 +1126,6 @@ var TraceBugModule = (() => {
         // mangling legitimate hex like git SHAs.
         { name: "labeled_hex", re: /\b(?:secret|token|key|password|api[_-]?key|auth)["':\s=]{1,5}([a-fA-F0-9]{32,})\b/gi, replace: (s2) => s2.replace(/[a-fA-F0-9]{32,}/, REDACTED2) }
       ];
-      SENSITIVE_QUERY_KEYS = /* @__PURE__ */ new Set([
-        "token",
-        "access_token",
-        "id_token",
-        "refresh_token",
-        "api_key",
-        "apikey",
-        "secret",
-        "password",
-        "passwd",
-        "pwd",
-        "auth",
-        "authorization",
-        "x-api-key",
-        "session",
-        "sid",
-        "csrf"
-      ]);
     }
   });
 
@@ -1107,7 +1160,7 @@ var TraceBugModule = (() => {
         const eqIdx = part.indexOf("=");
         if (eqIdx === -1) return part;
         const key = part.slice(0, eqIdx);
-        if (SENSITIVE_PARAM_RE.test(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
+        if (isSensitiveParamName(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
         return part;
       }).join("&");
       return `${base}?${redacted}${hash}`;
@@ -1277,6 +1330,10 @@ var TraceBugModule = (() => {
                 value: isSensitive ? "[REDACTED]" : (t2.value || "").slice(0, 200),
                 placeholder: t2.placeholder || ""
               };
+              try {
+                element.selector = buildSelector(t2);
+              } catch (e3) {
+              }
               const data = { element };
               if (inputType === "checkbox" || inputType === "radio") {
                 element.checked = t2.checked;
@@ -1308,6 +1365,11 @@ var TraceBugModule = (() => {
         const t2 = e2.target;
         if (!t2 || t2.tagName.toLowerCase() !== "select" || isTraceBugElement(t2)) return;
         const selectedOption = t2.options[t2.selectedIndex];
+        let selector = "";
+        try {
+          selector = buildSelector(t2);
+        } catch (e3) {
+        }
         emit("select_change", {
           element: {
             tag: "select",
@@ -1316,7 +1378,8 @@ var TraceBugModule = (() => {
             selectedText: selectedOption ? selectedOption.text : "",
             selectedIndex: t2.selectedIndex,
             optionCount: t2.options.length,
-            allOptions: Array.from(t2.options).map((o2) => o2.text).slice(0, 20)
+            allOptions: Array.from(t2.options).map((o2) => o2.text).slice(0, 20),
+            selector
           }
         });
       } catch (err) {
@@ -1587,14 +1650,29 @@ var TraceBugModule = (() => {
       }
     };
   }
+  function capMessage(s2, max = CONSOLE_MSG_MAX) {
+    return s2.length > max ? s2.slice(0, max) + "\u2026[truncated]" : s2;
+  }
+  function formatConsoleArgs(args) {
+    const parts = args.map((a2) => {
+      if (typeof a2 === "string") return a2;
+      try {
+        const s2 = JSON.stringify(a2);
+        return s2 === void 0 ? String(a2) : s2;
+      } catch (e2) {
+        return "[unserializable]";
+      }
+    });
+    return capMessage(parts.join(" "));
+  }
   function collectErrors(emit) {
     const prevOnError = window.onerror;
     window.onerror = (msg, source, line, col, error) => {
       try {
         emit("error", {
           error: {
-            message: sanitizeTokenShapes(typeof msg === "string" ? msg : "Unknown error"),
-            stack: (error == null ? void 0 : error.stack) && sanitizeTokenShapes(error.stack),
+            message: sanitizeTokenShapes(capMessage(typeof msg === "string" ? msg : "Unknown error")),
+            stack: (error == null ? void 0 : error.stack) && sanitizeTokenShapes(capMessage(error.stack)),
             source,
             line,
             column: col
@@ -1614,8 +1692,8 @@ var TraceBugModule = (() => {
       try {
         emit("unhandled_rejection", {
           error: {
-            message: sanitizeTokenShapes(((_a2 = e2.reason) == null ? void 0 : _a2.message) || String(e2.reason)),
-            stack: ((_b = e2.reason) == null ? void 0 : _b.stack) && sanitizeTokenShapes(e2.reason.stack)
+            message: sanitizeTokenShapes(capMessage(((_a2 = e2.reason) == null ? void 0 : _a2.message) || String(e2.reason))),
+            stack: ((_b = e2.reason) == null ? void 0 : _b.stack) && sanitizeTokenShapes(capMessage(e2.reason.stack))
           }
         });
       } catch (e3) {
@@ -1640,8 +1718,8 @@ var TraceBugModule = (() => {
         emit("console_error", {
           // Token-shape scrub at capture — a token logged to the console must
           // never reach the offline .html export unmasked (the cloud sanitizer
-          // only covers the upload path).
-          error: { message: sanitizeTokenShapes(args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ")) }
+          // only covers the upload path). formatConsoleArgs caps + is circular-safe.
+          error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) }
         });
       } catch (e2) {
       } finally {
@@ -1668,8 +1746,8 @@ var TraceBugModule = (() => {
       try {
         emit(type, {
           // Same capture-time token scrub as console_error — the offline
-          // export path never runs the cloud sanitizer.
-          error: { message: sanitizeTokenShapes(args.map((a2) => typeof a2 === "string" ? a2 : JSON.stringify(a2)).join(" ")) }
+          // export path never runs the cloud sanitizer. Capped + circular-safe.
+          error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) }
         });
       } catch (e2) {
       } finally {
@@ -1690,19 +1768,19 @@ var TraceBugModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, SENSITIVE_PARAM_RE, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
       init_cloud_upload();
       init_custom_redaction();
+      init_url_hygiene();
       ROOT_ID = "tracebug-root";
       PANEL_ID = "tracebug-dashboard-panel";
       BTN_ID = "tracebug-dashboard-btn";
       NETWORK_FAILURE_LIMIT = 10;
       RESPONSE_SNIPPET_CHARS = 200;
       _networkFailures = [];
-      SENSITIVE_PARAM_RE = /token|key|secret|auth|password|sig|signature/i;
       MAX_BODY_BYTES = 10 * 1024;
       BINARY_CONTENT_TYPE_RE = /^(image|video|audio)\/|^application\/(octet-stream|pdf|zip|x-protobuf|x-msgpack|wasm|vnd\.)/i;
       INTERNAL_URL_PATTERNS = [
@@ -1719,6 +1797,7 @@ var TraceBugModule = (() => {
         /\/@react-refresh/
       ];
       _perfSeen = /* @__PURE__ */ new Set();
+      CONSOLE_MSG_MAX = 1e4;
       CONSOLE_LEVEL_CAP = 50;
     }
   });
@@ -6174,30 +6253,30 @@ var TraceBugModule = (() => {
         let token, type;
         let length = tokens.length;
         let value = "";
-        let clean = true;
+        let clean2 = true;
         let next, prev;
         for (let i2 = 0; i2 < length; i2 += 1) {
           token = tokens[i2];
           type = token[0];
           if (type === "space" && i2 === length - 1 && !customProperty) {
-            clean = false;
+            clean2 = false;
           } else if (type === "comment") {
             prev = tokens[i2 - 1] ? tokens[i2 - 1][0] : "empty";
             next = tokens[i2 + 1] ? tokens[i2 + 1][0] : "empty";
             if (!SAFE_COMMENT_NEIGHBOR[prev] && !SAFE_COMMENT_NEIGHBOR[next]) {
               if (value.slice(-1) === ",") {
-                clean = false;
+                clean2 = false;
               } else {
                 value += token[1];
               }
             } else {
-              clean = false;
+              clean2 = false;
             }
           } else {
             value += token[1];
           }
         }
-        if (!clean) {
+        if (!clean2) {
           let raw = tokens.reduce((all, i2) => all + i2[1], "");
           node2.raws[prop] = { raw, value };
         }
@@ -10260,30 +10339,30 @@ var TraceBugModule = (() => {
         let token, type;
         let length = tokens.length;
         let value = "";
-        let clean = true;
+        let clean2 = true;
         let next, prev;
         for (let i2 = 0; i2 < length; i2 += 1) {
           token = tokens[i2];
           type = token[0];
           if (type === "space" && i2 === length - 1 && !customProperty) {
-            clean = false;
+            clean2 = false;
           } else if (type === "comment") {
             prev = tokens[i2 - 1] ? tokens[i2 - 1][0] : "empty";
             next = tokens[i2 + 1] ? tokens[i2 + 1][0] : "empty";
             if (!SAFE_COMMENT_NEIGHBOR[prev] && !SAFE_COMMENT_NEIGHBOR[next]) {
               if (value.slice(-1) === ",") {
-                clean = false;
+                clean2 = false;
               } else {
                 value += token[1];
               }
             } else {
-              clean = false;
+              clean2 = false;
             }
           } else {
             value += token[1];
           }
         }
-        if (!clean) {
+        if (!clean2) {
           let raw = tokens.reduce((all, i2) => all + i2[1], "");
           node2.raws[prop] = { raw, value };
         }
@@ -14315,11 +14394,11 @@ var TraceBugModule = (() => {
               return true;
             } : N, _ = void 0 === j, k = null != j ? j : p, T = n2.states[k];
             if (O(g, d)) {
-              var q = t(f((_ ? r(R) : [].concat(x.exit, R, T.entry).filter(function(t2) {
+              var q2 = t(f((_ ? r(R) : [].concat(x.exit, R, T.entry).filter(function(t2) {
                 return t2;
               })).map(function(t2) {
                 return i(t2, y._options.actions);
-              }), g, d), 3), z = q[0], A = q[1], B = q[2], C = null != j ? j : p;
+              }), g, d), 3), z = q2[0], A = q2[1], B = q2[2], C = null != j ? j : p;
               return { value: C, context: A, actions: z, changed: j !== p || z.length > 0 || B, matches: a(C) };
             }
           }
@@ -19537,6 +19616,26 @@ var TraceBugModule = (() => {
   });
 
   // src/rrweb-recorder.ts
+  function trimEventBuffer(events, softMax = SOFT_MAX, hardMax = HARD_MAX) {
+    if (events.length <= softMax) return false;
+    let trimmed = false;
+    let lastFull = -1;
+    for (let i2 = events.length - 1; i2 >= 0; i2--) {
+      if (events[i2].type === FULL_SNAPSHOT) {
+        lastFull = i2;
+        break;
+      }
+    }
+    if (lastFull > 0) {
+      events.splice(0, lastFull);
+      trimmed = true;
+    }
+    if (events.length > hardMax) {
+      events.splice(0, events.length - hardMax);
+      trimmed = true;
+    }
+    return trimmed;
+  }
   function loadRrweb() {
     if (_recordFn !== void 0) return Promise.resolve(_recordFn);
     if (!_loadPromise) {
@@ -19558,11 +19657,16 @@ var TraceBugModule = (() => {
     const record2 = await loadRrweb();
     if (!record2) return false;
     _events = [];
+    _trimmed = false;
     try {
       const stop = record2({
         emit: (event) => {
           _events.push(event);
+          if (trimEventBuffer(_events)) _trimmed = true;
         },
+        // Periodic full snapshots keep the buffer trimmable without losing
+        // replayability, and also speed up seeking in long recordings.
+        checkoutEveryNms: CHECKOUT_EVERY_MS,
         maskAllInputs: true,
         recordCanvas: false,
         collectFonts: false,
@@ -19607,7 +19711,7 @@ var TraceBugModule = (() => {
   function snapshotDomEvents() {
     return _events.slice();
   }
-  var _recordFn, _loadPromise, _events, _stopFn, _recording;
+  var _recordFn, _loadPromise, _events, _stopFn, _recording, _trimmed, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX;
   var init_rrweb_recorder = __esm({
     "src/rrweb-recorder.ts"() {
       "use strict";
@@ -19615,6 +19719,11 @@ var TraceBugModule = (() => {
       _events = [];
       _stopFn = null;
       _recording = false;
+      _trimmed = false;
+      FULL_SNAPSHOT = 2;
+      CHECKOUT_EVERY_MS = 12e4;
+      SOFT_MAX = 3e4;
+      HARD_MAX = 6e4;
     }
   });
 
@@ -20881,72 +20990,6 @@ var TraceBugModule = (() => {
     }
   });
 
-  // src/url-hygiene.ts
-  function isNoiseRequest(url) {
-    if (!url) return false;
-    if (ASSET_EXT_RE.test(url)) return true;
-    if (!/^https?:\/\//i.test(url)) return false;
-    try {
-      const u2 = new URL(url);
-      const host2 = u2.hostname.toLowerCase();
-      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
-      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
-      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
-      if (pageHost && host2 === pageHost) return false;
-      return NOISE_PATH_RE.test(u2.pathname);
-    } catch (e2) {
-      return false;
-    }
-  }
-  function isStaticResource(url) {
-    if (!url) return false;
-    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
-  }
-  function shortDisplayPath(url, base) {
-    if (!url) return "";
-    let pathname;
-    try {
-      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
-      pathname = new URL(url, origin).pathname || url;
-    } catch (e2) {
-      pathname = url;
-    }
-    const segments = pathname.split("/").map(
-      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
-    );
-    let out = segments.join("/");
-    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
-    return out;
-  }
-  var ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
-  var init_url_hygiene = __esm({
-    "src/url-hygiene.ts"() {
-      "use strict";
-      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
-      NOISE_HOSTS = [
-        "camo.githubusercontent.com",
-        "avatars.githubusercontent.com",
-        "img.shields.io",
-        "fonts.googleapis.com",
-        "fonts.gstatic.com",
-        "google-analytics.com",
-        "www.google-analytics.com",
-        "googletagmanager.com",
-        "www.googletagmanager.com",
-        "stats.g.doubleclick.net",
-        "connect.facebook.net",
-        "cdn.segment.com",
-        "api.segment.io",
-        "gravatar.com",
-        "www.gravatar.com"
-      ];
-      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
-      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
-      SEGMENT_MAX = 24;
-      PATH_MAX = 60;
-    }
-  });
-
   // src/title-generator.ts
   function generateBugTitle(session) {
     var _a2;
@@ -21572,7 +21615,112 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/annotation-store.ts
+  function addElementAnnotation(ann) {
+    _elementAnnotations.push(ann);
+  }
+  function addDrawRegion(region) {
+    _drawRegions.push(region);
+  }
+  function removeAnnotationById(id) {
+    _elementAnnotations = _elementAnnotations.filter((a2) => a2.id !== id);
+    _drawRegions = _drawRegions.filter((r2) => r2.id !== id);
+  }
+  function getElementAnnotations() {
+    return _elementAnnotations;
+  }
+  function getDrawRegions() {
+    return _drawRegions;
+  }
+  function getAnnotationReport() {
+    return {
+      elementAnnotations: [..._elementAnnotations],
+      drawRegions: [..._drawRegions],
+      page: typeof window !== "undefined" ? window.location.pathname : "",
+      timestamp: Date.now()
+    };
+  }
+  function clearAllAnnotations() {
+    _elementAnnotations = [];
+    _drawRegions = [];
+  }
+  function exportAsJSON() {
+    return JSON.stringify(getAnnotationReport(), null, 2);
+  }
+  function exportAsMarkdown() {
+    const lines = [];
+    lines.push("# UI Annotations Report");
+    lines.push(`**Page:** ${window.location.href}`);
+    lines.push(`**Date:** ${(/* @__PURE__ */ new Date()).toISOString()}`);
+    lines.push(`**Total:** ${_elementAnnotations.length} element annotations, ${_drawRegions.length} draw regions`);
+    lines.push("");
+    if (_elementAnnotations.length > 0) {
+      lines.push("## Element Annotations");
+      lines.push("");
+      for (let i2 = 0; i2 < _elementAnnotations.length; i2++) {
+        const a2 = _elementAnnotations[i2];
+        const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
+        const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
+        lines.push(`### ${i2 + 1}. [${intentLabel.toUpperCase()}] \`${a2.selector.slice(0, 60)}\` (${sevLabel})`);
+        lines.push(`- **Element:** \`<${a2.tagName}>\` "${a2.innerText.slice(0, 80)}"`);
+        lines.push(`- **Comment:** ${a2.comment}`);
+        lines.push(`- **Page:** ${a2.page}`);
+        lines.push("");
+      }
+    }
+    if (_drawRegions.length > 0) {
+      lines.push("## Draw Regions");
+      lines.push("");
+      for (let i2 = 0; i2 < _drawRegions.length; i2++) {
+        const r2 = _drawRegions[i2];
+        const shapeLabel = r2.shape === "rect" ? "Rectangle" : "Ellipse";
+        lines.push(`### ${i2 + 1}. ${shapeLabel} at (${Math.round(r2.x)}, ${Math.round(r2.y)}) ${Math.round(r2.width)}x${Math.round(r2.height)}`);
+        lines.push(`- **Comment:** ${r2.comment || "(no comment)"}`);
+        lines.push(`- **Page:** ${r2.page}`);
+        lines.push("");
+      }
+    }
+    return lines.join("\n");
+  }
+  async function copyToClipboard(format) {
+    const text = format === "json" ? exportAsJSON() : exportAsMarkdown();
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e2) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;left:-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        return true;
+      } catch (e3) {
+        return false;
+      } finally {
+        ta.remove();
+      }
+    }
+  }
+  var _elementAnnotations, _drawRegions;
+  var init_annotation_store = __esm({
+    "src/annotation-store.ts"() {
+      "use strict";
+      _elementAnnotations = [];
+      _drawRegions = [];
+    }
+  });
+
   // src/report-builder.ts
+  function safeElementAnnotations() {
+    try {
+      const anns = getElementAnnotations();
+      return anns.length ? [...anns] : void 0;
+    } catch (e2) {
+      return void 0;
+    }
+  }
   function getSessionVideo(session) {
     if (!session) return null;
     const v2 = getLastVideoRecording();
@@ -21698,6 +21846,8 @@ var TraceBugModule = (() => {
       priority: "low",
       storage: captureStorageSnapshot(),
       annotations: session.annotations || [],
+      // Element-level markup (annotate/inspect) with computed-style evidence.
+      elementAnnotations: safeElementAnnotations(),
       screenshots: screenshots2,
       timeline,
       voiceTranscripts,
@@ -21972,6 +22122,7 @@ var TraceBugModule = (() => {
       init_collectors();
       init_action_chips();
       init_url_hygiene();
+      init_annotation_store();
       VIDEO_SESSION_GRACE_MS = 1e4;
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
@@ -21991,6 +22142,122 @@ var TraceBugModule = (() => {
         medium: "Medium",
         low: "Low"
       };
+    }
+  });
+
+  // src/style-evidence.ts
+  function parseCssColor(css) {
+    const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/.exec(css || "");
+    if (!m) return null;
+    return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === void 0 ? 1 : Number(m[4])];
+  }
+  function cssColorToHex(css) {
+    const c2 = parseCssColor(css);
+    if (!c2) return css || "";
+    const hex = "#" + [c2[0], c2[1], c2[2]].map((n2) => n2.toString(16).padStart(2, "0")).join("");
+    return c2[3] < 1 ? `${hex} / ${Math.round(c2[3] * 100)}%` : hex;
+  }
+  function relativeLuminance(rgb) {
+    const [r2, g, b] = rgb.map((v2) => {
+      const s2 = v2 / 255;
+      return s2 <= 0.03928 ? s2 / 12.92 : Math.pow((s2 + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r2 + 0.7152 * g + 0.0722 * b;
+  }
+  function contrastRatio(fg, bg) {
+    const f2 = parseCssColor(fg);
+    const b = parseCssColor(bg);
+    if (!f2 || !b) return null;
+    const lf = relativeLuminance([f2[0], f2[1], f2[2]]);
+    const lb = relativeLuminance([b[0], b[1], b[2]]);
+    const [hi, lo] = lf >= lb ? [lf, lb] : [lb, lf];
+    return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100;
+  }
+  function collapseSides(top, right, bottom, left) {
+    if (top === right && right === bottom && bottom === left) return top;
+    if (top === bottom && right === left) return `${top} ${right}`;
+    return `${top} ${right} ${bottom} ${left}`;
+  }
+  function effectiveBackground(el) {
+    let node2 = el;
+    while (node2) {
+      const bg = getComputedStyle(node2).backgroundColor;
+      const parsed = parseCssColor(bg);
+      if (parsed && parsed[3] > 0) return bg;
+      node2 = node2.parentElement;
+    }
+    return "rgb(255, 255, 255)";
+  }
+  function captureStyleEvidence(el) {
+    var _a2;
+    const cs = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const evidence = {
+      typography: {
+        fontFamily: cs.fontFamily,
+        fontSize: cs.fontSize,
+        fontWeight: cs.fontWeight,
+        lineHeight: cs.lineHeight,
+        letterSpacing: cs.letterSpacing,
+        textAlign: cs.textAlign
+      },
+      colors: {
+        color: cssColorToHex(cs.color),
+        backgroundColor: cssColorToHex(cs.backgroundColor),
+        borderColor: cssColorToHex(cs.borderTopColor),
+        opacity: cs.opacity
+      },
+      box: {
+        width: `${Math.round(rect.width)}px`,
+        height: `${Math.round(rect.height)}px`,
+        margin: collapseSides(cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft),
+        padding: collapseSides(cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft),
+        border: cs.borderTopWidth === "0px" ? "none" : `${cs.borderTopWidth} ${cs.borderTopStyle} ${cssColorToHex(cs.borderTopColor)}`,
+        borderRadius: cs.borderRadius,
+        boxSizing: cs.boxSizing
+      },
+      layout: {
+        display: cs.display,
+        position: cs.position,
+        zIndex: cs.zIndex,
+        overflow: cs.overflow
+      }
+    };
+    const text = (_a2 = el.innerText) == null ? void 0 : _a2.trim();
+    if (text) {
+      const bg = effectiveBackground(el);
+      const ratio = contrastRatio(cs.color, bg);
+      if (ratio !== null) {
+        const px = parseFloat(cs.fontSize) || 16;
+        const bold = (parseInt(cs.fontWeight, 10) || 400) >= 700;
+        const isLarge = px >= 24 || px >= 18.66 && bold;
+        evidence.contrast = {
+          ratio,
+          aa: ratio >= 4.5,
+          aaLarge: ratio >= 3,
+          foreground: cssColorToHex(cs.color),
+          background: cssColorToHex(bg)
+        };
+        if (isLarge) evidence.contrast.aa = ratio >= 3;
+      }
+    }
+    return evidence;
+  }
+  function formatStyleSummary(s2) {
+    const parts = [
+      `${s2.typography.fontSize}/${s2.typography.lineHeight} ${s2.typography.fontWeight} ${s2.typography.fontFamily.split(",")[0].trim()}`,
+      `color ${s2.colors.color} on ${s2.colors.backgroundColor}`,
+      `${s2.box.width}\xD7${s2.box.height}`,
+      `pad ${s2.box.padding}`
+    ];
+    if (s2.contrast) {
+      parts.push(`contrast ${s2.contrast.ratio}:1${s2.contrast.aa ? "" : " \u26A0 fails AA"}`);
+    }
+    return parts.join(" \xB7 ");
+  }
+  var init_style_evidence = __esm({
+    "src/style-evidence.ts"() {
+      "use strict";
     }
   });
 
@@ -22107,6 +22374,28 @@ var TraceBugModule = (() => {
 `;
         if (note.actual) md += `  - **Actual:** ${note.actual}
 `;
+      }
+      md += `
+`;
+    }
+    if (report.elementAnnotations && report.elementAnnotations.length > 0) {
+      md += `### Element Evidence
+
+`;
+      for (const a2 of report.elementAnnotations) {
+        md += `- **[${a2.intent}/${a2.severity}]** \`${a2.selector}\` \u2014 ${a2.comment}
+`;
+        if (a2.styles) {
+          try {
+            md += `  - ${formatStyleSummary(a2.styles)}
+`;
+            if (a2.styles.contrast && !a2.styles.contrast.aa) {
+              md += `  - \u26A0 Text contrast **${a2.styles.contrast.ratio}:1** fails WCAG AA (${a2.styles.contrast.foreground} on ${a2.styles.contrast.background})
+`;
+            }
+          } catch (e2) {
+          }
+        }
       }
       md += `
 `;
@@ -22274,6 +22563,7 @@ ${(req.response || "").replace(/```/g, "` ` `")}
     "src/github-issue.ts"() {
       "use strict";
       init_timeline_builder();
+      init_style_evidence();
       init_report_builder();
       GITHUB_URL_BODY_LIMIT = 6e3;
     }
@@ -22784,100 +23074,26 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     }
   });
 
-  // src/annotation-store.ts
-  function addElementAnnotation(ann) {
-    _elementAnnotations.push(ann);
-  }
-  function addDrawRegion(region) {
-    _drawRegions.push(region);
-  }
-  function removeAnnotationById(id) {
-    _elementAnnotations = _elementAnnotations.filter((a2) => a2.id !== id);
-    _drawRegions = _drawRegions.filter((r2) => r2.id !== id);
-  }
-  function getElementAnnotations() {
-    return _elementAnnotations;
-  }
-  function getDrawRegions() {
-    return _drawRegions;
-  }
-  function getAnnotationReport() {
-    return {
-      elementAnnotations: [..._elementAnnotations],
-      drawRegions: [..._drawRegions],
-      page: typeof window !== "undefined" ? window.location.pathname : "",
-      timestamp: Date.now()
-    };
-  }
-  function clearAllAnnotations() {
-    _elementAnnotations = [];
-    _drawRegions = [];
-  }
-  function exportAsJSON() {
-    return JSON.stringify(getAnnotationReport(), null, 2);
-  }
-  function exportAsMarkdown() {
-    const lines = [];
-    lines.push("# UI Annotations Report");
-    lines.push(`**Page:** ${window.location.href}`);
-    lines.push(`**Date:** ${(/* @__PURE__ */ new Date()).toISOString()}`);
-    lines.push(`**Total:** ${_elementAnnotations.length} element annotations, ${_drawRegions.length} draw regions`);
-    lines.push("");
-    if (_elementAnnotations.length > 0) {
-      lines.push("## Element Annotations");
-      lines.push("");
-      for (let i2 = 0; i2 < _elementAnnotations.length; i2++) {
-        const a2 = _elementAnnotations[i2];
-        const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
-        const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
-        lines.push(`### ${i2 + 1}. [${intentLabel.toUpperCase()}] \`${a2.selector.slice(0, 60)}\` (${sevLabel})`);
-        lines.push(`- **Element:** \`<${a2.tagName}>\` "${a2.innerText.slice(0, 80)}"`);
-        lines.push(`- **Comment:** ${a2.comment}`);
-        lines.push(`- **Page:** ${a2.page}`);
-        lines.push("");
-      }
+  // src/dom-helpers.ts
+  function isTraceBugUiElement(el) {
+    var _a2;
+    let node2 = el;
+    while (node2) {
+      const h = node2;
+      const id = h.id || "";
+      if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
+      const cn = typeof h.className === "string" ? h.className : "";
+      if (cn && TB_WIDGET_CLASSES.some((p) => cn.includes(p))) return true;
+      if ((_a2 = h.dataset) == null ? void 0 : _a2.tracebug) return true;
+      node2 = node2.parentElement;
     }
-    if (_drawRegions.length > 0) {
-      lines.push("## Draw Regions");
-      lines.push("");
-      for (let i2 = 0; i2 < _drawRegions.length; i2++) {
-        const r2 = _drawRegions[i2];
-        const shapeLabel = r2.shape === "rect" ? "Rectangle" : "Ellipse";
-        lines.push(`### ${i2 + 1}. ${shapeLabel} at (${Math.round(r2.x)}, ${Math.round(r2.y)}) ${Math.round(r2.width)}x${Math.round(r2.height)}`);
-        lines.push(`- **Comment:** ${r2.comment || "(no comment)"}`);
-        lines.push(`- **Page:** ${r2.page}`);
-        lines.push("");
-      }
-    }
-    return lines.join("\n");
+    return false;
   }
-  async function copyToClipboard(format) {
-    const text = format === "json" ? exportAsJSON() : exportAsMarkdown();
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (e2) {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.cssText = "position:fixed;left:-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-        return true;
-      } catch (e3) {
-        return false;
-      } finally {
-        ta.remove();
-      }
-    }
-  }
-  var _elementAnnotations, _drawRegions;
-  var init_annotation_store = __esm({
-    "src/annotation-store.ts"() {
+  var TB_WIDGET_CLASSES;
+  var init_dom_helpers = __esm({
+    "src/dom-helpers.ts"() {
       "use strict";
-      _elementAnnotations = [];
-      _drawRegions = [];
+      TB_WIDGET_CLASSES = ["tracebug-", "tb-qb", "tb-hud", "tb-rs"];
     }
   });
 
@@ -23015,7 +23231,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _highlightOverlay.style.width = rect.width + "px";
       _highlightOverlay.style.height = rect.height + "px";
     };
-    const onClick = (e2) => {
+    const onClick2 = (e2) => {
       if (!_active2) return;
       const target = e2.target;
       if (target && _isOurElement(target)) return;
@@ -23070,14 +23286,14 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       }
     };
     document.addEventListener("mousemove", onMouseMove, { capture: true });
-    document.addEventListener("click", onClick, { capture: true });
+    document.addEventListener("click", onClick2, { capture: true });
     document.addEventListener("contextmenu", onContext, { capture: true });
     document.addEventListener("keydown", onKeyDown, { capture: true });
     _cleanup = () => {
       var _a2;
       _active2 = false;
       document.removeEventListener("mousemove", onMouseMove, { capture: true });
-      document.removeEventListener("click", onClick, { capture: true });
+      document.removeEventListener("click", onClick2, { capture: true });
       document.removeEventListener("contextmenu", onContext, { capture: true });
       document.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("wheel", preventScroll, { capture: true });
@@ -23236,19 +23452,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     }
   }
   function _isOurElement(el) {
-    var _a2, _b, _c;
-    if (!el) return false;
-    if ((_a2 = el.dataset) == null ? void 0 : _a2.tracebug) return true;
-    const root2 = document.getElementById("tracebug-root");
-    if (root2 && root2.contains(el)) return true;
-    let node2 = el;
-    while (node2) {
-      if (((_b = node2.id) == null ? void 0 : _b.startsWith("tracebug-")) || ((_c = node2.id) == null ? void 0 : _c.startsWith("bt-"))) return true;
-      const cn = typeof node2.className === "string" ? node2.className : "";
-      if (cn.includes("tracebug-")) return true;
-      node2 = node2.parentElement;
-    }
-    return false;
+    return isTraceBugUiElement(el);
+  }
+  function computeElementSelector(el) {
+    return _computeSelector(el);
   }
   function _computeSelector(el) {
     if (el.id && !el.id.startsWith("tracebug-") && !el.id.startsWith("bt-")) {
@@ -23284,9 +23491,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
   }
   function _renderSelectionOverlay(el, index2, root2) {
     const rect = el.getBoundingClientRect();
-    const box = document.createElement("div");
-    box.dataset.tracebug = "selection-overlay";
-    box.style.cssText = `
+    const box2 = document.createElement("div");
+    box2.dataset.tracebug = "selection-overlay";
+    box2.style.cssText = `
     position: fixed; z-index: 2147483645; pointer-events: none;
     left: ${rect.left - 2}px; top: ${rect.top - 2}px;
     width: ${rect.width + 4}px; height: ${rect.height + 4}px;
@@ -23305,9 +23512,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     box-shadow: 0 1px 4px rgba(0,0,0,0.3);
   `;
     badge.textContent = String(index2);
-    box.appendChild(badge);
-    root2.appendChild(box);
-    _selectionOverlays.push(box);
+    box2.appendChild(badge);
+    root2.appendChild(box2);
+    _selectionOverlays.push(box2);
   }
   function _showFeedbackPopover(targetEl, root2) {
     if (_popover) {
@@ -23438,6 +23645,10 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
           scrollX: window.scrollX,
           scrollY: window.scrollY
         };
+        try {
+          annotation.styles = captureStyleEvidence(el);
+        } catch (e3) {
+        }
         addElementAnnotation(annotation);
       }
       popover.remove();
@@ -23466,6 +23677,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         return "#f97316";
       case "question":
         return "#3b82f6";
+      case "inspect":
+        return "#10b981";
     }
   }
   var _active2, _cleanup, _selectedElements, _highlightOverlay, _selectionOverlays, _popover, _modeBanner, _counter, _onUpdate, _onDeactivate, _persistentBadges, _badgeRoot, HIGHLIGHT_COLOR, SELECTION_COLOR;
@@ -23473,6 +23686,8 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     "src/element-annotate.ts"() {
       "use strict";
       init_annotation_store();
+      init_style_evidence();
+      init_dom_helpers();
       init_helpers();
       _active2 = false;
       _cleanup = null;
@@ -23879,7 +24094,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       _cleanup2 = null;
     }
   }
-  function _createToolbar(_root3) {
+  function _createToolbar(_root4) {
     const bar = document.createElement("div");
     bar.id = "tracebug-draw-toolbar";
     bar.dataset.tracebug = "draw-toolbar";
@@ -24250,7 +24465,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         sel.style.height = "0px";
         sel.style.display = "block";
       };
-      const onMove = (e2) => {
+      const onMove2 = (e2) => {
         if (!dragging) return;
         const x = Math.min(sx, e2.clientX), y = Math.min(sy, e2.clientY);
         const w = Math.abs(e2.clientX - sx), h = Math.abs(e2.clientY - sy);
@@ -24258,12 +24473,12 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
       };
       const cleanup = () => {
         overlay.removeEventListener("mousedown", onDown);
-        overlay.removeEventListener("mousemove", onMove);
+        overlay.removeEventListener("mousemove", onMove2);
         overlay.removeEventListener("mouseup", onUp);
-        document.removeEventListener("keydown", onKey, true);
+        document.removeEventListener("keydown", onKey2, true);
         overlay.remove();
       };
-      const onKey = (e2) => {
+      const onKey2 = (e2) => {
         if (e2.key === "Escape") {
           e2.stopPropagation();
           cleanup();
@@ -24347,9 +24562,9 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         }
       };
       overlay.addEventListener("mousedown", onDown);
-      overlay.addEventListener("mousemove", onMove);
+      overlay.addEventListener("mousemove", onMove2);
       overlay.addEventListener("mouseup", onUp);
-      document.addEventListener("keydown", onKey, true);
+      document.addEventListener("keydown", onKey2, true);
     });
   }
   function cropDataUrl(dataUrl, r2) {
@@ -24993,7 +25208,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     track.addEventListener("mouseleave", () => {
       if (hoverEl) hoverEl.style.display = "none";
     });
-    const onKey = (e2) => {
+    const onKey2 = (e2) => {
       if (e2.key === " " || e2.code === "Space") {
         e2.preventDefault();
         togglePlay();
@@ -25034,7 +25249,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         _toggleHelpOverlay(root2);
       }
     };
-    root2.addEventListener("keydown", onKey);
+    root2.addEventListener("keydown", onKey2);
     jumpBtn.addEventListener("click", () => {
       if (errorMarkers.length === 0) return;
       seek(errorMarkers[0].timestamp, { snap: true });
@@ -25046,7 +25261,7 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
         track.removeEventListener("pointerdown", onPointerDown);
         track.removeEventListener("pointermove", onPointerMove);
         track.removeEventListener("pointerup", onPointerUp);
-        root2.removeEventListener("keydown", onKey);
+        root2.removeEventListener("keydown", onKey2);
         container2.innerHTML = "";
       }
     };
@@ -25371,172 +25586,126 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     return [..._events2];
   }
   function removeAllBlurBoxes() {
-    var _a2;
-    (_a2 = document.getElementById(BOX_LAYER_ID)) == null ? void 0 : _a2.remove();
+    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
   }
-  function _ensureStyles() {
-    var _a2, _b;
-    if (document.getElementById(STYLE_ID2)) return;
-    const supportsBackdrop = typeof CSS !== "undefined" && (((_a2 = CSS.supports) == null ? void 0 : _a2.call(CSS, "backdrop-filter", "blur(8px)")) || ((_b = CSS.supports) == null ? void 0 : _b.call(CSS, "-webkit-backdrop-filter", "blur(8px)")));
-    const s2 = document.createElement("style");
-    s2.id = STYLE_ID2;
-    s2.textContent = `
-    #${BOX_LAYER_ID} { position: fixed !important; inset: 0 !important; z-index: 2147483646 !important; pointer-events: none !important; }
-    #${BOX_LAYER_ID} .tb-blur-box {
-      position: fixed !important;
-      ${supportsBackdrop ? "backdrop-filter: blur(12px) saturate(0.6) !important; -webkit-backdrop-filter: blur(12px) saturate(0.6) !important; background: rgba(20,20,28,0.18) !important;" : "background: rgba(28,28,38,0.96) !important;"}
-      border: 1px solid rgba(255,255,255,0.35) !important;
-      border-radius: 4px !important;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.25) !important;
-      pointer-events: none !important;
-      overflow: visible !important;
-    }
-    #${BOX_LAYER_ID} .tb-blur-x {
-      position: absolute !important; top: -9px !important; right: -9px !important;
-      width: 18px !important; height: 18px !important; border-radius: 50% !important;
-      background: #1b1d24 !important; color: #fff !important; border: 1px solid rgba(255,255,255,0.4) !important;
-      font: 700 11px/1 system-ui, sans-serif !important; cursor: pointer !important;
-      display: flex !important; align-items: center !important; justify-content: center !important;
-      pointer-events: auto !important; padding: 0 !important;
-    }
-    #${DRAW_OVERLAY_ID} {
-      position: fixed !important; inset: 0 !important; z-index: 2147483646 !important;
-      cursor: crosshair !important; background: rgba(10,12,18,0.12) !important;
-      user-select: none !important; touch-action: none !important;
-    }
-    #${DRAW_OVERLAY_ID} .tb-blur-hint {
-      position: fixed !important; top: 64px !important; left: 50% !important; transform: translateX(-50%) !important;
-      background: #1b1d24 !important; color: #e9eaee !important; border: 1px solid rgba(255,255,255,0.12) !important;
-      padding: 7px 14px !important; border-radius: 999px !important; font: 600 12px/1 system-ui, sans-serif !important;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.5) !important; pointer-events: none !important; white-space: nowrap !important;
-    }
-    #${DRAW_OVERLAY_ID} .tb-blur-rubber {
-      position: fixed !important; border: 1.5px dashed #6366F1 !important;
-      background: rgba(99,102,241,0.12) !important; border-radius: 4px !important; pointer-events: none !important;
-    }
-  `;
-    document.head.appendChild(s2);
+  function undoLastBlur() {
+    const last = _blurred[_blurred.length - 1];
+    if (last) _unblur(last);
+    return _blurred.length;
   }
-  function _boxLayer() {
-    let layer = document.getElementById(BOX_LAYER_ID);
-    if (!layer) {
-      layer = document.createElement("div");
-      layer.id = BOX_LAYER_ID;
-      layer.dataset.tracebug = "blur-layer";
-      document.body.appendChild(layer);
-    }
-    return layer;
+  function _isOurNode(el) {
+    return isTraceBugUiElement(el);
   }
-  function _addBox(x, y, w, h) {
-    if (w < 6 || h < 6) return;
-    const layer = _boxLayer();
-    const box = document.createElement("div");
-    box.className = "tb-blur-box";
-    box.style.setProperty("left", x + "px", "important");
-    box.style.setProperty("top", y + "px", "important");
-    box.style.setProperty("width", w + "px", "important");
-    box.style.setProperty("height", h + "px", "important");
+  function _findBlurred(el) {
+    return _blurred.find((b) => b.el === el);
+  }
+  function _blur(el) {
+    const prevFilter = el.style.getPropertyValue("filter");
+    const prevPriority = el.style.getPropertyPriority("filter");
+    el.style.setProperty("filter", BLUR_FILTER, "important");
+    el.classList.add("tb-mask");
+    el.setAttribute("data-tb-blurred", "1");
     const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const del = document.createElement("button");
-    del.className = "tb-blur-x";
-    del.type = "button";
-    del.textContent = "\u2715";
-    del.title = "Remove this blur";
-    del.addEventListener("click", (e2) => {
-      e2.stopPropagation();
-      box.remove();
-      const i2 = _events2.findIndex((ev) => ev.id === evtId);
-      if (i2 >= 0) _events2.splice(i2, 1);
-    });
-    box.appendChild(del);
-    layer.appendChild(box);
+    _blurred.push({ el, prevFilter, prevPriority, evtId });
     _events2.push({ id: evtId, timestamp: Date.now() });
   }
-  function activateBlurMode(_root3, onExit) {
+  function _unblur(entry) {
+    const { el, prevFilter, prevPriority, evtId } = entry;
+    try {
+      if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
+      else el.style.removeProperty("filter");
+      el.classList.remove("tb-mask");
+      el.removeAttribute("data-tb-blurred");
+    } catch (e2) {
+    }
+    _blurred = _blurred.filter((b) => b !== entry);
+    const i2 = _events2.findIndex((ev) => ev.id === evtId);
+    if (i2 >= 0) _events2.splice(i2, 1);
+  }
+  function activateBlurMode(_root4, onExit) {
     if (_active4) return;
     _active4 = true;
     _onExit = onExit || null;
-    _ensureStyles();
-    _boxLayer();
-    const overlay = document.createElement("div");
-    overlay.id = DRAW_OVERLAY_ID;
-    overlay.dataset.tracebug = "blur-draw";
+    const outline = document.createElement("div");
+    outline.id = OUTLINE_ID;
+    outline.setAttribute(
+      "style",
+      "position:fixed;display:none;pointer-events:none;z-index:2147483646;outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
+    );
+    document.body.appendChild(outline);
     const hint = document.createElement("div");
-    hint.className = "tb-blur-hint";
-    hint.textContent = "Drag to blur sensitive areas \xB7 Esc to finish";
-    overlay.appendChild(hint);
-    document.body.appendChild(overlay);
-    let startX = 0, startY = 0, drawing = false;
-    let rubber = null;
-    const onDown = (e2) => {
-      var _a2;
-      if ((_a2 = e2.target.classList) == null ? void 0 : _a2.contains("tb-blur-x")) return;
-      drawing = true;
-      startX = e2.clientX;
-      startY = e2.clientY;
-      rubber = document.createElement("div");
-      rubber.className = "tb-blur-rubber";
-      overlay.appendChild(rubber);
-      overlay.setPointerCapture(e2.pointerId);
-      e2.preventDefault();
-    };
-    const onMove = (e2) => {
-      if (!drawing || !rubber) return;
-      const x = Math.min(startX, e2.clientX), y = Math.min(startY, e2.clientY);
-      const w = Math.abs(e2.clientX - startX), h = Math.abs(e2.clientY - startY);
-      rubber.style.setProperty("left", x + "px", "important");
-      rubber.style.setProperty("top", y + "px", "important");
-      rubber.style.setProperty("width", w + "px", "important");
-      rubber.style.setProperty("height", h + "px", "important");
-    };
-    const onUp = (e2) => {
-      if (!drawing) return;
-      drawing = false;
-      const x = Math.min(startX, e2.clientX), y = Math.min(startY, e2.clientY);
-      const w = Math.abs(e2.clientX - startX), h = Math.abs(e2.clientY - startY);
-      rubber == null ? void 0 : rubber.remove();
-      rubber = null;
-      try {
-        overlay.releasePointerCapture(e2.pointerId);
-      } catch (e3) {
+    hint.id = HINT_ID;
+    hint.setAttribute(
+      "style",
+      "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
+    );
+    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
+    document.body.appendChild(hint);
+    document.body.style.cursor = "crosshair";
+    _onMove = (e2) => {
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
+        outline.style.display = "none";
+        return;
       }
-      _addBox(x, y, w, h);
+      const r2 = el.getBoundingClientRect();
+      outline.style.display = "block";
+      outline.style.left = r2.left + "px";
+      outline.style.top = r2.top + "px";
+      outline.style.width = r2.width + "px";
+      outline.style.height = r2.height + "px";
     };
-    const onKey = (e2) => {
+    _onClick = (e2) => {
+      var _a2;
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
+      e2.preventDefault();
+      e2.stopPropagation();
+      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
+      const existing = _findBlurred(el);
+      if (existing) _unblur(existing);
+      else _blur(el);
+    };
+    _onKey = (e2) => {
       if (e2.key === "Escape") {
         e2.preventDefault();
         deactivateBlurMode();
       }
     };
-    overlay.addEventListener("pointerdown", onDown);
-    overlay.addEventListener("pointermove", onMove);
-    overlay.addEventListener("pointerup", onUp);
-    document.addEventListener("keydown", onKey, true);
-    overlay._tbKey = onKey;
+    document.addEventListener("mousemove", _onMove, true);
+    document.addEventListener("click", _onClick, true);
+    document.addEventListener("keydown", _onKey, true);
   }
   function deactivateBlurMode() {
+    var _a2, _b;
     if (!_active4) return;
     _active4 = false;
-    const overlay = document.getElementById(DRAW_OVERLAY_ID);
-    if (overlay) {
-      const onKey = overlay._tbKey;
-      if (onKey) document.removeEventListener("keydown", onKey, true);
-      overlay.remove();
-    }
+    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
+    if (_onClick) document.removeEventListener("click", _onClick, true);
+    if (_onKey) document.removeEventListener("keydown", _onKey, true);
+    _onMove = _onClick = _onKey = null;
+    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
+    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
+    document.body.style.cursor = "";
     const cb = _onExit;
     _onExit = null;
     cb == null ? void 0 : cb();
   }
-  var BOX_LAYER_ID, DRAW_OVERLAY_ID, STYLE_ID2, _active4, _onExit, _events2;
+  var HINT_ID, OUTLINE_ID, BLUR_FILTER, _active4, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
   var init_blur_tool = __esm({
     "src/ui/blur-tool.ts"() {
       "use strict";
-      BOX_LAYER_ID = "tracebug-blur-layer";
-      DRAW_OVERLAY_ID = "tracebug-blur-draw";
-      STYLE_ID2 = "tracebug-blur-styles";
+      init_dom_helpers();
+      HINT_ID = "tracebug-blur-hint";
+      OUTLINE_ID = "tracebug-blur-outline";
+      BLUR_FILTER = "blur(12px)";
       _active4 = false;
       _onExit = null;
       _events2 = [];
+      _blurred = [];
+      _onMove = null;
+      _onClick = null;
+      _onKey = null;
     }
   });
 
@@ -27203,6 +27372,164 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/exporters/playwright-test.ts
+  function q(s2) {
+    return "'" + String(s2).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, " ") + "'";
+  }
+  function clean(s2) {
+    return (s2 || "").replace(/\s+/g, " ").trim();
+  }
+  function locatorFor(el) {
+    var _a2;
+    if (el.testId) return `page.getByTestId(${q(el.testId)})`;
+    if (el.id) return `page.locator(${q("#" + el.id)})`;
+    if (el.ariaLabel) return `page.getByLabel(${q(clean(el.ariaLabel))})`;
+    const text = (_a2 = clean(el.text)) == null ? void 0 : _a2.split("\n")[0].slice(0, 60);
+    const role = el.role || (el.tag === "button" || el.buttonType ? "button" : el.tag === "a" ? "link" : null);
+    if (role && text) return `page.getByRole(${q(role)}, { name: ${q(text)} })`;
+    if (el.selector) return `page.locator(${q(el.selector)})`;
+    if (text) return `page.getByText(${q(text)}, { exact: false }).first()`;
+    return null;
+  }
+  function fieldLocatorFor(el) {
+    if (el.selector) return `page.locator(${q(el.selector)})`;
+    if (el.name) return `page.locator(${q(`[name="${el.name}"], #${el.name}`)}).first()`;
+    return null;
+  }
+  function pickPrimaryFailure(report) {
+    const failing = (report.networkErrors || []).find((r2) => !isNoiseRequest(r2.url));
+    if (failing) {
+      let needle = failing.url;
+      try {
+        needle = new URL(failing.url, "http://x.local").pathname;
+      } catch (e2) {
+      }
+      return {
+        kind: "network",
+        needle,
+        display: `${failing.method} ${failing.url} \u2192 ${failing.status === 0 ? "NETWORK_ERROR" : failing.status}`
+      };
+    }
+    const err = (report.consoleErrors || [])[0];
+    if (err == null ? void 0 : err.message) {
+      return { kind: "console", needle: clean(err.message).slice(0, 60), display: clean(err.message).slice(0, 120) };
+    }
+    return { kind: "none", needle: "", display: "" };
+  }
+  function generatePlaywrightTest(report) {
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
+    const events = [...((_a2 = report.session) == null ? void 0 : _a2.events) || []].sort(
+      (a2, b) => a2.timestamp - b.timestamp
+    );
+    const steps = [];
+    let lastStep = "";
+    const push = (line) => {
+      if (line === lastStep) return;
+      steps.push(line);
+      lastStep = line;
+    };
+    for (const ev of events) {
+      const el = ((_b = ev.data) == null ? void 0 : _b.element) || {};
+      switch (ev.type) {
+        case "click": {
+          const loc = locatorFor(el);
+          if (loc) push(`  await ${loc}.click();`);
+          break;
+        }
+        case "input": {
+          const loc = fieldLocatorFor(el);
+          if (!loc) break;
+          if (el.type === "checkbox" || el.type === "radio") {
+            push(`  await ${loc}.${el.value === "unchecked" ? "uncheck" : "check"}();`);
+          } else if (el.value === "[REDACTED]") {
+            push(`  await ${loc}.fill(${q("TODO-redacted-value")}); // value was masked at capture \u2014 fill in a test value`);
+          } else if (el.value) {
+            push(`  await ${loc}.fill(${q(el.value)});`);
+          }
+          break;
+        }
+        case "select_change": {
+          const loc = fieldLocatorFor(el);
+          if (loc && el.selectedText) {
+            push(`  await ${loc}.selectOption({ label: ${q(clean(el.selectedText))} });`);
+          }
+          break;
+        }
+        case "route_change": {
+          if ((_c = ev.data) == null ? void 0 : _c.to) push(`  // \u2192 navigated to ${ev.data.to}`);
+          break;
+        }
+      }
+    }
+    const hasActions = steps.some((s2) => s2.trimStart().startsWith("await"));
+    if (!hasActions) return null;
+    let origin = "http://localhost:3000";
+    let startPath = ((_d = events[0]) == null ? void 0 : _d.page) || "/";
+    try {
+      const u2 = new URL(((_e = report.environment) == null ? void 0 : _e.url) || "");
+      origin = u2.origin;
+      if (!((_f = events[0]) == null ? void 0 : _f.page)) startPath = u2.pathname;
+    } catch (e2) {
+    }
+    const failure = pickPrimaryFailure(report);
+    const title = clean(report.title) || "TraceBug captured bug";
+    const lines = [];
+    lines.push(`import { test, expect } from '@playwright/test';`);
+    lines.push(``);
+    lines.push(`// Generated by TraceBug from bug report: ${title}`);
+    lines.push(`// Session ${((_h = (_g = report.session) == null ? void 0 : _g.sessionId) == null ? void 0 : _h.slice(0, 8)) || "?"} \xB7 captured ${new Date(report.generatedAt).toISOString()}`);
+    lines.push(`//`);
+    lines.push(`// This test REPRODUCES the captured bug \u2014 expect it to FAIL until the bug`);
+    lines.push(`// is fixed, then pass. Point BASE_URL at your running dev server.`);
+    lines.push(`const BASE_URL = process.env.BASE_URL || ${q(origin)};`);
+    lines.push(``);
+    lines.push(`test(${q(title)}, async ({ page }) => {`);
+    if (failure.kind === "network") {
+      lines.push(`  // Captured failure: ${failure.display}`);
+      lines.push(`  const failedRequests: string[] = [];`);
+      lines.push(`  page.on('response', (r) => {`);
+      lines.push(`    if (r.status() >= 400) failedRequests.push(\`\${r.request().method()} \${r.url()} \u2192 \${r.status()}\`);`);
+      lines.push(`  });`);
+      lines.push(`  page.on('requestfailed', (r) => {`);
+      lines.push(`    failedRequests.push(\`\${r.method()} \${r.url()} \u2192 \${r.failure()?.errorText ?? 'FAILED'}\`);`);
+      lines.push(`  });`);
+    } else {
+      lines.push(failure.kind === "console" ? `  // Captured failure: ${failure.display}` : `  // No single captured failure \u2014 asserting the flow completes without page errors.`);
+      lines.push(`  const pageErrors: string[] = [];`);
+      lines.push(`  page.on('pageerror', (e) => pageErrors.push(e.message));`);
+      lines.push(`  page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(m.text()); });`);
+    }
+    lines.push(``);
+    lines.push(`  await page.goto(BASE_URL + ${q(startPath)});`);
+    lines.push(...steps);
+    lines.push(``);
+    lines.push(`  // Give in-flight requests/errors a moment to land before asserting.`);
+    lines.push(`  await page.waitForLoadState('networkidle').catch(() => {});`);
+    lines.push(``);
+    if (failure.kind === "network") {
+      lines.push(`  const stillFailing = failedRequests.filter((f) => f.includes(${q(failure.needle)}));`);
+      lines.push(`  expect(stillFailing, 'Bug reproduced \u2014 this request failed during capture and is still failing').toEqual([]);`);
+    } else if (failure.kind === "console") {
+      lines.push(`  const stillFailing = pageErrors.filter((e) => e.includes(${q(failure.needle)}));`);
+      lines.push(`  expect(stillFailing, 'Bug reproduced \u2014 this error was captured and is still thrown').toEqual([]);`);
+    } else {
+      lines.push(`  expect(pageErrors, 'The captured flow should complete without page errors').toEqual([]);`);
+    }
+    lines.push(`});`);
+    lines.push(``);
+    return lines.join("\n");
+  }
+  function playwrightTestFilename(report) {
+    const slug = (clean(report.title) || "tracebug-bug").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "tracebug-bug";
+    return `${slug}.spec.ts`;
+  }
+  var init_playwright_test = __esm({
+    "src/exporters/playwright-test.ts"() {
+      "use strict";
+      init_url_hygiene();
+    }
+  });
+
   // src/exporters/rrweb-runtime.generated.ts
   var rrweb_runtime_generated_exports = {};
   __export(rrweb_runtime_generated_exports, {
@@ -27359,7 +27686,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         environment: formatEnv(report),
         durationMs: estimateDuration(report.session, report)
       },
-      description: (_g = (_f = options == null ? void 0 : options.descriptionOverride) != null ? _f : report.steps) != null ? _g : "",
+      description: withElementEvidence((_g = (_f = options == null ? void 0 : options.descriptionOverride) != null ? _f : report.steps) != null ? _g : "", report),
       events: timeline,
       screenshots: report.screenshots.map((s2) => ({
         timestamp: s2.timestamp,
@@ -27388,6 +27715,16 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         expected: a2.expected,
         actual: a2.actual
       })),
+      elementAnnotations: (report.elementAnnotations || []).map((a2) => ({
+        selector: a2.selector,
+        tagName: a2.tagName,
+        innerText: a2.innerText || void 0,
+        intent: a2.intent,
+        severity: a2.severity,
+        comment: a2.comment,
+        styleSummary: a2.styles ? safeStyleSummary(a2.styles) : void 0,
+        styles: a2.styles
+      })),
       rootCauseHint: report.rootCause ? {
         hint: report.rootCause.hint,
         confidence: report.rootCause.confidence
@@ -27395,7 +27732,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       // Issue-filing helpers for the file's RECIPIENT — precomputed here so
       // the viewer ships zero issue-builder code. Token-free actions only;
       // API-token integrations stay in the exporter's modal.
-      github: buildGithubPayload(report, options == null ? void 0 : options.githubRepo)
+      github: buildGithubPayload(report, options == null ? void 0 : options.githubRepo),
+      ...buildPlaywrightPayload(report)
     };
     if (hasRrweb && rrwebEvents) {
       const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
@@ -27414,6 +27752,38 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     const html = buildReplayHtml(payload, rrwebExtras);
     const blob2 = new Blob([html], { type: "text/html;charset=utf-8" });
     return { blob: blob2, html };
+  }
+  function safeStyleSummary(styles) {
+    try {
+      return formatStyleSummary(styles);
+    } catch (e2) {
+      return void 0;
+    }
+  }
+  function withElementEvidence(description, report) {
+    const anns = report.elementAnnotations || [];
+    if (!anns.length) return description;
+    const lines = [description.trimEnd(), "", "**Element evidence:**"];
+    for (const a2 of anns) {
+      lines.push(`- [${a2.intent}/${a2.severity}] \`${a2.selector}\` \u2014 ${a2.comment}`);
+      if (a2.styles) {
+        const summary = safeStyleSummary(a2.styles);
+        if (summary) lines.push(`  ${summary}`);
+        if (a2.styles.contrast && !a2.styles.contrast.aa) {
+          lines.push(`  \u26A0 Text contrast ${a2.styles.contrast.ratio}:1 fails WCAG AA (${a2.styles.contrast.foreground} on ${a2.styles.contrast.background})`);
+        }
+      }
+    }
+    return lines.join("\n").trimStart();
+  }
+  function buildPlaywrightPayload(report) {
+    try {
+      const spec = generatePlaywrightTest(report);
+      if (!spec) return {};
+      return { playwrightTest: spec, playwrightTestFilename: playwrightTestFilename(report) };
+    } catch (e2) {
+      return {};
+    }
   }
   function buildGithubPayload(report, repo) {
     let markdown;
@@ -27507,6 +27877,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_report_builder();
       init_redaction_summary();
       init_github_issue();
+      init_playwright_test();
+      init_style_evidence();
     }
   });
 
@@ -27712,9 +28084,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }, 3e4);
   }
   function parseQueryString(url) {
-    const q = url.indexOf("?");
-    if (q === -1) return [];
-    const search = url.slice(q + 1).split("#")[0];
+    const q2 = url.indexOf("?");
+    if (q2 === -1) return [];
+    const search = url.slice(q2 + 1).split("#")[0];
     if (!search) return [];
     const out = [];
     for (const pair of search.split("&")) {
@@ -28418,7 +28790,9 @@ ${vars}
         "--tb-bg-overlay": "#ffffffee",
         "--tb-text-primary": "#111113",
         "--tb-text-secondary": "#52525B",
-        "--tb-text-muted": "#82828C",
+        // #82828C was 3.8:1 on white — fails WCAG AA for normal text. #75757E is
+        // 4.56:1, the minimal darkening that clears the 4.5:1 bar.
+        "--tb-text-muted": "#75757E",
         "--tb-accent": "#4F46E5",
         "--tb-accent-hover": "#4338CA",
         "--tb-accent-subtle": "#4F46E514",
@@ -28803,11 +29177,13 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   // src/ui/quick-bug.ts
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
+    getFocusableElements: () => getFocusableElements,
     isQuickBugOpen: () => isQuickBugOpen,
     refreshQuickBugCapture: () => refreshQuickBugCapture,
     setCloudEndpoint: () => setCloudEndpoint,
     setGithubRepo: () => setGithubRepo,
-    showQuickBugCapture: () => showQuickBugCapture
+    showQuickBugCapture: () => showQuickBugCapture,
+    trapModalTab: () => trapModalTab
   });
   function setGithubRepo(repo) {
     _githubRepo = repo;
@@ -28846,6 +29222,38 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   }
   function isQuickBugOpen() {
     return _isOpen;
+  }
+  function getFocusableElements(container2) {
+    const sel = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(container2.querySelectorAll(sel)).filter(
+      (el) => el.getClientRects().length > 0
+    );
+  }
+  function trapModalTab(e2, modal) {
+    if (e2.key !== "Tab") return false;
+    const f2 = getFocusableElements(modal);
+    if (f2.length === 0) {
+      e2.preventDefault();
+      return true;
+    }
+    const first = f2[0];
+    const last = f2[f2.length - 1];
+    const active = document.activeElement;
+    const inside = active && modal.contains(active);
+    if (e2.shiftKey) {
+      if (!inside || active === first) {
+        e2.preventDefault();
+        last.focus();
+        return true;
+      }
+    } else {
+      if (!inside || active === last) {
+        e2.preventDefault();
+        first.focus();
+        return true;
+      }
+    }
+    return false;
   }
   async function refreshQuickBugCapture(root2) {
     if (!_isOpen) return;
@@ -28973,7 +29381,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -29185,6 +29593,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More \u25BE</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
             <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip \u2014 GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
+            <button data-action="export-spec" class="tb-qb-more-item" role="menuitem" title="A runnable Playwright test that replays this session and asserts the captured failure is gone \u2014 fails until the bug is fixed, passes after">${_ic("fileCode")} Download failing test (.spec.ts)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report \u2014 upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots2.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots2.length === 1 ? "" : "s"} as image file${screenshots2.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots2.length === 1 ? "" : "s"}</button>` : ""}
@@ -29360,6 +29769,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         }
         return;
       }
+      if (trapModalTab(e2, modal)) return;
       if (isTypingTarget(e2.target)) return;
       if (e2.key === "?" || e2.shiftKey && e2.key === "/") {
         e2.preventDefault();
@@ -29534,7 +29944,30 @@ ${report.steps}` : userDesc : void 0,
         showToast("Replay export failed", root2);
       }
     });
-    (_z = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _z.addEventListener("click", async () => {
+    (_z = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _z.addEventListener("click", () => {
+      if (!data.currentSession) {
+        showToast("No session to export yet", root2);
+        return;
+      }
+      try {
+        const report = buildReport(data.currentSession);
+        const draft = getDraft();
+        if (draft.title.trim()) report.title = draft.title.trim();
+        const spec = generatePlaywrightTest(report);
+        if (!spec) {
+          showToast("No replayable user actions in this session", root2);
+          return;
+        }
+        const blob2 = new Blob([spec], { type: "text/plain;charset=utf-8" });
+        const filename = playwrightTestFilename(report);
+        triggerDownload(URL.createObjectURL(blob2), filename);
+        showToast(`\u2713 ${filename} \u2014 run with: npx playwright test ${filename}`, root2);
+      } catch (err) {
+        console.warn("[TraceBug] Failing-test export failed:", err);
+        showToast("Test export failed", root2);
+      }
+    });
+    (_A = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _A.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29563,7 +29996,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("ZIP export failed", root2);
       }
     });
-    (_A = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_B = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _B.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29583,7 +30016,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("HAR export failed", root2);
       }
     });
-    (_B = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _B.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _C.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -29603,7 +30036,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Report export failed", root2);
       }
     });
-    (_C = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_D = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _D.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -29630,7 +30063,7 @@ ${report.steps}` : userDesc : void 0,
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_D = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _D.addEventListener("click", (e2) => {
+    (_E = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _E.addEventListener("click", (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root2);
         return;
@@ -29678,7 +30111,7 @@ ${report.steps}` : userDesc : void 0,
       const pills = netPanel.querySelectorAll(".tb-qb-net-pill");
       let activeType = "all";
       const applyNetFilter = () => {
-        const q = ((searchEl == null ? void 0 : searchEl.value) || "").trim().toLowerCase();
+        const q2 = ((searchEl == null ? void 0 : searchEl.value) || "").trim().toLowerCase();
         const errOnly = !!(errorsOnlyEl == null ? void 0 : errorsOnlyEl.checked);
         netPanel.querySelectorAll(".tb-qb-net-row").forEach((row) => {
           if (row.classList.contains("tb-qb-net-head")) return;
@@ -29687,7 +30120,7 @@ ${report.steps}` : userDesc : void 0,
           const hay = row.dataset.search || "";
           const typeMatch = activeType === "all" || t2 === activeType;
           const errMatch = !errOnly || isErr;
-          const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          const searchMatch = q2.length === 0 || hay.indexOf(q2) !== -1;
           const show = typeMatch && errMatch && searchMatch;
           row.style.display = show ? "" : "none";
         });
@@ -29697,7 +30130,7 @@ ${report.steps}` : userDesc : void 0,
       pills.forEach((p) => {
         p.addEventListener("click", () => {
           activeType = p.dataset.type || "all";
-          pills.forEach((q) => q.classList.toggle("tb-qb-net-pill-active", q === p));
+          pills.forEach((q2) => q2.classList.toggle("tb-qb-net-pill-active", q2 === p));
           applyNetFilter();
         });
       });
@@ -29709,14 +30142,14 @@ ${report.steps}` : userDesc : void 0,
       const pills = conPanel.querySelectorAll(".tb-qb-feed-pill");
       let activeCat = "all";
       const applyFeedFilter = () => {
-        const q = ((conSearch == null ? void 0 : conSearch.value) || "").trim().toLowerCase();
+        const q2 = ((conSearch == null ? void 0 : conSearch.value) || "").trim().toLowerCase();
         const errOnly = !!(conErrOnly == null ? void 0 : conErrOnly.checked);
         conPanel.querySelectorAll(".tb-qb-feed-row").forEach((row) => {
           const cat = row.dataset.cat || "";
           const hay = row.dataset.search || "";
           const isErr = row.dataset.err === "1";
           const catMatch = activeCat === "all" || cat === activeCat;
-          const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
+          const searchMatch = q2.length === 0 || hay.indexOf(q2) !== -1;
           const errMatch = !errOnly || isErr;
           row.style.display = catMatch && searchMatch && errMatch ? "" : "none";
         });
@@ -29726,7 +30159,7 @@ ${report.steps}` : userDesc : void 0,
       pills.forEach((p) => {
         p.addEventListener("click", () => {
           activeCat = p.dataset.cat || "all";
-          pills.forEach((q) => q.classList.toggle("tb-qb-feed-pill-active", q === p));
+          pills.forEach((q2) => q2.classList.toggle("tb-qb-feed-pill-active", q2 === p));
           applyFeedFilter();
         });
       });
@@ -29795,7 +30228,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_E = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _E.addEventListener("click", () => {
+    (_F = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _F.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -29826,7 +30259,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_F = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _F.addEventListener("click", async () => {
+    (_G = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _G.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -29850,7 +30283,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_G = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _G.addEventListener("click", async () => {
+    (_H = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _H.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -30859,6 +31292,30 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       onSaved();
     });
   }
+  function _styleSummaryLine(s2) {
+    try {
+      return "Styles: " + formatStyleSummary(s2);
+    } catch (e2) {
+      return "Styles captured";
+    }
+  }
+  function _styleDetails(s2) {
+    const rows = [];
+    const add = (group, obj) => {
+      for (const [k, v2] of Object.entries(obj)) rows.push(`${group}.${k}: ${v2}`);
+    };
+    try {
+      add("font", s2.typography);
+      add("color", s2.colors);
+      add("box", s2.box);
+      add("layout", s2.layout);
+      if (s2.contrast) {
+        rows.push(`contrast: ${s2.contrast.ratio}:1 (${s2.contrast.aa ? "passes" : "FAILS"} WCAG AA) \u2014 ${s2.contrast.foreground} on ${s2.contrast.background}`);
+      }
+    } catch (e2) {
+    }
+    return rows.join("\n");
+  }
   function _buildAnnotationsTab(session) {
     const sessAnn = (session == null ? void 0 : session.annotations) || [];
     let els = [];
@@ -30892,6 +31349,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         <div class="tb-qb-note-sev">${escapeHtml2(e2.intent)} \xB7 ${escapeHtml2(e2.severity)}</div>
         <div class="tb-qb-note-text">${escapeHtml2(e2.comment || "")}</div>
         <div class="tb-qb-note-line"><code>${escapeHtml2(e2.selector)}</code> \u2014 ${escapeHtml2((e2.innerText || "").slice(0, 60))}</div>
+        ${e2.styles ? `
+        <details class="tb-qb-note-styles">
+          <summary>${escapeHtml2(_styleSummaryLine(e2.styles))}</summary>
+          <pre class="tb-qb-note-styles-pre">${escapeHtml2(_styleDetails(e2.styles))}</pre>
+        </details>` : ""}
       </div>
     `).join("")}
   ` : "";
@@ -31249,6 +31711,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID2} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID2} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
     #${MODAL_ID2} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }
+    #${MODAL_ID2} .tb-qb-note-styles { margin-top:6px; }
+    #${MODAL_ID2} .tb-qb-note-styles summary { font-size:11px; color:var(--tb-text-muted); cursor:pointer; font-family:var(--tb-font-mono); }
+    #${MODAL_ID2} .tb-qb-note-styles summary:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID2} .tb-qb-note-styles-pre { margin:6px 0 0; padding:8px 10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:8px; font-family:var(--tb-font-mono); font-size:10.5px; line-height:1.6; white-space:pre-wrap; color:var(--tb-text-secondary); }
     #${MODAL_ID2} .tb-qb-fb { color:var(--tb-text-muted); }
     #${MODAL_ID2} .tb-qb-fb a { text-decoration:none; margin-left:4px; opacity:0.75; transition:opacity .15s, transform .15s; display:inline-block; }
     #${MODAL_ID2} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
@@ -31281,7 +31747,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   `;
     document.head.appendChild(style);
   }
-  function showAIPromptPopover(_anchor, prompt, _root3) {
+  function showAIPromptPopover(_anchor, prompt, _root4) {
     var _a2;
     (_a2 = document.getElementById("tb-ai-popover")) == null ? void 0 : _a2.remove();
     const overlay = document.createElement("div");
@@ -31401,14 +31867,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       } else if (action === "close" || target === overlay) close();
     });
-    const onKey = (e2) => {
+    const onKey2 = (e2) => {
       if (e2.key === "Escape") close();
     };
     function close() {
       overlay.remove();
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey2);
     }
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey2);
   }
   function showMcpHandoffCard(filename, sizeBytes) {
     var _a2;
@@ -31565,14 +32031,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       } else if (action === "close" || target === overlay) close();
     });
-    const onKey = (e2) => {
+    const onKey2 = (e2) => {
       if (e2.key === "Escape") close();
     };
     function close() {
       overlay.remove();
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey2);
     }
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey2);
   }
   var _githubRepo, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
@@ -31590,6 +32056,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_jira_issue();
       init_title_generator();
       init_redaction_summary();
+      init_style_evidence();
       init_environment();
       init_toast();
       init_helpers();
@@ -31597,6 +32064,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_blur_tool();
       init_html_replay();
       init_zip_export();
+      init_playwright_test();
       init_har_export();
       init_ai_prompt();
       init_llm_client();
@@ -31760,8 +32228,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
-    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive areas \u2014 drag to redact (captured in the recording)" aria-label="Blur sensitive areas">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22" opacity="0.45"/></svg>
+    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements \u2014 click to blur, click again to unblur (captured in the recording)" aria-label="Blur sensitive elements">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>
     </button>
   `;
     root2.appendChild(hud);
@@ -31791,7 +32259,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         startY = e2.clientY;
         e2.preventDefault();
       };
-      const onMove = (e2) => {
+      const onMove2 = (e2) => {
         if (!dragging) return;
         const nx = Math.max(4, Math.min(window.innerWidth - hud.offsetWidth - 4, hudX + (e2.clientX - startX)));
         const ny = Math.max(4, Math.min(window.innerHeight - hud.offsetHeight - 4, hudY + (e2.clientY - startY)));
@@ -31810,7 +32278,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       };
       gripEl.addEventListener("pointerdown", onDown);
-      gripEl.addEventListener("pointermove", onMove);
+      gripEl.addEventListener("pointermove", onMove2);
       gripEl.addEventListener("pointerup", onUp);
       gripEl.addEventListener("pointercancel", onUp);
     }
@@ -32152,7 +32620,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _trackBtn = null;
     };
   }
-  function _createToolbarBtn(title, iconHtml, onClick, id) {
+  function _createToolbarBtn(title, iconHtml, onClick2, id) {
     const btn = document.createElement("button");
     if (id) btn.id = id;
     btn.dataset.tracebug = "toolbar-btn";
@@ -32177,7 +32645,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         btn.style.color = "var(--tb-btn-text, #aaa)";
       }
     });
-    btn.addEventListener("click", onClick);
+    btn.addEventListener("click", onClick2);
     return btn;
   }
   function _divider() {
@@ -32396,11 +32864,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (settled) return;
         settled = true;
         pop.remove();
-        document.removeEventListener("keydown", onKey, true);
+        document.removeEventListener("keydown", onKey2, true);
         document.removeEventListener("mousedown", onOutside, true);
         resolve(value);
       };
-      const onKey = (e2) => {
+      const onKey2 = (e2) => {
         if (e2.key === "Escape") {
           e2.preventDefault();
           finish(null);
@@ -32415,7 +32883,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       };
       cancelEl.addEventListener("click", () => finish(null));
       startEl.addEventListener("click", () => finish({ surface, withMicrophone: micEl.checked }));
-      document.addEventListener("keydown", onKey, true);
+      document.addEventListener("keydown", onKey2, true);
       setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
       setTimeout(() => startEl.focus(), 0);
     });
@@ -32765,9 +33233,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   }
   function ensurePulseStyles() {
-    if (document.getElementById(STYLE_ID3)) return;
+    if (document.getElementById(STYLE_ID2)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID3;
+    style.id = STYLE_ID2;
     style.textContent = `
     @keyframes tracebug-onboard-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
@@ -32791,15 +33259,15 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }, 1e4);
   }
   function cleanupOnboarding() {
-    const style = document.getElementById(STYLE_ID3);
+    const style = document.getElementById(STYLE_ID2);
     if (style) style.remove();
   }
-  var STORAGE_KEY4, STYLE_ID3;
+  var STORAGE_KEY4, STYLE_ID2;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
       STORAGE_KEY4 = "tracebug_onboarding_complete";
-      STYLE_ID3 = "tracebug-onboarding-styles";
+      STYLE_ID2 = "tracebug-onboarding-styles";
     }
   });
 
@@ -33041,20 +33509,20 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (filter === "errors") filtered = filtered.filter((s2) => s2.errorMessage);
       if (filter === "healthy") filtered = filtered.filter((s2) => !s2.errorMessage);
       if (search) {
-        const q = search.toLowerCase();
+        const q2 = search.toLowerCase();
         filtered = filtered.filter((s2) => {
           var _a2;
-          if (s2.sessionId.toLowerCase().includes(q)) return true;
-          if (s2.errorMessage && s2.errorMessage.toLowerCase().includes(q)) return true;
-          if (s2.reproSteps && s2.reproSteps.toLowerCase().includes(q)) return true;
+          if (s2.sessionId.toLowerCase().includes(q2)) return true;
+          if (s2.errorMessage && s2.errorMessage.toLowerCase().includes(q2)) return true;
+          if (s2.reproSteps && s2.reproSteps.toLowerCase().includes(q2)) return true;
           for (const e2 of s2.events) {
-            if (e2.page && e2.page.toLowerCase().includes(q)) return true;
+            if (e2.page && e2.page.toLowerCase().includes(q2)) return true;
             const d = e2.data || {};
             const el = d.element || {};
-            if (typeof el.text === "string" && el.text.toLowerCase().includes(q)) return true;
-            if (typeof el.value === "string" && el.value.toLowerCase().includes(q)) return true;
-            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q)) return true;
-            if (((_a2 = d.request) == null ? void 0 : _a2.url) && String(d.request.url).toLowerCase().includes(q)) return true;
+            if (typeof el.text === "string" && el.text.toLowerCase().includes(q2)) return true;
+            if (typeof el.value === "string" && el.value.toLowerCase().includes(q2)) return true;
+            if (typeof el.ariaLabel === "string" && el.ariaLabel.toLowerCase().includes(q2)) return true;
+            if (((_a2 = d.request) == null ? void 0 : _a2.url) && String(d.request.url).toLowerCase().includes(q2)) return true;
           }
           return false;
         });
@@ -46843,7 +47311,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               }
             }
-            var q = {
+            var q2 = {
               defer: function defer(fn) {
                 if (_typeof(fn) === "object" && fn.then && fn["catch"]) {
                   var defer2 = fn;
@@ -46860,7 +47328,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 tasks.push(fn);
                 ++remaining;
                 pop();
-                return q;
+                return q2;
               },
               then: function then(fn) {
                 funcGuard(fn);
@@ -46874,7 +47342,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                     completeQueue(tasks);
                   }
                 }
-                return q;
+                return q2;
               },
               catch: function _catch(fn) {
                 funcGuard(fn);
@@ -46887,11 +47355,11 @@ Response: ${match.response.slice(0, 160)}` : "";
                   fn(err2);
                   err2 = null;
                 }
-                return q;
+                return q2;
               },
               abort
             };
-            return q;
+            return q2;
           }
           var queue_default = queue;
           var uuid;
@@ -47527,11 +47995,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             options = _extends({}, options, {
               elementRef: false
             });
-            var q = queue_default();
+            var q2 = queue_default();
             var frames = parentContent.frames;
             frames.forEach(function(_ref35) {
               var frameElement = _ref35.node, context2 = _objectWithoutProperties(_ref35, _excluded8);
-              q.defer(function(res, rej) {
+              q2.defer(function(res, rej) {
                 var params = {
                   options,
                   command,
@@ -47550,7 +48018,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 _sendCommandToFrame(frameElement, params, callback, rej);
               });
             });
-            q.then(function(data) {
+            q2.then(function(data) {
               resolve(merge_results_default(data, options));
             })["catch"](reject);
           }
@@ -55514,10 +55982,10 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (!axe._audit) {
               throw new Error("No audit configured");
             }
-            var q = axe.utils.queue();
+            var q2 = axe.utils.queue();
             var cleanupErrors = [];
             Object.keys(axe.plugins).forEach(function(key2) {
-              q.defer(function(res) {
+              q2.defer(function(res) {
                 var rej = function rej2(err2) {
                   cleanupErrors.push(err2);
                   res();
@@ -55531,13 +55999,13 @@ Response: ${match.response.slice(0, 160)}` : "";
             });
             var flattenedTree = axe.utils.getFlattenedTree(document2.body);
             axe.utils.querySelectorAll(flattenedTree, "iframe, frame").forEach(function(node2) {
-              q.defer(function(res, rej) {
+              q2.defer(function(res, rej) {
                 return axe.utils.sendCommandToFrame(node2.actualNode, {
                   command: "cleanup-plugin"
                 }, res, rej);
               });
             });
-            q.then(function(results) {
+            q2.then(function(results) {
               if (cleanupErrors.length === 0) {
                 resolve(results);
               } else {
@@ -61450,7 +61918,7 @@ Response: ${match.response.slice(0, 160)}` : "";
           }
           var link_in_text_block_evaluate_default = linkInTextBlockEvaluate;
           function colorContrastEvaluate(node2, options, virtualNode) {
-            var ignoreUnicode = options.ignoreUnicode, ignoreLength = options.ignoreLength, ignorePseudo = options.ignorePseudo, boldValue = options.boldValue, boldTextPt = options.boldTextPt, largeTextPt = options.largeTextPt, contrastRatio = options.contrastRatio, shadowOutlineEmMax = options.shadowOutlineEmMax, pseudoSizeThreshold = options.pseudoSizeThreshold;
+            var ignoreUnicode = options.ignoreUnicode, ignoreLength = options.ignoreLength, ignorePseudo = options.ignorePseudo, boldValue = options.boldValue, boldTextPt = options.boldTextPt, largeTextPt = options.largeTextPt, contrastRatio2 = options.contrastRatio, shadowOutlineEmMax = options.shadowOutlineEmMax, pseudoSizeThreshold = options.pseudoSizeThreshold;
             if (!_isVisibleOnScreen(node2)) {
               this.data({
                 messageKey: "hidden"
@@ -61470,7 +61938,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             var bold = parseFloat(fontWeight) >= boldValue || fontWeight === "bold";
             var ptSize = Math.ceil(fontSize * 72) / 96;
             var isSmallFont = bold && ptSize < boldTextPt || !bold && ptSize < largeTextPt;
-            var _ref134 = isSmallFont ? contrastRatio.normal : contrastRatio.large, expected = _ref134.expected, minThreshold = _ref134.minThreshold, maxThreshold = _ref134.maxThreshold;
+            var _ref134 = isSmallFont ? contrastRatio2.normal : contrastRatio2.large, expected = _ref134.expected, minThreshold = _ref134.minThreshold, maxThreshold = _ref134.maxThreshold;
             var pseudoElm = findPseudoElement(virtualNode, {
               ignorePseudo,
               pseudoSizeThreshold
@@ -63405,7 +63873,7 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (options.performanceTimer) {
               this._trackPerformance();
             }
-            var q = queue_default();
+            var q2 = queue_default();
             var ruleResult = new rule_result_default(this);
             var nodes;
             try {
@@ -63418,7 +63886,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               this._logGatherPerformance(nodes);
             }
             nodes.forEach(function(node2) {
-              q.defer(function(resolveNode, rejectNode) {
+              q2.defer(function(resolveNode, rejectNode) {
                 var checkQueue = queue_default();
                 ["any", "all", "none"].forEach(function(type2) {
                   checkQueue.defer(function(res, rej) {
@@ -63451,7 +63919,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 });
               });
             });
-            q.then(function() {
+            q2.then(function() {
               if (options.performanceTimer) {
                 _this1._logRulePerformance();
               }
@@ -64288,20 +64756,20 @@ Response: ${match.response.slice(0, 160)}` : "";
               teardown_default();
               return reject(e2);
             }
-            var q = queue_default();
+            var q2 = queue_default();
             var audit = axe._audit;
             if (options.performanceTimer) {
               performance_timer_default.auditStart();
             }
             if (context2.frames.length && options.iframes !== false) {
-              q.defer(function(res, rej) {
+              q2.defer(function(res, rej) {
                 _collectResultsFromFrames(context2, options, "rules", null, res, rej);
               });
             }
-            q.defer(function(res, rej) {
+            q2.defer(function(res, rej) {
               audit.run(context2, options, res, rej);
             });
-            q.then(function(data) {
+            q2.then(function(data) {
               try {
                 if (options.performanceTimer) {
                   performance_timer_default.auditEnd();
@@ -64393,14 +64861,14 @@ Response: ${match.response.slice(0, 160)}` : "";
             return this._collect.apply(this, arguments);
           };
           Plugin.prototype.cleanup = function cleanup2(done) {
-            var q = axe.utils.queue();
+            var q2 = axe.utils.queue();
             var that = this;
             Object.keys(this._registry).forEach(function(key2) {
-              q.defer(function(_done) {
+              q2.defer(function(_done) {
                 that._registry[key2].cleanup(_done);
               });
             });
-            q.then(done);
+            q2.then(done);
           };
           Plugin.prototype.add = function add(impl) {
             this._registry[impl.id] = impl;
@@ -68918,9 +69386,9 @@ First element: \`${exampleSnippet}\``,
     return parts.join("");
   }
   function _injectStyles3() {
-    if (document.getElementById(STYLE_ID4)) return;
+    if (document.getElementById(STYLE_ID3)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID4;
+    style.id = STYLE_ID3;
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -69033,12 +69501,12 @@ First element: \`${exampleSnippet}\``,
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID, STYLE_ID4, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
       CARD_ID = "tracebug-live-bug-card";
-      STYLE_ID4 = "tracebug-live-bug-card-styles";
+      STYLE_ID3 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
       _currentRoot = null;
@@ -69057,7 +69525,7 @@ First element: \`${exampleSnippet}\``,
   async function showIssuesPanel(root2, options) {
     var _a2;
     if (_isOpen2) return;
-    _root2 = root2;
+    _root3 = root2;
     _injectStyles4();
     _open(root2, { issues: [], loading: true });
     try {
@@ -69070,9 +69538,9 @@ First element: \`${exampleSnippet}\``,
     _renderBody(getIssues());
   }
   function _injectStyles4() {
-    if (document.getElementById(STYLE_ID5)) return;
+    if (document.getElementById(STYLE_ID4)) return;
     const style = document.createElement("style");
-    style.id = STYLE_ID5;
+    style.id = STYLE_ID4;
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }
@@ -69327,7 +69795,7 @@ First element: \`${exampleSnippet}\``,
   }
   function _fileAsBug(issue) {
     var _a2;
-    const root2 = _root2 || document.getElementById("tracebug-root");
+    const root2 = _root3 || document.getElementById("tracebug-root");
     if (!root2) return;
     (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
     _isOpen2 = false;
@@ -69350,16 +69818,16 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID3, STYLE_ID5, _isOpen2, _root2, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID3, STYLE_ID4, _isOpen2, _root3, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
       init_scanner();
       init_helpers();
       PANEL_ID3 = "tracebug-issues-panel";
-      STYLE_ID5 = "tracebug-issues-panel-styles";
+      STYLE_ID4 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
-      _root2 = null;
+      _root3 = null;
       SEVERITY_COLORS = {
         critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
         serious: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
@@ -69391,6 +69859,7 @@ First element: \`${exampleSnippet}\``,
     TRACKER_LABELS: () => TRACKER_LABELS,
     buildAnalysisPrompt: () => buildAnalysisPrompt,
     buildHar: () => buildHar,
+    buildReplayBlob: () => buildReplayBlob,
     buildReport: () => buildReport,
     buildTimeline: () => buildTimeline,
     buildZipBlob: () => buildZipBlob,
@@ -69398,15 +69867,18 @@ First element: \`${exampleSnippet}\``,
     captureRegionScreenshot: () => captureRegionScreenshot,
     captureRollingBuffer: () => captureRollingBuffer,
     captureScreenshot: () => captureScreenshot,
+    captureStyleEvidence: () => captureStyleEvidence,
     clearAIConfig: () => clearAIConfig,
     clearAllSessions: () => clearAllSessions,
     clearIntegrationsConfig: () => clearIntegrationsConfig,
     clearIssues: () => clearIssues,
     clearVideoRecording: () => clearVideoRecording,
     clearVoiceTranscripts: () => clearVoiceTranscripts,
+    contrastRatio: () => contrastRatio,
     createGitHubIssue: () => createGitHubIssue,
     createLinearIssue: () => createLinearIssue,
     createTrackerIssue: () => createTrackerIssue,
+    cssColorToHex: () => cssColorToHex,
     default: () => src_default,
     deleteSession: () => deleteSession,
     dismissIssue: () => dismissIssue,
@@ -69414,10 +69886,12 @@ First element: \`${exampleSnippet}\``,
     downloadPdfAsHtml: () => downloadPdfAsHtml,
     downloadVideoRecording: () => downloadVideoRecording,
     exportSessionAsHar: () => exportSessionAsHar,
+    exportSessionAsHtml: () => exportSessionAsHtml,
     exportSessionAsZip: () => exportSessionAsZip,
     extractClickedElement: () => extractClickedElement,
     formatRedactionSummary: () => formatRedactionSummary,
     formatRootCauseLine: () => formatRootCauseLine,
+    formatStyleSummary: () => formatStyleSummary,
     formatTimelineText: () => formatTimelineText,
     generateAIPrompt: () => generateAIPrompt,
     generateBugTitle: () => generateBugTitle,
@@ -69427,6 +69901,7 @@ First element: \`${exampleSnippet}\``,
     generateJiraTicket: () => generateJiraTicket,
     generateMcpPrompt: () => generateMcpPrompt,
     generatePdfReport: () => generatePdfReport,
+    generatePlaywrightTest: () => generatePlaywrightTest,
     generateReproSteps: () => generateReproSteps,
     generateRootCauseHint: () => generateRootCauseHint,
     generateSessionSteps: () => generateSessionSteps,
@@ -69447,6 +69922,7 @@ First element: \`${exampleSnippet}\``,
     hasAIKey: () => hasAIKey,
     hasIntegration: () => hasIntegration,
     hydratePlan: () => hydratePlan,
+    isBlurModeActive: () => isBlurModeActive,
     isPremium: () => isPremium,
     isRollingMode: () => isRollingMode,
     isVideoRecording: () => isVideoRecording,
@@ -69456,13 +69932,17 @@ First element: \`${exampleSnippet}\``,
     openGitHubIssue: () => openGitHubIssue,
     openInChatGPT: () => openInChatGPT,
     openInClaude: () => openInClaude,
+    playwrightTestFilename: () => playwrightTestFilename,
+    removeAllBlurBoxes: () => removeAllBlurBoxes,
     runLLMAnalysis: () => runLLMAnalysis,
+    runRecordCountdown: () => runRecordCountdown,
     scan: () => scan,
     sendSlackMessage: () => sendSlackMessage,
     setAIConfig: () => setAIConfig,
     setIntegrationsConfig: () => setIntegrationsConfig,
     setPlan: () => setPlan,
     setRedactRules: () => setRedactRules,
+    startBlurThenRecord: () => startBlurThenRecord,
     startVideoRecording: () => startVideoRecording,
     startVoiceRecording: () => startVoiceRecording,
     stopVideoRecording: () => stopVideoRecording,
@@ -69903,6 +70383,264 @@ First element: \`${exampleSnippet}\``,
   init_scanner();
   init_element_annotate();
   init_draw_mode();
+
+  // src/inspect-mode.ts
+  init_style_evidence();
+  init_annotation_store();
+  init_element_annotate();
+  init_dom_helpers();
+  var _active5 = false;
+  var _root2 = null;
+  var _raf = 0;
+  var _onChange = null;
+  var LAYER_ID = "tracebug-inspect-layer";
+  function isInspectModeActive() {
+    return _active5;
+  }
+  function activateInspectMode(onChange) {
+    if (_active5) return;
+    _active5 = true;
+    _onChange = onChange != null ? onChange : null;
+    const layer = document.createElement("div");
+    layer.id = LAYER_ID;
+    layer.setAttribute("style", "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
+    layer.innerHTML = `
+    <div data-tb-i="margin" style="position:fixed;background:rgba(246,178,107,0.25);pointer-events:none;display:none"></div>
+    <div data-tb-i="padding" style="position:fixed;background:rgba(147,196,125,0.30);pointer-events:none;display:none"></div>
+    <div data-tb-i="content" style="position:fixed;background:rgba(111,168,220,0.30);outline:1.5px solid #6366F1;pointer-events:none;display:none"></div>
+    <div data-tb-i="tip" style="position:fixed;display:none;max-width:340px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:8px;padding:8px 10px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none;white-space:pre-wrap;word-break:break-word"></div>
+    <div data-tb-i="hint" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:7px 16px;font:12px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none">\u{1F3AF} Inspect \u2014 click an element to attach its style evidence \xB7 Esc to exit</div>
+  `;
+    document.body.appendChild(layer);
+    _root2 = layer;
+    document.body.style.cursor = "crosshair";
+    document.addEventListener("mousemove", onMove, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("keydown", onKey, true);
+  }
+  function deactivateInspectMode() {
+    if (!_active5) return;
+    _active5 = false;
+    document.removeEventListener("mousemove", onMove, true);
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("keydown", onKey, true);
+    if (_raf) cancelAnimationFrame(_raf);
+    _root2 == null ? void 0 : _root2.remove();
+    _root2 = null;
+    document.body.style.cursor = "";
+  }
+  function isOurs(el) {
+    return isTraceBugUiElement(el);
+  }
+  function box(name) {
+    var _a2;
+    return (_a2 = _root2 == null ? void 0 : _root2.querySelector(`[data-tb-i="${name}"]`)) != null ? _a2 : null;
+  }
+  function hideAll() {
+    for (const n2 of ["margin", "padding", "content", "tip"]) {
+      const el = box(n2);
+      if (el) el.style.display = "none";
+    }
+  }
+  function onMove(e2) {
+    if (!_active5) return;
+    if (_raf) cancelAnimationFrame(_raf);
+    const { clientX, clientY } = e2;
+    _raf = requestAnimationFrame(() => paint(clientX, clientY));
+  }
+  function paint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (!el || el === document.body || el === document.documentElement || isOurs(el)) {
+      hideAll();
+      return;
+    }
+    const r2 = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const m = {
+      t: parseFloat(cs.marginTop) || 0,
+      r: parseFloat(cs.marginRight) || 0,
+      b: parseFloat(cs.marginBottom) || 0,
+      l: parseFloat(cs.marginLeft) || 0
+    };
+    const p = {
+      t: parseFloat(cs.paddingTop) || 0,
+      r: parseFloat(cs.paddingRight) || 0,
+      b: parseFloat(cs.paddingBottom) || 0,
+      l: parseFloat(cs.paddingLeft) || 0
+    };
+    const place = (elBox, left, top, w, h) => {
+      if (!elBox) return;
+      elBox.style.display = "block";
+      elBox.style.left = `${left}px`;
+      elBox.style.top = `${top}px`;
+      elBox.style.width = `${Math.max(0, w)}px`;
+      elBox.style.height = `${Math.max(0, h)}px`;
+    };
+    place(box("margin"), r2.left - m.l, r2.top - m.t, r2.width + m.l + m.r, r2.height + m.t + m.b);
+    place(box("padding"), r2.left, r2.top, r2.width, r2.height);
+    place(box("content"), r2.left + p.l, r2.top + p.t, r2.width - p.l - p.r, r2.height - p.t - p.b);
+    const tip = box("tip");
+    if (tip) {
+      let label = el.tagName.toLowerCase();
+      if (el.id) label += `#${el.id}`;
+      else if (typeof el.className === "string" && el.className.trim()) label += `.${el.className.trim().split(/\s+/)[0]}`;
+      let summary = "";
+      try {
+        summary = formatStyleSummary(captureStyleEvidence(el));
+      } catch (e2) {
+      }
+      tip.textContent = `${label}
+${summary}`;
+      tip.style.display = "block";
+      const tw = tip.offsetWidth;
+      const th = tip.offsetHeight;
+      let left = x + 14;
+      let top = y + 14;
+      if (left + tw > window.innerWidth - 8) left = x - tw - 14;
+      if (top + th > window.innerHeight - 8) top = y - th - 14;
+      tip.style.left = `${Math.max(4, left)}px`;
+      tip.style.top = `${Math.max(4, top)}px`;
+    }
+  }
+  function onClick(e2) {
+    if (!_active5) return;
+    const el = document.elementFromPoint(e2.clientX, e2.clientY);
+    if (!el || isOurs(el)) return;
+    e2.preventDefault();
+    e2.stopPropagation();
+    e2.stopImmediatePropagation();
+    const rect = el.getBoundingClientRect();
+    const annotation = {
+      id: `ea_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      selector: computeElementSelector(el),
+      tagName: el.tagName.toLowerCase(),
+      innerText: (el.innerText || "").slice(0, 100),
+      boundingRect: { x: rect.x + window.scrollX, y: rect.y + window.scrollY, width: rect.width, height: rect.height },
+      intent: "inspect",
+      severity: "info",
+      comment: "Style evidence captured via Inspect",
+      page: window.location.pathname,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY
+    };
+    try {
+      annotation.styles = captureStyleEvidence(el);
+    } catch (e3) {
+    }
+    addElementAnnotation(annotation);
+    flashConfirmation(el.tagName.toLowerCase());
+    if (_onChange) {
+      try {
+        _onChange();
+      } catch (e3) {
+      }
+    }
+  }
+  function onKey(e2) {
+    if (e2.key === "Escape") {
+      e2.preventDefault();
+      e2.stopPropagation();
+      deactivateInspectMode();
+    }
+  }
+  function flashConfirmation(tag) {
+    const hint = box("hint");
+    if (!hint) return;
+    const original = hint.textContent;
+    hint.textContent = `\u2713 <${tag}> style evidence attached to the report`;
+    hint.style.background = "#14532d";
+    setTimeout(() => {
+      if (!hint.isConnected) return;
+      hint.textContent = original;
+      hint.style.background = "#0B0B10";
+    }, 1400);
+  }
+
+  // src/ui/pre-record.ts
+  init_blur_tool();
+  var COUNTDOWN_ID = "tracebug-record-countdown";
+  var ARM_BAR_ID = "tracebug-record-armbar";
+  function runRecordCountdown(seconds) {
+    const total = Math.max(1, Math.min(10, Math.round(seconds)));
+    return new Promise((resolve) => {
+      var _a2;
+      (_a2 = document.getElementById(COUNTDOWN_ID)) == null ? void 0 : _a2.remove();
+      const overlay = document.createElement("div");
+      overlay.id = COUNTDOWN_ID;
+      overlay.setAttribute(
+        "style",
+        "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
+      );
+      const num = document.createElement("div");
+      num.setAttribute(
+        "style",
+        "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);transition:transform 0.25s ease, opacity 0.25s ease;"
+      );
+      overlay.appendChild(num);
+      document.body.appendChild(overlay);
+      let n2 = total;
+      const tick = () => {
+        if (n2 <= 0) {
+          overlay.remove();
+          resolve();
+          return;
+        }
+        num.textContent = String(n2);
+        num.style.transform = "scale(1.25)";
+        num.style.opacity = "1";
+        setTimeout(() => {
+          num.style.transform = "scale(1)";
+          num.style.opacity = "0.75";
+        }, 200);
+        n2--;
+        setTimeout(tick, 1e3);
+      };
+      tick();
+    });
+  }
+  function startBlurThenRecord(opts) {
+    var _a2;
+    (_a2 = document.getElementById(ARM_BAR_ID)) == null ? void 0 : _a2.remove();
+    const root2 = document.getElementById("tracebug-root") || document.body;
+    activateBlurMode(root2);
+    const bar = document.createElement("div");
+    bar.id = ARM_BAR_ID;
+    bar.setAttribute(
+      "style",
+      "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
+    );
+    bar.innerHTML = `
+    <span>\u{1FAE5} Click elements to blur/unblur \u2014 the blur is captured into the recording</span>
+    <button data-tb-arm="undo" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Undo</button>
+    <button data-tb-arm="start" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:7px 16px;font:600 13px inherit;cursor:pointer">\u25CF Start recording</button>
+    <button data-tb-arm="cancel" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Cancel</button>
+  `;
+    document.body.appendChild(bar);
+    bar.querySelector('[data-tb-arm="undo"]').addEventListener("click", () => {
+      undoLastBlur();
+    });
+    const cleanup = () => {
+      bar.remove();
+      if (isBlurModeActive()) {
+        try {
+          deactivateBlurMode();
+        } catch (e2) {
+        }
+      }
+    };
+    bar.querySelector('[data-tb-arm="start"]').addEventListener("click", () => {
+      cleanup();
+      opts.onStart();
+    });
+    bar.querySelector('[data-tb-arm="cancel"]').addEventListener("click", () => {
+      cleanup();
+      removeAllBlurBoxes();
+      if (opts.onCancel) opts.onCancel();
+    });
+  }
+
+  // src/index.ts
   init_annotation_store();
   init_theme();
 
@@ -69976,6 +70714,10 @@ First element: \`${exampleSnippet}\``,
   init_ai_prompt();
   init_har_export();
   init_zip_export();
+  init_html_replay();
+  init_playwright_test();
+  init_style_evidence();
+  init_blur_tool();
   init_llm_client();
   init_tracker_client();
   init_pdf_generator();
@@ -70023,31 +70765,12 @@ First element: \`${exampleSnippet}\``,
      *  - enabled:         Control when SDK is active (default "auto").
      */
     init(config) {
-      var _a2, _b;
+      var _a2;
       if (this.initialized) {
         console.warn("[TraceBug] Already initialized.");
         return;
       }
-      if (!config || typeof config !== "object") {
-        console.warn("[TraceBug] init() requires a config object.");
-        return;
-      }
-      if (!config.projectId || typeof config.projectId !== "string") {
-        console.warn("[TraceBug] init() requires a projectId string.");
-        return;
-      }
-      if (config.maxEvents !== void 0 && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
-        console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
-        config.maxEvents = 200;
-      }
-      if (config.maxSessions !== void 0 && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
-        console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
-        config.maxSessions = 50;
-      }
-      if (!this.shouldEnable((_a2 = config.enabled) != null ? _a2 : "auto")) {
-        console.info("[TraceBug] Disabled in this environment.");
-        return;
-      }
+      if (!this._validateConfig(config)) return;
       try {
         this.config = {
           maxEvents: 200,
@@ -70063,124 +70786,22 @@ First element: \`${exampleSnippet}\``,
         this.initialized = true;
         this.sessionId = getActiveSessionId();
         this.recording = !!this.sessionId;
-        let themeMode = this.config.theme;
-        try {
-          const saved = localStorage.getItem("tracebug_theme_pref");
-          if (saved === "light" || saved === "dark" || saved === "auto") {
-            themeMode = saved;
-          }
-        } catch (e2) {
-        }
-        try {
-          injectTheme(themeMode);
-        } catch (e2) {
-        }
+        this._applyThemeFromConfig();
         hydratePlan().catch(() => {
         });
-        Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
-          var _a3, _b2;
-          if ((_a3 = this.config) == null ? void 0 : _a3.githubRepo) m.setGithubRepo(this.config.githubRepo);
-          m.setCloudEndpoint((_b2 = this.config) == null ? void 0 : _b2.cloudEndpoint);
-        }).catch(() => {
-        });
-        const emit = (type, data) => {
-          var _a3, _b2, _c, _d;
-          try {
-            if (!this.recording) return;
-            const sid = this.sessionId;
-            if (!sid) return;
-            let event = {
-              id: Math.random().toString(36).slice(2, 10),
-              sessionId: sid,
-              projectId: this.config.projectId,
-              type,
-              page: window.location.pathname,
-              timestamp: Date.now(),
-              data
-            };
-            event = runEventPlugins(event);
-            if (!event) return;
-            appendEvent(sid, event, this.config.maxEvents, this.config.maxSessions);
-            if (type === "error" || type === "unhandled_rejection") {
-              this.processError(sid, (_a3 = data.error) == null ? void 0 : _a3.message, (_b2 = data.error) == null ? void 0 : _b2.stack);
-              emitHook("error:captured", event);
-              this.maybePromptErrorCapture((_c = data.error) == null ? void 0 : _c.message, (_d = data.error) == null ? void 0 : _d.stack);
-            }
-          } catch (err) {
-            if (typeof console !== "undefined") console.warn("[TraceBug] Event emit error:", err);
-          }
-        };
+        this._wireQuickBugConfig();
+        const emit = this._buildEmit();
         setDevApiHooks({
           emit,
           processError: (msg, stack) => {
             if (this.sessionId) this.processError(this.sessionId, msg, stack);
           }
         });
-        this.cleanups.push(collectClicks(emit));
-        this.cleanups.push(collectInputs(emit));
-        this.cleanups.push(collectSelectChanges(emit));
-        this.cleanups.push(collectFormSubmits(emit));
-        this.cleanups.push(collectRouteChanges(emit));
-        this.cleanups.push(collectApiRequests(emit));
-        this.cleanups.push(collectXhrRequests(emit));
-        this.cleanups.push(collectPerformanceNetwork(emit));
-        this.cleanups.push(collectErrors(emit));
+        this._startCollectors(emit);
         this._emit = emit;
-        this._consoleLevel = (_b = this.config.captureConsole) != null ? _b : "all";
-        if (this.config.enableDashboard) {
-          try {
-            setRecordingState(this.recording, () => {
-              if (this.recording) {
-                this.pauseRecording();
-              } else {
-                this.resumeRecording();
-              }
-              updateRecordingState(this.recording);
-            });
-            setSessionLifecycleHandlers(
-              () => this._startActiveSession(),
-              () => this._endActiveSession()
-            );
-            setNewCaptureHandler(() => {
-              try {
-                this._startActiveSession();
-              } catch (e2) {
-              }
-            });
-            this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
-          } catch (err) {
-            console.warn("[TraceBug] Dashboard mount failed:", err);
-          }
-        }
-        wireAutoStopListener();
-        setAutoStopHandler((recording2) => this._handleAutoStop(recording2));
-        wireStartedListener();
-        setStartedHandler(() => this._handleRecordingStarted());
-        if (this.config.enableDashboard) {
-          const restoredSessionId = this.sessionId;
-          restoreFromOffscreenIfActive().then((wasActive) => {
-            if (wasActive) {
-              this._remountRecordingHud();
-              this._attachConsoleCollectors();
-            } else if (restoredSessionId && this.sessionId === restoredSessionId) {
-              if (getActiveCaptureMode() !== "events") {
-                clearActiveSessionId();
-                this.sessionId = null;
-                this.recording = false;
-                updateRecordingState(false);
-                restoreLastRecordingFromOffscreen().then((rec) => {
-                  if (rec) this._handleAutoStop(rec);
-                }).catch(() => {
-                });
-              } else {
-                this._attachConsoleCollectors();
-                if (this._emit) drainPerformanceNetwork(this._emit);
-                updateRecordingState(true);
-              }
-            }
-          }).catch(() => {
-          });
-        }
+        this._consoleLevel = (_a2 = this.config.captureConsole) != null ? _a2 : "all";
+        this._mountDashboardIfEnabled();
+        this._restoreVideoSessionOnInit();
         if (this.sessionId && getActiveCaptureMode() !== "events") {
           emitHook("session:start", this.sessionId);
         }
@@ -70192,6 +70813,167 @@ First element: \`${exampleSnippet}\``,
         this.initialized = false;
         return;
       }
+    }
+    // ── init() phases ─────────────────────────────────────────────────
+    // Extracted from init() for testability and readability. Each is a pure
+    // side-effecting phase; init() is the orchestrator. Behavior is unchanged.
+    /** Validate the config object and environment gate. Returns false (and logs)
+     *  when init should abort; may normalize invalid maxEvents/maxSessions. */
+    _validateConfig(config) {
+      var _a2;
+      if (!config || typeof config !== "object") {
+        console.warn("[TraceBug] init() requires a config object.");
+        return false;
+      }
+      if (!config.projectId || typeof config.projectId !== "string") {
+        console.warn("[TraceBug] init() requires a projectId string.");
+        return false;
+      }
+      if (config.maxEvents !== void 0 && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
+        console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
+        config.maxEvents = 200;
+      }
+      if (config.maxSessions !== void 0 && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
+        console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
+        config.maxSessions = 50;
+      }
+      if (!this.shouldEnable((_a2 = config.enabled) != null ? _a2 : "auto")) {
+        console.info("[TraceBug] Disabled in this environment.");
+        return false;
+      }
+      return true;
+    }
+    /** Inject theme CSS custom properties, honoring a per-origin user preference
+     *  saved by the modal's theme toggle; falls back to the config default. */
+    _applyThemeFromConfig() {
+      let themeMode = this.config.theme;
+      try {
+        const saved = localStorage.getItem("tracebug_theme_pref");
+        if (saved === "light" || saved === "dark" || saved === "auto") {
+          themeMode = saved;
+        }
+      } catch (e2) {
+      }
+      try {
+        injectTheme(themeMode);
+      } catch (e2) {
+      }
+    }
+    /** Wire githubRepo + cloudEndpoint into the (lazy-loaded) Quick Bug modal.
+     *  cloudEndpoint always wires through so Share reads the override even with
+     *  no githubRepo set. */
+    _wireQuickBugConfig() {
+      Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
+        var _a2, _b;
+        if ((_a2 = this.config) == null ? void 0 : _a2.githubRepo) m.setGithubRepo(this.config.githubRepo);
+        m.setCloudEndpoint((_b = this.config) == null ? void 0 : _b.cloudEndpoint);
+      }).catch(() => {
+      });
+    }
+    /** The emit function collectors call with raw event data. Reads
+     *  sessionId / recording dynamically from `this` so toggling record state
+     *  mid-session takes effect without re-wiring collectors. */
+    _buildEmit() {
+      return (type, data) => {
+        var _a2, _b, _c, _d;
+        try {
+          if (!this.recording) return;
+          const sid = this.sessionId;
+          if (!sid) return;
+          let event = {
+            id: Math.random().toString(36).slice(2, 10),
+            sessionId: sid,
+            projectId: this.config.projectId,
+            type,
+            page: window.location.pathname,
+            timestamp: Date.now(),
+            data
+          };
+          event = runEventPlugins(event);
+          if (!event) return;
+          appendEvent(sid, event, this.config.maxEvents, this.config.maxSessions);
+          if (type === "error" || type === "unhandled_rejection") {
+            this.processError(sid, (_a2 = data.error) == null ? void 0 : _a2.message, (_b = data.error) == null ? void 0 : _b.stack);
+            emitHook("error:captured", event);
+            this.maybePromptErrorCapture((_c = data.error) == null ? void 0 : _c.message, (_d = data.error) == null ? void 0 : _d.stack);
+          }
+        } catch (err) {
+          if (typeof console !== "undefined") console.warn("[TraceBug] Event emit error:", err);
+        }
+      };
+    }
+    /** Attach all event collectors, pushing their cleanups. */
+    _startCollectors(emit) {
+      this.cleanups.push(collectClicks(emit));
+      this.cleanups.push(collectInputs(emit));
+      this.cleanups.push(collectSelectChanges(emit));
+      this.cleanups.push(collectFormSubmits(emit));
+      this.cleanups.push(collectRouteChanges(emit));
+      this.cleanups.push(collectApiRequests(emit));
+      this.cleanups.push(collectXhrRequests(emit));
+      this.cleanups.push(collectPerformanceNetwork(emit));
+      this.cleanups.push(collectErrors(emit));
+    }
+    /** Mount the in-browser dashboard toolbar and wire its session handlers. */
+    _mountDashboardIfEnabled() {
+      if (!this.config.enableDashboard) return;
+      try {
+        setRecordingState(this.recording, () => {
+          if (this.recording) {
+            this.pauseRecording();
+          } else {
+            this.resumeRecording();
+          }
+          updateRecordingState(this.recording);
+        });
+        setSessionLifecycleHandlers(
+          () => this._startActiveSession(),
+          () => this._endActiveSession()
+        );
+        setNewCaptureHandler(() => {
+          try {
+            this._startActiveSession();
+          } catch (e2) {
+          }
+        });
+        this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
+      } catch (err) {
+        console.warn("[TraceBug] Dashboard mount failed:", err);
+      }
+    }
+    /** Reconnect to a live screen recording that survived a page reload.
+     *  Extension transport keeps the recording in an offscreen document, so a
+     *  reload doesn't kill it: ping for status, re-mount the HUD if still armed,
+     *  otherwise clear a stale active-session id so the next Record starts fresh. */
+    _restoreVideoSessionOnInit() {
+      wireAutoStopListener();
+      setAutoStopHandler((recording2) => this._handleAutoStop(recording2));
+      wireStartedListener();
+      setStartedHandler(() => this._handleRecordingStarted());
+      if (!this.config.enableDashboard) return;
+      const restoredSessionId = this.sessionId;
+      restoreFromOffscreenIfActive().then((wasActive) => {
+        if (wasActive) {
+          this._remountRecordingHud();
+          this._attachConsoleCollectors();
+        } else if (restoredSessionId && this.sessionId === restoredSessionId) {
+          if (getActiveCaptureMode() !== "events") {
+            clearActiveSessionId();
+            this.sessionId = null;
+            this.recording = false;
+            updateRecordingState(false);
+            restoreLastRecordingFromOffscreen().then((rec) => {
+              if (rec) this._handleAutoStop(rec);
+            }).catch(() => {
+            });
+          } else {
+            this._attachConsoleCollectors();
+            if (this._emit) drainPerformanceNetwork(this._emit);
+            updateRecordingState(true);
+          }
+        }
+      }).catch(() => {
+      });
     }
     /**
      * Begin a fresh record-driven session: mints a session ID, persists it so
@@ -70491,6 +71273,26 @@ First element: \`${exampleSnippet}\``,
      * comments without breaking flow. Comments are synced to video time and
      * attached to the bug report.
      */
+    /**
+     * Pre-recording flow: optionally let the user BLUR sensitive areas first
+     * (the blur is real backdrop blur — the redacted pixels are what the
+     * recording captures), then an optional 3-2-1 countdown, then record.
+     */
+    prepareRecording(opts = {}) {
+      const begin = () => {
+        const go = () => {
+          void this.startVideoRecording({
+            withMicrophone: !!opts.withMicrophone,
+            surfaceMode: opts.surfaceMode
+          });
+        };
+        const d = Number(opts.delaySec) || 0;
+        if (d > 0) void runRecordCountdown(d).then(go);
+        else go();
+      };
+      if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
+      else begin();
+    }
     async startVideoRecording(options) {
       var _a2;
       try {
@@ -70789,6 +71591,22 @@ First element: \`${exampleSnippet}\``,
     /** Check if draw mode is active */
     isDrawModeActive() {
       return isDrawModeActive();
+    }
+    // ── Inspect mode ───────────────────────────────────────────────────
+    /** Activate inspect mode — hover shows the box model + computed-style
+     *  summary; click attaches the element's style evidence to the report. */
+    activateInspectMode() {
+      deactivateElementAnnotateMode();
+      deactivateDrawMode();
+      activateInspectMode();
+    }
+    /** Deactivate inspect mode */
+    deactivateInspectMode() {
+      deactivateInspectMode();
+    }
+    /** Check if inspect mode is active */
+    isInspectModeActive() {
+      return isInspectModeActive();
     }
     // ── UI Annotations ─────────────────────────────────────────────────
     /** Get complete annotation report (element annotations + draw regions) */
@@ -71203,6 +72021,7 @@ First element: \`${exampleSnippet}\``,
       setRedactRules(void 0);
       deactivateElementAnnotateMode();
       deactivateDrawMode();
+      deactivateInspectMode();
       clearAllAnnotations();
       clearAllPlugins();
       clearIssues();

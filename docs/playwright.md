@@ -93,6 +93,10 @@ The reporter prints this hand-off at the end of every failing run:
 
 Behavior notes: reports are written only for the **final retry** of a failing test (no duplicates), `skipped`/`interrupted` tests are ignored, and a reporter error can never fail your test run.
 
+## The other direction: reports become failing tests
+
+The reporter turns failed tests **into** reports. The generator (v1.8+) goes the other way: every exported report embeds a runnable failing spec that replays the captured session and asserts the captured failure is gone — red while the bug exists, green after the fix. Get it via **More ▾ → Download failing test (.spec.ts)** in the Quick Bug modal, or ask an agent for it with the MCP `get_playwright_test` tool ([mcp.md](mcp.md)). SDK exports: `generatePlaywrightTest(report)` / `playwrightTestFilename(report)`.
+
 ## Cypress?
 
 On the roadmap — the artifact format is runner-agnostic, so a Cypress plugin only needs to assemble the same payload. Open an issue if you want it prioritized.

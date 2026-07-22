@@ -19,6 +19,7 @@ TraceBug silently captures these events as users interact with the app:
 | **Console Warnings** | console.warn() + console.info() arguments, 50 each (when `captureConsole: "warnings"` or `"all"`) |
 | **Console Logs** | console.log() arguments, first 50 (when `captureConsole: "all"`) |
 | **Promise Rejections** | Rejection reason + stack trace |
+| **Element Annotations** | Annotate/inspect-mode selections: selector, intent, severity, comment, plus a computed-style snapshot (typography, colors as hex, box model, WCAG contrast verdict) — surfaced in exports and over MCP |
 
 ### Privacy — what gets redacted
 
@@ -47,8 +48,10 @@ regexes that are masked at capture across all the surfaces above.
 **Limitations (please read before sharing reports externally):** masking is
 pattern-based. Free-form PII in network payloads that you haven't declared
 via `redact`, and anything visible in screenshots, video frames, or the DOM
-replay, is **not** detected. Use the blur tool for on-screen PII, and review
-the Network tab before sharing a report outside your team.
+replay, is **not** detected. Use the blur tool for on-screen PII — it's
+click-to-blur: click an element to blur it in place (captured into the video
+and masked in the DOM replay), click again to unblur — and review the
+Network tab before sharing a report outside your team.
 
 ### Framework Noise Filtering
 
@@ -104,7 +107,7 @@ When you're done reproducing the bug, click the **recording toggle** to stop, or
 - Auto-filled title and description (root cause, steps, environment, errors, failed requests)
 - **Primary preview** of the first screenshot
 - **Numbered thumbnail strip** of every other screenshot; click any thumbnail to swap it into the primary preview
-- Export actions: **Export .html** (interactive replay), **Export HAR**, **Fix with AI**, and under **More ▾** — **Export for AI (.html)**, **Download report (.md)**, **Download screenshots**, and file a real GitHub / Linear / Slack / Jira issue. See [ticket-flow.md](ticket-flow.md#step-4--export).
+- Export actions: **Export .html** (interactive replay), **Export HAR**, **Fix with AI**, and under **More ▾** — **Download .zip** (attach to GitHub), **Download failing test (.spec.ts)** (a Playwright spec that fails until the bug is fixed), **Export for AI (.html)**, **Download report (.md)**, **Download screenshots**, and file a real GitHub / Linear / Slack / Jira issue. See [ticket-flow.md](ticket-flow.md#step-4--export).
 - Press `Ctrl+Shift+B` (or call `TraceBug.quickCapture()`) to open the same modal at any time
 
 ### Screenshot with Annotations

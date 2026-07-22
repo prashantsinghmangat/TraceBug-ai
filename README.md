@@ -76,7 +76,8 @@ stream (rrweb), environment, and a redacted Web-Storage snapshot
 Review the ticket, then export:
   • Export .html          — self-contained interactive DOM replay (KB, not MB)
   • Export for AI (.html) — tiny text-only report to paste into a chat
-  • Download report (.md) · Export HAR · file a real GitHub/Linear/Slack/Jira issue
+  • Download report (.md) · .zip (GitHub-attachable) · failing test (.spec.ts)
+  • Export HAR · file a real GitHub/Linear/Slack/Jira issue
   ↓
 Complete report includes:
   - Auto-generated title + smart summary + root-cause hint (high/medium/low confidence)
@@ -168,7 +169,9 @@ Your coding agent (Claude Code, Cursor, Windsurf, VS Code) reads TraceBug bug re
 claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
 ```
 
-The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets six tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, and `get_screenshot` (real image content). `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
+The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets nine tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, `get_screenshot` (real image content), `get_playwright_test`, `resolve_stack`, and `get_fix_context`. `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
+
+The last three close the fix loop (v1.9): `get_playwright_test` returns the generated **failing Playwright spec** that replays the session and asserts the captured failure is gone — red until the bug is fixed, green after — so the agent can run it, patch, and re-run until green. `resolve_stack` maps the report's minified stack frames to original source files/lines using `.map` files found in the repo the server runs from. `get_fix_context` is a one-call fix starter: the failing request with response snippet, the user action that triggered it, the source-map-resolved top stack frames, and whether a failing test is available.
 
 Kicking off is one paste: the extension shows a ready-made agent prompt after every **Export .html** (auto-copied), the exported file itself carries the same prompt in its **AI** tab, and in Claude Code you can just type `/tracebug:debug_bug_report`.
 
@@ -195,6 +198,25 @@ Combined with the local heuristic hint and the local MCP server, this is **AI de
 
 One click exports the captured network activity as a standard **HAR 1.2** file that opens in DevTools, Charles, Fiddler, or Postman. No competitor ships this — Jam even markets "everything a HAR offers" without the export. Your network capture is a portable file you own, not a row in someone's cloud. See [docs/har-export.md](docs/har-export.md).
 
+### 🧪 Generated Failing Playwright Test (v1.9)
+
+Every export carries a runnable Playwright spec that **replays the captured session** (locators prefer `data-testid` → id → aria-label → role+name → captured CSS selector) and **asserts the captured failure is gone** — the failing endpoint must stop failing, the console errors must stop being thrown. Red while the bug exists, green after the fix. Get it three ways: **Download failing test (.spec.ts)** in the Quick Bug More menu, embedded in the `.html` export, or via the MCP `get_playwright_test` tool — so an agent can run it, patch, and re-run until green.
+
+### 🔎 Inspect Mode — Style Evidence for Design-QA Bugs (v1.9)
+
+"The button looks wrong" now ships with the receipts. A DevTools-style inspect mode (extension popup → **Inspect element**, or `TraceBug.activateInspectMode()`): hover paints the box-model highlight plus a computed-style summary tooltip; click attaches the element to the report with a curated style snapshot — typography, colors as hex, box model — plus a **WCAG text-contrast verdict** (ratio + AA pass/fail). Surfaced on annotation cards, in generated GitHub issues, in the export, and as structured data MCP agents get from `get_bug_report`.
+
+### 🎬 Pre-Recording Options + Element-Level Blur (v1.9)
+
+The extension popup's **⚙ Record options** panel picks the capture surface (current tab / desktop picker), an optional 3s/5s countdown, and **Blur before recording** — redact sensitive areas *before* the first frame is captured. Also public SDK API: `TraceBug.prepareRecording({ blurFirst, delaySec, surfaceMode, withMicrophone })`.
+
+Blur itself is element-level, click-to-blur: hover highlights, click applies `filter: blur(12px)` **to the element itself**, click again unblurs. Because the blur is part of the element's own rendering, it physically cannot lag behind scrolling. Blurred elements also get `tb-mask`, so the DOM replay masks their text, not just the video pixels.
+
+### 📦 Reports the Recipient Can Act On (v1.8)
+
+- **Download .zip (attach to GitHub)** — the same offline replay wrapped in a `.zip`, because GitHub issues accept `.zip` attachments by drag-and-drop but reject bare `.html`.
+- **Issue actions inside the exported report** — the viewer header has **Open GitHub issue** (prefilled URL when the exporter configured `githubRepo`) and **Copy issue markdown** (fully offline, pastes into any tracker). Both are precomputed at export time from the already-redacted report.
+
 ### Auto-Captured (Zero Effort)
 
 | What | Details |
@@ -206,7 +228,7 @@ One click exports the captured network activity as a standard **HAR 1.2** file t
 | **Navigation** | Route from → to (supports pushState, replaceState, popstate) |
 | **API Requests** | URL, method, status code, response time (both `fetch` and `XMLHttpRequest`) |
 | **Errors** | Message, stack trace, source file, line, column |
-| **Console Errors** | `console.error()` calls |
+| **Console** | `console.error` + `warn` + `info` + `log` (each non-error level capped at 50/session); warn/info render in the repro timeline |
 | **Unhandled Rejections** | Promise rejection reason + stack |
 | **Environment** | Browser, OS, viewport, device type, connection, language, timezone |
 
@@ -511,7 +533,7 @@ Review and edit the ticket, then export or file it:
 - Auto-generated title, summary, root-cause hint, reproduction steps, timeline
 - Interactive DOM replay (or the screen recording), screenshots gallery
 - Tabs: Info · Console · Network · Actions · AI · Events
-- Export: **Export .html** (replay) · **Export for AI (.html)** · **Download report (.md)** · **Export HAR**
+- Export: **Export .html** (replay) · **Export for AI (.html)** · **Download report (.md)** · **Download .zip** (GitHub-attachable) · **Download failing test (.spec.ts)** · **Export HAR**
 - File directly: GitHub · Linear · Slack · Jira (real issues with a configured token)
 
 ## Keyboard Shortcuts
@@ -536,6 +558,11 @@ Full documentation is in the [`docs/`](docs/) folder:
 - [Annotate & Draw](docs/annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](docs/chrome-extension.md) — Extension install & usage
 - [Architecture](docs/architecture.md) — How TraceBug works internally
+- [ADRs](docs/adr/README.md) — Why local-first, single-file HTML, rrweb, MV3, zero deps
+- [Performance](docs/performance.md) — Measured numbers + the reproducible benchmark
+- [Compatibility](docs/compatibility.md) — Browser matrix, support policy, known limitations
+- [Migration Guide](docs/migrating.md) — Upgrade notes and API stability
+- [Roadmap](ROADMAP.md) — Shipped · in progress · planned · long-term
 
 ## Chrome Extension
 
@@ -623,6 +650,9 @@ npm run dev
 ## Privacy
 
 - Sensitive fields auto-redacted (`password`, `secret`, `token`, `ssn`, `credit`)
+- ~20 token-shape patterns masked at capture (JWT, `Bearer` headers, cloud provider keys) — a logged secret never enters the report object
+- The export flow and the exported report show exactly what was masked: `🛡 N sensitive values auto-masked`
+- App-specific PII covered via `redact: { fields, patterns }` in config — also settable in the extension popup's 🛡 Redaction rules section
 - All data stays in `localStorage` — nothing leaves the browser
 - SDK never captures its own UI interactions
 - No external servers, no tracking, no analytics

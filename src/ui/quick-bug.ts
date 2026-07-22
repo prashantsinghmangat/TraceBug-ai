@@ -15,14 +15,16 @@ import { generateGitHubIssue, openGitHubIssue } from "../github-issue";
 import { generateJiraTicket } from "../jira-issue";
 import { generateBugTitle, generateFlowSummary } from "../title-generator";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
+import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast } from "./toast";
 import { escapeHtml, tbIsolationCss } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
-import { exportSessionAsHtml } from "../exporters/html-replay";
+import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
 import { exportSessionAsZip } from "../exporters/zip-export";
+import { generatePlaywrightTest, playwrightTestFilename } from "../exporters/playwright-test";
 import { exportSessionAsHar } from "../exporters/har-export";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 // PHASE2-CLOUD: import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
@@ -118,6 +120,36 @@ type ModalOverlayElement = HTMLElement & {
 /** Check if quick bug modal is currently open */
 export function isQuickBugOpen(): boolean {
   return _isOpen;
+}
+
+/** Visible, focusable descendants of a container, in DOM order — the tab ring
+ *  for the modal's focus trap. Hidden tab-panels (display:none) are excluded
+ *  because their controls have no client rects. Exported for tests. */
+export function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  const sel =
+    'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+    'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  return Array.from(container.querySelectorAll<HTMLElement>(sel)).filter(
+    (el) => el.getClientRects().length > 0
+  );
+}
+
+/** Keep Tab / Shift+Tab focus inside the modal (WCAG 2.4.3 / 2.1.2). Returns
+ *  true if it handled the event (caller should stop). Exported for tests. */
+export function trapModalTab(e: KeyboardEvent, modal: HTMLElement): boolean {
+  if (e.key !== "Tab") return false;
+  const f = getFocusableElements(modal);
+  if (f.length === 0) { e.preventDefault(); return true; }
+  const first = f[0];
+  const last = f[f.length - 1];
+  const active = document.activeElement as HTMLElement | null;
+  const inside = active && modal.contains(active);
+  if (e.shiftKey) {
+    if (!inside || active === first) { e.preventDefault(); last.focus(); return true; }
+  } else {
+    if (!inside || active === last) { e.preventDefault(); first.focus(); return true; }
+  }
+  return false;
 }
 
 /** Force the modal to re-render with fresh state. Used after a screenshot
@@ -574,6 +606,7 @@ function _openModal(
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
           <div class="tb-qb-more-menu" data-open="false" role="menu">
             <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip — GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
+            <button data-action="export-spec" class="tb-qb-more-item" role="menuitem" title="A runnable Playwright test that replays this session and asserts the captured failure is gone — fails until the bug is fixed, passes after">${_ic("fileCode")} Download failing test (.spec.ts)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report — upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
             ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
@@ -775,6 +808,9 @@ function _openModal(
       if (e.key === "Escape" || e.key === "?") { e.preventDefault(); toggleHelp(false); }
       return;
     }
+    // Focus trap runs BEFORE the typing-target guard — Tab must be caught even
+    // when focus is in a field (that's exactly the escape case to prevent).
+    if (trapModalTab(e, modal)) return;
     if (isTypingTarget(e.target)) return;
     if (e.key === "?" || (e.shiftKey && e.key === "/")) { e.preventDefault(); toggleHelp(true); return; }
     if (e.key === "t" || e.key === "T") {
@@ -966,6 +1002,32 @@ function _openModal(
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Replay export failed", root);
+    }
+  });
+
+  // Download failing test — a Playwright spec that replays the session and
+  // asserts the captured failure is gone. Red until fixed, green after.
+  modal.querySelector('[data-action="export-spec"]')?.addEventListener("click", () => {
+    if (!data.currentSession) {
+      showToast("No session to export yet", root);
+      return;
+    }
+    try {
+      const report = buildReport(data.currentSession);
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const spec = generatePlaywrightTest(report);
+      if (!spec) {
+        showToast("No replayable user actions in this session", root);
+        return;
+      }
+      const blob = new Blob([spec], { type: "text/plain;charset=utf-8" });
+      const filename = playwrightTestFilename(report);
+      triggerDownload(URL.createObjectURL(blob), filename);
+      showToast(`✓ ${filename} — run with: npx playwright test ${filename}`, root);
+    } catch (err) {
+      console.warn("[TraceBug] Failing-test export failed:", err);
+      showToast("Test export failed", root);
     }
   });
 
@@ -2528,6 +2590,27 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   });
 }
 
+function _styleSummaryLine(s: import("../style-evidence").StyleEvidence): string {
+  try { return "Styles: " + formatStyleSummary(s); } catch { return "Styles captured"; }
+}
+
+function _styleDetails(s: import("../style-evidence").StyleEvidence): string {
+  const rows: string[] = [];
+  const add = (group: string, obj: Record<string, string>) => {
+    for (const [k, v] of Object.entries(obj)) rows.push(`${group}.${k}: ${v}`);
+  };
+  try {
+    add("font", s.typography as unknown as Record<string, string>);
+    add("color", s.colors as unknown as Record<string, string>);
+    add("box", s.box as unknown as Record<string, string>);
+    add("layout", s.layout as unknown as Record<string, string>);
+    if (s.contrast) {
+      rows.push(`contrast: ${s.contrast.ratio}:1 (${s.contrast.aa ? "passes" : "FAILS"} WCAG AA) — ${s.contrast.foreground} on ${s.contrast.background}`);
+    }
+  } catch {}
+  return rows.join("\n");
+}
+
 function _buildAnnotationsTab(session: StoredSession | null): string {
   const sessAnn = session?.annotations || [];
   let els: import("../types").ElementAnnotation[] = [];
@@ -2555,6 +2638,11 @@ function _buildAnnotationsTab(session: StoredSession | null): string {
         <div class="tb-qb-note-sev">${escapeHtml(e.intent)} \u00b7 ${escapeHtml(e.severity)}</div>
         <div class="tb-qb-note-text">${escapeHtml(e.comment || "")}</div>
         <div class="tb-qb-note-line"><code>${escapeHtml(e.selector)}</code> \u2014 ${escapeHtml((e.innerText || "").slice(0, 60))}</div>
+        ${e.styles ? `
+        <details class="tb-qb-note-styles">
+          <summary>${escapeHtml(_styleSummaryLine(e.styles))}</summary>
+          <pre class="tb-qb-note-styles-pre">${escapeHtml(_styleDetails(e.styles))}</pre>
+        </details>` : ""}
       </div>
     `).join("")}
   ` : "";
@@ -2913,6 +3001,10 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-tip { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-tip-right { display:inline-flex; align-items:center; gap:12px; }
     #${MODAL_ID} .tb-qb-privacy { color:var(--tb-success, #2e9e5b); cursor:help; }
+    #${MODAL_ID} .tb-qb-note-styles { margin-top:6px; }
+    #${MODAL_ID} .tb-qb-note-styles summary { font-size:11px; color:var(--tb-text-muted); cursor:pointer; font-family:var(--tb-font-mono); }
+    #${MODAL_ID} .tb-qb-note-styles summary:hover { color:var(--tb-text-primary); }
+    #${MODAL_ID} .tb-qb-note-styles-pre { margin:6px 0 0; padding:8px 10px; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:8px; font-family:var(--tb-font-mono); font-size:10.5px; line-height:1.6; white-space:pre-wrap; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-fb { color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-fb a { text-decoration:none; margin-left:4px; opacity:0.75; transition:opacity .15s, transform .15s; display:inline-block; }
     #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }

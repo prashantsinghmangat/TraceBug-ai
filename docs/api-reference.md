@@ -25,7 +25,7 @@ TraceBug.init({
   maxSessions: 50,            // Default: 50
   enableDashboard: true,      // Default: true
   enabled: "auto",            // Default: "auto"
-  theme: "dark",              // Default: "dark"
+  theme: "light",             // Default: "light"
   toolbarPosition: "right",   // Default: "right"
   minimized: false,           // Default: false
   captureConsole: "all",      // Default: "all"
@@ -42,7 +42,7 @@ TraceBug.init({
 | `maxSessions` | `number` | `50` | Max sessions kept in localStorage |
 | `enableDashboard` | `boolean` | `true` | Show the compact toolbar on page |
 | `enabled` | `string \| string[]` | `"auto"` | Controls when SDK is active (see [Configuration](configuration.md)) |
-| `theme` | `"dark" \| "light" \| "auto"` | `"dark"` | Color theme (`"auto"` follows system preference) |
+| `theme` | `"dark" \| "light" \| "auto"` | `"light"` | Color theme (`"auto"` follows system preference) |
 | `toolbarPosition` | `"right" \| "left" \| "bottom-right" \| "bottom-left"` | `"right"` | Toolbar position on screen |
 | `minimized` | `boolean` | `false` | Start in minimized FAB mode |
 | `captureConsole` | `"errors" \| "warnings" \| "all" \| "none"` | `"all"` | Console capture level (see [Configuration](configuration.md)) |
@@ -170,6 +170,8 @@ The modal:
 | **Export HAR** | Network capture as a standard `.har` (DevTools / Charles / Postman). |
 | **Fix with AI** | Builds the structured AI prompt and opens Claude / ChatGPT (or runs BYO-key analysis in the AI tab). |
 | **Open in GitHub** | Prefilled GitHub issue (shown when `githubRepo` is set), or files a real issue if a token is configured. |
+| **Download .zip (attach to GitHub)** *(More)* | The replay `.html` wrapped in a `.zip` — GitHub issues accept `.zip` attachments but reject bare `.html`. |
+| **Download failing test (.spec.ts)** *(More)* | Runnable Playwright spec that replays the session and asserts the failure is gone — red until fixed. |
 | **Export for AI (.html)** *(More)* | Tiny (~5 KB) text-only HTML report — paste/upload into a chat, no MCP needed. |
 | **Download report (.md)** *(More)* | Compact markdown report. |
 | **Download screenshots** *(More)* | Raw PNG(s) to attach alongside the `.md`. |
@@ -318,6 +320,40 @@ Check if annotate mode is currently active.
 - Hold `Shift` and click to select multiple elements
 - Right-click to open feedback for multi-selected elements
 - Press `Esc` to exit
+
+---
+
+## Inspect Mode (Style Evidence)
+
+DevTools-style element inspection for design-QA bugs. Hover paints a box-model highlight (margin / padding / content tint) plus a computed-style tooltip; click attaches the element to the report as an `inspect` annotation with a curated ~20-property style snapshot (typography, colors as hex, box model, layout) and a WCAG contrast verdict. See [annotate-and-draw.md](annotate-and-draw.md).
+
+### `TraceBug.activateInspectMode()`
+
+Enter inspect mode (also on the extension popup as **Inspect element**). Press `Esc` to exit.
+
+### `TraceBug.deactivateInspectMode()`
+
+Exit inspect mode.
+
+### `TraceBug.isInspectModeActive(): boolean`
+
+Check if inspect mode is currently active.
+
+### Style-evidence helpers (named exports)
+
+```typescript
+import { captureStyleEvidence, formatStyleSummary, contrastRatio, cssColorToHex } from "tracebug-sdk";
+import type { StyleEvidence } from "tracebug-sdk";
+```
+
+| Export | What it does |
+|---|---|
+| `captureStyleEvidence(el): StyleEvidence` | Snapshot the curated computed-style evidence for an element: `typography`, `colors`, `box`, `layout`, plus optional `contrast` (ratio + AA / AA-large pass, omitted when the element has no visible text). |
+| `formatStyleSummary(s): string` | One-line summary, e.g. `13.5px/20px 600 Inter · color #ffffff on #4f46e5 · 686px×38px · contrast 6.29:1` |
+| `contrastRatio(fg, bg): number \| null` | WCAG contrast ratio (1–21) between two computed CSS colors; `null` for unparseable input. |
+| `cssColorToHex(css): string` | Computed `rgb()/rgba()` → `#rrggbb` (alpha appended as ` / NN%` when < 1). |
+
+Annotate-mode annotations capture the same evidence automatically — it rides on `ElementAnnotation.styles`.
 
 ---
 
@@ -649,6 +685,48 @@ const json = TraceBug.exportSessionJSON();
 
 ---
 
+## Export & Redaction Helpers (v1.8+)
+
+Named exports — no TraceBug instance needed.
+
+### `generatePlaywrightTest(report): string | null`
+
+Generate a runnable **failing Playwright spec** that replays the captured session (locator preference: `data-testid` → id → aria-label → role+name → captured CSS selector) and asserts the captured failure is gone — red while the bug exists, green after the fix. Returns `null` when the session has no replayable user actions. Redacted input values become `TODO` placeholders.
+
+### `playwrightTestFilename(report): string`
+
+The suggested `.spec.ts` filename for the generated test. The spec is also embedded in the `.html` export and served by the MCP `get_playwright_test` tool.
+
+### `exportSessionAsZip(session, report, options?)` / `buildZipBlob(entries): Promise<Blob>`
+
+The self-contained replay `.html` wrapped in a `.zip` — GitHub issues accept `.zip` attachments by drag-and-drop but reject bare `.html`. Zero-dependency writer: `CompressionStream("deflate-raw")` when available, STORE fallback.
+
+### `summarizeRedactions(report): RedactionSummary`
+
+Count the `[REDACTED]` markers in a built report by category — tokens, URL params, form fields, storage values.
+
+### `formatRedactionSummary(summary): string | null`
+
+Render the summary line shown in the export modal and the exported Info tab — `"4 sensitive values auto-masked (2 tokens, 1 URL param, 1 form field)"`. Returns `null` when nothing was masked.
+
+### `setRedactRules(rules: RedactRules)`
+
+Swap the app-specific redaction rules (`{ fields?, patterns? }`) at runtime — same shape as the `redact` init option ([configuration.md](configuration.md#redact)).
+
+### `runRecordCountdown(seconds): Promise<void>`
+
+Fullscreen 3-2-1 countdown overlay; resolves when it hits zero. Used by `prepareRecording({ delaySec })`.
+
+### `startBlurThenRecord({ onStart, onCancel? })`
+
+Arm the element-level blur tool with the floating "● Start recording / Undo / Cancel" bar; `onStart` fires with the blurs still applied so the recording captures them from its first frame. Cancel unblurs everything.
+
+### `isBlurModeActive(): boolean` / `removeAllBlurBoxes()`
+
+Whether the blur picker is currently active / unblur every element (placed blurs otherwise persist until the recording stops).
+
+---
+
 ## Standalone Exports
 
 These functions can be imported directly without the TraceBug instance:
@@ -687,6 +765,26 @@ import {
   isVoiceRecording,
   getVoiceTranscripts,
   clearVoiceTranscripts,
+  // Failing-test generator (v1.8+)
+  generatePlaywrightTest,
+  playwrightTestFilename,
+  // Zip export (v1.8+)
+  exportSessionAsZip,
+  buildZipBlob,
+  // Redaction (v1.8+)
+  summarizeRedactions,
+  formatRedactionSummary,
+  setRedactRules,
+  // Style evidence (v1.8+)
+  captureStyleEvidence,
+  formatStyleSummary,
+  contrastRatio,
+  cssColorToHex,
+  // Pre-recording + blur (v1.8+)
+  runRecordCountdown,
+  startBlurThenRecord,
+  isBlurModeActive,
+  removeAllBlurBoxes,
 } from "tracebug-sdk";
 ```
 
@@ -718,6 +816,10 @@ import type {
   ClickedElementSummary,
   NetworkErrorEntry,
   NetworkFailure,
+  // v1.8+
+  StyleEvidence,
+  RedactRules,
+  RedactionSummary,
 } from "tracebug-sdk";
 ```
 
@@ -804,6 +906,19 @@ interface ClickedElementSummary {
 ## Sentry Mode (Rolling Video Buffer)
 
 Arm a screen-share once, file multiple bug tickets from the same recording. Inspired by NVIDIA Shadowplay / OBS replay buffer.
+
+### `TraceBug.prepareRecording(options?)`
+
+Pre-roll flow for `startVideoRecording()`: optionally arm the element-level **blur tool** first (a floating "● Start recording / Undo / Cancel" bar — the blurs are captured from the very first frame), then an optional on-page 3-2-1 countdown, then record. This is what the extension popup's **⚙ Record options** panel calls.
+
+```typescript
+TraceBug.prepareRecording({
+  blurFirst: true,       // click elements to blur/unblur before capture starts
+  delaySec: 3,           // on-page countdown before recording rolls (0 = none)
+  surfaceMode: "tab",    // "tab" (current tab) | "desktop" (window/screen picker)
+  withMicrophone: false,
+});
+```
 
 ### `TraceBug.startVideoRecording(options?): Promise<boolean>`
 
@@ -963,7 +1078,7 @@ These features were removed from the default toolbar in v1.0 to reduce noise. Th
 | Draw Mode | `TraceBug.activateDrawMode()`, `deactivateDrawMode()`, `isDrawModeActive()` |
 | Annotation list / export | `getAnnotationReport()`, `exportAnnotationsJSON()`, `exportAnnotationsMarkdown()`, `copyAnnotationsToClipboard("json"\|"markdown")`, `clearAnnotations()` |
 | PDF report | `TraceBug.downloadPdf()` (free shows upgrade modal) |
-| First-run onboarding tour | Runs automatically on first mount (`src/onboarding.ts`); not a public export |
+| First-run attention cue | A one-time logo pulse on first mount (`src/onboarding.ts`); the original 4-step tooltip tour was removed in 1.7.0. Not a public export |
 | Plain text export | Build manually from `TraceBug.generateReport()` |
 
 The `shortcuts.annotate` and `shortcuts.draw` config keys are still typed in `TraceBugConfig` for backwards compatibility but are no-ops in v1.0.

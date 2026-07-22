@@ -12,6 +12,8 @@ import { buildReplayHtml, BundlePayload } from "./html-template";
 import { priorityLabel } from "../report-builder";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 import { generateGitHubIssue, generateGitHubIssueUrl } from "../github-issue";
+import { generatePlaywrightTest, playwrightTestFilename } from "./playwright-test";
+import { formatStyleSummary, type StyleEvidence } from "../style-evidence";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -222,7 +224,7 @@ async function buildReplayPayload(
       environment: formatEnv(report),
       durationMs: estimateDuration(report.session, report),
     },
-    description: options?.descriptionOverride ?? report.steps ?? "",
+    description: withElementEvidence(options?.descriptionOverride ?? report.steps ?? "", report),
     events: timeline,
     screenshots: report.screenshots.map(s => ({
       timestamp: s.timestamp,
@@ -251,6 +253,16 @@ async function buildReplayPayload(
       expected: a.expected,
       actual: a.actual,
     })),
+    elementAnnotations: (report.elementAnnotations || []).map(a => ({
+      selector: a.selector,
+      tagName: a.tagName,
+      innerText: a.innerText || undefined,
+      intent: a.intent,
+      severity: a.severity,
+      comment: a.comment,
+      styleSummary: a.styles ? safeStyleSummary(a.styles) : undefined,
+      styles: a.styles,
+    })),
     rootCauseHint: report.rootCause ? {
       hint: report.rootCause.hint,
       confidence: report.rootCause.confidence,
@@ -259,6 +271,7 @@ async function buildReplayPayload(
     // the viewer ships zero issue-builder code. Token-free actions only;
     // API-token integrations stay in the exporter's modal.
     github: buildGithubPayload(report, options?.githubRepo),
+    ...buildPlaywrightPayload(report),
   };
 
   // Compress the DOM-replay stream. It's repetitive text and gzips ~8–12×, so
@@ -287,6 +300,41 @@ async function buildReplayPayload(
   const html = buildReplayHtml(payload, rrwebExtras);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   return { blob, html };
+}
+
+function safeStyleSummary(styles: StyleEvidence): string | undefined {
+  try { return formatStyleSummary(styles); } catch { return undefined; }
+}
+
+/** Append the human-readable element-evidence block to the description so it
+ *  renders in the viewer's Description panel with zero viewer-JS changes. */
+function withElementEvidence(description: string, report: BugReport): string {
+  const anns = report.elementAnnotations || [];
+  if (!anns.length) return description;
+  const lines = [description.trimEnd(), "", "**Element evidence:**"];
+  for (const a of anns) {
+    lines.push(`- [${a.intent}/${a.severity}] \`${a.selector}\` — ${a.comment}`);
+    if (a.styles) {
+      const summary = safeStyleSummary(a.styles);
+      if (summary) lines.push(`  ${summary}`);
+      if (a.styles.contrast && !a.styles.contrast.aa) {
+        lines.push(`  ⚠ Text contrast ${a.styles.contrast.ratio}:1 fails WCAG AA (${a.styles.contrast.foreground} on ${a.styles.contrast.background})`);
+      }
+    }
+  }
+  return lines.join("\n").trimStart();
+}
+
+function buildPlaywrightPayload(
+  report: BugReport
+): Pick<BundlePayload, "playwrightTest" | "playwrightTestFilename"> {
+  try {
+    const spec = generatePlaywrightTest(report);
+    if (!spec) return {};
+    return { playwrightTest: spec, playwrightTestFilename: playwrightTestFilename(report) };
+  } catch {
+    return {};
+  }
 }
 
 function buildGithubPayload(

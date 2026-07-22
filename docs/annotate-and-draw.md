@@ -1,4 +1,29 @@
-# Annotate & Draw
+# Annotate, Inspect & Draw
+
+## Inspect Mode — style evidence for design-QA bugs
+
+The newest of the three modes, and the only one with a first-class UI entry
+point: the extension popup's **Inspect element** button (or
+`TraceBug.activateInspectMode()`).
+
+- **Hover** any element → a DevTools-style box-model highlight (margin /
+  padding / content tint) plus a tooltip with the computed-style summary:
+  `13.5px/20px 600 Inter · color #ffffff on #4f46e5 · 686px×38px · pad 10px 16px · contrast 6.29:1`
+- **Click** → the element is attached to the report as an `inspect`
+  annotation carrying a curated ~20-property snapshot: typography, colors
+  (as hex), box model, layout, and a **WCAG text-contrast verdict** (ratio +
+  AA pass/fail, large-text aware).
+- **Esc** exits.
+
+The evidence surfaces everywhere the report goes: an expandable **Styles**
+block on annotation cards in the Quick Bug modal, an **Element Evidence**
+section in generated GitHub issues, the export's Description panel, and
+structured `elementAnnotations` over MCP (`get_bug_report`) so an AI agent
+can diff the captured styles against the design tokens in the codebase.
+
+Regular annotate-mode annotations (below) capture the same style snapshot
+automatically.
+
 
 > **v1.0 status — programmatic only.** Both modes were cut from the default toolbar in v1.0 to reduce overlap with the screenshot-annotation editor. The source files still ship in the bundle and the public API is unchanged — anything below works if you call it from your own code or a plugin. The `Ctrl+Shift+A` and `Ctrl+Shift+D` shortcuts are not wired in v1.0.
 >
@@ -11,7 +36,7 @@
 > TraceBug.deactivateDrawMode();
 > ```
 
-TraceBug provides two visual feedback modes for marking up UI issues directly on the live page — no screenshots needed.
+TraceBug also provides visual feedback modes for marking up UI issues directly on the live page — no screenshots needed: annotate, draw, and the element-level blur tool.
 
 ## Element Annotate Mode
 
@@ -55,6 +80,7 @@ Each element annotation records:
 | Comment | Your description of the issue |
 | Page URL | Which page the annotation is on |
 | Scroll position | Where the page was scrolled to |
+| Style snapshot | The same curated computed-style evidence as inspect mode (typography, colors as hex, box model, WCAG contrast) — captured automatically on save |
 
 ### Persistent Badges
 
@@ -111,6 +137,30 @@ Each draw region records:
 Saved regions display on the canvas with:
 - A **colored number pill** in the top-left corner
 - A **comment preview** next to the number (first 40 characters)
+
+## Blur Tool (element-level redaction)
+
+The blur tool redacts sensitive on-screen content before or during a
+recording. Unlike draw mode, it is **element-level — no dragging**:
+
+1. **Activate** — the recording HUD's droplet **Blur** button, the extension
+   popup's **Blur before recording** option, or programmatically via
+   `TraceBug.prepareRecording({ blurFirst: true })` /
+   `startBlurThenRecord(...)`
+2. **Hover** highlights an element; **click** applies `filter: blur(12px)`
+   to the element itself. Because the blur is part of the element's own
+   rendering it moves in the same paint as the content — it can't lag
+   behind scrolling the way overlay boxes did
+3. **Click again** to unblur; **Undo** on the pre-record arming bar removes
+   the most recent blur
+4. **Esc** (or deactivating) exits the picker — placed blurs stay
+
+Blurred elements also get the `tb-mask` class, so the rrweb DOM replay
+masks their text — not just the video pixels. Blurs persist through the
+recording and are removed (original inline `filter` restored) when it
+stops.
+
+Named exports: `isBlurModeActive()`, `removeAllBlurBoxes()`.
 
 ## Viewing Annotations
 

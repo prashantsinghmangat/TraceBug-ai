@@ -255,6 +255,14 @@ export { expect } from "@playwright/test";`}
   then /tracebug:debug_bug_report — or open the .html in a browser.`}
               </pre>
             </div>
+            <p className="text-text-muted text-sm mt-4 leading-relaxed">
+              The loop also runs the other way: every report exported from the
+              widget embeds a <strong className="text-text-primary">generated failing
+              Playwright spec</strong> that replays the captured session and asserts
+              the failure is gone — the agent fetches it with{" "}
+              <code className="text-primary bg-surface px-1 rounded">get_playwright_test</code>,
+              runs it red, fixes, and reruns until green.
+            </p>
           </section>
 
           {/* What ends up in the report */}

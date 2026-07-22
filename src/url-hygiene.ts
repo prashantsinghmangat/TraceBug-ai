@@ -10,6 +10,22 @@
 //    path segments (content hashes, camo hex, JWTs-in-path) get a middle
 //    ellipsis, and the whole path is capped.
 
+// ── Sensitive query-param detection (single source of truth) ──────────────
+// Both the capture-time URL redactor (collectors.ts) and the defense-in-depth
+// upload sanitizer (sanitize/cloud-upload.ts) must agree on which query-param
+// NAMES are sensitive — they used to keep two separate lists that drifted
+// (one caught `sig`/`signature`, the other caught `session`/`sid`/`csrf`; each
+// under-redacted what the other caught). This regex is the strict union, so
+// neither path ever redacts less than before. Substring, case-insensitive:
+// `key` matches `api_key`/`x-api-key`, `token` matches `access_token`, etc.
+const SENSITIVE_PARAM_RE =
+  /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
+
+/** True when a query-param name looks sensitive and its value must be masked. */
+export function isSensitiveParamName(name: string | undefined): boolean {
+  return !!name && SENSITIVE_PARAM_RE.test(name);
+}
+
 /** Static-asset file extensions — failures here are resource noise, not APIs. */
 const ASSET_EXT_RE =
   /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;

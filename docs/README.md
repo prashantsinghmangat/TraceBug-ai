@@ -13,7 +13,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [configuration.md](configuration.md) | Every `TraceBug.init()` option and defaults; session behavior. |
 | [bug-reporting.md](bug-reporting.md) | The Quick Bug modal and Saved Tickets. |
 | [ticket-flow.md](ticket-flow.md) | Capture → review → export, step by step (incl. all export formats). |
-| [annotate-and-draw.md](annotate-and-draw.md) | Element annotation + draw/redact modes (programmatic in v1.0). |
+| [annotate-and-draw.md](annotate-and-draw.md) | Inspect mode (style evidence), element annotation, draw mode, and click-to-blur redaction. |
 | [chrome-extension.md](chrome-extension.md) | Using TraceBug as a browser extension. |
 
 ## Exports, agents & integrations
@@ -24,7 +24,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [ai-debugger.md](ai-debugger.md) | BYO-key LLM root-cause analysis (Anthropic / OpenAI / Ollama). |
 | [integrations.md](integrations.md) | File real GitHub / Linear / Slack / Jira issues from a report. |
 | [har-export.md](har-export.md) | Export captured network activity as a standard `.har`. |
-| [playwright.md](playwright.md) | Playwright reporter — failing tests become TraceBug reports. |
+| [playwright.md](playwright.md) | Playwright reporter — failing tests become TraceBug reports (and every report embeds a failing spec). |
 
 ## Reference
 
@@ -32,6 +32,10 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | --- | --- |
 | [api-reference.md](api-reference.md) | Public SDK API — methods, types, exports. |
 | [architecture.md](architecture.md) | File-by-file internals (recording pipeline, storage, exporters). |
+| [adr/](adr/README.md) | **Architecture Decision Records** — why local-first, single-file HTML, rrweb, MV3, zero deps, stdio-only MCP. |
+| [performance.md](performance.md) | Measured numbers (init, capture overhead, export time/size) + the reproducible benchmark. |
+| [compatibility.md](compatibility.md) | Browser matrix, version support policy, and known limitations. |
+| [migrating.md](migrating.md) | Upgrade notes 1.6 → 1.9; API stability guarantees. |
 
 > The self-contained offline **HTML replay export** (rrweb DOM replay + gzip),
 > the lean **Export for AI (.html)**, and **event capture surviving navigation**

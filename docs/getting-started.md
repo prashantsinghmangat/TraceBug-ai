@@ -26,8 +26,8 @@ npx tracebug init
 
 ```bash
 cd tracebug-ai && npm pack
-# Share the file: tracebug-sdk-1.6.0.tgz
-npm install ./tracebug-sdk-1.6.0.tgz
+# Share the file: tracebug-sdk-1.8.0.tgz
+npm install ./tracebug-sdk-1.8.0.tgz
 ```
 
 ## Setup (2 lines of code)
@@ -54,9 +54,9 @@ After initialization, a **compact toolbar rail** appears on the right edge of yo
 
 Press **`Ctrl+Shift+B`** anywhere to open the **Quick Bug** ticket modal — auto-filled title, editable description, screenshots, the interactive DOM replay, and one-click export: **Export .html** (self-contained interactive replay), **Export HAR**, **Fix with AI**, plus under **More** — **Export for AI (.html)** (tiny text-only, chat-ready), **Download report (.md)**, and file a real GitHub / Linear / Slack / Jira issue. A cloud **Share link** button is built but gated off by default.
 
-While recording, a floating HUD (top-center) gives you **Stop · Pause · Mic · Screenshot · Pen · Blur**.
+While recording, a floating HUD (top-center) gives you **Stop · Pause · Mic · Screenshot · Pen · Blur**. Blur is **click-to-blur**: click an element to blur it in place, click again to unblur — the blur is captured into the recording and the element's text is masked in the DOM replay. You can also blur *before* recording starts via `TraceBug.prepareRecording({ blurFirst: true })` or the extension popup's **⚙ Record options**.
 
-> **Annotate & Draw** modes ship in the SDK but aren't on the toolbar — call them programmatically (`TraceBug.activateAnnotateMode()` / `activateDrawMode()`); Draw is also on the recording HUD's ✎ button. See [annotate-and-draw.md](annotate-and-draw.md).
+> **Annotate & Draw** modes ship in the SDK but aren't on the toolbar — call them programmatically (`TraceBug.activateAnnotateMode()` / `activateDrawMode()`); Draw is also on the recording HUD's ✎ button. For design-QA bugs, **Inspect mode** (`TraceBug.activateInspectMode()` or the extension popup's **Inspect element** button) attaches computed-style evidence — typography, colors, box model, WCAG contrast — to the report. See [annotate-and-draw.md](annotate-and-draw.md).
 
 **Toolbar position:** The toolbar defaults to the right edge, but you can change it:
 

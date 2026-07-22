@@ -57,6 +57,11 @@ export interface BundlePayload {
    *  shareable file: a prefilled github.com URL and copyable markdown.
    *  Generated at export time so no issue-builder code ships in the viewer. */
   github?: { repo?: string; issueUrl?: string; markdown?: string };
+  /** Generated Playwright spec that replays the session and asserts the
+   *  captured failure is gone — red until fixed. Precomputed at export so
+   *  the MCP server can hand it to an agent (`get_playwright_test`). */
+  playwrightTest?: string;
+  playwrightTestFilename?: string;
   // Tabbed-viewer data — populated in html-replay.ts from BugReport.
   info?: Array<{ k: string; v: string; i?: string }>;
   consoleErrors?: Array<{ message: string; stack?: string; timestamp: number }>;
@@ -105,6 +110,19 @@ export interface BundlePayload {
     text: string;
     expected?: string;
     actual?: string;
+  }>;
+  /** Element-level annotations (annotate/inspect modes) with computed-style
+   *  evidence — the receipts for design-QA bugs. Structured for MCP agents;
+   *  the human-readable version rides in `description`. */
+  elementAnnotations?: Array<{
+    selector: string;
+    tagName: string;
+    innerText?: string;
+    intent: string;
+    severity: string;
+    comment: string;
+    styleSummary?: string;
+    styles?: unknown;
   }>;
   rootCauseHint?: { hint: string; confidence: string };
 }
