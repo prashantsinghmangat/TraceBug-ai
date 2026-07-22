@@ -12,6 +12,9 @@ import {
   toolGetNetworkActivity,
   toolGetReproSteps,
   toolGetScreenshot,
+  toolGetPlaywrightTest,
+  toolResolveStack,
+  toolGetFixContext,
   callTool,
   handleMessage,
   TOOL_DEFINITIONS,
@@ -278,12 +281,13 @@ describe('MCP protocol (handleMessage)', () => {
     expect(res.result.serverInfo.name).toBe('tracebug');
   });
 
-  it('lists all six tools with schemas', () => {
+  it('lists all nine tools with schemas', () => {
     const res = handleMessage(tmpDir, { jsonrpc: '2.0', id: 2, method: 'tools/list' }) as Record<string, any>;
-    expect(res.result.tools).toHaveLength(6);
+    expect(res.result.tools).toHaveLength(9);
     expect(TOOL_DEFINITIONS.map((t) => t.name)).toEqual([
       'list_bug_reports', 'get_bug_report', 'get_console_errors',
       'get_network_activity', 'get_repro_steps', 'get_screenshot',
+      'get_playwright_test', 'resolve_stack', 'get_fix_context',
     ]);
     for (const t of res.result.tools) expect(t.inputSchema.type).toBe('object');
   });
@@ -334,5 +338,88 @@ describe('MCP protocol (handleMessage)', () => {
   it('debug prompt falls back to list_bug_reports when no file is given', () => {
     expect(buildDebugPrompt()).toContain('list_bug_reports');
     expect(buildDebugPrompt('  ')).toContain('list_bug_reports');
+  });
+});
+
+describe('fix-loop tools (get_playwright_test / resolve_stack / get_fix_context)', () => {
+  const SPEC = "import { test, expect } from '@playwright/test';\ntest('bug', async ({ page }) => {});\n";
+  let specReport: string;
+  let mapDir: string;
+
+  beforeAll(() => {
+    const payload = fixturePayload();
+    payload.playwrightTest = SPEC;
+    payload.playwrightTestFilename = 'vendor-update-fails.spec.ts';
+    payload.elementAnnotations = [{
+      selector: '#save-btn', tagName: 'button', intent: 'inspect', severity: 'info',
+      comment: 'Style evidence captured via Inspect',
+      styleSummary: '14px/20px 600 Inter · color #ffffff on #6366f1 · 120px×36px · pad 8px 16px · contrast 3.9:1 ⚠ fails AA',
+      styles: { contrast: { ratio: 3.9, aa: false } },
+    }];
+    payload.consoleLogs![1].stack = '    at save (http://localhost:5173/assets/vendor-77aa.js:1:9)';
+    specReport = path.join(tmpDir, 'spec-report.html');
+    fs.writeFileSync(specReport, buildReplayHtml(payload), 'utf8');
+
+    // Sourcemap the resolver should find: one-line bundle, two segments.
+    mapDir = path.join(tmpDir, 'fake-repo');
+    fs.mkdirSync(path.join(mapDir, 'dist'), { recursive: true });
+    fs.writeFileSync(
+      path.join(mapDir, 'dist', 'vendor-77aa.js.map'),
+      JSON.stringify({ version: 3, sources: ['src/vendor.ts'], names: ['save'], mappings: 'AAAA,QAEIA' })
+    );
+  });
+
+  it('get_playwright_test returns the embedded spec with run instructions', () => {
+    const r = toolGetPlaywrightTest(tmpDir, { file: 'spec-report.html' });
+    expect(r.spec).toBe(SPEC);
+    expect(r.filename).toBe('vendor-update-fails.spec.ts');
+    expect(r.howToUse.join(' ')).toContain('npx playwright test');
+  });
+
+  it('get_playwright_test explains itself for pre-1.9 exports', () => {
+    expect(() => toolGetPlaywrightTest(tmpDir, { file: 'bug-report.html' })).toThrow(/before TraceBug 1\.9/);
+  });
+
+  it('resolve_stack maps frames through discovered .map files', () => {
+    const r = toolResolveStack(tmpDir, { file: 'spec-report.html', searchDir: mapDir });
+    expect(r.stacks.length).toBeGreaterThan(0);
+    const frame = r.stacks[0].frames[0];
+    expect(frame.bundled).toContain('vendor-77aa.js:1:9');
+    expect(frame.original).toContain('src/vendor.ts:3');
+  });
+
+  it('resolve_stack notes when no maps match', () => {
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-nomaps-'));
+    try {
+      const r = toolResolveStack(tmpDir, { file: 'spec-report.html', searchDir: empty });
+      expect(r.note).toContain('No .map files matched');
+    } finally {
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  it('get_fix_context bundles failing request, trigger, resolved stack, and test availability', () => {
+    const r = toolGetFixContext(tmpDir, { file: 'spec-report.html', searchDir: mapDir });
+    expect(r.failingRequest).toMatchObject({ method: 'PUT', status: 500 });
+    expect(r.triggeringAction!.action).toContain('Save');
+    expect(r.error!.topFrames[0].original).toContain('src/vendor.ts');
+    expect(r.failingTest.available).toBe(true);
+    expect(r.nextStep).toContain('get_playwright_test');
+  });
+
+  it('get_bug_report surfaces element annotations with style evidence', () => {
+    const r = toolGetBugReport(tmpDir, { file: 'spec-report.html' });
+    expect(r.elementAnnotations).toHaveLength(1);
+    expect(r.elementAnnotations[0].selector).toBe('#save-btn');
+    expect(r.elementAnnotations[0].styleSummary).toContain('fails AA');
+    expect(r.investigationGuide.join(' ')).toContain('computed-style evidence');
+  });
+
+  it('tools are registered in definitions and dispatch', () => {
+    const names = TOOL_DEFINITIONS.map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(['get_playwright_test', 'resolve_stack', 'get_fix_context']));
+    const res = callTool(tmpDir, 'get_playwright_test', { file: 'spec-report.html' });
+    expect(res.isError).toBeUndefined();
+    expect((res.content[0] as { text: string }).text).toContain('vendor-update-fails.spec.ts');
   });
 });

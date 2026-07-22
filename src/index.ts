@@ -117,6 +117,8 @@ import {
 } from "./scanner";
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
+import { activateInspectMode, deactivateInspectMode, isInspectModeActive } from "./inspect-mode";
+import { runRecordCountdown, startBlurThenRecord } from "./ui/pre-record";
 import {
   getAnnotationReport,
   exportAsJSON as exportAnnotationsJSON, exportAsMarkdown as exportAnnotationsMD,
@@ -170,6 +172,12 @@ export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
 export { buildHar, exportSessionAsHar } from "./exporters/har-export";
 export { exportSessionAsZip, buildZipBlob } from "./exporters/zip-export";
+export { exportSessionAsHtml, buildReplayBlob } from "./exporters/html-replay";
+export { generatePlaywrightTest, playwrightTestFilename } from "./exporters/playwright-test";
+export { captureStyleEvidence, formatStyleSummary, contrastRatio, cssColorToHex } from "./style-evidence";
+export type { StyleEvidence } from "./style-evidence";
+export { runRecordCountdown, startBlurThenRecord } from "./ui/pre-record";
+export { isBlurModeActive, removeAllBlurBoxes } from "./ui/blur-tool";
 export type { HarLog, HarExportResult } from "./exporters/har-export";
 export {
   runLLMAnalysis, buildAnalysisPrompt,
@@ -262,29 +270,7 @@ class TraceBugSDK {
       return;
     }
 
-    // ── Validate config ────────────────────────────────────────────
-    if (!config || typeof config !== "object") {
-      console.warn("[TraceBug] init() requires a config object.");
-      return;
-    }
-    if (!config.projectId || typeof config.projectId !== "string") {
-      console.warn("[TraceBug] init() requires a projectId string.");
-      return;
-    }
-    if (config.maxEvents !== undefined && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
-      console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
-      config.maxEvents = 200;
-    }
-    if (config.maxSessions !== undefined && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
-      console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
-      config.maxSessions = 50;
-    }
-
-    // ── Check if SDK should be active in this environment ────────────
-    if (!this.shouldEnable(config.enabled ?? "auto")) {
-      console.info("[TraceBug] Disabled in this environment.");
-      return;
-    }
+    if (!this._validateConfig(config)) return;
 
     try {
       this.config = {
@@ -310,17 +296,7 @@ class TraceBugSDK {
       this.sessionId = getActiveSessionId();
       this.recording = !!this.sessionId;
 
-      // ── Inject theme CSS custom properties ────────────────────────
-      // Honor a per-origin user preference saved by the modal's theme
-      // toggle. Falls back to the config default (typically "auto").
-      let themeMode = this.config.theme!;
-      try {
-        const saved = localStorage.getItem("tracebug_theme_pref");
-        if (saved === "light" || saved === "dark" || saved === "auto") {
-          themeMode = saved;
-        }
-      } catch {}
-      try { injectTheme(themeMode); } catch {}
+      this._applyThemeFromConfig();
 
       // ── Hydrate freemium plan flag (non-blocking) ─────────────────
       // Defaults to "free" until storage read resolves. The first user
@@ -328,48 +304,9 @@ class TraceBugSDK {
       // does, the free behavior applies — acceptable for a local flag.
       hydratePlan().catch(() => {});
 
-      // Wire githubRepo + cloudEndpoint into Quick Bug modal (lazy-loaded
-      // on first capture). cloudEndpoint always wires through so the Share
-      // button reads the override even when no githubRepo is set.
-      import("./ui/quick-bug").then(m => {
-        if (this.config?.githubRepo) m.setGithubRepo(this.config.githubRepo);
-        m.setCloudEndpoint(this.config?.cloudEndpoint);
-      }).catch(() => {});
+      this._wireQuickBugConfig();
 
-      // ── Emit function — collectors call this with raw event data ───────
-      // Reads sessionId / recording dynamically from `this` so toggling
-      // record state mid-session takes effect without re-wiring collectors.
-      const emit = (type: EventType, data: TraceBugEvent["data"]) => {
-        try {
-          if (!this.recording) return;
-          const sid = this.sessionId;
-          if (!sid) return;
-
-          let event: TraceBugEvent | null = {
-            id: Math.random().toString(36).slice(2, 10),
-            sessionId: sid,
-            projectId: this.config!.projectId,
-            type,
-            page: window.location.pathname,
-            timestamp: Date.now(),
-            data,
-          };
-
-          event = runEventPlugins(event);
-          if (!event) return;
-
-          appendEvent(sid, event, this.config!.maxEvents!, this.config!.maxSessions!);
-
-          if (type === "error" || type === "unhandled_rejection") {
-            this.processError(sid, data.error?.message, data.error?.stack);
-            emitHook("error:captured", event);
-            // Auto-detect: surface the Live Bug Card (throttled inside)
-            this.maybePromptErrorCapture(data.error?.message, data.error?.stack);
-          }
-        } catch (err) {
-          if (typeof console !== 'undefined') console.warn('[TraceBug] Event emit error:', err);
-        }
-      };
+      const emit = this._buildEmit();
 
       // ── Wire dev-api so TraceBug.mark/assert/context route through emit ──
       setDevApiHooks({
@@ -379,116 +316,14 @@ class TraceBugSDK {
         },
       });
 
-      // ── Start all collectors ──────────────────────────────────────────
-      this.cleanups.push(collectClicks(emit));
-      this.cleanups.push(collectInputs(emit));
-      this.cleanups.push(collectSelectChanges(emit));
-      this.cleanups.push(collectFormSubmits(emit));
-      this.cleanups.push(collectRouteChanges(emit));
-      this.cleanups.push(collectApiRequests(emit));
-      this.cleanups.push(collectXhrRequests(emit));
-      // Backfill: catches requests fired BEFORE our fetch/XHR wraps were
-      // installed, plus anything that bypassed them (axios with cached XHR
-      // reference, service workers, polyfills). Reads from the browser's
-      // resource timing buffer so we never miss a network call again.
-      this.cleanups.push(collectPerformanceNetwork(emit));
-
-      // Eager error capture: window.onerror + unhandledrejection only.
-      // These don't pollute call stacks of unrelated code, so they stay
-      // attached for the full SDK lifetime. The console.* wrappers (which
-      // DO add a frame to every console call's stack trace) attach lazily
-      // when a recording session starts — see _attachConsoleCollectors().
-      this.cleanups.push(collectErrors(emit));
+      this._startCollectors(emit);
 
       // Save references for the lazy attach/detach during session lifecycle.
       this._emit = emit;
       this._consoleLevel = this.config.captureConsole ?? "all";
 
-      // ── Mount in-browser dashboard ────────────────────────────────────
-      if (this.config.enableDashboard) {
-        try {
-          setRecordingState(this.recording, () => {
-            if (this.recording) { this.pauseRecording(); } else { this.resumeRecording(); }
-            updateRecordingState(this.recording);
-          });
-          // Tie the toolbar's video-record button to the SDK session
-          // lifecycle so a single Record click arms event capture + video,
-          // and a single Stop ends both. Without this, the video could be
-          // running while no session was active — events would be dropped
-          // and reloads looked like new sessions because there was never a
-          // persisted active-session id to restore.
-          setSessionLifecycleHandlers(
-            () => this._startActiveSession(),
-            () => this._endActiveSession(),
-          );
-          // Each screenshot/region capture starts a fresh session so every
-          // toolbar click produces an independent ticket, not an accumulation.
-          setNewCaptureHandler(() => { try { this._startActiveSession(); } catch {} });
-          this.cleanups.push(mountDashboard(this.config.toolbarPosition, this.config.shortcuts));
-        } catch (err) {
-          console.warn('[TraceBug] Dashboard mount failed:', err);
-        }
-      }
-
-      // ── Reconnect to a live screen recording if one survived a reload ──
-      // Extension transport keeps the recording in an offscreen document, so
-      // a page reload doesn't kill it. On every init we ping the offscreen
-      // for status and re-mount the HUD if a session is still armed. If the
-      // offscreen is gone (browser restart, native Stop) but we still hold a
-      // stale active-session-ID, clear it so the next Record click starts
-      // fresh.
-      _wireAutoStop();
-      _setAutoStopHandler((recording) => this._handleAutoStop(recording));
-      // Mount the HUD the instant the offscreen doc signals capture began —
-      // independent of the start RPC's return value (which can spuriously
-      // report "cancelled" while recording is actually live).
-      _wireStarted();
-      _setStartedHandler(() => this._handleRecordingStarted());
-      if (this.config.enableDashboard) {
-        // Snapshot the session id RESTORED at init. By the time the async
-        // offscreen status ping resolves, a popup action (capture-now →
-        // startRecording) may have armed a brand-new session — clearing THAT
-        // killed the live session and blanked the ticket the user just asked
-        // for (quickCapture then re-armed and wiped the fresh screenshot).
-        const restoredSessionId = this.sessionId;
-        _restoreVideoState().then((wasActive) => {
-          if (wasActive) {
-            // Real recording is in progress in the offscreen — re-mount the
-            // HUD and attach the console.* wrappers so all the data flowing
-            // for the rest of this session lands in the ticket.
-            this._remountRecordingHud();
-            this._attachConsoleCollectors();
-          } else if (restoredSessionId && this.sessionId === restoredSessionId) {
-            // No live offscreen recording — but WHY depends on the mode.
-            // Anything that isn't explicitly "events" (i.e. "video", or a null
-            // mode from a session armed before this feature shipped) is treated
-            // as a video session whose tab-share died — the safe pre-feature
-            // behavior. Only an explicit "events" session resumes.
-            if (getActiveCaptureMode() !== "events") {
-              // A video session whose tab-share Chrome ended on navigation.
-              // Recover whatever the offscreen finalized and open the ticket
-              // so the user doesn't lose the recording.
-              clearActiveSessionId();
-              this.sessionId = null;
-              this.recording = false;
-              updateRecordingState(false);
-              _restoreLastRecording().then((rec) => {
-                if (rec) this._handleAutoStop(rec);
-              }).catch(() => {});
-            } else {
-              // Event-only tracking (no video to die). The session ID + events
-              // survived the navigation and `recording` is already true from
-              // init, so the collectors keep capturing on this new page. Keep
-              // the console wrappers attached, backfill the network resources
-              // this new page loaded before the SDK re-injected, and refresh
-              // the toolbar's "tracking" state — DON'T tear the session down.
-              this._attachConsoleCollectors();
-              if (this._emit) drainPerformanceNetwork(this._emit);
-              updateRecordingState(true);
-            }
-          }
-        }).catch(() => {});
-      }
+      this._mountDashboardIfEnabled();
+      this._restoreVideoSessionOnInit();
 
       // Re-emit session:start only when restoring a VIDEO session that survived
       // a reload (hooks re-attach to it). Event-only sessions already emitted
@@ -507,6 +342,201 @@ class TraceBugSDK {
       this.initialized = false;
       return;
     }
+  }
+
+  // ── init() phases ─────────────────────────────────────────────────
+  // Extracted from init() for testability and readability. Each is a pure
+  // side-effecting phase; init() is the orchestrator. Behavior is unchanged.
+
+  /** Validate the config object and environment gate. Returns false (and logs)
+   *  when init should abort; may normalize invalid maxEvents/maxSessions. */
+  private _validateConfig(config: TraceBugConfig): boolean {
+    if (!config || typeof config !== "object") {
+      console.warn("[TraceBug] init() requires a config object.");
+      return false;
+    }
+    if (!config.projectId || typeof config.projectId !== "string") {
+      console.warn("[TraceBug] init() requires a projectId string.");
+      return false;
+    }
+    if (config.maxEvents !== undefined && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
+      console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
+      config.maxEvents = 200;
+    }
+    if (config.maxSessions !== undefined && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
+      console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
+      config.maxSessions = 50;
+    }
+    if (!this.shouldEnable(config.enabled ?? "auto")) {
+      console.info("[TraceBug] Disabled in this environment.");
+      return false;
+    }
+    return true;
+  }
+
+  /** Inject theme CSS custom properties, honoring a per-origin user preference
+   *  saved by the modal's theme toggle; falls back to the config default. */
+  private _applyThemeFromConfig(): void {
+    let themeMode = this.config!.theme!;
+    try {
+      const saved = localStorage.getItem("tracebug_theme_pref");
+      if (saved === "light" || saved === "dark" || saved === "auto") {
+        themeMode = saved;
+      }
+    } catch {}
+    try { injectTheme(themeMode); } catch {}
+  }
+
+  /** Wire githubRepo + cloudEndpoint into the (lazy-loaded) Quick Bug modal.
+   *  cloudEndpoint always wires through so Share reads the override even with
+   *  no githubRepo set. */
+  private _wireQuickBugConfig(): void {
+    import("./ui/quick-bug").then(m => {
+      if (this.config?.githubRepo) m.setGithubRepo(this.config.githubRepo);
+      m.setCloudEndpoint(this.config?.cloudEndpoint);
+    }).catch(() => {});
+  }
+
+  /** The emit function collectors call with raw event data. Reads
+   *  sessionId / recording dynamically from `this` so toggling record state
+   *  mid-session takes effect without re-wiring collectors. */
+  private _buildEmit(): (type: EventType, data: TraceBugEvent["data"]) => void {
+    return (type, data) => {
+      try {
+        if (!this.recording) return;
+        const sid = this.sessionId;
+        if (!sid) return;
+
+        let event: TraceBugEvent | null = {
+          id: Math.random().toString(36).slice(2, 10),
+          sessionId: sid,
+          projectId: this.config!.projectId,
+          type,
+          page: window.location.pathname,
+          timestamp: Date.now(),
+          data,
+        };
+
+        event = runEventPlugins(event);
+        if (!event) return;
+
+        appendEvent(sid, event, this.config!.maxEvents!, this.config!.maxSessions!);
+
+        if (type === "error" || type === "unhandled_rejection") {
+          this.processError(sid, data.error?.message, data.error?.stack);
+          emitHook("error:captured", event);
+          // Auto-detect: surface the Live Bug Card (throttled inside)
+          this.maybePromptErrorCapture(data.error?.message, data.error?.stack);
+        }
+      } catch (err) {
+        if (typeof console !== 'undefined') console.warn('[TraceBug] Event emit error:', err);
+      }
+    };
+  }
+
+  /** Attach all event collectors, pushing their cleanups. */
+  private _startCollectors(emit: (type: EventType, data: TraceBugEvent["data"]) => void): void {
+    this.cleanups.push(collectClicks(emit));
+    this.cleanups.push(collectInputs(emit));
+    this.cleanups.push(collectSelectChanges(emit));
+    this.cleanups.push(collectFormSubmits(emit));
+    this.cleanups.push(collectRouteChanges(emit));
+    this.cleanups.push(collectApiRequests(emit));
+    this.cleanups.push(collectXhrRequests(emit));
+    // Backfill: catches requests fired BEFORE our fetch/XHR wraps were
+    // installed, plus anything that bypassed them (axios with cached XHR
+    // reference, service workers, polyfills). Reads from the browser's
+    // resource timing buffer so we never miss a network call again.
+    this.cleanups.push(collectPerformanceNetwork(emit));
+    // Eager error capture: window.onerror + unhandledrejection only.
+    // These don't pollute call stacks of unrelated code, so they stay
+    // attached for the full SDK lifetime. The console.* wrappers (which
+    // DO add a frame to every console call's stack trace) attach lazily
+    // when a recording session starts — see _attachConsoleCollectors().
+    this.cleanups.push(collectErrors(emit));
+  }
+
+  /** Mount the in-browser dashboard toolbar and wire its session handlers. */
+  private _mountDashboardIfEnabled(): void {
+    if (!this.config!.enableDashboard) return;
+    try {
+      setRecordingState(this.recording, () => {
+        if (this.recording) { this.pauseRecording(); } else { this.resumeRecording(); }
+        updateRecordingState(this.recording);
+      });
+      // Tie the toolbar's video-record button to the SDK session lifecycle so
+      // a single Record click arms event capture + video, and a single Stop
+      // ends both. Without this, the video could be running while no session
+      // was active — events would be dropped and reloads looked like new
+      // sessions because there was never a persisted active-session id.
+      setSessionLifecycleHandlers(
+        () => this._startActiveSession(),
+        () => this._endActiveSession(),
+      );
+      // Each screenshot/region capture starts a fresh session so every toolbar
+      // click produces an independent ticket, not an accumulation.
+      setNewCaptureHandler(() => { try { this._startActiveSession(); } catch {} });
+      this.cleanups.push(mountDashboard(this.config!.toolbarPosition, this.config!.shortcuts));
+    } catch (err) {
+      console.warn('[TraceBug] Dashboard mount failed:', err);
+    }
+  }
+
+  /** Reconnect to a live screen recording that survived a page reload.
+   *  Extension transport keeps the recording in an offscreen document, so a
+   *  reload doesn't kill it: ping for status, re-mount the HUD if still armed,
+   *  otherwise clear a stale active-session id so the next Record starts fresh. */
+  private _restoreVideoSessionOnInit(): void {
+    _wireAutoStop();
+    _setAutoStopHandler((recording) => this._handleAutoStop(recording));
+    // Mount the HUD the instant the offscreen doc signals capture began —
+    // independent of the start RPC's return value (which can spuriously
+    // report "cancelled" while recording is actually live).
+    _wireStarted();
+    _setStartedHandler(() => this._handleRecordingStarted());
+    if (!this.config!.enableDashboard) return;
+
+    // Snapshot the session id RESTORED at init. By the time the async offscreen
+    // status ping resolves, a popup action (capture-now → startRecording) may
+    // have armed a brand-new session — clearing THAT killed the live session and
+    // blanked the ticket the user just asked for.
+    const restoredSessionId = this.sessionId;
+    _restoreVideoState().then((wasActive) => {
+      if (wasActive) {
+        // Real recording is in progress in the offscreen — re-mount the HUD and
+        // attach the console.* wrappers so all the data flowing for the rest of
+        // this session lands in the ticket.
+        this._remountRecordingHud();
+        this._attachConsoleCollectors();
+      } else if (restoredSessionId && this.sessionId === restoredSessionId) {
+        // No live offscreen recording — but WHY depends on the mode. Anything
+        // that isn't explicitly "events" (i.e. "video", or a null mode from a
+        // session armed before this feature shipped) is treated as a video
+        // session whose tab-share died. Only an explicit "events" session resumes.
+        if (getActiveCaptureMode() !== "events") {
+          // A video session whose tab-share Chrome ended on navigation. Recover
+          // whatever the offscreen finalized and open the ticket so the user
+          // doesn't lose the recording.
+          clearActiveSessionId();
+          this.sessionId = null;
+          this.recording = false;
+          updateRecordingState(false);
+          _restoreLastRecording().then((rec) => {
+            if (rec) this._handleAutoStop(rec);
+          }).catch(() => {});
+        } else {
+          // Event-only tracking (no video to die). The session ID + events
+          // survived the navigation and `recording` is already true from init,
+          // so the collectors keep capturing on this new page. Keep the console
+          // wrappers attached, backfill the network resources this new page
+          // loaded before the SDK re-injected, and refresh the toolbar's
+          // "tracking" state — DON'T tear the session down.
+          this._attachConsoleCollectors();
+          if (this._emit) drainPerformanceNetwork(this._emit);
+          updateRecordingState(true);
+        }
+      }
+    }).catch(() => {});
   }
 
   /**
@@ -909,6 +939,32 @@ class TraceBugSDK {
    * comments without breaking flow. Comments are synced to video time and
    * attached to the bug report.
    */
+  /**
+   * Pre-recording flow: optionally let the user BLUR sensitive areas first
+   * (the blur is real backdrop blur — the redacted pixels are what the
+   * recording captures), then an optional 3-2-1 countdown, then record.
+   */
+  prepareRecording(opts: {
+    blurFirst?: boolean;
+    delaySec?: number;
+    withMicrophone?: boolean;
+    surfaceMode?: "tab" | "desktop";
+  } = {}): void {
+    const begin = () => {
+      const go = () => {
+        void this.startVideoRecording({
+          withMicrophone: !!opts.withMicrophone,
+          surfaceMode: opts.surfaceMode,
+        });
+      };
+      const d = Number(opts.delaySec) || 0;
+      if (d > 0) void runRecordCountdown(d).then(go);
+      else go();
+    };
+    if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
+    else begin();
+  }
+
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
     surfaceMode?: "tab" | "desktop";
@@ -1236,6 +1292,27 @@ class TraceBugSDK {
   /** Check if draw mode is active */
   isDrawModeActive(): boolean {
     return isDrawModeActive();
+  }
+
+  // ── Inspect mode ───────────────────────────────────────────────────
+
+  /** Activate inspect mode — hover shows the box model + computed-style
+   *  summary; click attaches the element's style evidence to the report. */
+  activateInspectMode(): void {
+    // Modes are mutually exclusive — same rule as annotate vs draw.
+    deactivateElementAnnotateMode();
+    deactivateDrawMode();
+    activateInspectMode();
+  }
+
+  /** Deactivate inspect mode */
+  deactivateInspectMode(): void {
+    deactivateInspectMode();
+  }
+
+  /** Check if inspect mode is active */
+  isInspectModeActive(): boolean {
+    return isInspectModeActive();
   }
 
   // ── UI Annotations ─────────────────────────────────────────────────
@@ -1724,6 +1801,7 @@ class TraceBugSDK {
     setRedactRules(undefined);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
+    deactivateInspectMode();
     clearAllAnnotations();
     clearAllPlugins();
     _clearIssues();

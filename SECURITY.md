@@ -44,10 +44,13 @@ shouldn't:
 - **XSS / script execution** when an exported `.html` report is opened (session
   data — page URLs, console messages, network responses, storage values — is
   escaped before rendering; a bypass is in scope).
-- **Data leakage / redaction bypass**: sensitive input or storage values that
-  should be masked (`maskAllInputs`, `.tb-block` / `.tb-mask`, redacted storage
-  keys) appearing in a report; or the offline replay making unexpected network
-  requests.
+- **Data leakage / redaction bypass**: sensitive values that should be masked
+  appearing in a report — via `maskAllInputs`, `.tb-block` / `.tb-mask`,
+  redacted storage keys, the capture-time token-shape scrub (JWTs, Bearer
+  headers, API keys in console output / error stacks / network snippets /
+  URLs), user-declared `redact` rules (fields/patterns), or element-level
+  blur (`data-tb-blurred` + `tb-mask`) failing to cover the recording or the
+  DOM replay; or the offline replay making unexpected network requests.
 - **Extension privilege issues**: permission escalation, cross-origin data access
   beyond the per-tab opt-in model, or the content script leaking data to a page.
 - Anything that lets TraceBug **break or compromise the host application** it's

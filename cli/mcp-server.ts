@@ -15,6 +15,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { resolveStackWithMaps, type ResolvedFrame } from "./source-map";
 
 // ── Payload shape (mirrors BundlePayload in src/exporters/html-template.ts) ──
 
@@ -43,7 +44,21 @@ interface ReportPayload {
   actions?: string[];
   actionChips?: Array<{ verb: string; kind: string; target?: string; nounLabel?: string; detail?: string; frustration?: string; timestamp: number; isError?: boolean }>;
   annotations?: Array<{ severity: string; text: string; expected?: string; actual?: string }>;
+  /** Element-level annotations with computed-style evidence (SDK 1.9+). */
+  elementAnnotations?: Array<{
+    selector: string;
+    tagName: string;
+    innerText?: string;
+    intent: string;
+    severity: string;
+    comment: string;
+    styleSummary?: string;
+    styles?: unknown;
+  }>;
   rootCauseHint?: { hint: string; confidence: string };
+  /** Generated failing Playwright spec (exports from SDK v1.9+). */
+  playwrightTest?: string;
+  playwrightTestFilename?: string;
 }
 
 // ── File discovery & parsing ─────────────────────────────────────────────
@@ -267,8 +282,25 @@ export function buildInvestigationGuide(p: ReportPayload): string[] {
     );
   }
 
+  if (p.playwrightTest) {
+    steps.push(
+      "[HIGH] get_playwright_test — this report includes a generated Playwright spec that REPLAYS the session and asserts the captured failure is gone. Save it, run it to reproduce (red), then use it to verify your fix (green)."
+    );
+  }
+  if ((p.elementAnnotations ?? []).length > 0) {
+    const n = p.elementAnnotations!.length;
+    steps.push(
+      `[HIGH] This report carries ${n} element annotation${n === 1 ? "" : "s"} with computed-style evidence (included in get_bug_report) — for visual bugs, diff the captured typography/colors/spacing against the design tokens or CSS in this codebase.`
+    );
+  }
+  if ((p.consoleErrors ?? []).some((e) => e.stack) || (p.consoleLogs ?? []).some((e) => e.stack)) {
+    steps.push(
+      "[MEDIUM] resolve_stack — maps minified stack frames to original source files/lines using .map files found in this repo (run from the project that built the app)."
+    );
+  }
+
   steps.push(
-    "Finally: cross-reference the findings with the codebase — search for the failing endpoint path, the symbols in the stack trace, or the UI text near the error — to locate the root cause and propose a fix."
+    "Finally: cross-reference the findings with the codebase — search for the failing endpoint path, the symbols in the stack trace, or the UI text near the error — to locate the root cause and propose a fix. get_fix_context bundles the failing request + triggering action + resolved stack in one call."
   );
   return steps;
 }
@@ -327,6 +359,9 @@ export function toolGetBugReport(baseDir: string, args: { file: string }) {
     description: p.description || null,
     rootCause: p.rootCauseHint ?? p.meta.rootCause ?? null,
     annotations: p.annotations ?? [],
+    // Computed-style receipts for design-QA bugs (selector, typography,
+    // colors, box model, WCAG contrast) — diff these against the codebase.
+    elementAnnotations: p.elementAnnotations ?? [],
     consoleErrorCount: p.consoleErrors?.length ?? 0,
     networkFailureCount: p.networkErrors?.length ?? 0,
     screenshotCount: p.screenshots?.length ?? 0,
@@ -415,6 +450,125 @@ export function toolGetScreenshot(baseDir: string, args: { file: string; index?:
   };
 }
 
+export function toolGetPlaywrightTest(baseDir: string, args: { file: string }) {
+  const { payload: p, resolved } = requireReport(baseDir, args.file);
+  if (!p.playwrightTest) {
+    throw new Error(
+      "This report was exported before TraceBug 1.9 and has no generated test. " +
+        "Re-export the session from the TraceBug widget (Export .html) to include one."
+    );
+  }
+  const filename = p.playwrightTestFilename || "tracebug-bug.spec.ts";
+  return {
+    filename,
+    spec: p.playwrightTest,
+    sourceReport: path.basename(resolved),
+    howToUse: [
+      `1. Save the spec as tests/${filename} (or your e2e folder).`,
+      "2. Set BASE_URL to your running dev server if it differs from the captured origin.",
+      `3. Run: npx playwright test ${filename} — the test FAILS while the bug exists.`,
+      "4. Fix the bug, re-run — green means the captured failure is gone.",
+    ],
+  };
+}
+
+/** Collect all stacks captured in a report (console + error entries). */
+function collectStacks(p: ReportPayload): Array<{ message: string; stack: string }> {
+  const out: Array<{ message: string; stack: string }> = [];
+  for (const e of p.consoleLogs ?? []) {
+    if (e.stack) out.push({ message: e.message, stack: e.stack });
+  }
+  if (!out.length) {
+    for (const e of p.consoleErrors ?? []) {
+      if (e.stack) out.push({ message: e.message, stack: e.stack });
+    }
+  }
+  return out;
+}
+
+function frameSummary(f: ResolvedFrame) {
+  return {
+    fn: f.fn,
+    bundled: `${f.file}:${f.line}:${f.column}`,
+    original: f.original
+      ? `${f.original.source}:${f.original.line}:${f.original.column}${f.original.name ? ` (${f.original.name})` : ""}`
+      : null,
+    mapFile: f.mapFile ?? null,
+  };
+}
+
+export function toolResolveStack(baseDir: string, args: { file: string; searchDir?: string }) {
+  const { payload: p } = requireReport(baseDir, args.file);
+  const searchDir = args.searchDir
+    ? path.resolve(process.cwd(), args.searchDir)
+    : process.cwd();
+  const stacks = collectStacks(p);
+  if (!stacks.length) throw new Error("This report contains no stack traces to resolve.");
+  const resolved = stacks.map((s) => {
+    const frames = resolveStackWithMaps(s.stack, searchDir).map(frameSummary);
+    return { error: s.message.slice(0, 200), frames };
+  });
+  const anyResolved = resolved.some((r) => r.frames.some((f) => f.original));
+  return {
+    searchDir,
+    note: anyResolved
+      ? "original = source file:line:column from the matching .map file — search the codebase there."
+      : `No .map files matched under ${searchDir}. Build with sourcemaps enabled, or pass searchDir pointing at the build output.`,
+    stacks: resolved,
+  };
+}
+
+export function toolGetFixContext(baseDir: string, args: { file: string; searchDir?: string }) {
+  const { payload: p } = requireReport(baseDir, args.file);
+
+  const failingRequest = (p.networkErrors ?? [])[0] ?? null;
+  // The last USER action at-or-before the failure is the trigger. Whitelist
+  // genuine user-interaction kinds — api/error chips share the failure's own
+  // timestamp and would otherwise win the ≤ comparison over the real click.
+  const USER_KINDS = new Set(["click", "input", "select", "submit", "navigate"]);
+  const failureTs = failingRequest?.timestamp ?? (p.consoleErrors ?? [])[0]?.timestamp ?? Infinity;
+  // Note: keep chips with isError=true — a click flagged as error-causing IS
+  // the triggering action; only non-interaction kinds (api/error) are noise.
+  const userChips = (p.actionChips ?? []).filter((c) => USER_KINDS.has(c.kind));
+  const triggeringAction =
+    [...userChips].reverse().find((c) => c.timestamp <= failureTs) ?? userChips[userChips.length - 1] ?? null;
+
+  const firstError = (p.consoleLogs ?? []).find((l) => l.level === "error") ?? (p.consoleErrors ?? [])[0] ?? null;
+  const searchDir = args.searchDir ? path.resolve(process.cwd(), args.searchDir) : process.cwd();
+  const topFrames = firstError?.stack
+    ? resolveStackWithMaps(firstError.stack, searchDir).slice(0, 5).map(frameSummary)
+    : [];
+
+  return {
+    title: p.meta.title,
+    rootCause: p.rootCauseHint ?? p.meta.rootCause ?? null,
+    failingRequest: failingRequest
+      ? {
+          method: failingRequest.method,
+          url: failingRequest.url,
+          status: failingRequest.status,
+          responseSnippet: failingRequest.response ?? null,
+        }
+      : null,
+    triggeringAction: triggeringAction
+      ? {
+          action: [triggeringAction.verb, triggeringAction.nounLabel ?? triggeringAction.target].filter(Boolean).join(" "),
+          detail: triggeringAction.detail ?? null,
+          at: new Date(triggeringAction.timestamp).toISOString(),
+        }
+      : null,
+    error: firstError ? { message: firstError.message, topFrames } : null,
+    failingTest: p.playwrightTest
+      ? { available: true, tool: "get_playwright_test", filename: p.playwrightTestFilename ?? "tracebug-bug.spec.ts" }
+      : { available: false, tool: null, filename: null },
+    nextStep:
+      "Search the codebase for the failing endpoint path and the original source locations above; " +
+      (p.playwrightTest
+        ? "then save the generated test (get_playwright_test) and iterate: run → fix → run until green."
+        : "reproduce manually using get_repro_steps, then fix and verify."),
+  };
+}
+
 // ── Tool registry (MCP tools/list definitions + dispatch) ────────────────
 
 const FILE_PROP = {
@@ -476,6 +630,38 @@ export const TOOL_DEFINITIONS = [
       properties: {
         ...FILE_PROP,
         index: { type: "number", description: "Zero-based screenshot index (default 0). list_bug_reports shows the count." },
+      },
+      required: ["file"],
+    },
+  },
+  {
+    name: "get_playwright_test",
+    description:
+      "Get the generated Playwright spec that REPLAYS this bug report's session and asserts the captured failure is gone — the test fails while the bug exists and passes once fixed. Save it, run it to reproduce, then use it to verify your fix.",
+    inputSchema: { type: "object", properties: { ...FILE_PROP }, required: ["file"] },
+  },
+  {
+    name: "resolve_stack",
+    description:
+      "Map the minified stack traces in a TraceBug bug report to original source files/lines using .map files found in the current project (run from the repo that built the app). Returns bundled and original positions per frame.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...FILE_PROP,
+        searchDir: { type: "string", description: "Directory to search for .map files (default: the current working directory). Point at your build output if maps aren't found." },
+      },
+      required: ["file"],
+    },
+  },
+  {
+    name: "get_fix_context",
+    description:
+      "One-call fix starter for a TraceBug bug report: the failing request (with response snippet), the user action that triggered it, the first error with source-map-resolved top stack frames, and whether a generated failing test is available. Call this when you're ready to locate and fix the bug.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...FILE_PROP,
+        searchDir: { type: "string", description: "Directory to search for .map files when resolving stack frames (default: current working directory)." },
       },
       required: ["file"],
     },
@@ -544,6 +730,12 @@ export function callTool(baseDir: string, name: string, args: Record<string, unk
           ],
         };
       }
+      case "get_playwright_test":
+        return textResult(toolGetPlaywrightTest(baseDir, args as { file: string }));
+      case "resolve_stack":
+        return textResult(toolResolveStack(baseDir, args as { file: string; searchDir?: string }));
+      case "get_fix_context":
+        return textResult(toolGetFixContext(baseDir, args as { file: string; searchDir?: string }));
       default:
         return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
     }

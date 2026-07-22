@@ -14,7 +14,19 @@ Connect Claude Code, Cursor, Windsurf, or VS Code to the `.html` bug reports the
 claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
 ```
 
-The agent gets six read tools — `list_bug_reports`, `get_bug_report` (with a prioritized investigation guide), `get_console_errors`, `get_network_activity`, `get_repro_steps`, `get_screenshot` — and a `/tracebug:debug_bug_report` prompt.
+The agent gets nine read tools and a `/tracebug:debug_bug_report` prompt:
+
+- `list_bug_reports` — scan a folder and summarize every export
+- `get_bug_report` — report overview plus a prioritized investigation guide
+- `get_console_errors` — captured console output with stack traces
+- `get_network_activity` — captured requests, failed ones first, with response snippets
+- `get_repro_steps` — plain-English steps, user actions, full session timeline
+- `get_screenshot` — screenshots as real image content
+- `get_playwright_test` — a generated failing Playwright spec that replays the session and asserts the failure is gone; red until fixed, green after
+- `resolve_stack` — maps minified stack frames to original source via `.map` files found in the repo the server runs from
+- `get_fix_context` — one-call fix starter: failing request, triggering user action, source-map-resolved stack, failing-test availability
+
+The last three close the fix loop: pull the failing test, patch, re-run until green.
 
 **Everything stays on your machine.** The server binds to stdio only, opens zero network connections, and reads the report files from your disk. No account, no cloud, no upload.
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { collectConsoleWarnings, collectConsoleInfo, collectConsoleLogs } from '../src/collectors';
+import { collectConsoleWarnings, collectConsoleInfo, collectConsoleLogs, formatConsoleArgs, capMessage, CONSOLE_MSG_MAX } from '../src/collectors';
 import type { EventType } from '../src/types';
 
 type Emitted = { type: EventType; data: Record<string, unknown> };
@@ -69,5 +69,42 @@ describe.each([
     expect(console[method]).not.toBe(orig);
     cleanup();
     expect(console[method]).toBe(orig);
+  });
+
+  it('caps a huge logged object so it cannot bloat the report', () => {
+    const huge = { blob: 'x'.repeat(500_000) };
+    const { emitted, cleanup, call } = capture(collect, method);
+    try { call('payload', huge); } finally { cleanup(); }
+    const msg = (emitted[0].data as any).error.message as string;
+    expect(msg.length).toBeLessThanOrEqual(CONSOLE_MSG_MAX + 20);
+    expect(msg).toContain('…[truncated]');
+  });
+
+  it('does not drop the event when a circular object is logged', () => {
+    const circular: any = { name: 'node' };
+    circular.self = circular;
+    const { emitted, cleanup, call } = capture(collect, method);
+    try { call('cycle', circular); } finally { cleanup(); }
+    // Old bare JSON.stringify threw → outer catch dropped the whole event.
+    expect(emitted.length).toBe(1);
+    expect((emitted[0].data as any).error.message).toContain('[unserializable]');
+  });
+});
+
+describe('formatConsoleArgs / capMessage', () => {
+  it('joins mixed args and caps the result', () => {
+    const out = formatConsoleArgs(['status', 500, { ok: false }]);
+    expect(out).toBe('status 500 {"ok":false}');
+  });
+
+  it('capMessage appends the marker only past the limit', () => {
+    expect(capMessage('short', 10)).toBe('short');
+    expect(capMessage('x'.repeat(20), 10)).toBe('x'.repeat(10) + '…[truncated]');
+  });
+
+  it('degrades a circular arg without throwing', () => {
+    const c: any = {}; c.self = c;
+    expect(() => formatConsoleArgs([c])).not.toThrow();
+    expect(formatConsoleArgs([c])).toBe('[unserializable]');
   });
 });

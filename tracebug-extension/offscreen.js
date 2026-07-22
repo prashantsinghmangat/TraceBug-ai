@@ -20,6 +20,15 @@
 let _recorder = null;
 let _stream = null;
 let _chunks = [];
+// Running size of the accumulated chunks + a one-shot warning past a soft
+// ceiling. In "standard" mode (not the default rolling mode) chunks grow for
+// the whole recording; a multi-hour session can reach hundreds of MB in the
+// offscreen document. We don't hard-cap (that would truncate the video and
+// possibly lose the bug) — we warn so a long standard recording is a choice,
+// not a surprise. Rolling mode is bounded by its periodic captures.
+let _chunksBytes = 0;
+let _chunksWarned = false;
+const CHUNKS_WARN_BYTES = 1024 * 1024 * 1024; // 1 GB
 let _startedAt = 0;
 let _mimeType = "";
 let _mode = "rolling";
@@ -166,6 +175,8 @@ function teardown() {
   _recorder = null;
   _stream = null;
   _chunks = [];
+  _chunksBytes = 0;
+  _chunksWarned = false;
   _startedAt = 0;
   _mimeType = "";
   _mode = "rolling";
@@ -247,6 +258,8 @@ async function _startRecordingImpl(options) {
 
   _stream = displayStream;
   _chunks = [];
+  _chunksBytes = 0;
+  _chunksWarned = false;
   _comments = [];
   _startedAt = Date.now();
   _capturesTaken = 0;
@@ -263,7 +276,19 @@ async function _startRecordingImpl(options) {
   }
 
   _recorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) _chunks.push(e.data);
+    if (e.data && e.data.size > 0) {
+      _chunks.push(e.data);
+      _chunksBytes += e.data.size;
+      if (!_chunksWarned && _mode !== "rolling" && _chunksBytes > CHUNKS_WARN_BYTES) {
+        _chunksWarned = true;
+        console.warn(
+          "[TraceBug offscreen] recording buffer > 1 GB (" +
+            Math.round(_chunksBytes / 1048576) +
+            " MB) — a very long standard recording holds it all in memory. " +
+            "Stop soon, or use rolling mode (the default) for long sessions."
+        );
+      }
+    }
   };
 
   // ── Auto-stop finalize ─────────────────────────────────────────────────

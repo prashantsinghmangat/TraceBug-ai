@@ -1,6 +1,9 @@
 # Architecture
 
-Technical overview of how TraceBug works internally.
+Technical overview of how TraceBug works internally — the **file-by-file
+tour**. For the system-level overview (data flow, subsystems, design
+positions), start at the root [ARCHITECTURE.md](../ARCHITECTURE.md); for
+the *why* behind the big decisions, see the [ADRs](adr/README.md).
 
 ## Build System
 

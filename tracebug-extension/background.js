@@ -141,7 +141,13 @@ async function handleComboAction(message, sender) {
   // Forward the popup's per-action options into the page-side handler. Right
   // now this is just the mic flag for recording flows, but any future combo
   // option (region, framerate, etc.) plugs in here.
-  const actionMessage = { type: message.type, withMic: !!message.withMic };
+  const actionMessage = {
+    type: message.type,
+    withMic: !!message.withMic,
+    blurFirst: !!message.blurFirst,
+    delaySec: message.delaySec || 0,
+    surfaceMode: message.surfaceMode || undefined,
+  };
   if (!wasAlreadyInjected) {
     await new Promise((r) => setTimeout(r, 250));
   }
@@ -220,7 +226,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Each one: ensure the site is enabled, inject the SDK if needed, then
   // dispatch the matching action message to the page. Lets the popup
   // express user intent in a single call instead of a 3-step dance.
-  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS") {
+  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT") {
     handleComboAction(message, sender)
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ error: (err && err.message) || String(err) }));

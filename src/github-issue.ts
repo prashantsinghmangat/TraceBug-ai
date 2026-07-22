@@ -4,6 +4,7 @@
 
 import { BugReport } from "./types";
 import { formatTimelineText } from "./timeline-builder";
+import { formatStyleSummary } from "./style-evidence";
 import { formatRootCauseLine, severityTitlePrefix } from "./report-builder";
 
 // GitHub URL prefill has a ~8KB practical limit (some browsers/proxies cap at 6-8KB)
@@ -143,6 +144,23 @@ export function generateGitHubIssue(report: BugReport): string {
       md += `- **[${note.severity.toUpperCase()}]** ${note.text}\n`;
       if (note.expected) md += `  - **Expected:** ${note.expected}\n`;
       if (note.actual) md += `  - **Actual:** ${note.actual}\n`;
+    }
+    md += `\n`;
+  }
+
+  // Element evidence — computed-style receipts from annotate/inspect modes.
+  if (report.elementAnnotations && report.elementAnnotations.length > 0) {
+    md += `### Element Evidence\n\n`;
+    for (const a of report.elementAnnotations) {
+      md += `- **[${a.intent}/${a.severity}]** \`${a.selector}\` — ${a.comment}\n`;
+      if (a.styles) {
+        try {
+          md += `  - ${formatStyleSummary(a.styles)}\n`;
+          if (a.styles.contrast && !a.styles.contrast.aa) {
+            md += `  - ⚠ Text contrast **${a.styles.contrast.ratio}:1** fails WCAG AA (${a.styles.contrast.foreground} on ${a.styles.contrast.background})\n`;
+          }
+        } catch {}
+      }
     }
     md += `\n`;
   }
