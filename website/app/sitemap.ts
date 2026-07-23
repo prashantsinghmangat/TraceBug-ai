@@ -7,6 +7,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     { url: baseUrl, lastModified: new Date(), changeFrequency: 'weekly', priority: 1 },
     { url: `${baseUrl}/instant-bug-report`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${baseUrl}/ai-bug-fix`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${baseUrl}/claude-code-bug-reports`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${baseUrl}/cursor-bug-reports`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.9 },
     { url: `${baseUrl}/features`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
     { url: `${baseUrl}/pricing`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.7 },
     { url: `${baseUrl}/docs`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
@@ -26,6 +29,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/docs/playwright`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
     { url: `${baseUrl}/docs/ai-debugger`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
     { url: `${baseUrl}/docs/har-export`, lastModified: new Date(), changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${baseUrl}/compare/jam-alternative`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.9 },
     { url: `${baseUrl}/compare/sentry-alternative`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.9 },
     { url: `${baseUrl}/compare/logrocket-alternative`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.9 },
     { url: `${baseUrl}/compare/bugsnag-alternative`, lastModified: new Date(), changeFrequency: 'monthly', priority: 0.9 },

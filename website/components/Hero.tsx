@@ -49,8 +49,8 @@ export default function Hero() {
 
         {/* Headline */}
         <h1 className="mx-auto max-w-4xl text-center text-[42px] sm:text-6xl lg:text-[76px] font-semibold leading-[1.04] tracking-[-0.035em] text-text-primary">
-          Instant bug reports your dev can{" "}
-          <span className="gradient-text-anim">actually open</span>
+          Capture the bug.{" "}
+          <span className="gradient-text-anim">Let AI fix it.</span>
           {/* Trace IS the terminal caret — the bug blinks at the end of the
               line instead of the cursor block */}
           <span className="brand-caret ml-2.5 inline-block w-[0.55em] align-middle" aria-hidden="true">
@@ -59,12 +59,12 @@ export default function Hero() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-center text-text-muted text-lg sm:text-xl leading-relaxed">
-          One shortcut captures the bug — replay, console errors, network calls, and
-          screenshots — into a single{" "}
+          One shortcut captures what broke — replay, console errors, network calls,
+          a repro timeline — into one offline{" "}
           <code className="font-mono text-[0.86em] text-text-primary bg-surface-2 border border-border rounded px-1.5 py-0.5">
             .html
           </code>{" "}
-          file. Your dev opens it offline and sees exactly what broke.
+          file. Your AI agent reads it over MCP and fixes the bug — a human dev can just open it too.
         </p>
 
         {/* CTAs */}

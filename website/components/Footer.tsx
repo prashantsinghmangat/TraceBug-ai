@@ -11,9 +11,11 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     title: "Product",
     links: [
       { label: "Features", href: "/features" },
+      { label: "AI bug fix", href: "/ai-bug-fix" },
       { label: "Instant bug report", href: "/instant-bug-report" },
+      { label: "Claude Code bug reports", href: "/claude-code-bug-reports" },
+      { label: "Cursor bug reports", href: "/cursor-bug-reports" },
       { label: "Demo", href: "/#demo" },
-      { label: "Installation", href: "/#install" },
       { label: "Pricing", href: "/pricing" },
     ],
   },
@@ -31,6 +33,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
       { label: "npm package", href: NPM, external: true },
       { label: "Chrome extension", href: "/#install" },
       { label: "Sentry alternative", href: "/compare/sentry-alternative" },
+      { label: "Jam alternative", href: "/compare/jam-alternative" },
     ],
   },
   {
