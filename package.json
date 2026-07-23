@@ -1,7 +1,7 @@
 {
   "name": "tracebug-sdk",
   "version": "1.9.0",
-  "description": "Capture a bug, see the root cause, and create a GitHub issue in 5 seconds. Zero-backend, browser-only debugging assistant. Free Sentry/LogRocket alternative.",
+  "description": "Capture a browser bug into one offline .html file your AI coding agent reads over MCP and fixes — session replay, console, network, repro timeline, and a generated failing test. Local-first, zero backend. Free.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",

@@ -1,9 +1,10 @@
 <h1 align="center">TraceBug</h1>
 
 <p align="center">
-  <strong>Bug reports your dev can actually open.</strong><br>
-  Local-first. One <code>.html</code> file with full replay, console errors,
-  network requests, and screenshots. Opens offline.
+  <strong>Capture the bug. Let AI fix it.</strong><br>
+  Local-first, zero backend. One <code>.html</code> file — full replay, console
+  errors, network requests, repro timeline — that your AI coding agent reads over
+  MCP and fixes. Opens offline for humans too.
 </p>
 
 <p align="center">
@@ -27,7 +28,7 @@
 
 ---
 
-TraceBug is a local-first debugging assistant. Capture a bug → produce a single self-contained `.html` file → email/Slack it to a dev → they open it offline and see exactly what happened.
+TraceBug is a local-first debugging assistant. Capture a bug → produce a single self-contained `.html` file → hand it to your AI coding agent (Claude Code, Cursor, Windsurf), which reads the evidence over a local MCP server and fixes it — or email/Slack it to a human dev who opens it offline. Every report also embeds a failing test the agent runs to verify the fix.
 
 Every report opens with:
 

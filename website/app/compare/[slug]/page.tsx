@@ -73,6 +73,26 @@ const comparisons: Record<string, {
       "Bugsnag has error grouping with machine learning",
     ],
   },
+  "jam-alternative": {
+    title: "TraceBug vs Jam",
+    metaTitle: "TraceBug: Free, Local-First Jam Alternative (AI-agent ready)",
+    metaDescription: "Compare TraceBug to Jam.dev. TraceBug captures the bug into one offline .html file your AI coding agent reads over MCP and fixes — no cloud, no account, no backend. Free and open source.",
+    competitor: "Jam",
+    tagline: "Jam sends the bug to a dashboard. TraceBug sends it to your AI agent.",
+    advantages: [
+      "AI-agent ready — a local MCP server hands the report to Claude Code, Cursor, or Windsurf to fix; Jam is built for a human dashboard",
+      "Every report embeds a generated failing test the agent runs to verify the fix",
+      "Local-first, zero backend — the report is one self-contained .html file, nothing is uploaded",
+      "Free and open source (MIT) — Jam is a paid cloud product",
+      "Works offline — open the report file with no network, no login",
+      "Secrets auto-masked at capture (JWTs, API keys) before they ever enter the file",
+    ],
+    disadvantages: [
+      "Jam has a hosted team dashboard with shared links out of the box",
+      "Jam offers cloud storage and cross-device history",
+      "Jam's onboarding needs no local MCP setup for the AI step",
+    ],
+  },
   "frontend-bug-reporting-tool": {
     title: "Best Frontend Bug Reporting Tool in 2026",
     metaTitle: "Best Frontend Bug Reporting Tool — TraceBug (Free, Open Source)",
