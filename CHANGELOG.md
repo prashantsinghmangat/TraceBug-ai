@@ -2,9 +2,9 @@
 
 All notable changes to TraceBug are documented here.
 
-## [Unreleased]
+## [1.9.0] - 2026-07-22
 
-> The fix-loop release: the report stops being evidence an agent *reads* and becomes something it *iterates against* — run the generated failing test, patch, re-run until green.
+> The fix-loop release: the report stops being evidence an agent *reads* and becomes something it *iterates against* — run the generated failing test, patch, re-run until green. Also ships inspect mode (design-QA style evidence), pre-recording blur, an extension redaction UI, and a full production-audit hardening pass (bounded recording memory, capped console capture, modal focus trap, faster source-map resolution, e2e in CI).
 
 ### Added
 
