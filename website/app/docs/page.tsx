@@ -68,7 +68,8 @@ export default function DocsPage() {
             </ul>
           </div>
 
-          {/* MCP promo card — the newest capability, deep-dive on its own page */}
+          {/* MCP promo card — the differentiator, deep-dive on its own page.
+              No "New:" badge: it never expires and reads as recency inflation. */}
           <a
             href="/docs/mcp"
             className="block bg-surface border border-accent/30 rounded-xl p-6 mb-12 hover:border-accent/60 transition-colors"
@@ -77,7 +78,7 @@ export default function DocsPage() {
               <span className="text-2xl">🤖</span>
               <div>
                 <h3 className="text-text-primary font-semibold mb-1">
-                  New: MCP Server — let AI agents debug your bug reports
+                  MCP Server — let AI agents debug your bug reports
                 </h3>
                 <p className="text-text-muted text-sm leading-relaxed">
                   Connect Claude Code, Cursor, or VS Code to your exported .html

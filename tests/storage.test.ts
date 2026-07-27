@@ -13,6 +13,8 @@ import {
   clearAllSessions,
   flushPendingEvents,
   saveEnvironment,
+  markSessionSaved,
+  getStorageUsageBytes,
 } from '../src/storage';
 import type { TraceBugEvent, Annotation, EnvironmentInfo } from '../src/types';
 
@@ -222,5 +224,95 @@ describe('localStorage quota handling', () => {
     // that the error did not crash the host and the storage engine recovered.
     const sessions = getAllSessions();
     expect(Array.isArray(sessions)).toBe(true);
+  });
+});
+
+describe('saved-ticket protection', () => {
+  it('markSessionSaved persists the flag and returns true', () => {
+    appendEvent('s1', event('s1'), 100, 10);
+    expect(markSessionSaved('s1')).toBe(true);
+    const s = getAllSessions().find(x => x.sessionId === 's1')!;
+    expect(s.saved).toBe(true);
+  });
+
+  it('markSessionSaved returns false for an unknown session', () => {
+    expect(markSessionSaved('nope')).toBe(false);
+  });
+
+  it('quota eviction drops unsaved sessions, never saved tickets', () => {
+    // Oldest session is SAVED; two unsaved follow.
+    appendEvent('sv', event('sv'), 100, 10);
+    markSessionSaved('sv');
+    appendEvent('u1', event('u1'), 100, 10);
+    appendEvent('u2', event('u2'), 100, 10);
+    flushPendingEvents();
+
+    const warnings: any[] = [];
+    const onWarn = (e: Event) => warnings.push((e as CustomEvent).detail);
+    window.addEventListener('tracebug:storage-warning', onWarn);
+
+    // First write attempt hits quota; the retry after one eviction succeeds.
+    // Spy on the prototype — in jsdom, setting properties directly on the
+    // localStorage instance stores them as items instead of overriding.
+    let throws = 1;
+    const origSet = Storage.prototype.setItem;
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+      if (throws > 0) { throws--; throw new Error('QuotaExceededError'); }
+      origSet.call(this, k, v);
+    });
+    appendEvent('u3', event('u3'), 100, 10);
+    flushPendingEvents();
+    spy.mockRestore();
+    window.removeEventListener('tracebug:storage-warning', onWarn);
+
+    const sessions = getAllSessions();
+    // The saved ticket survived; the oldest UNSAVED session was evicted instead.
+    expect(sessions.find(s => s.sessionId === 'sv')).toBeDefined();
+    expect(sessions.find(s => s.sessionId === 'u1')).toBeUndefined();
+    // The newest (active) session survived too.
+    expect(sessions.find(s => s.sessionId === 'u3')).toBeDefined();
+    // And the eviction was surfaced, not silent.
+    expect(warnings.some(w => w?.code === 'unsaved_evicted')).toBe(true);
+  });
+
+  it('maxSessions rotation exempts saved tickets', () => {
+    appendEvent('keep', event('keep'), 10, 3);
+    markSessionSaved('keep');
+    for (let i = 0; i < 8; i++) {
+      appendEvent(`s${i}`, event(`s${i}`), 10, 3);
+    }
+    flushPendingEvents();
+    const sessions = getAllSessions();
+    expect(sessions.find(s => s.sessionId === 'keep')).toBeDefined();
+    expect(sessions.filter(s => !s.saved).length).toBeLessThanOrEqual(3);
+  });
+
+  it('markSessionSaved returns false and rolls back when storage is truly full', () => {
+    appendEvent('s1', event('s1'), 100, 10);
+    flushPendingEvents();
+
+    const warnings: any[] = [];
+    const onWarn = (e: Event) => warnings.push((e as CustomEvent).detail);
+    window.addEventListener('tracebug:storage-warning', onWarn);
+
+    // Every write fails — nothing can be evicted to make room.
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    const ok = markSessionSaved('s1');
+    spy.mockRestore();
+    window.removeEventListener('tracebug:storage-warning', onWarn);
+
+    expect(ok).toBe(false);
+    // On-disk state was never corrupted and the flag did not stick.
+    expect(getAllSessions().find(s => s.sessionId === 's1')?.saved).not.toBe(true);
+    expect(warnings.some(w => w?.code === 'storage_full')).toBe(true);
+  });
+
+  it('getStorageUsageBytes reflects persisted data', () => {
+    expect(getStorageUsageBytes()).toBe(0);
+    appendEvent('s1', event('s1'), 100, 10);
+    flushPendingEvents();
+    expect(getStorageUsageBytes()).toBeGreaterThan(0);
   });
 });

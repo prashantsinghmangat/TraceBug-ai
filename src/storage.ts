@@ -76,10 +76,38 @@ export function getAllSessions(): StoredSession[] {
   }
 }
 
-function saveSessions(sessions: StoredSession[]): void {
+// ── Storage warnings ──────────────────────────────────────────────────────
+// The storage engine has no UI access, so eviction / quota problems are
+// broadcast as a DOM event. The toolbar listens and shows a toast — users
+// must never lose data silently.
+
+export interface StorageWarningDetail {
+  code: "unsaved_evicted" | "events_trimmed" | "storage_full";
+  message: string;
+}
+
+export function emitStorageWarning(detail: StorageWarningDetail): void {
+  if (typeof console !== "undefined") console.warn(`[TraceBug] ${detail.message}`);
+  try {
+    window.dispatchEvent(new CustomEvent<StorageWarningDetail>("tracebug:storage-warning", { detail }));
+  } catch {}
+}
+
+/** Approximate bytes the sessions blob occupies in localStorage
+ *  (UTF-16 → 2 bytes per code unit). Used by the Saved Tickets meter. */
+export function getStorageUsageBytes(): number {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    return raw ? raw.length * 2 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveSessions(sessions: StoredSession[]): boolean {
   try {
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-    return;
+    return true;
   } catch {
     // localStorage full. Free space *progressively* — the old code dropped a
     // single session and gave up, which silently lost every pending event when
@@ -100,30 +128,50 @@ function saveSessions(sessions: StoredSession[]): void {
     }
   };
 
-  // 1) Drop oldest sessions one at a time.
+  // 1) Drop oldest UNSAVED sessions one at a time. Sessions the user
+  //    explicitly saved (saved === true) are never evicted — only their own
+  //    Delete / Clear All removes them. The newest session is also kept: it's
+  //    the active recording whose events triggered this flush.
   const working = sessions.slice();
-  while (working.length > 1) {
-    working.shift();
+  let dropped = 0;
+  for (;;) {
+    const newest = working[working.length - 1];
+    const idx = working.findIndex((s) => !s.saved && s !== newest);
+    if (idx === -1) break;
+    working.splice(idx, 1);
+    dropped++;
     if (commit(working)) {
-      if (typeof console !== "undefined") console.warn("[TraceBug] Storage full — dropped oldest session(s) to fit.");
-      return;
+      emitStorageWarning({
+        code: "unsaved_evicted",
+        message: `Browser storage full — removed ${dropped} old unsaved session${dropped === 1 ? "" : "s"} to make room. Saved tickets were kept.`,
+      });
+      return true;
     }
   }
 
-  // 2) One session left and still too big — halve its oldest events repeatedly.
-  const last = working[0];
-  if (last && Array.isArray(last.events)) {
+  // 2) Only saved tickets + the newest session remain — halve the newest
+  //    session's oldest events repeatedly (only if it isn't itself saved).
+  const last = working[working.length - 1];
+  if (last && !last.saved && Array.isArray(last.events)) {
     while (last.events.length > 1) {
       last.events = last.events.slice(Math.ceil(last.events.length / 2));
       if (commit(working)) {
-        if (typeof console !== "undefined") console.warn("[TraceBug] Storage full — trimmed older events from the current session to fit.");
-        return;
+        emitStorageWarning({
+          code: "events_trimmed",
+          message: "Browser storage full — trimmed older events from the current session to fit. Saved tickets were kept.",
+        });
+        return true;
       }
     }
   }
 
-  // 3) Genuinely cannot persist — surface it instead of losing data silently.
-  if (typeof console !== "undefined") console.error("[TraceBug] Could not persist sessions: localStorage quota exceeded.");
+  // 3) Cannot persist without touching saved tickets — refuse and surface it.
+  //    Whatever was last written to localStorage stays intact on disk.
+  emitStorageWarning({
+    code: "storage_full",
+    message: "Browser storage is full of saved tickets — new data can't be saved. Delete old saved tickets to free space.",
+  });
+  return false;
 }
 
 // ── Get or create the current session ─────────────────────────────────────
@@ -179,8 +227,8 @@ export function scheduleFlush(): void {
   _pendingFlush = setTimeout(() => {
     _pendingFlush = null;
     if (_cachedSessions && _dirty) {
-      saveSessions(_cachedSessions);
-      _dirty = false;
+      // Keep _dirty on failure so the next mutation retries the write.
+      if (saveSessions(_cachedSessions)) _dirty = false;
     }
   }, FLUSH_INTERVAL_MS);
 }
@@ -190,15 +238,17 @@ export function scheduleFlush(): void {
  *  then call this to persist NOW without going through scheduleFlush(), so it
  *  must always write when a cache exists. The dirty guard is only for the
  *  high-frequency scheduled path. */
-export function flushPendingEvents(): void {
+export function flushPendingEvents(): boolean {
   if (_pendingFlush) {
     clearTimeout(_pendingFlush);
     _pendingFlush = null;
   }
   if (_cachedSessions) {
-    saveSessions(_cachedSessions);
-    _dirty = false;
+    const ok = saveSessions(_cachedSessions);
+    if (ok) _dirty = false;
+    return ok;
   }
+  return true;
 }
 
 /**
@@ -264,9 +314,18 @@ export function appendEvent(
     session.events = session.events.slice(-maxEvents);
   }
 
-  // Trim old sessions if over limit
-  if (sessions.length > maxSessions) {
-    sessions = sessions.slice(-maxSessions);
+  // Trim old sessions if over limit. Saved tickets are exempt: they neither
+  // count toward maxSessions nor get evicted — only unsaved sessions rotate.
+  const unsavedCount = sessions.filter((s) => !s.saved).length;
+  if (unsavedCount > maxSessions) {
+    let toDrop = unsavedCount - maxSessions;
+    sessions = sessions.filter((s) => {
+      if (toDrop > 0 && !s.saved && s !== session) {
+        toDrop--;
+        return false;
+      }
+      return true;
+    });
     _cachedSessions = sessions;
   }
 
@@ -347,15 +406,26 @@ export function setSessionPriority(sessionId: string, priority: BugPriority): vo
 
 // ── Mark session as explicitly saved by the user ─────────────────────────
 
-export function markSessionSaved(sessionId: string): void {
+export function markSessionSaved(sessionId: string): boolean {
   const sessions = getCachedSessions();
   const session = sessions.find((s) => s.sessionId === sessionId);
-  if (!session) return;
+  if (!session) return false;
 
   session.saved = true;
   session.updatedAt = Date.now();
-  // Flush immediately so the saved state survives page reloads.
-  flushPendingEvents();
+
+  // Ask the browser to make this origin's storage durable so saved tickets
+  // aren't evicted under disk pressure. Fire-and-forget; browsers may deny.
+  try {
+    navigator.storage?.persist?.().catch(() => {});
+  } catch {}
+
+  // Flush immediately so the saved state survives page reloads. saveSessions
+  // never evicts saved tickets, so `false` here means storage is truly full —
+  // the caller should tell the user instead of pretending the save worked.
+  const ok = flushPendingEvents();
+  if (!ok) session.saved = false;
+  return ok;
 }
 
 // ── Clear everything ──────────────────────────────────────────────────────

@@ -242,7 +242,7 @@ function renderPanel(panel: HTMLElement): void {
   const content = panel.querySelector("#bt-content") as HTMLElement;
   panel.querySelector("#bt-refresh")!.addEventListener("click", () => renderPanel(panel));
   panel.querySelector("#bt-clear")!.addEventListener("click", () => {
-    if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
+    if (confirm("Delete all TraceBug data? This clears sessions (including SAVED tickets), screenshots, voice notes, annotations, and the network failure buffer.")) {
       // Wipe everything so no stale data leaks into future reports.
       try { clearAllSessions(); } catch {}
       try { clearScreenshots(); } catch {}

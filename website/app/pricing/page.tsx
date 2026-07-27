@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import PricingClient from "./PricingClient";
 
 export const metadata: Metadata = {
-  title: "Pricing — TraceBug",
+  title: "Pricing — TraceBug (Free for Local Capture)",
   description:
-    "Local bug capture and .html export are free forever. Pay only for cloud collaboration when your team needs it. No SaaS lock-in.",
+    "TraceBug is free: local bug capture, offline .html exports, and the MCP integration for AI agents cost nothing. Optional cloud features may come later — local capture and export will remain free.",
 };
 
 export default function PricingPage() {

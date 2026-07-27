@@ -9,7 +9,7 @@ import { captureScreenshot, getScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
 import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
-import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId } from "./storage";
+import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getStorageUsageBytes } from "./storage";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
@@ -311,10 +311,19 @@ export function mountCompactToolbar(
   };
   document.addEventListener("keydown", keyHandler);
 
+  // Storage-engine warnings (eviction, quota full) surface as toasts here —
+  // the engine itself has no UI access. See emitStorageWarning in storage.ts.
+  const storageWarningHandler = (e: Event) => {
+    const detail = (e as CustomEvent<{ message?: string }>).detail;
+    if (detail?.message) showToast(`⚠ ${detail.message}`, root);
+  };
+  window.addEventListener("tracebug:storage-warning", storageWarningHandler);
+
   return () => {
     toolbar.remove();
     dragCleanup();
     document.removeEventListener("keydown", keyHandler);
+    window.removeEventListener("tracebug:storage-warning", storageWarningHandler);
     window.removeEventListener("resize", resizeHandler);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
@@ -676,11 +685,11 @@ function _showOfflineTicketList(root: HTMLElement): void {
   const existing = root.querySelector('[data-tracebug="offline-tickets-pop"]');
   if (existing) { existing.remove(); return; }
 
-  // Only sessions the user explicitly saved appear here.
+  // Only sessions the user explicitly saved appear here. No cap — saved
+  // tickets live until the user deletes them; the list scrolls instead.
   const sessions = getAllSessions()
     .filter(s => s.saved)
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    .slice(0, 10);
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
   const pop = document.createElement("div");
   pop.dataset.tracebug = "offline-tickets-pop";
@@ -718,6 +727,10 @@ function _showOfflineTicketList(root: HTMLElement): void {
     empty.innerHTML = "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.";
     pop.appendChild(empty);
   } else {
+    // Scrollable card list — the popover stays a fixed height no matter how
+    // many tickets the user has saved.
+    const list = document.createElement("div");
+    list.style.cssText = "max-height:320px;overflow-y:auto;overscroll-behavior:contain;margin-right:-6px;padding-right:6px";
     sessions.forEach((s) => {
       const evCount = (s.events || []).length;
       const ssArr = s.screenshots || [];
@@ -770,15 +783,58 @@ function _showOfflineTicketList(root: HTMLElement): void {
       const delBtn = document.createElement("button");
       delBtn.textContent = "Delete";
       delBtn.style.cssText = "background:transparent;color:var(--tb-error,#ef4444);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
+      // Two-click confirm — saved tickets are the user's durable data, so a
+      // single misclick must not destroy one. First click arms, second deletes.
       delBtn.addEventListener("click", () => {
+        if (delBtn.dataset.armed !== "true") {
+          delBtn.dataset.armed = "true";
+          delBtn.textContent = "Sure?";
+          delBtn.style.background = "var(--tb-error,#ef4444)";
+          delBtn.style.color = "#fff";
+          setTimeout(() => {
+            if (!delBtn.isConnected) return;
+            delBtn.dataset.armed = "false";
+            delBtn.textContent = "Delete";
+            delBtn.style.background = "transparent";
+            delBtn.style.color = "var(--tb-error,#ef4444)";
+          }, 3000);
+          return;
+        }
         deleteSession(s.sessionId);
+        // Re-render in place so the user sees the list update, not a close.
         pop.remove();
+        _showOfflineTicketList(root);
       });
       actions.appendChild(openBtn);
       actions.appendChild(delBtn);
       card.appendChild(actions);
-      pop.appendChild(card);
+      list.appendChild(card);
     });
+    pop.appendChild(list);
+  }
+
+  // Storage meter — saved tickets share the origin's localStorage budget
+  // (~5 MB in most browsers). Shows usage so users hit "full" with warning,
+  // never by surprise.
+  const usedBytes = getStorageUsageBytes();
+  if (usedBytes > 0) {
+    const QUOTA_ESTIMATE = 5 * 1024 * 1024;
+    const pct = Math.min(100, Math.round((usedBytes / QUOTA_ESTIMATE) * 100));
+    const usedMb = (usedBytes / (1024 * 1024)).toFixed(1);
+    const meter = document.createElement("div");
+    meter.style.cssText = "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)";
+    const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
+    const bar = document.createElement("div");
+    bar.style.cssText = "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px";
+    const fill = document.createElement("div");
+    fill.style.cssText = `height:100%;width:${pct}%;border-radius:2px;background:${barColor}`;
+    bar.appendChild(fill);
+    const label = document.createElement("div");
+    label.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666)";
+    label.textContent = `~${usedMb} MB of browser storage used · tickets stay until you delete them`;
+    meter.appendChild(bar);
+    meter.appendChild(label);
+    pop.appendChild(meter);
   }
 
   root.appendChild(pop);

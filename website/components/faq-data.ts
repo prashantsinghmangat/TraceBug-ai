@@ -31,6 +31,10 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
     a: "The Chrome extension works on any http/https page (Chrome, Edge, Brave, Opera). Browser-internal pages like chrome:// are off-limits by browser policy. For your own app, the npm SDK adds the capture toolbar with two lines of code and stays disabled on production by default.",
   },
   {
+    q: "Is TraceBug the same as “Trace Bug”?",
+    a: "Yes. The product name is written as one word, TraceBug, but some people search for it as “Trace Bug” with a space. Both refer to the same local-first browser bug-capture tool that turns a bug into AI-ready debugging context for coding agents.",
+  },
+  {
     q: "What exactly ends up inside an exported report?",
     a: "A pixel-accurate DOM session replay (rrweb, gzip-compressed), console output with stack traces, network requests with status and failing response bodies, screenshots with annotations, a millisecond-resolution timeline of user actions, environment details, and a root-cause hint. It's one .html file — typically well under a megabyte.",
   },

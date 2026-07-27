@@ -94,11 +94,11 @@ const comparisons: Record<string, {
     ],
   },
   "frontend-bug-reporting-tool": {
-    title: "Best Frontend Bug Reporting Tool in 2026",
-    metaTitle: "Best Frontend Bug Reporting Tool — TraceBug (Free, Open Source)",
-    metaDescription: "TraceBug is the best free frontend bug reporting tool. Automatic session recording, reproduction steps, screenshots, and one-click export to GitHub Issues and Jira.",
-    competitor: "Manual Bug Reporting",
-    tagline: "Stop wasting hours reproducing bugs. TraceBug does it automatically.",
+    title: "Automated Frontend Bug Reporting",
+    metaTitle: "Automated Frontend Bug Reporting — TraceBug (Free, Open Source)",
+    metaDescription: "TraceBug replaces hand-written bug reports with captured browser evidence: session recording, reproduction steps, console and network logs in one local .html file a human can open or an AI agent can investigate.",
+    competitor: "manual bug reporting",
+    tagline: "Browser evidence a human can open — or an AI coding agent can investigate. No more twenty-minute write-ups.",
     advantages: [
       "Auto-captures every click, input, API call, and error",
       "Generates reproduction steps automatically — no more 'it works on my machine'",
@@ -107,7 +107,12 @@ const comparisons: Record<string, {
       "One-click export to GitHub Issues, Jira Tickets, or PDF",
       "Works with React, Vue, Angular, Svelte, Next.js, and plain HTML",
     ],
-    disadvantages: [],
+    disadvantages: [
+      "Backend-only bugs never reach the browser — server logs and APM tools are still the right evidence there",
+      "The Chrome extension is Chrome-only today (Firefox port is paused)",
+      "There's no hosted team dashboard — reports are local files you share yourself",
+      "The AI-agent step needs a one-time local MCP setup",
+    ],
   },
 };
 
