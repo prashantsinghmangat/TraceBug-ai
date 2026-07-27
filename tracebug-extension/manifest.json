@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "TraceBug — QA Bug Reporter",
-  "version": "1.7.0",
-  "description": "Record bugs, capture screenshots, and generate developer-ready bug reports. No coding required.",
+  "name": "TraceBug — Capture the Bug, Let AI Fix It",
+  "version": "1.9.0",
+  "description": "Capture a browser bug — replay, console, network — into one local report your AI agent (Claude, Cursor) reads and fixes. Free.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
 

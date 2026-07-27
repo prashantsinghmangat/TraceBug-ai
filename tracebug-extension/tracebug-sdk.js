@@ -28253,10 +28253,10 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       lines.push(`
 ## Task`);
       lines.push(`Analyze this bug report and respond with:`);
-      lines.push(`1. The most likely root cause`);
+      lines.push(`1. The most likely root cause, with your reasoning tied to the evidence above`);
       lines.push(`2. Specific files or components to inspect`);
-      lines.push(`3. A concrete fix suggestion (code where possible)`);
-      lines.push(`4. Edge cases worth testing once the fix lands`);
+      lines.push(`3. A concrete fix (code where possible)`);
+      lines.push(`4. A regression test \u2014 or the exact assertions \u2014 that would catch this bug if it returns`);
     }
     return lines.join("\n");
   }
@@ -28283,7 +28283,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       ``,
       `1. Call get_bug_report("${filename}") to load the report overview and its investigation guide.`,
       `2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).`,
-      `3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.`,
+      `3. Cross-reference the findings with this codebase to identify the root cause and implement the fix.`,
+      `4. Call get_playwright_test("${filename}") for the generated failing test \u2014 run it to reproduce the bug (red), then re-run after your fix to confirm it passes (green).`,
       ``,
       `If the tracebug MCP server isn't connected yet, register it first \u2014 it auto-finds reports in your Downloads/Desktop folders, so no path setup is needed:`,
       `claude mcp add tracebug -- npx -y tracebug mcp`,

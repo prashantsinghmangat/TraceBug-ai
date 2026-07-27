@@ -88,9 +88,10 @@ export default function Hero() {
           </a>
         </div>
 
-        {/* the honest version of "no credit card required" */}
+        {/* the honest version of "no credit card required" — precise, not absolute:
+            capture/export are local today; optional cloud may come later (see /pricing) */}
         <p className="mt-4 text-center text-[12.5px] text-text-subtle">
-          No credit card. No account. No server. Free &amp; open source — forever.
+          Capture and export locally. No account or server required. Free &amp; open source.
         </p>
 
         {/* Product visual — light browser frame with the auto-generated report */}
