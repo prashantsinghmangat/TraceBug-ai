@@ -9,7 +9,11 @@ import { captureScreenshot, getScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
 import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
-import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getStorageUsageBytes } from "./storage";
+import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getStorageUsageBytes, QUOTA_ESTIMATE_BYTES } from "./storage";
+import { buildReport } from "./report-builder";
+import { exportSessionAsHtml } from "./exporters/html-replay";
+import { showToast as toast } from "./ui/toast";
+import type { StoredSession } from "./types";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
@@ -709,6 +713,14 @@ function _showOfflineTicketList(root: HTMLElement): void {
            d.toLocaleDateString([], { month: "short", day: "numeric" });
   };
 
+  // Serialized footprint of one ticket (UTF-16 → 2 bytes/code unit). Shown on
+  // each card so users understand WHY one ticket eats more storage than another.
+  const _sizeOf = (s: StoredSession): number => {
+    try { return JSON.stringify(s).length * 2; } catch { return 0; }
+  };
+  const _fmtSize = (bytes: number): string =>
+    bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+
   const hdr = document.createElement("div");
   hdr.style.cssText = "font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center";
   const hdrTitle = document.createElement("span");
@@ -760,9 +772,18 @@ function _showOfflineTicketList(root: HTMLElement): void {
       const parts: string[] = [];
       if (evCount > 0) parts.push(`${evCount} event${evCount !== 1 ? "s" : ""}`);
       if (ssArr.length > 0) parts.push(`${ssArr.length} shot${ssArr.length !== 1 ? "s" : ""}`);
+      const ticketBytes = _sizeOf(s);
+      if (ticketBytes > 0) parts.push(_fmtSize(ticketBytes));
       statsEl.textContent = parts.length > 0 ? parts.join(" · ") : "Empty session";
       info.appendChild(timeEl);
       info.appendChild(statsEl);
+      if (s.screenshotsDropped) {
+        const dropWarn = document.createElement("div");
+        dropWarn.style.cssText = "font-size:10px;margin-top:2px;color:#f59e0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+        dropWarn.textContent = "⚠ Saved without screenshots (storage was full)";
+        dropWarn.title = "Browser storage was full when this ticket was saved, so its screenshots were dropped to preserve the rest of the ticket.";
+        info.appendChild(dropWarn);
+      }
       card.appendChild(info);
 
       const actions = document.createElement("div");
@@ -780,6 +801,28 @@ function _showOfflineTicketList(root: HTMLElement): void {
         }
         showQuickBugCapture(root, { sessionId: s.sessionId }).catch(() => {});
       });
+      // Export — downloads the same self-contained .html replay the ticket
+      // modal produces, straight from the list. Backup / hand-off without a
+      // backend; also the escape hatch when storage runs full. Video is never
+      // persisted locally, so historical exports are always video-free.
+      const exportBtn = document.createElement("button");
+      exportBtn.textContent = "Export";
+      exportBtn.style.cssText = "background:transparent;color:var(--tb-text-secondary,#aaa);border:1px solid var(--tb-border-hover,#3a3a5e);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
+      exportBtn.addEventListener("click", async () => {
+        exportBtn.disabled = true;
+        exportBtn.textContent = "…";
+        try {
+          const report = buildReport(s);
+          report.video = undefined;
+          await exportSessionAsHtml(s, report, { includeVideo: false });
+          toast("✓ Replay exported (.html)", root);
+        } catch {
+          toast("Export failed", root);
+        }
+        exportBtn.disabled = false;
+        exportBtn.textContent = "Export";
+      });
+
       const delBtn = document.createElement("button");
       delBtn.textContent = "Delete";
       delBtn.style.cssText = "background:transparent;color:var(--tb-error,#ef4444);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
@@ -806,6 +849,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
         _showOfflineTicketList(root);
       });
       actions.appendChild(openBtn);
+      actions.appendChild(exportBtn);
       actions.appendChild(delBtn);
       card.appendChild(actions);
       list.appendChild(card);
@@ -818,9 +862,8 @@ function _showOfflineTicketList(root: HTMLElement): void {
   // never by surprise.
   const usedBytes = getStorageUsageBytes();
   if (usedBytes > 0) {
-    const QUOTA_ESTIMATE = 5 * 1024 * 1024;
-    const pct = Math.min(100, Math.round((usedBytes / QUOTA_ESTIMATE) * 100));
-    const usedMb = (usedBytes / (1024 * 1024)).toFixed(1);
+    const pct = Math.min(100, Math.round((usedBytes / QUOTA_ESTIMATE_BYTES) * 100));
+    const freeBytes = Math.max(0, QUOTA_ESTIMATE_BYTES - usedBytes);
     const meter = document.createElement("div");
     meter.style.cssText = "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)";
     const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
@@ -829,11 +872,28 @@ function _showOfflineTicketList(root: HTMLElement): void {
     const fill = document.createElement("div");
     fill.style.cssText = `height:100%;width:${pct}%;border-radius:2px;background:${barColor}`;
     bar.appendChild(fill);
+
+    // "Room for ≈N more" — estimated from the median size of the user's own
+    // saved tickets, which is far more actionable than raw megabytes. Skipped
+    // when nothing is saved yet (no basis for an estimate).
+    let roomHint = "";
+    const sizes = sessions.map(_sizeOf).filter((n) => n > 0).sort((a, b) => a - b);
+    if (sizes.length > 0) {
+      const median = sizes[Math.floor(sizes.length / 2)];
+      const more = Math.floor(freeBytes / median);
+      roomHint = ` · room for ≈${more} more ticket${more === 1 ? "" : "s"}`;
+    }
     const label = document.createElement("div");
     label.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666)";
-    label.textContent = `~${usedMb} MB of browser storage used · tickets stay until you delete them`;
+    label.textContent = `~${(usedBytes / (1024 * 1024)).toFixed(1)} MB used · ~${(freeBytes / (1024 * 1024)).toFixed(1)} MB free${roomHint}`;
+
+    const note = document.createElement("div");
+    note.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666);margin-top:3px;opacity:0.8";
+    note.textContent = "Saved in this browser only — tickets stay until you delete them. Clearing site data removes them.";
+
     meter.appendChild(bar);
     meter.appendChild(label);
+    meter.appendChild(note);
     pop.appendChild(meter);
   }
 

@@ -187,6 +187,31 @@ After a successful export, the modal closes after 300ms and the draft is cleared
 
 ---
 
+## Step 5 (optional) — Save Ticket (local, offline)
+
+**Save Ticket** in the modal footer persists the ticket in the browser's `localStorage` (`src/storage.ts`) — no account, no upload, no expiry. Saved tickets appear in the toolbar's **Saved Tickets** popover with thumbnail, event/screenshot counts, per-ticket size, an **Export** action (self-contained `.html` replay), and a two-click **Delete**.
+
+What gets saved: events (≤200), annotations, environment, error/repro metadata, priority, and up to 5 screenshots. Video is **not** persisted locally.
+
+The popover footer shows a storage meter: usage against the ~5 MB localStorage budget, plus an estimate of how many more tickets fit (based on the median size of your own saved tickets).
+
+### Storage invariants (do not break these)
+
+These rules are load-bearing for user trust — enforced in `src/storage.ts` and covered by `tests/storage.test.ts`:
+
+1. **Saved tickets never disappear automatically.** No LRU eviction, no TTL, no silent cleanup. Only the ticket's own Delete button or "Clear All Data" removes them. Quota-pressure eviction and the `maxSessions` rotation only ever touch *unsaved* sessions.
+2. **Save is verified before success is shown.** `markSessionSaved` confirms the write persisted; the UI never claims "Saved" on a failed write.
+3. **Users are warned before degradation.** A `near_full` warning fires at ~90% usage — before saves start failing, not after.
+4. **Degradation is always visible.** Every eviction / trim / refusal emits a `tracebug:storage-warning` event, surfaced as a toast. A screenshot-less fallback save is permanently marked on the ticket (`screenshotsDropped`) and shown on its card.
+5. **Saved data is never corrupted to make room.** If storage is full of saved tickets, new writes are refused rather than partially overwriting what's on disk.
+6. **Export always works offline.** The `.html` replay export from the saved list has no network dependency.
+
+> **Roadmap:** the single planned storage change is migrating saved tickets to IndexedDB (v2.0) — primarily to isolate long-term storage from the live recording pipeline's quota, secondarily for capacity. Feature additions (search, pins, archive, cleanup tools) wait for real-user feedback after that migration.
+>
+> **Migration trigger:** storage-pressure events are counted locally (never transmitted) — `TraceBug.getStorageStats()` returns per-code counts (`near_full`, `storage_full`, `unsaved_evicted`, `events_trimmed`, `screenshots_dropped`). When users report these filling up, start v2.0.
+
+---
+
 ## Equivalents & shortcuts
 
 | Goal | Trigger |
