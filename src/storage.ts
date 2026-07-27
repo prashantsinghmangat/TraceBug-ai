@@ -82,16 +82,60 @@ export function getAllSessions(): StoredSession[] {
 // must never lose data silently.
 
 export interface StorageWarningDetail {
-  code: "unsaved_evicted" | "events_trimmed" | "storage_full";
+  code: "unsaved_evicted" | "events_trimmed" | "storage_full" | "near_full";
   message: string;
 }
 
 export function emitStorageWarning(detail: StorageWarningDetail): void {
   if (typeof console !== "undefined") console.warn(`[TraceBug] ${detail.message}`);
+  recordStorageStat(detail.code);
   try {
     window.dispatchEvent(new CustomEvent<StorageWarningDetail>("tracebug:storage-warning", { detail }));
   } catch {}
 }
+
+// ── Local storage-pressure stats ──────────────────────────────────────────
+// Counts how often this browser hits storage pressure (near-full warnings,
+// refused writes, evictions, screenshot-dropping saves). Local-only — nothing
+// is ever transmitted. This is the decision gate for the v2.0 IndexedDB
+// migration: `TraceBug.getStorageStats()` output pasted into a GitHub issue
+// turns "is 5 MB enough?" from a guess into data.
+
+const STATS_KEY = "tracebug_storage_stats";
+
+export type StorageStatCode = StorageWarningDetail["code"] | "screenshots_dropped";
+
+export interface StorageStats {
+  counts: Partial<Record<StorageStatCode, number>>;
+  firstAt: number | null;
+  lastAt: number | null;
+}
+
+export function getStorageStats(): StorageStats {
+  try {
+    const raw = localStorage.getItem(STATS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { counts: {}, firstAt: null, lastAt: null };
+}
+
+export function recordStorageStat(code: StorageStatCode): void {
+  // Best-effort: when storage is genuinely full this tiny write can fail too.
+  // Acceptable — the near_full events leading up to it were already counted.
+  try {
+    const stats = getStorageStats();
+    stats.counts[code] = (stats.counts[code] ?? 0) + 1;
+    const now = Date.now();
+    if (!stats.firstAt) stats.firstAt = now;
+    stats.lastAt = now;
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch {}
+}
+
+/** Typical per-origin localStorage quota. Browsers don't expose the real
+ *  number for localStorage specifically, so the meter and the near-full
+ *  warning both assume the common ~5 MB. */
+export const QUOTA_ESTIMATE_BYTES = 5 * 1024 * 1024;
 
 /** Approximate bytes the sessions blob occupies in localStorage
  *  (UTF-16 → 2 bytes per code unit). Used by the Saved Tickets meter. */
@@ -104,9 +148,32 @@ export function getStorageUsageBytes(): number {
   }
 }
 
+// Warn BEFORE writes start failing, not at the moment of failure — users need
+// time to delete or export old tickets. Fires once when usage crosses 90% of
+// the assumed quota; re-arms only after usage drops back under 80% so a user
+// hovering around the threshold isn't toasted on every flush.
+let _nearFullWarned = false;
+function maybeWarnNearFull(): void {
+  const used = getStorageUsageBytes();
+  if (used >= QUOTA_ESTIMATE_BYTES * 0.9) {
+    if (!_nearFullWarned) {
+      _nearFullWarned = true;
+      emitStorageWarning({
+        code: "near_full",
+        message: "Browser storage is nearly full. New tickets may lose screenshots or fail to save — delete or export old saved tickets.",
+      });
+    }
+  } else if (used < QUOTA_ESTIMATE_BYTES * 0.8) {
+    _nearFullWarned = false;
+  }
+}
+
 function saveSessions(sessions: StoredSession[]): boolean {
   try {
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    // Only the clean-write path checks the early warning — the fallback paths
+    // below emit their own, stronger warnings when quota is already exceeded.
+    maybeWarnNearFull();
     return true;
   } catch {
     // localStorage full. Free space *progressively* — the old code dropped a

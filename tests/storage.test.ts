@@ -15,6 +15,9 @@ import {
   saveEnvironment,
   markSessionSaved,
   getStorageUsageBytes,
+  getStorageStats,
+  recordStorageStat,
+  emitStorageWarning,
 } from '../src/storage';
 import type { TraceBugEvent, Annotation, EnvironmentInfo } from '../src/types';
 
@@ -309,10 +312,49 @@ describe('saved-ticket protection', () => {
     expect(warnings.some(w => w?.code === 'storage_full')).toBe(true);
   });
 
+  it('emits a near_full warning when usage crosses ~90% of the quota estimate', () => {
+    // One session whose serialized size pushes usage past 90% of the assumed
+    // quota: 0.9 × 5 MiB = 4,718,592 bytes, and usage = raw.length × 2, so
+    // the raw JSON must exceed ~2.36M chars.
+    appendEvent('big', event('big'), 100, 10);
+    updateSessionError('big', 'Boom', 'x'.repeat(2_400_000), 'steps', 'summary');
+
+    const warnings: any[] = [];
+    const onWarn = (e: Event) => warnings.push((e as CustomEvent).detail);
+    window.addEventListener('tracebug:storage-warning', onWarn);
+    flushPendingEvents();
+    window.removeEventListener('tracebug:storage-warning', onWarn);
+
+    expect(warnings.some(w => w?.code === 'near_full')).toBe(true);
+  });
+
   it('getStorageUsageBytes reflects persisted data', () => {
     expect(getStorageUsageBytes()).toBe(0);
     appendEvent('s1', event('s1'), 100, 10);
     flushPendingEvents();
     expect(getStorageUsageBytes()).toBeGreaterThan(0);
+  });
+});
+
+describe('storage-pressure stats', () => {
+  it('starts empty', () => {
+    const stats = getStorageStats();
+    expect(stats.counts).toEqual({});
+    expect(stats.firstAt).toBeNull();
+    expect(stats.lastAt).toBeNull();
+  });
+
+  it('counts recorded events with timestamps', () => {
+    recordStorageStat('screenshots_dropped');
+    recordStorageStat('screenshots_dropped');
+    const stats = getStorageStats();
+    expect(stats.counts.screenshots_dropped).toBe(2);
+    expect(stats.firstAt).toBeTypeOf('number');
+    expect(stats.lastAt).toBeTypeOf('number');
+  });
+
+  it('emitStorageWarning increments the matching counter', () => {
+    emitStorageWarning({ code: 'near_full', message: 'test warning' });
+    expect(getStorageStats().counts.near_full).toBe(1);
   });
 });

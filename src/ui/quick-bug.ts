@@ -7,7 +7,7 @@ import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { isPremium } from "../plan";
 import { showUpgradeModal } from "./upgrade-modal";
-import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved } from "../storage";
+import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved, recordStorageStat } from "../storage";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
@@ -932,14 +932,22 @@ function _openModal(
       // opened from the saved list must not inherit the current global shots.
       if (!data.suppressVideo && data.currentSession) {
         const liveShots = getScreenshots();
-        if (liveShots.length > 0) data.currentSession.screenshots = liveShots.slice(0, 5);
+        if (liveShots.length > 0) {
+          data.currentSession.screenshots = liveShots.slice(0, 5);
+          // A fresh save that includes screenshots supersedes any earlier
+          // degraded (screenshot-less) save of this session.
+          delete data.currentSession.screenshotsDropped;
+        }
       }
       let savedOk = markSessionSaved(sid);
       let withoutShots = false;
       if (!savedOk && data.currentSession?.screenshots?.length) {
         // Storage full \u2014 screenshots are by far the heaviest part of a ticket.
-        // Save the ticket without them rather than losing it entirely.
+        // Save the ticket without them rather than losing it entirely, and
+        // record why so the Saved Tickets card can explain the missing shots.
         delete data.currentSession.screenshots;
+        data.currentSession.screenshotsDropped = true;
+        recordStorageStat("screenshots_dropped");
         withoutShots = true;
         savedOk = markSessionSaved(sid);
       }

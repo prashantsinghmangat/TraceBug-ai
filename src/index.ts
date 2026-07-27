@@ -39,6 +39,8 @@ import {
   saveEnvironment,
   setSessionPriority,
   flushPendingEvents,
+  getStorageStats,
+  type StorageStats,
 } from "./storage";
 import { generateReproSteps } from "./repro-generator";
 import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers, setNewCaptureHandler } from "./dashboard";
@@ -148,7 +150,7 @@ export {
   UIAnnotationReport,
   AnnotationIntent,
 } from "./types";
-export { getAllSessions, clearAllSessions, deleteSession } from "./storage";
+export { getAllSessions, clearAllSessions, deleteSession, getStorageStats } from "./storage";
 export { generateReproSteps } from "./repro-generator";
 export { captureEnvironment } from "./environment";
 export { captureScreenshot, getScreenshots, downloadAllScreenshots } from "./screenshot";
@@ -818,6 +820,14 @@ class TraceBugSDK {
   /** Get all screenshots from current session */
   getScreenshots(): ScreenshotData[] {
     return getScreenshots();
+  }
+
+  /** Local storage-pressure counters (near-full warnings, refused writes,
+   *  evictions, screenshot-dropping saves). Local-only diagnostics, never
+   *  transmitted — paste the output into a GitHub issue when reporting
+   *  storage problems. */
+  getStorageStats(): StorageStats {
+    return getStorageStats();
   }
 
   // ── Quick Bug Capture ───────────────────────────────────────────────

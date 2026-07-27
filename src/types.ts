@@ -196,6 +196,11 @@ export interface StoredSession {
   screenshots?: ScreenshotData[];
   /** Set to true when the user explicitly clicks "Save Ticket". Only saved sessions appear in the Saved Tickets list. */
   saved?: boolean;
+  /** Set when Save Ticket had to drop this ticket's screenshots because browser
+   *  storage was full. Shown as a warning on the Saved Tickets card so the user
+   *  isn't surprised by missing screenshots later. Cleared by a fresh save that
+   *  includes screenshots. */
+  screenshotsDropped?: boolean;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────
