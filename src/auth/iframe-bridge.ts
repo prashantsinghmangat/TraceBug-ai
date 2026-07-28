@@ -183,7 +183,17 @@ export class IframeBridge {
     const already = await this.checkAuth();
     if (already.authed && already.user) return already.user;
 
-    await this.send("sign-in"); // tells bridge to open popup
+    // Tells the bridge to open the auth popup. If it couldn't (auth pages not
+    // live yet, or the popup was blocked), fail fast instead of polling for
+    // an authentication that can never arrive.
+    const opened = await this.send<{ popupOpened?: boolean; error?: string }>("sign-in");
+    if (opened && opened.popupOpened === false) {
+      throw new Error(
+        opened.error === "cloud_not_live"
+          ? "Cloud sharing isn't available yet — sign-in is disabled."
+          : "Sign-in popup was blocked — allow popups for this site and try again.",
+      );
+    }
     const start = Date.now();
 
     // Race: explicit auth-change broadcast vs polling fallback

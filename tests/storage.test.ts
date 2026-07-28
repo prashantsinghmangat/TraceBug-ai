@@ -18,6 +18,8 @@ import {
   getStorageStats,
   recordStorageStat,
   emitStorageWarning,
+  getCachedSessions,
+  resetStorageWarningStateForTests,
 } from '../src/storage';
 import type { TraceBugEvent, Annotation, EnvironmentInfo } from '../src/types';
 
@@ -35,9 +37,11 @@ function event(sessionId: string, overrides: Partial<TraceBugEvent> = {}): Trace
 }
 
 beforeEach(() => {
-  // Drop any cached state AND localStorage before each test.
+  // Drop any cached state AND localStorage before each test, and reset the
+  // warning throttle/hysteresis/backoff so emissions are observed per-test.
   clearAllSessions();
   localStorage.clear();
+  resetStorageWarningStateForTests();
 });
 
 describe('getSessionId', () => {
@@ -310,6 +314,69 @@ describe('saved-ticket protection', () => {
     // On-disk state was never corrupted and the flag did not stick.
     expect(getAllSessions().find(s => s.sessionId === 's1')?.saved).not.toBe(true);
     expect(warnings.some(w => w?.code === 'storage_full')).toBe(true);
+  });
+
+  it('a refused write leaves the active session\'s events intact', () => {
+    // One saved ticket + one unsaved active session with events.
+    appendEvent('sv', event('sv'), 100, 10);
+    markSessionSaved('sv');
+    for (let i = 0; i < 8; i++) appendEvent('active', event('active'), 100, 10);
+
+    // Every write fails: step 1 has nothing to evict (sv is saved, active is
+    // protected), step 2 trial-halves events but must restore them on refusal.
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    const ok = flushPendingEvents();
+    spy.mockRestore();
+
+    expect(ok).toBe(false);
+    const active = getCachedSessions().find(s => s.sessionId === 'active')!;
+    expect(active.events.length).toBe(8);
+  });
+
+  it('re-saving an already-saved ticket does not un-save it on a failed flush', () => {
+    appendEvent('s1', event('s1'), 100, 10);
+    expect(markSessionSaved('s1')).toBe(true);
+
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    const ok = markSessionSaved('s1');
+    spy.mockRestore();
+
+    expect(ok).toBe(false);
+    // The flag must survive in memory AND on disk — a rollback here would make
+    // a durable saved ticket evictable.
+    expect(getCachedSessions().find(s => s.sessionId === 's1')?.saved).toBe(true);
+    expect(getAllSessions().find(s => s.sessionId === 's1')?.saved).toBe(true);
+  });
+
+  it('deleteSession preserves un-flushed mutations when the pre-delete flush is refused', () => {
+    // sv is saved (unevictable), s2 has one flushed event.
+    appendEvent('sv', event('sv'), 100, 10);
+    markSessionSaved('sv');
+    appendEvent('s2', event('s2'), 100, 10);
+    flushPendingEvents();
+    // Second event on s2 is pending in the cache only.
+    appendEvent('s2', event('s2'), 100, 10);
+
+    // The pre-delete flush is fully refused (initial write + the single
+    // event-halving trial both fail); the delete's own write then succeeds.
+    let throws = 2;
+    const origSet = Storage.prototype.setItem;
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
+      if (throws > 0) { throws--; throw new Error('QuotaExceededError'); }
+      origSet.call(this, k, v);
+    });
+    deleteSession('sv');
+    spy.mockRestore();
+
+    const s2 = getAllSessions().find(s => s.sessionId === 's2')!;
+    // Both events survived — the survivor list was built from the cache, not
+    // from the stale disk snapshot the refused flush left behind.
+    expect(s2.events.length).toBe(2);
+    expect(getAllSessions().find(s => s.sessionId === 'sv')).toBeUndefined();
   });
 
   it('emits a near_full warning when usage crosses ~90% of the quota estimate', () => {

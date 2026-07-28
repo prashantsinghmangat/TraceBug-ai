@@ -193,7 +193,7 @@ After a successful export, the modal closes after 300ms and the draft is cleared
 
 What gets saved: events (≤200), annotations, environment, error/repro metadata, priority, and up to 5 screenshots. Video is **not** persisted locally.
 
-The popover footer shows a storage meter: usage against the ~5 MB localStorage budget, plus an estimate of how many more tickets fit (based on the median size of your own saved tickets).
+The popover footer shows a storage meter: usage against the ~5 MB localStorage budget, plus an estimate of how many more tickets fit (based on the median size of your own saved tickets). **Known limitation:** the meter counts only TraceBug's data, but the ~5 MB quota is per-origin and shared with the host page's own localStorage — on sites that store a lot themselves, writes can fail earlier than the meter suggests.
 
 ### Storage invariants (do not break these)
 

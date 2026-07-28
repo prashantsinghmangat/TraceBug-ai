@@ -48,7 +48,7 @@
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",
     "dev": "npm run gen:rrweb && tsup --watch",
     "prepare": "npm run gen:rrweb && tsup",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run check:versions && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

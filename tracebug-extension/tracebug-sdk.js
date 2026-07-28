@@ -83,10 +83,65 @@ var TraceBugModule = (() => {
       return [];
     }
   }
+  function emitStorageWarning(detail) {
+    var _a2;
+    const now = Date.now();
+    if (now - ((_a2 = _lastWarnAt[detail.code]) != null ? _a2 : 0) < WARNING_THROTTLE_MS) return;
+    _lastWarnAt[detail.code] = now;
+    if (typeof console !== "undefined") console.warn(`[TraceBug] ${detail.message}`);
+    recordStorageStat(detail.code);
+    try {
+      window.dispatchEvent(new CustomEvent("tracebug:storage-warning", { detail }));
+    } catch (e2) {
+    }
+  }
+  function getStorageStats() {
+    try {
+      const raw = localStorage.getItem(STATS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e2) {
+    }
+    return { counts: {}, firstAt: null, lastAt: null };
+  }
+  function recordStorageStat(code) {
+    var _a2;
+    try {
+      const stats = getStorageStats();
+      stats.counts[code] = ((_a2 = stats.counts[code]) != null ? _a2 : 0) + 1;
+      const now = Date.now();
+      if (!stats.firstAt) stats.firstAt = now;
+      stats.lastAt = now;
+      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+    } catch (e2) {
+    }
+  }
+  function getStorageUsageBytes() {
+    try {
+      const raw = localStorage.getItem(SESSIONS_KEY);
+      return raw ? raw.length * 2 : 0;
+    } catch (e2) {
+      return 0;
+    }
+  }
+  function maybeWarnNearFull(used) {
+    if (used >= QUOTA_ESTIMATE_BYTES * 0.9) {
+      if (!_nearFullWarned) {
+        _nearFullWarned = true;
+        emitStorageWarning({
+          code: "near_full",
+          message: "Browser storage is nearly full. New tickets may lose screenshots or fail to save \u2014 delete or export old saved tickets."
+        });
+      }
+    } else if (used < QUOTA_ESTIMATE_BYTES * 0.8) {
+      _nearFullWarned = false;
+    }
+  }
   function saveSessions(sessions) {
     try {
-      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
-      return;
+      const json = JSON.stringify(sessions);
+      localStorage.setItem(SESSIONS_KEY, json);
+      maybeWarnNearFull(json.length * 2);
+      return true;
     } catch (e2) {
     }
     const commit = (next) => {
@@ -100,24 +155,43 @@ var TraceBugModule = (() => {
       }
     };
     const working = sessions.slice();
-    while (working.length > 1) {
-      working.shift();
+    let active;
+    for (const s2 of working) {
+      if (!active || (s2.updatedAt || 0) >= (active.updatedAt || 0)) active = s2;
+    }
+    let dropped = 0;
+    let idx;
+    while ((idx = working.findIndex((s2) => !s2.saved && s2 !== active)) !== -1) {
+      working.splice(idx, 1);
+      dropped++;
       if (commit(working)) {
-        if (typeof console !== "undefined") console.warn("[TraceBug] Storage full \u2014 dropped oldest session(s) to fit.");
-        return;
+        emitStorageWarning({
+          code: "unsaved_evicted",
+          message: `Browser storage full \u2014 removed ${dropped} old unsaved session${dropped === 1 ? "" : "s"} to make room. Saved tickets were kept.`
+        });
+        return true;
       }
     }
-    const last = working[0];
-    if (last && Array.isArray(last.events)) {
-      while (last.events.length > 1) {
-        last.events = last.events.slice(Math.ceil(last.events.length / 2));
+    if (active && !active.saved && Array.isArray(active.events)) {
+      const originalEvents = active.events;
+      while (active.events.length > 1) {
+        active.events = active.events.slice(Math.ceil(active.events.length / 2));
         if (commit(working)) {
-          if (typeof console !== "undefined") console.warn("[TraceBug] Storage full \u2014 trimmed older events from the current session to fit.");
-          return;
+          emitStorageWarning({
+            code: "events_trimmed",
+            message: "Browser storage full \u2014 trimmed older events from the current session to fit. Saved tickets were kept."
+          });
+          return true;
         }
       }
+      active.events = originalEvents;
     }
-    if (typeof console !== "undefined") console.error("[TraceBug] Could not persist sessions: localStorage quota exceeded.");
+    _refusedUntil = Date.now() + REFUSAL_BACKOFF_MS;
+    emitStorageWarning({
+      code: "storage_full",
+      message: "Browser storage is full of saved tickets \u2014 new data can't be saved. Delete old saved tickets to free space."
+    });
+    return false;
   }
   function getCachedSessions() {
     if (!_cachedSessions) {
@@ -130,9 +204,8 @@ var TraceBugModule = (() => {
     if (_pendingFlush) return;
     _pendingFlush = setTimeout(() => {
       _pendingFlush = null;
-      if (_cachedSessions && _dirty) {
-        saveSessions(_cachedSessions);
-        _dirty = false;
+      if (_cachedSessions && _dirty && Date.now() >= _refusedUntil) {
+        if (saveSessions(_cachedSessions)) _dirty = false;
       }
     }, FLUSH_INTERVAL_MS);
   }
@@ -142,9 +215,11 @@ var TraceBugModule = (() => {
       _pendingFlush = null;
     }
     if (_cachedSessions) {
-      saveSessions(_cachedSessions);
-      _dirty = false;
+      const ok = saveSessions(_cachedSessions);
+      if (ok) _dirty = false;
+      return ok;
     }
+    return true;
   }
   function invalidateCache() {
     if (_pendingFlush) {
@@ -178,8 +253,16 @@ var TraceBugModule = (() => {
     if (session.events.length > maxEvents) {
       session.events = session.events.slice(-maxEvents);
     }
-    if (sessions.length > maxSessions) {
-      sessions = sessions.slice(-maxSessions);
+    const unsavedCount = sessions.filter((s2) => !s2.saved).length;
+    if (unsavedCount > maxSessions) {
+      let toDrop = unsavedCount - maxSessions;
+      sessions = sessions.filter((s2) => {
+        if (toDrop > 0 && !s2.saved && s2 !== session) {
+          toDrop--;
+          return false;
+        }
+        return true;
+      });
       _cachedSessions = sessions;
     }
     scheduleFlush();
@@ -197,7 +280,7 @@ var TraceBugModule = (() => {
   }
   function deleteSession(sessionId) {
     flushPendingEvents();
-    const remaining = getAllSessions().filter((s2) => s2.sessionId !== sessionId);
+    const remaining = getCachedSessions().filter((s2) => s2.sessionId !== sessionId);
     invalidateCache();
     saveSessions(remaining);
   }
@@ -226,12 +309,21 @@ var TraceBugModule = (() => {
     scheduleFlush();
   }
   function markSessionSaved(sessionId) {
+    var _a2, _b;
     const sessions = getCachedSessions();
     const session = sessions.find((s2) => s2.sessionId === sessionId);
-    if (!session) return;
+    if (!session) return false;
+    const wasSaved = session.saved === true;
     session.saved = true;
     session.updatedAt = Date.now();
-    flushPendingEvents();
+    try {
+      (_b = (_a2 = navigator.storage) == null ? void 0 : _a2.persist) == null ? void 0 : _b.call(_a2).catch(() => {
+      });
+    } catch (e2) {
+    }
+    const ok = flushPendingEvents();
+    if (!ok && !wasSaved) session.saved = false;
+    return ok;
   }
   function clearAllSessions() {
     invalidateCache();
@@ -240,13 +332,20 @@ var TraceBugModule = (() => {
     } catch (e2) {
     }
   }
-  var SESSIONS_KEY, ACTIVE_SESSION_KEY, ACTIVE_CAPTURE_MODE_KEY, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
+  var SESSIONS_KEY, ACTIVE_SESSION_KEY, ACTIVE_CAPTURE_MODE_KEY, WARNING_THROTTLE_MS, _lastWarnAt, STATS_KEY, QUOTA_ESTIMATE_BYTES, REFUSAL_BACKOFF_MS, _refusedUntil, _nearFullWarned, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
   var init_storage = __esm({
     "src/storage.ts"() {
       "use strict";
       SESSIONS_KEY = "tracebug_sessions";
       ACTIVE_SESSION_KEY = "tracebug_active_session";
       ACTIVE_CAPTURE_MODE_KEY = "tracebug_active_capture_mode";
+      WARNING_THROTTLE_MS = 3e4;
+      _lastWarnAt = {};
+      STATS_KEY = "tracebug_storage_stats";
+      QUOTA_ESTIMATE_BYTES = 5 * 1024 * 1024;
+      REFUSAL_BACKOFF_MS = 1e4;
+      _refusedUntil = 0;
+      _nearFullWarned = false;
       _cachedSessions = null;
       _pendingFlush = null;
       _dirty = false;
@@ -24773,942 +24872,6 @@ _Generated by TraceBug SDK \xB7 Session: ${report.session.sessionId.slice(0, 8)}
     }
   });
 
-  // src/redaction-summary.ts
-  function count(s2, re) {
-    if (!s2) return 0;
-    const m = s2.match(re);
-    return m ? m.length : 0;
-  }
-  function summarizeRedactions(report) {
-    var _a2, _b, _c, _d, _e, _f, _g;
-    const requests = (((_a2 = report.networkRequests) == null ? void 0 : _a2.length) ? report.networkRequests : report.networkErrors) || [];
-    let urlParams = count((_b = report.environment) == null ? void 0 : _b.url, PARAM_RE);
-    for (const r2 of requests) urlParams += count(r2.url, PARAM_RE);
-    const seenFields = /* @__PURE__ */ new Set();
-    for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
-      if (ev.type === "input") {
-        const el = (_d = ev.data) == null ? void 0 : _d.element;
-        if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
-      } else if (ev.type === "form_submit") {
-        const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
-        if (fields && typeof fields === "object") {
-          for (const [name, v2] of Object.entries(fields)) {
-            if (v2 === REDACTED3) seenFields.add(`form:${name}`);
-          }
-        }
-      }
-    }
-    const formFields = seenFields.size;
-    let storageKeys = 0;
-    const st = report.storage;
-    for (const list of [st == null ? void 0 : st.local, st == null ? void 0 : st.session, st == null ? void 0 : st.cookies]) {
-      if (!list) continue;
-      for (const e2 of list) if (e2.redacted) storageKeys++;
-    }
-    const consoleTexts = (((_g = report.consoleLogs) == null ? void 0 : _g.length) ? report.consoleLogs : report.consoleErrors) || [];
-    let tokens = 0;
-    for (const c2 of consoleTexts) {
-      tokens += count(c2.message, TOKEN_RE) + count(c2.stack, TOKEN_RE);
-    }
-    for (const r2 of requests) tokens += count(r2.response, TOKEN_RE);
-    return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
-  }
-  function formatRedactionSummary(s2) {
-    if (s2.total === 0) return null;
-    const part = (n2, singular, plural = singular + "s") => n2 > 0 ? `${n2} ${n2 === 1 ? singular : plural}` : null;
-    const parts = [
-      part(s2.tokens, "token"),
-      part(s2.urlParams, "URL param"),
-      part(s2.formFields, "form field"),
-      part(s2.storageKeys, "storage value")
-    ].filter(Boolean);
-    return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
-  }
-  var REDACTED3, TOKEN_RE, PARAM_RE;
-  var init_redaction_summary = __esm({
-    "src/redaction-summary.ts"() {
-      "use strict";
-      REDACTED3 = "[REDACTED]";
-      TOKEN_RE = /\[REDACTED\]/g;
-      PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
-    }
-  });
-
-  // src/ui/replay-scrubber.ts
-  function mountReplayScrubber(container2, options) {
-    var _a2, _b, _c;
-    _injectStyles();
-    container2.innerHTML = "";
-    const timeline = options.timeline.slice().sort((a2, b) => a2.timestamp - b.timestamp);
-    if (timeline.length === 0) {
-      container2.innerHTML = `<div class="tb-rs-empty">No events recorded yet.</div>`;
-      return { seek: () => {
-      }, destroy: () => {
-        container2.innerHTML = "";
-      } };
-    }
-    const screenshots2 = (options.screenshots || []).slice().sort((a2, b) => a2.timestamp - b.timestamp);
-    const allTs = [];
-    for (const t2 of timeline) allTs.push(t2.timestamp);
-    for (const s2 of screenshots2) allTs.push(s2.timestamp);
-    if ((_a2 = options.videoEl) == null ? void 0 : _a2.dataset.tbStartTs) {
-      const v2 = Number(options.videoEl.dataset.tbStartTs);
-      if (!isNaN(v2)) allTs.push(v2);
-    }
-    const minTs = allTs.length ? Math.min(...allTs) : timeline[0].timestamp;
-    const maxTs = allTs.length ? Math.max(...allTs) : timeline[timeline.length - 1].timestamp;
-    const startedAt = (_b = options.startedAt) != null ? _b : minTs;
-    const endedAt = (_c = options.endedAt) != null ? _c : Math.max(maxTs, startedAt + 1e3);
-    const span = Math.max(1e3, endedAt - startedAt);
-    const errorMarkers = timeline.filter((t2) => t2.isError);
-    const root2 = document.createElement("div");
-    root2.className = "tb-rs-root";
-    root2.dataset.tracebug = "replay-scrubber";
-    root2.tabIndex = 0;
-    root2.setAttribute("role", "slider");
-    root2.setAttribute("aria-label", "Session replay scrubber");
-    const header = document.createElement("div");
-    header.className = "tb-rs-header";
-    const playBtn = document.createElement("button");
-    playBtn.className = "tb-rs-play";
-    playBtn.type = "button";
-    playBtn.setAttribute("aria-label", "Play / pause (Space)");
-    playBtn.title = "Play (Space)";
-    playBtn.textContent = "\u25B6";
-    const time = document.createElement("span");
-    time.className = "tb-rs-time";
-    time.textContent = `00:00 / ${formatElapsed2(span)}`;
-    const speedSel = document.createElement("select");
-    speedSel.className = "tb-rs-speed";
-    speedSel.setAttribute("aria-label", "Playback speed");
-    speedSel.title = "Playback speed";
-    ["0.5", "1", "1.5", "2"].forEach((v2) => {
-      const opt = document.createElement("option");
-      opt.value = v2;
-      opt.textContent = v2 + "\xD7";
-      if (v2 === "1") opt.selected = true;
-      speedSel.appendChild(opt);
-    });
-    const jumpBtn = document.createElement("button");
-    jumpBtn.className = "tb-rs-jump";
-    jumpBtn.type = "button";
-    jumpBtn.textContent = "Jump to error";
-    jumpBtn.style.display = errorMarkers.length > 0 ? "inline-block" : "none";
-    jumpBtn.title = errorMarkers.length === 1 ? "Seek to the error" : `Seek to first of ${errorMarkers.length} errors`;
-    const helpBtn = document.createElement("button");
-    helpBtn.className = "tb-rs-help";
-    helpBtn.type = "button";
-    helpBtn.textContent = "?";
-    helpBtn.title = "Keyboard shortcuts";
-    helpBtn.setAttribute("aria-label", "Keyboard shortcuts");
-    helpBtn.addEventListener("click", () => _toggleHelpOverlay(root2));
-    header.appendChild(playBtn);
-    header.appendChild(time);
-    header.appendChild(speedSel);
-    header.appendChild(jumpBtn);
-    header.appendChild(helpBtn);
-    const track = document.createElement("div");
-    track.className = "tb-rs-track";
-    const fill = document.createElement("div");
-    fill.className = "tb-rs-fill";
-    track.appendChild(fill);
-    const markersLayer = document.createElement("div");
-    markersLayer.className = "tb-rs-markers";
-    track.appendChild(markersLayer);
-    const handle = document.createElement("div");
-    handle.className = "tb-rs-handle";
-    handle.setAttribute("aria-hidden", "true");
-    track.appendChild(handle);
-    const tooltip = document.createElement("div");
-    tooltip.className = "tb-rs-tooltip";
-    tooltip.setAttribute("role", "tooltip");
-    track.appendChild(tooltip);
-    root2.appendChild(header);
-    root2.appendChild(track);
-    const MAX_MARKERS = 200;
-    const visible = timeline.length <= MAX_MARKERS ? timeline : evenSample(timeline, MAX_MARKERS);
-    for (const entry of visible) {
-      const m = document.createElement("div");
-      const isError = entry.isError;
-      const isMark = entry.type === "mark";
-      m.className = isError ? "tb-rs-marker tb-rs-error" : isMark ? "tb-rs-marker tb-rs-mark" : "tb-rs-marker";
-      m.style.left = `${pct(entry.timestamp, startedAt, span)}%`;
-      m.style.background = isError ? MARKER_COLORS.error : MARKER_COLORS[entry.type] || "#6366F1";
-      m.dataset.ts = String(entry.timestamp);
-      m.dataset.desc = `${entry.elapsed} \xB7 ${entry.description}`;
-      if (isError) m.textContent = "!";
-      markersLayer.appendChild(m);
-    }
-    container2.appendChild(root2);
-    let currentTs = startedAt;
-    const fmtTime = (ts) => `${formatElapsed2(ts - startedAt)} / ${formatElapsed2(span)}`;
-    const findClosestScreenshot = (ts) => {
-      if (screenshots2.length === 0) return null;
-      let best = screenshots2[0];
-      let bestDelta = Math.abs(best.timestamp - ts);
-      for (const s2 of screenshots2) {
-        const d = Math.abs(s2.timestamp - ts);
-        if (d < bestDelta) {
-          best = s2;
-          bestDelta = d;
-        }
-      }
-      return best;
-    };
-    const findClosestMarker = (ts) => {
-      if (timeline.length === 0) return void 0;
-      let best = timeline[0];
-      let bestDelta = Math.abs(best.timestamp - ts);
-      for (const e2 of timeline) {
-        const d = Math.abs(e2.timestamp - ts);
-        if (d < bestDelta) {
-          best = e2;
-          bestDelta = d;
-        }
-      }
-      return { timestamp: best.timestamp, entry: best };
-    };
-    const renderHandle = () => {
-      const p = pct(currentTs, startedAt, span);
-      handle.style.left = `${p}%`;
-      fill.style.width = `${p}%`;
-      time.textContent = fmtTime(currentTs);
-    };
-    const seek = (ts, opts) => {
-      var _a3;
-      let next = Math.max(startedAt, Math.min(endedAt, ts));
-      let marker;
-      if ((opts == null ? void 0 : opts.snap) !== false) {
-        marker = findClosestMarker(next);
-        if (marker) next = marker.timestamp;
-      }
-      currentTs = next;
-      renderHandle();
-      if (options.videoEl) {
-        const v2 = options.videoEl;
-        if (v2.played.length > 0 || !v2.paused) {
-          try {
-            const vidStart = v2.dataset.tbStartTs ? Number(v2.dataset.tbStartTs) : startedAt;
-            v2.currentTime = Math.max(0, (currentTs - vidStart) / 1e3);
-          } catch (e2) {
-          }
-        }
-      }
-      (_a3 = options.onSeek) == null ? void 0 : _a3.call(options, currentTs, marker);
-    };
-    seek(timeline[0].timestamp);
-    let dragging = false;
-    const trackToTs = (clientX) => {
-      const rect = track.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      return startedAt + ratio * span;
-    };
-    const onPointerDown = (e2) => {
-      dragging = true;
-      track.setPointerCapture(e2.pointerId);
-      seek(trackToTs(e2.clientX), { snap: false });
-    };
-    const onPointerMove = (e2) => {
-      var _a3;
-      if (dragging) seek(trackToTs(e2.clientX), { snap: false });
-      const target = e2.target;
-      if (!dragging && ((_a3 = target == null ? void 0 : target.classList) == null ? void 0 : _a3.contains("tb-rs-marker"))) {
-        tooltip.textContent = target.dataset.desc || "";
-        tooltip.style.left = target.style.left;
-        tooltip.style.opacity = "1";
-      } else if (!dragging) {
-        tooltip.style.opacity = "0";
-      }
-    };
-    const onPointerUp = (e2) => {
-      if (!dragging) return;
-      dragging = false;
-      try {
-        track.releasePointerCapture(e2.pointerId);
-      } catch (e3) {
-      }
-      seek(currentTs, { snap: true });
-    };
-    track.addEventListener("pointerdown", onPointerDown);
-    track.addEventListener("pointermove", onPointerMove);
-    track.addEventListener("pointerup", onPointerUp);
-    track.addEventListener("pointerleave", () => {
-      tooltip.style.opacity = "0";
-    });
-    markersLayer.addEventListener("click", (e2) => {
-      const target = e2.target;
-      if (!target.classList.contains("tb-rs-marker")) return;
-      const ts = Number(target.dataset.ts);
-      if (!Number.isNaN(ts)) seek(ts, { snap: true });
-    });
-    const chipDefs = [];
-    for (const s2 of screenshots2) chipDefs.push({ ts: s2.timestamp, kind: "screenshot", label: "Screenshot added" });
-    for (const em of options.extraMarkers || []) chipDefs.push({ ts: em.timestamp, kind: em.kind, label: em.label });
-    if (chipDefs.length > 0) {
-      const chipLayer = document.createElement("div");
-      chipLayer.className = "tb-rs-chips";
-      chipDefs.sort((a2, b) => a2.ts - b.ts);
-      for (const c2 of chipDefs) {
-        const meta = CHIP_META[c2.kind] || CHIP_META.note;
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "tb-rs-chip";
-        chip.style.left = `${pct(c2.ts, startedAt, span)}%`;
-        chip.style.setProperty("background", meta.color, "important");
-        chip.dataset.ts = String(c2.ts);
-        chip.title = `${formatElapsed2(c2.ts - startedAt)} \xB7 ${c2.label}`;
-        chip.innerHTML = meta.icon;
-        chip.addEventListener("click", () => seek(c2.ts, { snap: false }));
-        chipLayer.appendChild(chip);
-      }
-      track.appendChild(chipLayer);
-      root2.classList.add("tb-rs-has-chips");
-    }
-    let isPlaying = false;
-    let playTimer = null;
-    let videoTickHandler = null;
-    let speed = 1;
-    const setPlayIcon = (playing) => {
-      playBtn.textContent = playing ? "\u23F8" : "\u25B6";
-      playBtn.title = playing ? "Pause (Space)" : "Play (Space)";
-      isPlaying = playing;
-    };
-    const stopPlay = () => {
-      if (playTimer) {
-        clearTimeout(playTimer);
-        playTimer = null;
-      }
-      if (options.videoEl && videoTickHandler) {
-        options.videoEl.removeEventListener("timeupdate", videoTickHandler);
-        options.videoEl.removeEventListener("pause", stopPlay);
-        videoTickHandler = null;
-      }
-      setPlayIcon(false);
-    };
-    const playEvents = () => {
-      const startIdx = timeline.findIndex((t2) => t2.timestamp > currentTs);
-      if (startIdx < 0 || startIdx >= timeline.length) {
-        stopPlay();
-        return;
-      }
-      const tick = (i2) => {
-        if (!isPlaying || i2 >= timeline.length) {
-          stopPlay();
-          return;
-        }
-        seek(timeline[i2].timestamp, { snap: false });
-        if (i2 + 1 >= timeline.length) {
-          stopPlay();
-          return;
-        }
-        const wait = Math.max(60, (timeline[i2 + 1].timestamp - timeline[i2].timestamp) / speed);
-        playTimer = setTimeout(() => tick(i2 + 1), wait);
-      };
-      tick(startIdx);
-    };
-    const visitedErrors = /* @__PURE__ */ new Set();
-    const PAUSE_TOLERANCE_MS = 250;
-    const playFromVideo = () => {
-      const v2 = options.videoEl;
-      const vidStart = v2.dataset.tbStartTs ? Number(v2.dataset.tbStartTs) : startedAt;
-      v2.playbackRate = speed;
-      videoTickHandler = () => {
-        var _a3;
-        const ts = vidStart + v2.currentTime * 1e3;
-        const prevTs = currentTs;
-        currentTs = Math.max(startedAt, Math.min(endedAt, ts));
-        renderHandle();
-        const marker = findClosestMarker(currentTs);
-        (_a3 = options.onSeek) == null ? void 0 : _a3.call(options, currentTs, marker);
-        for (const em of errorMarkers) {
-          if (visitedErrors.has(em.timestamp)) continue;
-          if (em.timestamp >= prevTs && em.timestamp <= currentTs + PAUSE_TOLERANCE_MS) {
-            visitedErrors.add(em.timestamp);
-            try {
-              v2.pause();
-            } catch (e2) {
-            }
-            _flashErrorPause(root2, em);
-            break;
-          }
-        }
-      };
-      v2.addEventListener("timeupdate", videoTickHandler);
-      v2.addEventListener("pause", stopPlay);
-      const p = v2.play();
-      if (p && typeof p.then === "function") {
-        p.catch(() => {
-          try {
-            v2.removeEventListener("timeupdate", videoTickHandler);
-            v2.removeEventListener("pause", stopPlay);
-          } catch (e2) {
-          }
-          videoTickHandler = null;
-          playEvents();
-        });
-      }
-    };
-    const togglePlay = () => {
-      if (isPlaying) {
-        stopPlay();
-        if (options.videoEl) try {
-          options.videoEl.pause();
-        } catch (e2) {
-        }
-        return;
-      }
-      setPlayIcon(true);
-      if (currentTs >= endedAt - 50) seek(startedAt, { snap: false });
-      if (options.videoEl) playFromVideo();
-      else playEvents();
-    };
-    playBtn.addEventListener("click", togglePlay);
-    speedSel.addEventListener("change", () => {
-      speed = Number(speedSel.value) || 1;
-      if (isPlaying) {
-        if (options.videoEl) options.videoEl.playbackRate = speed;
-        else {
-          stopPlay();
-          setPlayIcon(true);
-          playEvents();
-        }
-      }
-    });
-    let hoverEl = null;
-    if (screenshots2.length > 0) {
-      hoverEl = document.createElement("div");
-      hoverEl.className = "tb-rs-hover-thumb";
-      hoverEl.innerHTML = `<img alt="" /><div class="tb-rs-hover-time"></div>`;
-      hoverEl.style.display = "none";
-      root2.appendChild(hoverEl);
-    }
-    const showHoverThumb = (clientX) => {
-      if (!hoverEl) return;
-      const rect = track.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const ts = startedAt + ratio * span;
-      const ss = findClosestScreenshot(ts);
-      if (!ss) {
-        hoverEl.style.display = "none";
-        return;
-      }
-      const img = hoverEl.querySelector("img");
-      const tEl = hoverEl.querySelector(".tb-rs-hover-time");
-      img.src = ss.dataUrl;
-      tEl.textContent = formatElapsed2(ts - startedAt);
-      hoverEl.style.display = "block";
-      const rootRect = root2.getBoundingClientRect();
-      const thumbRect = hoverEl.getBoundingClientRect();
-      let left = clientX - rootRect.left - thumbRect.width / 2;
-      left = Math.max(4, Math.min(rootRect.width - thumbRect.width - 4, left));
-      hoverEl.style.left = left + "px";
-      hoverEl.style.bottom = rootRect.bottom - rect.top + 6 + "px";
-    };
-    track.addEventListener("mousemove", (e2) => showHoverThumb(e2.clientX));
-    track.addEventListener("mouseleave", () => {
-      if (hoverEl) hoverEl.style.display = "none";
-    });
-    const onKey2 = (e2) => {
-      if (e2.key === " " || e2.code === "Space") {
-        e2.preventDefault();
-        togglePlay();
-        return;
-      }
-      if (e2.key === "ArrowLeft" || e2.key === "ArrowRight") {
-        e2.preventDefault();
-        const delta = e2.key === "ArrowRight" ? 5e3 : -5e3;
-        visitedErrors.clear();
-        seek(currentTs + delta, { snap: false });
-        return;
-      }
-      if (e2.key === "ArrowUp" || e2.key === "ArrowDown") {
-        if (errorMarkers.length === 0) return;
-        e2.preventDefault();
-        const errIdx = errorMarkers.findIndex((m) => m.timestamp >= currentTs);
-        let nextErr;
-        if (e2.key === "ArrowDown") nextErr = Math.min(errorMarkers.length - 1, (errIdx < 0 ? errorMarkers.length : errIdx) + (errIdx === -1 ? -1 : 1));
-        else nextErr = Math.max(0, (errIdx > 0 ? errIdx : errorMarkers.length) - 1);
-        seek(errorMarkers[nextErr].timestamp, { snap: false });
-        return;
-      }
-      if (e2.key === "0") {
-        e2.preventDefault();
-        visitedErrors.clear();
-        seek(startedAt, { snap: false });
-        return;
-      }
-      if (e2.key === "1" || e2.key === "2" || e2.key === "3") {
-        e2.preventDefault();
-        const pct2 = Number(e2.key) * 0.25;
-        visitedErrors.clear();
-        seek(startedAt + span * pct2, { snap: false });
-        return;
-      }
-      if (e2.key === "?") {
-        e2.preventDefault();
-        _toggleHelpOverlay(root2);
-      }
-    };
-    root2.addEventListener("keydown", onKey2);
-    jumpBtn.addEventListener("click", () => {
-      if (errorMarkers.length === 0) return;
-      seek(errorMarkers[0].timestamp, { snap: true });
-    });
-    return {
-      seek: (ts) => seek(ts, { snap: true }),
-      destroy: () => {
-        stopPlay();
-        track.removeEventListener("pointerdown", onPointerDown);
-        track.removeEventListener("pointermove", onPointerMove);
-        track.removeEventListener("pointerup", onPointerUp);
-        root2.removeEventListener("keydown", onKey2);
-        container2.innerHTML = "";
-      }
-    };
-    function pct(ts, start, range) {
-      return Math.max(0, Math.min(100, (ts - start) / range * 100));
-    }
-    function formatElapsed2(ms) {
-      const total = Math.max(0, Math.floor(ms / 1e3));
-      const m = Math.floor(total / 60).toString().padStart(2, "0");
-      const s2 = (total % 60).toString().padStart(2, "0");
-      return `${m}:${s2}`;
-    }
-    function evenSample(arr, n2) {
-      if (arr.length <= n2) return arr;
-      const out = [];
-      const step = arr.length / n2;
-      for (let i2 = 0; i2 < n2; i2++) out.push(arr[Math.floor(i2 * step)]);
-      return out;
-    }
-    void findClosestScreenshot;
-  }
-  function _flashErrorPause(root2, marker) {
-    const existing = root2.querySelector(".tb-rs-err-toast");
-    if (existing) existing.remove();
-    const toast = document.createElement("div");
-    toast.className = "tb-rs-err-toast";
-    toast.textContent = `\u23F8 Paused at error \u2014 ${(marker.description || "").slice(0, 60)}`;
-    root2.appendChild(toast);
-    setTimeout(() => {
-      try {
-        toast.remove();
-      } catch (e2) {
-      }
-    }, 2500);
-  }
-  function _toggleHelpOverlay(root2) {
-    var _a2;
-    const existing = root2.querySelector(".tb-rs-help-overlay");
-    if (existing) {
-      existing.remove();
-      return;
-    }
-    const overlay = document.createElement("div");
-    overlay.className = "tb-rs-help-overlay";
-    overlay.innerHTML = `
-    <div class="tb-rs-help-card">
-      <div class="tb-rs-help-title">Keyboard shortcuts</div>
-      <table class="tb-rs-help-table">
-        <tr><td><kbd>Space</kbd></td><td>Play / pause</td></tr>
-        <tr><td><kbd>\u2190</kbd> <kbd>\u2192</kbd></td><td>Seek &minus;5 s / +5 s</td></tr>
-        <tr><td><kbd>\u2191</kbd> <kbd>\u2193</kbd></td><td>Previous / next error</td></tr>
-        <tr><td><kbd>0</kbd></td><td>Jump to start</td></tr>
-        <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Jump to 25 / 50 / 75 %</td></tr>
-        <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
-      </table>
-      <button type="button" class="tb-rs-help-close" aria-label="Close">\xD7</button>
-    </div>
-  `;
-    root2.appendChild(overlay);
-    (_a2 = overlay.querySelector(".tb-rs-help-close")) == null ? void 0 : _a2.addEventListener("click", () => overlay.remove());
-    overlay.addEventListener("click", (e2) => {
-      if (e2.target === overlay) overlay.remove();
-    });
-  }
-  function _injectStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
-    style.textContent = `
-    .tb-rs-root {
-      box-sizing: border-box !important;
-      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-      padding: 10px 12px !important;
-      background: var(--tb-bg-primary, #0f0f1a) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important;
-      border-radius: var(--tb-radius-md, 6px) !important;
-      outline: none !important;
-    }
-    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #6366F1) !important; }
-    .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
-    .tb-rs-empty {
-      font-size: 11px; color: var(--tb-text-muted, #888);
-      padding: 12px; text-align: center;
-    }
-    .tb-rs-header {
-      display: flex !important; align-items: center !important; gap: 10px !important;
-      margin-bottom: 8px !important;
-    }
-    .tb-rs-label { font-size: 11px !important; font-weight: 600 !important; color: var(--tb-text-muted, #888) !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
-    .tb-rs-time { font-size: 11px !important; font-variant-numeric: tabular-nums !important; color: var(--tb-text-secondary, #aaa) !important; flex: 1 !important; }
-    .tb-rs-jump {
-      background: transparent !important; color: var(--tb-error, #ef4444) !important;
-      border: 1px solid var(--tb-error, #ef4444) !important; border-radius: 4px !important;
-      padding: 3px 9px !important; font-size: 10px !important; font-weight: 600 !important;
-      font-family: inherit !important; cursor: pointer !important;
-    }
-    .tb-rs-jump:hover { background: rgba(239, 68, 68, 0.12) !important; }
-    .tb-rs-help {
-      background: transparent !important; color: var(--tb-text-muted, #888) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important; border-radius: 999px !important;
-      width: 22px !important; height: 22px !important; padding: 0 !important;
-      font-size: 12px !important; font-weight: 700 !important; font-family: inherit !important;
-      cursor: pointer !important; display: inline-flex !important; align-items: center !important; justify-content: center !important;
-    }
-    .tb-rs-help:hover { background: var(--tb-bg-elevated, rgba(255,255,255,0.05)) !important; color: var(--tb-text-primary, #fff) !important; }
-    .tb-rs-err-toast {
-      position: absolute !important; top: -34px !important; left: 50% !important; transform: translateX(-50%) !important;
-      background: var(--tb-error, #ef4444) !important; color: #fff !important;
-      padding: 6px 12px !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 600 !important;
-      white-space: nowrap !important; box-shadow: 0 4px 16px rgba(239,68,68,0.35) !important;
-      pointer-events: none !important; z-index: 10 !important;
-      animation: tb-rs-toast-in 0.18s ease !important;
-    }
-    @keyframes tb-rs-toast-in { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
-    .tb-rs-help-overlay {
-      position: absolute !important; inset: 0 !important; background: rgba(0,0,0,0.55) !important;
-      display: flex !important; align-items: center !important; justify-content: center !important;
-      z-index: 20 !important; border-radius: 8px !important;
-    }
-    .tb-rs-help-card {
-      position: relative !important; background: var(--tb-bg-secondary, #1a1a2e) !important;
-      border: 1px solid var(--tb-border-hover, #3a3a5e) !important; border-radius: 8px !important;
-      padding: 16px 18px !important; min-width: 260px !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
-    }
-    .tb-rs-help-title { font-size: 12px !important; font-weight: 700 !important; margin-bottom: 10px !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; color: var(--tb-text-muted, #888) !important; }
-    .tb-rs-help-table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; }
-    .tb-rs-help-table td { padding: 4px 8px !important; vertical-align: middle !important; }
-    .tb-rs-help-table td:first-child { white-space: nowrap !important; width: 1% !important; }
-    .tb-rs-help-table kbd {
-      display: inline-block !important; padding: 2px 6px !important; margin-right: 3px !important;
-      background: var(--tb-bg-primary, #0a0a14) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important; border-radius: 4px !important;
-      font-family: var(--tb-font-mono, monospace) !important; font-size: 10px !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-    }
-    .tb-rs-help-close {
-      position: absolute !important; top: 6px !important; right: 8px !important;
-      background: transparent !important; border: none !important; color: var(--tb-text-muted, #888) !important;
-      font-size: 18px !important; cursor: pointer !important; line-height: 1 !important; padding: 4px 8px !important;
-    }
-    .tb-rs-help-close:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
-    .tb-rs-track {
-      position: relative !important;
-      height: 28px !important;
-      background: var(--tb-bg-secondary, #1a1a2e) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important;
-      border-radius: 999px !important;
-      cursor: pointer !important;
-      touch-action: none !important;
-      user-select: none !important;
-    }
-    .tb-rs-fill {
-      position: absolute !important; top: 0 !important; left: 0 !important;
-      height: 100% !important; width: 0% !important;
-      background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.08)) !important;
-      border-radius: 999px !important;
-      pointer-events: none !important;
-    }
-    .tb-rs-markers { position: absolute !important; inset: 0 !important; pointer-events: none !important; }
-    /* Chip markers above the track (screenshots / notes / annotations / blur) */
-    .tb-rs-has-chips .tb-rs-track { margin-top: 24px !important; }
-    .tb-rs-chips { position: absolute !important; left: 0 !important; right: 0 !important; bottom: calc(100% + 7px) !important; height: 0 !important; pointer-events: none !important; }
-    .tb-rs-chip {
-      position: absolute !important; bottom: -9px !important; transform: translateX(-50%) !important;
-      width: 18px !important; height: 18px !important; border-radius: 50% !important;
-      display: inline-flex !important; align-items: center !important; justify-content: center !important;
-      color: #fff !important; border: 1.5px solid var(--tb-bg-primary, #0f0f1a) !important;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.45) !important; cursor: pointer !important; pointer-events: auto !important;
-      padding: 0 !important; font-family: inherit !important; transition: transform 0.12s !important;
-    }
-    .tb-rs-chip:hover { transform: translateX(-50%) scale(1.18) !important; z-index: 3 !important; }
-    .tb-rs-chip svg { display: block !important; }
-    .tb-rs-marker {
-      position: absolute !important;
-      top: 50% !important;
-      transform: translate(-50%, -50%) !important;
-      width: 10px !important; height: 10px !important;
-      border-radius: 50% !important;
-      background: #6366F1 !important;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
-      pointer-events: auto !important;
-      cursor: pointer !important;
-      transition: transform 0.12s !important;
-    }
-    .tb-rs-marker:hover { transform: translate(-50%, -50%) scale(1.4) !important; }
-    .tb-rs-error {
-      width: 14px !important; height: 14px !important;
-      border-radius: 3px !important;
-      color: #fff !important;
-      font-size: 10px !important; font-weight: 800 !important;
-      display: flex !important; align-items: center !important; justify-content: center !important;
-      animation: tb-rs-pulse 1.6s infinite !important;
-    }
-    .tb-rs-mark {
-      width: 12px !important; height: 12px !important;
-      border-radius: 2px !important;
-      transform: translate(-50%, -50%) rotate(45deg) !important;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 0 2px rgba(168, 85, 247, 0.25) !important;
-    }
-    .tb-rs-mark:hover { transform: translate(-50%, -50%) rotate(45deg) scale(1.4) !important; }
-    .tb-rs-handle {
-      position: absolute !important;
-      top: 50% !important;
-      width: 16px !important; height: 16px !important;
-      transform: translate(-50%, -50%) !important;
-      background: #fff !important;
-      border: 3px solid var(--tb-accent, #6366F1) !important;
-      border-radius: 50% !important;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
-      pointer-events: none !important;
-    }
-    .tb-rs-tooltip {
-      position: absolute !important;
-      bottom: calc(100% + 6px) !important;
-      transform: translateX(-50%) !important;
-      background: var(--tb-bg-secondary, #1a1a2e) !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important;
-      border-radius: 4px !important;
-      padding: 4px 8px !important;
-      font-size: 11px !important;
-      white-space: nowrap !important;
-      pointer-events: none !important;
-      opacity: 0 !important;
-      transition: opacity 0.12s !important;
-      z-index: 2 !important;
-    }
-    @keyframes tb-rs-pulse {
-      0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 0 0 rgba(239,68,68,0.5); }
-      50% { box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 0 6px rgba(239,68,68,0); }
-    }
-    /* Play button + speed selector */
-    .tb-rs-play {
-      width: 28px !important; height: 28px !important;
-      background: var(--tb-accent, #6366F1) !important;
-      color: #fff !important;
-      border: none !important;
-      border-radius: 50% !important;
-      cursor: pointer !important;
-      font-size: 12px !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      padding: 0 !important;
-      font-family: inherit !important;
-      transition: transform 0.12s !important;
-    }
-    .tb-rs-play:hover { transform: scale(1.08) !important; }
-    .tb-rs-speed {
-      background: var(--tb-bg-secondary, #1a1a2e) !important;
-      color: var(--tb-text-primary, #e0e0e0) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important;
-      border-radius: var(--tb-radius-sm, 6px) !important;
-      padding: 3px 6px !important;
-      font-size: 10px !important;
-      font-family: inherit !important;
-      cursor: pointer !important;
-      outline: none !important;
-    }
-    .tb-rs-speed:hover { border-color: var(--tb-border-hover, #3f3f46) !important; }
-    /* Hover thumbnail */
-    .tb-rs-hover-thumb {
-      position: absolute !important;
-      z-index: 10 !important;
-      background: var(--tb-bg-primary, #0a0a0c) !important;
-      border: 1px solid var(--tb-border, #2a2a3e) !important;
-      border-radius: var(--tb-radius-sm, 6px) !important;
-      padding: 4px !important;
-      pointer-events: none !important;
-      box-shadow: 0 6px 24px rgba(0,0,0,0.4) !important;
-    }
-    .tb-rs-hover-thumb img {
-      display: block !important;
-      max-width: 200px !important;
-      max-height: 130px !important;
-      border-radius: 3px !important;
-    }
-    .tb-rs-hover-time {
-      font-size: 10px !important;
-      color: var(--tb-text-muted, #71717a) !important;
-      margin-top: 3px !important;
-      text-align: center !important;
-      font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
-    }
-  `;
-    document.head.appendChild(style);
-  }
-  var STYLE_ID, MARKER_COLORS, CHIP_META;
-  var init_replay_scrubber = __esm({
-    "src/ui/replay-scrubber.ts"() {
-      "use strict";
-      STYLE_ID = "tracebug-replay-scrubber-styles";
-      MARKER_COLORS = {
-        click: "#6366F1",
-        input: "#6366F1",
-        select_change: "#6366F1",
-        form_submit: "#6366F1",
-        route_change: "#22d3ee",
-        api_request: "#facc15",
-        error: "#ef4444",
-        unhandled_rejection: "#ef4444",
-        console_error: "#ef4444",
-        mark: "#a855f7"
-      };
-      CHIP_META = {
-        screenshot: { color: "#22d3ee", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>` },
-        annotation: { color: "#a855f7", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>` },
-        note: { color: "#f59e0b", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
-        blur: { color: "#A1A1AA", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` }
-      };
-    }
-  });
-
-  // src/ui/blur-tool.ts
-  function isBlurModeActive() {
-    return _active4;
-  }
-  function getBlurEvents() {
-    return [..._events2];
-  }
-  function removeAllBlurBoxes() {
-    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
-  }
-  function undoLastBlur() {
-    const last = _blurred[_blurred.length - 1];
-    if (last) _unblur(last);
-    return _blurred.length;
-  }
-  function _isOurNode(el) {
-    return isTraceBugUiElement(el);
-  }
-  function _findBlurred(el) {
-    return _blurred.find((b) => b.el === el);
-  }
-  function _blur(el) {
-    const prevFilter = el.style.getPropertyValue("filter");
-    const prevPriority = el.style.getPropertyPriority("filter");
-    el.style.setProperty("filter", BLUR_FILTER, "important");
-    el.classList.add("tb-mask");
-    el.setAttribute("data-tb-blurred", "1");
-    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    _blurred.push({ el, prevFilter, prevPriority, evtId });
-    _events2.push({ id: evtId, timestamp: Date.now() });
-  }
-  function _unblur(entry) {
-    const { el, prevFilter, prevPriority, evtId } = entry;
-    try {
-      if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
-      else el.style.removeProperty("filter");
-      el.classList.remove("tb-mask");
-      el.removeAttribute("data-tb-blurred");
-    } catch (e2) {
-    }
-    _blurred = _blurred.filter((b) => b !== entry);
-    const i2 = _events2.findIndex((ev) => ev.id === evtId);
-    if (i2 >= 0) _events2.splice(i2, 1);
-  }
-  function activateBlurMode(_root4, onExit) {
-    if (_active4) return;
-    _active4 = true;
-    _onExit = onExit || null;
-    const outline = document.createElement("div");
-    outline.id = OUTLINE_ID;
-    outline.setAttribute(
-      "style",
-      "position:fixed;display:none;pointer-events:none;z-index:2147483646;outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
-    );
-    document.body.appendChild(outline);
-    const hint = document.createElement("div");
-    hint.id = HINT_ID;
-    hint.setAttribute(
-      "style",
-      "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
-    );
-    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
-    document.body.appendChild(hint);
-    document.body.style.cursor = "crosshair";
-    _onMove = (e2) => {
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
-        outline.style.display = "none";
-        return;
-      }
-      const r2 = el.getBoundingClientRect();
-      outline.style.display = "block";
-      outline.style.left = r2.left + "px";
-      outline.style.top = r2.top + "px";
-      outline.style.width = r2.width + "px";
-      outline.style.height = r2.height + "px";
-    };
-    _onClick = (e2) => {
-      var _a2;
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
-      e2.preventDefault();
-      e2.stopPropagation();
-      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
-      const existing = _findBlurred(el);
-      if (existing) _unblur(existing);
-      else _blur(el);
-    };
-    _onKey = (e2) => {
-      if (e2.key === "Escape") {
-        e2.preventDefault();
-        deactivateBlurMode();
-      }
-    };
-    document.addEventListener("mousemove", _onMove, true);
-    document.addEventListener("click", _onClick, true);
-    document.addEventListener("keydown", _onKey, true);
-  }
-  function deactivateBlurMode() {
-    var _a2, _b;
-    if (!_active4) return;
-    _active4 = false;
-    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
-    if (_onClick) document.removeEventListener("click", _onClick, true);
-    if (_onKey) document.removeEventListener("keydown", _onKey, true);
-    _onMove = _onClick = _onKey = null;
-    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
-    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
-    document.body.style.cursor = "";
-    const cb = _onExit;
-    _onExit = null;
-    cb == null ? void 0 : cb();
-  }
-  var HINT_ID, OUTLINE_ID, BLUR_FILTER, _active4, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
-  var init_blur_tool = __esm({
-    "src/ui/blur-tool.ts"() {
-      "use strict";
-      init_dom_helpers();
-      HINT_ID = "tracebug-blur-hint";
-      OUTLINE_ID = "tracebug-blur-outline";
-      BLUR_FILTER = "blur(12px)";
-      _active4 = false;
-      _onExit = null;
-      _events2 = [];
-      _blurred = [];
-      _onMove = null;
-      _onClick = null;
-      _onKey = null;
-    }
-  });
-
   // src/exporters/html-template.ts
   function buildReplayHtml(payload, extras) {
     const dataJson = JSON.stringify(payload).replace(/<\/script>/gi, "<\\/script>");
@@ -27372,6 +26535,67 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/redaction-summary.ts
+  function count(s2, re) {
+    if (!s2) return 0;
+    const m = s2.match(re);
+    return m ? m.length : 0;
+  }
+  function summarizeRedactions(report) {
+    var _a2, _b, _c, _d, _e, _f, _g;
+    const requests = (((_a2 = report.networkRequests) == null ? void 0 : _a2.length) ? report.networkRequests : report.networkErrors) || [];
+    let urlParams = count((_b = report.environment) == null ? void 0 : _b.url, PARAM_RE);
+    for (const r2 of requests) urlParams += count(r2.url, PARAM_RE);
+    const seenFields = /* @__PURE__ */ new Set();
+    for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
+      if (ev.type === "input") {
+        const el = (_d = ev.data) == null ? void 0 : _d.element;
+        if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
+      } else if (ev.type === "form_submit") {
+        const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
+        if (fields && typeof fields === "object") {
+          for (const [name, v2] of Object.entries(fields)) {
+            if (v2 === REDACTED3) seenFields.add(`form:${name}`);
+          }
+        }
+      }
+    }
+    const formFields = seenFields.size;
+    let storageKeys = 0;
+    const st = report.storage;
+    for (const list of [st == null ? void 0 : st.local, st == null ? void 0 : st.session, st == null ? void 0 : st.cookies]) {
+      if (!list) continue;
+      for (const e2 of list) if (e2.redacted) storageKeys++;
+    }
+    const consoleTexts = (((_g = report.consoleLogs) == null ? void 0 : _g.length) ? report.consoleLogs : report.consoleErrors) || [];
+    let tokens = 0;
+    for (const c2 of consoleTexts) {
+      tokens += count(c2.message, TOKEN_RE) + count(c2.stack, TOKEN_RE);
+    }
+    for (const r2 of requests) tokens += count(r2.response, TOKEN_RE);
+    return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
+  }
+  function formatRedactionSummary(s2) {
+    if (s2.total === 0) return null;
+    const part = (n2, singular, plural = singular + "s") => n2 > 0 ? `${n2} ${n2 === 1 ? singular : plural}` : null;
+    const parts = [
+      part(s2.tokens, "token"),
+      part(s2.urlParams, "URL param"),
+      part(s2.formFields, "form field"),
+      part(s2.storageKeys, "storage value")
+    ].filter(Boolean);
+    return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
+  }
+  var REDACTED3, TOKEN_RE, PARAM_RE;
+  var init_redaction_summary = __esm({
+    "src/redaction-summary.ts"() {
+      "use strict";
+      REDACTED3 = "[REDACTED]";
+      TOKEN_RE = /\[REDACTED\]/g;
+      PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
+    }
+  });
+
   // src/exporters/playwright-test.ts
   function q(s2) {
     return "'" + String(s2).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, " ") + "'";
@@ -27879,6 +27103,881 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_github_issue();
       init_playwright_test();
       init_style_evidence();
+    }
+  });
+
+  // src/ui/replay-scrubber.ts
+  function mountReplayScrubber(container2, options) {
+    var _a2, _b, _c;
+    _injectStyles();
+    container2.innerHTML = "";
+    const timeline = options.timeline.slice().sort((a2, b) => a2.timestamp - b.timestamp);
+    if (timeline.length === 0) {
+      container2.innerHTML = `<div class="tb-rs-empty">No events recorded yet.</div>`;
+      return { seek: () => {
+      }, destroy: () => {
+        container2.innerHTML = "";
+      } };
+    }
+    const screenshots2 = (options.screenshots || []).slice().sort((a2, b) => a2.timestamp - b.timestamp);
+    const allTs = [];
+    for (const t2 of timeline) allTs.push(t2.timestamp);
+    for (const s2 of screenshots2) allTs.push(s2.timestamp);
+    if ((_a2 = options.videoEl) == null ? void 0 : _a2.dataset.tbStartTs) {
+      const v2 = Number(options.videoEl.dataset.tbStartTs);
+      if (!isNaN(v2)) allTs.push(v2);
+    }
+    const minTs = allTs.length ? Math.min(...allTs) : timeline[0].timestamp;
+    const maxTs = allTs.length ? Math.max(...allTs) : timeline[timeline.length - 1].timestamp;
+    const startedAt = (_b = options.startedAt) != null ? _b : minTs;
+    const endedAt = (_c = options.endedAt) != null ? _c : Math.max(maxTs, startedAt + 1e3);
+    const span = Math.max(1e3, endedAt - startedAt);
+    const errorMarkers = timeline.filter((t2) => t2.isError);
+    const root2 = document.createElement("div");
+    root2.className = "tb-rs-root";
+    root2.dataset.tracebug = "replay-scrubber";
+    root2.tabIndex = 0;
+    root2.setAttribute("role", "slider");
+    root2.setAttribute("aria-label", "Session replay scrubber");
+    const header = document.createElement("div");
+    header.className = "tb-rs-header";
+    const playBtn = document.createElement("button");
+    playBtn.className = "tb-rs-play";
+    playBtn.type = "button";
+    playBtn.setAttribute("aria-label", "Play / pause (Space)");
+    playBtn.title = "Play (Space)";
+    playBtn.textContent = "\u25B6";
+    const time = document.createElement("span");
+    time.className = "tb-rs-time";
+    time.textContent = `00:00 / ${formatElapsed2(span)}`;
+    const speedSel = document.createElement("select");
+    speedSel.className = "tb-rs-speed";
+    speedSel.setAttribute("aria-label", "Playback speed");
+    speedSel.title = "Playback speed";
+    ["0.5", "1", "1.5", "2"].forEach((v2) => {
+      const opt = document.createElement("option");
+      opt.value = v2;
+      opt.textContent = v2 + "\xD7";
+      if (v2 === "1") opt.selected = true;
+      speedSel.appendChild(opt);
+    });
+    const jumpBtn = document.createElement("button");
+    jumpBtn.className = "tb-rs-jump";
+    jumpBtn.type = "button";
+    jumpBtn.textContent = "Jump to error";
+    jumpBtn.style.display = errorMarkers.length > 0 ? "inline-block" : "none";
+    jumpBtn.title = errorMarkers.length === 1 ? "Seek to the error" : `Seek to first of ${errorMarkers.length} errors`;
+    const helpBtn = document.createElement("button");
+    helpBtn.className = "tb-rs-help";
+    helpBtn.type = "button";
+    helpBtn.textContent = "?";
+    helpBtn.title = "Keyboard shortcuts";
+    helpBtn.setAttribute("aria-label", "Keyboard shortcuts");
+    helpBtn.addEventListener("click", () => _toggleHelpOverlay(root2));
+    header.appendChild(playBtn);
+    header.appendChild(time);
+    header.appendChild(speedSel);
+    header.appendChild(jumpBtn);
+    header.appendChild(helpBtn);
+    const track = document.createElement("div");
+    track.className = "tb-rs-track";
+    const fill = document.createElement("div");
+    fill.className = "tb-rs-fill";
+    track.appendChild(fill);
+    const markersLayer = document.createElement("div");
+    markersLayer.className = "tb-rs-markers";
+    track.appendChild(markersLayer);
+    const handle = document.createElement("div");
+    handle.className = "tb-rs-handle";
+    handle.setAttribute("aria-hidden", "true");
+    track.appendChild(handle);
+    const tooltip = document.createElement("div");
+    tooltip.className = "tb-rs-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    track.appendChild(tooltip);
+    root2.appendChild(header);
+    root2.appendChild(track);
+    const MAX_MARKERS = 200;
+    const visible = timeline.length <= MAX_MARKERS ? timeline : evenSample(timeline, MAX_MARKERS);
+    for (const entry of visible) {
+      const m = document.createElement("div");
+      const isError = entry.isError;
+      const isMark = entry.type === "mark";
+      m.className = isError ? "tb-rs-marker tb-rs-error" : isMark ? "tb-rs-marker tb-rs-mark" : "tb-rs-marker";
+      m.style.left = `${pct(entry.timestamp, startedAt, span)}%`;
+      m.style.background = isError ? MARKER_COLORS.error : MARKER_COLORS[entry.type] || "#6366F1";
+      m.dataset.ts = String(entry.timestamp);
+      m.dataset.desc = `${entry.elapsed} \xB7 ${entry.description}`;
+      if (isError) m.textContent = "!";
+      markersLayer.appendChild(m);
+    }
+    container2.appendChild(root2);
+    let currentTs = startedAt;
+    const fmtTime = (ts) => `${formatElapsed2(ts - startedAt)} / ${formatElapsed2(span)}`;
+    const findClosestScreenshot = (ts) => {
+      if (screenshots2.length === 0) return null;
+      let best = screenshots2[0];
+      let bestDelta = Math.abs(best.timestamp - ts);
+      for (const s2 of screenshots2) {
+        const d = Math.abs(s2.timestamp - ts);
+        if (d < bestDelta) {
+          best = s2;
+          bestDelta = d;
+        }
+      }
+      return best;
+    };
+    const findClosestMarker = (ts) => {
+      if (timeline.length === 0) return void 0;
+      let best = timeline[0];
+      let bestDelta = Math.abs(best.timestamp - ts);
+      for (const e2 of timeline) {
+        const d = Math.abs(e2.timestamp - ts);
+        if (d < bestDelta) {
+          best = e2;
+          bestDelta = d;
+        }
+      }
+      return { timestamp: best.timestamp, entry: best };
+    };
+    const renderHandle = () => {
+      const p = pct(currentTs, startedAt, span);
+      handle.style.left = `${p}%`;
+      fill.style.width = `${p}%`;
+      time.textContent = fmtTime(currentTs);
+    };
+    const seek = (ts, opts) => {
+      var _a3;
+      let next = Math.max(startedAt, Math.min(endedAt, ts));
+      let marker;
+      if ((opts == null ? void 0 : opts.snap) !== false) {
+        marker = findClosestMarker(next);
+        if (marker) next = marker.timestamp;
+      }
+      currentTs = next;
+      renderHandle();
+      if (options.videoEl) {
+        const v2 = options.videoEl;
+        if (v2.played.length > 0 || !v2.paused) {
+          try {
+            const vidStart = v2.dataset.tbStartTs ? Number(v2.dataset.tbStartTs) : startedAt;
+            v2.currentTime = Math.max(0, (currentTs - vidStart) / 1e3);
+          } catch (e2) {
+          }
+        }
+      }
+      (_a3 = options.onSeek) == null ? void 0 : _a3.call(options, currentTs, marker);
+    };
+    seek(timeline[0].timestamp);
+    let dragging = false;
+    const trackToTs = (clientX) => {
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      return startedAt + ratio * span;
+    };
+    const onPointerDown = (e2) => {
+      dragging = true;
+      track.setPointerCapture(e2.pointerId);
+      seek(trackToTs(e2.clientX), { snap: false });
+    };
+    const onPointerMove = (e2) => {
+      var _a3;
+      if (dragging) seek(trackToTs(e2.clientX), { snap: false });
+      const target = e2.target;
+      if (!dragging && ((_a3 = target == null ? void 0 : target.classList) == null ? void 0 : _a3.contains("tb-rs-marker"))) {
+        tooltip.textContent = target.dataset.desc || "";
+        tooltip.style.left = target.style.left;
+        tooltip.style.opacity = "1";
+      } else if (!dragging) {
+        tooltip.style.opacity = "0";
+      }
+    };
+    const onPointerUp = (e2) => {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        track.releasePointerCapture(e2.pointerId);
+      } catch (e3) {
+      }
+      seek(currentTs, { snap: true });
+    };
+    track.addEventListener("pointerdown", onPointerDown);
+    track.addEventListener("pointermove", onPointerMove);
+    track.addEventListener("pointerup", onPointerUp);
+    track.addEventListener("pointerleave", () => {
+      tooltip.style.opacity = "0";
+    });
+    markersLayer.addEventListener("click", (e2) => {
+      const target = e2.target;
+      if (!target.classList.contains("tb-rs-marker")) return;
+      const ts = Number(target.dataset.ts);
+      if (!Number.isNaN(ts)) seek(ts, { snap: true });
+    });
+    const chipDefs = [];
+    for (const s2 of screenshots2) chipDefs.push({ ts: s2.timestamp, kind: "screenshot", label: "Screenshot added" });
+    for (const em of options.extraMarkers || []) chipDefs.push({ ts: em.timestamp, kind: em.kind, label: em.label });
+    if (chipDefs.length > 0) {
+      const chipLayer = document.createElement("div");
+      chipLayer.className = "tb-rs-chips";
+      chipDefs.sort((a2, b) => a2.ts - b.ts);
+      for (const c2 of chipDefs) {
+        const meta = CHIP_META[c2.kind] || CHIP_META.note;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tb-rs-chip";
+        chip.style.left = `${pct(c2.ts, startedAt, span)}%`;
+        chip.style.setProperty("background", meta.color, "important");
+        chip.dataset.ts = String(c2.ts);
+        chip.title = `${formatElapsed2(c2.ts - startedAt)} \xB7 ${c2.label}`;
+        chip.innerHTML = meta.icon;
+        chip.addEventListener("click", () => seek(c2.ts, { snap: false }));
+        chipLayer.appendChild(chip);
+      }
+      track.appendChild(chipLayer);
+      root2.classList.add("tb-rs-has-chips");
+    }
+    let isPlaying = false;
+    let playTimer = null;
+    let videoTickHandler = null;
+    let speed = 1;
+    const setPlayIcon = (playing) => {
+      playBtn.textContent = playing ? "\u23F8" : "\u25B6";
+      playBtn.title = playing ? "Pause (Space)" : "Play (Space)";
+      isPlaying = playing;
+    };
+    const stopPlay = () => {
+      if (playTimer) {
+        clearTimeout(playTimer);
+        playTimer = null;
+      }
+      if (options.videoEl && videoTickHandler) {
+        options.videoEl.removeEventListener("timeupdate", videoTickHandler);
+        options.videoEl.removeEventListener("pause", stopPlay);
+        videoTickHandler = null;
+      }
+      setPlayIcon(false);
+    };
+    const playEvents = () => {
+      const startIdx = timeline.findIndex((t2) => t2.timestamp > currentTs);
+      if (startIdx < 0 || startIdx >= timeline.length) {
+        stopPlay();
+        return;
+      }
+      const tick = (i2) => {
+        if (!isPlaying || i2 >= timeline.length) {
+          stopPlay();
+          return;
+        }
+        seek(timeline[i2].timestamp, { snap: false });
+        if (i2 + 1 >= timeline.length) {
+          stopPlay();
+          return;
+        }
+        const wait = Math.max(60, (timeline[i2 + 1].timestamp - timeline[i2].timestamp) / speed);
+        playTimer = setTimeout(() => tick(i2 + 1), wait);
+      };
+      tick(startIdx);
+    };
+    const visitedErrors = /* @__PURE__ */ new Set();
+    const PAUSE_TOLERANCE_MS = 250;
+    const playFromVideo = () => {
+      const v2 = options.videoEl;
+      const vidStart = v2.dataset.tbStartTs ? Number(v2.dataset.tbStartTs) : startedAt;
+      v2.playbackRate = speed;
+      videoTickHandler = () => {
+        var _a3;
+        const ts = vidStart + v2.currentTime * 1e3;
+        const prevTs = currentTs;
+        currentTs = Math.max(startedAt, Math.min(endedAt, ts));
+        renderHandle();
+        const marker = findClosestMarker(currentTs);
+        (_a3 = options.onSeek) == null ? void 0 : _a3.call(options, currentTs, marker);
+        for (const em of errorMarkers) {
+          if (visitedErrors.has(em.timestamp)) continue;
+          if (em.timestamp >= prevTs && em.timestamp <= currentTs + PAUSE_TOLERANCE_MS) {
+            visitedErrors.add(em.timestamp);
+            try {
+              v2.pause();
+            } catch (e2) {
+            }
+            _flashErrorPause(root2, em);
+            break;
+          }
+        }
+      };
+      v2.addEventListener("timeupdate", videoTickHandler);
+      v2.addEventListener("pause", stopPlay);
+      const p = v2.play();
+      if (p && typeof p.then === "function") {
+        p.catch(() => {
+          try {
+            v2.removeEventListener("timeupdate", videoTickHandler);
+            v2.removeEventListener("pause", stopPlay);
+          } catch (e2) {
+          }
+          videoTickHandler = null;
+          playEvents();
+        });
+      }
+    };
+    const togglePlay = () => {
+      if (isPlaying) {
+        stopPlay();
+        if (options.videoEl) try {
+          options.videoEl.pause();
+        } catch (e2) {
+        }
+        return;
+      }
+      setPlayIcon(true);
+      if (currentTs >= endedAt - 50) seek(startedAt, { snap: false });
+      if (options.videoEl) playFromVideo();
+      else playEvents();
+    };
+    playBtn.addEventListener("click", togglePlay);
+    speedSel.addEventListener("change", () => {
+      speed = Number(speedSel.value) || 1;
+      if (isPlaying) {
+        if (options.videoEl) options.videoEl.playbackRate = speed;
+        else {
+          stopPlay();
+          setPlayIcon(true);
+          playEvents();
+        }
+      }
+    });
+    let hoverEl = null;
+    if (screenshots2.length > 0) {
+      hoverEl = document.createElement("div");
+      hoverEl.className = "tb-rs-hover-thumb";
+      hoverEl.innerHTML = `<img alt="" /><div class="tb-rs-hover-time"></div>`;
+      hoverEl.style.display = "none";
+      root2.appendChild(hoverEl);
+    }
+    const showHoverThumb = (clientX) => {
+      if (!hoverEl) return;
+      const rect = track.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const ts = startedAt + ratio * span;
+      const ss = findClosestScreenshot(ts);
+      if (!ss) {
+        hoverEl.style.display = "none";
+        return;
+      }
+      const img = hoverEl.querySelector("img");
+      const tEl = hoverEl.querySelector(".tb-rs-hover-time");
+      img.src = ss.dataUrl;
+      tEl.textContent = formatElapsed2(ts - startedAt);
+      hoverEl.style.display = "block";
+      const rootRect = root2.getBoundingClientRect();
+      const thumbRect = hoverEl.getBoundingClientRect();
+      let left = clientX - rootRect.left - thumbRect.width / 2;
+      left = Math.max(4, Math.min(rootRect.width - thumbRect.width - 4, left));
+      hoverEl.style.left = left + "px";
+      hoverEl.style.bottom = rootRect.bottom - rect.top + 6 + "px";
+    };
+    track.addEventListener("mousemove", (e2) => showHoverThumb(e2.clientX));
+    track.addEventListener("mouseleave", () => {
+      if (hoverEl) hoverEl.style.display = "none";
+    });
+    const onKey2 = (e2) => {
+      if (e2.key === " " || e2.code === "Space") {
+        e2.preventDefault();
+        togglePlay();
+        return;
+      }
+      if (e2.key === "ArrowLeft" || e2.key === "ArrowRight") {
+        e2.preventDefault();
+        const delta = e2.key === "ArrowRight" ? 5e3 : -5e3;
+        visitedErrors.clear();
+        seek(currentTs + delta, { snap: false });
+        return;
+      }
+      if (e2.key === "ArrowUp" || e2.key === "ArrowDown") {
+        if (errorMarkers.length === 0) return;
+        e2.preventDefault();
+        const errIdx = errorMarkers.findIndex((m) => m.timestamp >= currentTs);
+        let nextErr;
+        if (e2.key === "ArrowDown") nextErr = Math.min(errorMarkers.length - 1, (errIdx < 0 ? errorMarkers.length : errIdx) + (errIdx === -1 ? -1 : 1));
+        else nextErr = Math.max(0, (errIdx > 0 ? errIdx : errorMarkers.length) - 1);
+        seek(errorMarkers[nextErr].timestamp, { snap: false });
+        return;
+      }
+      if (e2.key === "0") {
+        e2.preventDefault();
+        visitedErrors.clear();
+        seek(startedAt, { snap: false });
+        return;
+      }
+      if (e2.key === "1" || e2.key === "2" || e2.key === "3") {
+        e2.preventDefault();
+        const pct2 = Number(e2.key) * 0.25;
+        visitedErrors.clear();
+        seek(startedAt + span * pct2, { snap: false });
+        return;
+      }
+      if (e2.key === "?") {
+        e2.preventDefault();
+        _toggleHelpOverlay(root2);
+      }
+    };
+    root2.addEventListener("keydown", onKey2);
+    jumpBtn.addEventListener("click", () => {
+      if (errorMarkers.length === 0) return;
+      seek(errorMarkers[0].timestamp, { snap: true });
+    });
+    return {
+      seek: (ts) => seek(ts, { snap: true }),
+      destroy: () => {
+        stopPlay();
+        track.removeEventListener("pointerdown", onPointerDown);
+        track.removeEventListener("pointermove", onPointerMove);
+        track.removeEventListener("pointerup", onPointerUp);
+        root2.removeEventListener("keydown", onKey2);
+        container2.innerHTML = "";
+      }
+    };
+    function pct(ts, start, range) {
+      return Math.max(0, Math.min(100, (ts - start) / range * 100));
+    }
+    function formatElapsed2(ms) {
+      const total = Math.max(0, Math.floor(ms / 1e3));
+      const m = Math.floor(total / 60).toString().padStart(2, "0");
+      const s2 = (total % 60).toString().padStart(2, "0");
+      return `${m}:${s2}`;
+    }
+    function evenSample(arr, n2) {
+      if (arr.length <= n2) return arr;
+      const out = [];
+      const step = arr.length / n2;
+      for (let i2 = 0; i2 < n2; i2++) out.push(arr[Math.floor(i2 * step)]);
+      return out;
+    }
+    void findClosestScreenshot;
+  }
+  function _flashErrorPause(root2, marker) {
+    const existing = root2.querySelector(".tb-rs-err-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "tb-rs-err-toast";
+    toast.textContent = `\u23F8 Paused at error \u2014 ${(marker.description || "").slice(0, 60)}`;
+    root2.appendChild(toast);
+    setTimeout(() => {
+      try {
+        toast.remove();
+      } catch (e2) {
+      }
+    }, 2500);
+  }
+  function _toggleHelpOverlay(root2) {
+    var _a2;
+    const existing = root2.querySelector(".tb-rs-help-overlay");
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const overlay = document.createElement("div");
+    overlay.className = "tb-rs-help-overlay";
+    overlay.innerHTML = `
+    <div class="tb-rs-help-card">
+      <div class="tb-rs-help-title">Keyboard shortcuts</div>
+      <table class="tb-rs-help-table">
+        <tr><td><kbd>Space</kbd></td><td>Play / pause</td></tr>
+        <tr><td><kbd>\u2190</kbd> <kbd>\u2192</kbd></td><td>Seek &minus;5 s / +5 s</td></tr>
+        <tr><td><kbd>\u2191</kbd> <kbd>\u2193</kbd></td><td>Previous / next error</td></tr>
+        <tr><td><kbd>0</kbd></td><td>Jump to start</td></tr>
+        <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Jump to 25 / 50 / 75 %</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+      </table>
+      <button type="button" class="tb-rs-help-close" aria-label="Close">\xD7</button>
+    </div>
+  `;
+    root2.appendChild(overlay);
+    (_a2 = overlay.querySelector(".tb-rs-help-close")) == null ? void 0 : _a2.addEventListener("click", () => overlay.remove());
+    overlay.addEventListener("click", (e2) => {
+      if (e2.target === overlay) overlay.remove();
+    });
+  }
+  function _injectStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+    .tb-rs-root {
+      box-sizing: border-box !important;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      padding: 10px 12px !important;
+      background: var(--tb-bg-primary, #0f0f1a) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: var(--tb-radius-md, 6px) !important;
+      outline: none !important;
+    }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #6366F1) !important; }
+    .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
+    .tb-rs-empty {
+      font-size: 11px; color: var(--tb-text-muted, #888);
+      padding: 12px; text-align: center;
+    }
+    .tb-rs-header {
+      display: flex !important; align-items: center !important; gap: 10px !important;
+      margin-bottom: 8px !important;
+    }
+    .tb-rs-label { font-size: 11px !important; font-weight: 600 !important; color: var(--tb-text-muted, #888) !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }
+    .tb-rs-time { font-size: 11px !important; font-variant-numeric: tabular-nums !important; color: var(--tb-text-secondary, #aaa) !important; flex: 1 !important; }
+    .tb-rs-jump {
+      background: transparent !important; color: var(--tb-error, #ef4444) !important;
+      border: 1px solid var(--tb-error, #ef4444) !important; border-radius: 4px !important;
+      padding: 3px 9px !important; font-size: 10px !important; font-weight: 600 !important;
+      font-family: inherit !important; cursor: pointer !important;
+    }
+    .tb-rs-jump:hover { background: rgba(239, 68, 68, 0.12) !important; }
+    .tb-rs-help {
+      background: transparent !important; color: var(--tb-text-muted, #888) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important; border-radius: 999px !important;
+      width: 22px !important; height: 22px !important; padding: 0 !important;
+      font-size: 12px !important; font-weight: 700 !important; font-family: inherit !important;
+      cursor: pointer !important; display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    }
+    .tb-rs-help:hover { background: var(--tb-bg-elevated, rgba(255,255,255,0.05)) !important; color: var(--tb-text-primary, #fff) !important; }
+    .tb-rs-err-toast {
+      position: absolute !important; top: -34px !important; left: 50% !important; transform: translateX(-50%) !important;
+      background: var(--tb-error, #ef4444) !important; color: #fff !important;
+      padding: 6px 12px !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 600 !important;
+      white-space: nowrap !important; box-shadow: 0 4px 16px rgba(239,68,68,0.35) !important;
+      pointer-events: none !important; z-index: 10 !important;
+      animation: tb-rs-toast-in 0.18s ease !important;
+    }
+    @keyframes tb-rs-toast-in { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .tb-rs-help-overlay {
+      position: absolute !important; inset: 0 !important; background: rgba(0,0,0,0.55) !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      z-index: 20 !important; border-radius: 8px !important;
+    }
+    .tb-rs-help-card {
+      position: relative !important; background: var(--tb-bg-secondary, #1a1a2e) !important;
+      border: 1px solid var(--tb-border-hover, #3a3a5e) !important; border-radius: 8px !important;
+      padding: 16px 18px !important; min-width: 260px !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
+    }
+    .tb-rs-help-title { font-size: 12px !important; font-weight: 700 !important; margin-bottom: 10px !important; text-transform: uppercase !important; letter-spacing: 0.6px !important; color: var(--tb-text-muted, #888) !important; }
+    .tb-rs-help-table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; }
+    .tb-rs-help-table td { padding: 4px 8px !important; vertical-align: middle !important; }
+    .tb-rs-help-table td:first-child { white-space: nowrap !important; width: 1% !important; }
+    .tb-rs-help-table kbd {
+      display: inline-block !important; padding: 2px 6px !important; margin-right: 3px !important;
+      background: var(--tb-bg-primary, #0a0a14) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important; border-radius: 4px !important;
+      font-family: var(--tb-font-mono, monospace) !important; font-size: 10px !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+    }
+    .tb-rs-help-close {
+      position: absolute !important; top: 6px !important; right: 8px !important;
+      background: transparent !important; border: none !important; color: var(--tb-text-muted, #888) !important;
+      font-size: 18px !important; cursor: pointer !important; line-height: 1 !important; padding: 4px 8px !important;
+    }
+    .tb-rs-help-close:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
+    .tb-rs-track {
+      position: relative !important;
+      height: 28px !important;
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: 999px !important;
+      cursor: pointer !important;
+      touch-action: none !important;
+      user-select: none !important;
+    }
+    .tb-rs-fill {
+      position: absolute !important; top: 0 !important; left: 0 !important;
+      height: 100% !important; width: 0% !important;
+      background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.08)) !important;
+      border-radius: 999px !important;
+      pointer-events: none !important;
+    }
+    .tb-rs-markers { position: absolute !important; inset: 0 !important; pointer-events: none !important; }
+    /* Chip markers above the track (screenshots / notes / annotations / blur) */
+    .tb-rs-has-chips .tb-rs-track { margin-top: 24px !important; }
+    .tb-rs-chips { position: absolute !important; left: 0 !important; right: 0 !important; bottom: calc(100% + 7px) !important; height: 0 !important; pointer-events: none !important; }
+    .tb-rs-chip {
+      position: absolute !important; bottom: -9px !important; transform: translateX(-50%) !important;
+      width: 18px !important; height: 18px !important; border-radius: 50% !important;
+      display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      color: #fff !important; border: 1.5px solid var(--tb-bg-primary, #0f0f1a) !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.45) !important; cursor: pointer !important; pointer-events: auto !important;
+      padding: 0 !important; font-family: inherit !important; transition: transform 0.12s !important;
+    }
+    .tb-rs-chip:hover { transform: translateX(-50%) scale(1.18) !important; z-index: 3 !important; }
+    .tb-rs-chip svg { display: block !important; }
+    .tb-rs-marker {
+      position: absolute !important;
+      top: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      width: 10px !important; height: 10px !important;
+      border-radius: 50% !important;
+      background: #6366F1 !important;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
+      pointer-events: auto !important;
+      cursor: pointer !important;
+      transition: transform 0.12s !important;
+    }
+    .tb-rs-marker:hover { transform: translate(-50%, -50%) scale(1.4) !important; }
+    .tb-rs-error {
+      width: 14px !important; height: 14px !important;
+      border-radius: 3px !important;
+      color: #fff !important;
+      font-size: 10px !important; font-weight: 800 !important;
+      display: flex !important; align-items: center !important; justify-content: center !important;
+      animation: tb-rs-pulse 1.6s infinite !important;
+    }
+    .tb-rs-mark {
+      width: 12px !important; height: 12px !important;
+      border-radius: 2px !important;
+      transform: translate(-50%, -50%) rotate(45deg) !important;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 0 2px rgba(168, 85, 247, 0.25) !important;
+    }
+    .tb-rs-mark:hover { transform: translate(-50%, -50%) rotate(45deg) scale(1.4) !important; }
+    .tb-rs-handle {
+      position: absolute !important;
+      top: 50% !important;
+      width: 16px !important; height: 16px !important;
+      transform: translate(-50%, -50%) !important;
+      background: #fff !important;
+      border: 3px solid var(--tb-accent, #6366F1) !important;
+      border-radius: 50% !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+      pointer-events: none !important;
+    }
+    .tb-rs-tooltip {
+      position: absolute !important;
+      bottom: calc(100% + 6px) !important;
+      transform: translateX(-50%) !important;
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: 4px !important;
+      padding: 4px 8px !important;
+      font-size: 11px !important;
+      white-space: nowrap !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      transition: opacity 0.12s !important;
+      z-index: 2 !important;
+    }
+    @keyframes tb-rs-pulse {
+      0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 0 0 rgba(239,68,68,0.5); }
+      50% { box-shadow: 0 0 0 1px rgba(239,68,68,0.4), 0 0 0 6px rgba(239,68,68,0); }
+    }
+    /* Play button + speed selector */
+    .tb-rs-play {
+      width: 28px !important; height: 28px !important;
+      background: var(--tb-accent, #6366F1) !important;
+      color: #fff !important;
+      border: none !important;
+      border-radius: 50% !important;
+      cursor: pointer !important;
+      font-size: 12px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 !important;
+      font-family: inherit !important;
+      transition: transform 0.12s !important;
+    }
+    .tb-rs-play:hover { transform: scale(1.08) !important; }
+    .tb-rs-speed {
+      background: var(--tb-bg-secondary, #1a1a2e) !important;
+      color: var(--tb-text-primary, #e0e0e0) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: var(--tb-radius-sm, 6px) !important;
+      padding: 3px 6px !important;
+      font-size: 10px !important;
+      font-family: inherit !important;
+      cursor: pointer !important;
+      outline: none !important;
+    }
+    .tb-rs-speed:hover { border-color: var(--tb-border-hover, #3f3f46) !important; }
+    /* Hover thumbnail */
+    .tb-rs-hover-thumb {
+      position: absolute !important;
+      z-index: 10 !important;
+      background: var(--tb-bg-primary, #0a0a0c) !important;
+      border: 1px solid var(--tb-border, #2a2a3e) !important;
+      border-radius: var(--tb-radius-sm, 6px) !important;
+      padding: 4px !important;
+      pointer-events: none !important;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4) !important;
+    }
+    .tb-rs-hover-thumb img {
+      display: block !important;
+      max-width: 200px !important;
+      max-height: 130px !important;
+      border-radius: 3px !important;
+    }
+    .tb-rs-hover-time {
+      font-size: 10px !important;
+      color: var(--tb-text-muted, #71717a) !important;
+      margin-top: 3px !important;
+      text-align: center !important;
+      font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
+    }
+  `;
+    document.head.appendChild(style);
+  }
+  var STYLE_ID, MARKER_COLORS, CHIP_META;
+  var init_replay_scrubber = __esm({
+    "src/ui/replay-scrubber.ts"() {
+      "use strict";
+      STYLE_ID = "tracebug-replay-scrubber-styles";
+      MARKER_COLORS = {
+        click: "#6366F1",
+        input: "#6366F1",
+        select_change: "#6366F1",
+        form_submit: "#6366F1",
+        route_change: "#22d3ee",
+        api_request: "#facc15",
+        error: "#ef4444",
+        unhandled_rejection: "#ef4444",
+        console_error: "#ef4444",
+        mark: "#a855f7"
+      };
+      CHIP_META = {
+        screenshot: { color: "#22d3ee", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>` },
+        annotation: { color: "#a855f7", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>` },
+        note: { color: "#f59e0b", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
+        blur: { color: "#A1A1AA", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` }
+      };
+    }
+  });
+
+  // src/ui/blur-tool.ts
+  function isBlurModeActive() {
+    return _active4;
+  }
+  function getBlurEvents() {
+    return [..._events2];
+  }
+  function removeAllBlurBoxes() {
+    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
+  }
+  function undoLastBlur() {
+    const last = _blurred[_blurred.length - 1];
+    if (last) _unblur(last);
+    return _blurred.length;
+  }
+  function _isOurNode(el) {
+    return isTraceBugUiElement(el);
+  }
+  function _findBlurred(el) {
+    return _blurred.find((b) => b.el === el);
+  }
+  function _blur(el) {
+    const prevFilter = el.style.getPropertyValue("filter");
+    const prevPriority = el.style.getPropertyPriority("filter");
+    el.style.setProperty("filter", BLUR_FILTER, "important");
+    el.classList.add("tb-mask");
+    el.setAttribute("data-tb-blurred", "1");
+    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    _blurred.push({ el, prevFilter, prevPriority, evtId });
+    _events2.push({ id: evtId, timestamp: Date.now() });
+  }
+  function _unblur(entry) {
+    const { el, prevFilter, prevPriority, evtId } = entry;
+    try {
+      if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
+      else el.style.removeProperty("filter");
+      el.classList.remove("tb-mask");
+      el.removeAttribute("data-tb-blurred");
+    } catch (e2) {
+    }
+    _blurred = _blurred.filter((b) => b !== entry);
+    const i2 = _events2.findIndex((ev) => ev.id === evtId);
+    if (i2 >= 0) _events2.splice(i2, 1);
+  }
+  function activateBlurMode(_root4, onExit) {
+    if (_active4) return;
+    _active4 = true;
+    _onExit = onExit || null;
+    const outline = document.createElement("div");
+    outline.id = OUTLINE_ID;
+    outline.setAttribute(
+      "style",
+      "position:fixed;display:none;pointer-events:none;z-index:2147483646;outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
+    );
+    document.body.appendChild(outline);
+    const hint = document.createElement("div");
+    hint.id = HINT_ID;
+    hint.setAttribute(
+      "style",
+      "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
+    );
+    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
+    document.body.appendChild(hint);
+    document.body.style.cursor = "crosshair";
+    _onMove = (e2) => {
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
+        outline.style.display = "none";
+        return;
+      }
+      const r2 = el.getBoundingClientRect();
+      outline.style.display = "block";
+      outline.style.left = r2.left + "px";
+      outline.style.top = r2.top + "px";
+      outline.style.width = r2.width + "px";
+      outline.style.height = r2.height + "px";
+    };
+    _onClick = (e2) => {
+      var _a2;
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
+      e2.preventDefault();
+      e2.stopPropagation();
+      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
+      const existing = _findBlurred(el);
+      if (existing) _unblur(existing);
+      else _blur(el);
+    };
+    _onKey = (e2) => {
+      if (e2.key === "Escape") {
+        e2.preventDefault();
+        deactivateBlurMode();
+      }
+    };
+    document.addEventListener("mousemove", _onMove, true);
+    document.addEventListener("click", _onClick, true);
+    document.addEventListener("keydown", _onKey, true);
+  }
+  function deactivateBlurMode() {
+    var _a2, _b;
+    if (!_active4) return;
+    _active4 = false;
+    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
+    if (_onClick) document.removeEventListener("click", _onClick, true);
+    if (_onKey) document.removeEventListener("keydown", _onKey, true);
+    _onMove = _onClick = _onKey = null;
+    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
+    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
+    document.body.style.cursor = "";
+    const cb = _onExit;
+    _onExit = null;
+    cb == null ? void 0 : cb();
+  }
+  var HINT_ID, OUTLINE_ID, BLUR_FILTER, _active4, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
+  var init_blur_tool = __esm({
+    "src/ui/blur-tool.ts"() {
+      "use strict";
+      init_dom_helpers();
+      HINT_ID = "tracebug-blur-hint";
+      OUTLINE_ID = "tracebug-blur-outline";
+      BLUR_FILTER = "blur(12px)";
+      _active4 = false;
+      _onExit = null;
+      _events2 = [];
+      _blurred = [];
+      _onMove = null;
+      _onClick = null;
+      _onKey = null;
     }
   });
 
@@ -29885,18 +29984,39 @@ ${description}`;
     const saveTicketBtn = modal.querySelector('[data-action="save-ticket"]');
     if (saveTicketBtn) {
       saveTicketBtn.addEventListener("click", () => {
-        var _a3;
+        var _a3, _b2, _c2;
         const sid = (_a3 = data.currentSession) == null ? void 0 : _a3.sessionId;
         if (!sid) return;
         if (!data.suppressVideo && data.currentSession) {
           const liveShots = getScreenshots();
-          if (liveShots.length > 0) data.currentSession.screenshots = liveShots.slice(0, 5);
+          if (liveShots.length > 0) {
+            data.currentSession.screenshots = liveShots.slice(0, 5);
+            delete data.currentSession.screenshotsDropped;
+          }
         }
-        markSessionSaved(sid);
+        let savedOk = markSessionSaved(sid);
+        let withoutShots = false;
+        if (!savedOk && !data.suppressVideo && ((_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.screenshots) == null ? void 0 : _c2.length)) {
+          const originalShots = data.currentSession.screenshots;
+          delete data.currentSession.screenshots;
+          data.currentSession.screenshotsDropped = true;
+          savedOk = markSessionSaved(sid);
+          if (savedOk) {
+            recordStorageStat("screenshots_dropped");
+            withoutShots = true;
+          } else {
+            data.currentSession.screenshots = originalShots;
+            delete data.currentSession.screenshotsDropped;
+          }
+        }
+        if (!savedOk) {
+          showToast("\u26A0 Could not save \u2014 browser storage is full. Delete old saved tickets and try again.", root2);
+          return;
+        }
         saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
         saveTicketBtn.classList.add("tb-qb-btn-saved");
         saveTicketBtn.disabled = true;
-        showToast("\u2713 Ticket saved \u2014 find it in the toolbar list", root2);
+        showToast(withoutShots ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it in the toolbar list" : "\u2713 Ticket saved \u2014 find it in the toolbar list", root2);
       });
     }
     const moreBtn = modal.querySelector('[data-action="more-toggle"]');
@@ -32607,10 +32727,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     };
     document.addEventListener("keydown", keyHandler);
+    const storageWarningHandler = (e2) => {
+      const detail = e2.detail;
+      if (detail == null ? void 0 : detail.message) showToast3(`\u26A0 ${detail.message}`, root2);
+    };
+    window.addEventListener("tracebug:storage-warning", storageWarningHandler);
     return () => {
       toolbar.remove();
       dragCleanup();
       document.removeEventListener("keydown", keyHandler);
+      window.removeEventListener("tracebug:storage-warning", storageWarningHandler);
       window.removeEventListener("resize", resizeHandler);
       deactivateElementAnnotateMode();
       deactivateDrawMode();
@@ -32903,10 +33029,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function _showOfflineTicketList(root2) {
     const existing = root2.querySelector('[data-tracebug="offline-tickets-pop"]');
     if (existing) {
-      existing.remove();
+      const closer = existing._tbClose;
+      if (closer) closer();
+      else existing.remove();
       return;
     }
-    const sessions = getAllSessions().filter((s2) => s2.saved).sort((a2, b) => (b.updatedAt || 0) - (a2.updatedAt || 0)).slice(0, 10);
+    const sessions = getAllSessions().filter((s2) => s2.saved).sort((a2, b) => (b.updatedAt || 0) - (a2.updatedAt || 0));
     const pop = document.createElement("div");
     pop.dataset.tracebug = "offline-tickets-pop";
     pop.style.cssText = [
@@ -32924,10 +33052,29 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       "color:var(--tb-text-primary,#e0e0e0)",
       "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
     ].join(";");
+    const closeOnOutside = (e2) => {
+      var _a2;
+      if (!pop.contains(e2.target) && ((_a2 = e2.target) == null ? void 0 : _a2.id) !== "tracebug-toolbar-tickets-btn") {
+        closePop();
+      }
+    };
+    const closePop = () => {
+      pop.remove();
+      document.removeEventListener("mousedown", closeOnOutside);
+    };
+    pop._tbClose = closePop;
     const _fmtTime = (ts) => {
       const d = new Date(ts);
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + " \xB7 " + d.toLocaleDateString([], { month: "short", day: "numeric" });
     };
+    const _sizeOf = (s2) => {
+      try {
+        return JSON.stringify(s2).length * 2;
+      } catch (e2) {
+        return 0;
+      }
+    };
+    const _fmtSize = (bytes) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
     const hdr = document.createElement("div");
     hdr.style.cssText = "font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center";
     const hdrTitle = document.createElement("span");
@@ -32935,7 +33082,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const closeX = document.createElement("button");
     closeX.textContent = "\xD7";
     closeX.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0";
-    closeX.addEventListener("click", () => pop.remove());
+    closeX.addEventListener("click", closePop);
     hdr.appendChild(hdrTitle);
     hdr.appendChild(closeX);
     pop.appendChild(hdr);
@@ -32945,6 +33092,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       empty.innerHTML = "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.";
       pop.appendChild(empty);
     } else {
+      const list = document.createElement("div");
+      list.style.cssText = "max-height:320px;overflow-y:auto;overscroll-behavior:contain;margin-right:-6px;padding-right:6px";
       sessions.forEach((s2) => {
         const evCount = (s2.events || []).length;
         const ssArr = s2.screenshots || [];
@@ -32972,9 +33121,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         const parts = [];
         if (evCount > 0) parts.push(`${evCount} event${evCount !== 1 ? "s" : ""}`);
         if (ssArr.length > 0) parts.push(`${ssArr.length} shot${ssArr.length !== 1 ? "s" : ""}`);
+        const ticketBytes = _sizeOf(s2);
+        if (ticketBytes > 0) parts.push(_fmtSize(ticketBytes));
         statsEl.textContent = parts.length > 0 ? parts.join(" \xB7 ") : "Empty session";
         info.appendChild(timeEl);
         info.appendChild(statsEl);
+        if (s2.screenshotsDropped) {
+          const dropWarn = document.createElement("div");
+          dropWarn.style.cssText = "font-size:10px;margin-top:2px;color:#f59e0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+          dropWarn.textContent = "\u26A0 Saved without screenshots (storage was full)";
+          dropWarn.title = "Browser storage was full when this ticket was saved, so its screenshots were dropped to preserve the rest of the ticket.";
+          info.appendChild(dropWarn);
+        }
         card.appendChild(info);
         const actions = document.createElement("div");
         actions.style.cssText = "display:flex;flex-direction:column;gap:4px;flex-shrink:0";
@@ -32982,7 +33140,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         openBtn.textContent = "Open";
         openBtn.style.cssText = "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap";
         openBtn.addEventListener("click", () => {
-          pop.remove();
+          closePop();
           const tbModal = document.getElementById("tracebug-quick-bug-modal");
           if (tbModal) {
             const tbClose = tbModal.querySelector('[data-action="close"]');
@@ -32991,29 +33149,86 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           showQuickBugCapture(root2, { sessionId: s2.sessionId }).catch(() => {
           });
         });
+        const exportBtn = document.createElement("button");
+        exportBtn.textContent = "Export";
+        exportBtn.style.cssText = "background:transparent;color:var(--tb-text-secondary,#aaa);border:1px solid var(--tb-border-hover,#3a3a5e);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
+        exportBtn.addEventListener("click", async () => {
+          exportBtn.disabled = true;
+          exportBtn.textContent = "\u2026";
+          try {
+            const report = buildReport(s2);
+            report.video = void 0;
+            await exportSessionAsHtml(s2, report, { includeVideo: false });
+            showToast("\u2713 Replay exported (.html)", root2);
+          } catch (e2) {
+            showToast("Export failed", root2);
+          }
+          exportBtn.disabled = false;
+          exportBtn.textContent = "Export";
+        });
         const delBtn = document.createElement("button");
         delBtn.textContent = "Delete";
         delBtn.style.cssText = "background:transparent;color:var(--tb-error,#ef4444);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
         delBtn.addEventListener("click", () => {
+          if (delBtn.dataset.armed !== "true") {
+            delBtn.dataset.armed = "true";
+            delBtn.textContent = "Sure?";
+            delBtn.style.background = "var(--tb-error,#ef4444)";
+            delBtn.style.color = "#fff";
+            setTimeout(() => {
+              if (!delBtn.isConnected) return;
+              delBtn.dataset.armed = "false";
+              delBtn.textContent = "Delete";
+              delBtn.style.background = "transparent";
+              delBtn.style.color = "var(--tb-error,#ef4444)";
+            }, 3e3);
+            return;
+          }
           deleteSession(s2.sessionId);
-          pop.remove();
+          closePop();
+          _showOfflineTicketList(root2);
         });
         actions.appendChild(openBtn);
+        actions.appendChild(exportBtn);
         actions.appendChild(delBtn);
         card.appendChild(actions);
-        pop.appendChild(card);
+        list.appendChild(card);
       });
+      pop.appendChild(list);
+    }
+    const usedBytes = getStorageUsageBytes();
+    if (usedBytes > 0) {
+      const pct = Math.min(100, Math.round(usedBytes / QUOTA_ESTIMATE_BYTES * 100));
+      const freeBytes = Math.max(0, QUOTA_ESTIMATE_BYTES - usedBytes);
+      const meter = document.createElement("div");
+      meter.style.cssText = "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)";
+      const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
+      const bar = document.createElement("div");
+      bar.style.cssText = "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px";
+      const fill = document.createElement("div");
+      fill.style.cssText = `height:100%;width:${pct}%;border-radius:2px;background:${barColor}`;
+      bar.appendChild(fill);
+      let roomHint = "";
+      const sizes = sessions.map(_sizeOf).filter((n2) => n2 > 0).sort((a2, b) => a2 - b);
+      if (sizes.length > 0) {
+        const median = sizes[Math.floor(sizes.length / 2)];
+        const more = Math.floor(freeBytes / median);
+        roomHint = ` \xB7 room for \u2248${more} more ticket${more === 1 ? "" : "s"}`;
+      }
+      const label = document.createElement("div");
+      label.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666)";
+      label.textContent = `~${(usedBytes / (1024 * 1024)).toFixed(1)} MB used \xB7 ~${(freeBytes / (1024 * 1024)).toFixed(1)} MB free${roomHint}`;
+      const note = document.createElement("div");
+      note.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666);margin-top:3px;opacity:0.8";
+      note.textContent = "Saved in this browser only \u2014 tickets stay until you delete them. Clearing site data removes them.";
+      meter.appendChild(bar);
+      meter.appendChild(label);
+      meter.appendChild(note);
+      pop.appendChild(meter);
     }
     root2.appendChild(pop);
     setTimeout(() => {
-      const closeOnOutside = (e2) => {
-        var _a2;
-        if (!pop.contains(e2.target) && ((_a2 = e2.target) == null ? void 0 : _a2.id) !== "tracebug-toolbar-tickets-btn") {
-          pop.remove();
-          document.removeEventListener("mousedown", closeOnOutside);
-        }
-      };
-      document.addEventListener("mousedown", closeOnOutside);
+      if (pop.isConnected) document.addEventListener("mousedown", closeOnOutside);
     }, 0);
   }
   function _applyToolbarPosition(toolbar, position) {
@@ -33204,6 +33419,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_plan();
       init_upgrade_modal();
       init_storage();
+      init_report_builder();
+      init_html_replay();
+      init_toast();
       init_quick_bug();
       init_helpers();
       init_video_recorder();
@@ -33439,7 +33657,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const content = panel.querySelector("#bt-content");
     panel.querySelector("#bt-refresh").addEventListener("click", () => renderPanel(panel));
     panel.querySelector("#bt-clear").addEventListener("click", () => {
-      if (confirm("Delete all TraceBug data? This clears sessions, screenshots, voice notes, annotations, and the network failure buffer.")) {
+      if (confirm("Delete all TraceBug data? This clears sessions (including SAVED tickets), screenshots, voice notes, annotations, and the network failure buffer.")) {
         try {
           clearAllSessions();
         } catch (e2) {
@@ -69919,6 +70137,7 @@ First element: \`${exampleSnippet}\``,
     getNetworkFailures: () => getNetworkFailures,
     getPlan: () => getPlan,
     getScreenshots: () => getScreenshots,
+    getStorageStats: () => getStorageStats,
     getVoiceTranscripts: () => getVoiceTranscripts,
     hasAIKey: () => hasAIKey,
     hasIntegration: () => hasIntegration,
@@ -70109,7 +70328,12 @@ First element: \`${exampleSnippet}\``,
     async signIn() {
       const already = await this.checkAuth();
       if (already.authed && already.user) return already.user;
-      await this.send("sign-in");
+      const opened = await this.send("sign-in");
+      if (opened && opened.popupOpened === false) {
+        throw new Error(
+          opened.error === "cloud_not_live" ? "Cloud sharing isn't available yet \u2014 sign-in is disabled." : "Sign-in popup was blocked \u2014 allow popups for this site and try again."
+        );
+      }
       const start = Date.now();
       return new Promise((resolve, reject) => {
         let done = false;
@@ -71185,6 +71409,13 @@ ${summary}`;
     /** Get all screenshots from current session */
     getScreenshots() {
       return getScreenshots();
+    }
+    /** Local storage-pressure counters (near-full warnings, refused writes,
+     *  evictions, screenshot-dropping saves). Local-only diagnostics, never
+     *  transmitted — paste the output into a GitHub issue when reporting
+     *  storage problems. */
+    getStorageStats() {
+      return getStorageStats();
     }
     // ── Quick Bug Capture ───────────────────────────────────────────────
     /**
