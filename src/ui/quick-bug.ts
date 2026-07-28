@@ -941,15 +941,24 @@ function _openModal(
       }
       let savedOk = markSessionSaved(sid);
       let withoutShots = false;
-      if (!savedOk && data.currentSession?.screenshots?.length) {
-        // Storage full \u2014 screenshots are by far the heaviest part of a ticket.
-        // Save the ticket without them rather than losing it entirely, and
-        // record why so the Saved Tickets card can explain the missing shots.
+      // Storage full \u2014 retry without screenshots (by far the heaviest part of
+      // a ticket). LIVE sessions only: a historical ticket's screenshots are
+      // already safely persisted and must never be sacrificed to force a
+      // re-save through. The drop is committed only if the retry actually
+      // succeeds; on a double failure the screenshots are restored so a later
+      // successful flush can't persist the loss.
+      if (!savedOk && !data.suppressVideo && data.currentSession?.screenshots?.length) {
+        const originalShots = data.currentSession.screenshots;
         delete data.currentSession.screenshots;
         data.currentSession.screenshotsDropped = true;
-        recordStorageStat("screenshots_dropped");
-        withoutShots = true;
         savedOk = markSessionSaved(sid);
+        if (savedOk) {
+          recordStorageStat("screenshots_dropped");
+          withoutShots = true;
+        } else {
+          data.currentSession.screenshots = originalShots;
+          delete data.currentSession.screenshotsDropped;
+        }
       }
       if (!savedOk) {
         showToast("\u26a0 Could not save \u2014 browser storage is full. Delete old saved tickets and try again.", root);

@@ -25,6 +25,10 @@ const ALLOWED_PARENT_ORIGINS: string[] = [
     : []),
 ];
 
+// PHASE2-CLOUD: accounts are not live — keep in sync with auth/page.tsx and
+// dashboard/page.tsx until the flag moves to a shared module.
+const PHASE2_CLOUD_LIVE = false;
+
 function isAllowedOrigin(origin: string): boolean {
   return ALLOWED_PARENT_ORIGINS.includes(origin);
 }
@@ -72,6 +76,13 @@ export default function SdkBridgePage() {
           return;
         }
         case "sign-in": {
+          // PHASE2-CLOUD: /auth is 404-gated until Phase 2 ships (see
+          // auth/page.tsx). Opening it would show a 404 popup and leave the
+          // SDK polling until timeout — reply with a clean failure instead.
+          if (!PHASE2_CLOUD_LIVE) {
+            reply(source, origin, msg.requestId, { popupOpened: false, error: "cloud_not_live" });
+            return;
+          }
           // Open the auth page in a popup; parent waits for follow-up "check-auth".
           const w = window.open("/auth", "tracebug-auth", "width=420,height=560");
           reply(source, origin, msg.requestId, { popupOpened: !!w });

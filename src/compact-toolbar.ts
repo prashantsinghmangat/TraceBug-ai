@@ -687,7 +687,13 @@ async function _openOrRefreshTicket(root: HTMLElement): Promise<void> {
  */
 function _showOfflineTicketList(root: HTMLElement): void {
   const existing = root.querySelector('[data-tracebug="offline-tickets-pop"]');
-  if (existing) { existing.remove(); return; }
+  if (existing) {
+    // Use the popover's own closer so its document-level outside-click
+    // listener is removed with it — plain .remove() would leak the listener.
+    const closer = (existing as HTMLElement & { _tbClose?: () => void })._tbClose;
+    if (closer) closer(); else existing.remove();
+    return;
+  }
 
   // Only sessions the user explicitly saved appear here. No cap — saved
   // tickets live until the user deletes them; the list scrolls instead.
@@ -706,6 +712,21 @@ function _showOfflineTicketList(root: HTMLElement): void {
     "font-size:12px", "color:var(--tb-text-primary,#e0e0e0)",
     "box-shadow:0 12px 40px rgba(0,0,0,0.5)",
   ].join(";");
+
+  // Single owner for closing: every close path must remove BOTH the popover
+  // and its document-level outside-click listener, or the listener (holding
+  // the detached DOM tree, incl. base64 thumbnails) leaks until the next
+  // unrelated outside click. Exposed on the element for the toggle path.
+  const closeOnOutside = (e: MouseEvent) => {
+    if (!pop.contains(e.target as Node) && (e.target as HTMLElement)?.id !== "tracebug-toolbar-tickets-btn") {
+      closePop();
+    }
+  };
+  const closePop = () => {
+    pop.remove();
+    document.removeEventListener("mousedown", closeOnOutside);
+  };
+  (pop as HTMLElement & { _tbClose?: () => void })._tbClose = closePop;
 
   const _fmtTime = (ts: number): string => {
     const d = new Date(ts);
@@ -728,7 +749,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
   const closeX = document.createElement("button");
   closeX.textContent = "×";
   closeX.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0";
-  closeX.addEventListener("click", () => pop.remove());
+  closeX.addEventListener("click", closePop);
   hdr.appendChild(hdrTitle);
   hdr.appendChild(closeX);
   pop.appendChild(hdr);
@@ -792,7 +813,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
       openBtn.textContent = "Open";
       openBtn.style.cssText = "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap";
       openBtn.addEventListener("click", () => {
-        pop.remove();
+        closePop();
         // Close any open modal first so the _isOpen guard doesn't block reopening.
         const tbModal = document.getElementById("tracebug-quick-bug-modal");
         if (tbModal) {
@@ -845,7 +866,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
         }
         deleteSession(s.sessionId);
         // Re-render in place so the user sees the list update, not a close.
-        pop.remove();
+        closePop();
         _showOfflineTicketList(root);
       });
       actions.appendChild(openBtn);
@@ -898,15 +919,11 @@ function _showOfflineTicketList(root: HTMLElement): void {
   }
 
   root.appendChild(pop);
-  // Close when clicking anywhere outside the popover (but not the toolbar button).
+  // Close when clicking anywhere outside the popover (but not the toolbar
+  // button). Deferred a tick so the click that opened the popover doesn't
+  // immediately close it. closePop owns the listener's removal.
   setTimeout(() => {
-    const closeOnOutside = (e: MouseEvent) => {
-      if (!pop.contains(e.target as Node) && (e.target as HTMLElement)?.id !== "tracebug-toolbar-tickets-btn") {
-        pop.remove();
-        document.removeEventListener("mousedown", closeOnOutside);
-      }
-    };
-    document.addEventListener("mousedown", closeOnOutside);
+    if (pop.isConnected) document.addEventListener("mousedown", closeOnOutside);
   }, 0);
 }
 

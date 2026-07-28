@@ -86,12 +86,30 @@ export interface StorageWarningDetail {
   message: string;
 }
 
+// Identical warnings are throttled per code: a full-storage state during an
+// active recording would otherwise re-emit (and re-toast) on every ~1s flush
+// retry. One event per code per window is enough — the stats count incidents,
+// not retries. near_full additionally has its own 90/80% usage hysteresis.
+const WARNING_THROTTLE_MS = 30_000;
+const _lastWarnAt: Partial<Record<StorageWarningDetail["code"], number>> = {};
+
 export function emitStorageWarning(detail: StorageWarningDetail): void {
+  const now = Date.now();
+  if (now - (_lastWarnAt[detail.code] ?? 0) < WARNING_THROTTLE_MS) return;
+  _lastWarnAt[detail.code] = now;
   if (typeof console !== "undefined") console.warn(`[TraceBug] ${detail.message}`);
   recordStorageStat(detail.code);
   try {
     window.dispatchEvent(new CustomEvent<StorageWarningDetail>("tracebug:storage-warning", { detail }));
   } catch {}
+}
+
+/** Test hook: clears warning throttle + hysteresis + retry backoff so each
+ *  test observes emissions independently. Not part of the public API. */
+export function resetStorageWarningStateForTests(): void {
+  for (const k of Object.keys(_lastWarnAt)) delete _lastWarnAt[k as StorageWarningDetail["code"]];
+  _nearFullWarned = false;
+  _refusedUntil = 0;
 }
 
 // ── Local storage-pressure stats ──────────────────────────────────────────
@@ -148,13 +166,21 @@ export function getStorageUsageBytes(): number {
   }
 }
 
+// After a fully-refused write (storage full of saved tickets), scheduled
+// flushes back off instead of re-running the whole eviction + serialization
+// gauntlet every second. Explicit flushes (unload, delete, Save Ticket)
+// bypass the backoff — they're the user's last/best chance to persist.
+const REFUSAL_BACKOFF_MS = 10_000;
+let _refusedUntil = 0;
+
 // Warn BEFORE writes start failing, not at the moment of failure — users need
 // time to delete or export old tickets. Fires once when usage crosses 90% of
 // the assumed quota; re-arms only after usage drops back under 80% so a user
-// hovering around the threshold isn't toasted on every flush.
+// hovering around the threshold isn't toasted on every flush. `used` is passed
+// in by saveSessions (it already has the serialized payload in hand) so this
+// per-flush check doesn't re-read the multi-MB blob from localStorage.
 let _nearFullWarned = false;
-function maybeWarnNearFull(): void {
-  const used = getStorageUsageBytes();
+function maybeWarnNearFull(used: number): void {
   if (used >= QUOTA_ESTIMATE_BYTES * 0.9) {
     if (!_nearFullWarned) {
       _nearFullWarned = true;
@@ -170,10 +196,11 @@ function maybeWarnNearFull(): void {
 
 function saveSessions(sessions: StoredSession[]): boolean {
   try {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    const json = JSON.stringify(sessions);
+    localStorage.setItem(SESSIONS_KEY, json);
     // Only the clean-write path checks the early warning — the fallback paths
     // below emit their own, stronger warnings when quota is already exceeded.
-    maybeWarnNearFull();
+    maybeWarnNearFull(json.length * 2);
     return true;
   } catch {
     // localStorage full. Free space *progressively* — the old code dropped a
@@ -197,14 +224,18 @@ function saveSessions(sessions: StoredSession[]): boolean {
 
   // 1) Drop oldest UNSAVED sessions one at a time. Sessions the user
   //    explicitly saved (saved === true) are never evicted — only their own
-  //    Delete / Clear All removes them. The newest session is also kept: it's
-  //    the active recording whose events triggered this flush.
+  //    Delete / Clear All removes them. The MOST-RECENTLY-UPDATED session is
+  //    also protected: it's the one whose write triggered this flush. (The
+  //    array is creation-ordered, so the tail is not necessarily it — e.g.
+  //    the user may be annotating an older session opened from a list.)
   const working = sessions.slice();
+  let active: StoredSession | undefined;
+  for (const s of working) {
+    if (!active || (s.updatedAt || 0) >= (active.updatedAt || 0)) active = s;
+  }
   let dropped = 0;
-  for (;;) {
-    const newest = working[working.length - 1];
-    const idx = working.findIndex((s) => !s.saved && s !== newest);
-    if (idx === -1) break;
+  let idx: number;
+  while ((idx = working.findIndex((s) => !s.saved && s !== active)) !== -1) {
     working.splice(idx, 1);
     dropped++;
     if (commit(working)) {
@@ -216,12 +247,14 @@ function saveSessions(sessions: StoredSession[]): boolean {
     }
   }
 
-  // 2) Only saved tickets + the newest session remain — halve the newest
-  //    session's oldest events repeatedly (only if it isn't itself saved).
-  const last = working[working.length - 1];
-  if (last && !last.saved && Array.isArray(last.events)) {
-    while (last.events.length > 1) {
-      last.events = last.events.slice(Math.ceil(last.events.length / 2));
+  // 2) Only saved tickets + the active session remain — trial-halve the
+  //    active session's oldest events (only if it isn't itself saved). The
+  //    original events array is restored if no size fits: a refused write
+  //    must leave the in-memory session exactly as the caller passed it.
+  if (active && !active.saved && Array.isArray(active.events)) {
+    const originalEvents = active.events;
+    while (active.events.length > 1) {
+      active.events = active.events.slice(Math.ceil(active.events.length / 2));
       if (commit(working)) {
         emitStorageWarning({
           code: "events_trimmed",
@@ -230,10 +263,14 @@ function saveSessions(sessions: StoredSession[]): boolean {
         return true;
       }
     }
+    active.events = originalEvents;
   }
 
   // 3) Cannot persist without touching saved tickets — refuse and surface it.
-  //    Whatever was last written to localStorage stays intact on disk.
+  //    In-memory state is left exactly as passed in; whatever was last written
+  //    to localStorage stays intact on disk. Back off scheduled retries so the
+  //    (expensive) fallback above doesn't re-run every flush interval.
+  _refusedUntil = Date.now() + REFUSAL_BACKOFF_MS;
   emitStorageWarning({
     code: "storage_full",
     message: "Browser storage is full of saved tickets — new data can't be saved. Delete old saved tickets to free space.",
@@ -293,7 +330,9 @@ export function scheduleFlush(): void {
   if (_pendingFlush) return;
   _pendingFlush = setTimeout(() => {
     _pendingFlush = null;
-    if (_cachedSessions && _dirty) {
+    // Skip scheduled attempts while a refusal backoff is active — _dirty stays
+    // set, so the next mutation reschedules and the check repeats cheaply.
+    if (_cachedSessions && _dirty && Date.now() >= _refusedUntil) {
       // Keep _dirty on failure so the next mutation retries the write.
       if (saveSessions(_cachedSessions)) _dirty = false;
     }
@@ -426,11 +465,14 @@ export function updateSessionError(
 // ── Delete a single session ───────────────────────────────────────────────
 
 export function deleteSession(sessionId: string): void {
-  // Persist pending in-memory events first — reading straight from
-  // localStorage below would silently drop them for the surviving sessions.
-  // Then invalidate so a stale pending flush can't resurrect the deleted one.
+  // Best-effort flush of pending mutations — this can be REFUSED when storage
+  // is full, which is exactly when users delete tickets to free space. So the
+  // survivor list is built from the CACHE, not from disk: the cache holds any
+  // un-flushed mutations that a stale disk read would silently drop.
   flushPendingEvents();
-  const remaining = getAllSessions().filter((s) => s.sessionId !== sessionId);
+  const remaining = getCachedSessions().filter((s) => s.sessionId !== sessionId);
+  // Invalidate before writing so a stale pending flush can't resurrect the
+  // deleted session or overwrite the new state.
   invalidateCache();
   saveSessions(remaining);
 }
@@ -478,6 +520,11 @@ export function markSessionSaved(sessionId: string): boolean {
   const session = sessions.find((s) => s.sessionId === sessionId);
   if (!session) return false;
 
+  // Remember the prior state: on a failed flush we roll back ONLY a
+  // fresh save. A ticket that was already saved before this call must keep
+  // its flag — flipping it to false would make a durable saved ticket
+  // evictable, breaking the "saved tickets never disappear" invariant.
+  const wasSaved = session.saved === true;
   session.saved = true;
   session.updatedAt = Date.now();
 
@@ -491,7 +538,7 @@ export function markSessionSaved(sessionId: string): boolean {
   // never evicts saved tickets, so `false` here means storage is truly full —
   // the caller should tell the user instead of pretending the save worked.
   const ok = flushPendingEvents();
-  if (!ok) session.saved = false;
+  if (!ok && !wasSaved) session.saved = false;
   return ok;
 }
 

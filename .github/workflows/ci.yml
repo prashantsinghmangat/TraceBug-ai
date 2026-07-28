@@ -16,6 +16,8 @@ jobs:
           node-version: 20
           cache: 'npm'
       - run: npm ci
+      - name: Version consistency
+        run: npm run check:versions
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint
