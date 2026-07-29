@@ -1259,7 +1259,7 @@ function _openModal(
   // Fix with AI — generate a structured debug prompt, copy to clipboard,
   // and show a tiny popover with "Open in Claude / ChatGPT". No backend,
   // no API key — purely client-side prompt generation.
-  modal.querySelector('[data-action="ai-prompt"]')?.addEventListener("click", (e) => {
+  modal.querySelector('[data-action="ai-prompt"]')?.addEventListener("click", async (e) => {
     if (!data.currentSession) {
       showToast("No session to share yet", root);
       return;
@@ -1267,11 +1267,9 @@ function _openModal(
     try {
       const report = buildReport(data.currentSession);
       const prompt = generateAIPrompt(report);
-      let copied = false;
-      try {
-        navigator.clipboard.writeText(prompt);
-        copied = true;
-      } catch {}
+      // Awaited helper — a bare writeText's rejection escapes try/catch and
+      // becomes an unhandled error TraceBug's own collectors then report.
+      const copied = await _copyToClipboard(prompt);
       // Fire a toast immediately so the user has loud, unmissable feedback
       // even if they don't notice the popover.
       const sizeKb = (prompt.length / 1024).toFixed(1);
@@ -3185,7 +3183,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     if (action === "claude") { openInClaude(prompt); close(); }
     else if (action === "chatgpt") { openInChatGPT(prompt); close(); }
     else if (action === "copy") {
-      try { navigator.clipboard.writeText(prompt); } catch {}
+      void _copyToClipboard(prompt);
       // tiny visual feedback — pulse the button
       const btn = target.closest("button");
       if (btn) {
@@ -3213,7 +3211,19 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
 function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   document.getElementById("tb-mcp-handoff")?.remove();
   const prompt = generateMcpPrompt(filename);
-  try { navigator.clipboard.writeText(prompt); } catch {}
+  // This runs AFTER the async export finished, i.e. outside the click's
+  // user-activation window — Firefox blocks clipboard writes there. The old
+  // fire-and-forget writeText surfaced an unhandled rejection that TraceBug's
+  // own error toast then reported to the user. Await via the helper (which
+  // also has an execCommand fallback) and, if the copy was blocked, rewrite
+  // the header so it doesn't lie about the prompt being on the clipboard.
+  void _copyToClipboard(prompt).then((ok) => {
+    if (ok) return;
+    const state = document.querySelector<HTMLElement>("#tb-mcp-handoff [data-copy-state]");
+    if (state) {
+      state.innerHTML = `Your browser blocked the auto-copy — click <strong>Copy prompt again</strong> below, then paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.`;
+    }
+  });
 
   // This replay .html is built for a human (open in a browser) and for the MCP
   // server (parses the data) — NOT for pasting into a chat. Even compressed it's
@@ -3274,7 +3284,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
         <div style="font-size:14px;font-weight:600;letter-spacing:-0.01em">Debug this export with your coding agent</div>
       </div>
-      <div style="font-size:12px;color:#A1A1AA;line-height:1.45">
+      <div data-copy-state style="font-size:12px;color:#A1A1AA;line-height:1.45">
         ✓ Prompt copied · paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.
         The agent reads the .html via TraceBug's local MCP server — nothing is uploaded.
       </div>
@@ -3350,14 +3360,14 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
     }
     const action = target.closest("[data-mcp-action]")?.getAttribute("data-mcp-action");
     if (action === "copy") {
-      try { navigator.clipboard.writeText(prompt); } catch {}
+      void _copyToClipboard(prompt);
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓ Copied";
         setTimeout(() => { btn.innerHTML = `${_ic("copy")} Copy prompt again`; }, 1100);
       }
     } else if (action === "copy-setup") {
-      try { navigator.clipboard.writeText(MCP_SETUP[mcpTool].cmd); } catch {}
+      void _copyToClipboard(MCP_SETUP[mcpTool].cmd);
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓";

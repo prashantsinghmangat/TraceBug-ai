@@ -60,7 +60,16 @@ function firefoxManifest() {
     browser_specific_settings: {
       gecko: {
         id: "tracebug@prashantsinghmangat",
-        strict_min_version: "115.0",
+        // 128 is the floor because the SDK is injected with
+        // scripting.executeScript({world: "MAIN"}), which Firefox supports
+        // only from 128 (also an ESR). 127+ additionally shows the
+        // host-permission grant in the install prompt.
+        strict_min_version: "128.0",
+        // AMO requires new submissions to declare data collection. TraceBug
+        // is local-first: nothing is collected or transmitted. Firefox < 140
+        // ignores this key (web-ext warns about that — expected and benign;
+        // we keep min_version 115 for reach rather than silencing the warning).
+        data_collection_permissions: { required: ["none"] },
       },
     },
   };

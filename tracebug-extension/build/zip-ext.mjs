@@ -1,7 +1,8 @@
-// Creates the Chrome Web Store upload zip from the built extension, named
-// with the current package version: releases/tracebug-extension-v<x.y.z>.zip
-// (releases/ is gitignored — these are upload artifacts, not source).
-// Run via `npm run zip:ext`, which builds dist/chrome first.
+// Creates the store upload zips from the built extension, named with the
+// current package version (releases/ is gitignored — upload artifacts, not
+// source). Run via `npm run zip:ext`, which builds dist/ first.
+//   Chrome Web Store: releases/tracebug-extension-v<x.y.z>.zip
+//   Firefox AMO:      releases/tracebug-firefox-v<x.y.z>.zip
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -9,22 +10,28 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { version } = require("../../package.json");
 
-const distDir = "tracebug-extension/dist/chrome";
-if (!existsSync(distDir)) {
-  console.error(`[zip-ext] ${distDir} not found — run \`npm run build:ext\` first`);
-  process.exit(1);
-}
+const TARGETS = [
+  { distDir: "tracebug-extension/dist/chrome", zipName: `tracebug-extension-v${version}.zip` },
+  { distDir: "tracebug-extension/dist/firefox", zipName: `tracebug-firefox-v${version}.zip` },
+];
 
 mkdirSync("releases", { recursive: true });
-const out = `releases/tracebug-extension-v${version}.zip`;
-rmSync(out, { force: true });
 
-if (process.platform === "win32") {
-  execSync(
-    `powershell -NoProfile -Command "Compress-Archive -Path '${distDir}/*' -DestinationPath '${out}' -Force"`,
-    { stdio: "inherit" }
-  );
-} else {
-  execSync(`cd ${distDir} && zip -rq ../../../${out} .`, { stdio: "inherit" });
+for (const { distDir, zipName } of TARGETS) {
+  if (!existsSync(distDir)) {
+    console.error(`[zip-ext] ${distDir} not found — run \`npm run build:ext\` first`);
+    process.exit(1);
+  }
+  const out = `releases/${zipName}`;
+  rmSync(out, { force: true });
+
+  if (process.platform === "win32") {
+    execSync(
+      `powershell -NoProfile -Command "Compress-Archive -Path '${distDir}/*' -DestinationPath '${out}' -Force"`,
+      { stdio: "inherit" }
+    );
+  } else {
+    execSync(`cd ${distDir} && zip -rq ../../../${out} .`, { stdio: "inherit" });
+  }
+  console.log(`[OK] store zip: ${out}`);
 }
-console.log(`[OK] store zip: ${out}`);

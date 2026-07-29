@@ -116,7 +116,16 @@ async function injectSDK(tabId) {
     updateBadge(tabId);
   } catch (err) {
     injectedTabs.delete(tabId);
+    // Injection never happened — don't keep the tab marked active, or every
+    // future navigation retries and silently fails again.
+    activeTabs.delete(tabId);
+    persistState();
     console.warn("[TraceBug] Injection failed:", err.message);
+    // Rethrow so the popup shows the real error instead of a false success.
+    // Critical on Firefox: without the host-permission grant this fails with
+    // "Missing host permission for the tab" — the user must see that. All
+    // background-internal callers already .catch() this.
+    throw err;
   }
 }
 
@@ -245,7 +254,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "CAPTURE_SCREENSHOT") {
-    chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
+    // Capture the REQUESTER's window, not "the current window": on Firefox
+    // the recorder host is a real, focusable popup window, so a null
+    // windowId while it has focus would screenshot the recorder page
+    // instead of the tab under test. (Chrome's offscreen host can never be
+    // focused, so null was always safe there.)
+    const windowId = sender?.tab?.windowId ?? null;
+    chrome.tabs.captureVisibleTab(windowId, { format: "png" }, (dataUrl) => {
       if (chrome.runtime.lastError) {
         sendResponse({ error: chrome.runtime.lastError.message });
       } else {
@@ -274,6 +289,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // dedicated path never runs.
   if (message.type === "tb:rec:auto-stopped") {
     forwardAutoStopToTabs(message);
+    // Firefox window host: the recording is finalized and persisted to
+    // storage before this broadcast fires (see finalizeAndBroadcast), so the
+    // popup has done its job — close it rather than leave a blank window.
+    if (!HAS_OFFSCREEN) closeRecorderWindow();
     return false;
   }
 
@@ -399,11 +418,19 @@ async function closeOffscreenDocument() {
 
 async function ensureRecorderWindow() {
   if (_recorderWindowId != null) {
-    try { await chrome.windows.get(_recorderWindowId); return; }
+    try {
+      await chrome.windows.get(_recorderWindowId);
+      // Bring it forward — the user must SEE the window to click its
+      // "Share screen" button (the gesture getDisplayMedia requires).
+      try { await chrome.windows.update(_recorderWindowId, { focused: true }); } catch {}
+      return;
+    }
     catch { _recorderWindowId = null; }
   }
   const win = await chrome.windows.create({
-    url: chrome.runtime.getURL("offscreen.html"),
+    // ?host=window tells offscreen.js it's running as a visible popup and
+    // must gate getDisplayMedia behind a click (transient activation).
+    url: chrome.runtime.getURL("offscreen.html") + "?host=window",
     type: "popup",
     width: 480,
     height: 240,
@@ -413,6 +440,22 @@ async function ensureRecorderWindow() {
   // Let the page install its chrome.runtime.onMessage listener before the
   // first tb:rec:* message is forwarded to it.
   await new Promise((resolve) => setTimeout(resolve, 300));
+}
+
+// If the user closes the recorder popup mid-recording, its document (and the
+// MediaStream it holds) dies with no chance to broadcast — fan out the
+// auto-stop ourselves so the page HUD tears down instead of showing a live
+// recording that no longer exists. No recording payload survives this path.
+if (chrome.windows?.onRemoved) {
+  chrome.windows.onRemoved.addListener((windowId) => {
+    if (windowId !== _recorderWindowId) return;
+    _recorderWindowId = null;
+    if (_recordingTabId != null) {
+      forwardAutoStopToTabs({ type: "tb:rec:auto-stopped", recording: null });
+      _recordingTabId = null;
+      persistState();
+    }
+  });
 }
 
 async function closeRecorderWindow() {
@@ -441,6 +484,43 @@ async function handleRecordingMessage(message, sender) {
   // and produces a recording that always plays back correctly.
   const extraData = {};
 
+  // Firefox visible-window host: never POP the recorder window for passive
+  // RPCs. Chrome's offscreen host is invisible so creating it is harmless,
+  // but on Firefox every tb:rec:* used to open the popup — e.g. the ticket
+  // modal's "last recording" recovery probe flashed a blank window on every
+  // open. No live window → nothing is recording; answer from here instead.
+  if (!HAS_OFFSCREEN && _recorderWindowId == null && message.type !== "tb:rec:start") {
+    switch (message.type) {
+      case "tb:rec:status":
+        return { active: false, mode: null, capturesTaken: 0, elapsedMs: 0, comments: [], mimeType: "", startedAt: 0 };
+      case "tb:rec:last-recording": {
+        // The last finalized recording survives in chrome.storage.local even
+        // after the recorder window closed — serve its metadata directly; the
+        // content script pulls the big dataUrl from storage itself.
+        try {
+          const data = await chrome.storage.local.get("tb_rec_meta_v2");
+          const meta = data && data["tb_rec_meta_v2"];
+          if (meta && meta.durationMs) {
+            return {
+              mimeType: meta.mimeType,
+              durationMs: meta.durationMs,
+              sizeBytes: meta.sizeBytes,
+              comments: meta.comments || [],
+              startedAt: meta.startedAt,
+              _viaStorage: true,
+            };
+          }
+        } catch {}
+        return null;
+      }
+      case "tb:rec:comment":
+        return { ok: false };
+      default:
+        // tb:rec:stop / tb:rec:capture with no recorder → nothing to return.
+        return null;
+    }
+  }
+
   await ensureRecorderHost();
   // Forward to offscreen with the `_toOffscreen` marker so it knows this is
   // the routed copy. We use a Promise-wrapped sendMessage since the callback
@@ -451,13 +531,25 @@ async function handleRecordingMessage(message, sender) {
     _toOffscreen: true,
   };
   const result = await new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(forwarded, (response) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-        return;
-      }
-      resolve(response);
-    });
+    // The recorder host may still be booting (fresh offscreen doc, or a
+    // Firefox popup window on a cold start) when the first message arrives —
+    // "Receiving end does not exist" here means "not listening YET", so retry
+    // briefly instead of failing the user's recording on a race.
+    const attempt = (triesLeft) => {
+      chrome.runtime.sendMessage(forwarded, (response) => {
+        const err = chrome.runtime.lastError;
+        if (err) {
+          if (triesLeft > 0 && /receiving end|establish connection/i.test(err.message || "")) {
+            setTimeout(() => attempt(triesLeft - 1), 150);
+            return;
+          }
+          reject(new Error(err.message));
+          return;
+        }
+        resolve(response);
+      });
+    };
+    attempt(20); // ~3s worst case
   });
 
   // Track the recording tab so we can re-attach the on-page HUD after a
@@ -466,6 +558,11 @@ async function handleRecordingMessage(message, sender) {
   if (message.type === "tb:rec:start" && result && !result.error && result.ok !== false) {
     _recordingTabId = sender?.tab?.id || null;
     persistState();
+  }
+  // Start didn't happen (user cancelled the gesture or the picker, or it
+  // errored) — on Firefox, close the popup instead of leaving it blank.
+  if (message.type === "tb:rec:start" && (!result || result.error || result.ok === false)) {
+    if (!HAS_OFFSCREEN) closeRecorderWindow();
   }
 
   // Keep the offscreen alive after a stop so the page can re-request the
@@ -477,6 +574,12 @@ async function handleRecordingMessage(message, sender) {
   if (message.type === "tb:rec:stop" && result && !result.error) {
     _recordingTabId = null;
     persistState();
+    // Firefox window host: the popup would otherwise linger as a blank
+    // window after the recording ends. Safe to close — the finalized
+    // recording is already persisted to chrome.storage.local, and the
+    // passive-RPC path above serves last-recording metadata from storage
+    // without reopening the window.
+    if (!HAS_OFFSCREEN) closeRecorderWindow();
   }
 
   return result;

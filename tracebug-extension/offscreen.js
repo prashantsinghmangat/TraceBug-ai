@@ -17,6 +17,47 @@
 //     boundary in MV3).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Host mode ───────────────────────────────────────────────────────────────
+// Chrome hosts this page as an invisible offscreen document and getDisplayMedia
+// works straight from the RPC handler. Firefox hosts it in a visible popup
+// window (background appends ?host=window), where getDisplayMedia requires
+// transient activation — a real click inside THIS document. In window mode the
+// start flow shows a "Share screen" button and waits for the click before
+// opening the picker.
+const IS_WINDOW_HOST = new URLSearchParams(location.search).get("host") === "window";
+
+/** Show one of the window-host panels ("gesture" | "recording" | "idle").
+ *  No-op on Chrome, where the panels don't exist visibly anyway. */
+function setHostPanel(state) {
+  if (!IS_WINDOW_HOST) return;
+  const gesture = document.getElementById("tb-gesture");
+  const recording = document.getElementById("tb-recording");
+  if (gesture) gesture.dataset.visible = String(state === "gesture");
+  if (recording) recording.dataset.visible = String(state === "recording");
+}
+
+/** Wait for the user to click "Share screen" (true) or "Cancel" (false).
+ *  The click IS the transient activation getDisplayMedia needs, so the caller
+ *  must call getDisplayMedia immediately after this resolves — no timers or
+ *  network awaits in between, or Firefox's activation window expires. */
+function waitForShareGesture() {
+  return new Promise((resolve) => {
+    setHostPanel("gesture");
+    try { window.focus(); } catch {}
+    const share = document.getElementById("tb-share");
+    const cancel = document.getElementById("tb-cancel");
+    const done = (proceed) => {
+      share?.removeEventListener("click", onShare);
+      cancel?.removeEventListener("click", onCancel);
+      resolve(proceed);
+    };
+    const onShare = () => done(true);
+    const onCancel = () => { setHostPanel("idle"); done(false); };
+    share?.addEventListener("click", onShare);
+    cancel?.addEventListener("click", onCancel);
+  });
+}
+
 let _recorder = null;
 let _stream = null;
 let _chunks = [];
@@ -64,9 +105,15 @@ const REC_META_KEY = "tb_rec_meta_v2";
 const REC_DATA_KEY = "tb_rec_data_v2";
 
 // Offscreen documents don't always have chrome.storage in MV3 (varies by
-// Chrome build). Route writes through the background service worker which
-// always has storage access. The background also writes the dataUrl to
-// the persistent store the content-script reads from.
+// Chrome build) — those route through the background service worker, which
+// always has storage access. But when this document DOES have storage (always
+// true for the Firefox window host, and most Chrome builds), write directly:
+// the multi-MB base64 dataUrl then never rides chrome.runtime.sendMessage,
+// which silently drops payloads past ~10-20 MB (see comment above).
+function hasDirectStorage() {
+  try { return !!(chrome.storage && chrome.storage.local); } catch { return false; }
+}
+
 async function persistLastRecording(recording) {
   if (!recording) return;
   const meta = {
@@ -77,6 +124,13 @@ async function persistLastRecording(recording) {
     startedAt: recording.startedAt,
   };
   try {
+    if (hasDirectStorage()) {
+      await chrome.storage.local.set({
+        [REC_META_KEY]: meta,
+        [REC_DATA_KEY]: recording.dataUrl || "",
+      });
+      return;
+    }
     const res = await chrome.runtime.sendMessage({
       type: "tb:rec:persist",
       _toBackground: true,
@@ -93,21 +147,35 @@ async function persistLastRecording(recording) {
 
 async function clearPersistedRecording() {
   try {
+    if (hasDirectStorage()) {
+      await chrome.storage.local.remove([REC_DATA_KEY, REC_META_KEY]);
+      return;
+    }
     await chrome.runtime.sendMessage({ type: "tb:rec:persist-clear", _toBackground: true });
   } catch {}
 }
 
 async function hydratePersistedRecording() {
   try {
-    const res = await chrome.runtime.sendMessage({ type: "tb:rec:persist-read", _toBackground: true });
-    if (res && res.dataUrl && typeof res.dataUrl === "string" && res.dataUrl.startsWith("data:")) {
+    let dataUrl = null;
+    let meta = null;
+    if (hasDirectStorage()) {
+      const data = await chrome.storage.local.get([REC_DATA_KEY, REC_META_KEY]);
+      dataUrl = data && data[REC_DATA_KEY];
+      meta = data && data[REC_META_KEY];
+    } else {
+      const res = await chrome.runtime.sendMessage({ type: "tb:rec:persist-read", _toBackground: true });
+      dataUrl = res && res.dataUrl;
+      meta = res && res.meta;
+    }
+    if (dataUrl && typeof dataUrl === "string" && dataUrl.startsWith("data:")) {
       _lastBuiltRecording = {
-        dataUrl: res.dataUrl,
-        mimeType: res.meta?.mimeType,
-        durationMs: res.meta?.durationMs,
-        sizeBytes: res.meta?.sizeBytes,
-        comments: res.meta?.comments || [],
-        startedAt: res.meta?.startedAt,
+        dataUrl,
+        mimeType: meta?.mimeType,
+        durationMs: meta?.durationMs,
+        sizeBytes: meta?.sizeBytes,
+        comments: meta?.comments || [],
+        startedAt: meta?.startedAt,
       };
     }
   } catch {}
@@ -166,6 +234,7 @@ async function buildRecording(chunks) {
 }
 
 function teardown() {
+  setHostPanel("idle");
   if (_recorder && _recorder.state !== "inactive") {
     try { _recorder.stop(); } catch {}
   }
@@ -227,6 +296,14 @@ async function _startRecordingImpl(options) {
   if (!navigator.mediaDevices.getDisplayMedia) {
     return { ok: false, error: "getDisplayMedia not supported in this browser." };
   }
+  // Firefox window host: getDisplayMedia needs transient activation, which an
+  // RPC-triggered call doesn't have. Wait for a real click on "Share screen"
+  // in this window, then call the picker immediately while the activation is
+  // still fresh. The page-side RPC timeout is 60s — ample for the click.
+  if (IS_WINDOW_HOST) {
+    const proceed = await waitForShareGesture();
+    if (!proceed) return { ok: false, error: "cancelled" };
+  }
   let displayStream;
   try {
     displayStream = await navigator.mediaDevices.getDisplayMedia({
@@ -236,6 +313,7 @@ async function _startRecordingImpl(options) {
       selfBrowserSurface: "exclude",
     });
   } catch (err) {
+    setHostPanel("idle");
     if (err && (err.name === "NotAllowedError" || err.name === "AbortError")) {
       return { ok: false, error: "cancelled" };
     }
@@ -253,6 +331,19 @@ async function _startRecordingImpl(options) {
       // offscreen document — the popup's mic toggle is where the user grants it.
       // Keep recording (screen + tab audio) so they still get a video.
       console.warn("[TraceBug offscreen] microphone unavailable — grant it from the extension popup:", (err && err.name) || err);
+    }
+  }
+
+  // Firefox can't capture tab/system audio via getDisplayMedia — the stream
+  // simply arrives with zero audio tracks, no error (Chrome delivers tab
+  // audio). Surface it on the recorder panel so a silent recording is a
+  // choice, not a surprise.
+  const audioIncluded = displayStream.getAudioTracks().length > 0;
+  if (IS_WINDOW_HOST && !audioIncluded) {
+    const sub = document.querySelector("#tb-recording .tb-sub");
+    if (sub) {
+      sub.innerHTML = 'Keep this window open (you can minimize it).<br>Closing it ends the recording.<br>' +
+        '<span style="color:#f59e0b">No tab audio in Firefox — turn on the microphone toggle to narrate.</span>';
     }
   }
 
@@ -359,7 +450,8 @@ async function _startRecordingImpl(options) {
   // offscreen getDisplayMedia surfaces an AbortError on the RPC channel even
   // though capture began — which used to leave the page showing "Recording
   // cancelled" with no controls while the screen was actually being recorded.
-  try { broadcast({ type: "tb:rec:started", startedAt: _startedAt, mode: _mode, mimeType: _mimeType, micRequested: !!options?.withMicrophone, micIncluded }); } catch (e) {}
+  try { broadcast({ type: "tb:rec:started", startedAt: _startedAt, mode: _mode, mimeType: _mimeType, micRequested: !!options?.withMicrophone, micIncluded, audioIncluded }); } catch (e) {}
+  setHostPanel("recording");
   return { ok: true };
 }
 
@@ -415,6 +507,11 @@ async function captureRollingBuffer() {
       _capturesTaken += 1;
       // Reset comments — next capture from this session starts fresh.
       _comments = [];
+      // The RPC response strips the dataUrl (_viaStorage marker) and the
+      // content script reattaches it FROM STORAGE — persist this capture
+      // first, or the page stitches on a stale/missing payload.
+      _lastBuiltRecording = recording;
+      await persistLastRecording(recording);
       resolve(recording);
     };
     recorder.ondataavailable = flushOnce;

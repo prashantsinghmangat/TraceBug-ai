@@ -500,6 +500,15 @@ export function wireStartedListener(): void {
       _startedAt = typeof d.startedAt === "number" ? d.startedAt : Date.now();
       _mode = d.mode === "standard" ? "standard" : "rolling";
       _mimeType = typeof d.mimeType === "string" && d.mimeType ? d.mimeType : "video/webm";
+      // The start RPC's happy path didn't run (timed out or misreported
+      // "cancelled" — likelier on Firefox, where the same 60s RPC window
+      // covers the Share-screen gesture AND the native picker). Re-arm
+      // everything that path would have armed: without these the recording
+      // runs uncapped past the 2-min cloud limit and the export ships
+      // without the rrweb DOM replay.
+      void startDomRecording();
+      scheduleDurationCap();
+      _onStatus?.("recording");
     }
     // Mic was requested but the extension lacks microphone permission (an
     // offscreen document can't prompt). Tell the user where to grant it.
