@@ -4,7 +4,7 @@
 //   Chrome Web Store: releases/tracebug-extension-v<x.y.z>.zip
 //   Firefox AMO:      releases/tracebug-firefox-v<x.y.z>.zip
 import { execSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -26,10 +26,12 @@ for (const { distDir, zipName } of TARGETS) {
   rmSync(out, { force: true });
 
   if (process.platform === "win32") {
-    execSync(
-      `powershell -NoProfile -Command "Compress-Archive -Path '${distDir}/*' -DestinationPath '${out}' -Force"`,
-      { stdio: "inherit" }
-    );
+    // NOT Compress-Archive: it writes BACKSLASH entry names ("icons\icon.png"),
+    // which violates the zip spec (APPNOTE 4.4.17 requires forward slashes).
+    // Chrome tolerates it; AMO hard-rejects with "Invalid file name in
+    // archive". bsdtar (ships with Windows 10+) writes compliant entries.
+    const entries = readdirSync(distDir).map((e) => `"${e}"`).join(" ");
+    execSync(`tar -a -c -f "${out}" -C "${distDir}" ${entries}`, { stdio: "inherit" });
   } else {
     execSync(`cd ${distDir} && zip -rq ../../../${out} .`, { stdio: "inherit" });
   }
