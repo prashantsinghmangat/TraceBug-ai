@@ -2,6 +2,21 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.10.0] - 2026-07-29
+
+> The Firefox release: the extension now ships for Firefox 128+ from the same source as Chrome, with honest handling of every platform difference (gesture-gated screen picker, opt-in site access, no tab audio). Also makes locally saved tickets eviction-proof with storage insights, and hardens both flows with fixes from a full multi-agent review — including a cross-browser Sentry-mode bug where 📸 captures could attach a stale video.
+
+### Added
+
+- **Firefox extension** (`tracebug-extension/build/build-ext.mjs`, `background.js`, `offscreen.*`) — the extension now builds and packages for Firefox (115+) from the same source as Chrome. Firefox has no offscreen API, so the recorder page runs in a small popup window instead; because Firefox's `getDisplayMedia` requires a user gesture *in that document*, the popup shows a **Share screen** button that opens the native picker (Chrome's invisible flow is unchanged). Closing the recorder popup mid-recording tears the on-page HUD down cleanly. `npm run zip:ext` now also produces the AMO upload zip (`tracebug-firefox-v<version>.zip`), and the Firefox manifest declares `data_collection_permissions: none` — TraceBug collects nothing.
+- **Saved tickets are eviction-proof** (`src/storage.ts`, `src/ui/quick-bug.ts`, `src/compact-toolbar.ts`) — tickets saved with **Save Ticket** now live until explicitly deleted: storage-pressure eviction and session rotation only ever touch unsaved sessions, saves are verified before "Saved" is shown (with a screenshot-dropping fallback that's committed only on success and marked on the ticket card), and a warning fires at ~90% storage usage — before saves start degrading, not after. The Saved Tickets list is un-capped (scrollable) and gains per-ticket sizes, a storage meter with a room-for-≈N-more estimate, one-click **Export** (.html replay), and a two-click delete confirm. Storage-pressure incidents are counted locally (`TraceBug.getStorageStats()`, never transmitted) as the decision gate for the future IndexedDB migration.
+
+### Fixed
+
+- **Sentry-mode 📸 Capture could attach a stale or missing video** (cross-browser) — the capture reply told the page to fetch the clip from storage, but the capture was never persisted there; each rolling capture now persists before replying (`tracebug-extension/offscreen.js`).
+- **Firefox parity hardening** — Xray-safe content-script→page events (`cloneInto`), one-time host-permission request at the first capture (Firefox treats site access as opt-in), injection failures surface in the popup instead of a false success, screenshots capture the requester's window (not whichever window has focus), recordings persist via direct `chrome.storage.local` when available (no multi-MB IPC round-trip), the recorder popup never opens for passive probes and closes itself after stop/cancel, clipboard writes no longer throw unhandled activation errors after async exports, and a recording recovered via broadcast (slow picker) re-arms the 2-minute cap and DOM replay.
+- **Saved-ticket storage engine** — a refused write (storage full of saved tickets) is now side-effect-free (no in-memory event loss), re-saving an already-saved ticket can't un-save it, `deleteSession` preserves un-flushed data when freeing space, storage warnings are throttled (one per incident, not one per second), and failed flushes back off instead of re-serializing every second.
+
 ## [1.9.0] - 2026-07-22
 
 > The fix-loop release: the report stops being evidence an agent *reads* and becomes something it *iterates against* — run the generated failing test, patch, re-run until green. Also ships inspect mode (design-QA style evidence), pre-recording blur, an extension redaction UI, and a full production-audit hardening pass (bounded recording memory, capped console capture, modal focus trap, faster source-map resolution, e2e in CI).

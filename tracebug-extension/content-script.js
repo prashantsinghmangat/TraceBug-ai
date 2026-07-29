@@ -55,6 +55,24 @@ function safeSendMessage(msg, cb) {
  * the runtime context is invalidated, swallow it — the page should never
  * see an uncaught TraceBug error.
  */
+/**
+ * Dispatch a CustomEvent whose `detail` the PAGE can actually read.
+ * Firefox isolates content-script objects behind Xray wrappers: a detail
+ * object created here throws "Permission denied to access property ..."
+ * the moment page code touches it. cloneInto() (Firefox-only) clones the
+ * object into the page compartment; Chrome structurally shares the object,
+ * so the raw detail is fine there and cloneInto simply doesn't exist.
+ */
+function dispatchToPage(name, detail) {
+  var safeDetail = detail;
+  try {
+    if (typeof cloneInto === "function") safeDetail = cloneInto(detail, window);
+  } catch (e) { /* fall back to the raw object (Chrome path) */ }
+  try {
+    window.dispatchEvent(new CustomEvent(name, { detail: safeDetail }));
+  } catch (e) {}
+}
+
 function safeRun(fn) {
   try { return fn(); } catch (err) {
     // Only log if the message looks unexpected. The invalidated-context
@@ -121,11 +139,7 @@ safeRun(function () {
 // then send the result back to the page via another CustomEvent.
 window.addEventListener("tracebug-request-screenshot", () => safeRun(() => {
   safeSendMessage({ type: "CAPTURE_SCREENSHOT" }, (result) => {
-    window.dispatchEvent(
-      new CustomEvent("tracebug-ext-screenshot-result", {
-        detail: { dataUrl: (result && result.dataUrl) || null },
-      })
-    );
+    dispatchToPage("tracebug-ext-screenshot-result", { dataUrl: (result && result.dataUrl) || null });
   });
 }));
 
@@ -197,22 +211,15 @@ window.addEventListener("tracebug-rec-request", (e) => safeRun(() => {
   if (!isExtAlive()) {
     // Reply with an error so the page-side promise rejects cleanly instead
     // of waiting forever for a response that will never come.
-    window.dispatchEvent(
-      new CustomEvent("tracebug-rec-response", {
-        detail: { id, result: null, error: "Extension context invalidated" },
-      })
-    );
+    dispatchToPage("tracebug-rec-response", { id, result: null, error: "Extension context invalidated" });
     return;
   }
   safeSendMessage({ type, data }, (response) => safeRun(() => {
     const error = (chrome.runtime && chrome.runtime.lastError && chrome.runtime.lastError.message)
       || (response && response.error)
       || (!response ? "Extension context invalidated" : null);
-    const respond = (finalResult) => window.dispatchEvent(
-      new CustomEvent("tracebug-rec-response", {
-        detail: { id, result: error ? null : finalResult, error },
-      })
-    );
+    const respond = (finalResult) =>
+      dispatchToPage("tracebug-rec-response", { id, result: error ? null : finalResult, error });
     // Recordings carry only metadata over IPC — read the dataUrl out of
     // chrome.storage.local (where the offscreen wrote it) and stitch it
     // back on before handing the result to the page.
@@ -233,9 +240,7 @@ if (isExtAlive()) {
   try {
     chrome.runtime.onMessage.addListener((message) => safeRun(() => {
       if (message && message.type === "tb:rec:auto-stopped") {
-        const deliver = (m) => window.dispatchEvent(
-          new CustomEvent("tracebug-rec-auto-stopped", { detail: m })
-        );
+        const deliver = (m) => dispatchToPage("tracebug-rec-auto-stopped", m);
         // Same dataUrl rehydration as the RPC response path.
         if (message.recording && message.recording._viaStorage) {
           reattachDataUrl(message.recording, (rec) => {
@@ -258,7 +263,7 @@ if (isExtAlive()) {
   try {
     chrome.runtime.onMessage.addListener((message) => safeRun(() => {
       if (message && message.type === "tb:rec:started") {
-        window.dispatchEvent(new CustomEvent("tracebug-rec-started", { detail: message }));
+        dispatchToPage("tracebug-rec-started", message);
       }
     }));
   } catch (e) {}
@@ -273,104 +278,66 @@ if (isExtAlive()) {
         // Use chrome.tabs.captureVisibleTab via background
         safeSendMessage({ type: "CAPTURE_SCREENSHOT" }, (result) => {
           if (result && result.dataUrl) {
-            window.dispatchEvent(
-              new CustomEvent("tracebug-ext-screenshot", {
-                detail: { dataUrl: result.dataUrl },
-              })
-            );
+            dispatchToPage("tracebug-ext-screenshot", { dataUrl: result.dataUrl });
           }
         });
         sendResponse({ ok: true });
         break;
 
       case "GENERATE_REPORT":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: { action: "report" },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "report" });
         sendResponse({ ok: true });
         break;
 
       case "COPY_GITHUB_ISSUE":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: { action: "github" },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "github" });
         sendResponse({ ok: true });
         break;
 
       case "COPY_JIRA_TICKET":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: { action: "jira" },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "jira" });
         sendResponse({ ok: true });
         break;
 
       case "TOGGLE_ANNOTATE":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: { action: "annotate" },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "annotate" });
         sendResponse({ ok: true });
         break;
 
       case "TOGGLE_DRAW":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: { action: "draw" },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "draw" });
         sendResponse({ ok: true });
         break;
 
       case "EXPORT_ANNOTATIONS":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: { action: "export_annotations" },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "export_annotations" });
         sendResponse({ ok: true });
         break;
 
       // ── New popup flow ───────────────────────────────────────────────────
       case "TB_CAPTURE_NOW":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", { detail: { action: "capture-now" } })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "capture-now" });
         sendResponse({ ok: true });
         break;
 
       case "TB_START_RECORDING":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", {
-            detail: {
-              action: "record",
-              withMic: !!message.withMic,
-              blurFirst: !!message.blurFirst,
-              delaySec: message.delaySec || 0,
-              surfaceMode: message.surfaceMode || undefined,
-            },
-          })
-        );
+        dispatchToPage("tracebug-ext-action", {
+          action: "record",
+          withMic: !!message.withMic,
+          blurFirst: !!message.blurFirst,
+          delaySec: message.delaySec || 0,
+          surfaceMode: message.surfaceMode || undefined,
+        });
         sendResponse({ ok: true });
         break;
 
       case "TB_VIEW_TICKETS":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", { detail: { action: "view-tickets" } })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "view-tickets" });
         sendResponse({ ok: true });
         break;
 
       case "TB_INSPECT":
-        window.dispatchEvent(
-          new CustomEvent("tracebug-ext-action", { detail: { action: "inspect" } })
-        );
+        dispatchToPage("tracebug-ext-action", { action: "inspect" });
         sendResponse({ ok: true });
         break;
     }

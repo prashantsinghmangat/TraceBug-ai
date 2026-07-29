@@ -133,13 +133,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  // Bail out on chrome:// pages, the new-tab page, etc.
+  // Bail out on browser-internal pages where content scripts can't run
+  // (Chrome AND Firefox schemes, plus Mozilla's injection-restricted sites).
+  const restrictedHosts = ["addons.mozilla.org", "accounts.firefox.com"];
+  let tabHost = "";
+  try { tabHost = new URL(tab?.url || "").hostname; } catch {}
   if (
     !tab?.url ||
     tab.url.startsWith("chrome://") ||
     tab.url.startsWith("chrome-extension://") ||
     tab.url.startsWith("edge://") ||
-    tab.url.startsWith("about:")
+    tab.url.startsWith("about:") ||
+    tab.url.startsWith("moz-extension://") ||
+    tab.url.startsWith("view-source:") ||
+    tab.url.startsWith("resource://") ||
+    restrictedHosts.includes(tabHost)
   ) {
     document.getElementById("mainContent").style.display = "none";
     document.getElementById("unavailable").style.display = "block";
@@ -276,6 +284,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function runCombo(messageType, busyText, extra) {
   if (!currentTabId) return;
+  // Firefox MV3 treats manifest host_permissions as OPT-IN: without a granted
+  // origin, re-injection after navigation and captureVisibleTab fail once the
+  // one-shot activeTab grant expires. Request it here — this runs inside the
+  // button's click handler and MUST be the first await (Firefox rejects
+  // permissions.request made after unrelated awaits in the input handler).
+  // On Chrome the permission is already granted, so this resolves instantly.
+  // If the user declines, activeTab still covers the immediate action.
+  try { await chrome.permissions.request({ origins: ["<all_urls>"] }); } catch {}
   setBusy(true);
   showToast(busyText);
   try {

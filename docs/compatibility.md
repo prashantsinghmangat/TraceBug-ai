@@ -8,22 +8,29 @@ claim a ✅ we haven't verified.
 
 | Feature | Chrome / Edge / Chromium | Firefox | Safari |
 |---|---|---|---|
-| SDK event capture (clicks, inputs, network, console) | ✅ | ✅ expected — untested in CI | ⚠ expected — untested |
-| DOM replay recording (rrweb) | ✅ | ⚠ expected to work — untested | ⚠ untested |
+| SDK event capture (clicks, inputs, network, console) | ✅ | ✅ | ⚠ expected — untested |
+| DOM replay recording (rrweb) | ✅ | ✅ | ⚠ untested |
 | Exported `.html` viewer (open a report) | ✅ | ✅ | ⚠ needs `DecompressionStream` (Safari 16.4+); falls back to screenshots |
-| Screenshots (html2canvas / captureVisibleTab) | ✅ | ⚠ SDK path only | ⚠ SDK path only |
-| Screen recording (tab / desktop capture) | ✅ | ❌ extension recording (offscreen API is Chrome-only) | ❌ |
+| Screenshots / region screenshots | ✅ | ✅ | ⚠ SDK path only |
+| Screen recording (tab / desktop capture) | ✅ picker opens directly | ✅ via a "Share screen" click in the recorder window (Firefox requires the gesture there) | ❌ |
+| Tab / system audio in recordings | ✅ | ⚠ not supported by Firefox — enable the **microphone** toggle for narration | ❌ |
+| Sentry mode (rolling buffer, 📸 Capture) | ✅ | ✅ | ❌ |
+| Save Ticket (local, offline) | ✅ | ✅ | ⚠ SDK path expected |
+| HTML / HAR / zip / Playwright exports | ✅ | ✅ | ⚠ untested |
 | Element-level blur (CSS filter + `tb-mask`) | ✅ | ✅ | ✅ (standard CSS) |
-| Compressed exports (`CompressionStream`) | ✅ | ✅ (115+) | ✅ (16.4+); older ships uncompressed fallback |
-| **Browser extension** | ✅ Chrome Web Store (Edge can sideload) | ⚠ port paused after Phase 2 — builds exist (`dist/firefox`), recording parity unfinished | ❌ not planned |
+| Compressed exports (`CompressionStream`) | ✅ | ✅ | ✅ (16.4+); older ships uncompressed fallback |
+| **Browser extension** | ✅ Chrome Web Store (Edge can sideload) | ✅ Firefox 128+ (AMO submission in progress) | ❌ not planned |
+| Site access after navigation | ✅ automatic | ✅ after the one-time host-permission prompt on first capture | n/a |
 | MCP server (`npx tracebug mcp`) | n/a — runs in Node 18+, any OS | n/a | n/a |
 
 ## Version support policy
 
 - **Chrome / Edge:** latest two stable releases (the extension targets
   Manifest V3, Chrome 109+ APIs; `CompressionStream` paths need 103+).
-- **Firefox:** SDK targets current ESR and later; the extension build
-  declares `strict_min_version: 115`.
+- **Firefox:** SDK targets current ESR and later; the extension requires
+  **Firefox 128+** (`strict_min_version: 128` — the SDK is injected via
+  `scripting.executeScript({world: "MAIN"})`, which Firefox added in 128;
+  128 is also an ESR).
 - **Safari:** SDK best-effort on 16.4+ (where `CompressionStream` /
   `DecompressionStream` exist); no extension.
 - **Node (CLI/MCP):** 18+ (`engines` enforced in the package).
@@ -34,9 +41,16 @@ DOM replay) rather than break.
 
 ## Known limitations
 
-- **Extension is Chrome-only today.** The Firefox port is paused with
-  Phase 2 complete (shared codebase + Firefox manifest build exist); the
-  remaining work is recording parity without Chrome's offscreen API.
+- **Firefox differences (by platform design, not bugs):**
+  - *Tab/system audio* can't be captured via `getDisplayMedia` on Firefox —
+    recordings are silent unless the microphone toggle is on (the recorder
+    window says so during recording).
+  - *Screen recording needs one extra click*: Firefox requires a user gesture
+    in the recorder window, so a small "Share screen" popup appears before
+    the native picker (Chrome's picker opens directly).
+  - *Site access is a one-time prompt*: Firefox treats host permissions as
+    opt-in, so the first capture asks for site access; declining limits
+    TraceBug to the current page view until re-invoked (navigation loses it).
 - **Canvas/WebGL-heavy apps lose replay fidelity** — rrweb records DOM, and
   `recordCanvas` is off for size. Use video recording for those apps.
 - **Very large reports:** sessions with embedded video reach tens of MB.

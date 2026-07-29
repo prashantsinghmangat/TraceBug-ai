@@ -3,13 +3,56 @@
 <head>
   <meta charset="utf-8">
   <title>TraceBug Recording Host</title>
+  <style>
+    /* Only visible in Firefox window-host mode (?host=window). On Chrome this
+       page is an invisible offscreen document and both panels stay hidden. */
+    body {
+      margin: 0; padding: 24px;
+      background: #0E1117; color: #e0e0e0;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px; line-height: 1.5;
+    }
+    .tb-panel { display: none; text-align: center; }
+    .tb-panel[data-visible="true"] { display: block; }
+    .tb-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .tb-sub { font-size: 12px; color: #9aa0b0; margin-bottom: 18px; }
+    .tb-share {
+      background: #6366F1; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer;
+      font-family: inherit;
+    }
+    .tb-share:hover { background: #5558e6; }
+    .tb-cancel {
+      display: block; margin: 12px auto 0; background: none; border: none;
+      color: #9aa0b0; font-size: 12px; cursor: pointer; font-family: inherit;
+      text-decoration: underline;
+    }
+    .tb-dot {
+      display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+      background: #ef4444; margin-right: 8px; vertical-align: baseline;
+      animation: tb-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes tb-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+  </style>
 </head>
 <body>
   <!--
-    Hidden offscreen document. Holds the MediaStream + MediaRecorder so
-    screen recording survives host-page reloads / navigations. Driven by
-    chrome.runtime messages from background.js.
+    Recording host page. On Chrome this is a hidden offscreen document; on
+    Firefox it runs in a small popup window (no offscreen API) and shows the
+    panels below. Holds the MediaStream + MediaRecorder so screen recording
+    survives host-page reloads. Driven by chrome.runtime messages from
+    background.js.
   -->
+  <div id="tb-gesture" class="tb-panel">
+    <div class="tb-title">TraceBug Screen Recording</div>
+    <div class="tb-sub">Firefox needs a click here to open the screen picker.</div>
+    <button id="tb-share" class="tb-share">&#127916; Share screen</button>
+    <button id="tb-cancel" class="tb-cancel">Cancel</button>
+  </div>
+  <div id="tb-recording" class="tb-panel">
+    <div class="tb-title"><span class="tb-dot"></span>Recording</div>
+    <div class="tb-sub">Keep this window open (you can minimize it).<br>Closing it ends the recording.</div>
+  </div>
   <script src="offscreen.js"></script>
 </body>
 </html>

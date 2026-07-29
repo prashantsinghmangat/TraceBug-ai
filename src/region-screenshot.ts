@@ -9,6 +9,18 @@ import { captureScreenshot, loadHtml2CanvasShared, pushScreenshot, isNonRenderin
 
 interface Rect { x: number; y: number; w: number; h: number; }
 
+/** Resolve after the browser has actually painted pending DOM changes.
+ *  Double-rAF puts us after the next frame's paint; the extra timeout gives
+ *  the compositor a beat. Needed before captureVisibleTab: removing the
+ *  selection overlay and capturing in the same tick can photograph a stale
+ *  frame that still contains the overlay (or the just-hidden ticket modal) —
+ *  observed on Firefox, where the capture path is slower to reflect DOM. */
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50)));
+  });
+}
+
 /** Show a fullscreen overlay; user drags a rectangle; returns cropped ScreenshotData. */
 export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
   return new Promise((resolve) => {
@@ -87,6 +99,8 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
         // mis-positions the crop on scrolled / lazy-loaded content (the bug:
         // "takes long and captures elsewhere").
         if (isExtensionContext()) {
+          // Let the overlay removal reach the screen before photographing it.
+          await afterPaint();
           const full = await captureScreenshot(null);
           const cropped = await cropDataUrl(full.dataUrl, rect);
           full.dataUrl = cropped;
@@ -144,6 +158,7 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
         // the visible viewport so the crop math still aligns. The base
         // captureScreenshot already pushed the full image to the store —
         // overwrite its dataUrl in place so the store reflects the crop.
+        await afterPaint();
         const full = await captureScreenshot(null);
         const cropped = await cropDataUrl(full.dataUrl, rect);
         full.dataUrl = cropped;
@@ -173,10 +188,21 @@ function cropDataUrl(dataUrl: string, r: Rect): Promise<string> {
     // don't retain a chain of full-page bitmaps until GC.
     const release = () => { img.onload = null; img.onerror = null; img.src = ""; };
     img.onload = () => {
-      // captureVisibleTab returns device pixels; html2canvas at scale:1 returns CSS pixels.
-      // Either way, scaling by naturalWidth / innerWidth gives the correct factor.
-      const sx = img.naturalWidth / window.innerWidth;
-      const sy = img.naturalHeight / window.innerHeight;
+      // captureVisibleTab returns device pixels; html2canvas at scale:1 returns
+      // CSS pixels. Either way, scaling captured-size / viewport-size gives the
+      // correct factor. Use clientWidth/Height (excludes scrollbars) rather
+      // than innerWidth/Height (includes them): the captured image covers only
+      // the page area, so on browsers with reserved scrollbars (e.g. Firefox
+      // on Windows) the innerWidth denominator skews the crop origin.
+      const viewW = document.documentElement.clientWidth || window.innerWidth;
+      const viewH = document.documentElement.clientHeight || window.innerHeight;
+      const sx = img.naturalWidth / viewW;
+      const sy = img.naturalHeight / viewH;
+      // Diagnostic for mis-aligned region reports: one line pinpoints whether
+      // the capture size, viewport math, or the drag rect is at fault.
+      try {
+        console.info(`[TraceBug] region crop: rect=${JSON.stringify(r)} img=${img.naturalWidth}x${img.naturalHeight} view=${viewW}x${viewH} dpr=${window.devicePixelRatio}`);
+      } catch {}
       const c = document.createElement("canvas");
       c.width = Math.max(1, Math.round(r.w * sx));
       c.height = Math.max(1, Math.round(r.h * sy));
