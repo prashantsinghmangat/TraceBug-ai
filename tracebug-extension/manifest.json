@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TraceBug — Capture the Bug, Let AI Fix It",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "description": "Capture a browser bug — replay, console, network — into one local report your AI agent (Claude, Cursor) reads and fixes. Free.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
@@ -11,9 +11,9 @@
     "storage",
     "unlimitedStorage",
     "scripting",
-    "tabs",
     "offscreen"
   ],
+  "minimum_chrome_version": "116",
 
   "host_permissions": [
     "<all_urls>"

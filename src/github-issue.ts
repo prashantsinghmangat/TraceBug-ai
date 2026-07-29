@@ -268,7 +268,7 @@ export function generateGitHubIssue(report: BugReport): string {
 
   // Footer
   md += `---\n`;
-  md += `_[TraceBug SDK](https://www.npmjs.com/package/tracebug-sdk) · Session: \`${report.session.sessionId.slice(0, 8)}\`_\n`;
+  md += `_Captured with [TraceBug](https://tracebug.dev/?ref=github-issue) — free, local-first bug reports · Session: \`${report.session.sessionId.slice(0, 8)}\`_\n`;
 
   return md;
 }

@@ -66,9 +66,8 @@ import { setRedactRules } from "./sanitize/custom-redaction";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
-import { hydratePlan, getPlan, isPremium, setPlan, FREE_LIMITS } from "./plan";
+import { hydratePlan, getPlan, isPremium, setPlan } from "./plan";
 import type { Plan } from "./plan";
-import { showUpgradeModal } from "./ui/upgrade-modal";
 import { buildReport } from "./report-builder";
 import { generateGitHubIssue } from "./github-issue";
 import { generateJiraTicket } from "./jira-issue";
@@ -776,13 +775,10 @@ class TraceBugSDK {
    * always returns true.
    */
   private _checkScreenshotLimit(): boolean {
-    if (isPremium()) return true;
-    if (getScreenshots().length < FREE_LIMITS.screenshots) return true;
-    showUpgradeModal({
-      feature: "Unlimited screenshots",
-      message: `Free plan is capped at ${FREE_LIMITS.screenshots} screenshots per ticket. Upgrade for unlimited captures.`,
-    }, document.getElementById("tracebug-root"));
-    return false;
+    // Screenshots are local capture — never plan-gated (pricing boundary:
+    // local free forever, cloud collaboration paid). The in-memory ring
+    // buffer cap in screenshot.ts is the only limit.
+    return true;
   }
 
   /** Capture a screenshot of the current page */
@@ -1092,17 +1088,13 @@ class TraceBugSDK {
 
   // ── Report Generation ───────────────────────────────────────────────
 
-  /**
-   * Strip premium-only data (network errors, console errors) from a report
-   * so free-plan exports include only basic metadata. Mutates and returns
-   * the report. No-op for premium.
-   */
-  private _redactForFreePlan(report: BugReport): BugReport {
-    if (isPremium()) return report;
-    report.networkErrors = [];
-    report.consoleErrors = [];
-    return report;
-  }
+  // PRICING BOUNDARY (committed publicly on the pricing page and GitHub):
+  // local capture and export are free forever — console/network data, PDF,
+  // Jira formatting, and screenshots are NEVER plan-gated. The only paid
+  // line is cloud collaboration (share links, team workspaces). The old
+  // _redactForFreePlan (which stripped console/network errors from free
+  // exports) is gone: it would have violated that promise the day plans
+  // went live.
 
   /**
    * Branding prefix for export markdown. Premium + companyName configured →
@@ -1143,7 +1135,7 @@ class TraceBugSDK {
     const session = sessions.find(s => s.sessionId === this.sessionId);
     if (!session) return null;
 
-    const report = this._redactForFreePlan(buildReport(session));
+    const report = buildReport(session);
     // Honor opt-out: drop the Web Storage snapshot when disabled.
     if (this.config?.captureStorage === false) delete report.storage;
     return report;
@@ -1166,18 +1158,10 @@ class TraceBugSDK {
   }
 
   /**
-   * Generate Jira ticket payload (premium). Free users see the upgrade
-   * modal and receive null. Premium users get the full Jira-formatted
-   * ticket including network/console metadata + optional company branding.
+   * Generate Jira ticket payload. Free — Jira formatting is local capture
+   * output, which is never plan-gated (see the pricing-boundary note above).
    */
   getJiraTicket() {
-    if (!isPremium()) {
-      showUpgradeModal({
-        feature: "Jira ticket export",
-        message: "Generate Jira-formatted tickets with priority + labels in one click. Upgrade to unlock.",
-      }, document.getElementById("tracebug-root"));
-      return null;
-    }
     const report = this.generateReport();
     if (!report) return null;
     const ticket = generateJiraTicket(report);
@@ -1231,22 +1215,15 @@ class TraceBugSDK {
     const sessions = getAllSessions();
     const session = sessions.find(s => s.sessionId === this.sessionId) || sessions[0];
     if (!session) throw new Error("no_session_to_share");
-    const report = this._redactForFreePlan(buildReport(session));
+    const report = buildReport(session);
     return shareSessionAsLink(session, report, { ...options, cloudEndpoint: ep });
   }
 
   /**
-   * Download a PDF bug report (premium). Free users see the upgrade modal
-   * and the download is skipped.
+   * Download a PDF bug report. Free — local export is never plan-gated
+   * (see the pricing-boundary note above).
    */
   downloadPdf(): void {
-    if (!isPremium()) {
-      showUpgradeModal({
-        feature: "PDF export",
-        message: "Get a polished, formatted PDF with screenshots and timeline embedded. Upgrade to unlock.",
-      }, document.getElementById("tracebug-root"));
-      return;
-    }
     const report = this.generateReport();
     if (!report) {
       console.warn("[TraceBug] No session data to generate PDF.");

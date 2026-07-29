@@ -2,6 +2,20 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.10.1] - 2026-07-29
+
+> Store-readiness release: fixes from a Chrome Web Store-style review — permission minimization, a hardened page↔extension bridge, and four real extension-lifecycle bugs the happy path had been hiding.
+
+### Fixed
+
+- **Removed the unused `tabs` permission** — the extension never needed it (every `chrome.tabs.*` call rides `activeTab` or host permissions), and it added a "Read your browsing history" install warning for nothing.
+- **Page→extension bridge is now allowlisted** — page scripts can only relay the six `tb:rec:*` recording verbs; previously a page could relay arbitrary message types (including `CAPTURE_SCREENSHOT`, reading the tab's pixels back without a consent prompt).
+- **`tb:rec:started` now actually reaches the page** — it was broadcast via `runtime.sendMessage`, which never delivers to content scripts, so the HUD-mount fallback, the mic-missing toast, and the slow-picker recovery (2-min cap + DOM replay re-arm) were dead code end-to-end. Background now fans it out per-tab like the auto-stop broadcast.
+- **Service-worker hydration race** — a mutating event that *woke* the worker (tab close, toolbar ✕, auto-stop) could persist blank state over every tab's saved state, and the in-flight hydration read could then resurrect the stale snapshot. All mutating paths now await hydration, and a dirty flag makes fresh writes win.
+- **Firefox recorder-window id survives event-page restarts** — previously a restart mid-recording meant closing the popup never ended the recording on-page, passive probes reported "not recording", and the next start opened a second window.
+- **The recorder host is closed after every recording on both browsers** — Chrome's offscreen document (exempt from auto-teardown) used to hold the full base64 recording in memory until browser close; recovery is served from `chrome.storage.local` instead.
+- **`minimum_chrome_version: 116`** declared — Chrome ≤108 used to install the extension and silently fail to record.
+
 ## [1.10.0] - 2026-07-29
 
 > The Firefox release: the extension now ships for Firefox 128+ from the same source as Chrome, with honest handling of every platform difference (gesture-gated screen picker, opt-in site access, no tab audio). Also makes locally saved tickets eviction-proof with storage insights, and hardens both flows with fixes from a full multi-agent review — including a cross-browser Sentry-mode bug where 📸 captures could attach a stale video.

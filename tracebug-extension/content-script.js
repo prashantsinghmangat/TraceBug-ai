@@ -205,9 +205,22 @@ function reattachDataUrl(rec, cb) {
 // + type + data. We forward to background.js, which routes to the offscreen
 // document. The response comes back as `tracebug-rec-response` with the same
 // id. Page resolves the matching pending promise.
+// SECURITY: the page controls e.detail — only these recording verbs may cross
+// into the privileged background. Without this allowlist, any page script
+// could relay e.g. CAPTURE_SCREENSHOT and read the tab's pixels back through
+// the response event, bypassing the getDisplayMedia consent prompt.
+const REC_RPC_TYPES = new Set([
+  "tb:rec:start", "tb:rec:stop", "tb:rec:capture",
+  "tb:rec:comment", "tb:rec:status", "tb:rec:last-recording",
+]);
+
 window.addEventListener("tracebug-rec-request", (e) => safeRun(() => {
   const { id, type, data } = e.detail || {};
   if (!type) return;
+  if (!REC_RPC_TYPES.has(type)) {
+    dispatchToPage("tracebug-rec-response", { id, result: null, error: "Unsupported request type" });
+    return;
+  }
   if (!isExtAlive()) {
     // Reply with an error so the page-side promise rejects cleanly instead
     // of waiting forever for a response that will never come.

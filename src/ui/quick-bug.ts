@@ -5,8 +5,6 @@
 import { downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot, pushScreenshot, isExtensionContext } from "../screenshot";
 import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
-import { isPremium } from "../plan";
-import { showUpgradeModal } from "./upgrade-modal";
 import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved, recordStorageStat } from "../storage";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
@@ -193,11 +191,26 @@ export async function showQuickBugCapture(
   // from the offscreen document. Static import so the bundler always
   // includes the recovery code — earlier dynamic imports sometimes resolved
   // to a separate chunk that wasn't loaded in time.
-  try {
-    if (!getLastVideoRecording()) {
-      await restoreLastRecordingFromOffscreen();
-    }
-  } catch {}
+  // DON'T await the recording-restore RPC before first paint: right after a
+  // 1-2 min recording it can take 0.5-2s (multi-MB base64 through storage +
+  // IPC + decode), and it used to gate the ENTIRE modal — the product's worst
+  // dead-time moment. Mount with what's local now; when the restore lands,
+  // flush the typed fields to the draft and refresh so the video swaps in.
+  // Historical tickets skip this: the restored recording belongs to the live
+  // session and would be suppressed anyway.
+  if (!getLastVideoRecording() && !options?.sessionId) {
+    void restoreLastRecordingFromOffscreen()
+      .then(() => {
+        if (!_isOpen || !getLastVideoRecording()) return;
+        const titleEl = document.getElementById("tb-qb-title") as HTMLInputElement | null;
+        const descEl = document.getElementById("tb-qb-desc") as HTMLTextAreaElement | null;
+        if (titleEl || descEl) {
+          _saveDraft({ title: titleEl?.value ?? "", description: descEl?.value ?? "", timestamp: Date.now() });
+        }
+        refreshQuickBugCapture(root).catch(() => {});
+      })
+      .catch(() => {});
+  }
 
   // Grab session for auto-fill. If a specific sessionId is requested (e.g. user
   // clicked "View ticket" on an older session), pick that one; otherwise fall
@@ -217,10 +230,18 @@ export async function showQuickBugCapture(
     ? [...currentSession.screenshots].reverse()
     : getScreenshots().slice().reverse();
 
+  // Build the full report ONCE — every tab reads from it, and it feeds the
+  // description builder below (which used to run its own duplicate build,
+  // doubling the modal's pre-paint cost on event-heavy sessions).
+  let report: import("../types").BugReport | null = null;
+  if (currentSession) {
+    try { report = buildReport(currentSession); } catch {}
+  }
+
   // Auto-fill title + description from session context
   const draft = _loadDraft();
   const autoTitle = currentSession ? generateBugTitle(currentSession) : `Bug on ${window.location.pathname}`;
-  const autoDesc = _buildDescription(currentSession);
+  const autoDesc = _buildDescription(currentSession, report);
 
   // Source order: caller prefill (scanner) > the reopened saved ticket's own
   // persisted title/description > recovered draft > auto-generated. A restored
@@ -232,12 +253,6 @@ export async function showQuickBugCapture(
   const description = options?.prefilledDescription ?? sessionDesc ?? (draft?.description || autoDesc);
   const draftRestored = !options?.prefilledTitle && !sessionTitle && !!draft && !!(draft.title || draft.description);
 
-  // Build the full report once so every tab (Info/Console/Network/Actions/AI)
-  // can read from it without re-running buildReport per tab.
-  let report: import("../types").BugReport | null = null;
-  if (currentSession) {
-    try { report = buildReport(currentSession); } catch {}
-  }
   // Historical session: the global last-recording is a NEWER session's video.
   // buildReport's time gate can't catch that direction (newer video passes the
   // "started after session created" check), so strip it here — this report
@@ -300,20 +315,21 @@ function _downloadVideoIfPresent(): void {
   downloadVideoRecording(v, _videoFilename(v));
 }
 
-function _buildDescription(session: StoredSession | null): string {
+function _buildDescription(session: StoredSession | null, prebuilt?: import("../types").BugReport | null): string {
   const env = session?.environment || captureEnvironment();
   const flow = session ? generateFlowSummary(session.events) : "";
   const errorMsg = session?.errorMessage || "";
 
-  // Smart summary — pulled from a full BugReport build so all signals
-  // (network, click, error, page) are considered.
+  // Smart summary — pulled from a full BugReport so all signals (network,
+  // click, error, page) are considered. The caller passes its already-built
+  // report; building here is the fallback for other call sites.
   let summary = "";
   let rootCauseLine = "";
   let networkLines: string[] = [];
   let recentSteps: string[] = [];
   try {
     if (session) {
-      const report = buildReport(session);
+      const report = prebuilt ?? buildReport(session);
       summary = report.summary;
       rootCauseLine = formatRootCauseLine(report.rootCause);
       recentSteps = report.sessionSteps || [];
@@ -467,8 +483,13 @@ function _openModal(
       <!-- LEFT: title + replay preview + scrubber + thumbs + description -->
       <div class="tb-qb-left">
 
-        <label class="tb-qb-lbl">Title${data.draftRestored ? `
-          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="margin-left:8px;font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label class="tb-qb-lbl" style="margin:0">Title</label>${data.draftRestored ? `
+          <!-- Sibling of the label, NOT inside it: a button nested in a label
+               becomes its implicit control, so clicking the word "Title"
+               would fire Discard. -->
+          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}
+        </div>
         <input id="tb-qb-title" type="text" value="${escapeHtml(data.title)}" class="tb-qb-input" />
 
         ${video ? `
@@ -610,7 +631,7 @@ function _openModal(
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
-        <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">🔗 Share link</button>
+        <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">↗ Share link</button>
         PHASE2-CLOUD -->
         <div class="tb-qb-more">
           <button data-action="more-toggle" class="tb-qb-btn tb-qb-more-btn" aria-haspopup="true" aria-expanded="false" title="More export options">More ▾</button>
@@ -873,6 +894,11 @@ function _openModal(
     // Esc peels ONE layer, not the whole stack. Child overlays mount inside
     // this modal's stacking context; without these guards, Esc on (say) the
     // post-export handoff card also destroyed the ticket modal beneath it.
+    // modalKeyHandler runs FIRST on the same keydown and preventDefault()s
+    // when it consumed the key (e.g. closing the help overlay) — without this
+    // guard we'd re-read the already-closed overlay's state and peel a second
+    // layer.
+    if (e.defaultPrevented) return;
     if (helpEl && helpEl.style.display !== "none") return; // modalKeyHandler closes it
     const child = document.getElementById("tb-ai-popover")
       || document.getElementById("tb-mcp-handoff")
@@ -900,7 +926,7 @@ function _openModal(
     openGhBtn.addEventListener("click", async () => {
       const { title, description } = getDraft();
       const report = _reportFromDraft(title, description);
-      if (!report) { showToast("No session data yet", root); return; }
+      if (!report) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
       // Real API (BYO-token) when configured; otherwise the prefilled-URL flow.
       if (hasIntegration("github") && await _fileViaTracker("github", report, root, screenshots, close)) return;
       const repo = _githubRepo!; // checked in outer if
@@ -935,14 +961,9 @@ function _openModal(
     setTimeout(close, 300);
   });
 
+  // Jira formatting is local export output — never plan-gated (pricing
+  // boundary: local free forever, cloud collaboration paid).
   modal.querySelector('[data-action="jira"]')!.addEventListener("click", async () => {
-    if (!isPremium()) {
-      showUpgradeModal({
-        feature: "Jira ticket export",
-        message: "Generate Jira-formatted tickets with priority + labels in one click. Upgrade to unlock.",
-      }, root);
-      return;
-    }
     const { title, description } = getDraft();
     const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0];
@@ -1024,8 +1045,8 @@ function _openModal(
       saveTicketBtn.classList.add("tb-qb-btn-saved");
       saveTicketBtn.disabled = true;
       showToast(withoutShots
-        ? "\u2713 Ticket saved locally without screenshots (storage full) \u2014 it's in the \u2713 Saved Tickets list on the toolbar"
-        : "\u2713 Ticket saved locally \u2014 it's in the \u2713 Saved Tickets list on the toolbar", root);
+        ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it under Saved tickets on the toolbar"
+        : "\u2713 Ticket saved \u2014 find it under Saved tickets on the toolbar", root);
     });
   }
 
@@ -1056,9 +1077,15 @@ function _openModal(
   // self-contained HTML file. Recipient opens offline \u2192 full interactive replay.
   modal.querySelector('[data-action="export-replay"]')?.addEventListener("click", async () => {
     if (!data.currentSession) {
-      showToast("No session to export yet", root);
+      showToast("Nothing to export yet — capture something first", root);
       return;
     }
+    // Busy state + double-click guard: bundling is main-thread heavy and a
+    // second click used to produce a second download.
+    const exportBtn = modal.querySelector<HTMLButtonElement>('[data-action="export-replay"]');
+    if (exportBtn?.disabled) return;
+    const prevLabel = exportBtn?.innerHTML ?? "";
+    if (exportBtn) { exportBtn.disabled = true; exportBtn.innerHTML = `${_ic("fileCode")} Bundling\u2026`; }
     showToast("Bundling replay\u2026", root);
     try {
       // Pull the latest recording from the offscreen one more time right
@@ -1088,7 +1115,9 @@ function _openModal(
       showMcpHandoffCard(result.filename, result.sizeBytes);
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
-      showToast("Replay export failed", root);
+      showToast("Couldn't export the replay — try again", root);
+    } finally {
+      if (exportBtn && exportBtn.isConnected) { exportBtn.disabled = false; exportBtn.innerHTML = prevLabel; }
     }
   });
 
@@ -1096,7 +1125,7 @@ function _openModal(
   // asserts the captured failure is gone. Red until fixed, green after.
   modal.querySelector('[data-action="export-spec"]')?.addEventListener("click", () => {
     if (!data.currentSession) {
-      showToast("No session to export yet", root);
+      showToast("Nothing to export yet — capture something first", root);
       return;
     }
     try {
@@ -1122,9 +1151,13 @@ function _openModal(
   // as a drag-and-drop attachment (GitHub rejects bare .html files).
   modal.querySelector('[data-action="export-zip"]')?.addEventListener("click", async () => {
     if (!data.currentSession) {
-      showToast("No session to export yet", root);
+      showToast("Nothing to export yet — capture something first", root);
       return;
     }
+    const zipBtn = modal.querySelector<HTMLButtonElement>('[data-action="export-zip"]');
+    if (zipBtn?.disabled) return;
+    const zipPrevLabel = zipBtn?.innerHTML ?? "";
+    if (zipBtn) { zipBtn.disabled = true; zipBtn.textContent = "Bundling…"; }
     showToast("Bundling .zip…", root);
     try {
       try { await restoreLastRecordingFromOffscreen(); } catch {}
@@ -1143,14 +1176,16 @@ function _openModal(
       showToast(`✓ .zip exported · ${sizeMb} MB — drag it onto a GitHub issue to attach`, root);
     } catch (err) {
       console.warn("[TraceBug] ZIP export failed:", err);
-      showToast("ZIP export failed", root);
+      showToast("Couldn't build the .zip — try again", root);
+    } finally {
+      if (zipBtn && zipBtn.isConnected) { zipBtn.disabled = false; zipBtn.innerHTML = zipPrevLabel; }
     }
   });
 
   // Export HAR — standard HTTP Archive of the captured network activity.
   modal.querySelector('[data-action="export-har"]')?.addEventListener("click", () => {
     if (!data.currentSession) {
-      showToast("No session to export yet", root);
+      showToast("Nothing to export yet — capture something first", root);
       return;
     }
     try {
@@ -1173,7 +1208,7 @@ function _openModal(
   // screenshots go as separate image files (see download-screenshots).
   modal.querySelector('[data-action="download-md"]')?.addEventListener("click", () => {
     if (!data.currentSession) {
-      showToast("No session to export yet", root);
+      showToast("Nothing to export yet — capture something first", root);
       return;
     }
     try {
@@ -1197,7 +1232,7 @@ function _openModal(
   // long". Same capped/deduped content as the .md, just rendered as HTML.
   modal.querySelector('[data-action="export-ai-html"]')?.addEventListener("click", () => {
     if (!data.currentSession) {
-      showToast("No session to export yet", root);
+      showToast("Nothing to export yet — capture something first", root);
       return;
     }
     try {
@@ -1232,7 +1267,7 @@ function _openModal(
   const shareBtn = modal.querySelector<HTMLButtonElement>('[data-action="share-link"]');
   shareBtn?.addEventListener("click", async () => {
     if (!data.currentSession) {
-      showToast("No session to share yet", root);
+      showToast("Nothing to share yet — capture something first", root);
       return;
     }
     if (shareBtn?.dataset.busy === "1") return;
@@ -1317,7 +1352,7 @@ function _openModal(
   // no API key — purely client-side prompt generation.
   modal.querySelector('[data-action="ai-prompt"]')?.addEventListener("click", async (e) => {
     if (!data.currentSession) {
-      showToast("No session to share yet", root);
+      showToast("Nothing to share yet — capture something first", root);
       return;
     }
     try {
@@ -1338,7 +1373,7 @@ function _openModal(
       showAIPromptPopover(e.currentTarget as HTMLElement, prompt, root);
     } catch (err) {
       console.warn("[TraceBug] AI prompt generation failed:", err);
-      showToast("AI prompt failed — check console", root);
+      showToast("Couldn't build the AI prompt — try again", root);
     }
   });
 
@@ -1427,7 +1462,7 @@ function _openModal(
   modal.querySelector('[data-action="linear"]')!.addEventListener("click", async () => {
     const { title, description } = getDraft();
     const r = _reportFromDraft(title, description);
-    if (!r) { showToast("No session data yet", root); return; }
+    if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
     if (hasIntegration("linear") && await _fileViaTracker("linear", r, root, screenshots, close)) return;
     const ok = openLinearIssue(r);
     if (ok) {
@@ -1446,7 +1481,7 @@ function _openModal(
   modal.querySelector('[data-action="slack"]')!.addEventListener("click", async () => {
     const { title, description } = getDraft();
     const r = _reportFromDraft(title, description);
-    if (!r) { showToast("No session data yet", root); return; }
+    if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
     if (hasIntegration("slack") && await _fileViaTracker("slack", r, root, screenshots, close)) return;
     const text = generateSlackPost(r, description);
     const ok = await _copyToClipboard(text);
@@ -2709,7 +2744,7 @@ function _buildAnnotationsTab(session: StoredSession | null): string {
   try { els = getElementAnnotations(); } catch {}
   try { regions = getDrawRegions(); } catch {}
   if (sessAnn.length === 0 && els.length === 0 && regions.length === 0) {
-    return `<div class="tb-qb-empty">No notes yet \u2014 use the toolbar to add annotations, comments, or draw markup</div>`;
+    return `<div class="tb-qb-empty">No notes yet \u2014 annotate a screenshot to add notes here</div>`;
   }
   const sessHtml = sessAnn.length > 0 ? `
     <div class="tb-qb-sec-head">Comments (${sessAnn.length})</div>

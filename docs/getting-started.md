@@ -26,8 +26,8 @@ npx tracebug init
 
 ```bash
 cd tracebug-ai && npm pack
-# Share the file: tracebug-sdk-1.10.0.tgz
-npm install ./tracebug-sdk-1.10.0.tgz
+# Share the file: tracebug-sdk-1.10.1.tgz
+npm install ./tracebug-sdk-1.10.1.tgz
 ```
 
 ## Setup (2 lines of code)

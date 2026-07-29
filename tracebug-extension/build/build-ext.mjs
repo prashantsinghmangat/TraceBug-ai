@@ -48,6 +48,10 @@ function chromeManifest() {
     version,
     permissions: [...base.permissions, "offscreen"],
     background: { service_worker: "background.js" },
+    // Hard API floors: offscreen (109), storage.session (102),
+    // runtime.getContexts (116). Without this, Chrome ≤108 installs the
+    // extension and recording silently breaks.
+    minimum_chrome_version: "116",
   };
 }
 
