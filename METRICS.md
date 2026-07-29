@@ -33,6 +33,57 @@ or user-volunteered, consistent with the local-first promise.
 
 *(When this list has real entries, it outranks every audit finding ever filed.)*
 
+## User quotes (verbatim fragments — one-liners count)
+
+Developers won't write big feedback, and they don't need to. A five-word store
+review, a GitHub issue *title*, a Reddit comment, an overheard "wait, I had to
+click Record?" — each one goes here verbatim. Ten fragments beat one essay.
+
+**Week of ______**
+- " "
+- " "
+
+Sources that produce quotes WITHOUT asking for effort: store reviews ·
+GitHub issue titles · comments on the announcement threads (HN/Reddit — people
+give brutal, detailed feedback for free when it's public) · the 👍/👎 report
+chips · tracebug.dev/feedback · anything said while watching someone use it.
+
+**The one question to ask, when asking at all** (one question, never a survey):
+> "What almost stopped you from using it?"
+
+## Time to First Success (TTFS) — the one UX metric
+
+Measured by watching (not asking): install → first capture → replay generated
+→ handed to an AI. **Target: ≤ 3 minutes, zero documentation.** If it takes
+15 minutes or requires docs, the first hesitation point is the next fix —
+ahead of everything else in this file.
+
+| Date | Person (role) | TTFS | First hesitation | Fixed? |
+|---|---|---|---|---|
+| | | | | |
+
+## Evidence rules (in priority order — "feedback" is not the goal, evidence is)
+
+1. **Watching someone use it** — outranks everything below.
+2. **Repeated complaints** — the three-users rule: 1 report → investigate ·
+   3 independent reports → prioritize · 10 → roadmap, immediately.
+3. **Behavior** — the tables above (`?ref=` conversion, retention, exports used).
+4. **Public launch threads** — brutal, free, honest. Reply to everything.
+5. **Feature requests** — log the *pain*, distrust the proposed *solution*.
+   Never build from one request. Before any weekend project: *did at least
+   three real users ask for this?*
+
+**Standing question for every idea:** does this help more people succeed at
+the existing workflow (capture → replay → AI fix), or is it just another
+feature? The former wins.
+
+**Time allocation (next 90 days):** 70% distribution · 20% friction-fixing ·
+10% new capability (only with 3+ user evidence).
+
+**Launch-post footer (use verbatim):** "I'm the solo developer. If anything is
+confusing — or you get stuck anywhere — tell me. I'll probably fix it the
+same day."
+
 ## Decision triggers (agreed in advance, so numbers — not moods — drive them)
 
 - **Storage pressure** (`getStorageStats()` reports in issues) → start v2.0 IndexedDB.
