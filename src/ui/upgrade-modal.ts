@@ -68,22 +68,30 @@ export function showUpgradeModal(options: UpgradeOptions, root?: HTMLElement | n
       <button data-action="close" style="background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:10px 14px;cursor:pointer;font-size:12px;font-family:inherit">Not now</button>
     </div>
 
+    ${_devMode() ? `
     <div style="border-top:1px solid var(--tb-border, #2a2a3e);padding-top:10px;margin-top:6px">
       <button data-action="dev-toggle" style="width:100%;background:transparent;color:var(--tb-text-muted, #888);border:1px dashed var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 6px);padding:6px;cursor:pointer;font-size:10px;font-family:monospace">${isPremium() ? "Dev: switch to Free" : "Dev: enable Premium (test only)"}</button>
-    </div>
+    </div>` : ""}
   `;
 
   overlay.appendChild(card);
   host.appendChild(overlay);
 
-  const close = () => { overlay.remove(); };
+  // Every close path removes the Esc listener — only the Esc path used to,
+  // leaking one document keydown per backdrop/"Not now" dismissal.
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", escHandler);
+  };
 
   card.querySelector('[data-action="close"]')!.addEventListener("click", close);
   card.querySelector('[data-action="upgrade"]')!.addEventListener("click", () => {
     // Placeholder for a future upgrade flow — for now, just close.
     close();
   });
-  card.querySelector('[data-action="dev-toggle"]')!.addEventListener("click", async () => {
+  // Dev-only plan toggle — hidden in production (see _devMode). A visible
+  // "defeat the paywall" button next to the upgrade CTA was a trust leak.
+  card.querySelector('[data-action="dev-toggle"]')?.addEventListener("click", async () => {
     await setPlan(isPremium() ? "free" : "premium");
     close();
     // Emit a window event so other UI surfaces (toolbar badge) can refresh.
@@ -92,9 +100,15 @@ export function showUpgradeModal(options: UpgradeOptions, root?: HTMLElement | n
 
   overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
   const escHandler = (e: KeyboardEvent) => {
-    if (e.key === "Escape") { close(); document.removeEventListener("keydown", escHandler); }
+    if (e.key === "Escape") close();
   };
   document.addEventListener("keydown", escHandler);
+}
+
+/** Dev affordances render only when explicitly armed from the console:
+ *  localStorage.setItem("tracebug_dev", "1"). Never shown to end users. */
+function _devMode(): boolean {
+  try { return localStorage.getItem("tracebug_dev") === "1"; } catch { return false; }
 }
 
 function escape(s: string): string {

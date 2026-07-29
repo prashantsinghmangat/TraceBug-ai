@@ -71,6 +71,10 @@ export function showActionToast(
 
 export function showToast(message: string, root: HTMLElement): void {
   const existing = root.querySelector(".bt-toast");
+  // Action toasts (storage warnings etc.) carry a recovery path and an 8s
+  // window — a routine "✓ done" transient must NOT evict one. Drop the
+  // transient instead; the warning is the message that must survive.
+  if (existing?.classList.contains("bt-toast-action")) return;
   if (existing) existing.remove();
 
   const toast = document.createElement("div");

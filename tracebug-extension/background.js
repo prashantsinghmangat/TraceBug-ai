@@ -39,23 +39,39 @@ let _recordingTabId = null;
 // in-memory, survives SW restarts, clears on browser close, and needs only the
 // already-declared "storage" permission — exactly the right store for this.
 const SESSION_STATE_KEY = "tb_sw_state_v1";
+// Set the moment any mutation persists — hydration must then DISCARD its
+// (older) read instead of restoring stale state over the fresh write.
+let _stateDirty = false;
 function persistState() {
+  _stateDirty = true;
   try {
     chrome.storage.session.set({
-      [SESSION_STATE_KEY]: { activeTabs: [...activeTabs], recordingTabId: _recordingTabId },
+      [SESSION_STATE_KEY]: {
+        activeTabs: [...activeTabs],
+        recordingTabId: _recordingTabId,
+        recorderWindowId: _recorderWindowId,
+      },
     });
   } catch {}
 }
-// Rehydrate on every worker startup. Best-effort and racey against the first
-// event after wake, but navigation (the consumer of this state) fires well
-// after wake in practice, so the window is negligible.
+// Rehydrate on every worker startup. Every handler that MUTATES this state
+// must `await _hydrated` first: if the SW is woken BY a mutating event (tab
+// close, toolbar ✕, auto-stop), running against empty in-memory sets would
+// persist that emptiness over every other tab's state — and the in-flight
+// read here could then resurrect the stale snapshot. The _stateDirty guard
+// closes the second half of that race.
 const _hydrated = (async () => {
   try {
     const got = await chrome.storage.session.get(SESSION_STATE_KEY);
+    if (_stateDirty) return; // a mutation beat us — memory is newer than this read
     const s = got && got[SESSION_STATE_KEY];
     if (s) {
       if (Array.isArray(s.activeTabs)) s.activeTabs.forEach((t) => activeTabs.add(t));
       if (typeof s.recordingTabId === "number") _recordingTabId = s.recordingTabId;
+      // Firefox event pages restart mid-recording too — without this, closing
+      // the recorder popup after a restart never fans out the auto-stop, and
+      // passive probes wrongly report "not recording".
+      if (typeof s.recorderWindowId === "number") _recorderWindowId = s.recorderWindowId;
     }
   } catch {}
 })();
@@ -83,6 +99,9 @@ async function updateBadge(tabId /* , hostname */) {
 // ── Inject SDK (once per tab) ───────────────────────────────────────────────
 
 async function injectSDK(tabId) {
+  // Hydrate before mutating activeTabs — a combo action can be the SW's wake
+  // event, and persisting against blank state would wipe other tabs.
+  try { await _hydrated; } catch {}
   // Prevent duplicate injection
   if (injectedTabs.has(tabId)) return;
   injectedTabs.add(tabId);
@@ -192,8 +211,11 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   } catch {}
 });
 
-// Clean up when tab is closed
-chrome.tabs.onRemoved.addListener((tabId) => {
+// Clean up when tab is closed. Await hydration first: if THIS event woke the
+// worker, mutating + persisting against blank state would wipe every other
+// tab's persisted ON state.
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try { await _hydrated; } catch {}
   injectedTabs.delete(tabId);
   activeTabs.delete(tabId);
   if (_recordingTabId === tabId) _recordingTabId = null;
@@ -217,18 +239,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   // User turned TraceBug OFF from the floating toolbar (✕). Forget the tab so
-  // it isn't re-injected on the next navigation.
+  // it isn't re-injected on the next navigation. Hydration-await inside the
+  // async block (sendResponse stays sync-safe via return true).
   if (message.type === "TB_DISABLE_TAB") {
     const tabId = message.tabId || sender?.tab?.id;
-    if (tabId) {
-      activeTabs.delete(tabId);
-      injectedTabs.delete(tabId);
-      if (_recordingTabId === tabId) _recordingTabId = null;
-      persistState();
-      try { updateBadge(tabId); } catch {}
-    }
-    sendResponse({ ok: true });
-    return false;
+    (async () => {
+      try { await _hydrated; } catch {}
+      if (tabId) {
+        activeTabs.delete(tabId);
+        injectedTabs.delete(tabId);
+        if (_recordingTabId === tabId) _recordingTabId = null;
+        persistState();
+        try { updateBadge(tabId); } catch {}
+      }
+      sendResponse({ ok: true });
+    })();
+    return true;
   }
 
   // ── Popup combo flows ───────────────────────────────────────────────
@@ -289,10 +315,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // dedicated path never runs.
   if (message.type === "tb:rec:auto-stopped") {
     forwardAutoStopToTabs(message);
-    // Firefox window host: the recording is finalized and persisted to
-    // storage before this broadcast fires (see finalizeAndBroadcast), so the
-    // popup has done its job — close it rather than leave a blank window.
-    if (!HAS_OFFSCREEN) closeRecorderWindow();
+    // The recording is finalized and persisted to storage before this
+    // broadcast fires (see finalizeAndBroadcast), so the recorder host has
+    // done its job — close it (Firefox: blank popup; Chrome: offscreen doc
+    // holding the multi-MB recording in memory indefinitely).
+    closeRecorderHost();
+    return false;
+  }
+
+  // The recorder host broadcasts tb:rec:started the moment MediaRecorder
+  // starts. chrome.runtime.sendMessage NEVER reaches content scripts, so
+  // without this per-tab fan-out the page-side started listener — HUD-mount
+  // fallback, mic-missing toast, slow-picker recovery (duration cap + DOM
+  // replay) — was dead code end-to-end. Fan out to all tabs: at broadcast
+  // time _recordingTabId may not be set yet (the start RPC is still in
+  // flight), and unrelated tabs safely ignore it.
+  if (message.type === "tb:rec:started") {
+    (async () => {
+      try {
+        const tabs = await chrome.tabs.query({});
+        for (const tab of tabs) {
+          if (!tab.id) continue;
+          chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+        }
+      } catch {}
+    })();
     return false;
   }
 
@@ -437,6 +484,9 @@ async function ensureRecorderWindow() {
     focused: true,
   });
   _recorderWindowId = win?.id ?? null;
+  // Persist immediately — a Firefox event-page restart mid-recording must be
+  // able to rediscover the window (onRemoved guard, passive-probe gate).
+  persistState();
   // Let the page install its chrome.runtime.onMessage listener before the
   // first tb:rec:* message is forwarded to it.
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -447,14 +497,18 @@ async function ensureRecorderWindow() {
 // auto-stop ourselves so the page HUD tears down instead of showing a live
 // recording that no longer exists. No recording payload survives this path.
 if (chrome.windows?.onRemoved) {
-  chrome.windows.onRemoved.addListener((windowId) => {
+  chrome.windows.onRemoved.addListener(async (windowId) => {
+    // Hydrate first: after an event-page restart, _recorderWindowId lives
+    // only in storage.session — without this await, closing the recorder
+    // popup mid-recording would never fan out the auto-stop.
+    try { await _hydrated; } catch {}
     if (windowId !== _recorderWindowId) return;
     _recorderWindowId = null;
     if (_recordingTabId != null) {
       forwardAutoStopToTabs({ type: "tb:rec:auto-stopped", recording: null });
       _recordingTabId = null;
-      persistState();
     }
+    persistState();
   });
 }
 
@@ -462,7 +516,23 @@ async function closeRecorderWindow() {
   if (_recorderWindowId == null) return;
   const id = _recorderWindowId;
   _recorderWindowId = null;
+  persistState();
   try { await chrome.windows.remove(id); } catch {}
+}
+
+/** Is a Chrome offscreen document currently alive? Uses getContexts (Chrome
+ *  116+); when the API is unavailable, claim it exists so callers fall through
+ *  to the old create-and-ask path — correct, just slower. Safe across service
+ *  worker restarts: a live recording implies a live offscreen doc, which
+ *  getContexts will find. */
+async function offscreenDocumentExists() {
+  try {
+    if (typeof chrome.runtime.getContexts !== "function") return true;
+    const contexts = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
+    return contexts.length > 0;
+  } catch {
+    return true;
+  }
 }
 
 // ── Recorder host dispatch (offscreen on Chrome, popup window on Firefox) ────
@@ -476,6 +546,9 @@ async function closeRecorderHost() {
 }
 
 async function handleRecordingMessage(message, sender) {
+  // Hydrate before reading _recorderWindowId (Firefox host-absent gate) or
+  // mutating _recordingTabId below — either can be the wake event.
+  try { await _hydrated; } catch {}
   // No more silent tabCapture path. We always route to getDisplayMedia so
   // the user gets Chrome's native "Choose what to share" picker — they can
   // pick the current tab, a different tab, a window, or the whole screen.
@@ -484,12 +557,13 @@ async function handleRecordingMessage(message, sender) {
   // and produces a recording that always plays back correctly.
   const extraData = {};
 
-  // Firefox visible-window host: never POP the recorder window for passive
-  // RPCs. Chrome's offscreen host is invisible so creating it is harmless,
-  // but on Firefox every tb:rec:* used to open the popup — e.g. the ticket
-  // modal's "last recording" recovery probe flashed a blank window on every
-  // open. No live window → nothing is recording; answer from here instead.
-  if (!HAS_OFFSCREEN && _recorderWindowId == null && message.type !== "tb:rec:start") {
+  // Never spin up the recorder host just to answer a passive probe.
+  // Firefox: the host is a VISIBLE popup that used to flash at the user on
+  // every ticket-modal open. Chrome: creating an offscreen document (plus its
+  // boot-retry loop) costs 100-400ms on the modal-open path — just to answer
+  // "no recording". No live host → nothing is recording; answer from here.
+  const hostAbsent = HAS_OFFSCREEN ? !(await offscreenDocumentExists()) : _recorderWindowId == null;
+  if (hostAbsent && message.type !== "tb:rec:start") {
     switch (message.type) {
       case "tb:rec:status":
         return { active: false, mode: null, capturesTaken: 0, elapsedMs: 0, comments: [], mimeType: "", startedAt: 0 };
@@ -560,9 +634,10 @@ async function handleRecordingMessage(message, sender) {
     persistState();
   }
   // Start didn't happen (user cancelled the gesture or the picker, or it
-  // errored) — on Firefox, close the popup instead of leaving it blank.
+  // errored) — close the host instead of leaving a blank popup (Firefox) or
+  // an idle offscreen document (Chrome).
   if (message.type === "tb:rec:start" && (!result || result.error || result.ok === false)) {
-    if (!HAS_OFFSCREEN) closeRecorderWindow();
+    closeRecorderHost();
   }
 
   // Keep the offscreen alive after a stop so the page can re-request the
@@ -574,18 +649,23 @@ async function handleRecordingMessage(message, sender) {
   if (message.type === "tb:rec:stop" && result && !result.error) {
     _recordingTabId = null;
     persistState();
-    // Firefox window host: the popup would otherwise linger as a blank
-    // window after the recording ends. Safe to close — the finalized
-    // recording is already persisted to chrome.storage.local, and the
+    // Close the recorder host on BOTH browsers. Firefox: the popup would
+    // linger as a blank window. Chrome: the offscreen document (exempt from
+    // auto-teardown with USER_MEDIA/DISPLAY_MEDIA reasons) would otherwise
+    // hold the full base64 recording in memory until browser close. Safe:
+    // the finalized recording is persisted to chrome.storage.local, and the
     // passive-RPC path above serves last-recording metadata from storage
-    // without reopening the window.
-    if (!HAS_OFFSCREEN) closeRecorderWindow();
+    // without reopening a host.
+    closeRecorderHost();
   }
 
   return result;
 }
 
 async function forwardAutoStopToTabs(message) {
+  // Hydrate first — this broadcast can be the event-page/SW wake event, and
+  // both the _recordingTabId read and the persistState below need real state.
+  try { await _hydrated; } catch {}
   // Snapshot the recording tab BEFORE clearing it so we can focus it after
   // the broadcast. The user expects to see the ticket modal — if they're on
   // a different tab when Chrome auto-stops the share, switch them back.

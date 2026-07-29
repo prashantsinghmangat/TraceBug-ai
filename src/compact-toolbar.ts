@@ -5,10 +5,8 @@
 
 import { deactivateElementAnnotateMode } from "./element-annotate";
 import { deactivateDrawMode } from "./draw-mode";
-import { captureScreenshot, getScreenshots } from "./screenshot";
+import { captureScreenshot } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
-import { isPremium, FREE_LIMITS } from "./plan";
-import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getStorageUsageBytes, QUOTA_ESTIMATE_BYTES } from "./storage";
 import { buildReport } from "./report-builder";
 import { generateBugTitle } from "./title-generator";
@@ -121,16 +119,9 @@ export function mountCompactToolbar(
   // the screenshot annotation editor and confused users with two paradigms.
   // The underlying APIs still exist (TraceBug.activateAnnotateMode / activateDrawMode).
 
-  // Free-plan gate: enforce the screenshot limit at capture time.
-  const _checkLimit = (): boolean => {
-    if (isPremium()) return true;
-    if (getScreenshots().length < FREE_LIMITS.screenshots) return true;
-    showUpgradeModal({
-      feature: "Unlimited screenshots",
-      message: `Free plan is capped at ${FREE_LIMITS.screenshots} screenshots per ticket. Upgrade for unlimited captures.`,
-    }, root);
-    return false;
-  };
+  // Screenshots are local capture — never plan-gated (pricing boundary:
+  // local free forever, cloud collaboration paid).
+  const _checkLimit = (): boolean => true;
 
   // Drag handle — drag already works from any non-button area, but the grip
   // makes it discoverable so users know the bar can be moved anywhere.
@@ -178,7 +169,7 @@ export function mountCompactToolbar(
       try {
         if (!_isTracking) { try { _onNewCapture?.(); } catch {} }
         const ss = await captureRegionScreenshot();
-        if (!ss) { showToast("Cancelled", root); return; }
+        if (!ss) { showToast("Region capture cancelled", root); return; }
         if (_isTracking) {
           showToast("✓ Region added to tracked session", root);
         } else {
@@ -584,7 +575,17 @@ async function _toggleRecording(
     surfaceMode: choice.surface,
     withMicrophone: choice.withMicrophone,
     onStatus: (status, message) => {
-      if (status === "error" && message) showToast(`Recording error: ${message}`, root);
+      if (status === "error" && message) {
+        // Internal transport errors ("Extension context invalidated",
+        // "RPC timeout: tb:rec:start", "Receiving end does not exist") mean
+        // nothing to a tester — translate to the one recovery that fixes all
+        // of them. Raw detail stays in the console for bug reports.
+        const internal = /extension context|rpc timeout|receiving end|establish connection/i.test(message);
+        console.warn("[TraceBug] recording error:", message);
+        showToast(internal
+          ? "Couldn't start the recording — reload this tab and try again"
+          : `Recording error: ${message}`, root);
+      }
       else if (status === "warning" && message) showToast(message, root);
     },
   });
@@ -866,7 +867,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
       if (ssArr.length > 0) parts.push(`${ssArr.length} shot${ssArr.length !== 1 ? "s" : ""}`);
       const ticketBytes = _sizeOf(s);
       if (ticketBytes > 0) parts.push(_fmtSize(ticketBytes));
-      statsEl.textContent = parts.length > 0 ? parts.join(" · ") : "Empty session";
+      statsEl.textContent = parts.length > 0 ? parts.join(" · ") : "No events or screenshots";
       info.appendChild(timeEl);
       info.appendChild(statsEl);
       if (s.screenshotsDropped) {

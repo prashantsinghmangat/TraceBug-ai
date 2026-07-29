@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "description": "Capture a browser bug into one offline .html file your AI coding agent reads over MCP and fixes — session replay, console, network, repro timeline, and a generated failing test. Local-first, zero backend. Free.",
   "type": "module",
   "main": "dist/index.cjs",
