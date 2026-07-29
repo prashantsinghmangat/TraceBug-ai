@@ -222,11 +222,15 @@ export async function showQuickBugCapture(
   const autoTitle = currentSession ? generateBugTitle(currentSession) : `Bug on ${window.location.pathname}`;
   const autoDesc = _buildDescription(currentSession);
 
-  // Caller-provided values (e.g. from the auto-scanner) override the draft.
-  // If the caller prefilled, ignore the saved draft so a stale draft doesn't
-  // overwrite the issue context.
-  const title = options?.prefilledTitle ?? (draft?.title || autoTitle);
-  const description = options?.prefilledDescription ?? (draft?.description || autoDesc);
+  // Source order: caller prefill (scanner) > the reopened saved ticket's own
+  // persisted title/description > recovered draft > auto-generated. A restored
+  // draft is FLAGGED so the modal can show a "Restored draft · Discard" pill —
+  // silent substitution produced wrong tickets (bug B under bug A's title).
+  const sessionTitle = options?.sessionId ? currentSession?.title : undefined;
+  const sessionDesc = options?.sessionId ? currentSession?.description : undefined;
+  const title = options?.prefilledTitle ?? sessionTitle ?? (draft?.title || autoTitle);
+  const description = options?.prefilledDescription ?? sessionDesc ?? (draft?.description || autoDesc);
+  const draftRestored = !options?.prefilledTitle && !sessionTitle && !!draft && !!(draft.title || draft.description);
 
   // Build the full report once so every tab (Info/Console/Network/Actions/AI)
   // can read from it without re-running buildReport per tab.
@@ -242,7 +246,7 @@ export async function showQuickBugCapture(
   const severity: import("../types").BugSeverity = report?.severity ?? "low";
   const timeline: import("../types").TimelineEntry[] = report?.timeline ?? [];
 
-  _openModal(root, { title, description, screenshots, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession });
+  _openModal(root, { title, description, screenshots, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession, draftRestored, autoTitle, autoDesc });
 }
 
 /** Download every screenshot in the ticket, one PNG per file. */
@@ -366,6 +370,11 @@ function _openModal(
     currentSession: StoredSession | null;
     report: import("../types").BugReport | null;
     suppressVideo?: boolean;
+    /** True when the title/description came from a recovered localStorage
+     *  draft — shows the "Restored draft · Discard" pill. */
+    draftRestored?: boolean;
+    autoTitle?: string;
+    autoDesc?: string;
   }
 ): void {
   _isOpen = true;
@@ -458,7 +467,8 @@ function _openModal(
       <!-- LEFT: title + replay preview + scrubber + thumbs + description -->
       <div class="tb-qb-left">
 
-        <label class="tb-qb-lbl">Title</label>
+        <label class="tb-qb-lbl">Title${data.draftRestored ? `
+          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="margin-left:8px;font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}</label>
         <input id="tb-qb-title" type="text" value="${escapeHtml(data.title)}" class="tb-qb-input" />
 
         ${video ? `
@@ -597,7 +607,7 @@ function _openModal(
           ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
-        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export .html<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
+        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">🔗 Share link</button>
@@ -608,7 +618,7 @@ function _openModal(
             <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip — GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
             <button data-action="export-spec" class="tb-qb-more-item" role="menuitem" title="A runnable Playwright test that replays this session and asserts the captured failure is gone — fails until the bug is fixed, passes after">${_ic("fileCode")} Download failing test (.spec.ts)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report — upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
-            <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
+            <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report — small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} AI report (.html) — for chat</button>
             ${screenshots.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots.length === 1 ? "" : "s"} as image file${screenshots.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
@@ -741,14 +751,29 @@ function _openModal(
     saveTimer = setTimeout(saveDraft, 500);
   });
 
+  // Discard a restored draft: reset both fields to this capture's auto values.
+  modal.querySelector('[data-action="discard-draft"]')?.addEventListener("click", (e) => {
+    const titleEl = modal.querySelector<HTMLInputElement>("#tb-qb-title");
+    const descEl = modal.querySelector<HTMLTextAreaElement>("#tb-qb-desc");
+    if (titleEl) titleEl.value = data.autoTitle ?? "";
+    if (descEl) descEl.value = data.autoDesc ?? "";
+    _clearDraft();
+    (e.currentTarget as HTMLElement).remove();
+    showToast("Draft discarded — using this capture's auto-fill", root);
+  });
+
   const close = () => {
     _isOpen = false;
     // Tear down the scrubber first — it owns a setTimeout playback chain that
     // would otherwise keep firing against the detached modal DOM.
     try { _scrubberCtl?.destroy(); } catch {}
     _scrubberCtl = null;
-    // Cancel the pending draft-autosave debounce so it can't fire post-close.
+    // FLUSH (don't discard) any pending draft keystrokes — losing the last
+    // 500ms of typing on Esc broke the "Draft auto-saved" promise. Skipped
+    // when the draft was just intentionally cleared by an export/save, so
+    // the flush can't resurrect it.
     clearTimeout(saveTimer);
+    if (!_draftCleared) { try { saveDraft(); } catch {} }
     overlay.remove();
     document.removeEventListener("keydown", escHandler);
     const k = (overlay as ModalOverlayElement).__tbModalKey;
@@ -843,7 +868,26 @@ function _openModal(
   // Detach when modal closes — added to the existing close path below.
   (overlay as ModalOverlayElement).__tbModalKey = modalKeyHandler;
 
-  const escHandler = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  const escHandler = (e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    // Esc peels ONE layer, not the whole stack. Child overlays mount inside
+    // this modal's stacking context; without these guards, Esc on (say) the
+    // post-export handoff card also destroyed the ticket modal beneath it.
+    if (helpEl && helpEl.style.display !== "none") return; // modalKeyHandler closes it
+    const child = document.getElementById("tb-ai-popover")
+      || document.getElementById("tb-mcp-handoff")
+      || document.getElementById("tb-ai-config")
+      || document.getElementById("tb-int-config")
+      || document.getElementById("tb-share-consent");
+    if (child) { child.remove(); return; }
+    const moreMenu = modal.querySelector<HTMLElement>(".tb-qb-more-menu");
+    if (moreMenu?.dataset.open === "true") {
+      moreMenu.dataset.open = "false";
+      modal.querySelector('[data-action="more-toggle"]')?.setAttribute("aria-expanded", "false");
+      return;
+    }
+    close();
+  };
   document.addEventListener("keydown", escHandler);
   // Stash so a refresh (which removes the DOM without calling close()) can also
   // detach it — otherwise every screenshot refresh leaked two document keydown
@@ -939,6 +983,15 @@ function _openModal(
           delete data.currentSession.screenshotsDropped;
         }
       }
+      // Persist the typed title/description ON the session: the saved ticket
+      // keeps them across reopens (drafts expire in 1h), the Saved Tickets
+      // card can show a real title, and the draft can then be safely cleared
+      // so it never bleeds into the NEXT bug's modal.
+      if (data.currentSession) {
+        const typed = getDraft();
+        if (typed.title.trim()) data.currentSession.title = typed.title.trim();
+        if (typed.description.trim()) data.currentSession.description = typed.description.trim();
+      }
       let savedOk = markSessionSaved(sid);
       let withoutShots = false;
       // Storage full \u2014 retry without screenshots (by far the heaviest part of
@@ -964,12 +1017,15 @@ function _openModal(
         showToast("\u26a0 Could not save \u2014 browser storage is full. Delete old saved tickets and try again.", root);
         return;
       }
+      // The ticket is persisted \u2014 the draft's job is done. Clearing it here is
+      // what stops a saved bug's text from silently pre-filling the next one.
+      _clearDraft();
       saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
       saveTicketBtn.classList.add("tb-qb-btn-saved");
       saveTicketBtn.disabled = true;
       showToast(withoutShots
-        ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it in the toolbar list"
-        : "\u2713 Ticket saved \u2014 find it in the toolbar list", root);
+        ? "\u2713 Ticket saved locally without screenshots (storage full) \u2014 it's in the \u2713 Saved Tickets list on the toolbar"
+        : "\u2713 Ticket saved locally \u2014 it's in the \u2713 Saved Tickets list on the toolbar", root);
     });
   }
 
@@ -1702,7 +1758,7 @@ function _openModal(
           <div style="font-size:24px;margin-bottom:8px">🎬</div>
           <div style="color:var(--tb-text-primary,#e0e0e0);font-weight:600;margin-bottom:6px">Inline preview blocked by this page</div>
           This site's security policy (CSP) blocks embedded video. Your ${_formatVideoTime(video.durationMs)} recording is fine —
-          use <strong>Download .webm</strong> below or <strong>Export .html</strong> to watch it.
+          use <strong>Download .webm</strong> below or <strong>Export replay (.html)</strong> to watch it.
         </div>`;
     };
     videoEl.addEventListener("error", showBlockedNotice);
@@ -1843,12 +1899,18 @@ function _loadDraft(): Draft | null {
   } catch { return null; }
 }
 
+// Set when the draft was intentionally cleared (export/save completed) so
+// close()'s flush can't resurrect it; any new save re-arms the flush.
+let _draftCleared = false;
+
 function _saveDraft(draft: Draft): void {
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  _draftCleared = false;
 }
 
 function _clearDraft(): void {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  _draftCleared = true;
 }
 
 // \u2500\u2500 Tab content builders \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -3010,14 +3072,17 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
     #${MODAL_ID} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
     /* "Fix with AI" — the highlight action. Gradient accent so it stands out. */
-    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(99,102,241,0.35); }
+    /* ONE glowing primary per row (the GitHub action). Fix-with-AI keeps its
+       gradient identity but no glow; Save Ticket is a tinted outline. Three
+       competing glows meant no button read as "the finish line". */
+    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated — white-on-white text in the light theme. */
-    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(99,102,241,0.45); }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; }
     /* Save Ticket — prominent green CTA */
-    #${MODAL_ID} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
-    #${MODAL_ID} .tb-qb-btn-save:hover { background:#16a34a; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(34,197,94,0.45); }
+    #${MODAL_ID} .tb-qb-btn-save { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.35); padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-btn-save:hover { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.55); }
     #${MODAL_ID} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
     #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
@@ -3232,7 +3297,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   // text-only artifacts instead, regardless of file size.
   const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
   const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
-         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} — use <strong>Export for AI (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;▾</strong> menu. Both are a few KB of plain text built for chat.
+         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} — use <strong>AI report (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;▾</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
 
   // One-time MCP setup per tool — the prompt is identical everywhere; only

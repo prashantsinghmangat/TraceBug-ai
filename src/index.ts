@@ -968,7 +968,8 @@ class TraceBugSDK {
         });
       };
       const d = Number(opts.delaySec) || 0;
-      if (d > 0) void runRecordCountdown(d).then(go);
+      // Esc during the countdown cancels the whole flow — no recording starts.
+      if (d > 0) void runRecordCountdown(d).then((completed) => { if (completed) go(); });
       else go();
     };
     if (opts.blurFirst) startBlurThenRecord({ onStart: begin });

@@ -11,8 +11,9 @@ import { isPremium, FREE_LIMITS } from "./plan";
 import { showUpgradeModal } from "./ui/upgrade-modal";
 import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode, setActiveCaptureMode, clearActiveSessionId, getStorageUsageBytes, QUOTA_ESTIMATE_BYTES } from "./storage";
 import { buildReport } from "./report-builder";
+import { generateBugTitle } from "./title-generator";
 import { exportSessionAsHtml } from "./exporters/html-replay";
-import { showToast as toast } from "./ui/toast";
+import { showToast as toast, showActionToast } from "./ui/toast";
 import type { StoredSession } from "./types";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
@@ -241,11 +242,42 @@ export function mountCompactToolbar(
   // View saved tickets — opens the offline Saved Tickets popover.
   toolbar.appendChild(_divider());
   toolbar.appendChild(_createToolbarBtn(
-    "View saved tickets",
+    "Saved tickets",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
     () => { _showOfflineTicketList(root); },
     "tracebug-toolbar-tickets-btn"
   ));
+
+  // Saved-count badge + save pulse — this is what makes "it's in the Saved
+  // Tickets list" findable. Updates on the storage engine's change broadcast
+  // instead of polling.
+  const ticketsBtn = toolbar.querySelector<HTMLElement>("#tracebug-toolbar-tickets-btn");
+  const updateTicketsBadge = (pulse = false) => {
+    if (!ticketsBtn) return;
+    const count = getAllSessions().filter((s) => s.saved).length;
+    let badge = ticketsBtn.querySelector<HTMLElement>(".tb-tickets-badge");
+    if (count === 0) { badge?.remove(); return; }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "tb-tickets-badge";
+      badge.setAttribute("aria-hidden", "true");
+      badge.style.cssText = "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none";
+      ticketsBtn.style.position = "relative";
+      ticketsBtn.appendChild(badge);
+    }
+    badge.textContent = count > 99 ? "99+" : String(count);
+    if (pulse) {
+      try {
+        badge.animate(
+          [{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }],
+          { duration: 450, easing: "ease-out" },
+        );
+      } catch {}
+    }
+  };
+  updateTicketsBadge();
+  const ticketsChangedHandler = () => updateTicketsBadge(true);
+  window.addEventListener("tracebug:tickets-changed", ticketsChangedHandler);
 
   // Close — turn TraceBug off on this page. Re-open from the extension popup.
   toolbar.appendChild(_divider());
@@ -253,6 +285,25 @@ export function mountCompactToolbar(
     "Turn off TraceBug on this page",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
     () => {
+      // A live recording or tracked session dies with the toolbar. The most
+      // destructive action on the rail shouldn't be the cheapest to trigger —
+      // arm-confirm it (same pattern as deleting a saved ticket). Plain
+      // idle close stays one click.
+      const closeBtn = toolbar.querySelector<HTMLElement>("#tracebug-toolbar-close-btn");
+      const busy = isVideoRecording() || _isTracking;
+      if (busy && closeBtn && closeBtn.dataset.armed !== "true") {
+        closeBtn.dataset.armed = "true";
+        closeBtn.style.color = "var(--tb-error, #ef4444)";
+        closeBtn.title = "Click again to turn off TraceBug and end the recording";
+        showToast("Recording in progress — click ✕ again to turn off TraceBug", root);
+        setTimeout(() => {
+          if (!closeBtn.isConnected) return;
+          closeBtn.dataset.armed = "false";
+          closeBtn.style.color = "";
+          closeBtn.title = "Turn off TraceBug on this page";
+        }, 3000);
+        return;
+      }
       // Tell the extension background to stop re-injecting on navigation for
       // this tab, then tear down the SDK on the page.
       try { window.dispatchEvent(new CustomEvent("tracebug-disable-tab")); } catch {}
@@ -295,31 +346,41 @@ export function mountCompactToolbar(
         _restoreToolbar(toolbar);
       }
     }
+    // Re-clamp a dragged toolbar into view when the window shrinks.
+    if (!_isMobile && toolbar.style.left) {
+      const x = parseInt(toolbar.style.left, 10);
+      const y = parseInt(toolbar.style.top, 10);
+      if (!isNaN(x)) toolbar.style.left = `${Math.max(0, Math.min(window.innerWidth - 60, x))}px`;
+      if (!isNaN(y)) toolbar.style.top = `${Math.max(0, Math.min(window.innerHeight - 60, y))}px`;
+    }
   };
   window.addEventListener("resize", resizeHandler);
 
   // Keyboard shortcuts — user-configurable via config.shortcuts.
   // Cross-platform: Ctrl on Windows/Linux, Cmd on macOS (both match).
-  const annotateShortcut = shortcuts?.annotate || "ctrl+shift+a";
-  const drawShortcut = shortcuts?.draw || "ctrl+shift+d";
+  // The old annotate/draw bindings are GONE: their toolbar buttons were cut
+  // in v1, so the handlers preventDefault()'d Chrome's own Ctrl+Shift+A
+  // ("Search tabs") and Ctrl+Shift+D ("Bookmark all tabs") and then did
+  // nothing — silently stealing browser shortcuts on every enabled page.
+  // What remains is the shortcut the screenshot button's tooltip advertises.
+  const screenshotShortcut = shortcuts?.screenshot || "ctrl+shift+s";
 
   const keyHandler = (e: KeyboardEvent) => {
-    if (matchesShortcut(e, annotateShortcut)) {
+    if (matchesShortcut(e, screenshotShortcut)) {
       e.preventDefault();
-      (toolbar.querySelector("#tracebug-toolbar-annotate-btn") as HTMLElement)?.click();
-    }
-    if (matchesShortcut(e, drawShortcut)) {
-      e.preventDefault();
-      (toolbar.querySelector("#tracebug-toolbar-draw-btn") as HTMLElement)?.click();
+      (toolbar.querySelector("#tracebug-toolbar-screenshot-btn") as HTMLElement)?.click();
     }
   };
   document.addEventListener("keydown", keyHandler);
 
-  // Storage-engine warnings (eviction, quota full) surface as toasts here —
-  // the engine itself has no UI access. See emitStorageWarning in storage.ts.
+  // Storage-engine warnings (eviction, quota full) surface here — the engine
+  // itself has no UI access. These are the messages users must ACT on, so
+  // they get the 8s action toast with a direct route to the Saved Tickets
+  // list (where Delete/Export live) instead of a 2.8s transient.
   const storageWarningHandler = (e: Event) => {
     const detail = (e as CustomEvent<{ message?: string }>).detail;
-    if (detail?.message) showToast(`⚠ ${detail.message}`, root);
+    if (!detail?.message) return;
+    showActionToast(`⚠ ${detail.message}`, "Manage tickets", () => _showOfflineTicketList(root), root);
   };
   window.addEventListener("tracebug:storage-warning", storageWarningHandler);
 
@@ -328,6 +389,7 @@ export function mountCompactToolbar(
     dragCleanup();
     document.removeEventListener("keydown", keyHandler);
     window.removeEventListener("tracebug:storage-warning", storageWarningHandler);
+    window.removeEventListener("tracebug:tickets-changed", ticketsChangedHandler);
     window.removeEventListener("resize", resizeHandler);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
@@ -785,6 +847,15 @@ function _showOfflineTicketList(root: HTMLElement): void {
 
       const info = document.createElement("div");
       info.style.cssText = "flex:1;min-width:0";
+      // Title line — without it, eight saved tickets are eight identical
+      // timestamps and the confident-wrong-delete becomes the likely error.
+      const cardTitle = document.createElement("div");
+      cardTitle.style.cssText = "font-size:11px;font-weight:600;color:var(--tb-text-primary,#e0e0e0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px";
+      let titleText = s.title || s.errorSummary || "";
+      if (!titleText) { try { titleText = generateBugTitle(s); } catch {} }
+      cardTitle.textContent = titleText || "Untitled ticket";
+      cardTitle.title = titleText;
+      info.appendChild(cardTitle);
       const timeEl = document.createElement("div");
       timeEl.style.cssText = "font-size:10px;color:var(--tb-text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
       timeEl.textContent = _fmtTime(s.updatedAt || s.createdAt || 0);
@@ -908,15 +979,19 @@ function _showOfflineTicketList(root: HTMLElement): void {
     label.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666)";
     label.textContent = `~${(usedBytes / (1024 * 1024)).toFixed(1)} MB used · ~${(freeBytes / (1024 * 1024)).toFixed(1)} MB free${roomHint}`;
 
-    const note = document.createElement("div");
-    note.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666);margin-top:3px;opacity:0.8";
-    note.textContent = "Saved in this browser only — tickets stay until you delete them. Clearing site data removes them.";
-
     meter.appendChild(bar);
     meter.appendChild(label);
-    meter.appendChild(note);
     pop.appendChild(meter);
   }
+
+  // Locality note — ALWAYS visible, including for brand-new users with zero
+  // bytes stored: "this lives in this browser only" is the single most
+  // surprising property of local-first storage, and the empty-state user is
+  // exactly who needs to learn it before they rely on it.
+  const note = document.createElement("div");
+  note.style.cssText = `font-size:10px;color:var(--tb-text-muted,#666);opacity:0.8;${sessions.length === 0 ? "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)" : "margin-top:4px"}`;
+  note.textContent = "Saved in this browser only — tickets stay until you delete them. Clearing site data removes them.";
+  pop.appendChild(note);
 
   root.appendChild(pop);
   // Close when clicking anywhere outside the popover (but not the toolbar
@@ -936,6 +1011,14 @@ function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition):
     const raw = localStorage.getItem(DRAG_POS_KEY);
     if (raw) savedPos = JSON.parse(raw);
   } catch {}
+
+  // Clamp the restored position to the CURRENT viewport. Dragging clamps
+  // live, but a position saved on a 2560px monitor and restored on a 1366px
+  // laptop used to mount the toolbar fully off-screen with no way to recover.
+  if (savedPos) {
+    savedPos.x = Math.max(0, Math.min(window.innerWidth - 60, savedPos.x));
+    savedPos.y = Math.max(0, Math.min(window.innerHeight - 60, savedPos.y));
+  }
 
   const isBottom = position === "bottom-right" || position === "bottom-left";
   const isLeft = position === "left" || position === "bottom-left";

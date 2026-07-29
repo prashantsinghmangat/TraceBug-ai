@@ -283,6 +283,7 @@ var TraceBugModule = (() => {
     const remaining = getCachedSessions().filter((s2) => s2.sessionId !== sessionId);
     invalidateCache();
     saveSessions(remaining);
+    emitTicketsChanged();
   }
   function addAnnotation(sessionId, annotation) {
     const sessions = getCachedSessions();
@@ -323,7 +324,14 @@ var TraceBugModule = (() => {
     }
     const ok = flushPendingEvents();
     if (!ok && !wasSaved) session.saved = false;
+    if (ok) emitTicketsChanged();
     return ok;
+  }
+  function emitTicketsChanged() {
+    try {
+      window.dispatchEvent(new CustomEvent("tracebug:tickets-changed"));
+    } catch (e2) {
+    }
   }
   function clearAllSessions() {
     invalidateCache();
@@ -29385,7 +29393,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     await showQuickBugCapture(root2);
   }
   async function showQuickBugCapture(root2, options) {
-    var _a2, _b, _c, _d, _e;
+    var _a2, _b, _c, _d, _e, _f, _g;
     if (_isOpen) return;
     try {
       if (!getLastVideoRecording()) {
@@ -29400,8 +29408,11 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const draft = _loadDraft();
     const autoTitle = currentSession ? generateBugTitle(currentSession) : `Bug on ${window.location.pathname}`;
     const autoDesc = _buildDescription(currentSession);
-    const title = (_b = options == null ? void 0 : options.prefilledTitle) != null ? _b : (draft == null ? void 0 : draft.title) || autoTitle;
-    const description = (_c = options == null ? void 0 : options.prefilledDescription) != null ? _c : (draft == null ? void 0 : draft.description) || autoDesc;
+    const sessionTitle = (options == null ? void 0 : options.sessionId) ? currentSession == null ? void 0 : currentSession.title : void 0;
+    const sessionDesc = (options == null ? void 0 : options.sessionId) ? currentSession == null ? void 0 : currentSession.description : void 0;
+    const title = (_c = (_b = options == null ? void 0 : options.prefilledTitle) != null ? _b : sessionTitle) != null ? _c : (draft == null ? void 0 : draft.title) || autoTitle;
+    const description = (_e = (_d = options == null ? void 0 : options.prefilledDescription) != null ? _d : sessionDesc) != null ? _e : (draft == null ? void 0 : draft.description) || autoDesc;
+    const draftRestored = !(options == null ? void 0 : options.prefilledTitle) && !sessionTitle && !!draft && !!(draft.title || draft.description);
     let report = null;
     if (currentSession) {
       try {
@@ -29410,9 +29421,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       }
     }
     if (report && isHistoricalSession) report.video = void 0;
-    const severity = (_d = report == null ? void 0 : report.severity) != null ? _d : "low";
-    const timeline = (_e = report == null ? void 0 : report.timeline) != null ? _e : [];
-    _openModal(root2, { title, description, screenshots: screenshots2, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession });
+    const severity = (_f = report == null ? void 0 : report.severity) != null ? _f : "low";
+    const timeline = (_g = report == null ? void 0 : report.timeline) != null ? _g : [];
+    _openModal(root2, { title, description, screenshots: screenshots2, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession, draftRestored, autoTitle, autoDesc });
   }
   function _downloadAllScreenshots(screenshots2) {
     screenshots2.forEach((ss, i2) => {
@@ -29497,7 +29508,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -29562,7 +29573,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       <!-- LEFT: title + replay preview + scrubber + thumbs + description -->
       <div class="tb-qb-left">
 
-        <label class="tb-qb-lbl">Title</label>
+        <label class="tb-qb-lbl">Title${data.draftRestored ? `
+          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="margin-left:8px;font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft \xB7 Discard</button>` : ""}</label>
         <input id="tb-qb-title" type="text" value="${escapeHtml2(data.title)}" class="tb-qb-input" />
 
         ${video ? `
@@ -29700,7 +29712,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
-        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export .html<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
+        <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">\u{1F517} Share link</button>
@@ -29711,7 +29723,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             <button data-action="export-zip" class="tb-qb-more-item" role="menuitem" title="Same offline replay, wrapped in a .zip \u2014 GitHub issues accept .zip attachments by drag-and-drop but reject .html">${_ic("fileCode")} Download .zip (attach to GitHub)</button>
             <button data-action="export-spec" class="tb-qb-more-item" role="menuitem" title="A runnable Playwright test that replays this session and asserts the captured failure is gone \u2014 fails until the bug is fixed, passes after">${_ic("fileCode")} Download failing test (.spec.ts)</button>
             <button data-action="download-md" class="tb-qb-more-item" role="menuitem" title="Save a compact .md bug report \u2014 upload it to any AI agent or chat (no MCP needed)">${_ic("fileText")} Download report (.md)</button>
-            <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} Export for AI (.html)</button>
+            <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} AI report (.html) \u2014 for chat</button>
             ${screenshots2.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots2.length === 1 ? "" : "s"} as image file${screenshots2.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots2.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
@@ -29821,6 +29833,16 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       clearTimeout(saveTimer);
       saveTimer = setTimeout(saveDraft, 500);
     });
+    (_u = modal.querySelector('[data-action="discard-draft"]')) == null ? void 0 : _u.addEventListener("click", (e2) => {
+      var _a3, _b2;
+      const titleEl = modal.querySelector("#tb-qb-title");
+      const descEl = modal.querySelector("#tb-qb-desc");
+      if (titleEl) titleEl.value = (_a3 = data.autoTitle) != null ? _a3 : "";
+      if (descEl) descEl.value = (_b2 = data.autoDesc) != null ? _b2 : "";
+      _clearDraft();
+      e2.currentTarget.remove();
+      showToast("Draft discarded \u2014 using this capture's auto-fill", root2);
+    });
     const close = () => {
       _isOpen = false;
       try {
@@ -29829,6 +29851,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       }
       _scrubberCtl = null;
       clearTimeout(saveTimer);
+      if (!_draftCleared) {
+        try {
+          saveDraft();
+        } catch (e2) {
+        }
+      }
       overlay.remove();
       document.removeEventListener("keydown", escHandler);
       const k = overlay.__tbModalKey;
@@ -29842,12 +29870,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     overlay.addEventListener("click", (e2) => {
       if (e2.target === overlay) close();
     });
-    (_u = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _u.addEventListener("click", () => {
+    (_v = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _v.addEventListener("click", () => {
       _cycleTheme();
       const btn = modal.querySelector('[data-action="theme-toggle"]');
       if (btn) btn.innerHTML = _themeIcon();
     });
-    (_v = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _v.addEventListener("change", (e2) => {
+    (_w = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _w.addEventListener("change", (e2) => {
       var _a3, _b2;
       const val = e2.target.value;
       const sid = (_a3 = data.currentSession) == null ? void 0 : _a3.sessionId;
@@ -29862,8 +29890,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const open = force !== void 0 ? force : helpEl.style.display === "none";
       helpEl.style.display = open ? "flex" : "none";
     };
-    (_w = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _w.addEventListener("click", () => toggleHelp());
-    (_x = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _x.addEventListener("click", () => toggleHelp(false));
+    (_x = modal.querySelector('[data-action="help-toggle"]')) == null ? void 0 : _x.addEventListener("click", () => toggleHelp());
+    (_y = modal.querySelector('[data-action="help-close"]')) == null ? void 0 : _y.addEventListener("click", () => toggleHelp(false));
     helpEl == null ? void 0 : helpEl.addEventListener("click", (e2) => {
       if (e2.target === helpEl) toggleHelp(false);
     });
@@ -29918,7 +29946,21 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     document.addEventListener("keydown", modalKeyHandler);
     overlay.__tbModalKey = modalKeyHandler;
     const escHandler = (e2) => {
-      if (e2.key === "Escape") close();
+      var _a3;
+      if (e2.key !== "Escape") return;
+      if (helpEl && helpEl.style.display !== "none") return;
+      const child = document.getElementById("tb-ai-popover") || document.getElementById("tb-mcp-handoff") || document.getElementById("tb-ai-config") || document.getElementById("tb-int-config") || document.getElementById("tb-share-consent");
+      if (child) {
+        child.remove();
+        return;
+      }
+      const moreMenu2 = modal.querySelector(".tb-qb-more-menu");
+      if ((moreMenu2 == null ? void 0 : moreMenu2.dataset.open) === "true") {
+        moreMenu2.dataset.open = "false";
+        (_a3 = modal.querySelector('[data-action="more-toggle"]')) == null ? void 0 : _a3.setAttribute("aria-expanded", "false");
+        return;
+      }
+      close();
     };
     document.addEventListener("keydown", escHandler);
     overlay.__tbEscKey = escHandler;
@@ -30010,6 +30052,11 @@ ${description}`;
             delete data.currentSession.screenshotsDropped;
           }
         }
+        if (data.currentSession) {
+          const typed = getDraft();
+          if (typed.title.trim()) data.currentSession.title = typed.title.trim();
+          if (typed.description.trim()) data.currentSession.description = typed.description.trim();
+        }
         let savedOk = markSessionSaved(sid);
         let withoutShots = false;
         if (!savedOk && !data.suppressVideo && ((_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.screenshots) == null ? void 0 : _c2.length)) {
@@ -30029,10 +30076,11 @@ ${description}`;
           showToast("\u26A0 Could not save \u2014 browser storage is full. Delete old saved tickets and try again.", root2);
           return;
         }
+        _clearDraft();
         saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
         saveTicketBtn.classList.add("tb-qb-btn-saved");
         saveTicketBtn.disabled = true;
-        showToast(withoutShots ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it in the toolbar list" : "\u2713 Ticket saved \u2014 find it in the toolbar list", root2);
+        showToast(withoutShots ? "\u2713 Ticket saved locally without screenshots (storage full) \u2014 it's in the \u2713 Saved Tickets list on the toolbar" : "\u2713 Ticket saved locally \u2014 it's in the \u2713 Saved Tickets list on the toolbar", root2);
       });
     }
     const moreBtn = modal.querySelector('[data-action="more-toggle"]');
@@ -30051,7 +30099,7 @@ ${description}`;
         if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
       });
     }
-    (_y = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _y.addEventListener("click", async () => {
+    (_z = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _z.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -30081,7 +30129,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Replay export failed", root2);
       }
     });
-    (_z = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _z.addEventListener("click", () => {
+    (_A = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _A.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -30104,7 +30152,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Test export failed", root2);
       }
     });
-    (_A = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _A.addEventListener("click", async () => {
+    (_B = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _B.addEventListener("click", async () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -30133,7 +30181,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("ZIP export failed", root2);
       }
     });
-    (_B = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _B.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _C.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -30153,7 +30201,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("HAR export failed", root2);
       }
     });
-    (_C = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_D = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _D.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
@@ -30173,7 +30221,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Report export failed", root2);
       }
     });
-    (_D = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _D.addEventListener("click", () => {
+    (_E = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _E.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("No session to export yet", root2);
         return;
@@ -30200,7 +30248,7 @@ ${report.steps}` : userDesc : void 0,
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_E = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _E.addEventListener("click", async (e2) => {
+    (_F = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _F.addEventListener("click", async (e2) => {
       if (!data.currentSession) {
         showToast("No session to share yet", root2);
         return;
@@ -30360,7 +30408,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_F = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _F.addEventListener("click", () => {
+    (_G = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _G.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -30391,7 +30439,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_G = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _G.addEventListener("click", async () => {
+    (_H = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _H.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -30415,7 +30463,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_H = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _H.addEventListener("click", async () => {
+    (_I = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _I.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -30603,7 +30651,7 @@ ${report.steps}` : userDesc : void 0,
           <div style="font-size:24px;margin-bottom:8px">\u{1F3AC}</div>
           <div style="color:var(--tb-text-primary,#e0e0e0);font-weight:600;margin-bottom:6px">Inline preview blocked by this page</div>
           This site's security policy (CSP) blocks embedded video. Your ${_formatVideoTime(video.durationMs)} recording is fine \u2014
-          use <strong>Download .webm</strong> below or <strong>Export .html</strong> to watch it.
+          use <strong>Download .webm</strong> below or <strong>Export replay (.html)</strong> to watch it.
         </div>`;
       };
       videoEl.addEventListener("error", showBlockedNotice);
@@ -30743,12 +30791,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
     } catch (e2) {
     }
+    _draftCleared = false;
   }
   function _clearDraft() {
     try {
       localStorage.removeItem(DRAFT_KEY);
     } catch (e2) {
     }
+    _draftCleared = true;
   }
   function _getElementAnnotationCount() {
     try {
@@ -31823,14 +31873,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID2} .tb-qb-btn-gh-primary { background:#24292e; color:#fff; border-color:transparent; flex:1 0 100%; justify-content:center; padding:11px; font-size:13px; }
     #${MODAL_ID2} .tb-qb-btn-gh-primary:hover { background:#1a1e22; border-color:transparent; }
     /* "Fix with AI" \u2014 the highlight action. Gradient accent so it stands out. */
-    #${MODAL_ID2} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; box-shadow:0 2px 10px rgba(99,102,241,0.35); }
+    /* ONE glowing primary per row (the GitHub action). Fix-with-AI keeps its
+       gradient identity but no glow; Save Ticket is a tinted outline. Three
+       competing glows meant no button read as "the finish line". */
+    #${MODAL_ID2} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated \u2014 white-on-white text in the light theme. */
-    #${MODAL_ID2} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(99,102,241,0.45); }
+    #${MODAL_ID2} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; }
     /* Save Ticket \u2014 prominent green CTA */
-    #${MODAL_ID2} .tb-qb-btn-save { background:#16a34a; color:#fff; border-color:transparent; padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 10px rgba(34,197,94,0.35); flex-shrink:0; }
-    #${MODAL_ID2} .tb-qb-btn-save:hover { background:#16a34a; filter:brightness(1.08); border-color:transparent; box-shadow:0 4px 18px rgba(34,197,94,0.45); }
+    #${MODAL_ID2} .tb-qb-btn-save { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.35); padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
+    #${MODAL_ID2} .tb-qb-btn-save:hover { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.55); }
     #${MODAL_ID2} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
     #${MODAL_ID2} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
@@ -32018,7 +32071,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     });
     const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
     const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
-         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} \u2014 use <strong>Export for AI (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;\u25BE</strong> menu. Both are a few KB of plain text built for chat.
+         Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} \u2014 use <strong>AI report (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;\u25BE</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
     const MCP_SETUP = {
       claude: { label: "Claude Code", cmd: "claude mcp add tracebug -- npx -y tracebug mcp" },
@@ -32166,7 +32219,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey2);
   }
-  var _githubRepo, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _LU, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, MODAL_ID2, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -32204,6 +32257,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       DRAFT_KEY = "tracebug_last_bug_draft";
       THEME_PREF_KEY = "tracebug_theme_pref";
       _isOpen = false;
+      _draftCleared = false;
       _LU = {
         link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
         clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -32668,18 +32722,64 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     toolbar.appendChild(_divider());
     toolbar.appendChild(_createToolbarBtn(
-      "View saved tickets",
+      "Saved tickets",
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
       () => {
         _showOfflineTicketList(root2);
       },
       "tracebug-toolbar-tickets-btn"
     ));
+    const ticketsBtn = toolbar.querySelector("#tracebug-toolbar-tickets-btn");
+    const updateTicketsBadge = (pulse = false) => {
+      if (!ticketsBtn) return;
+      const count2 = getAllSessions().filter((s2) => s2.saved).length;
+      let badge = ticketsBtn.querySelector(".tb-tickets-badge");
+      if (count2 === 0) {
+        badge == null ? void 0 : badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "tb-tickets-badge";
+        badge.setAttribute("aria-hidden", "true");
+        badge.style.cssText = "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none";
+        ticketsBtn.style.position = "relative";
+        ticketsBtn.appendChild(badge);
+      }
+      badge.textContent = count2 > 99 ? "99+" : String(count2);
+      if (pulse) {
+        try {
+          badge.animate(
+            [{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }],
+            { duration: 450, easing: "ease-out" }
+          );
+        } catch (e2) {
+        }
+      }
+    };
+    updateTicketsBadge();
+    const ticketsChangedHandler = () => updateTicketsBadge(true);
+    window.addEventListener("tracebug:tickets-changed", ticketsChangedHandler);
     toolbar.appendChild(_divider());
     toolbar.appendChild(_createToolbarBtn(
       "Turn off TraceBug on this page",
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
       () => {
+        const closeBtn = toolbar.querySelector("#tracebug-toolbar-close-btn");
+        const busy = isVideoRecording() || _isTracking;
+        if (busy && closeBtn && closeBtn.dataset.armed !== "true") {
+          closeBtn.dataset.armed = "true";
+          closeBtn.style.color = "var(--tb-error, #ef4444)";
+          closeBtn.title = "Click again to turn off TraceBug and end the recording";
+          showToast3("Recording in progress \u2014 click \u2715 again to turn off TraceBug", root2);
+          setTimeout(() => {
+            if (!closeBtn.isConnected) return;
+            closeBtn.dataset.armed = "false";
+            closeBtn.style.color = "";
+            closeBtn.title = "Turn off TraceBug on this page";
+          }, 3e3);
+          return;
+        }
         try {
           window.dispatchEvent(new CustomEvent("tracebug-disable-tab"));
         } catch (e2) {
@@ -32716,25 +32816,27 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           _restoreToolbar(toolbar);
         }
       }
+      if (!_isMobile && toolbar.style.left) {
+        const x = parseInt(toolbar.style.left, 10);
+        const y = parseInt(toolbar.style.top, 10);
+        if (!isNaN(x)) toolbar.style.left = `${Math.max(0, Math.min(window.innerWidth - 60, x))}px`;
+        if (!isNaN(y)) toolbar.style.top = `${Math.max(0, Math.min(window.innerHeight - 60, y))}px`;
+      }
     };
     window.addEventListener("resize", resizeHandler);
-    const annotateShortcut = (shortcuts == null ? void 0 : shortcuts.annotate) || "ctrl+shift+a";
-    const drawShortcut = (shortcuts == null ? void 0 : shortcuts.draw) || "ctrl+shift+d";
+    const screenshotShortcut = (shortcuts == null ? void 0 : shortcuts.screenshot) || "ctrl+shift+s";
     const keyHandler = (e2) => {
-      var _a2, _b;
-      if (matchesShortcut(e2, annotateShortcut)) {
+      var _a2;
+      if (matchesShortcut(e2, screenshotShortcut)) {
         e2.preventDefault();
-        (_a2 = toolbar.querySelector("#tracebug-toolbar-annotate-btn")) == null ? void 0 : _a2.click();
-      }
-      if (matchesShortcut(e2, drawShortcut)) {
-        e2.preventDefault();
-        (_b = toolbar.querySelector("#tracebug-toolbar-draw-btn")) == null ? void 0 : _b.click();
+        (_a2 = toolbar.querySelector("#tracebug-toolbar-screenshot-btn")) == null ? void 0 : _a2.click();
       }
     };
     document.addEventListener("keydown", keyHandler);
     const storageWarningHandler = (e2) => {
       const detail = e2.detail;
-      if (detail == null ? void 0 : detail.message) showToast3(`\u26A0 ${detail.message}`, root2);
+      if (!(detail == null ? void 0 : detail.message)) return;
+      showActionToast(`\u26A0 ${detail.message}`, "Manage tickets", () => _showOfflineTicketList(root2), root2);
     };
     window.addEventListener("tracebug:storage-warning", storageWarningHandler);
     return () => {
@@ -32742,6 +32844,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       dragCleanup();
       document.removeEventListener("keydown", keyHandler);
       window.removeEventListener("tracebug:storage-warning", storageWarningHandler);
+      window.removeEventListener("tracebug:tickets-changed", ticketsChangedHandler);
       window.removeEventListener("resize", resizeHandler);
       deactivateElementAnnotateMode();
       deactivateDrawMode();
@@ -33118,6 +33221,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         card.appendChild(thumb);
         const info = document.createElement("div");
         info.style.cssText = "flex:1;min-width:0";
+        const cardTitle = document.createElement("div");
+        cardTitle.style.cssText = "font-size:11px;font-weight:600;color:var(--tb-text-primary,#e0e0e0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px";
+        let titleText = s2.title || s2.errorSummary || "";
+        if (!titleText) {
+          try {
+            titleText = generateBugTitle(s2);
+          } catch (e2) {
+          }
+        }
+        cardTitle.textContent = titleText || "Untitled ticket";
+        cardTitle.title = titleText;
+        info.appendChild(cardTitle);
         const timeEl = document.createElement("div");
         timeEl.style.cssText = "font-size:10px;color:var(--tb-text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
         timeEl.textContent = _fmtTime(s2.updatedAt || s2.createdAt || 0);
@@ -33223,14 +33338,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const label = document.createElement("div");
       label.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666)";
       label.textContent = `~${(usedBytes / (1024 * 1024)).toFixed(1)} MB used \xB7 ~${(freeBytes / (1024 * 1024)).toFixed(1)} MB free${roomHint}`;
-      const note = document.createElement("div");
-      note.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666);margin-top:3px;opacity:0.8";
-      note.textContent = "Saved in this browser only \u2014 tickets stay until you delete them. Clearing site data removes them.";
       meter.appendChild(bar);
       meter.appendChild(label);
-      meter.appendChild(note);
       pop.appendChild(meter);
     }
+    const note = document.createElement("div");
+    note.style.cssText = `font-size:10px;color:var(--tb-text-muted,#666);opacity:0.8;${sessions.length === 0 ? "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)" : "margin-top:4px"}`;
+    note.textContent = "Saved in this browser only \u2014 tickets stay until you delete them. Clearing site data removes them.";
+    pop.appendChild(note);
     root2.appendChild(pop);
     setTimeout(() => {
       if (pop.isConnected) document.addEventListener("mousedown", closeOnOutside);
@@ -33242,6 +33357,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const raw = localStorage.getItem(DRAG_POS_KEY);
       if (raw) savedPos = JSON.parse(raw);
     } catch (e2) {
+    }
+    if (savedPos) {
+      savedPos.x = Math.max(0, Math.min(window.innerWidth - 60, savedPos.x));
+      savedPos.y = Math.max(0, Math.min(window.innerHeight - 60, savedPos.y));
     }
     const isBottom = position === "bottom-right" || position === "bottom-left";
     const isLeft = position === "left" || position === "bottom-left";
@@ -33425,6 +33544,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_upgrade_modal();
       init_storage();
       init_report_builder();
+      init_title_generator();
       init_html_replay();
       init_toast();
       init_quick_bug();
@@ -33597,7 +33717,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     root2.appendChild(panel);
     document.documentElement.appendChild(root2);
     setRenderPanel(renderPanel);
-    const cleanupToolbar = mountCompactToolbar(root2, panel, showToast2, renderAnnotationList, toolbarPosition, shortcuts);
+    const cleanupToolbar = mountCompactToolbar(root2, panel, showToast, renderAnnotationList, toolbarPosition, shortcuts);
     showAnnotationBadges(root2);
     addLogoPulse();
     const screenshotShortcut = (shortcuts == null ? void 0 : shortcuts.screenshot) || "ctrl+shift+s";
@@ -35574,6 +35694,7 @@ ${"-".repeat(40)}
       init_voice_recorder();
       init_annotation_store();
       init_compact_toolbar();
+      init_toast();
       init_element_annotate();
       init_onboarding();
       init_quick_bug();
@@ -70800,20 +70921,40 @@ ${summary}`;
       overlay.id = COUNTDOWN_ID;
       overlay.setAttribute(
         "style",
-        "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
+        "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
       );
       const num = document.createElement("div");
       num.setAttribute(
         "style",
         "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);transition:transform 0.25s ease, opacity 0.25s ease;"
       );
+      const hint = document.createElement("div");
+      hint.textContent = "Press Esc to cancel";
+      hint.setAttribute("style", "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
       overlay.appendChild(num);
+      overlay.appendChild(hint);
       document.body.appendChild(overlay);
+      let cancelled = false;
+      let timer;
+      const finish = (completed) => {
+        document.removeEventListener("keydown", onKey2, true);
+        overlay.remove();
+        resolve(completed);
+      };
+      const onKey2 = (e2) => {
+        if (e2.key !== "Escape") return;
+        e2.preventDefault();
+        e2.stopPropagation();
+        cancelled = true;
+        clearTimeout(timer);
+        finish(false);
+      };
+      document.addEventListener("keydown", onKey2, true);
       let n2 = total;
       const tick = () => {
+        if (cancelled) return;
         if (n2 <= 0) {
-          overlay.remove();
-          resolve();
+          finish(true);
           return;
         }
         num.textContent = String(n2);
@@ -70824,7 +70965,7 @@ ${summary}`;
           num.style.opacity = "0.75";
         }, 200);
         n2--;
-        setTimeout(tick, 1e3);
+        timer = setTimeout(tick, 1e3);
       };
       tick();
     });
@@ -71524,7 +71665,9 @@ ${summary}`;
           });
         };
         const d = Number(opts.delaySec) || 0;
-        if (d > 0) void runRecordCountdown(d).then(go);
+        if (d > 0) void runRecordCountdown(d).then((completed) => {
+          if (completed) go();
+        });
         else go();
       };
       if (opts.blurFirst) startBlurThenRecord({ onStart: begin });

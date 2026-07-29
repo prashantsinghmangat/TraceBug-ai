@@ -14,6 +14,7 @@ import { generateBugTitle } from "./title-generator";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, clearVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, copyToClipboard } from "./annotation-store";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
+import { showToast as showUnifiedToast } from "./ui/toast";
 
 export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setNewCaptureHandler };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
@@ -154,7 +155,10 @@ export function mountDashboard(
 
   // ── Wire compact toolbar ────────────────────────────────────────────
   setRenderPanel(renderPanel);
-  const cleanupToolbar = mountCompactToolbar(root, panel, showToast, renderAnnotationList, toolbarPosition, shortcuts);
+  // The toolbar gets the UNIFIED toast (src/ui/toast.ts) — the local
+  // showToast below serves only the legacy panel code and has a broken
+  // `var()ee` background; one toast style everywhere is the rule.
+  const cleanupToolbar = mountCompactToolbar(root, panel, showUnifiedToast, renderAnnotationList, toolbarPosition, shortcuts);
 
   // ── Show existing annotation badges on page ────────────────────────
   showAnnotationBadges(root);
