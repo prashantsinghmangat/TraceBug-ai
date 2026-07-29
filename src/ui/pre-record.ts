@@ -9,8 +9,11 @@ import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBo
 const COUNTDOWN_ID = "tracebug-record-countdown";
 const ARM_BAR_ID = "tracebug-record-armbar";
 
-/** Fullscreen 3-2-1 countdown. Resolves when it hits zero. */
-export function runRecordCountdown(seconds: number): Promise<void> {
+/** Fullscreen 3-2-1 countdown. Resolves `true` at zero, `false` if the user
+ *  cancels with Esc. The countdown exists for privacy prep ("wrong tab",
+ *  "sensitive data on screen") — being locked in for up to 10 seconds was
+ *  the opposite of the control it's meant to give. */
+export function runRecordCountdown(seconds: number): Promise<boolean> {
   const total = Math.max(1, Math.min(10, Math.round(seconds)));
   return new Promise((resolve) => {
     document.getElementById(COUNTDOWN_ID)?.remove();
@@ -18,7 +21,7 @@ export function runRecordCountdown(seconds: number): Promise<void> {
     overlay.id = COUNTDOWN_ID;
     overlay.setAttribute(
       "style",
-      "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;" +
+      "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;" +
         "background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
     );
     const num = document.createElement("div");
@@ -27,14 +30,36 @@ export function runRecordCountdown(seconds: number): Promise<void> {
       "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);" +
         "transition:transform 0.25s ease, opacity 0.25s ease;"
     );
+    const hint = document.createElement("div");
+    hint.textContent = "Press Esc to cancel";
+    hint.setAttribute("style", "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
     overlay.appendChild(num);
+    overlay.appendChild(hint);
     document.body.appendChild(overlay);
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (completed: boolean) => {
+      document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      resolve(completed);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      cancelled = true;
+      clearTimeout(timer);
+      finish(false);
+    };
+    // Capture-phase so the host page can't swallow the cancel key.
+    document.addEventListener("keydown", onKey, true);
 
     let n = total;
     const tick = () => {
+      if (cancelled) return;
       if (n <= 0) {
-        overlay.remove();
-        resolve();
+        finish(true);
         return;
       }
       num.textContent = String(n);
@@ -42,7 +67,7 @@ export function runRecordCountdown(seconds: number): Promise<void> {
       num.style.opacity = "1";
       setTimeout(() => { num.style.transform = "scale(1)"; num.style.opacity = "0.75"; }, 200);
       n--;
-      setTimeout(tick, 1000);
+      timer = setTimeout(tick, 1000);
     };
     tick();
   });

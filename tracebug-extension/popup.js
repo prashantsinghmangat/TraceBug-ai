@@ -17,6 +17,16 @@ const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
 let currentHostname = "";
 let currentTabId = null;
 let cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
+// Firefox host-permission state: once the user declines the "<all_urls>"
+// doorhanger, don't re-prompt on every click — that punishes a "no".
+// Persisted so the decision survives popup reopens.
+let hostPermDeclined = false;
+try {
+  chrome.storage.local.get("tb_host_perm_declined", (r) => {
+    void chrome.runtime.lastError;
+    hostPermDeclined = !!(r && r.tb_host_perm_declined);
+  });
+} catch {}
 
 async function loadCloudEndpoint() {
   try {
@@ -290,8 +300,21 @@ async function runCombo(messageType, busyText, extra) {
   // button's click handler and MUST be the first await (Firefox rejects
   // permissions.request made after unrelated awaits in the input handler).
   // On Chrome the permission is already granted, so this resolves instantly.
-  // If the user declines, activeTab still covers the immediate action.
-  try { await chrome.permissions.request({ origins: ["<all_urls>"] }); } catch {}
+  // If the user declines, activeTab still covers the immediate action — and
+  // we remember the decline so they aren't re-prompted on every click.
+  let declinedThisClick = false;
+  if (!hostPermDeclined) {
+    try {
+      const granted = await chrome.permissions.request({ origins: ["<all_urls>"] });
+      if (granted === false) {
+        hostPermDeclined = true;
+        declinedThisClick = true;
+        try { chrome.storage.local.set({ tb_host_perm_declined: true }); } catch {}
+      } else {
+        try { chrome.storage.local.set({ tb_host_perm_declined: false }); } catch {}
+      }
+    } catch {}
+  }
   setBusy(true);
   showToast(busyText);
   try {
@@ -302,10 +325,16 @@ async function runCombo(messageType, busyText, extra) {
       return;
     }
     // Success — close popup so focus returns to the page, where the modal /
-    // HUD / panel is about to appear.
-    setTimeout(() => window.close(), 350);
+    // HUD / panel is about to appear. If site access was just declined, leave
+    // the honest limitation on screen a beat longer before closing.
+    if (declinedThisClick) {
+      showToast("Works on this page for now — TraceBug stops after navigation without site access (grant it anytime in your browser's extension settings)");
+      setTimeout(() => window.close(), 2400);
+    } else {
+      setTimeout(() => window.close(), 350);
+    }
   } catch (err) {
-    showToast(err?.message || "Failed — see console", true);
+    showToast(err?.message || "Couldn't reach the page — reload the tab and try again", true);
     setBusy(false);
   }
 }

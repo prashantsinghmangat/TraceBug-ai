@@ -475,6 +475,7 @@ export function deleteSession(sessionId: string): void {
   // deleted session or overwrite the new state.
   invalidateCache();
   saveSessions(remaining);
+  emitTicketsChanged();
 }
 
 // ── Add annotation to session ────────────────────────────────────────────
@@ -539,7 +540,14 @@ export function markSessionSaved(sessionId: string): boolean {
   // the caller should tell the user instead of pretending the save worked.
   const ok = flushPendingEvents();
   if (!ok && !wasSaved) session.saved = false;
+  if (ok) emitTicketsChanged();
   return ok;
+}
+
+/** UI hook: fired when the saved-tickets set changes (save/delete) so the
+ *  toolbar's count badge can update and pulse without polling. */
+function emitTicketsChanged(): void {
+  try { window.dispatchEvent(new CustomEvent("tracebug:tickets-changed")); } catch {}
 }
 
 // ── Clear everything ──────────────────────────────────────────────────────

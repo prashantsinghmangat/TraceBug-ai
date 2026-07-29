@@ -79,12 +79,16 @@
   self-contained report you can open offline or hand to your AI agent.
 </div>
 <script>
-  // Welcome flow: the extension opens this page on first install.
+  // Welcome flow: the extension opens this page on first install. The copy
+  // must teach the EXTENSION flow (pin → icon → Capture Bug) — the on-page
+  // toolbar it used to mention only appears AFTER a popup action, and Chrome
+  // hides new extensions behind the puzzle icon.
   if (new URLSearchParams(location.search).get("welcome") === "extension") {
     document.getElementById("banner").innerHTML =
-      "<b>🎉 Extension installed — try your first capture right here.</b> " +
-      "This checkout has real bugs, on purpose. Trigger one below, then use the TraceBug toolbar " +
-      "(right edge) or press <b>Ctrl+Shift+B</b> to capture and <b>Export .html</b>.";
+      "<b>🎉 Extension installed.</b> " +
+      "<b>1.</b> Pin TraceBug (puzzle icon 🧩 in your toolbar → 📌). " +
+      "<b>2.</b> Trigger a bug below — this checkout has real bugs, on purpose. " +
+      "<b>3.</b> Click the TraceBug icon → <b>Capture Bug</b>, then <b>Export replay (.html)</b>.";
   }
 </script>
 
