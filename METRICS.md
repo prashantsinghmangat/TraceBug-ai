@@ -94,6 +94,16 @@ Target personas in order: Cursor users → Claude Code users → Windsurf/Copilo
 everything your AI needs to debug browser bugs — video, console, network,
 DOM replay, repro steps — and packages it into one HTML file."
 
+## Evidence-gated feature candidates (build ONLY at 3+ independent asks)
+
+- **"Open in Claude / Cursor" one-click** (deep-link handoff replacing the
+  copy-prompt flow) — ingredients exist (hand-off card, MCP prompt); wait for
+  users to ask for fewer clicks.
+- **Identity v2 package** (ship as ONE commit the day stores approve, not
+  before): H1 → "Your AI can't fix bugs it can't see." · retire the old
+  tagline across README/meta/OG · 8-second pitch → meta description ·
+  "context for AI coding agents" category language · viewer "AI" tab renamed.
+
 ## Decision triggers (agreed in advance, so numbers — not moods — drive them)
 
 - **Storage pressure** (`getStorageStats()` reports in issues) → start v2.0 IndexedDB.
