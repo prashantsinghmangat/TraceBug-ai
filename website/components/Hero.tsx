@@ -42,7 +42,7 @@ export default function Hero() {
             </span>
             <span className="font-medium text-text-primary">{SDK_VERSION_TAG}</span>
             <span className="text-border-strong">·</span>
-            <span>Root-cause hints in every report</span>
+            <span>Stop explaining bugs to AI — capture them instead</span>
             <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
           </a>
         </div>
@@ -59,12 +59,13 @@ export default function Hero() {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-center text-text-muted text-lg sm:text-xl leading-relaxed">
-          One shortcut captures what broke — replay, console errors, network calls,
-          a repro timeline — into one offline{" "}
+          Stop spending 30 minutes explaining bugs to Claude Code or Cursor —
+          your AI can&apos;t fix what it can&apos;t see. One shortcut captures everything
+          — replay, console errors, network calls, a repro timeline — into one offline{" "}
           <code className="font-mono text-[0.86em] text-text-primary bg-surface-2 border border-border rounded px-1.5 py-0.5">
             .html
           </code>{" "}
-          file. Your AI agent reads it over MCP and fixes the bug — a human dev can just open it too.
+          file your agent reads over MCP. A human dev can just open it too.
         </p>
 
         {/* CTAs */}
