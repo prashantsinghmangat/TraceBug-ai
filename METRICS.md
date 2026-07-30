@@ -1,5 +1,12 @@
 # TraceBug — Adoption Metrics
 
+**North-star question: does a user capture a SECOND bug within 7 days?**
+That one behavior implies install → it worked → it helped → they remembered.
+It can't be measured remotely (local-first, no telemetry) — it's answered by
+watching TTFS sessions, asking the one question, and reading what users say
+in issues/reviews. Every roadmap debate should route back to: "does this make
+the second capture more likely?"
+
 **This file is the roadmap.** Engineering work happens only when a number here
 (or a user complaint below) demands it. Update weekly — a five-minute Monday
 ritual. No telemetry is collected from users; every source below is external
@@ -97,8 +104,11 @@ DOM replay, repro steps — and packages it into one HTML file."
 ## Evidence-gated feature candidates (build ONLY at 3+ independent asks)
 
 - **"Open in Claude / Cursor" one-click** (deep-link handoff replacing the
-  copy-prompt flow) — ingredients exist (hand-off card, MCP prompt); wait for
-  users to ask for fewer clicks.
+  copy-prompt flow) — ingredients exist (hand-off card, MCP prompt).
+  Trigger: three independent OBSERVATIONS of people manually moving a report
+  from TraceBug into an AI assistant ("I paste the replay into Claude",
+  "can I send this to Cursor?") — users describe friction, not solutions,
+  so observations count as asks.
 - **Identity v2 package** (ship as ONE commit the day stores approve, not
   before): H1 → "Your AI can't fix bugs it can't see." · retire the old
   tagline across README/meta/OG · 8-second pitch → meta description ·
