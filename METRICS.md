@@ -24,7 +24,7 @@ or user-volunteered, consistent with the local-first promise.
 
 | Week of | Chrome | Firefox | Stars | npm sdk | npm cli | CWS weekly users | ?ref= hits (top source) | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 2026-07-29 (pre-launch baseline) | — | — | | | | — | — | v1.10.1 built; stores not yet submitted |
+| 2026-07-29 (launch baseline) | in review | in review | | | | — | — | v1.10.1: npm live (sdk+cli), GitHub release live, AMO + CWS submitted, website deployed |
 
 ## Top 10 user complaints (ranked, refreshed weekly)
 
