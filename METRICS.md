@@ -84,6 +84,16 @@ feature? The former wins.
 confusing — or you get stuck anywhere — tell me. I'll probably fix it the
 same day."
 
+**Weekly content cadence (the 70% — teaching, not marketing):** 2 X posts ·
+2 LinkedIn posts · 1 Reddit post · 1 YouTube short · 1 blog/compare article ·
+HN only when there's something substantial · reply to every issue and comment.
+Post formula that spreads: show the before/after ("I gave Claude one TraceBug
+report — fixed in 45 seconds"), never the announcement ("we launched").
+Target personas in order: Cursor users → Claude Code users → Windsurf/Copilot
+→ QA engineers using AI. The 8-second answer, verbatim: "TraceBug captures
+everything your AI needs to debug browser bugs — video, console, network,
+DOM replay, repro steps — and packages it into one HTML file."
+
 ## Decision triggers (agreed in advance, so numbers — not moods — drive them)
 
 - **Storage pressure** (`getStorageStats()` reports in issues) → start v2.0 IndexedDB.
