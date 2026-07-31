@@ -507,6 +507,158 @@ A full feedback platform — surveys, feature requests, roadmaps, user portals �
 Whichever you pick, insist on one thing: the report must let its reader reproduce the bug on the first try. That property — not the logo on the tool — is what gets bugs fixed.
 `.trim(),
   },
+  {
+    slug: "report-bugs-to-cursor",
+    title: "How to report bugs to Cursor so it fixes them on the first try",
+    description:
+      "Cursor is brilliant at code and blind to your browser. The difference between a five-round guessing session and a first-try fix is what you paste into that first message. Here's what works — manually, and with one click.",
+    date: "2026-08-01",
+    readMinutes: 6,
+    tag: "AI debugging",
+    cover: "/blog/report-bugs-to-cursor/hero.jpg",
+    content: `
+Cursor has read your entire repo. It knows your components, your API routes, your naming conventions. And the moment a browser bug appears, all of that goes to waste — because the one thing Cursor *can't* read is what just happened in your browser.
+
+So the session starts like this: *"the checkout button is broken."* Cursor, blind, does the only thing it can: pattern-matches on your code. It finds three plausible suspects, rewrites one, and asks you to try again. It's not hallucinating out of malice — it's debugging with no evidence, which is what we'd call guessing if a human did it.
+
+## The first message decides the whole session
+
+There's a sharp asymmetry in agent debugging sessions: **context added in the first message is worth five times the same context added in message six.** By message six, the agent has already committed to a theory and generated code around it. Front-load the evidence and the theory forms around reality instead.
+
+For a browser bug, the first message needs five things — the same five a human debugger checks first:
+
+- the console error, **as text, with the stack**
+- the network request that failed, with its response body
+- the exact click/input sequence that triggered it
+- what the DOM actually showed
+- browser, URL, and route
+
+## The manual version
+
+Paste this shape into Cursor and watch the difference:
+
+\`\`\`
+Bug: clicking "Place order" does nothing on /checkout
+
+Steps: logged in → added item → applied coupon "SAVE20" → clicked Place order
+Console: TypeError: Cannot read properties of undefined (reading 'status')
+         at OrderSummary (OrderSummary.tsx:42)
+Network: POST /api/orders → 404 (response: {"error":"route not found"})
+Env: Chrome 150, /checkout?step=payment, viewport 1280x800
+\`\`\`
+
+With that, Cursor doesn't grep-and-guess. It goes to \`OrderSummary.tsx:42\`, sees the code expects a response the 404 never delivered, and fixes both the missing route handling and the unguarded property access. First try. The evidence did the aiming; the agent did the coding.
+
+## The one-click version
+
+Assembling that block by hand takes ten minutes you won't spend when it's the fourth bug of the day. [TraceBug](https://tracebug.dev) (disclosure: I build it) captures all five evidence types automatically — DOM replay, console, network, action timeline, environment — into one local \`.html\` file, and hands it to Cursor through a local MCP server:
+
+\`\`\`
+Add to .cursor/mcp.json:
+{"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}
+\`\`\`
+
+![After export, the hand-off card gives you the exact prompt to paste into Cursor](/blog/report-bugs-to-cursor/handoff.jpg)
+
+From then on the workflow is: capture the bug → export → paste the generated one-line prompt into Cursor. The agent calls \`get_bug_report\` and \`get_fix_context\` itself and reads the *actual* evidence — not your summary of it. Nothing uploads anywhere; the MCP server reads the file from your own disk.
+
+Two extras that specifically suit Cursor's strengths: the report resolves minified stack frames through your source maps when available, so the agent lands on real files and lines — and it embeds a [generated failing Playwright test](/blog/failing-playwright-test-from-bug-report), so Cursor can prove the fix instead of asserting it.
+
+## Try it on a real bug
+
+The [live sandbox](https://tracebug.dev/try.html) has intentional bugs and the real capture widget. Break the checkout, capture it, hand the file to Cursor, and compare the session to your last "the button is broken" conversation. More on the general pattern: [how to give Claude Code full browser context](/blog/give-claude-code-browser-context) — everything there applies to Cursor identically.
+`.trim(),
+  },
+  {
+    slug: "debug-react-bugs-with-ai",
+    title: "Debugging React bugs with AI: why your agent guesses, and how to make it stop",
+    description:
+      "React's most common bugs — undefined props, stale state, effects firing at the wrong time — are exactly the ones AI agents struggle to fix from a description alone. What each bug class needs as evidence, and how to capture it.",
+    date: "2026-08-01",
+    readMinutes: 7,
+    tag: "React",
+    cover: "/blog/debug-react-bugs-with-ai/hero.jpg",
+    content: `
+Ask an AI agent to fix a React bug from a one-line description and you'll usually get a very confident rewrite of the wrong thing. Not because the model is bad at React — it's arguably better-read in React than any of us — but because React's most common bugs are *runtime* bugs, and the agent only sees your *code*.
+
+The gap between "what the code says" and "what actually happened at runtime" is precisely where React bugs live. Here are the four classes that dominate real apps, and what each one needs as evidence before an agent can fix it rather than guess at it.
+
+## 1. The undefined-property TypeError
+
+*"Cannot read properties of undefined (reading 'status')"* — the most common React crash in existence. The code renders \`order.status\`; somewhere upstream, \`order\` arrived undefined.
+
+**What the agent needs:** the stack (which component, which line) *plus the network story*. Nine times out of ten the undefined traces back to an API response that wasn't what the code expected — an error object instead of data, an empty 200, a 404 the fetch never checked. Without the network evidence, the agent's fix is a defensive \`?.\` that hides the bug. With it, the agent fixes the *cause*: the failed request and the missing error path.
+
+## 2. State that doesn't update (or updates one render late)
+
+The classic stale-closure family: a click handler reads old state, a callback captures a variable from three renders ago, a list doesn't re-render after a mutation because the reference didn't change.
+
+**What the agent needs:** the *exact action sequence with timing*. "Clicked Add, then immediately clicked Save, and the count showed the old value" is diagnosable — the agent can trace which closure captured what and when. "The count is sometimes wrong" is not. This is where a captured click-by-click timeline beats any prose description a human will realistically write.
+
+## 3. Effects firing at the wrong time
+
+Double-fetches from an effect, a subscription that outlives its component, an infinite render loop from an unstable dependency. The code *looks* right; the sequence of executions is wrong.
+
+**What the agent needs:** the console and network in *chronological order* interleaved with user actions. Two identical fetches four milliseconds apart tell an agent "unstable dependency or missing cleanup" instantly. The order of events IS the evidence — which is why a screenshot, which flattens time, rarely helps with this class.
+
+## 4. "It renders wrong" (hydration mismatches, conditional-render gaps)
+
+The state was fine, the data was fine, and the DOM is still wrong: a hydration warning, a component that vanished, a modal that rendered behind the page.
+
+**What the agent needs:** the actual DOM at the failure moment — not the JSX, which describes intent, but what React actually committed. A DOM replay lets the agent inspect the real element tree, classes, and inline styles at the exact broken frame.
+
+## Capturing all four evidence types at once
+
+You could gather each of these by hand per bug class — or capture everything, every time. That's the approach [TraceBug](https://tracebug.dev) takes (disclosure: I build it): a browser extension that records the DOM replay, console, network, and action timeline together, packaged as one local \`.html\` file your agent reads over a local MCP server. It works with any framework — React, Next.js, Vue, Svelte, plain HTML — because it captures at the browser level, not through React internals.
+
+The React-specific payoff is that the four bug classes above stop needing different workflows. Undefined prop? The failing request is in the report. Stale state? The action timeline is in the report. Effect storm? The chronological console/network feed is in the report. Wrong render? The DOM replay is in the report. Capture once; the evidence for whichever class it turns out to be is already there — plus a [generated failing Playwright test](/blog/failing-playwright-test-from-bug-report) so the agent can prove the fix.
+
+The [live sandbox](https://tracebug.dev/try.html) has an intentional TypeError of exactly the class-1 variety waiting for you. Capture it, hand it to [Claude Code](/blog/give-claude-code-browser-context) or [Cursor](/blog/report-bugs-to-cursor), and watch the difference evidence makes.
+`.trim(),
+  },
+  {
+    slug: "qa-bug-reporting-ai",
+    title: "The QA workflow where your bug reports get fixed by AI (before standup)",
+    description:
+      "QA captures the bug once, with everything attached. The developer's AI agent reads it and starts fixing. A practical workflow for QA teams working with AI-assisted developers — including Sentry mode, the arm-once-capture-all-day trick.",
+    date: "2026-08-01",
+    readMinutes: 7,
+    tag: "QA",
+    cover: "/blog/qa-bug-reporting-ai/hero.jpg",
+    content: `
+Something changed on the developer side of the bug-report handoff, and most QA workflows haven't caught up with it yet: **the first reader of your bug report is increasingly an AI coding agent.** The developer receives your ticket, opens Claude Code or Cursor, and pastes your report in. Whatever you wrote is now the agent's entire knowledge of the bug.
+
+This raises the bar and lowers it at the same time. Lowers it: you no longer need to write beautiful prose — agents don't care about prose. Raises it: agents are *ruthlessly* literal about missing evidence. A human developer fills gaps with intuition ("she probably means the staging env"). An agent fills gaps with guesses, and the fix comes back wrong. Which means the QA report that gets bugs fixed in 2026 is the one that's **complete**, not the one that's well-written.
+
+## What "complete" means now
+
+For an agent to fix a browser bug on the first pass, the report needs: the console error as text, the failing network request with its response, the exact click-by-click steps, the DOM state at the failure, and the environment. Writing all of that by hand for every bug is a part-time job — which is exactly why it doesn't happen, and why tickets bounce back with questions.
+
+The practical answer is to stop *writing* reports and start *capturing* them. [TraceBug](https://tracebug.dev) (disclosure: I build it) is a free browser extension built around that idea: click Capture, reproduce the bug, and everything — DOM replay, console, network, screenshots, your steps — lands in one ticket you review and export. No account; nothing uploads; works on any site including staging environments behind logins.
+
+## The Sentry-mode trick: arm once, capture all day
+
+Here's the workflow detail that changes daily QA life. You don't know when the bug will happen — so recording on demand means the bug you just saw is already gone.
+
+TraceBug's rolling mode fixes the timing problem: start one recording at the beginning of your test session and leave it running. It keeps a rolling buffer — bounded, not an ever-growing file — and when a bug appears, you snapshot **that moment** into a ticket and keep going. One arm-up in the morning; every bug of the day captured with full evidence, none of them requiring you to reproduce anything twice.
+
+Each ticket gets your human layer on top: annotated screenshots (arrows, highlights, blur for sensitive data), a typed title and steps, priority. The evidence is automatic; the judgment is yours.
+
+## The handoff that makes developers love QA
+
+Export options map to wherever your team lives — GitHub issue, Jira, Linear, or the self-contained \`.html\` replay file. Two things in the export matter specifically for AI-assisted teams:
+
+**The replay file is agent-readable.** The developer's agent reads it over a local MCP server — actual console errors, actual failed requests, your exact steps — instead of a paraphrase. Your capture becomes the agent's evidence, unfiltered.
+
+**Every report embeds a failing Playwright test.** Generated from your captured session, it fails while your bug exists and passes when it's fixed. You've not only reported the bug — you've shipped the verification for it. When the fix lands, the test tells everyone it's real. ([How that works →](/blog/failing-playwright-test-from-bug-report))
+
+The result, on teams that run this loop: QA captures at 4:50pm, the developer's agent reads it at 9am, and the fix — proven green against your captured test — is in review before standup. The bounce-back questions ("what browser? can you get the console?") disappear, because the answers were captured before anyone thought to ask.
+
+## Try the loop without installing anything on your app
+
+The [live sandbox](https://tracebug.dev/try.html) is a checkout page with intentional bugs. Run the workflow end to end: arm a session, trigger the coupon bug, snapshot it, annotate, export. Ten minutes, and you'll know whether this fits your team. The extension is free and open source — and if your compliance team asks where the data goes, the answer that makes that meeting short is: nowhere. It stays on your machine.
+`.trim(),
+  },
 ];
 
 /** All posts, newest first. Async so a future backend swap is signature-compatible. */
