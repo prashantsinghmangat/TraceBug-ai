@@ -31,6 +31,20 @@ or user-volunteered, consistent with the local-first promise.
 | 7-day return | proxy: CWS weekly-users trend vs cumulative installs |
 | Top complaints | GitHub issues + store reviews + tracebug.dev/feedback submissions |
 
+## Confidence milestones (check these on low-confidence days — not feelings)
+
+- [ ] 20–50 extension installs from strangers
+- [ ] 5 observed user sessions (TTFS table below)
+- [ ] 3 independent people saying the same positive thing
+- [ ] 1 person captures a SECOND bug (the north star, witnessed once)
+- [ ] 1 developer: "I used this in a real project"
+- [ ] 1 person asks how to share a report with their team (= first paid-tier evidence)
+- [ ] 1 public recommendation not prompted by you
+- [ ] 10 emails on the Pro waitlist
+
+Judge the product only after this list has real checkmarks. Silence before
+the launch posts go out is not data.
+
 ## Weekly log
 
 | Week of | Chrome | Firefox | Stars | npm sdk | npm cli | CWS weekly users | ?ref= hits (top source) | Notes |
