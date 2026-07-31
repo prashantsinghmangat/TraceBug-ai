@@ -7,6 +7,10 @@ watching TTFS sessions, asking the one question, and reading what users say
 in issues/reviews. Every roadmap debate should route back to: "does this make
 the second capture more likely?"
 
+**Next milestone is not a version number.** It is: five observed users, five
+TTFS records, ten verbatim user quotes, and the first recurring complaint.
+Once those exist, the next product decision makes itself.
+
 **This file is the roadmap.** Engineering work happens only when a number here
 (or a user complaint below) demands it. Update weekly — a five-minute Monday
 ritual. No telemetry is collected from users; every source below is external
@@ -57,6 +61,16 @@ chips · tracebug.dev/feedback · anything said while watching someone use it.
 
 **The one question to ask, when asking at all** (one question, never a survey):
 > "What almost stopped you from using it?"
+
+**The must-have sentence (one per week, verbatim only — never self-written):**
+> "I keep using TraceBug because ______."
+
+Copy the completion exactly from issues, store reviews, Reddit, Discord, DMs,
+X replies. The friction question above says what to FIX; this one says what to
+MARKET. After 30–50 entries the dominant completion IS the positioning — if it
+names a different feature than the homepage does, the messaging is wrong, not
+the users. Target answer shape: "I can't get my AI enough context without it"
+(moat) — not "screenshots" or "recordings" (commodity).
 
 ## Time to First Success (TTFS) — the one UX metric
 
@@ -109,10 +123,20 @@ DOM replay, repro steps — and packages it into one HTML file."
   from TraceBug into an AI assistant ("I paste the replay into Claude",
   "can I send this to Cursor?") — users describe friction, not solutions,
   so observations count as asks.
-- **Identity v2 package** (ship as ONE commit the day stores approve, not
-  before): H1 → "Your AI can't fix bugs it can't see." · retire the old
-  tagline across README/meta/OG · 8-second pitch → meta description ·
-  "context for AI coding agents" category language · viewer "AI" tab renamed.
+- **Identity v2 package** (ship as ONE commit): H1 → "Your AI can't fix bugs
+  it can't see." · retire the old tagline across README/meta/OG · 8-second
+  pitch → meta description · "context for AI coding agents" category language ·
+  viewer "AI" tab renamed.
+  Trigger: NOT store approval alone — the current headline ("Capture the bug.
+  Let AI fix it.") gets real exposure first. Ship only if early interviews /
+  TTFS sessions consistently show confusion about what "Let AI fix it" means,
+  or the must-have-sentence completions converge on the "can't see" framing.
+- **Interactive demo playground** (a page with an intentional checkout bug the
+  visitor captures themselves: trigger bug → shortcut → report → Fix with AI).
+  Distinct from /proof — /proof shows what happened; this lets a visitor DO
+  the loop before installing anything.
+  Trigger: TTFS sessions repeatedly show users stalling because they don't
+  have a suitable bug to try it on. A hypothesis, not a roadmap commitment.
 
 ## Decision triggers (agreed in advance, so numbers — not moods — drive them)
 
