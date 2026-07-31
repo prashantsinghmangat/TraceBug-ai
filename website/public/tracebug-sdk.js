@@ -26965,6 +26965,143 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/cloud-endpoint.ts
+  function resolveCloudEndpoint(endpoint) {
+    const raw = endpoint == null ? void 0 : endpoint.trim();
+    if (!raw) return DEFAULT_CLOUD_ENDPOINT;
+    try {
+      const url = new URL(raw);
+      const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+      if (url.protocol !== "https:" && !(url.protocol === "http:" && isLocal)) {
+        if (typeof console !== "undefined") {
+          console.warn(`[TraceBug] cloudEndpoint must be HTTPS (or http on localhost) \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
+        }
+        return DEFAULT_CLOUD_ENDPOINT;
+      }
+      return url.href.replace(/\/+$/, "");
+    } catch (e2) {
+      if (typeof console !== "undefined") {
+        console.warn(`[TraceBug] Invalid cloudEndpoint "${raw}" \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
+      }
+      return DEFAULT_CLOUD_ENDPOINT;
+    }
+  }
+  var DEFAULT_CLOUD_ENDPOINT;
+  var init_cloud_endpoint = __esm({
+    "src/cloud-endpoint.ts"() {
+      "use strict";
+      DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
+    }
+  });
+
+  // src/ui/milestone-ask.ts
+  function maybeShowMilestoneAsk(root2) {
+    var _a2, _b, _c;
+    try {
+      if (localStorage.getItem(DONE_KEY)) return;
+      const savedCount = getAllSessions().filter((s2) => s2.saved).length;
+      if (savedCount < MILESTONE) return;
+    } catch (e2) {
+      return;
+    }
+    if (document.getElementById(CARD_ID)) return;
+    try {
+      localStorage.setItem(DONE_KEY, "1");
+    } catch (e2) {
+    }
+    const card = document.createElement("div");
+    card.id = CARD_ID;
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", "TraceBug update emails \u2014 optional");
+    card.style.cssText = [
+      "position:fixed",
+      "right:16px",
+      "bottom:16px",
+      "width:320px",
+      "background:var(--tb-bg-secondary,#1a1a2e)",
+      "border:1px solid var(--tb-border-hover,#3a3a5e)",
+      // Max z-index, same as the ticket modal — the card is appended AFTER the
+      // modal, so among equals it paints (and clicks) on top. At 2147483646 it
+      // rendered visibly but the modal's overlay swallowed every click.
+      "border-radius:12px",
+      "padding:16px",
+      "z-index:2147483647",
+      "font-family:var(--tb-font-family,system-ui,sans-serif)",
+      "color:var(--tb-text-primary,#e0e0e0)",
+      "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
+    ].join(";");
+    card.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div style="font-size:13px;font-weight:700">\u{1F389} That's your ${MILESTONE}th saved ticket</div>
+      <button data-act="close" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0">\u2715</button>
+    </div>
+    <p style="margin:6px 0 10px;font-size:12px;line-height:1.5;color:var(--tb-text-secondary,#aaa)">
+      Want release updates from the solo dev who builds TraceBug? A few emails a year, nothing else.
+    </p>
+    <form data-act="form" style="display:flex;gap:6px">
+      <input data-act="email" type="email" required placeholder="you@company.com" aria-label="Email address"
+        style="flex:1;min-width:0;background:var(--tb-bg-primary,#12121f);border:1px solid var(--tb-border,#2a2a3e);border-radius:8px;padding:8px 10px;font-size:12px;color:inherit;font-family:inherit;outline:none" />
+      <button type="submit" data-act="submit"
+        style="background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">Keep me posted</button>
+    </form>
+    <button data-act="no" style="margin-top:8px;background:none;border:none;color:var(--tb-text-muted,#888);font-size:11px;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline">
+      No thanks \u2014 never ask again
+    </button>
+    <p style="margin:8px 0 0;font-size:10.5px;color:var(--tb-text-muted,#888);line-height:1.4">
+      Optional \u2014 TraceBug works fully without this, forever.
+    </p>
+  `;
+    const close = () => {
+      document.removeEventListener("keydown", onKey2, true);
+      card.remove();
+    };
+    const onKey2 = (e2) => {
+      if (e2.key === "Escape") {
+        e2.stopPropagation();
+        close();
+      }
+    };
+    document.addEventListener("keydown", onKey2, true);
+    (_a2 = card.querySelector('[data-act="close"]')) == null ? void 0 : _a2.addEventListener("click", close);
+    (_b = card.querySelector('[data-act="no"]')) == null ? void 0 : _b.addEventListener("click", close);
+    (_c = card.querySelector('[data-act="form"]')) == null ? void 0 : _c.addEventListener("submit", (e2) => {
+      e2.preventDefault();
+      const input2 = card.querySelector('[data-act="email"]');
+      const btn = card.querySelector('[data-act="submit"]');
+      const email = input2 == null ? void 0 : input2.value.trim();
+      if (!email) return;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Adding\u2026";
+      }
+      fetch(`${resolveCloudEndpoint()}/api/notify-me`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "milestone-5" })
+      }).then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        card.innerHTML = `<div style="font-size:12.5px;line-height:1.5">\u2713 You're on the list \u2014 thanks for using TraceBug this much.</div>`;
+        setTimeout(close, 2500);
+      }).catch(() => {
+        card.innerHTML = `<div style="font-size:12px;line-height:1.5">This page blocked the request \u2014 you can sign up at
+          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`;
+        setTimeout(close, 6e3);
+      });
+    });
+    root2.appendChild(card);
+  }
+  var DONE_KEY, CARD_ID, MILESTONE;
+  var init_milestone_ask = __esm({
+    "src/ui/milestone-ask.ts"() {
+      "use strict";
+      init_storage();
+      init_cloud_endpoint();
+      DONE_KEY = "tracebug_milestone_ask_done";
+      CARD_ID = "tracebug-milestone-ask";
+      MILESTONE = 5;
+    }
+  });
+
   // src/ui/replay-scrubber.ts
   function mountReplayScrubber(container2, options) {
     var _a2, _b, _c;
@@ -29923,6 +30060,12 @@ ${description}`;
         saveTicketBtn.classList.add("tb-qb-btn-saved");
         saveTicketBtn.disabled = true;
         showToast(withoutShots ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it under Saved tickets on the toolbar" : "\u2713 Ticket saved \u2014 find it under Saved tickets on the toolbar", root2);
+        setTimeout(() => {
+          try {
+            maybeShowMilestoneAsk(root2);
+          } catch (e2) {
+          }
+        }, 1600);
       });
     }
     const moreBtn = modal.querySelector('[data-action="more-toggle"]');
@@ -32095,6 +32238,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_region_screenshot();
       init_dashboard();
       init_storage();
+      init_milestone_ask();
       init_video_recorder();
       init_report_builder();
       init_github_issue();
@@ -69432,7 +69576,7 @@ First element: \`${exampleSnippet}\``,
     _injectStyles3();
     hideLiveBugCard();
     const overlay = document.createElement("div");
-    overlay.id = CARD_ID;
+    overlay.id = CARD_ID2;
     overlay.dataset.tracebug = "live-bug-card";
     overlay.setAttribute("role", "alert");
     overlay.setAttribute("aria-live", "assertive");
@@ -69598,7 +69742,7 @@ First element: \`${exampleSnippet}\``,
       from { transform: translateY(20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    #${CARD_ID} {
+    #${CARD_ID2} {
       position: fixed !important;
       bottom: 16px !important;
       right: 16px !important;
@@ -69606,7 +69750,7 @@ First element: \`${exampleSnippet}\``,
       pointer-events: auto !important;
       animation: tb-lbc-in 0.18s ease !important;
     }
-    #${CARD_ID} .tb-lbc-card {
+    #${CARD_ID2} .tb-lbc-card {
       box-sizing: border-box !important;
       max-width: 460px !important;
       min-width: 340px !important;
@@ -69619,31 +69763,31 @@ First element: \`${exampleSnippet}\``,
       padding: 12px 14px !important;
       box-shadow: 0 12px 36px rgba(0,0,0,0.45) !important;
     }
-    #${CARD_ID} .tb-lbc-card *, #${CARD_ID} .tb-lbc-card *::before, #${CARD_ID} .tb-lbc-card *::after {
+    #${CARD_ID2} .tb-lbc-card *, #${CARD_ID2} .tb-lbc-card *::before, #${CARD_ID2} .tb-lbc-card *::after {
       box-sizing: border-box !important;
     }
-    #${CARD_ID} .tb-lbc-head {
+    #${CARD_ID2} .tb-lbc-head {
       display: flex !important; align-items: flex-start !important; gap: 8px !important;
       margin-bottom: 8px !important;
     }
-    #${CARD_ID} .tb-lbc-icon { font-size: 16px !important; line-height: 1.2 !important; flex-shrink: 0 !important; }
-    #${CARD_ID} .tb-lbc-title {
+    #${CARD_ID2} .tb-lbc-icon { font-size: 16px !important; line-height: 1.2 !important; flex-shrink: 0 !important; }
+    #${CARD_ID2} .tb-lbc-title {
       flex: 1 !important; font-size: 13px !important; font-weight: 600 !important;
       color: var(--tb-error, #ef4444) !important; line-height: 1.35 !important; word-break: break-word !important;
     }
-    #${CARD_ID} .tb-lbc-close {
+    #${CARD_ID2} .tb-lbc-close {
       background: none !important; border: none !important; color: var(--tb-text-muted, #888) !important;
       font-size: 20px !important; line-height: 1 !important; cursor: pointer !important;
       padding: 0 4px !important; font-family: inherit !important;
     }
-    #${CARD_ID} .tb-lbc-loc {
+    #${CARD_ID2} .tb-lbc-loc {
       font-size: 11px !important; color: var(--tb-text-muted, #888) !important;
       font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
       margin-bottom: 4px !important;
     }
-    #${CARD_ID} .tb-lbc-file { color: var(--tb-text-secondary, #aaa) !important; }
-    #${CARD_ID} .tb-lbc-no-source { font-style: italic !important; color: var(--tb-text-muted, #666) !important; }
-    #${CARD_ID} .tb-lbc-source {
+    #${CARD_ID2} .tb-lbc-file { color: var(--tb-text-secondary, #aaa) !important; }
+    #${CARD_ID2} .tb-lbc-no-source { font-style: italic !important; color: var(--tb-text-muted, #666) !important; }
+    #${CARD_ID2} .tb-lbc-source {
       background: var(--tb-bg-primary, #0f0f1a) !important;
       border: 1px solid var(--tb-border, #2a2a3e) !important;
       border-radius: 6px !important;
@@ -69652,29 +69796,29 @@ First element: \`${exampleSnippet}\``,
       font-size: 11px !important;
       max-height: 110px !important; overflow: hidden !important;
     }
-    #${CARD_ID} .tb-lbc-loading {
+    #${CARD_ID2} .tb-lbc-loading {
       font-style: italic !important; color: var(--tb-text-muted, #666) !important;
     }
-    #${CARD_ID} .tb-lbc-line {
+    #${CARD_ID2} .tb-lbc-line {
       display: flex !important; gap: 8px !important; line-height: 1.45 !important;
       white-space: pre !important; color: var(--tb-text-secondary, #aaa) !important;
     }
-    #${CARD_ID} .tb-lbc-line-hot {
+    #${CARD_ID2} .tb-lbc-line-hot {
       color: var(--tb-text-primary, #fff) !important; font-weight: 600 !important;
       background: rgba(239, 68, 68, 0.12) !important;
       margin: 0 -8px !important; padding: 0 8px !important;
     }
-    #${CARD_ID} .tb-lbc-arrow { color: var(--tb-error, #ef4444) !important; width: 10px !important; flex-shrink: 0 !important; }
-    #${CARD_ID} .tb-lbc-num { color: var(--tb-text-muted, #555) !important; user-select: none !important; flex-shrink: 0 !important; }
-    #${CARD_ID} .tb-lbc-code { color: inherit !important; flex: 1 !important; }
-    #${CARD_ID} .tb-lbc-action {
+    #${CARD_ID2} .tb-lbc-arrow { color: var(--tb-error, #ef4444) !important; width: 10px !important; flex-shrink: 0 !important; }
+    #${CARD_ID2} .tb-lbc-num { color: var(--tb-text-muted, #555) !important; user-select: none !important; flex-shrink: 0 !important; }
+    #${CARD_ID2} .tb-lbc-code { color: inherit !important; flex: 1 !important; }
+    #${CARD_ID2} .tb-lbc-action {
       font-size: 11px !important; color: var(--tb-text-muted, #888) !important;
       margin-bottom: 10px !important;
     }
-    #${CARD_ID} .tb-lbc-buttons {
+    #${CARD_ID2} .tb-lbc-buttons {
       display: flex !important; gap: 6px !important; flex-wrap: wrap !important;
     }
-    #${CARD_ID} .tb-lbc-btn {
+    #${CARD_ID2} .tb-lbc-btn {
       font-family: inherit !important;
       border: 1px solid var(--tb-border, #2a2a3e) !important;
       border-radius: 6px !important;
@@ -69683,33 +69827,33 @@ First element: \`${exampleSnippet}\``,
       cursor: pointer !important;
       transition: all 0.12s !important;
     }
-    #${CARD_ID} .tb-lbc-primary {
+    #${CARD_ID2} .tb-lbc-primary {
       background: var(--tb-accent, #6366F1) !important;
       color: #fff !important;
       border-color: transparent !important;
     }
-    #${CARD_ID} .tb-lbc-primary:hover { opacity: 0.9 !important; }
-    #${CARD_ID} .tb-lbc-editor {
+    #${CARD_ID2} .tb-lbc-primary:hover { opacity: 0.9 !important; }
+    #${CARD_ID2} .tb-lbc-editor {
       background: transparent !important;
       color: var(--tb-text-primary, #e0e0e0) !important;
     }
-    #${CARD_ID} .tb-lbc-editor:hover { background: var(--tb-btn-hover, #ffffff15) !important; }
-    #${CARD_ID} .tb-lbc-ghost {
+    #${CARD_ID2} .tb-lbc-editor:hover { background: var(--tb-btn-hover, #ffffff15) !important; }
+    #${CARD_ID2} .tb-lbc-ghost {
       background: transparent !important;
       color: var(--tb-text-muted, #888) !important;
     }
-    #${CARD_ID} .tb-lbc-ghost:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
+    #${CARD_ID2} .tb-lbc-ghost:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
   `;
     document.head.appendChild(style);
   }
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID2, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
-      CARD_ID = "tracebug-live-bug-card";
+      CARD_ID2 = "tracebug-live-bug-card";
       STYLE_ID3 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
@@ -70247,30 +70391,8 @@ First element: \`${exampleSnippet}\``,
   init_html_replay();
   init_cloud_upload();
 
-  // src/cloud-endpoint.ts
-  var DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
-  function resolveCloudEndpoint(endpoint) {
-    const raw = endpoint == null ? void 0 : endpoint.trim();
-    if (!raw) return DEFAULT_CLOUD_ENDPOINT;
-    try {
-      const url = new URL(raw);
-      const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-      if (url.protocol !== "https:" && !(url.protocol === "http:" && isLocal)) {
-        if (typeof console !== "undefined") {
-          console.warn(`[TraceBug] cloudEndpoint must be HTTPS (or http on localhost) \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
-        }
-        return DEFAULT_CLOUD_ENDPOINT;
-      }
-      return url.href.replace(/\/+$/, "");
-    } catch (e2) {
-      if (typeof console !== "undefined") {
-        console.warn(`[TraceBug] Invalid cloudEndpoint "${raw}" \u2014 using ${DEFAULT_CLOUD_ENDPOINT}`);
-      }
-      return DEFAULT_CLOUD_ENDPOINT;
-    }
-  }
-
   // src/auth/iframe-bridge.ts
+  init_cloud_endpoint();
   var DEFAULT_TIMEOUT_MS = 6e4;
   var BRIDGE_READY_TIMEOUT_MS = 2e4;
   var SIGN_IN_POLL_INTERVAL_MS = 1500;
@@ -70600,6 +70722,8 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/exporters/share-link.ts
+  init_cloud_endpoint();
+  init_cloud_endpoint();
   var MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
   var MAX_VIDEO_DURATION_S = 120;
   var MAX_SCREENSHOTS_PER_SHARE = 5;
@@ -70658,6 +70782,7 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/index.ts
+  init_cloud_endpoint();
   init_title_generator();
   init_voice_recorder();
   init_video_recorder();
