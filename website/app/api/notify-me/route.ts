@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 
-const ALLOWED_SOURCES = new Set(["pricing-pro", "pricing-team", "viewer-footer"]);
+const ALLOWED_SOURCES = new Set(["pricing-pro", "pricing-team", "viewer-footer", "blog"]);
 const ALLOWED_TIERS = new Set(["pro", "team", "enterprise"]);
 
 export async function POST(req: Request) {

@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import EmailCapture from "@/components/EmailCapture";
 
 // Deliberately one tier. Paid cloud plans (Pro/Team/Enterprise) were removed
 // pre-launch: selling an Enterprise plan before having an Enterprise customer
@@ -91,6 +92,14 @@ export default function PricingClient() {
                 Tell us what your team needs.
               </a>
             </p>
+            <div className="mt-5">
+              <EmailCapture
+                source="pricing-pro"
+                tier="pro"
+                heading="Get one email when cloud sharing ships"
+                sub="Shareable links, team workspaces, report history — the future paid tier. Joining this list is also how we measure whether to build it."
+              />
+            </div>
           </div>
         </div>
       </section>
