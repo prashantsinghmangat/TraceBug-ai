@@ -6,6 +6,7 @@ import { downloadScreenshot, getScreenshots, removeScreenshot, updateScreenshot,
 import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved, recordStorageStat } from "../storage";
+import { maybeShowMilestoneAsk } from "./milestone-ask";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
@@ -1047,6 +1048,10 @@ function _openModal(
       showToast(withoutShots
         ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it under Saved tickets on the toolbar"
         : "\u2713 Ticket saved \u2014 find it under Saved tickets on the toolbar", root);
+      // One-time OPTIONAL email ask at the 5th saved ticket \u2014 an ask, never a
+      // wall (see milestone-ask.ts guardrails). Delayed so the toast lands
+      // first; the card sits bottom-right, away from the toast.
+      setTimeout(() => { try { maybeShowMilestoneAsk(root); } catch {} }, 1600);
     });
   }
 
