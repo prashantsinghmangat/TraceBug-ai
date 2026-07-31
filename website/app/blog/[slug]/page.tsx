@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { getAllPosts, getPostBySlug } from "@/lib/blog";
 import { renderMarkdown } from "@/lib/blog-markdown";
+import EmailCapture from "@/components/EmailCapture";
 
 // One dynamic route renders every post from the content layer (lib/blog.ts).
 // Statically generated today; when posts move to a backend, either keep SSG
@@ -81,6 +82,16 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
                 Open the sandbox <ArrowRight size={14} />
               </a>
             </Button>
+          </div>
+
+          {/* Owned-channel capture — the product stays account-free; this is
+              website-only, opt-in, and honest about frequency. */}
+          <div className="mt-6">
+            <EmailCapture
+              source="blog"
+              heading="Get the next post (and launch-sized updates only)"
+              sub="A few emails a year — new capabilities, major releases. Written by the solo dev, not a marketing team."
+            />
           </div>
         </div>
       </article>
