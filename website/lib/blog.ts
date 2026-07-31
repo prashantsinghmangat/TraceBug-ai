@@ -312,6 +312,201 @@ Ask where the bug report's journey **ends**:
 If that last line is you, the fastest way to check is not this article: [try the live sandbox](https://tracebug.dev/try.html) — a page with intentional bugs and the real widget running. Capture one, export the .html, and drop it in front of your agent. The whole loop takes under two minutes, costs nothing, and nothing you capture leaves your machine.
 `.trim(),
   },
+  {
+    slug: "give-claude-code-browser-context",
+    title: "How to give Claude Code full browser context for a bug (stop typing 300-word descriptions)",
+    description:
+      "Claude Code can't see your browser. When a UI bug happens, you become its eyes — badly. What coding agents actually need to fix a browser bug, how to assemble it by hand, and how to capture all of it in one click.",
+    date: "2026-07-31",
+    readMinutes: 7,
+    tag: "AI debugging",
+    cover: "/blog/claude-code-context/hero.jpg",
+    content: `
+Here's a loop every Claude Code and Cursor user knows by heart. A button in your app stops working. You open the agent and type: *"When I click Place Order on checkout, nothing happens. Sometimes there's an error in the console. Can you fix it?"*
+
+The agent — which is genuinely good at code — starts guessing. It greps for the button handler. It asks what the console said. You alt-tab, reproduce the bug, squint at the console, paraphrase the error. It asks about the network tab. Another alt-tab. Fifteen minutes in, you're the world's slowest JSON API between your browser and your agent, and the agent still has a foggy, secondhand picture of what happened.
+
+The problem isn't the agent. **The problem is that your agent can't see the browser.** Everything it knows about the bug arrives through your typing.
+
+## What an agent actually needs
+
+When a human debugs a browser bug, they look at five things almost immediately. Your agent needs exactly the same five — it just can't gather them itself:
+
+1. **The console error, verbatim** — the full text with the stack, not "there was a TypeError somewhere."
+2. **The network story** — which request fired, with what payload, and what came back. Half of all "frontend" bugs are a failing API call wearing a UI costume.
+3. **The exact action sequence** — what was clicked, in what order, with what typed input. "I clicked around and it broke" is not reproducible.
+4. **The DOM state** — what the page actually looked like when it broke, not what the JSX says it should look like.
+5. **The environment** — browser, viewport, URL, and route. "Works on my machine" lives in this gap.
+
+Give an agent those five things and something remarkable happens: it stops guessing. It reads the failing request, finds the handler, connects the console stack to a file and line, and proposes a fix grounded in what *actually happened* — usually on the first try.
+
+## The manual way (works today, costs ~10 minutes per bug)
+
+You can assemble this by hand, and if you do nothing else, this checklist will improve your agent sessions immediately:
+
+\`\`\`
+1. Reproduce the bug with DevTools open
+2. Console tab → right-click the error → Copy → paste as text (never a screenshot)
+3. Network tab → find the failing request → Copy → Copy as cURL, plus the response body
+4. Write the exact steps: numbered, from a known starting point, with typed values
+5. Note browser + URL + viewport
+6. Paste all of it into the agent in one message
+\`\`\`
+
+This works. It's also ten minutes of secretarial work per bug, you'll skip it when you're in a hurry, and the one detail you omit is reliably the one that mattered.
+
+## The one-click way
+
+This is the exact problem [TraceBug](https://tracebug.dev) exists to solve (disclosure: I build it). The browser extension captures all five evidence types as the bug happens — DOM replay, console, network, action timeline, environment — and packages them into one self-contained \`.html\` file on your machine. Nothing uploads anywhere.
+
+![The captured ticket: auto-titled with the failing request, console, network, and repro timeline attached](/blog/claude-code-context/ticket.jpg)
+
+Then the hand-off, which is the part built specifically for agents: TraceBug ships a local MCP server —
+
+\`\`\`
+claude mcp add tracebug -- npx -y tracebug mcp
+\`\`\`
+
+— and after that, Claude Code reads the report *directly*. Not a summary you typed: the actual console errors, the actual failed request with its response body, the repro steps, resolved stack frames when source maps are available. One MCP tool, \`get_fix_context\`, hands the agent a fix-starter in a single call: the failing request, the user action that triggered it, and the first error with its top frames.
+
+There's a verification step too: every report embeds a **generated failing Playwright test**. The agent runs it (red), patches the code, runs it again (green). The fix isn't "looks plausible" — it's proven against the captured failure. ([More on that here](/blog/failing-playwright-test-from-bug-report).)
+
+If you use chat instead of an agent — claude.ai, ChatGPT — don't upload the replay file; it's built for browsers and MCP, not context windows. TraceBug's **AI report (.html)** export is a few KB of structured plain text made exactly for pasting into a chat.
+
+## Try the loop in two minutes
+
+The [live sandbox](https://tracebug.dev/try.html) has a checkout page with intentional bugs and the real widget running. Capture one, export it, and hand it to your agent. The first time Claude fixes a bug from evidence it gathered itself — no typing, no alt-tabbing, no paraphrased stack traces — the 300-word bug description era ends on the spot.
+`.trim(),
+  },
+  {
+    slug: "failing-playwright-test-from-bug-report",
+    title: "Turn a bug report into a failing Playwright test — automatically",
+    description:
+      "A bug report tells you something broke. A failing test proves when it's fixed. How TraceBug generates a runnable Playwright spec from a captured browser session — red while the bug exists, green after the fix — and why that changes AI-assisted debugging.",
+    date: "2026-07-31",
+    readMinutes: 6,
+    tag: "Playwright",
+    cover: "/blog/playwright-from-bug/hero.jpg",
+    content: `
+Every bug fix ends with the same slightly awkward question: *how do we know it's actually fixed?* Usually the answer is "the person who reported it clicked around again and it seemed fine." That's a vibe, not a verification — and with AI agents writing more of our fixes, vibes are not enough. An agent will happily declare victory on a patch that compiles.
+
+There's an old discipline for this: **write a failing test first.** Reproduce the bug as an assertion, watch it fail, fix the code, watch it pass. Almost nobody does it for reported bugs, because translating "the order button doesn't work" into a runnable test is twenty minutes of tedious locator archaeology.
+
+So [TraceBug](https://tracebug.dev) does the translation automatically (disclosure: I build it). Every captured bug report embeds a generated Playwright spec that replays the session and asserts the captured failure is gone.
+
+## What the generated test contains
+
+TraceBug already captured everything a test needs: the exact click/input sequence, the request that failed, the console error that fired. The generator turns that into a spec:
+
+\`\`\`ts
+import { test, expect } from '@playwright/test';
+
+// Captured with TraceBug — free, local-first bug reports
+// Generated from bug report: "Place order" Action — API POST Returns 404
+//
+// This test REPRODUCES the captured bug — expect it to FAIL until the bug
+// is fixed, then pass. Point BASE_URL at your running dev server.
+
+test('replays the captured session and asserts the failure is gone', async ({ page }) => {
+  // ...navigates to the captured route, replays each action in order,
+  // then asserts:
+  //  - the captured endpoint (POST /api/orders) no longer fails
+  //  - the captured console error is no longer thrown
+});
+\`\`\`
+
+Three details in the generation matter more than they look:
+
+**Locator preference is stability-ordered.** Each replayed action targets \`data-testid\` first, then \`id\`, then \`aria-label\`, then role + accessible name, and only falls back to the captured CSS selector last — so the test survives a refactor better than a recorded macro would.
+
+**The assertions target the captured failure, not a screenshot.** The spec collects failed requests and asserts *the specific endpoint that broke* stops failing, and that the captured console error stops being thrown. It's asserting the bug, not the pixels.
+
+**Redacted input stays redacted.** If the captured session involved sensitive typed values, they arrive in the test as \`TODO\` placeholders with a comment — the capture-time masking carries through to the artifact.
+
+## Why this is bigger with an AI agent in the loop
+
+Hand an agent a bug report and a failing test together, and the debugging session gets a *definition of done*:
+
+1. Agent reads the report over MCP (console, network, replay — [the full-context story](/blog/give-claude-code-browser-context))
+2. Agent runs the spec → **red**, reproducing the exact captured failure
+3. Agent patches the code
+4. Agent runs the spec → **green**
+
+Step 4 is the difference between "the agent says it's fixed" and "the fix is proven against the failure that was actually captured." It also leaves something behind: commit the spec, and this bug has a permanent regression guard in CI. The bug report stops being a disposable artifact and becomes part of the test suite.
+
+## Getting one
+
+Three ways, all free: the **Download failing test (.spec.ts)** item in the ticket's More menu, embedded inside every exported \`.html\` replay, or via the MCP tool \`get_playwright_test\` if your agent wants to fetch it itself. Run it like any spec:
+
+\`\`\`
+npx playwright test bug-place-order-404.spec.ts
+\`\`\`
+
+The fastest way to see the loop end-to-end: capture a bug on the [live sandbox](https://tracebug.dev/try.html) — it has intentional bugs for exactly this — export the test, and watch it fail for the right reason. Then fix the sandbox's bug if you like. The test will tell you when you're done, which is more than most bug reports ever did.
+`.trim(),
+  },
+  {
+    slug: "betterbugs-alternatives",
+    title: "6 BetterBugs alternatives for bug capture in 2026 (picked by workflow, not features)",
+    description:
+      "BetterBugs is a capable Jam-style capture tool — but the right alternative depends on where your bug reports end up: a team dashboard, a client's PM tool, or an AI coding agent. An honest tour of Jam, Bird Eats Bug, Marker.io, BugHerd, Userback, and TraceBug.",
+    date: "2026-07-30",
+    readMinutes: 7,
+    tag: "Comparisons",
+    cover: "/blog/betterbugs-alternatives/hero.jpg",
+    content: `
+Disclosure first: I build [TraceBug](https://tracebug.dev), which is on this list. Bias declared; claims kept checkable; each tool gets an honest "pick it when."
+
+BetterBugs sits in the same family as Jam.dev: a browser extension that captures screenshots and recordings with console and network logs attached, feeding a cloud workspace with Slack and Jira routing. If it's not quite fitting, the useful question isn't "what has more features" — it's **where do your bug reports end up?** Different destinations, different winners.
+
+## 1. Jam.dev — the category's default
+
+The most polished version of the capture-to-cloud-link workflow, with a mature extension and broad integrations. If you're leaving BetterBugs but staying in the same model — hosted links, team workspace — Jam is the obvious candidate. Trade-offs are the model's, not the product's: captures live in their cloud, and the free tier has limits. ([I've written a full tour of the Jam alternatives here](/blog/jam-dev-alternatives).)
+
+**Pick Jam when:** you want the smoothest hosted capture-and-share loop.
+
+## 2. TraceBug — when the report's destination is an AI coding agent
+
+Mine. Same evidence class — DOM replay, console, network, screenshots, screen recording — but the output is **one self-contained .html file on your machine**, not a cloud link. No account, no upload, free and open source (MIT).
+
+The differentiators are about what happens *after* capture: a local MCP server lets Claude Code or Cursor read the report directly and start fixing, and every report embeds a [generated failing Playwright test](/blog/failing-playwright-test-from-bug-report) that proves the fix. If your bugs end up in front of an agent — or your compliance posture can't accept session data on third-party servers — this is the fit. If you need hosted team links today, it isn't (yet): reports are files you share yourself. ([Full comparison →](/compare/betterbugs-alternative))
+
+**Pick TraceBug when:** AI-agent debugging or local-first privacy is the point.
+
+## 3. Bird Eats Bug — when non-engineers do the reporting
+
+The friendliest capture flow for support and success teams: hit record, and the technical data rides along invisibly. Reports arrive as hosted links engineers can actually act on. Cloud-based, per-seat. ([Comparison →](/compare/bird-eats-bug-alternative))
+
+**Pick Bird when:** your reporters would never open DevTools and hosted links are how your org shares.
+
+## 4. Marker.io — when reporters are clients
+
+A different job entirely: website feedback from *clients* routed into your PM tool, with status flowing back to them automatically. Agencies live on this loop. It won't give a developer (or an agent) deep technical evidence — that's not its job. ([Comparison →](/compare/marker-io-alternative))
+
+**Pick Marker.io when:** agency + client review cycles describe your week.
+
+## 5. BugHerd — when feedback belongs pinned to the page
+
+Reporters click the broken element; the note pins to it; everything lands on a kanban board. Wonderfully simple for visual QA with guest reporters. Behavioral bugs — where the story is in the console and network — need a different tool. ([Comparison →](/compare/bugherd-alternative))
+
+**Pick BugHerd when:** the task board is your triage process.
+
+## 6. Userback — when bugs are one slice of all feedback
+
+A full feedback platform — surveys, feature requests, roadmaps, user portals — where bug capture is one feature among many. If you want a single system for everything users tell you, that breadth is the appeal; if you want developer-grade bug evidence, it's the compromise. ([Comparison →](/compare/userback-alternative))
+
+**Pick Userback when:** you're consolidating all user sentiment in one place.
+
+## The routing table
+
+- Reports end in a **hosted team workspace** → Jam or Bird Eats Bug
+- Reports come **from clients into your PM tool** → Marker.io or BugHerd
+- Reports live **next to feature requests and surveys** → Userback
+- Reports land **in front of a developer or AI agent with everything needed to fix them** → [TraceBug](https://tracebug.dev/try.html)
+
+Whichever you pick, insist on one thing: the report must let its reader reproduce the bug on the first try. That property — not the logo on the tool — is what gets bugs fixed.
+`.trim(),
+  },
 ];
 
 /** All posts, newest first. Async so a future backend swap is signature-compatible. */
