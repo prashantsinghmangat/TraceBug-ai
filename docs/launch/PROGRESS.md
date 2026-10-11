@@ -33,3 +33,20 @@ Newest entry at the bottom.
   2b (they throw a message pointing at settings). Options-page rendering in Firefox and the real migration on a
   live site are NOT automated - needs a manual pass. `tracebug-extension/manifest.json` (dev) still duplicates
   `manifest.base.json`; both were edited by hand here.
+
+## Phase 2a - verification pass before 2b (2026-10-11)
+- Real upgrade path automated instead of hand-tested: `e2e/ext-secret-migration.e2e.mjs` loads the **actual
+  1.10.1 build** (`git worktree add D:/tmp/tb-1101 v1.10.1`; 1.10.1 commits its built `tracebug-sdk.js`, so no
+  build step), has the OLD code write a fake GitHub PAT + Slack hook + AI key into page `localStorage` on two
+  origins (localhost and 127.0.0.1), then reloads the 1.11 build over the **same browser profile**.
+- 26/26 PASS: page keys gone on both origins; `tb_integrations_v1`/`tb_ai_config_v1` hold them; first origin's
+  token KEPT not overwritten; one notice naming `127.0.0.1` with no secret in it; `data-tb-caps` correct and
+  secret-free; no secret in `outerHTML`, any input `.value`, or page local/sessionStorage; options page renders,
+  shows Configured, surfaces the notice, prints no token.
+- Firefox: `options.js` uses only callback-style `chrome.storage.local` + `runtime.lastError` (FF 128 OK).
+  Playwright cannot install a WebExtension into Firefox, so the page was served from `dist/firefox` and driven
+  under Gecko 151 with a storage shim - renders, saves, pill flips to "Configured", no page errors, token not
+  echoed back. Remaining gap: nobody has opened the page via `about:addons` -> Preferences on a real install.
+- Open issues: `manifest.json`/`package.json` still say 1.10.1 (the 1.11.0 bump is a release step, not a bug).
+  PLAN.md amended - `data-tb-caps` residual accepted, Ollama custom `baseUrl` handed to Phase 1, real-DOM
+  no-token-in-page test added to Phase 8.

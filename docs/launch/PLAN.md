@@ -79,6 +79,10 @@ End Phase 0 with a proposed order of changes and any item that looks wrong.
 - If permission is declined, degrade gracefully: capture continues on the current page, with a clear notice that
   navigation will end the capture.
 - Drop `tabs` if Phase 0 showed it's replaceable. Otherwise leave it, and say which warning remains.
+- **Custom Ollama `baseUrl` (handed over by Phase 2b).** With `<all_urls>` declared optional, the settings page
+  can request that single origin instead of failing. Find the `TODO(phase-1)` left at the Ollama failure site,
+  replace the error with a per-origin `permissions.request()` from the save handler, and keep the clear error
+  for a decline.
 - Acceptance: a fresh install shows the smallest possible warning set. List the before and after warnings.
 - **Three checks before flipping the manifest** (first two already resolved in Phase 0 - do not re-investigate):
   1. **Static content scripts: already clean.** Neither manifest has a `content_scripts` key; `content-script.js`
@@ -130,6 +134,10 @@ script reads the token straight out of the DOM the moment the modal opens; no ke
   (`tracebug-init.js:17-49`) - booleans only, never a token. Render paths stay synchronous; only the send path
   is async, and it already is. In extension mode `getIntegrationsConfig()` / `getAIConfig()` must return no
   secret at all.
+  **Accepted residual (reviewed 2026-10-11, no further work):** a hostile page can flip the `data-tb-caps`
+  booleans, and can read which integrations the user has set up. Flipping them only changes which buttons the
+  in-page UI offers - the background worker re-reads the real config before any send (Phase 2b) - and the
+  "which integrations exist" leak is minor and accepted.
 - **Step 2 - entry forms move to an extension page.** Declare **`options_ui` with `open_in_tab: true`** (works
   in both Chrome and Firefox; `npm run ext:lint` will confirm) - **not** `options_page`. Add `options.html` +
   `options.js` to `SHARED_FILES` in `build/build-ext.mjs`. The in-page modal's config sections become a single
@@ -177,7 +185,11 @@ script reads the token straight out of the DOM the moment the modal opens; no ke
   - Ollama: **both** `http://localhost/*` **and** `http://127.0.0.1/*`. Chrome match patterns cannot contain a
     port and match any port, so `localhost/*` already covers Ollama's default `http://localhost:11434`
     (`src/ai/llm-client.ts:67`) - but `127.0.0.1` is a *different host* and needs its own pattern. `baseUrl` is
-    user-editable, so handle a custom host by failing with a clear message rather than silently.
+    user-editable. A custom host outside these patterns **fails with a clear message in 2b**, with a
+    `TODO(phase-1)` at the failure site. It does not have to stay a failure: once Phase 1 declares `<all_urls>`
+    as an optional host permission, the settings page can call `permissions.request()` for that one origin
+    (Chrome allows requesting a specific site when a declared optional pattern covers it), so the fixed six-host
+    list becomes a convenience rather than a limit. **Phase 1 must pick this up.**
   - With `https://hooks.slack.com/*` granted, the Slack POST can drop `mode: "no-cors"` and read a **real**
     response - this *resolves* Phase 6's Slack item rather than rewording it. Update Phase 6 accordingly.
 - **SDK-only (npm) mode keeps current behaviour** throughout 2a and 2b. Add a short doc note that SDK users
@@ -281,6 +293,12 @@ page in the extension and keep the remote page only as a link from it.**
   network and replay; navigation mid-capture survives; restricted-page message appears for `chrome://extensions`;
   `.html` export opens offline and contains the footer; redaction masks all three seeded values in every export
   format; diagnostics contain no URLs.
+- **No token anywhere in the page - the Phase 2a guarantee, tested in a real DOM.** Seed a GitHub PAT, a Linear
+  key, a Slack webhook and an AI key into extension storage, open the Quick Bug modal on a fixture page, and
+  assert none of those strings appears anywhere in the page: `document.documentElement.outerHTML`, every
+  `input`/`textarea` `.value` (not just the attribute), every open shadow root, and page `localStorage` /
+  `sessionStorage`. `tests/no-page-secret-fields.test.ts` only checks this at the unit level - this is the
+  real-browser version, and it is the test that would have caught the `value="${escapeHtml(...)}"` pre-fill.
 - Add a **golden report check**: export from a fixed fixture and compare structure (tabs present, event count
   range, redaction markers) with a stored snapshot.
 - Reuse the working harnesses rather than starting over: `e2e/ext-redaction.e2e.mjs:27-30` and
