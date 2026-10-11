@@ -26,13 +26,36 @@
     return undefined;
   }
 
-  // Initialize the SDK
+  // Which integrations are configured, published by the content script on
+  // <html data-tb-caps>. BOOLEANS ONLY — the tokens themselves live in
+  // chrome.storage.local and never reach the page. This lets the SDK render
+  // "configured / not configured" states synchronously without async getters.
+  function readIntegrationStatus() {
+    try {
+      var raw = document.documentElement.getAttribute("data-tb-caps");
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch (e) {}
+    return null;
+  }
+
+  function syncIntegrationStatus() {
+    if (window.TraceBugSDK && window.TraceBugSDK.setIntegrationStatus) {
+      window.TraceBugSDK.setIntegrationStatus(readIntegrationStatus());
+    }
+  }
+
+  // Initialize the SDK. `transport: "extension"` is the explicit declaration
+  // that secrets must not be kept in page storage — see src/ext-transport.ts.
   window.TraceBug.init({
     projectId: "tracebug-extension",
     enabled: "all",
     enableDashboard: true,
+    transport: "extension",
     redact: readRedactRules(),
   });
+  syncIntegrationStatus();
 
   // Rules edited in the popup mid-session reach the running SDK live: the
   // content script rewrites the attribute; we push it into the sanitizers.
@@ -45,10 +68,17 @@
     new MutationObserver(syncRedactRules)
       .observe(document.documentElement, { attributes: true, attributeFilter: ["data-tb-redact"] });
   } catch (e) {}
-  // The content script publishes the attribute from an ASYNC storage read,
-  // which can land between init() reading it and the observer attaching —
-  // one explicit sync now closes that gap.
+  // Same live-update bridge for the integration status: a token saved in the
+  // options page flips the badge in an already-running SDK without a reload.
+  try {
+    new MutationObserver(syncIntegrationStatus)
+      .observe(document.documentElement, { attributes: true, attributeFilter: ["data-tb-caps"] });
+  } catch (e) {}
+  // The content script publishes both attributes from ASYNC storage reads,
+  // which can land between init() reading them and the observers attaching —
+  // one explicit sync of each now closes that gap.
   syncRedactRules();
+  syncIntegrationStatus();
 
   console.info("[TraceBug Extension] Active on " + window.location.hostname);
 
@@ -73,7 +103,8 @@
   function ensureActive() {
     try {
       if (!document.getElementById("tracebug-root") && window.TraceBug && window.TraceBug.init) {
-        window.TraceBug.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true, redact: readRedactRules() });
+        window.TraceBug.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true, transport: "extension", redact: readRedactRules() });
+        syncIntegrationStatus();
       }
     } catch (e) {}
   }

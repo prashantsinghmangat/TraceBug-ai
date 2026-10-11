@@ -29,10 +29,13 @@ const base = JSON.parse(readFileSync(join(__dirname, "manifest.base.json"), "utf
 const SHARED_FILES = [
   "background.js",
   "content-script.js",
+  "secret-migration.js",
   "offscreen.js",
   "offscreen.html",
   "popup.js",
   "popup.html",
+  "options.js",
+  "options.html",
   "player.js",
   "player.html",
   "styles.css",

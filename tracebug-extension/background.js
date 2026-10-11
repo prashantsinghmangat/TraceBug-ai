@@ -114,7 +114,8 @@ async function injectSDK(tabId) {
     // Inject content script (message bridge between extension and page)
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["content-script.js"],
+      // secret-migration.js first: content-script.js calls its planner.
+      files: ["secret-migration.js", "content-script.js"],
     });
 
     // Inject SDK bundle into page context
@@ -293,6 +294,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ dataUrl });
       }
     });
+    return true;
+  }
+
+  // Open the extension's own settings (options) page. Content scripts cannot
+  // call openOptionsPage(), so the in-page "Open TraceBug settings" button
+  // relays through the content script to here. Secrets are entered only on
+  // that page — never in the host page's DOM (Phase 2).
+  if (message.type === "TB_OPEN_OPTIONS") {
+    try {
+      chrome.runtime.openOptionsPage();
+    } catch {
+      // Fallback for builds/browsers where openOptionsPage is unavailable.
+      try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html") }); } catch {}
+    }
+    sendResponse({ ok: true });
     return true;
   }
 

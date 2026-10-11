@@ -63,6 +63,7 @@ import {
   clearNetworkFailures,
 } from "./collectors";
 import { setRedactRules } from "./sanitize/custom-redaction";
+import { setTransportMode } from "./ext-transport";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
@@ -168,6 +169,10 @@ export { getNetworkFailures } from "./collectors";
 export type { NetworkFailure } from "./collectors";
 export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint, RedactRules } from "./types";
 export { setRedactRules } from "./sanitize/custom-redaction";
+// Extension-mode bridge: tracebug-init.js pushes the non-secret integration
+// status snapshot in through setIntegrationStatus (booleans only).
+export { setTransportMode, isExtensionMode, setIntegrationStatus, getIntegrationStatus } from "./ext-transport";
+export type { TransportMode, IntegrationStatus } from "./ext-transport";
 export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
 export { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT } from "./exporters/ai-prompt";
@@ -284,6 +289,11 @@ class TraceBugSDK {
         captureConsole: "all",
         ...config,
       };
+
+      // Declare the transport before anything reads config state: in extension
+      // mode the secret getters must already be returning nothing by the time
+      // any UI renders. See src/ext-transport.ts.
+      setTransportMode(this.config.transport);
 
       // Install app-specific redaction rules before any collector attaches —
       // rules must be live for the first captured event.

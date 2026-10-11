@@ -106,6 +106,20 @@ export interface TraceBugConfig {
    * hidden iframe bridge.
    */
   cloudEndpoint?: string;
+
+  /**
+   * How the SDK was loaded. Default: "page" (the npm SDK, embedded by the app).
+   *
+   * "extension" is declared only by the browser extension's injector
+   * (`tracebug-init.js`) and changes where secrets live: integration tokens and
+   * the AI key are kept in `chrome.storage.local` and provider calls are made by
+   * the background service worker, because in extension mode the SDK runs in
+   * the host page's main world where the site under test could read them.
+   *
+   * Declared explicitly rather than inferred — `projectId` is user-settable and
+   * page-side feature detection can be faked by a hostile page.
+   */
+  transport?: "page" | "extension";
 }
 
 /**

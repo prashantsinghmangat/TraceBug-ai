@@ -1,8 +1,11 @@
 // ── BYO-token issue-tracker integrations ──────────────────────────────────
 // Creates a REAL issue/message in the user's tracker using the USER'S OWN
 // token — GitHub (PAT), Linear (API key), or Slack (incoming webhook). The
-// call goes directly from the browser to the provider; the token lives only in
-// localStorage and never touches a TraceBug backend.
+// call goes directly from the browser to the provider and never touches a
+// TraceBug backend. In SDK (npm) mode the token lives in the app page's own
+// localStorage; in EXTENSION mode it lives in chrome.storage.local and the
+// background service worker makes the call, because the SDK runs in the host
+// page's main world where the site under test could read it.
 //
 // This is the same privacy-preserving pattern as the BYO-key AI Debugger
 // (src/ai/llm-client.ts): no OAuth, no client secret, no cloud in the path.
@@ -19,6 +22,7 @@ import type { BugReport } from "../types";
 import { generateGitHubIssue } from "../github-issue";
 import { generateSlackPost } from "../slack-export";
 import { severityTitlePrefix } from "../report-builder";
+import { isExtensionMode, getIntegrationStatus } from "../ext-transport";
 
 export type TrackerProvider = "github" | "linear" | "slack";
 
@@ -66,11 +70,20 @@ export const TRACKER_LABELS: Record<TrackerProvider, string> = {
   slack: "Slack",
 };
 
-const STORAGE_KEY = "tracebug_integrations";
+export const STORAGE_KEY = "tracebug_integrations";
 
-// ── Config store (localStorage only — never leaves the browser) ───────────
+// ── Config store ──────────────────────────────────────────────────────────
+// SDK (npm) mode: page localStorage, as before — the page is the app's own.
+// EXTENSION mode: the SDK runs in the host page's main world, so tokens live in
+// chrome.storage.local and are never handed to this module. Every accessor
+// below returns empty / refuses, and `hasIntegration` answers from the
+// non-secret boolean snapshot the content script pushes in. See
+// src/ext-transport.ts and docs/launch/PLAN.md Phase 2.
 
 export function getIntegrationsConfig(): IntegrationsConfig {
+  // Never surface a token to page-world code in extension mode. The background
+  // service worker reads the real config out of chrome.storage.local itself.
+  if (isExtensionMode()) return {};
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw) as IntegrationsConfig;
@@ -79,19 +92,43 @@ export function getIntegrationsConfig(): IntegrationsConfig {
 }
 
 export function setIntegrationsConfig(config: IntegrationsConfig): void {
+  // In extension mode tokens are entered in the extension's own options page,
+  // which writes chrome.storage.local directly. Writing them here would put the
+  // secret back into the host page's storage — the exact leak Phase 2 closes.
+  if (isExtensionMode()) {
+    console.warn("[TraceBug] Configure integrations in TraceBug settings — tokens are not stored on the page.");
+    return;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
   } catch { /* ignore quota/permission errors */ }
 }
 
 export function clearIntegrationsConfig(): void {
+  if (isExtensionMode()) {
+    console.warn("[TraceBug] Clear integrations in TraceBug settings.");
+    return;
+  }
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch { /* ignore */ }
 }
 
-/** True when the given provider has enough config to make a real API call. */
+/**
+ * True when the given provider has enough config to make a real API call.
+ * Stays SYNCHRONOUS in both modes — extension mode answers from the pushed
+ * boolean snapshot, so render paths never have to await storage.
+ */
 export function hasIntegration(provider: TrackerProvider): boolean {
+  if (isExtensionMode()) {
+    const s = getIntegrationStatus();
+    switch (provider) {
+      case "github": return s.github;
+      case "linear": return s.linear;
+      case "slack": return s.slack;
+      default: return false;
+    }
+  }
   const c = getIntegrationsConfig();
   switch (provider) {
     case "github": return !!(c.github?.token && c.github?.repo);
@@ -243,6 +280,15 @@ export async function createTrackerIssue(
   report: BugReport,
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
+  // Extension mode: tokens are deliberately unreachable from the page world,
+  // so this call cannot be made here. The background service worker owns it
+  // (Phase 2b, with per-send confirmation) — until then, fail with a message
+  // that tells the user where the token now lives.
+  if (isExtensionMode()) {
+    throw new Error(
+      `${TRACKER_LABELS[provider] || provider} is sent from the extension — open TraceBug settings to configure it.`,
+    );
+  }
   const c = getIntegrationsConfig();
   switch (provider) {
     case "github":
