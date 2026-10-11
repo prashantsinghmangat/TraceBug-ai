@@ -50,6 +50,7 @@ the launch posts go out is not data.
 | Week of | Chrome | Firefox | Stars | npm sdk | npm cli | CWS weekly users | ?ref= hits (top source) | Notes |
 |---|---|---|---|---|---|---|---|---|
 | 2026-07-29 (launch baseline) | in review | in review | | | | — | — | v1.10.1: npm live (sdk+cli), GitHub release live, AMO + CWS submitted, website deployed |
+| 2026-08-03 | 12 | 2 | 2 | 28 | 37 | 12 | not checked | Both stores now LIVE (CWS approved; AMO approved ~08-01). npm week = 8/1–8/7 (last 2 days lag); launch-day spike (121/129 on 7/29) is mostly registry-mirror bots. 0 reviews, 0 external issues, 0 quotes — launch posts not out yet, so silence isn't data yet. |
 
 ## Top 10 user complaints (ranked, refreshed weekly)
 

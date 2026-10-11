@@ -80,26 +80,108 @@ End Phase 0 with a proposed order of changes and any item that looks wrong.
   navigation will end the capture.
 - Drop `tabs` if Phase 0 showed it's replaceable. Otherwise leave it, and say which warning remains.
 - Acceptance: a fresh install shows the smallest possible warning set. List the before and after warnings.
+- **Three checks before flipping the manifest** (first two already resolved in Phase 0 - do not re-investigate):
+  1. **Static content scripts: already clean.** Neither manifest has a `content_scripts` key; `content-script.js`
+     is injected on demand via `chrome.scripting.executeScript` (`background.js:115`). Nothing to move.
+  2. **Keyboard shortcut: not a browser shortcut at all.** There is no `commands` key in either manifest and no
+     `chrome.commands.onCommand` listener. `Ctrl/Cmd+Shift+B` is a **page-level keydown handler inside the
+     injected SDK** (`src/dashboard.ts:177-187`), so it only works once the SDK is already on the page, and it
+     cannot call `permissions.request()` (that requires a user gesture in an *extension* page). Leave it as a
+     post-injection shortcut; do not route it through the background worker. This also means the Phase 4
+     welcome-page copy about the shortcut is misleading - see Phase 4.
+  3. **Existing users keep their grant - verify, don't assume.** Moving an origin from `host_permissions` to
+     `optional_host_permissions` should preserve an already-granted `<all_urls>` across update, but this must be
+     tested, not assumed: install the previous store build, grant access, then load the new build and confirm
+     cross-navigation capture still works without a re-prompt. This is the upgrade row on the release checklist
+     (Phase 8).
 - **Firefox check (this phase touches the manifest):** run `npm run build:ext`, then `npm run ext:lint`
   (web-ext lint on `tracebug-extension/dist/firefox`) and `npm run ext:firefox` to confirm the add-on still
   loads. Report any web-ext warning, even a pre-existing one.
 
-## Phase 2 - Secrets and saved tickets out of the host page (audit fixes #3, #4)
+## Phase 2 - Secrets out of the host page (audit fix #3)
 
-- In **extension mode**, store integration tokens, the AI provider key and config, and redaction rules in
-  `chrome.storage.local` (rules may stay in `chrome.storage.sync` if already there). Never store them in page
-  `localStorage`.
-- Make the provider API calls (GitHub, Linear, Slack webhook, Anthropic, OpenAI, Ollama) from the **background
-  service worker**, via a message from the content script. The page-world SDK must never receive the raw secret.
-- One-time migration: if an old key exists in a page's `localStorage` under `tracebug_integrations` or
-  `tracebug_ai_config`, move it into extension storage and delete it from the page.
-- In extension mode, also mirror **saved tickets** to `chrome.storage.local` (the extension has
-  `unlimitedStorage`). **View tickets** then shows tickets from all sites, grouped by origin. Keep the storage
-  invariants: verify the write before showing "Saved", never evict saved tickets, warn before degradation.
-- SDK-only (npm) mode keeps current behaviour. Add a short doc note that SDK users should only configure tokens
-  in dev builds.
-- Acceptance: tests showing (a) page JS cannot read the token in extension mode, (b) the migration works,
-  (c) tickets saved on origin A are visible from origin B and survive clearing site data for A.
+**Do this phase first** (see the Phase 0 ordering). Plan approved 2026-10-11 with amendments; **split into 2a
+and 2b**, each its own commit. The saved-ticket mirror (audit #4) is **deferred to 1.11.1** - tickets in page
+storage are the site's own data, a nuisance rather than a leak, and it should not hold the submission date.
+
+**In extension mode, secrets never enter the page world - not at rest, not in fetch, and not at entry.**
+Phase 0 found two exposure paths (storage at rest; `fetch()` running in the page's MAIN world). There is a
+**third and faster one**: the integration and AI-key forms are drawn by the SDK *inside the host page* AND
+pre-filled with the stored secret as a DOM attribute - `value="${escapeHtml(existing?.apiKey)}"` at
+`src/ui/quick-bug.ts:2584` (AI key), `:2667` (GitHub PAT), `:2676` (Linear), `:2683` (Slack webhook). A page
+script reads the token straight out of the DOM the moment the modal opens; no keystroke listener needed.
+
+> **Not shippable alone:** once secrets leave page `localStorage` in 2a, the page-world send path cannot reach
+> them, so GitHub/Linear/Slack/LLM sending is **broken in extension mode until 2b lands**. Both must ship in
+> 1.11.0. Do not submit between them.
+
+### Phase 2a - storage, entry point, migration
+
+- **Step 0 - extension-mode signal (gates everything).** There is **no extension-mode detection in the SDK
+  today** (grep `tracebug-extension` in `src/` returns nothing). `tracebug-extension/tracebug-init.js:30`
+  already calls `TraceBug.init({...})` - pass an explicit `transport: "extension"` there and thread it into a
+  module-level `isExtensionMode()`. Do **not** infer it from `projectId` (user-settable) or feature-detect it
+  from the page (a hostile page can fake either).
+- **Step 1 - at rest.** Integration tokens and the AI provider key/config move to `chrome.storage.local`
+  (`tb_integrations_v1`, `tb_ai_config_v1`). Redaction rules are already in `chrome.storage.sync` - leave them.
+  **Do not make the getters async.** The SDK only ever needs to know *whether* each integration is configured:
+  the content script pushes a non-secret yes/no snapshot into the page at init and again on
+  `chrome.storage.onChanged`, following the existing `<html data-tb-redact>` precedent
+  (`tracebug-init.js:17-49`) - booleans only, never a token. Render paths stay synchronous; only the send path
+  is async, and it already is. In extension mode `getIntegrationsConfig()` / `getAIConfig()` must return no
+  secret at all.
+- **Step 2 - entry forms move to an extension page.** Declare **`options_ui` with `open_in_tab: true`** (works
+  in both Chrome and Firefox; `npm run ext:lint` will confirm) - **not** `options_page`. Add `options.html` +
+  `options.js` to `SHARED_FILES` in `build/build-ext.mjs`. The in-page modal's config sections become a single
+  "Configure in TraceBug settings" button; **content scripts cannot call `chrome.runtime.openOptionsPage()`**,
+  so the button messages the background worker and the worker opens the page.
+- **Step 6 - lazy migration.** When the content script next runs on an origin holding
+  `tracebug_integrations` / `tracebug_ai_config` (incl. legacy `tracebug_ai_key`, `src/ai/llm-client.ts:41`),
+  move it into extension storage and `removeItem` it. Do not enumerate origins up front - that would mean
+  reading every site. **If extension storage already holds a config, keep it and discard the page copy, then
+  surface a one-time notice in the options page:** "Removed an older token found on &lt;site&gt;. Re-enter it if
+  you still need it." Users may have saved different tokens per site, so a silent discard loses work.
+- **Token rotation (changelog + store "What's new"):** add the line "If you configured GitHub, Linear, Slack or
+  an AI key before 1.11, revoke and re-create it." These tokens sat where any script on those sites could read
+  them.
+- **Tests:** no token in page `localStorage` **or in the modal DOM** in extension mode; migration moves and
+  deletes the keys (and notifies on discard); SDK mode unchanged.
+
+### Phase 2b - the bridge, per-send confirmation, optional permissions
+
+- **Step 3 - provider calls from the service worker.** Reuse the existing page->SW RPC bridge
+  (`content-script.js:217-245`). **The bridge is the part to get right.** Its allowlist at
+  `content-script.js:213-215` carries a security comment for a reason: the page controls `e.detail`, so any verb
+  added becomes callable by *any script on the page*. A hostile page could not read the token but could **use**
+  it - filing issues in the user's repo or posting to their Slack. Therefore:
+  - The page sends **only the report payload** - never a destination, URL, or provider setting. The background
+    worker resolves provider config itself, verifies the message came from its own content script, and caps
+    payload size.
+  - **GitHub / Linear / Slack: confirm every send** in an extension-owned window opened by the background
+    worker, showing provider, destination (repo / team / channel) and a preview of title and body, with a Send
+    button. One extra click is acceptable for something done a few times a day, and it shows the user exactly
+    what leaves the browser. (First-send-per-session is **not** enough: after one approval a hostile page could
+    spam for the rest of the session, and "session" is vague anyway because the service worker restarts.)
+  - **LLM analysis: confirm first use per site**, then allow ~10 requests/minute, so a page cannot burn the
+    user's API credits.
+- **Step 4 - payload size.** The ~10 MB `sendMessage` limit is already solved in-repo: `_viaStorage` +
+  `reattachDataUrl` (`content-script.js:238-243`) writes large blobs to `chrome.storage.local` and passes a
+  reference. Reuse it, strip video from provider payloads (no tracker API takes an inline video), and **clear
+  the `_viaStorage` blob as soon as the send finishes** - a store reviewer will look for exactly that.
+- **Step 5 - optional host permissions (approved; these only, no new required permissions).** Add to
+  `optional_host_permissions` in `build/manifest.base.json`, requested from the options page's save handler for
+  that provider only. Optional permissions add **no install warning** and do not disable the extension for
+  existing users.
+  - GitHub `https://api.github.com/*` · Linear `https://api.linear.app/*` · Slack `https://hooks.slack.com/*`
+  - OpenAI `https://api.openai.com/*` · Anthropic `https://api.anthropic.com/*`
+  - Ollama: **both** `http://localhost/*` **and** `http://127.0.0.1/*`. Chrome match patterns cannot contain a
+    port and match any port, so `localhost/*` already covers Ollama's default `http://localhost:11434`
+    (`src/ai/llm-client.ts:67`) - but `127.0.0.1` is a *different host* and needs its own pattern. `baseUrl` is
+    user-editable, so handle a custom host by failing with a clear message rather than silently.
+  - With `https://hooks.slack.com/*` granted, the Slack POST can drop `mode: "no-cors"` and read a **real**
+    response - this *resolves* Phase 6's Slack item rather than rewording it. Update Phase 6 accordingly.
+- **SDK-only (npm) mode keeps current behaviour** throughout 2a and 2b. Add a short doc note that SDK users
+  should only configure tokens in dev builds.
 
 ## Phase 3 - Restricted pages, orphaned tabs, updates (audit fixes #5, #6)
 
@@ -119,11 +201,19 @@ End Phase 0 with a proposed order of changes and any item that looks wrong.
 
 ## Phase 4 - First run and the first capture (audit fixes #7, #8)
 
+There is already an `onInstalled` handler (`background.js:11-15`) but it opens the **remote**
+`https://tracebug.dev/try.html?welcome=extension`, so first run depends on the network. **Bundle the welcome
+page in the extension and keep the remote page only as a link from it.**
+
 - On `runtime.onInstalled` with `reason === "install"`, open a bundled welcome page (`welcome.html` inside the
-  extension; no remote assets). It includes:
+  extension; no remote assets - add it to `SHARED_FILES` in `build/build-ext.mjs`). It includes:
   1. Pin TraceBug to the toolbar (with an image).
-  2. A **Try it now** button that opens `https://tracebug.dev/try.html` (a deliberately broken demo).
-  3. The `Ctrl+Shift+B` / `Cmd+Shift+B` shortcut.
+  2. A **Try it now** button that opens `https://tracebug.dev/try.html` (a deliberately broken demo) - now a
+     link *from* the bundled page, not the landing page itself.
+  3. The `Ctrl+Shift+B` / `Cmd+Shift+B` shortcut - **but state it accurately.** Phase 0 found it is a page-level
+     handler inside the injected SDK (`src/dashboard.ts:177-187`), not a browser command: it does nothing until
+     TraceBug is loaded on the tab via the popup. Either say so ("once TraceBug is running on a tab"), or
+     register a real `commands` entry - which needs my approval first, since that is a manifest addition.
   4. A plain-language privacy box: what's captured, that nothing goes to TraceBug, and that you choose what goes
      to GitHub, Slack or your LLM.
   5. A small "Rolling this out to a team?" link to `https://tracebug.dev/teams`.
@@ -161,8 +251,11 @@ End Phase 0 with a proposed order of changes and any item that looks wrong.
 
 - **Large exports:** before export, show the estimated file size. Above 20 MB, warn that GitHub attachments cap
   at 25 MB, and offer "DOM replay only (no video)" or `.zip`.
-- **Slack:** because webhook responses are CORS-opaque, change the success toast to "Sent to Slack (Slack doesn't
-  confirm delivery)".
+- **Slack:** **check what Phase 2b landed first.** If the `https://hooks.slack.com/*` optional permission is
+  granted, the POST can drop `mode: "no-cors"` and read a real response - report real success/failure instead of
+  rewording. Only when the permission is *not* granted does the honest-caveat copy apply: "Sent to Slack (Slack
+  doesn't confirm delivery)". Note `tracker-client.ts:232` already returns `opaque: true` and the UI ignores it
+  (`src/ui/quick-bug.ts:1884` shows a bare "✓ Sent to Slack") - so both branches are a small change.
 - **Jira:** rename the button to "Copy for Jira" wherever it implies filing.
 - **Strict-CSP and canvas/WebGL pages:** detect a heavy canvas or a CSP that blocks the inline pieces, and show a
   one-line notice recommending video capture.
@@ -190,7 +283,19 @@ End Phase 0 with a proposed order of changes and any item that looks wrong.
   format; diagnostics contain no URLs.
 - Add a **golden report check**: export from a fixed fixture and compare structure (tabs present, event count
   range, redaction markers) with a stored snapshot.
-- Add a GitHub Actions workflow: run the smoke test on push, plus a nightly run against **Chrome Beta**.
+- Reuse the working harnesses rather than starting over: `e2e/ext-redaction.e2e.mjs:27-30` and
+  `e2e/ext-player-csp.e2e.mjs:27-30` already load the unpacked extension. Before reusing them, fix the
+  hardcoded `D:/Project/TraceBug-ai/...` paths and note they are plain `node` scripts, not Playwright specs
+  (`playwright.config.ts` `testDir: "./e2e"` only matches `*.spec.ts`). The smoke spec needs its **own
+  Playwright project** - the default config sets `channel: "chrome"` and attaches the TraceBug reporter, and
+  `e2e/demo-failure.spec.ts` fails on purpose.
+- Add a GitHub Actions workflow: run the smoke test on push, plus a nightly run against a beta channel.
+  **Caveat (Phase 0, item 10):** branded Chrome 137+ silently ignores `--load-extension`, so the nightly cannot
+  use branded Chrome Beta. **First verify** whether Chrome for Testing's beta channel still accepts the flag
+  (`npx @puppeteer/browsers install chrome@beta`, then point `executablePath` at it and assert the extension's
+  service worker actually registers). If it does, run the nightly there. If it does not, run the nightly on
+  bundled Chromium only and move Chrome Beta to a manual row on the release checklist. Report which applies -
+  do not assume it works.
 - Write `docs/RELEASE_CHECKLIST.md` with the manual items that can't be automated: upgrade from the previous
   store version with saved tickets and keys surviving, macOS screen-recording permission, Edge, Brave, Firefox
   128 ESR + latest, real GitHub/Linear/Slack test targets, MCP `npx tracebug mcp --dir` listing the new report.

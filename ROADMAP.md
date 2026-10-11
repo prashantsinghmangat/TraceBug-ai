@@ -6,8 +6,28 @@ comments, GitHub issues). Suggest items via
 [issues](https://github.com/prashantsinghmangat/tracebug-ai/issues) or the
 [feedback page](https://tracebug.dev/feedback).
 
+_Current release: **1.10.1** (2026-07-29) — live on the Chrome Web Store and
+on addons.mozilla.org (since 2026-08-01), npm (`tracebug-sdk`, `tracebug`),
+and GitHub Releases._
+
 ## ✅ Shipped
 
+- **1.10.1 — store-readiness release** (2026-07): permission minimization
+  (dropped the unused `tabs` permission), an allowlisted page↔extension
+  bridge, and four extension-lifecycle fixes (service-worker hydration race,
+  Firefox recorder-window id across event-page restarts, recorder host
+  teardown, `minimum_chrome_version: 116`).
+- **1.10.0 — the Firefox release** (2026-07): the extension builds for
+  Firefox 128+ from the same source as Chrome, with honest handling of every
+  platform difference (gesture-gated screen picker, opt-in site access, no
+  tab audio). Also made **saved tickets eviction-proof** — saved tickets live
+  until explicitly deleted, with a storage meter, per-ticket sizes, one-click
+  export, and a ~90% usage warning.
+- **1.9.0 — the fix-loop release** (2026-07): generated failing Playwright
+  spec embedded in every export + `get_playwright_test`, source-map stack
+  resolution (`resolve_stack`), `get_fix_context`, inspect mode (computed-style
+  evidence), pre-recording options (surface/countdown/blur-before-recording
+  with click-to-blur), and the redaction-rules popup UI.
 - **1.8.0 — launch-feedback release** (2026-07): visible redaction summary
   (`🛡 N sensitive values auto-masked`), configurable `redact` rules,
   `console.info` capture + warn/info in the repro timeline, `.zip` export
@@ -17,31 +37,23 @@ comments, GitHub issues). Suggest items via
 - **1.5–1.6**: local MCP server, Playwright reporter, BYO-key AI debugger,
   HAR export.
 
-## 🔄 In progress (built & verified, releasing as 1.9)
+## 🔄 Now
 
-The **fix-loop release** — the report stops being evidence an agent reads
-and becomes something it iterates against:
+Engineering is paused on purpose. 1.10.1 is live on both stores, so the work
+is **distribution and evidence** — finding out what real users hit before
+building more. Feature work resumes when user evidence points at something
+specific. Progress is tracked in [METRICS.md](METRICS.md).
 
-- Generated **failing Playwright test** embedded in every export (red until
-  the bug is fixed) + `get_playwright_test` MCP tool
-- **Source-map stack resolution** (`resolve_stack`) — minified frames →
-  original source, dependency-free
-- **`get_fix_context`** — one-call fix starter for agents
-- **Inspect mode** — click an element to attach computed-style evidence
-  (typography, colors, box model, WCAG contrast) for design-QA bugs
-- **Pre-recording options** — tab/desktop surface, countdown, and
-  blur-before-recording with element-level click-to-blur
-- Extension popup UI for redaction rules
+## 🗓 Next milestone — 2.0
 
-## 🗓 Planned (next few releases)
-
+- **IndexedDB storage migration** — the one engineering item already decided.
+  The gate is real: saved tickets live in `localStorage` today, and
+  storage-pressure incidents are counted locally
+  (`TraceBug.getStorageStats()`, never transmitted) to say when the migration
+  is actually needed.
 - **JSON-path precision redaction** (`user.email` vs every `email` key) —
-  gated on user feedback confirming substring matching isn't enough
-- **Chrome Web Store listing refresh** with current-build screenshots
-- **Bundle-size + Lighthouse checks in CI** — budgets enforced per PR
-- **Firefox extension** — port is paused with the shared build in place
-  (`dist/firefox` builds today); the remaining work is recording parity
-  without Chrome's offscreen API. Prioritized when demand shows up.
+  gated on user feedback confirming substring matching isn't enough.
+- **Bundle-size + Lighthouse checks in CI** — budgets enforced per PR.
 
 ## 🔭 Long-term direction
 

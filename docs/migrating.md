@@ -4,7 +4,32 @@ TraceBug follows semver for the public SDK API. There have been **no
 breaking API changes** through 1.x — upgrades are `npm install
 tracebug-sdk@latest` plus awareness of the behavior changes below.
 
-## 1.8 → 1.9 (upcoming)
+## 1.9 → 1.10
+
+No breaking changes.
+
+- **Saved tickets are now permanent.** Tickets saved with **Save Ticket**
+  survive storage-pressure eviction and session rotation — only unsaved
+  sessions are ever reclaimed. A save is verified before "Saved" is shown; if
+  the screenshot had to be dropped to fit, the ticket card says so. If you
+  relied on saved tickets aging out on their own, delete them explicitly.
+- A storage warning now fires at ~90% usage, and the Saved Tickets list is
+  un-capped (scrollable) with per-ticket sizes, a storage meter, one-click
+  **Export** (.html replay), and a two-click delete confirm.
+- New public API: `TraceBug.getStorageStats()` — local-only counters
+  (including storage-pressure incidents), never transmitted.
+- **Extension users:** the extension ships for Firefox 128+ from the same
+  source as Chrome. Firefox has no offscreen API, so the recorder runs in a
+  small popup window and shows a **Share screen** button (its
+  `getDisplayMedia` requires a gesture in that document); Chrome's invisible
+  flow is unchanged. Firefox treats site access as opt-in, so the first
+  capture requests host permission.
+- **1.10.1 (extension only):** the `tabs` permission was removed — reinstalls
+  no longer show the "Read your browsing history" warning — and
+  `minimum_chrome_version: 116` is declared, so Chrome ≤108 no longer
+  installs the extension and silently fails to record. No SDK API change.
+
+## 1.8 → 1.9
 
 No breaking changes. New surface you may want to adopt:
 

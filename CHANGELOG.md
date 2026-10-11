@@ -2,6 +2,21 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased] - 1.11.0
+
+> Launch-readiness release. Phase 2a: integration tokens and the AI key move out of the websites you test and into the extension's own storage.
+
+### Security
+
+- **⚠️ Rotate your tokens.** If you configured GitHub, Linear, Slack or an AI key before 1.11, **revoke and re-create it**, then enter the new one in TraceBug settings. Earlier versions stored these in each website's own `localStorage`, where any script on that site could read them.
+- **Tokens and API keys are no longer stored on the pages you test** (`src/ext-transport.ts`, `src/integrations/tracker-client.ts`, `src/ai/llm-client.ts`) — in extension mode they live in `chrome.storage.local`. The extension's SDK runs in the host page's main world, so page `localStorage` was readable by the site under test. The page-world code now never receives a secret: the getters return nothing in extension mode, and "is GitHub configured?" is answered from a non-secret boolean snapshot the content script pushes in, so nothing had to become async.
+- **Secrets are no longer typed into the page either** (`tracebug-extension/options.html`, `options.js`) — there is a new **TraceBug settings** page (`options_ui`, opens in a tab, Chrome + Firefox). The old in-page forms both collected tokens inside the host page's DOM *and* pre-filled them as attribute values, so a page script could read a stored token the moment the modal opened. The in-page modal now links to settings instead. Saved values are never echoed back into a field — the page shows a "Configured" pill.
+- **Old page-stored keys are migrated automatically** (`tracebug-extension/secret-migration.js`) — when TraceBug next runs on a site that still holds `tracebug_integrations` / `tracebug_ai_config` (or the legacy `tracebug_ai_key`), they are moved into extension storage and deleted from the site. If extension storage already holds a config, the existing one is kept and settings shows a one-time notice naming the site whose older token was dropped, so nothing disappears silently.
+
+### Known limitation in this build
+
+- Sending to GitHub, Linear and Slack, and AI analysis, are **unavailable in extension mode until Phase 2b** lands the background-worker send path with per-send confirmation. They fail with a message pointing at settings rather than silently doing nothing. SDK (npm) mode is unaffected.
+
 ## [1.10.1] - 2026-07-29
 
 > Store-readiness release: fixes from a Chrome Web Store-style review — permission minimization, a hardened page↔extension bridge, and four real extension-lifecycle bugs the happy path had been hiding.

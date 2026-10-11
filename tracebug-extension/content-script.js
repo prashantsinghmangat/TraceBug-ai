@@ -133,6 +133,133 @@ safeRun(function () {
   } catch (e) {}
 });
 
+// ── Integration status hand-off (NON-SECRET) ────────────────────────────────
+// Phase 2: integration tokens and the AI key live in chrome.storage.local, NOT
+// in the host page, because the page-world SDK shares storage with the site
+// under test. But the SDK still renders "GitHub is configured" states
+// synchronously, so we publish a BOOLEAN-ONLY snapshot on <html data-tb-caps>
+// — same bridge shape as data-tb-redact above. Never publish a token here: the
+// attribute is readable by every script on the page.
+var TB_INT_KEY = "tb_integrations_v1";
+var TB_AI_KEY = "tb_ai_config_v1";
+
+safeRun(function () {
+  if (!isExtAlive() || !document.documentElement) return;
+
+  function toStatus(integrations, ai) {
+    var i = integrations || {};
+    var a = ai || null;
+    return {
+      github: !!(i.github && i.github.token && i.github.repo),
+      linear: !!(i.linear && i.linear.apiKey && i.linear.teamId),
+      slack: !!(i.slack && i.slack.webhookUrl),
+      // Ollama is local and needs no key, so "configured" means a provider is
+      // chosen and either it's ollama or a key is present.
+      ai: !!(a && a.provider && (a.provider === "ollama" || a.apiKey)),
+    };
+  }
+
+  function publishStatus(status) {
+    try {
+      document.documentElement.setAttribute("data-tb-caps", JSON.stringify(status));
+    } catch (e) {}
+  }
+
+  function readAndPublish() {
+    try {
+      chrome.storage.local.get([TB_INT_KEY, TB_AI_KEY], function (r) {
+        var _ = chrome.runtime.lastError;
+        publishStatus(toStatus(r && r[TB_INT_KEY], r && r[TB_AI_KEY]));
+      });
+    } catch (e) {}
+  }
+
+  readAndPublish();
+
+  // Live updates: a token saved in the options page reaches an already-running
+  // SDK without a reload (tracebug-init.js observes the attribute).
+  try {
+    chrome.storage.onChanged.addListener(function (changes, area) {
+      if (area === "local" && (changes[TB_INT_KEY] || changes[TB_AI_KEY])) readAndPublish();
+    });
+  } catch (e) {}
+});
+
+// ── One-time migration of page-stored secrets ───────────────────────────────
+// Before 1.11 the SDK wrote tokens into the HOST PAGE's localStorage, where any
+// script on that site could read them. Migration is lazy: whenever this script
+// runs on an origin that still holds them, move them into extension storage and
+// delete the page copy. The decision (including the keep-existing conflict rule
+// and the user notice) lives in secret-migration.js so it can be unit-tested;
+// this block is only the I/O.
+safeRun(function () {
+  if (!isExtAlive()) return;
+
+  var M = globalThis.TraceBugSecretMigration;
+  if (!M) return; // secret-migration.js failed to inject — skip, never guess
+
+  var LEGACY_INT = "tracebug_integrations";
+  var LEGACY_AI = "tracebug_ai_config";
+  var LEGACY_AI_BARE = "tracebug_ai_key";
+
+  function readPage(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function dropPage(key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+  }
+
+  var pageInt = readPage(LEGACY_INT);
+  var pageAi = readPage(LEGACY_AI);
+  var pageAiLegacy = null;
+  try {
+    var bare = localStorage.getItem(LEGACY_AI_BARE);
+    if (bare) pageAiLegacy = { provider: "anthropic", apiKey: bare, model: "" };
+  } catch (e) {}
+
+  if (!pageInt && !pageAi && !pageAiLegacy) return;
+
+  var site = "this site";
+  try { site = location.hostname || "this site"; } catch (e) {}
+
+  try {
+    chrome.storage.local.get([M.INT_KEY, M.AI_KEY, M.NOTICE_KEY], function (stored) {
+      var _ = chrome.runtime.lastError;
+      var plan = M.planSecretMigration(pageInt, pageAi, pageAiLegacy, stored || {}, site);
+
+      // Delete the page copy only AFTER the write resolves, so a failed write
+      // can never destroy the user's only copy of a token.
+      var finish = function () {
+        if (!plan.removeFromPage) return;
+        if (pageInt) dropPage(LEGACY_INT);
+        if (pageAi) dropPage(LEGACY_AI);
+        if (pageAiLegacy) dropPage(LEGACY_AI_BARE);
+      };
+
+      if (Object.keys(plan.writes).length) {
+        chrome.storage.local.set(plan.writes, function () {
+          if (!chrome.runtime.lastError) finish();
+        });
+      } else {
+        // Nothing to write: extension storage already had everything, so the
+        // page copies are purely redundant and must still go.
+        finish();
+      }
+    });
+  } catch (e) {}
+});
+
+// ── Open the extension's settings (options) page ────────────────────────────
+// Content scripts cannot call chrome.runtime.openOptionsPage(), so the
+// page-world "Open TraceBug settings" button dispatches this event and the
+// background worker opens the page.
+window.addEventListener("tracebug-open-settings", () => safeRun(() => {
+  safeSendMessage({ type: "TB_OPEN_OPTIONS" }, function () {});
+}));
+
 // ── Listen for SDK requesting a screenshot (toolbar camera button) ──────────
 // The SDK dispatches this event when it detects it's in an extension context.
 // We route it to background.js which calls chrome.tabs.captureVisibleTab,

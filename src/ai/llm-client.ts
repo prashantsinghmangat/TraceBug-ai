@@ -1,8 +1,11 @@
 // ── BYO-key LLM analysis ──────────────────────────────────────────────────
 // Runs LLM-powered root-cause analysis on a bug report using the USER'S OWN
 // API key — Anthropic, OpenAI, or a local Ollama. The call goes directly from
-// the browser to the provider; the key lives only in localStorage and the
-// report text is scrubbed of secret shapes before it leaves the page.
+// the browser to the provider and the report text is scrubbed of secret shapes
+// before it leaves the page. In SDK (npm) mode the key lives in the app page's
+// own localStorage; in EXTENSION mode it lives in chrome.storage.local and the
+// background service worker makes the call, because the SDK runs in the host
+// page's main world where the site under test could read it.
 //
 // This is the privacy-preserving answer to competitors' cloud AI debuggers:
 // TraceBug never sees the key, the prompt, or the response. Combined with the
@@ -16,6 +19,7 @@
 import type { BugReport } from "../types";
 import { generateAIPrompt } from "../exporters/ai-prompt";
 import { sanitizeTokenShapes } from "../sanitize/cloud-upload";
+import { isExtensionMode, getIntegrationStatus } from "../ext-transport";
 
 export type AIProvider = "anthropic" | "openai" | "ollama";
 
@@ -67,9 +71,16 @@ const DEFAULT_BASE_URLS: Record<AIProvider, string> = {
   ollama: "http://localhost:11434",
 };
 
-// ── Config store (localStorage only — never leaves the browser) ───────────
+// ── Config store ──────────────────────────────────────────────────────────
+// SDK (npm) mode: the app page's own localStorage, as before.
+// EXTENSION mode: the key lives in chrome.storage.local and the background
+// service worker makes the provider call — the SDK runs in the host page's main
+// world, where the site under test could read anything held here. See
+// src/ext-transport.ts and docs/launch/PLAN.md Phase 2.
 
 export function getAIConfig(): AIConfig | null {
+  // Never surface the key to page-world code in extension mode.
+  if (isExtensionMode()) return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -95,6 +106,13 @@ export function getAIConfig(): AIConfig | null {
 }
 
 export function setAIConfig(config: AIConfig): void {
+  // Extension mode: the key is entered in the extension's own options page,
+  // which writes chrome.storage.local. Writing it here would put the secret
+  // back into the host page's storage — the leak Phase 2 closes.
+  if (isExtensionMode()) {
+    console.warn("[TraceBug] Configure the AI key in TraceBug settings — it is not stored on the page.");
+    return;
+  }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     localStorage.removeItem(LEGACY_KEY);
@@ -102,13 +120,23 @@ export function setAIConfig(config: AIConfig): void {
 }
 
 export function clearAIConfig(): void {
+  if (isExtensionMode()) {
+    console.warn("[TraceBug] Clear the AI key in TraceBug settings.");
+    return;
+  }
   try {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(LEGACY_KEY);
   } catch { /* ignore */ }
 }
 
+/**
+ * Whether an AI provider is configured. SYNCHRONOUS in both modes — extension
+ * mode answers from the non-secret boolean snapshot the content script pushes
+ * in, so render paths never await storage.
+ */
 export function hasAIKey(): boolean {
+  if (isExtensionMode()) return getIntegrationStatus().ai;
   const c = getAIConfig();
   return !!c && (c.provider === "ollama" || !!c.apiKey);
 }
@@ -146,6 +174,12 @@ export async function runLLMAnalysis(
   report: BugReport,
   options: { signal?: AbortSignal } = {},
 ): Promise<AIAnalysisResult> {
+  // Extension mode: the key is deliberately unreachable from the page world.
+  // The background service worker owns this call (Phase 2b) — until then, fail
+  // with a message that tells the user where the key now lives.
+  if (isExtensionMode()) {
+    throw new Error("AI analysis runs from the extension — open TraceBug settings to configure your key.");
+  }
   const config = getAIConfig();
   if (!config) throw new Error("No AI provider configured. Add an API key first.");
   if (config.provider !== "ollama" && !config.apiKey) {

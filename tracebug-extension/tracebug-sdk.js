@@ -28561,8 +28561,41 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   });
 
+  // src/ext-transport.ts
+  function setTransportMode(mode) {
+    _mode2 = mode === "extension" ? "extension" : "page";
+  }
+  function isExtensionMode() {
+    return _mode2 === "extension";
+  }
+  function setIntegrationStatus(status) {
+    if (!status || typeof status !== "object") {
+      _status = { ...EMPTY };
+      return;
+    }
+    _status = {
+      github: !!status.github,
+      linear: !!status.linear,
+      slack: !!status.slack,
+      ai: !!status.ai
+    };
+  }
+  function getIntegrationStatus() {
+    return { ..._status };
+  }
+  var _mode2, EMPTY, _status;
+  var init_ext_transport = __esm({
+    "src/ext-transport.ts"() {
+      "use strict";
+      _mode2 = "page";
+      EMPTY = { github: false, linear: false, slack: false, ai: false };
+      _status = { ...EMPTY };
+    }
+  });
+
   // src/ai/llm-client.ts
   function getAIConfig() {
+    if (isExtensionMode()) return null;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -28587,6 +28620,10 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     return null;
   }
   function setAIConfig(config) {
+    if (isExtensionMode()) {
+      console.warn("[TraceBug] Configure the AI key in TraceBug settings \u2014 it is not stored on the page.");
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
       localStorage.removeItem(LEGACY_KEY);
@@ -28594,6 +28631,10 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   }
   function clearAIConfig() {
+    if (isExtensionMode()) {
+      console.warn("[TraceBug] Clear the AI key in TraceBug settings.");
+      return;
+    }
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LEGACY_KEY);
@@ -28601,6 +28642,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   }
   function hasAIKey() {
+    if (isExtensionMode()) return getIntegrationStatus().ai;
     const c2 = getAIConfig();
     return !!c2 && (c2.provider === "ollama" || !!c2.apiKey);
   }
@@ -28609,6 +28651,9 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     return sanitizeTokenShapes(prompt);
   }
   async function runLLMAnalysis(report, options = {}) {
+    if (isExtensionMode()) {
+      throw new Error("AI analysis runs from the extension \u2014 open TraceBug settings to configure your key.");
+    }
     const config = getAIConfig();
     if (!config) throw new Error("No AI provider configured. Add an API key first.");
     if (config.provider !== "ollama" && !config.apiKey) {
@@ -28752,6 +28797,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       "use strict";
       init_ai_prompt();
       init_cloud_upload();
+      init_ext_transport();
       STORAGE_KEY = "tracebug_ai_config";
       LEGACY_KEY = "tracebug_ai_key";
       PROVIDER_LABELS = {
@@ -29124,6 +29170,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
 
   // src/integrations/tracker-client.ts
   function getIntegrationsConfig() {
+    if (isExtensionMode()) return {};
     try {
       const raw = localStorage.getItem(STORAGE_KEY2);
       if (raw) return JSON.parse(raw);
@@ -29132,12 +29179,20 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return {};
   }
   function setIntegrationsConfig(config) {
+    if (isExtensionMode()) {
+      console.warn("[TraceBug] Configure integrations in TraceBug settings \u2014 tokens are not stored on the page.");
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY2, JSON.stringify(config));
     } catch (e2) {
     }
   }
   function clearIntegrationsConfig() {
+    if (isExtensionMode()) {
+      console.warn("[TraceBug] Clear integrations in TraceBug settings.");
+      return;
+    }
     try {
       localStorage.removeItem(STORAGE_KEY2);
     } catch (e2) {
@@ -29145,6 +29200,19 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   }
   function hasIntegration(provider) {
     var _a2, _b, _c, _d, _e;
+    if (isExtensionMode()) {
+      const s2 = getIntegrationStatus();
+      switch (provider) {
+        case "github":
+          return s2.github;
+        case "linear":
+          return s2.linear;
+        case "slack":
+          return s2.slack;
+        default:
+          return false;
+      }
+    }
     const c2 = getIntegrationsConfig();
     switch (provider) {
       case "github":
@@ -29239,6 +29307,11 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   }
   async function createTrackerIssue(provider, report, signal) {
     var _a2, _b, _c, _d, _e;
+    if (isExtensionMode()) {
+      throw new Error(
+        `${TRACKER_LABELS[provider] || provider} is sent from the extension \u2014 open TraceBug settings to configure it.`
+      );
+    }
     const c2 = getIntegrationsConfig();
     switch (provider) {
       case "github":
@@ -29261,6 +29334,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       init_github_issue();
       init_slack_export();
       init_report_builder();
+      init_ext_transport();
       TRACKER_LABELS = {
         github: "GitHub",
         linear: "Linear",
@@ -31325,9 +31399,50 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function _inlineMd(s2) {
     return escapeHtml2(s2).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   }
+  function showSettingsPointerModal(root2, title, body) {
+    var _a2, _b;
+    const overlay = document.createElement("div");
+    overlay.id = "tb-ext-settings-pointer";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+    overlay.innerHTML = `
+    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+      <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml2(title)}</div>
+        <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml2(body)}</div>
+      </div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.06)">
+        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
+        <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
+      </div>
+    </div>`;
+    const host2 = document.getElementById(MODAL_ID) || document.body;
+    host2.appendChild(overlay);
+    const close = () => overlay.remove();
+    (_a2 = overlay.querySelector("[data-ext-close]")) == null ? void 0 : _a2.addEventListener("click", close);
+    overlay.addEventListener("click", (e2) => {
+      if (e2.target === overlay) close();
+    });
+    (_b = overlay.querySelector("[data-ext-open-settings]")) == null ? void 0 : _b.addEventListener("click", () => {
+      try {
+        window.dispatchEvent(new CustomEvent("tracebug-open-settings"));
+        showToast("Opening TraceBug settings\u2026", root2);
+      } catch (e2) {
+        showToast("Open TraceBug settings from the extension popup", root2);
+      }
+      close();
+    });
+  }
   function showAIConfigModal(root2, onSaved) {
     var _a2, _b, _c, _d;
     (_a2 = document.getElementById("tb-ai-config")) == null ? void 0 : _a2.remove();
+    if (isExtensionMode()) {
+      showSettingsPointerModal(
+        root2,
+        "AI Debugger",
+        "Your API key is stored by the TraceBug extension, not by this website. Open TraceBug settings to add or change it."
+      );
+      return;
+    }
     const existing = getAIConfig();
     const provider = (existing == null ? void 0 : existing.provider) || "anthropic";
     const overlay = document.createElement("div");
@@ -31410,6 +31525,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function showIntegrationsConfigModal(root2, onSaved) {
     var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
     (_a2 = document.getElementById("tb-int-config")) == null ? void 0 : _a2.remove();
+    if (isExtensionMode()) {
+      showSettingsPointerModal(
+        root2,
+        "Integrations",
+        "Your GitHub, Linear and Slack tokens are stored by the TraceBug extension, not by this website. Open TraceBug settings to add or change them."
+      );
+      return;
+    }
     const cfg = getIntegrationsConfig();
     const overlay = document.createElement("div");
     overlay.id = "tb-int-config";
@@ -32261,6 +32384,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_annotation_store();
       init_linear_issue();
       init_slack_export();
+      init_tracker_client();
+      init_ext_transport();
       init_tracker_client();
       _githubRepo = null;
       MODAL_ID = "tracebug-quick-bug-modal";
@@ -70257,6 +70382,7 @@ First element: \`${exampleSnippet}\``,
     getAIConfig: () => getAIConfig,
     getAllSessions: () => getAllSessions,
     getCaptureCount: () => getCaptureCount,
+    getIntegrationStatus: () => getIntegrationStatus,
     getIntegrationsConfig: () => getIntegrationsConfig,
     getIssueById: () => getIssueById,
     getIssueCountsByDetector: () => getIssueCountsByDetector,
@@ -70272,6 +70398,7 @@ First element: \`${exampleSnippet}\``,
     hasIntegration: () => hasIntegration,
     hydratePlan: () => hydratePlan,
     isBlurModeActive: () => isBlurModeActive,
+    isExtensionMode: () => isExtensionMode,
     isPremium: () => isPremium,
     isRollingMode: () => isRollingMode,
     isVideoRecording: () => isVideoRecording,
@@ -70288,9 +70415,11 @@ First element: \`${exampleSnippet}\``,
     scan: () => scan,
     sendSlackMessage: () => sendSlackMessage,
     setAIConfig: () => setAIConfig,
+    setIntegrationStatus: () => setIntegrationStatus,
     setIntegrationsConfig: () => setIntegrationsConfig,
     setPlan: () => setPlan,
     setRedactRules: () => setRedactRules,
+    setTransportMode: () => setTransportMode,
     startBlurThenRecord: () => startBlurThenRecord,
     startVideoRecording: () => startVideoRecording,
     startVoiceRecording: () => startVoiceRecording,
@@ -70304,6 +70433,7 @@ First element: \`${exampleSnippet}\``,
   init_dashboard();
   init_collectors();
   init_custom_redaction();
+  init_ext_transport();
   init_environment();
   init_screenshot();
   init_region_screenshot();
@@ -71136,6 +71266,7 @@ ${summary}`;
   init_report_builder();
   init_collectors();
   init_custom_redaction();
+  init_ext_transport();
   init_github_issue();
   init_jira_issue();
   init_ai_prompt();
@@ -71209,6 +71340,7 @@ ${summary}`;
           captureConsole: "all",
           ...config
         };
+        setTransportMode(this.config.transport);
         setRedactRules(this.config.redact);
         this.initialized = true;
         this.sessionId = getActiveSessionId();

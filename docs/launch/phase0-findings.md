@@ -30,7 +30,10 @@ Not in either manifest. Only three *comments* mention it, documenting its delibe
 
 ## 3. `tabs` - **REFUTED as a permission; but the code depends on `<all_urls>` for tab URLs**
 
-`tabs` is **not** in either manifest, so no history warning. But `chrome.tabs.*` is used heavily
+`tabs` is **not** in either manifest, so no history warning. (Correction to an earlier draft of this report: it
+was not "never there" - `CHANGELOG.md` 1.10.1 records removing it precisely because it added a "Read your
+browsing history" warning for nothing. That release is what the live store build is, so the audit was reading
+pre-1.10.1 docs. Useful precedent: that removal shipped without breaking existing users.) But `chrome.tabs.*` is used heavily
 (`background.js:13,182,187,217,225,289,304,336,339,686,695,707,709`; `popup.js:81,144`). Two of those reads need
 URL access, which today comes from `<all_urls>`, **not** from `tabs`:
 

@@ -42,6 +42,9 @@ import { generateSlackPost } from "../slack-export";
 import {
   createTrackerIssue, hasIntegration,
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
+} from "../integrations/tracker-client";
+import { isExtensionMode } from "../ext-transport";
+import {
   TRACKER_LABELS, type TrackerProvider, type IntegrationsConfig,
 } from "../integrations/tracker-client";
 
@@ -2555,10 +2558,66 @@ function _inlineMd(s: string): string {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
+// ── Extension mode: settings pointer instead of an in-page secret form ────
+// In extension mode secrets live in chrome.storage.local and are entered in the
+// extension's own options page. This modal replaces the in-page forms so no
+// token — and no pre-filled input value — ever reaches the host page's DOM.
+//
+// Content scripts cannot call chrome.runtime.openOptionsPage(), and page-world
+// code has no chrome.* at all, so the button dispatches an event the content
+// script relays to the background worker, which opens the page.
+
+function showSettingsPointerModal(root: HTMLElement, title: string, body: string): void {
+  const overlay = document.createElement("div");
+  overlay.id = "tb-ext-settings-pointer";
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
+    "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+      <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml(title)}</div>
+        <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml(body)}</div>
+      </div>
+      <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.06)">
+        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
+        <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
+      </div>
+    </div>`;
+
+  const host = document.getElementById(MODAL_ID) || document.body;
+  host.appendChild(overlay);
+
+  const close = () => overlay.remove();
+  overlay.querySelector<HTMLButtonElement>("[data-ext-close]")?.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector<HTMLButtonElement>("[data-ext-open-settings]")?.addEventListener("click", () => {
+    try {
+      window.dispatchEvent(new CustomEvent("tracebug-open-settings"));
+      showToast("Opening TraceBug settings…", root);
+    } catch {
+      showToast("Open TraceBug settings from the extension popup", root);
+    }
+    close();
+  });
+}
+
 // ── BYO-key config modal ──────────────────────────────────────────────────
 
 function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
   document.getElementById("tb-ai-config")?.remove();
+  // Extension mode: never render a key field (or a pre-filled value) into the
+  // host page's DOM — the site under test could read it straight out of the
+  // attribute. Point at the extension's own settings page instead.
+  if (isExtensionMode()) {
+    showSettingsPointerModal(
+      root,
+      "AI Debugger",
+      "Your API key is stored by the TraceBug extension, not by this website. Open TraceBug settings to add or change it.",
+    );
+    return;
+  }
   const existing = getAIConfig();
   const provider: AIProvider = existing?.provider || "anthropic";
 
@@ -2643,6 +2702,15 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
 
 function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): void {
   document.getElementById("tb-int-config")?.remove();
+  // Extension mode: see showAIConfigModal — no token fields in page DOM.
+  if (isExtensionMode()) {
+    showSettingsPointerModal(
+      root,
+      "Integrations",
+      "Your GitHub, Linear and Slack tokens are stored by the TraceBug extension, not by this website. Open TraceBug settings to add or change them.",
+    );
+    return;
+  }
   const cfg = getIntegrationsConfig();
 
   const overlay = document.createElement("div");
