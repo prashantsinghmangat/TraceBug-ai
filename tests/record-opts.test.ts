@@ -9,12 +9,18 @@
 // silently, with nothing recording that it had happened.
 //
 // Now the blob lives in chrome.storage.local under `tb_record_opts` with an
-// explicit `videoSetBy` discriminator, the worker seeds the default on
-// install AND update, and the popup migrates the legacy localStorage copy on
-// first open. The failure mode this file guards is the ordering: onInstalled
-// runs before the popup is ever opened, so the seed is ALWAYS already present
-// by migration time, and a naive "only migrate when the key is absent" rule
-// would throw away the choice of a user who had turned video on.
+// explicit `videoSetBy` discriminator, and the worker seeds a default that
+// DIFFERS BY REASON: off on install (a new user should not meet a share
+// dialog first) and on on update (before Phase 4 every capture was a video,
+// so off would quietly take that away). Two failure modes are guarded here:
+//
+//   • Ordering. onInstalled runs before the popup is ever opened, so the seed
+//     is ALWAYS already present by migration time. A naive "only migrate when
+//     the key is absent" rule would throw away the choice of a user who had
+//     turned video on, and a merge that fell back to a hardcoded `false`
+//     would undo the update seed on the first popup open.
+//   • Re-seeding. A fresh installer who never opens Record options must not
+//     have video switched ON by their next update.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
@@ -33,7 +39,7 @@ async function install(mock: ChromeMock, reason: string) {
   return mock.localStore[KEY] as Record<string, unknown> | undefined;
 }
 
-describe('the worker seeds the no-video default', () => {
+describe('the worker seeds the video default, differently per reason', () => {
   let mock: ChromeMock;
   beforeEach(() => {
     mock = createChromeMock();
@@ -44,11 +50,21 @@ describe('the worker seeds the no-video default', () => {
     expect(await install(mock, 'install')).toMatchObject({ video: false, videoSetBy: 'default' });
   });
 
-  it('writes video off on an update from a build that had no such option', async () => {
-    // The whole reason the update branch exists. A 1.10 user recorded video
-    // every time because there was no way not to; they have no stored choice,
-    // so they get the new default — deliberately, and recorded as such.
-    expect(await install(mock, 'update')).toMatchObject({ video: false, videoSetBy: 'default' });
+  it('writes video ON for an update from a build that had no such option', async () => {
+    // The whole reason the update branch exists, and the opposite of install.
+    // A 1.10 user recorded video on every capture because there was no way
+    // not to; switching them to events-only without asking would take away
+    // the thing they have been using TraceBug for.
+    expect(await install(mock, 'update')).toMatchObject({ video: true, videoSetBy: 'default' });
+  });
+
+  it('keeps the other options when it seeds', async () => {
+    // A pre-1.11 install can hold a surface and a delay already — those are
+    // not the thing being defaulted.
+    mock.localStore[KEY] = { surfaceMode: 'desktop', delaySec: 3 };
+    expect(await install(mock, 'update')).toMatchObject({
+      video: true, videoSetBy: 'default', surfaceMode: 'desktop', delaySec: 3,
+    });
   });
 
   it('does NOT overwrite a user who turned video on', async () => {
@@ -56,11 +72,28 @@ describe('the worker seeds the no-video default', () => {
     expect(await install(mock, 'update')).toMatchObject({ video: true, videoSetBy: 'user' });
   });
 
-  it('keeps the other options when it seeds over its own earlier default', async () => {
-    // A re-seed must not reset the surface or the delay — they are not the
-    // thing being defaulted.
-    mock.localStore[KEY] = { video: false, videoSetBy: 'default', surfaceMode: 'desktop', delaySec: 3 };
-    expect(await install(mock, 'update')).toMatchObject({ surfaceMode: 'desktop', delaySec: 3 });
+  it('does NOT overwrite a user who turned video OFF', async () => {
+    // Now that the update default is ON, this is the direction that would
+    // actually hurt: re-enabling a screen share for someone who went looking
+    // for the checkbox to turn it off.
+    mock.localStore[KEY] = { video: false, videoSetBy: 'user' };
+    expect(await install(mock, 'update')).toMatchObject({ video: false, videoSetBy: 'user' });
+  });
+
+  it('does not flip a fresh installer to video on at their next update', async () => {
+    // install seeds { video: false, videoSetBy: "default" }. That stored
+    // boolean is what tells the update branch this build has already decided
+    // for this profile — without the check, every update would re-apply the
+    // "existing user" default to someone who has never recorded a video.
+    await install(mock, 'install');
+    expect(await install(mock, 'update')).toMatchObject({ video: false, videoSetBy: 'default' });
+  });
+
+  it('does not re-seed on a second update either', async () => {
+    const first = await install(mock, 'update');
+    expect(first).toMatchObject({ video: true });
+    mock.localStore[KEY] = { video: false, videoSetBy: 'default' };
+    expect(await install(mock, 'update')).toMatchObject({ video: false });
   });
 
   it('leaves the pref alone on a plain reload', async () => {
@@ -84,17 +117,17 @@ describe('the worker seeds the no-video default', () => {
 // Instead this slices the REAL `loadRecordOpts` out of the shipped file and
 // runs that text. The precedence rules are what's under test, and a rename or
 // a move fails the slice loudly rather than passing against a stale copy.
-function extractLoadRecordOpts(source: string): string {
-  const start = source.indexOf('  async function loadRecordOpts() {');
-  if (start < 0) throw new Error('loadRecordOpts not found in popup.js — did it move or get renamed?');
+function sliceFunction(source: string, declaration: string): string {
+  const start = source.indexOf(declaration);
+  if (start < 0) throw new Error(`not found in popup.js — did it move or get renamed? ${declaration}`);
   const end = source.indexOf('\n  }\n', start);
-  if (end < 0) throw new Error('could not find the end of loadRecordOpts in popup.js');
+  if (end < 0) throw new Error(`could not find the end of ${declaration} in popup.js`);
   return source.slice(start, end + 4);
 }
 
 describe('popup.js migrates the legacy localStorage blob', () => {
   const SOURCE = readFileSync(join(extDir, 'popup.js'), 'utf8');
-  const BODY = extractLoadRecordOpts(SOURCE);
+  const BODY = sliceFunction(SOURCE, '  async function loadRecordOpts() {');
 
   /** Run the real function against a given storage + localStorage state. */
   async function migrate(
@@ -166,6 +199,18 @@ describe('popup.js migrates the legacy localStorage blob', () => {
     expect(opts).toMatchObject({ video: false, videoSetBy: 'default' });
   });
 
+  it('keeps the update seed when the legacy blob has no answer in it', async () => {
+    // The pairing that actually happens on upgrade from pre-1.11: the worker
+    // seeded video ON, and the legacy blob holds a surface but no `video`.
+    // A merge that fell back to a literal `false` here would undo the seed on
+    // the first popup open and hand the user a silent behaviour change.
+    const { opts } = await migrate(
+      { video: true, videoSetBy: 'default' },
+      { surfaceMode: 'desktop', delaySec: 2 },
+    );
+    expect(opts).toMatchObject({ video: true, videoSetBy: 'default', surfaceMode: 'desktop' });
+  });
+
   it('carries the other options across', async () => {
     const { opts } = await migrate(undefined, { surfaceMode: 'desktop', delaySec: 3, blurFirst: true });
     expect(opts).toMatchObject({ surfaceMode: 'desktop', delaySec: 3, blurFirst: true });
@@ -204,5 +249,73 @@ describe('popup.js migrates the legacy localStorage blob', () => {
     const ctx = createContext(sandbox);
     runInContext(BODY.trim() + '\nresult = loadRecordOpts();', ctx);
     await expect(sandbox.result as Promise<unknown>).resolves.toMatchObject({ video: true });
+  });
+});
+
+// ── Who gets to say "the user chose this" ───────────────────────────────────
+// `videoSetBy: "user"` is a promise the worker keeps: it is never overwritten
+// by a future install or update seed. So stamping it on anything short of a
+// real decision freezes someone on a default they never saw — which is why
+// clicking Capture Bug must NOT stamp it, even though it saves the options.
+describe('popup.js only calls the video setting "chosen" when it was', () => {
+  const SOURCE = readFileSync(join(extDir, 'popup.js'), 'utf8');
+  const BODY = sliceFunction(SOURCE, '  function saveRecordOpts() {');
+
+  /** Run the real saveRecordOpts with fake controls and a given videoSetBy. */
+  function save(videoSetBy: string, checked = false) {
+    const written: Record<string, unknown>[] = [];
+    const sandbox = {
+      OPTS_KEY: KEY,
+      videoSetBy,
+      videoCb: { checked },
+      surfaceSel: { value: 'tab' },
+      delaySel: { value: '0' },
+      blurCb: { checked: false },
+      updateOptsState: () => {},
+      applyVideoUI: () => {},
+      chrome: { storage: { local: {
+        set: (items: Record<string, Record<string, unknown>>) => { written.push(items[KEY]); },
+      } } },
+      result: undefined as unknown,
+    };
+    const ctx = createContext(sandbox);
+    runInContext(BODY.trim() + '\nresult = saveRecordOpts();', ctx);
+    return { opts: sandbox.result as Record<string, unknown>, written };
+  }
+
+  it('is actually there', () => {
+    expect(BODY).toContain('videoSetBy,');
+    // The literal is gone from this function — a stamp here would be one.
+    expect(BODY).not.toContain('"user"');
+  });
+
+  it('leaves videoSetBy alone when the user has not touched the checkbox', () => {
+    // Clicking Capture Bug calls this. Accepting a default is not choosing it.
+    const { opts, written } = save('default');
+    expect(opts).toMatchObject({ videoSetBy: 'default' });
+    expect(written[0]).toMatchObject({ videoSetBy: 'default' });
+  });
+
+  it('carries a choice already made straight through', () => {
+    const { opts } = save('user', true);
+    expect(opts).toMatchObject({ video: true, videoSetBy: 'user' });
+  });
+
+  it('wires the promotion to the checkbox and to nothing else', () => {
+    // The stamp lives in one listener. Assert that listener is the checkbox's,
+    // and that the other three controls share the plain handler — adding
+    // markVideoChosen to any of them would silently re-freeze users.
+    expect(SOURCE).toContain('videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });');
+    expect(SOURCE).toContain('[surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));');
+    // The declaration plus exactly one call.
+    expect(SOURCE.match(/markVideoChosen\(\)/g) ?? []).toHaveLength(2);
+  });
+
+  it('is not called by the Capture Bug handler', () => {
+    // The handler saves the options; it must not claim they were chosen.
+    const handler = SOURCE.slice(SOURCE.indexOf('btnCaptureBug'));
+    const body = handler.slice(0, handler.indexOf('\n  });'));
+    expect(body).toContain('saveRecordOpts()');
+    expect(body).not.toContain('markVideoChosen');
   });
 });

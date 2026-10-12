@@ -324,12 +324,21 @@ Newest entry at the bottom.
   which a service worker can neither read nor write, so one question had no answer: has this user
   chosen whether to record video, or have they never been asked? A missing field is not a choice -
   and that ambiguity is what silently flipped a 1.10 always-video user to no-video. The blob is now
-  `tb_record_opts` with an explicit `videoSetBy: "user" | "default"`; `runtime.onInstalled` seeds
-  the no-video default on **install and update** without ever overwriting a `"user"` value, and the
-  popup migrates the legacy `tracebug_record_opts` blob on first open. The migration has to merge
-  rather than skip-if-present: onInstalled always runs before the popup is first opened, so the seed
-  is already there, and "only migrate when the key is absent" would discard the choice of a 1.11
-  user who had turned video on.
+  `tb_record_opts` with an explicit `videoSetBy: "user" | "default"`, and `runtime.onInstalled`
+  seeds a default that **differs by reason**: video **off** on install, video **on** on update,
+  because a pre-Phase-4 user has been recording video on every capture whether they asked to or
+  not, and flipping that silently would take away what they use TraceBug for. A `"user"` value is
+  never overwritten in either direction. Two guards: on `update` a stored `video` boolean means
+  this build already decided for this profile, so the update default does not re-apply (without it,
+  a fresh installer who never opened Record options would have video switched **on** by their next
+  update); and the popup's migration falls back to the stored seed rather than a literal `false`
+  when the legacy blob carries no answer, or the first popup open would undo the update seed. The
+  migration has to merge rather than skip-if-present: onInstalled always runs before the popup is
+  first opened, so the seed is already there, and "only migrate when the key is absent" would
+  discard the choice of a 1.11 user who had turned video on. `videoSetBy` is promoted to `"user"`
+  only by the checkbox's own handler - not by a surface or delay change, and not by clicking
+  Capture Bug, since accepting a default is not choosing one and a `"user"` stamp would freeze that
+  profile on a default it never saw.
 - **The exported replay heading names its page.** rrweb restarts on every document while an events
   capture deliberately survives a navigation, so the console/network/action lists span the whole
   capture and the replay beside them covers only the page it ended on. The heading now reads
@@ -343,7 +352,7 @@ Newest entry at the bottom.
   `tracebug-extension/{background.js,popup.js}`, `src/exporters/{html-template,html-replay}.ts`.
   Deleted `docs/launch/designs/tracebug_welcome_page_variant_{a_split_workbench,b_guided_timeline}/`
   (unused, and carried invented claims a later session could have copied).
-- Verified: typecheck + lint clean; `npm test` **40 files / 649 passing** (+23: 16 record-opts,
+- Verified: typecheck + lint clean; `npm test` **40 files / 658 passing** (+32: 25 record-opts,
   7 replay-page-label). `build` + `build:ext` OK; `ext:lint` 0 errors / **69** warnings, baseline
   unchanged. `ext-events-capture` **22/22** - and its navigation checks corroborate the label: the
   capture crosses a navigation, the timer keeps counting, and the report comes back with 9 rrweb
@@ -353,10 +362,10 @@ Newest entry at the bottom.
   the real `loadRecordOpts` text out of the shipped file and runs that, injecting the two key
   constants and pinning their literals against the source so a rename cannot pass silently. Weaker
   than loading the file; stronger than a copy of the logic.
-- Open issues: (1) The popup migration is **not** covered end-to-end in a browser - the slice tests
-  the precedence rules, not the popup actually opening. Worth one manual pass: a profile with a
-  `tracebug_record_opts` blob holding `video: true`, updated, should still show the checkbox ticked.
-  (2) `saveRecordOpts` marks `videoSetBy: "user"` when Capture Bug is clicked, not only when the
-  checkbox is touched - accepting the default counts as being asked. Harmless today (the default it
-  records is the same `false` a later seed would write) but it does mean a future default change
-  would not reach those users.
+- Open issues: (1) The popup migration is **not** covered end-to-end in a browser - the slices test
+  the precedence rules and the stamping, not the popup actually opening. Two manual passes worth
+  doing: a profile with a `tracebug_record_opts` blob holding `video: true`, updated, should still
+  show the checkbox ticked; and a pre-1.11 profile with no `video` field at all, updated, should
+  show it ticked too (the update seed) rather than cleared. (2) The reason split means the two
+  populations now see different first captures, so any manual script that says "the first capture
+  records events, not video" is only true of a fresh install.
