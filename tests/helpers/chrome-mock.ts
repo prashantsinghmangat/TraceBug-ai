@@ -73,6 +73,7 @@ export function createChromeMock(opts: ChromeMockOptions = {}) {
   const createdTabs: Array<Record<string, unknown>> = [];
   const reloadedTabs: number[] = [];
   let runtimeReloads = 0;
+  let uninstallUrl: string | null = null;
 
   const sessionStore: Record<string, unknown> = { ...(opts.session || {}) };
   const localStore: Record<string, unknown> = { ...(opts.local || {}) };
@@ -128,7 +129,7 @@ export function createChromeMock(opts: ChromeMockOptions = {}) {
       onUpdateAvailable: events.onUpdateAvailable,
       reload: () => { runtimeReloads += 1; },
       openOptionsPage: () => {},
-      setUninstallURL: () => {},
+      setUninstallURL: (url: string) => { uninstallUrl = url; },
       getContexts: async () => [],
       sendMessage: (_m: unknown, cb?: (r: unknown) => void) => { if (cb) cb(undefined); },
     },
@@ -278,6 +279,8 @@ export function createChromeMock(opts: ChromeMockOptions = {}) {
     sessionStore,
     localStore,
     get runtimeReloads() { return runtimeReloads; },
+    /** What runtime.setUninstallURL was last given. */
+    get uninstallUrl() { return uninstallUrl; },
 
     /** Mark a tab as having a live content script (and optionally a page SDK). */
     setTabLive(tabId: number, alive: boolean, pageSdk = false) {

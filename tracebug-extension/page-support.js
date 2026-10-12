@@ -230,11 +230,58 @@
     };
   }
 
+  /**
+   * A human label for the page the popup is pointed at: a host line and a path
+   * line, for the small card above the "can't run here" explanation.
+   *
+   * Lives here rather than in popup.js because it is the same kind of knowledge
+   * as classifyPage — which schemes mean what — and because it is then unit
+   * testable without a popup.
+   *
+   * Returns null when there is nothing honest to show. That is the NORMAL case
+   * on a tab the user has not acted on: `<all_urls>` is optional since Phase 1,
+   * so `tab.url` is usually undefined and the card must be absent rather than
+   * guess or render an empty row.
+   *
+   * @param {string|undefined} url
+   * @returns {{host: string, path: string}|null}
+   */
+  function describePage(url) {
+    if (!url || typeof url !== "string") return null;
+    var parsed = null;
+    try { parsed = new URL(url); } catch (e) { return null; }
+    var scheme = parsed.protocol.replace(":", "").toLowerCase();
+
+    // A browser-internal page has no meaningful host/path split — "extensions"
+    // is not a hostname anyone recognises. Name the surface, show the whole URL.
+    var INTERNAL = {
+      chrome: "Chrome settings",
+      "chrome-extension": "Extension page",
+      edge: "Edge settings",
+      about: "Browser page",
+      "moz-extension": "Extension page",
+      resource: "Browser page",
+      "view-source": "Page source",
+      devtools: "DevTools",
+    };
+    if (INTERNAL[scheme]) {
+      return { host: INTERNAL[scheme], path: url };
+    }
+    if (scheme === "file") {
+      // The path is the whole point here, and it is often long; the caller
+      // truncates visually rather than us losing characters.
+      return { host: "Local file", path: decodeURIComponent(parsed.pathname) };
+    }
+    var path = parsed.pathname + parsed.search;
+    return { host: parsed.host || url, path: path === "/" ? "/" : path };
+  }
+
   root.TraceBugPageSupport = {
     BLOCKED_SCHEMES: BLOCKED_SCHEMES,
     BLOCKED_HOSTS: BLOCKED_HOSTS,
     DEMO_URL: DEMO_URL,
     classifyPage: classifyPage,
+    describePage: describePage,
     explainInjectionError: explainInjectionError,
   };
 })(typeof globalThis !== "undefined" ? globalThis : self);

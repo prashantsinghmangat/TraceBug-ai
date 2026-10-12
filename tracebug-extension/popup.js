@@ -16,6 +16,9 @@ const DEFAULT_CLOUD_ENDPOINT = "https://tracebug.dev";
 
 let currentHostname = "";
 let currentTabId = null;
+// Remembered so a LATER failure can still name the page in its card. Often
+// undefined — `<all_urls>` is optional, so most tabs have no visible URL.
+let currentTabUrl = null;
 let cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
 // Firefox host-permission state: once the user declines the "<all_urls>"
 // doorhanger, don't re-prompt on every click — that punishes a "no".
@@ -69,12 +72,82 @@ function fileSchemeAccess() {
   });
 }
 
+// ── "Can't run here" presentation (Phase 4 Step E) ─────────────────────────
+const SVG_NS_PS = "http://www.w3.org/2000/svg";
+
+/** Build an SVG from path strings. createElementNS, never innerHTML. */
+function psIcon(paths, circles) {
+  const svg = document.createElementNS(SVG_NS_PS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.6");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  for (const c of circles || []) {
+    const el = document.createElementNS(SVG_NS_PS, "circle");
+    el.setAttribute("cx", c[0]); el.setAttribute("cy", c[1]); el.setAttribute("r", c[2]);
+    svg.appendChild(el);
+  }
+  for (const d of paths) {
+    const el = document.createElementNS(SVG_NS_PS, "path");
+    el.setAttribute("d", d);
+    svg.appendChild(el);
+  }
+  return svg;
+}
+
+/**
+ * One glyph per reason, per screens.md screen 3: circle-slash for a page the
+ * browser forbids, a file for local-file access, a refresh for a tab that only
+ * needs reloading. Indigo for the two the user can fix in one click, muted for
+ * the ones nobody can. Reasons the design does not name keep the pixel bug.
+ */
+function renderUnavailableGlyph(reason) {
+  const host = document.getElementById("unavailableGlyph");
+  const fallback = document.getElementById("unavailableIconFallback");
+  if (!host) return;
+  let svg = null;
+  let tone = "pg-muted";
+  if (reason === "browser-internal" || reason === "restricted" || reason === "webstore") {
+    svg = psIcon(["M4.9 4.9l14.2 14.2"], [[12, 12, 9]]);
+  } else if (reason === "file-no-access") {
+    svg = psIcon(["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6"]);
+  } else if (reason === "orphaned" || reason === "page-moved") {
+    svg = psIcon(["M3 12a9 9 0 0 1 15.5-6.3L21 8", "M21 3v5h-5", "M21 12a9 9 0 0 1-15.5 6.3L3 16", "M3 21v-5h5"]);
+    tone = "pg-action";
+  } else {
+    return; // keep the fallback visible
+  }
+  host.textContent = "";
+  host.className = "unavailable-icon " + tone;
+  host.appendChild(svg);
+  host.style.display = "";
+  if (fallback) fallback.style.display = "none";
+}
+
+/**
+ * The host/path card. Absent when there is no URL to show — see
+ * TraceBugPageSupport.describePage for why that is the normal case.
+ */
+function renderPageCard(pageUrl) {
+  const card = document.getElementById("pageCard");
+  if (!card) return;
+  const described = PageSupport.describePage ? PageSupport.describePage(pageUrl) : null;
+  if (!described) { card.style.display = "none"; return; }
+  document.getElementById("pageHost").textContent = described.host;
+  // &#8206; keeps an RTL-clipped path from reordering its leading slash.
+  document.getElementById("pagePath").textContent = "‎" + described.path;
+  card.style.display = "";
+}
+
 /**
  * Replace the four actions with one explanation and at most one button.
  * Every branch here comes from page-support.js — this function only renders.
  * Phase 3: nothing in the popup may end in a no-op.
  */
-function showUnavailable(verdict) {
+function showUnavailable(verdict, pageUrl) {
   const main = document.getElementById("mainContent");
   const panel = document.getElementById("unavailable");
   const title = document.getElementById("unavailableTitle");
@@ -84,6 +157,8 @@ function showUnavailable(verdict) {
 
   if (main) main.style.display = "none";
   panel.style.display = "block";
+  renderPageCard(pageUrl);
+  renderUnavailableGlyph(verdict.reason);
   // textContent, not innerHTML: `detail` can carry a browser error string.
   title.textContent = verdict.title || "Can't run on this page";
   sub.textContent = verdict.detail || "";
@@ -282,6 +357,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
+  currentTabUrl = tab?.url ?? null;
 
   // Can TraceBug run here at all? The scheme/host list and every sentence live
   // in page-support.js so the service worker reaches the same answers (the
@@ -292,7 +368,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // shown "Can't run on this page" on every single page.
   const verdict = PageSupport.classifyPage(tab?.url, { fileAccess: await fileSchemeAccess() });
   if (!verdict.ok) {
-    showUnavailable(verdict);
+    showUnavailable(verdict, tab?.url);
     return;
   }
 
@@ -598,7 +674,7 @@ async function runCombo(messageType, busyText, extra) {
 function reportFailure(err) {
   setBusy(false);
   const verdict = PageSupport.explainInjectionError(err);
-  if (verdict.action) showUnavailable(verdict);
+  if (verdict.action) showUnavailable(verdict, currentTabUrl);
   else showToast(verdict.detail || verdict.title, true);
 }
 

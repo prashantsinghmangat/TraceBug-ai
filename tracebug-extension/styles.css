@@ -366,3 +366,32 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-family: inherit;
 }
 .wn-got:hover { text-decoration: underline; }
+
+/* ── Page card above a "can't run here" panel (Phase 4 Step E) ────
+   Says WHICH page the explanation is about. Hidden entirely when the URL is
+   invisible — since <all_urls> became optional that is the normal state, and a
+   blank row reads as a bug. */
+.pg {
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  margin-bottom: 14px;
+}
+.pg-host {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pg-path {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px; color: var(--text-3); margin-top: 1px;
+  /* A file:// path or a long query is wider than 340px. Clip the START, so the
+     filename — the part that identifies the page — stays visible. */
+  direction: rtl; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Reason-specific glyph. Indigo only where the user can fix it in one click. */
+#unavailableGlyph svg { width: 32px; height: 32px; }
+#unavailableGlyph.pg-muted { color: var(--text-3); }
+#unavailableGlyph.pg-action { color: var(--accent); }

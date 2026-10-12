@@ -18,5 +18,17 @@
     <input type="email" name="email" />
     <input name="version" />
   </form>
+  <!-- The uninstall survey at /bye. Field names must match app/bye/ByeForm.tsx
+       exactly or Netlify drops the submission silently. `reason` is set from
+       the selected radio row before POST; `reason-choice` is the radio group's
+       own name and is not collected. -->
+  <form name="uninstall" data-netlify="true" netlify-honeypot="bot-field" hidden>
+    <input type="hidden" name="form-name" value="uninstall" />
+    <input name="bot-field" />
+    <input name="reason" />
+    <textarea name="message"></textarea>
+    <input type="email" name="email" />
+    <input name="version" />
+  </form>
 </body>
 </html>

@@ -62,3 +62,35 @@ with a literal `false`. Both have regressed before.
 
 **Pass:** unticked both times. Step 3 is the guard: the update default must not re-apply to someone
 this build already defaulted, or every new installer gets video switched on by their first update.
+
+## Phase 4 first-run and uninstall surfaces (never rendered in CI)
+
+Their tests assert source and logic, not layout. Each of these needs eyes once, on Chrome and Firefox.
+
+### 4. The welcome page
+
+Install unpacked on a clean profile. A tab should open to `welcome.html`. **Pass:** three step cards,
+and step 3 shows either real key caps (`Alt` `B` by default) or "No shortcut set" with a working
+button. "Change shortcut" must open the browser's shortcuts page, or print text steps - never do
+nothing. The privacy box shows three chips. There is no "Rolling this out to a team?" card.
+
+### 5. The "What's new" card
+
+**Requires the version bump to 1.11.0** - the copy table is keyed `1.11.0`, so nothing shows until
+then. Install a 1.11.0 build over an older profile, open the popup. **Pass:** indigo card above the
+actions, four check lines, the amber token-rotation line, "Got it" dismisses it and it never returns.
+
+### 6. The "can't run here" states
+
+Open the popup on `chrome://extensions`, on a `file://` page with file access off, and on a tab left
+open across an extension reload. **Pass:** each shows its own icon and sentence, the host/path card
+names the page, and the button does what it says. On a normal page with site access **declined**, the
+card should be ABSENT, not blank.
+
+### 7. The uninstall survey
+
+Uninstall the extension. **Pass:** `tracebug.dev/bye?v=<version>` opens, the version appears in the
+fine print, Skip reaches the thank-you state. Then submit the form once for real and confirm the
+submission appears in Netlify Forms under `uninstall` - a field-name mismatch is accepted and
+silently discarded, so this cannot be verified any other way.
+
