@@ -81,13 +81,22 @@
         <span class="site-path" id="sitePath"></span>
       </div>
 
-      <!-- Hero CTA — starts a tab-capture recording. Reproduce, then stop in the
-           on-page HUD; modal opens with the full replay + auto-collected data. -->
+      <!-- Hero CTA — starts a capture. Reproduce, then stop in the on-page HUD;
+           modal opens with the full replay + auto-collected data. Events-only
+           by default (no screen-share picker); the sub-label and icon are
+           rewritten by popup.js when "Record video too" is on. -->
       <button class="cta-primary" id="btnCaptureBug">
-        <span class="cta-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg></span>
+        <!-- Both icons ship in the markup and popup.js shows one. Not an
+             innerHTML swap on purpose: web-ext lint flags every dynamic
+             innerHTML assignment (UNSAFE_VAR_ASSIGNMENT), and an icon is not
+             worth adding a warning a reviewer then has to triage. -->
+        <span class="cta-icon">
+          <svg id="ctaIconEvents" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <svg id="ctaIconVideo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
+        </span>
         <span class="cta-body">
           <span class="cta-title">Capture Bug</span>
-          <span class="cta-sub">Records the tab · stop when done</span>
+          <span class="cta-sub" id="ctaSub">Console, network &amp; replay · stop when done</span>
         </span>
         <svg class="cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
       </button>
@@ -100,6 +109,15 @@
           <span class="redact-state" id="recordOptsState"></span>
         </summary>
         <div class="redact-body">
+          <!-- Video is OPT-IN (Phase 4). Off by default, so the very first
+               capture after install never opens a screen-share picker. The
+               choice is remembered. Everything that only describes a video
+               (surface, microphone) is disabled while this is off. -->
+          <label class="redact-label" style="display:flex;align-items:center;gap:7px;margin-top:2px;cursor:pointer">
+            <input type="checkbox" id="optVideo" style="accent-color:#6366F1" />
+            Record video too
+          </label>
+          <div class="redact-help">Off by default: a capture records console, network, clicks and an interactive DOM replay without asking your browser to share the screen. Turn this on to add a screen recording — your browser will ask what to share.</div>
           <label class="redact-label" for="optSurface">Capture</label>
           <select id="optSurface" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
             <option value="tab" selected>Current tab</option>
@@ -115,7 +133,7 @@
             <input type="checkbox" id="optBlurFirst" style="accent-color:#6366F1" />
             Blur before recording
           </label>
-          <div class="redact-help">Pick sensitive areas to blur first — the blur is captured into the video, so redacted pixels never leave the page.</div>
+          <div class="redact-help">Pick sensitive areas to blur first — the blur is captured into the video, and the element's text is masked in the DOM replay.</div>
         </div>
       </details>
 

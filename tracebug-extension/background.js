@@ -339,6 +339,9 @@ async function handleComboAction(message, sender) {
   // option (region, framerate, etc.) plugs in here.
   const actionMessage = {
     type: message.type,
+    // Phase 4: screen recording is opt-in, so a capture with no `video` flag is
+    // the events-only one. Default false, never "undefined means yes".
+    video: !!message.video,
     withMic: !!message.withMic,
     blurFirst: !!message.blurFirst,
     delaySec: message.delaySec || 0,

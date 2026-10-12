@@ -27,6 +27,13 @@ All notable changes to TraceBug are documented here.
 - **A custom Ollama base URL now works** (`tracebug-extension/options.js`, `background.js`) — saving an Ollama provider pointed at any host requests access to that one address, instead of refusing anything that was not `localhost` or `127.0.0.1`. Only a URL that is not parseable HTTP is still rejected, and it says so in the settings page rather than at send time.
 - The keyboard shortcut (`Ctrl/Cmd+Shift+B`) keeps capturing the page you are on without any site access — it is a page-level shortcut inside TraceBug, so it cannot ask for a permission itself. When access has been withheld it now says that the capture covers this page only, and where to allow more.
 
+### Changed
+
+- **A capture no longer asks to share your screen** (`src/index.ts`, `tracebug-extension/popup.js`) — **Capture Bug** now records the console, the network, your clicks and an interactive **DOM replay**, with no screen-share picker and no operating-system permission. Previously the first thing a brand-new user met was Chrome's "Choose what to share" dialog, before they had seen TraceBug do anything. A screen recording is still one checkbox away — **Record options → Record video too** — and the choice is remembered, so if you want video you turn it on once. Capture / surface / microphone are greyed out until you do, because they only describe a video.
+  - The DOM replay is what lands in the exported `.html` in place of the video: tens or hundreds of KB of inspectable DOM events instead of tens of MB of opaque WebM. A report from an events-only capture carries everything a video report does except the pixels.
+  - The capture now survives navigation by default, which the video path could not always do, and the on-page HUD comes back on the new page with its timer still running. One limitation worth knowing: the DOM replay covers the page the capture ends on, while the console, network and action timeline span every page you crossed.
+  - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
+
 ### Fixed
 
 - **A blocked page now says which kind of blocked, and offers a way out** (`tracebug-extension/page-support.js`, `popup.js`) — the popup's "Can't run on this page" panel used to be a dead end that also missed three real cases: the Chrome Web Store and the other add-on galleries (the page a brand-new user most likely has open), `file://` pages when "Allow access to file URLs" is off, and the built-in PDF viewer. Each one now gets its own sentence plus a single button — **Try it on a demo page**, **Open extension settings** or **Reload tab**.

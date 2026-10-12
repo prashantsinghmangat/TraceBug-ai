@@ -223,3 +223,51 @@ Newest entry at the bottom.
   real offscreen host. (4) Whether branded Chrome and Firefox bind `Alt+B` is still manual; Chromium is a
   signal, not proof. (5) `tracebug-extension/manifest.json` still duplicates `manifest.base.json`; both edited
   by hand again - four phases running, worth generating.
+
+## Phase 4, Step A - the first capture records events, not video (2026-10-12)
+- **Capture Bug no longer opens a screen-share picker.** New `startEventsCapture()` /
+  `stopEventsCapture()` on the SDK arm the session in the *existing* `"events"` mode, start rrweb in
+  the page, and mount the recording HUD in a new `mode: "events"` (no Pause, no mic - nothing to
+  pause or mute; a wall-clock timer instead of `getVideoElapsedMs()`; Stop / Screenshot / Draw /
+  Blur kept, because blur masks the element's text in the replay too). Video is an opt-in checkbox
+  in Record options, persisted in the popup's existing `tracebug_record_opts` blob, defaulting OFF
+  even for a stored blob that predates the option. Surface and mic grey out while it is off, and the
+  hero button's label and icon change with it - it must not promise a recording it won't make.
+- **The DOM replay needed a carrier.** Until now `rrwebEvents` only ever rode on a `VideoRecording`.
+  New stash in `rrweb-recorder.ts` (`stashDomReplay`/`get`/`clear`), and `report-builder` builds a
+  **replay-only `report.video`** from it when the session has no video - same ownership rule as
+  `getSessionVideo`, every video field empty. Chosen over a new field because every exporter already
+  prefers the rrweb branch and drops the video when `rrwebEvents` is present, so it flows through
+  untouched. Deliberately NOT stashed into `_lastRecording`: the ticket modal reads
+  `getSessionVideo()` directly and would render a `<video>` with an empty `src`, tripping its "CSP
+  blocks embedded video" notice. Two consumers that read "object present" as "video present" were
+  fixed (`ai-prompt.ts`, `share-link.ts`).
+- **Navigation survival** came mostly free (`index.ts:527-545` already resumes an `"events"`
+  session), but the HUD is that capture's only Stop control, so it has to come back. New
+  `tracebug_events_capture_started` key - a timestamp, not a boolean, because it answers two
+  questions: only a HUD-driven capture re-mounts the HUD (a toolbar ■-tracked session must not, or
+  the page shows two stop buttons), and the original start time keeps the timer from resetting to
+  00:00 on every page.
+- Files: new `tests/events-capture.test.ts`, `e2e/ext-events-capture.e2e.mjs`; edited
+  `src/{index,storage,report-builder,rrweb-recorder}.ts`, `src/ui/recording-hud.ts`,
+  `src/exporters/{ai-prompt,share-link}.ts`,
+  `tracebug-extension/{popup.html,popup.js,background.js,content-script.js,tracebug-init.js}`,
+  `tests/background-tab-lifecycle.test.ts`, `CHANGELOG.md`.
+- Verified: typecheck + lint clean; `npm test` **35 files / 590 passing** (was 34/576: +10
+  events-capture, +4 worker video-opt-in). `build` + `build:ext` OK; `ext:lint` 0 errors / **69**
+  warnings with the distribution byte-identical to 2a/2b/Phase 1/Phase 3 (62 generated bundle, 3
+  background, 2 manifest, 2 popup) - an icon swap had briefly made it 70, so the CTA ships both SVGs
+  in the markup and toggles them instead of assigning `innerHTML`; `ext:firefox` installs cleanly.
+  `e2e/ext-events-capture.e2e.mjs` **21/21** in a real MV3 browser, including the negative checks
+  that matter: no offscreen document is ever created, a `getDisplayMedia` tripwire on the page is
+  never tripped, `isVideoRecording()` stays false - and then the report carries the console error,
+  the 500s, actions from BOTH pages and 9 rrweb events with `dataUrl: ""` / `sizeBytes: 0`.
+  `ext-secret-migration` 26/26, `ext-provider-confirm` and `ext-redaction` green.
+- Open issues: (1) the DOM replay covers only the page a capture ENDS on - rrweb observers die with
+  the document; the console/network/action timeline does span pages. Documented, not fixed. (2) The
+  new harness replays the worker's injection itself, because an extension cannot `sendMessage` to
+  its own service worker; the worker's half (building the message, defaulting `video` to false) is
+  unit-covered in `background-tab-lifecycle.test.ts` instead. (3) `e2e/ext-events-capture.e2e.mjs`
+  uses repo-relative paths; the five older harnesses still hardcode `D:/Project/TraceBug-ai` (Phase
+  8). (4) Steps B-D of Phase 4 still pending; the welcome page and "What's new" card are blocked on
+  `docs/launch/screens.md` + the Stitch designs, which are not in the repo.

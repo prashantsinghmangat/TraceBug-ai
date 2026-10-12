@@ -373,39 +373,91 @@ document.addEventListener("DOMContentLoaded", async () => {
   const surfaceSel = document.getElementById("optSurface");
   const delaySel = document.getElementById("optDelay");
   const blurCb = document.getElementById("optBlurFirst");
+  const videoCb = document.getElementById("optVideo");
   const optsState = document.getElementById("recordOptsState");
   function loadRecordOpts() {
     try { return JSON.parse(localStorage.getItem(OPTS_KEY)) || {}; } catch { return {}; }
   }
   function saveRecordOpts() {
-    const o = { surfaceMode: surfaceSel.value, delaySec: Number(delaySel.value) || 0, blurFirst: !!blurCb.checked };
+    const o = {
+      video: !!videoCb.checked,
+      surfaceMode: surfaceSel.value,
+      delaySec: Number(delaySel.value) || 0,
+      blurFirst: !!blurCb.checked,
+    };
     try { localStorage.setItem(OPTS_KEY, JSON.stringify(o)); } catch {}
     updateOptsState(o);
+    applyVideoUI(o.video);
     return o;
   }
   function updateOptsState(o) {
     const bits = [];
-    if (o.surfaceMode === "desktop") bits.push("desktop");
+    // Lead with the thing that changes what the browser will do to you.
+    bits.push(o.video ? "video" : "no video");
+    if (o.video && o.surfaceMode === "desktop") bits.push("desktop");
     if (o.delaySec > 0) bits.push(`${o.delaySec}s delay`);
     if (o.blurFirst) bits.push("blur first");
     if (optsState) optsState.textContent = bits.join(" · ");
   }
+  /**
+   * Surface and microphone describe a video recording and nothing else, so with
+   * video off they are disabled rather than hidden — a control that vanishes
+   * reads as a bug, one that greys out reads as "turn the thing above on".
+   * The hero button's own label changes too: it is the only part of the popup a
+   * user in a hurry reads, and it must not promise a recording it won't make.
+   */
+  function applyVideoUI(on) {
+    surfaceSel.disabled = !on;
+    surfaceSel.style.opacity = on ? "" : "0.45";
+    const micRow = document.getElementById("micOpt");
+    if (micRow) {
+      micRow.disabled = !on;
+      micRow.style.opacity = on ? "" : "0.45";
+      micRow.title = on
+        ? "Toggle microphone for the recording"
+        : "Turn on “Record video too” in Record options first — there is no audio track without a recording";
+    }
+    const sub = document.getElementById("ctaSub");
+    if (sub) {
+      sub.textContent = on
+        ? "Records the tab · stop when done"
+        : "Console, network & replay · stop when done";
+    }
+    // Both icons are in popup.html; show one. No innerHTML — see the comment
+    // on the markup.
+    const iconEvents = document.getElementById("ctaIconEvents");
+    const iconVideo = document.getElementById("ctaIconVideo");
+    if (iconEvents) iconEvents.style.display = on ? "none" : "";
+    if (iconVideo) iconVideo.style.display = on ? "" : "none";
+  }
   {
     const o = loadRecordOpts();
+    // Default OFF for a stored blob that predates this option, not just for a
+    // missing one — an existing user's first 1.11 capture should also be quiet.
+    videoCb.checked = o.video === true;
     if (o.surfaceMode) surfaceSel.value = o.surfaceMode;
     if (o.delaySec) delaySel.value = String(o.delaySec);
     blurCb.checked = !!o.blurFirst;
-    updateOptsState({ surfaceMode: surfaceSel.value, delaySec: Number(delaySel.value) || 0, blurFirst: blurCb.checked });
-    [surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
+    updateOptsState({
+      video: videoCb.checked,
+      surfaceMode: surfaceSel.value,
+      delaySec: Number(delaySel.value) || 0,
+      blurFirst: blurCb.checked,
+    });
+    applyVideoUI(videoCb.checked);
+    [videoCb, surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
   }
 
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {
     const o = saveRecordOpts();
-    await runCombo("TB_START_RECORDING", "Starting recording…", {
-      withMic: micOn,
+    await runCombo("TB_START_RECORDING", o.video ? "Starting recording…" : "Starting capture…", {
+      video: o.video,
+      // Only meaningful with video on; sent as false/undefined otherwise so the
+      // page side can't mistake a leftover pref for a request to record.
+      withMic: o.video && micOn,
       blurFirst: o.blurFirst,
       delaySec: o.delaySec,
-      surfaceMode: o.surfaceMode,
+      surfaceMode: o.video ? o.surfaceMode : undefined,
     });
   });
 

@@ -638,6 +638,10 @@ if (isExtAlive()) {
       case "TB_START_RECORDING":
         dispatchToPage("tracebug-ext-action", {
           action: "record",
+          // Phase 4: video is OPT-IN. Absent means an events-only capture
+          // (console, network, actions, DOM replay) with no share picker, so
+          // the default here must stay false — not "undefined means yes".
+          video: !!message.video,
           withMic: !!message.withMic,
           blurFirst: !!message.blurFirst,
           delaySec: message.delaySec || 0,

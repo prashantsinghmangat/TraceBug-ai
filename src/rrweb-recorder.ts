@@ -170,6 +170,38 @@ export function isDomRecording(): boolean {
   return _recording;
 }
 
+// ── Replay-only stash (events-only capture) ───────────────────────────────
+// A DOM replay normally rides along on a VideoRecording, because until Phase 4
+// the only thing that started DOM recording was a screen recording. The
+// events-only capture (popup's default) has no video to attach to, so the
+// finished stream is parked here and report-builder picks it up when the
+// session has no video. One slot, same as _lastRecording in video-recorder:
+// the newest capture is the only one a ticket can be built from.
+export interface StashedDomReplay {
+  events: RrwebEvent[];
+  startedAt: number;
+  durationMs: number;
+}
+
+let _stashed: StashedDomReplay | null = null;
+
+/** Park a finished DOM-replay stream for a capture that has no video. */
+export function stashDomReplay(events: RrwebEvent[], startedAt: number, durationMs: number): void {
+  if (!Array.isArray(events) || events.length === 0) {
+    _stashed = null;
+    return;
+  }
+  _stashed = { events, startedAt, durationMs: Math.max(0, durationMs) };
+}
+
+export function getStashedDomReplay(): StashedDomReplay | null {
+  return _stashed;
+}
+
+export function clearStashedDomReplay(): void {
+  _stashed = null;
+}
+
 /** Approximate serialized size of an rrweb event stream, in bytes. */
 export function domEventsSizeBytes(events: RrwebEvent[] | undefined): number {
   if (!events || events.length === 0) return 0;

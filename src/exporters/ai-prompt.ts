@@ -133,7 +133,10 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
       ctxBits.push(`${n} screenshot${n === 1 ? "" : "s"} captured (not embedded — share the .html or cloud link for visuals)`);
     }
   }
-  if (report.video) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1000)}s)`);
+  // `report.video` can be a replay-only object (events-only capture: DOM replay,
+  // every video field empty), so key the claim on the data, not the object.
+  if (report.video?.dataUrl) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1000)}s)`);
+  else if (report.video?.rrwebEvents?.length) ctxBits.push(`interactive DOM replay available (${Math.round(report.video.durationMs / 1000)}s)`);
   if (report.annotations && report.annotations.length > 0) ctxBits.push(`${report.annotations.length} tester note${report.annotations.length === 1 ? "" : "s"}`);
   if (ctxBits.length > 0) {
     lines.push(`\n## Attached`);

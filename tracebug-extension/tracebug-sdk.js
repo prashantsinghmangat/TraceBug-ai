@@ -60,6 +60,30 @@ var TraceBugModule = (() => {
       localStorage.removeItem(ACTIVE_CAPTURE_MODE_KEY);
     } catch (e2) {
     }
+    try {
+      localStorage.removeItem(EVENTS_CAPTURE_START_KEY);
+    } catch (e2) {
+    }
+  }
+  function getEventsCaptureStartedAt() {
+    try {
+      const v2 = Number(localStorage.getItem(EVENTS_CAPTURE_START_KEY));
+      return Number.isFinite(v2) && v2 > 0 ? v2 : null;
+    } catch (e2) {
+      return null;
+    }
+  }
+  function setEventsCaptureStartedAt(ts) {
+    try {
+      localStorage.setItem(EVENTS_CAPTURE_START_KEY, String(ts));
+    } catch (e2) {
+    }
+  }
+  function clearEventsCaptureStartedAt() {
+    try {
+      localStorage.removeItem(EVENTS_CAPTURE_START_KEY);
+    } catch (e2) {
+    }
   }
   function getActiveCaptureMode() {
     try {
@@ -340,13 +364,14 @@ var TraceBugModule = (() => {
     } catch (e2) {
     }
   }
-  var SESSIONS_KEY, ACTIVE_SESSION_KEY, ACTIVE_CAPTURE_MODE_KEY, WARNING_THROTTLE_MS, _lastWarnAt, STATS_KEY, QUOTA_ESTIMATE_BYTES, REFUSAL_BACKOFF_MS, _refusedUntil, _nearFullWarned, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
+  var SESSIONS_KEY, ACTIVE_SESSION_KEY, ACTIVE_CAPTURE_MODE_KEY, EVENTS_CAPTURE_START_KEY, WARNING_THROTTLE_MS, _lastWarnAt, STATS_KEY, QUOTA_ESTIMATE_BYTES, REFUSAL_BACKOFF_MS, _refusedUntil, _nearFullWarned, _cachedSessions, _pendingFlush, _dirty, FLUSH_INTERVAL_MS;
   var init_storage = __esm({
     "src/storage.ts"() {
       "use strict";
       SESSIONS_KEY = "tracebug_sessions";
       ACTIVE_SESSION_KEY = "tracebug_active_session";
       ACTIVE_CAPTURE_MODE_KEY = "tracebug_active_capture_mode";
+      EVENTS_CAPTURE_START_KEY = "tracebug_events_capture_started";
       WARNING_THROTTLE_MS = 3e4;
       _lastWarnAt = {};
       STATS_KEY = "tracebug_storage_stats";
@@ -19818,7 +19843,20 @@ var TraceBugModule = (() => {
   function snapshotDomEvents() {
     return _events.slice();
   }
-  var _recordFn, _loadPromise, _events, _stopFn, _recording, _trimmed, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX;
+  function stashDomReplay(events, startedAt, durationMs) {
+    if (!Array.isArray(events) || events.length === 0) {
+      _stashed = null;
+      return;
+    }
+    _stashed = { events, startedAt, durationMs: Math.max(0, durationMs) };
+  }
+  function getStashedDomReplay() {
+    return _stashed;
+  }
+  function clearStashedDomReplay() {
+    _stashed = null;
+  }
+  var _recordFn, _loadPromise, _events, _stopFn, _recording, _trimmed, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX, _stashed;
   var init_rrweb_recorder = __esm({
     "src/rrweb-recorder.ts"() {
       "use strict";
@@ -19831,6 +19869,7 @@ var TraceBugModule = (() => {
       CHECKOUT_EVERY_MS = 12e4;
       SOFT_MAX = 3e4;
       HARD_MAX = 6e4;
+      _stashed = null;
     }
   });
 
@@ -21905,6 +21944,22 @@ var TraceBugModule = (() => {
     if (!v2) return null;
     return v2.startedAt >= (session.createdAt || 0) - VIDEO_SESSION_GRACE_MS ? v2 : null;
   }
+  function getSessionDomReplay(session) {
+    if (!session) return void 0;
+    const stash = getStashedDomReplay();
+    if (!stash || !stash.events.length) return void 0;
+    if (stash.startedAt < (session.createdAt || 0) - VIDEO_SESSION_GRACE_MS) return void 0;
+    return {
+      url: "",
+      dataUrl: "",
+      durationMs: stash.durationMs,
+      mimeType: "",
+      sizeBytes: 0,
+      comments: [],
+      startedAt: stash.startedAt,
+      rrwebEvents: stash.events
+    };
+  }
   function buildReport(session, extraScreenshots) {
     var _a2, _b, _c, _d;
     const environment = session.environment || captureEnvironment();
@@ -22002,7 +22057,7 @@ var TraceBugModule = (() => {
       startedAt: lastVideo.startedAt,
       rrwebEvents: lastVideo.rrwebEvents
       // DOM replay stream — embedded by the .html exporter
-    } : void 0;
+    } : getSessionDomReplay(session);
     const title = generateBugTitle(session);
     const sessionSteps = generateSessionSteps(events);
     const actionChips = buildActionChips(events);
@@ -22301,6 +22356,7 @@ var TraceBugModule = (() => {
       init_action_chips();
       init_url_hygiene();
       init_annotation_store();
+      init_rrweb_recorder();
       VIDEO_SESSION_GRACE_MS = 1e4;
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
@@ -28315,7 +28371,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 
   // src/exporters/ai-prompt.ts
   function generateAIPrompt(report, options = {}) {
-    var _a2, _b;
+    var _a2, _b, _c, _d, _e;
     const { includeTask = true, projectName, screenshotsAttached = false } = options;
     const env = report.environment;
     const lines = [];
@@ -28397,7 +28453,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         ctxBits.push(`${n2} screenshot${n2 === 1 ? "" : "s"} captured (not embedded \u2014 share the .html or cloud link for visuals)`);
       }
     }
-    if (report.video) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1e3)}s)`);
+    if ((_c = report.video) == null ? void 0 : _c.dataUrl) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1e3)}s)`);
+    else if ((_e = (_d = report.video) == null ? void 0 : _d.rrwebEvents) == null ? void 0 : _e.length) ctxBits.push(`interactive DOM replay available (${Math.round(report.video.durationMs / 1e3)}s)`);
     if (report.annotations && report.annotations.length > 0) ctxBits.push(`${report.annotations.length} tester note${report.annotations.length === 1 ? "" : "s"}`);
     if (ctxBits.length > 0) {
       lines.push(`
@@ -32643,10 +32700,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     return `${m}:${s2}`;
   }
   function showRecordingHUD(root2, options) {
+    var _a2;
     if (_hud) return;
-    if (!isVideoRecording()) return;
+    const eventsOnly = options.mode === "events";
+    if (!eventsOnly && !isVideoRecording()) return;
     _root = root2;
     _onStopRequested = options.onStop;
+    _eventsStartedAt = eventsOnly ? (_a2 = options.startedAt) != null ? _a2 : Date.now() : null;
     const hud = document.createElement("div");
     hud.id = HUD_ID;
     hud.dataset.tracebug = "recording-hud";
@@ -32714,21 +32774,28 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       #${HUD_ID} .tb-hud-stop:hover { background: #f87171 !important; }
       #${HUD_ID} .tb-hud-sep { width: 1px !important; height: 18px !important; background: rgba(255,255,255,0.1) !important; margin: 0 2px !important; }
       #${HUD_ID} .tb-hud-timer { font-variant-numeric: tabular-nums !important; font-weight: 600 !important; min-width: 44px !important; text-align: center !important; padding: 0 4px !important; font-size: 13px !important; }
+      /* Events-only capture: says what is being captured where the mic button
+         sits in a video recording, so "no picker appeared" isn't read as
+         "nothing is happening". */
+      #${HUD_ID} .tb-hud-label { font-size: 12px !important; font-weight: 500 !important; color: rgba(255,255,255,0.62) !important; padding: 0 4px !important; white-space: nowrap !important; }
     `;
       document.head.appendChild(style);
     }
-    const micAvailable = hasMicrophoneTrack();
+    const micAvailable = !eventsOnly && hasMicrophoneTrack();
     hud.innerHTML = `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
       <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
     </span>
-    <button class="tb-hud-stop" data-tb-hud="stop" title="Stop recording" aria-label="Stop recording">
+    <button class="tb-hud-stop" data-tb-hud="stop" title="${eventsOnly ? "Stop capturing & file a ticket" : "Stop recording"}" aria-label="${eventsOnly ? "Stop capturing" : "Stop recording"}">
       <span style="width:10px;height:10px;background:#fff;border-radius:2px;display:inline-block"></span>
     </button>
+    ${eventsOnly ? "" : `
     <button class="tb-hud-btn" data-tb-hud="pause" title="Pause" aria-label="Pause recording">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-    </button>
+    </button>`}
     <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
+    ${eventsOnly ? `
+    <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording \u2014 nothing is being shared with your browser's screen-share.">Capturing</span>` : `
     <button class="tb-hud-btn" data-tb-hud="mic"
       title="${micAvailable ? "Mute / unmute microphone" : "No microphone in this recording"}"
       aria-label="Toggle microphone"
@@ -32736,7 +32803,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       style="${micAvailable ? "" : "opacity:0.35;cursor:not-allowed"}"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-    </button>
+    </button>`}
     <span class="tb-hud-sep"></span>
     <button class="tb-hud-btn" data-tb-hud="shot" title="Take a screenshot now (adds to the ticket)" aria-label="Take a screenshot">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -32744,7 +32811,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
-    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements \u2014 click to blur, click again to unblur (captured in the recording)" aria-label="Blur sensitive elements">
+    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements \u2014 click to blur, click again to unblur (${eventsOnly ? "the element's text is masked in the DOM replay" : "captured in the recording"})" aria-label="Blur sensitive elements">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>
     </button>
   `;
@@ -32759,6 +32826,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const shotBtn = hud.querySelector('[data-tb-hud="shot"]');
     const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
     _timerInterval = setInterval(() => {
+      if (_eventsStartedAt !== null) {
+        timerEl.textContent = _formatElapsed(Date.now() - _eventsStartedAt);
+        return;
+      }
       if (!isVideoRecording()) return;
       if (!isVideoPaused()) timerEl.textContent = _formatElapsed(getVideoElapsedMs());
     }, 500);
@@ -32904,8 +32975,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     _hud = null;
     _root = null;
     _onStopRequested = null;
+    _eventsStartedAt = null;
   }
-  var HUD_ID, _root, _hud, _timerInterval, _onStopRequested;
+  var HUD_ID, _root, _hud, _timerInterval, _onStopRequested, _eventsStartedAt;
   var init_recording_hud = __esm({
     "src/ui/recording-hud.ts"() {
       "use strict";
@@ -32918,6 +32990,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _hud = null;
       _timerInterval = null;
       _onStopRequested = null;
+      _eventsStartedAt = null;
     }
   });
 
@@ -71076,9 +71149,9 @@ First element: \`${exampleSnippet}\``,
   var MAX_VIDEO_DURATION_S = 120;
   var MAX_SCREENSHOTS_PER_SHARE = 5;
   async function shareSessionAsLink(session, report, options) {
-    var _a2, _b, _c, _d, _e;
+    var _a2, _b, _c, _d, _e, _f;
     const cloudEndpoint = resolveCloudEndpoint(options == null ? void 0 : options.cloudEndpoint);
-    const includeVideo = (_a2 = options == null ? void 0 : options.includeVideo) != null ? _a2 : !!report.video;
+    const includeVideo = (_b = options == null ? void 0 : options.includeVideo) != null ? _b : !!((_a2 = report.video) == null ? void 0 : _a2.dataUrl);
     const safe = sanitizeReportForUpload(report);
     if (safe.screenshots && safe.screenshots.length > MAX_SCREENSHOTS_PER_SHARE) {
       const err = new Error("too_many_screenshots");
@@ -71087,7 +71160,7 @@ First element: \`${exampleSnippet}\``,
       err.limit = MAX_SCREENSHOTS_PER_SHARE;
       throw err;
     }
-    if (includeVideo && ((_b = safe.video) == null ? void 0 : _b.durationMs) && safe.video.durationMs > MAX_VIDEO_DURATION_S * 1e3) {
+    if (includeVideo && ((_c = safe.video) == null ? void 0 : _c.durationMs) && safe.video.durationMs > MAX_VIDEO_DURATION_S * 1e3) {
       const err = new Error("video_too_long");
       err.code = "video_too_long";
       err.durationMs = safe.video.durationMs;
@@ -71110,11 +71183,11 @@ First element: \`${exampleSnippet}\``,
     }
     const bridge = getBridge(cloudEndpoint);
     const init = await bridge.uploadInit({
-      title: (_c = safe.title) == null ? void 0 : _c.slice(0, 200),
+      title: (_d = safe.title) == null ? void 0 : _d.slice(0, 200),
       sizeBytes: blob2.size,
       hasVideo: !!(includeVideo && safe.video),
       videoDurationS: includeVideo && safe.video ? Math.round(safe.video.durationMs / 1e3) : void 0,
-      screenshotCount: (_e = (_d = safe.screenshots) == null ? void 0 : _d.length) != null ? _e : 0,
+      screenshotCount: (_f = (_e = safe.screenshots) == null ? void 0 : _e.length) != null ? _f : 0,
       thumbnail: thumbnail != null ? thumbnail : void 0,
       // Tester-set only — don't upload the severity-derived fallback.
       priority: session.priority
@@ -71135,6 +71208,7 @@ First element: \`${exampleSnippet}\``,
   init_voice_recorder();
   init_video_recorder();
   init_recording_hud();
+  init_rrweb_recorder();
   init_dev_api();
   init_scanner();
   init_element_annotate();
@@ -71527,6 +71601,11 @@ ${summary}`;
       this._emit = null;
       this._consoleLevel = "all";
       this._lastErrorMsgPrompted = null;
+      // When the current events-only capture began, or null if none is running.
+      // There is no MediaRecorder to ask for elapsed time on that path, so the HUD
+      // timer and the stashed replay's duration both come from here. Reset to a
+      // fresh timestamp when the capture resumes on a new page after a navigation.
+      this._eventsCaptureStartedAt = null;
     }
     /**
      * Initialize TraceBug. Call once on app startup.
@@ -71747,6 +71826,22 @@ ${summary}`;
             this._attachConsoleCollectors();
             if (this._emit) drainPerformanceNetwork(this._emit);
             updateRecordingState(true);
+            const eventsStartedAt = getEventsCaptureStartedAt();
+            if (eventsStartedAt !== null) {
+              this._eventsCaptureStartedAt = eventsStartedAt;
+              void startDomRecording();
+              const hudRoot = document.getElementById("tracebug-root");
+              if (hudRoot) {
+                showRecordingHUD(hudRoot, {
+                  mode: "events",
+                  startedAt: eventsStartedAt,
+                  onStop: () => {
+                    this.stopEventsCapture().catch(() => {
+                    });
+                  }
+                });
+              }
+            }
           }
         }
       }).catch(() => {
@@ -72052,13 +72147,22 @@ ${summary}`;
      * attached to the bug report.
      */
     /**
-     * Pre-recording flow: optionally let the user BLUR sensitive areas first
+     * Pre-capture flow: optionally let the user BLUR sensitive areas first
      * (the blur is real backdrop blur — the redacted pixels are what the
-     * recording captures), then an optional 3-2-1 countdown, then record.
+     * recording captures, and the element's text is masked in the DOM replay),
+     * then an optional 3-2-1 countdown, then capture.
+     *
+     * `video` decides which capture runs. It defaults to FALSE (Phase 4): the
+     * popup's Capture Bug no longer opens a screen-share picker unless the user
+     * has turned video on, so a first capture needs no OS dialog at all.
      */
     prepareRecording(opts = {}) {
       const begin = () => {
         const go = () => {
+          if (!opts.video) {
+            void this.startEventsCapture();
+            return;
+          }
           void this.startVideoRecording({
             withMicrophone: !!opts.withMicrophone,
             surfaceMode: opts.surfaceMode
@@ -72072,6 +72176,88 @@ ${summary}`;
       };
       if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
       else begin();
+    }
+    /**
+     * Start an events-only capture: console, network, clicks and keystrokes, plus
+     * an interactive DOM replay — and no screen share, so no picker and no OS
+     * permission. This is the popup's default capture since Phase 4.
+     *
+     * The session is armed in "events" mode, which is what lets it SURVIVE a
+     * navigation: `_restoreVideoSessionOnInit` resumes an "events" session on the
+     * next page instead of finalizing it (whereas a video session whose tab-share
+     * the browser killed has to be finalized).
+     *
+     * Returns false only when there is no dashboard root to mount the HUD into —
+     * without a Stop control the user would have no way to end the capture.
+     */
+    async startEventsCapture() {
+      const root2 = document.getElementById("tracebug-root");
+      if (!root2) {
+        console.warn("[TraceBug] Events capture needs the dashboard mounted (no #tracebug-root)");
+        return false;
+      }
+      try {
+        this._endActiveSession();
+      } catch (e2) {
+      }
+      try {
+        clearStashedDomReplay();
+      } catch (e2) {
+      }
+      try {
+        this._startActiveSession();
+      } catch (e2) {
+      }
+      this._eventsCaptureStartedAt = Date.now();
+      try {
+        setEventsCaptureStartedAt(this._eventsCaptureStartedAt);
+      } catch (e2) {
+      }
+      void startDomRecording();
+      this._attachConsoleCollectors();
+      showRecordingHUD(root2, {
+        mode: "events",
+        startedAt: this._eventsCaptureStartedAt,
+        onStop: () => {
+          this.stopEventsCapture().catch(() => {
+          });
+        }
+      });
+      return true;
+    }
+    /**
+     * Stop an events-only capture, stash its DOM replay for the report, and open
+     * the ticket modal. Mirrors `stopVideoRecording`: the user clicked Stop, so
+     * the ticket opens even if the replay came back empty.
+     */
+    async stopEventsCapture() {
+      var _a2, _b;
+      const startedAt = (_a2 = getEventsCaptureStartedAt()) != null ? _a2 : this._eventsCaptureStartedAt;
+      this._eventsCaptureStartedAt = null;
+      try {
+        clearEventsCaptureStartedAt();
+      } catch (e2) {
+      }
+      try {
+        const events = stopDomRecording();
+        if (startedAt !== null) stashDomReplay(events, startedAt, Date.now() - startedAt);
+      } catch (err) {
+        console.warn("[TraceBug] Failed to collect the DOM replay:", err);
+      }
+      hideRecordingHUD();
+      try {
+        this._endActiveSession();
+      } catch (e2) {
+      }
+      if (!((_b = this.config) == null ? void 0 : _b.enableDashboard)) return;
+      const root2 = document.getElementById("tracebug-root");
+      if (!root2) return;
+      try {
+        const m = await Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports));
+        if (!m.isQuickBugOpen()) await m.showQuickBugCapture(root2);
+      } catch (err) {
+        console.warn("[TraceBug] Failed to open the ticket after an events capture:", err);
+      }
     }
     async startVideoRecording(options) {
       var _a2;
@@ -72777,6 +72963,8 @@ ${summary}`;
       clearVoiceTranscripts();
       abortVideoRecording();
       clearVideoRecording();
+      this._eventsCaptureStartedAt = null;
+      clearStashedDomReplay();
       hideRecordingHUD();
       clearNetworkFailures();
       setRedactRules(void 0);

@@ -1,5 +1,5 @@
 // ── Recording HUD ─────────────────────────────────────────────────────────
-// Compact pill that appears while a video recording is in progress. Layout:
+// Compact pill that appears while a capture is in progress. Layout:
 //
 //   [● stop]  [‖ pause]  00:08  [🎤 mic]  |  [✎ annotate]  [✕ close]
 //
@@ -7,6 +7,15 @@
 // the rest of the controls. Pause / mic toggles state on the underlying
 // MediaRecorder so the user can briefly mask sensitive UI without losing
 // the recording context.
+//
+// Two modes (Phase 4). "video" is the above. "events" is the same pill for an
+// events-only capture — console, network, actions and DOM replay, no screen
+// share — which is now the popup's default, so this HUD is the only Stop
+// control the user has once the popup closes. Pause and mic are dropped there
+// (nothing to pause, no audio track) and the timer runs off a wall clock
+// instead of the MediaRecorder's. Stop / screenshot / draw / blur all still
+// apply: blur masks the element's text in the rrweb replay (see blur-tool.ts),
+// so it is not a video-only tool.
 
 import {
   getVideoElapsedMs,
@@ -28,6 +37,9 @@ let _root: HTMLElement | null = null;
 let _hud: HTMLElement | null = null;
 let _timerInterval: ReturnType<typeof setInterval> | null = null;
 let _onStopRequested: (() => void) | null = null;
+// "events" mode has no MediaRecorder to ask for elapsed time, so the HUD keeps
+// the capture's start timestamp and counts from it.
+let _eventsStartedAt: number | null = null;
 
 function _formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -36,17 +48,22 @@ function _formatElapsed(ms: number): string {
   return `${m}:${s}`;
 }
 
-/** Mount the recording HUD inside the TraceBug root. No-op if already mounted
- *  or if no recording is in progress. */
+/** Mount the recording HUD inside the TraceBug root. No-op if already mounted.
+ *  In "video" mode (the default) it also no-ops when no recording is in
+ *  progress — the guard that keeps a stale HUD from a dead offscreen document
+ *  off the page. An events-only capture has no MediaRecorder to check, so it
+ *  passes its own start timestamp instead. */
 export function showRecordingHUD(
   root: HTMLElement,
-  options: { onStop: () => void }
+  options: { onStop: () => void; mode?: "video" | "events"; startedAt?: number }
 ): void {
   if (_hud) return;
-  if (!isVideoRecording()) return;
+  const eventsOnly = options.mode === "events";
+  if (!eventsOnly && !isVideoRecording()) return;
 
   _root = root;
   _onStopRequested = options.onStop;
+  _eventsStartedAt = eventsOnly ? (options.startedAt ?? Date.now()) : null;
 
   const hud = document.createElement("div");
   hud.id = HUD_ID;
@@ -116,23 +133,30 @@ export function showRecordingHUD(
       #${HUD_ID} .tb-hud-stop:hover { background: #f87171 !important; }
       #${HUD_ID} .tb-hud-sep { width: 1px !important; height: 18px !important; background: rgba(255,255,255,0.1) !important; margin: 0 2px !important; }
       #${HUD_ID} .tb-hud-timer { font-variant-numeric: tabular-nums !important; font-weight: 600 !important; min-width: 44px !important; text-align: center !important; padding: 0 4px !important; font-size: 13px !important; }
+      /* Events-only capture: says what is being captured where the mic button
+         sits in a video recording, so "no picker appeared" isn't read as
+         "nothing is happening". */
+      #${HUD_ID} .tb-hud-label { font-size: 12px !important; font-weight: 500 !important; color: rgba(255,255,255,0.62) !important; padding: 0 4px !important; white-space: nowrap !important; }
     `;
     document.head.appendChild(style);
   }
 
-  const micAvailable = hasMicrophoneTrack();
+  const micAvailable = !eventsOnly && hasMicrophoneTrack();
 
   hud.innerHTML = `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
       <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
     </span>
-    <button class="tb-hud-stop" data-tb-hud="stop" title="Stop recording" aria-label="Stop recording">
+    <button class="tb-hud-stop" data-tb-hud="stop" title="${eventsOnly ? "Stop capturing & file a ticket" : "Stop recording"}" aria-label="${eventsOnly ? "Stop capturing" : "Stop recording"}">
       <span style="width:10px;height:10px;background:#fff;border-radius:2px;display:inline-block"></span>
     </button>
+    ${eventsOnly ? "" : `
     <button class="tb-hud-btn" data-tb-hud="pause" title="Pause" aria-label="Pause recording">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-    </button>
+    </button>`}
     <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
+    ${eventsOnly ? `
+    <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording — nothing is being shared with your browser's screen-share.">Capturing</span>` : `
     <button class="tb-hud-btn" data-tb-hud="mic"
       title="${micAvailable ? "Mute / unmute microphone" : "No microphone in this recording"}"
       aria-label="Toggle microphone"
@@ -140,7 +164,7 @@ export function showRecordingHUD(
       style="${micAvailable ? "" : "opacity:0.35;cursor:not-allowed"}"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-    </button>
+    </button>`}
     <span class="tb-hud-sep"></span>
     <button class="tb-hud-btn" data-tb-hud="shot" title="Take a screenshot now (adds to the ticket)" aria-label="Take a screenshot">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -148,7 +172,7 @@ export function showRecordingHUD(
     <button class="tb-hud-btn" data-tb-hud="annotate" title="Draw on the page" aria-label="Draw on the page">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
     </button>
-    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements — click to blur, click again to unblur (captured in the recording)" aria-label="Blur sensitive elements">
+    <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements — click to blur, click again to unblur (${eventsOnly ? "the element's text is masked in the DOM replay" : "captured in the recording"})" aria-label="Blur sensitive elements">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>
     </button>
   `;
@@ -166,6 +190,10 @@ export function showRecordingHUD(
   const stopBtn = hud.querySelector('[data-tb-hud="stop"]') as HTMLButtonElement;
 
   _timerInterval = setInterval(() => {
+    if (_eventsStartedAt !== null) {
+      timerEl.textContent = _formatElapsed(Date.now() - _eventsStartedAt);
+      return;
+    }
     if (!isVideoRecording()) return;
     if (!isVideoPaused()) timerEl.textContent = _formatElapsed(getVideoElapsedMs());
   }, 500);
@@ -299,6 +327,7 @@ export function hideRecordingHUD(): void {
   _hud = null;
   _root = null;
   _onStopRequested = null;
+  _eventsStartedAt = null;
 }
 
 export function isRecordingHUDVisible(): boolean {
