@@ -41,6 +41,18 @@
     <!-- Main content -->
     <main id="mainContent" class="main">
 
+      <!-- "What's new" after an update (Phase 4 Step D). Empty markup: the
+           lines and the warning are built by popup.js from its per-version
+           WHATS_NEW table, and the card stays hidden unless the worker flagged
+           a version that table has copy for. No copy, no card — a release that
+           forgets to add an entry shows nothing rather than an empty box. -->
+      <div class="wn" id="whatsNew" style="display:none;">
+        <div class="wn-label" id="whatsNewLabel"></div>
+        <ul class="wn-list" id="whatsNewList"></ul>
+        <div class="wn-warn" id="whatsNewWarn" style="display:none;"></div>
+        <div class="wn-foot"><button class="wn-got" id="whatsNewGot" type="button">Got it</button></div>
+      </div>
+
       <!-- PHASE2-CLOUD: account / cloud-sharing block disabled for Phase 1 offline release
       <div class="account" id="account">
         <div class="account-loading" id="accountLoading">

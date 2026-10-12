@@ -328,3 +328,41 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ft a { color: var(--text-2); text-decoration: none; font-weight: 500; transition: color 0.15s; }
 .ft a:hover { color: var(--accent); }
 .ft-sep { color: var(--text-3); }
+
+/* ── "What's new" card (Phase 4 Step D) ──────────────
+   Shown once after an update, at the top of the popup. Soft indigo so it
+   reads as information rather than a warning — the one genuinely cautionary
+   line inside it carries its own amber treatment. */
+.wn {
+  margin: 0 0 12px;
+  padding: 12px 13px 10px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--radius-md);
+}
+.wn-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+}
+.wn-list { list-style: none; margin: 0; padding: 0; }
+.wn-item {
+  display: flex; gap: 7px; align-items: flex-start;
+  font-size: 12px; line-height: 1.45; color: var(--text-2);
+  margin-bottom: 6px;
+}
+.wn-item:last-child { margin-bottom: 0; }
+.wn-item svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
+.wn-warn {
+  margin-top: 9px; padding: 7px 9px;
+  background: rgba(180, 83, 9, 0.10);
+  border-radius: 8px;
+  font-size: 11.5px; line-height: 1.45; color: #B45309;
+}
+:root[data-theme="dark"] .wn-warn { color: #FBBF24; background: rgba(251, 191, 36, 0.12); }
+.wn-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
+.wn-got {
+  background: none; border: 0; padding: 2px 2px;
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  font-family: inherit;
+}
+.wn-got:hover { text-decoration: underline; }

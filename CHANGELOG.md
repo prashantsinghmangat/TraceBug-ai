@@ -35,6 +35,16 @@ All notable changes to TraceBug are documented here.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
 
 - **One line before your browser asks what to share** (`src/ui/pre-record.ts`) — the share dialog is the browser's own, it offers three surfaces, and it says nothing about which one a bug report wants. Picking "Entire screen" records your whole desktop and picking the wrong tab records the wrong page, neither of which can be undone afterwards. TraceBug now explains it first, and the wording matches the dialog you are about to see: "already set to this tab — choose Share" when Capture is **Current tab**, "pick this tab" when it's **Desktop / window**.
+- **Updating tells you what changed, without taking over a tab** (`tracebug-extension/popup.js`) - after
+  an update the popup shows a short "What's new" card the next time you open it, with a "Got it" that
+  dismisses it for good. No new tab, no page stealing focus while you were doing something else. A fresh
+  install never sees it: it gets the welcome page instead.
+- **A bundled welcome page, so first run works offline** (`tracebug-extension/welcome.html`) — installing
+  used to open `tracebug.dev/try.html` in a new tab, which meant the first thing you ever saw of TraceBug
+  depended on your connection. The welcome page now ships inside the extension: pin it to the toolbar,
+  try it on the bug playground, and your capture shortcut — showing the key your browser actually bound,
+  or an easy way to set one if it bound nothing. It also says plainly what a capture can see, and what
+  never leaves your machine. The playground is still one click away, as step 2.
 - **The exported replay says which page it covers** (`src/exporters/html-template.ts`) — the heading
   on a DOM-replay export now reads "Replay of the last page (/checkout/payment)" instead of just
   "Replay". The console, network and action lists beside it span every page the capture crossed, so

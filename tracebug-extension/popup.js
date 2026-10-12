@@ -278,6 +278,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // void refreshAccount();
 
   void initRedactionUI();
+  void initWhatsNew();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -679,6 +680,98 @@ function parseRedactPatterns(raw) {
 function redactStateLabel(rules) {
   const n = (rules?.fields?.length || 0) + (rules?.patterns?.length || 0);
   return n > 0 ? `${n} rule${n === 1 ? "" : "s"}` : "";
+}
+
+// ── "What's new" after an update (Phase 4 Step D) ───────────────────────────
+// background.js records which version landed (tb_whats_new); the copy lives
+// HERE, keyed by that version, and literal. Deliberately not generated from the
+// changelog and not templated on the version number: every line below is a
+// claim about 1.11 specifically, and three of them stop being true the moment
+// 1.12 changes something. A version with no entry shows no card.
+//
+// The capture line is an INVITATION, not an announcement, and that is load
+// bearing: this card is only ever shown on UPDATE, and an updating user keeps
+// video ON (background.js seedRecordOptsDefault). "Captures no longer share
+// your screen" would be false for every single person who reads it.
+const WHATS_NEW_KEY = "tb_whats_new";
+const WHATS_NEW = {
+  "1.11.0": {
+    label: "New in 1.11",
+    lines: [
+      "New: capture without screen sharing. Turn off Record video too in Record options to try it.",
+      "No more “read all your data” warning at install",
+      "Tokens and API keys now live in TraceBug settings, not in the sites you test",
+      "Every GitHub, Linear or Slack send asks you first",
+    ],
+    warning: "Set up GitHub, Linear, Slack or an AI key before 1.11? Please revoke and re-create it.",
+  },
+};
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * The check mark, built with createElementNS rather than innerHTML.
+ *
+ * innerHTML here is what web-ext flags as UNSAFE_VAR_ASSIGNMENT, and the
+ * warning is fair even for a string literal: it makes the next edit to this
+ * function an injection point. Six lines of DOM calls, no warning, no risk.
+ */
+function wnCheckIcon() {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "12");
+  svg.setAttribute("height", "12");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "3");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", "M20 6 9 17l-5-5");
+  svg.appendChild(path);
+  return svg;
+}
+
+/**
+ * Show the card if, and only if, an update landed on a version this file has
+ * copy for. Dismissing clears the key, so it never returns for that version.
+ */
+async function initWhatsNew() {
+  const card = document.getElementById("whatsNew");
+  if (!card) return;
+  let version = "";
+  try { version = (await chrome.storage.local.get(WHATS_NEW_KEY))[WHATS_NEW_KEY] || ""; } catch { return; }
+  const copy = WHATS_NEW[version];
+  if (!copy) {
+    // Either nothing landed, or it landed on a version with nothing to say.
+    // Drop a stale flag so it is not reconsidered on every popup open.
+    if (version) { try { void chrome.storage.local.remove(WHATS_NEW_KEY); } catch {} }
+    return;
+  }
+
+  document.getElementById("whatsNewLabel").textContent = copy.label;
+  const list = document.getElementById("whatsNewList");
+  for (const line of copy.lines) {
+    const li = document.createElement("li");
+    li.className = "wn-item";
+    // The icon is built as nodes; the copy is set as text. Neither path goes
+    // through innerHTML.
+    const text = document.createElement("span");
+    text.textContent = line;
+    li.append(wnCheckIcon(), text);
+    list.appendChild(li);
+  }
+  if (copy.warning) {
+    const warn = document.getElementById("whatsNewWarn");
+    warn.textContent = copy.warning;
+    warn.style.display = "";
+  }
+  document.getElementById("whatsNewGot").addEventListener("click", () => {
+    card.style.display = "none";
+    try { void chrome.storage.local.remove(WHATS_NEW_KEY); } catch {}
+  });
+  card.style.display = "";
 }
 
 async function initRedactionUI() {

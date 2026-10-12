@@ -39,6 +39,8 @@ const SHARED_FILES = [
   "popup.html",
   "options.js",
   "options.html",
+  "welcome.js",
+  "welcome.html",
   "confirm-send.js",
   "confirm-send.html",
   "player.js",
