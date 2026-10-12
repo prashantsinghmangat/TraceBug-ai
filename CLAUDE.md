@@ -11,7 +11,7 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
   bundled for the background service worker, which cannot import the page SDK.
 - `tests/` - Vitest unit tests (e.g. `tests/storage.test.ts`). `e2e/` - Playwright specs + `.e2e.mjs` scripts; benchmark at `e2e/benchmark.mjs`.
 - `docs/` - user docs; `docs/adr/` - architecture decisions (read the relevant ADR before changing architecture).
-- `docs/launch/` - current launch work: `PLAN.md` (the phased task list), `phase0-findings.md`, `PROGRESS.md`.
+- `docs/launch/` - current launch work: `STATE.md` (where things stand - **start here**), `PLAN.md` (what's left), `PROGRESS.md`. The `*-archive.md` files are closed history; don't read them unless you need why.
 
 ## Commands
 - Build SDK + extension bundle: `npm run build` (tsup; rewrites `tracebug-extension/tracebug-sdk.js`, then reload the unpacked extension)
@@ -34,7 +34,7 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
 - No `Co-Authored-By` trailers.
 
 ## Working style (saves tokens)
-- Before exploring, read `docs/launch/phase0-findings.md`; don't re-investigate what it already answers.
+- Before exploring, read `docs/launch/STATE.md`; don't re-investigate what it already answers.
 - Use `rg`/grep with paths; read specific line ranges, not whole large files (`docs/api-reference.md`, `ARCHITECTURE.md` and the built bundle are big).
 - Make small diffs. Run only the tests related to the change, then the full suite once at the end of a phase.
-- At the end of each phase, append a 3-5 line entry to `docs/launch/PROGRESS.md` (what changed, files, how verified, open issues).
+- At the end of each phase, rewrite `docs/launch/STATE.md` and add a <=5 line entry to `docs/launch/PROGRESS.md` (what changed, files, how verified, open issues).
