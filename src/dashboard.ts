@@ -15,7 +15,7 @@ import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecor
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, copyToClipboard } from "./annotation-store";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
 import { showToast as showUnifiedToast, showActionToast } from "./ui/toast";
-import { shouldShowPageOnlyNotice } from "./ext-transport";
+import { shouldShowPageOnlyNotice, browserOwnsQuickCapture } from "./ext-transport";
 
 export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setNewCaptureHandler };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
@@ -174,11 +174,29 @@ export function mountDashboard(
   // matchesShortcut). Screenshot binding is user-configurable via
   // config.shortcuts; Quick Bug (Ctrl/Cmd+Shift+B) is hardcoded because
   // it's the headline daily-use shortcut.
+  //
+  // Phase 3 added a real browser command for capture (manifest `commands`),
+  // which is what makes a keypress work on a tab TraceBug has never run on.
+  // Its default is Alt+B, NOT this combo: Chrome refuses to bind
+  // Ctrl+Shift+B (bookmarks bar) or Alt+Shift+B (focus bookmarks bar) and
+  // reports an empty shortcut for both — verified in
+  // e2e/ext-provider-confirm.e2e.mjs. So by default both keys work and they
+  // do different jobs: Alt+B captures from anywhere, Ctrl+Shift+B opens Quick
+  // Bug once TraceBug is on the page.
+  //
+  // If the user REBINDS the command onto Ctrl/Cmd+Shift+B, the browser owns
+  // the key and this handler must stand down or one press opens Quick Bug
+  // twice — that is browserOwnsQuickCapture(). SDK (npm) mode never stands
+  // down, because there is no browser command there at all.
   const screenshotShortcut = shortcuts?.screenshot || "ctrl+shift+s";
 
   const keyHandler = async (e: KeyboardEvent) => {
     // Ctrl/Cmd+Shift+B — Quick Bug Capture (never configurable)
     if (matchesShortcut(e, "ctrl+shift+b")) {
+      // The browser has this combo bound to TraceBug's own command, so it has
+      // already run (or is about to). Doing it here too would open Quick Bug
+      // twice — and must not preventDefault either, since the key is not ours.
+      if (browserOwnsQuickCapture()) return;
       e.preventDefault();
       if (!isQuickBugOpen()) {
         showQuickBugCapture(root).catch(err => {

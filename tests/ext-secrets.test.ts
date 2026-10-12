@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   setTransportMode, isExtensionMode, setIntegrationStatus, getIntegrationStatus,
   setHostAccess, getHostAccess, isCaptureLimitedToThisPage, shouldShowPageOnlyNotice,
+  setBoundShortcut, getBoundShortcut, browserOwnsQuickCapture,
 } from '../src/ext-transport';
 import {
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
@@ -309,5 +310,77 @@ describe('the page-only notice fires once, and only when access is withheld', ()
     setTransportMode('extension');
     setHostAccess(false);
     expect(shouldShowPageOnlyNotice()).toBe(true);
+  });
+});
+
+describe('one Ctrl+Shift+B press never fires both handlers', () => {
+  // Phase 3 made the combo a real browser `commands` entry so it works on a
+  // tab TraceBug has never run on — which is what docs/quickstart.md has been
+  // telling new users to press. That gives the key two possible owners, and
+  // the rule has to be deterministic rather than relying on the modal's
+  // isQuickBugOpen() race guard.
+
+  it('stands down when the browser bound this exact combo', () => {
+    setTransportMode('extension');
+    setBoundShortcut('Ctrl+Shift+B');
+    expect(browserOwnsQuickCapture()).toBe(true);
+  });
+
+  it('accepts the macOS spellings of the same combo', () => {
+    setTransportMode('extension');
+    // chrome.commands.getAll() reports either form depending on platform.
+    for (const key of ['Command+Shift+B', 'Cmd+Shift+B', '⌘⇧B', 'MacCtrl+Shift+B']) {
+      setBoundShortcut(key);
+      expect(browserOwnsQuickCapture(), key).toBe(true);
+    }
+  });
+
+  it('keeps the in-page handler when the user rebound the command', () => {
+    // The browser no longer owns Ctrl+Shift+B, so the page handler is the
+    // only thing that would answer it — silencing it would lose the key.
+    setTransportMode('extension');
+    for (const key of ['Alt+Shift+B', 'Ctrl+Shift+Y', 'Ctrl+Shift+B+K', 'Ctrl+B']) {
+      setBoundShortcut(key);
+      expect(browserOwnsQuickCapture(), key).toBe(false);
+    }
+  });
+
+  it('keeps the in-page handler when NOTHING is bound', () => {
+    // The likely case on Chrome: Ctrl+Shift+B is the bookmarks bar, so the
+    // suggested key may never have bound. The page handler must still work.
+    setTransportMode('extension');
+    setBoundShortcut('');
+    expect(browserOwnsQuickCapture()).toBe(false);
+    setBoundShortcut(undefined);
+    expect(browserOwnsQuickCapture()).toBe(false);
+    setBoundShortcut(null);
+    expect(getBoundShortcut()).toBe('');
+    expect(browserOwnsQuickCapture()).toBe(false);
+  });
+
+  it('never stands down in SDK (npm) mode', () => {
+    // No browser command exists there at all, whatever the attribute says.
+    setTransportMode('page');
+    setBoundShortcut('Ctrl+Shift+B');
+    expect(browserOwnsQuickCapture()).toBe(false);
+  });
+
+  it('forgets the shortcut on a fresh init', () => {
+    // Until the content script republishes, we know nothing — and claiming a
+    // key is bound would silence the in-page handler for no reason.
+    setTransportMode('extension');
+    setBoundShortcut('Ctrl+Shift+B');
+    setTransportMode('extension');
+    expect(getBoundShortcut()).toBe('');
+    expect(browserOwnsQuickCapture()).toBe(false);
+  });
+
+  it('coerces a hostile non-string to ""', () => {
+    // data-tb-caps is page-writable; a rewritten shortcut must not become a
+    // reason to disable the only working handler.
+    setTransportMode('extension');
+    setBoundShortcut({ toString: () => 'Ctrl+Shift+B' } as unknown as string);
+    expect(getBoundShortcut()).toBe('');
+    expect(browserOwnsQuickCapture()).toBe(false);
   });
 });

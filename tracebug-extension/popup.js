@@ -21,6 +21,11 @@ let cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
 // doorhanger, don't re-prompt on every click — that punishes a "no".
 // Persisted so the decision survives popup reopens.
 let hostPermDeclined = false;
+// The shortcut the BROWSER bound to TraceBug's capture command, or "" if the
+// user has none. Never hardcoded in copy: it is rebindable, and Ctrl+Shift+B
+// collides with Chrome's bookmarks bar and Firefox's bookmarks Library, so it
+// may well have failed to bind.
+let boundShortcut = "";
 try {
   chrome.storage.local.get("tb_host_perm_declined", (r) => {
     void chrome.runtime.lastError;
@@ -123,6 +128,42 @@ function showUnavailable(verdict) {
     btn.textContent = "Try again";
     btn.onclick = () => window.location.reload();
   }
+}
+
+/** What chrome.commands bound to our capture command. "" = nothing. */
+function loadBoundShortcut() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.commands || !chrome.commands.getAll) return resolve("");
+      const maybe = chrome.commands.getAll((list) => {
+        void chrome.runtime.lastError;
+        const found = (list || []).find((c) => c && c.name === "tb-quick-capture");
+        resolve((found && found.shortcut) || "");
+      });
+      // Firefox returns a promise and ignores the callback.
+      if (maybe && typeof maybe.then === "function") {
+        maybe.then(
+          (list) => {
+            const found = (list || []).find((c) => c && c.name === "tb-quick-capture");
+            resolve((found && found.shortcut) || "");
+          },
+          () => resolve(""),
+        );
+      }
+    } catch { resolve(""); }
+  });
+}
+
+/**
+ * Where the user rebinds extension shortcuts. Branches on the extension URL
+ * scheme, which is the thing that actually differs — not on a user-agent
+ * string. Firefox has no shortcuts URL of its own; about:addons is where the
+ * "Manage Extension Shortcuts" menu lives.
+ */
+function shortcutsPageUrl() {
+  let scheme = "";
+  try { scheme = chrome.runtime.getURL(""); } catch {}
+  return scheme.startsWith("moz-extension://") ? "about:addons" : "chrome://extensions/shortcuts";
 }
 
 async function loadCloudEndpoint() {
@@ -266,6 +307,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Show whether the SDK is currently loaded on this tab. Informational
   // only — there's no enable/disable toggle here. Reloading the tab is
   // the way to unload it.
+  boundShortcut = await loadBoundShortcut();
+
   const stateResponse = await chrome.runtime.sendMessage({
     type: "GET_STATE",
     tabId: currentTabId,
@@ -453,13 +496,39 @@ function updateHint(isLoaded) {
   const dot = document.getElementById("hintDot");
   const text = document.getElementById("hintText");
   if (!dot || !text) return;
-  if (isLoaded) {
-    dot.classList.add("active");
-    text.textContent = "TraceBug is loaded on this tab. Reload to remove.";
-  } else {
-    dot.classList.remove("active");
-    text.textContent = "Nothing is tracked until you pick an action above.";
+
+  const base = isLoaded
+    ? "TraceBug is loaded on this tab. Reload to remove."
+    : "Nothing is tracked until you pick an action above.";
+
+  // The shortcut now works on any tab, cold — it is a real browser command,
+  // not a page handler — so the old "once TraceBug is on a page" caveat is
+  // gone with it.
+  text.textContent = boundShortcut
+    ? `${base} Tip: ${boundShortcut} captures a bug on this tab.`
+    : `${base} No capture shortcut is set.`;
+
+  dot.classList.toggle("active", !!isLoaded);
+
+  const link = document.getElementById("hintShortcut");
+  if (!link) return;
+  if (boundShortcut) {
+    link.style.display = "none";
+    return;
   }
+  // Nothing bound — most likely the browser refused Ctrl+Shift+B because it
+  // already owns it. Offer the page where the user can pick their own.
+  link.style.display = "inline-block";
+  link.textContent = "Set a shortcut";
+  link.title = `Opens ${shortcutsPageUrl()}, where you can assign a key to TraceBug`;
+  link.onclick = () => {
+    try {
+      chrome.tabs.create({ url: shortcutsPageUrl() });
+      window.close();
+    } catch {
+      showToast("Open your browser's extension shortcuts page to assign a key", true);
+    }
+  };
 }
 
 function showToast(msg, isError) {

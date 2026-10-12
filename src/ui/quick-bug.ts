@@ -43,7 +43,7 @@ import {
   createTrackerIssue, hasIntegration,
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
 } from "../integrations/tracker-client";
-import { isExtensionMode } from "../ext-transport";
+import { isExtensionMode, getBoundShortcut } from "../ext-transport";
 import {
   TRACKER_LABELS, type TrackerProvider, type IntegrationsConfig,
 } from "../integrations/tracker-client";
@@ -66,6 +66,24 @@ const MODAL_ID = "tracebug-quick-bug-modal";
 // Micro-feedback links at key product moments. Privacy-safe by construction:
 // nothing is sent anywhere — each option is a plain link that opens the
 // feedback page prefilled; submitting is the user's explicit action there.
+/**
+ * "Tip: <key> to quick-capture anytime" — but never with the key written in.
+ * In extension mode the shortcut is whatever the browser bound to TraceBug's
+ * command, which the user can rebind or clear (Ctrl+Shift+B collides with the
+ * bookmarks bar in Chrome and the bookmarks Library in Firefox, so it may
+ * never have bound at all). With nothing bound, the tip is dropped rather
+ * than advertising a dead key. SDK (npm) mode has no browser command, so the
+ * in-page handler really is Ctrl+Shift+B there.
+ */
+function quickCaptureTipHtml(): string {
+  if (isExtensionMode()) {
+    const key = getBoundShortcut();
+    if (!key) return "";
+    return `Tip: <kbd>${escapeHtml(key)}</kbd> to quick-capture anytime`;
+  }
+  return `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`;
+}
+
 function _feedbackUrl(type: "bug" | "idea" | "other", msg: string): string {
   const area = isExtensionContext() ? "extension" : "npm-sdk";
   return `https://tracebug.dev/feedback?type=${type}&area=${area}&msg=${encodeURIComponent(msg)}`;
@@ -656,7 +674,7 @@ function _openModal(
       <div class="tb-qb-tip">
         <span>${redactionLine
           ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture — they never enter the report. See docs → Privacy for the full pattern list.">🛡 ${escapeHtml(redactionLine)}</span>`
-          : `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`}</span>
+          : quickCaptureTipHtml()}</span>
         <span class="tb-qb-tip-right">
           <span class="tb-qb-fb">Enough info to reproduce?
             <a href="${_feedbackUrl("other", "Capture quality 👍 — the ticket had enough to reproduce the bug.")}" target="_blank" rel="noopener" title="Yes — send a quick thumbs up">👍</a>

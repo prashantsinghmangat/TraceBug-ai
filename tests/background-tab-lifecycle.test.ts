@@ -55,7 +55,7 @@ describe('re-injection after navigation with site access DECLINED', () => {
   it('reports host access as withheld', async () => {
     // This is the answer that reaches the SDK as data-tb-caps.hostAccess and
     // drives the "capturing this page only" notice.
-    expect(await ask(mock, { type: 'TB_HOST_ACCESS' })).toEqual({ granted: false });
+    expect(await ask(mock, { type: 'TB_HOST_ACCESS' })).toMatchObject({ granted: false });
   });
 
   it('still ATTEMPTS re-injection, with the right tabId, when tab.url is undefined', async () => {
@@ -322,4 +322,74 @@ describe('an extension update never kills a recording', () => {
   // delay. maybeApplyUpdate re-checks _recordingTabId before reloading for
   // exactly that case, but driving a successful tb:rec:start needs a working
   // offscreen/recorder host, which this fake deliberately does not model.
+});
+
+describe('the keyboard command (Phase 3)', () => {
+  // Ctrl/Cmd+Shift+B was only ever a keydown handler inside the injected SDK,
+  // so it did nothing on a tab TraceBug had never run on — which is the first
+  // thing docs/quickstart.md tells a new user to press. It is a real browser
+  // command now, and a command invocation grants activeTab, so it needs no
+  // host permission.
+
+  it('reports the bound shortcut so no UI has to hardcode the key', async () => {
+    const mock = createChromeMock({
+      commands: [{ name: 'tb-quick-capture', shortcut: 'Ctrl+Shift+B' }],
+    });
+    loadBackground(mock);
+    await settle(20);
+    expect(await ask(mock, { type: 'TB_HOST_ACCESS' })).toMatchObject({ shortcut: 'Ctrl+Shift+B' });
+  });
+
+  it('reports "" when the browser bound nothing', async () => {
+    // The real possibility on Chrome: Ctrl+Shift+B is the bookmarks bar.
+    const mock = createChromeMock({ commands: [{ name: 'tb-quick-capture', shortcut: '' }] });
+    loadBackground(mock);
+    await settle(20);
+    expect(await ask(mock, { type: 'TB_HOST_ACCESS' })).toMatchObject({ shortcut: '' });
+  });
+
+  it('captures the active tab from a cold start, with no site access', async () => {
+    const mock = createChromeMock({ commands: [{ name: 'tb-quick-capture', shortcut: 'Ctrl+Shift+B' }] });
+    loadBackground(mock);
+    await settle(20);
+    mock.setTabLive(7, true, true);
+
+    mock.events.onCommand.emit('tb-quick-capture');
+    await settle(500);
+
+    // Full injection into the active tab (chrome.tabs.query returns id 7)...
+    expect(mock.injections.some((i) => i.target.tabId === 7 && i.files.includes('content-script.js'))).toBe(true);
+    // ...then the same action the popup's screenshot button dispatches, which
+    // is what the in-page shortcut does: fresh screenshot + Quick Bug modal.
+    expect(mock.sentOfType('TB_CAPTURE_NOW').length).toBe(1);
+  });
+
+  it('ignores a command that is not ours', async () => {
+    const mock = createChromeMock();
+    loadBackground(mock);
+    await settle(20);
+    mock.events.onCommand.emit('some-other-command');
+    await settle(200);
+    expect(mock.injections.length).toBe(0);
+  });
+
+  it('explains a failure on the toolbar button, since there is no popup', async () => {
+    // A service worker has nowhere to talk: no popup, and TraceBug has no
+    // notifications permission. The badge and its tooltip are the whole
+    // surface — documented in docs/testing/restricted-pages.md.
+    const mock = createChromeMock({ commands: [{ name: 'tb-quick-capture', shortcut: 'Ctrl+Shift+B' }] });
+    loadBackground(mock);
+    await settle(20);
+    mock.failInjection(7, 'Cannot access contents of the page.');
+
+    mock.events.onCommand.emit('tb-quick-capture');
+    await settle(400);
+
+    expect(mock.badge.some((b) => b.text === '!')).toBe(true);
+    const title = mock.titles.map((t) => String(t.title)).join(' | ');
+    expect(title).toMatch(/TraceBug/);
+    // The mapped sentence, not the raw browser string.
+    expect(title).toMatch(/Browsers block extensions/);
+    expect(title).not.toMatch(/Cannot access contents/);
+  });
 });

@@ -16,6 +16,15 @@
   ],
   "minimum_chrome_version": "116",
 
+  "commands": {
+    "tb-quick-capture": {
+      "suggested_key": {
+        "default": "Alt+B"
+      },
+      "description": "Capture a bug on the current tab"
+    }
+  },
+
   "optional_host_permissions": [
     "<all_urls>",
     "https://api.github.com/*",
