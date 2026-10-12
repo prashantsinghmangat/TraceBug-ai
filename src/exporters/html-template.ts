@@ -1,3 +1,5 @@
+import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
+
 // ── HTML Replay Viewer Template ───────────────────────────────────────────
 // A self-contained HTML scaffold + inlined renderer. The bundler embeds the
 // session JSON (events, screenshots-as-base64, optional video-as-base64,
@@ -60,6 +62,9 @@ export interface BundlePayload {
    *  span the whole session. Without this the heading just says "Replay" and a
    *  recipient reasonably reads it as covering everything they can see. */
   rrwebPage?: string;
+  /** Render the "Captured with TraceBug" footer bar. Absent counts as true,
+   *  so an older payload still gets it; only an explicit false removes it. */
+  showFooter?: boolean;
   /** Precomputed issue-filing helpers — the file's recipient is often the
    *  person who files the ticket. Only token-free actions belong in a
    *  shareable file: a prefilled github.com URL and copyable markdown.
@@ -169,6 +174,20 @@ export function buildReplayHtml(
   // "the last page" would be the inaccuracy. The timeline scrubber below keeps
   // its own "Replay" label — it is built from the session's events and really
   // does span the whole capture.
+  // The footer bar. Phase 5: it points at the STORE listing, tagged, because
+  // that is the only link that can turn a forwarded report into an install —
+  // and the person reading an export is usually not the person who made it.
+  // `showFooter === false` removes it entirely: an export is often sent to a
+  // client or attached to a public issue, and a promotional line has no
+  // business being unremovable there. Absent counts as true so older payloads
+  // keep it.
+  const footerBar = payload.showFooter === false ? "" : `<footer class="tb-vf">
+  ${escapeHtml(EXPORT_FOOTER_TEXT)} <a href="${storeUrl("report", "export")}" target="_blank" rel="noopener">${escapeHtml(EXPORT_FOOTER_CTA)}</a> · opens fully offline (links open in your browser)
+  <span class="tb-vf-fb">· Did this report give your dev / AI agent what they needed?
+    <a href="https://tracebug.dev/feedback?type=other&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict 👍 — my dev/AI agent got what they needed from the exported report.")}" target="_blank" rel="noopener" title="Yes">👍</a>
+    <a href="https://tracebug.dev/feedback?type=bug&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict 👎 — the exported report was missing: ")}" target="_blank" rel="noopener" title="No — tell us what was missing">👎</a>
+  </span>
+</footer>`;
   const replayPath = hasRrweb && !payload.video ? pagePath(payload.rrwebPage) : "";
   const replayHeading = replayPath
     ? `Replay of the last page <span class="tb-vh2-note">(${escapeHtml(replayPath)})</span>`
@@ -258,13 +277,7 @@ ${rrwebCssTag}
     </div>
   </section>
 </main>
-<footer class="tb-vf">
-  Captured with <a href="https://tracebug.dev/?ref=replay" target="_blank" rel="noopener">TraceBug</a> — free · local-first · <a href="https://tracebug.dev/?ref=replay" target="_blank" rel="noopener">capture your own</a> · opens fully offline (links open in your browser)
-  <span class="tb-vf-fb">· Did this report give your dev / AI agent what they needed?
-    <a href="https://tracebug.dev/feedback?type=other&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict 👍 — my dev/AI agent got what they needed from the exported report.")}" target="_blank" rel="noopener" title="Yes">👍</a>
-    <a href="https://tracebug.dev/feedback?type=bug&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict 👎 — the exported report was missing: ")}" target="_blank" rel="noopener" title="No — tell us what was missing">👎</a>
-  </span>
-</footer>
+${footerBar}
 <!-- Help overlay: keyboard shortcut cheat sheet -->
 <div id="help-overlay" class="tb-vhelp" style="display:none">
   <div class="tb-vhelp-card">
