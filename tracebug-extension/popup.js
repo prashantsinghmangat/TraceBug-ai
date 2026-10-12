@@ -92,7 +92,7 @@ function showUnavailable(verdict) {
   btn.style.display = "inline-block";
 
   if (action === "demo") {
-    btn.textContent = "Try it on a demo page";
+    btn.textContent = "Try it on the bug playground";
     btn.onclick = () => {
       chrome.tabs.create({ url: verdict.url || PageSupport.DEMO_URL });
       window.close();

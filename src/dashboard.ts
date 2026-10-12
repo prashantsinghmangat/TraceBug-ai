@@ -15,7 +15,7 @@ import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecor
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, copyToClipboard } from "./annotation-store";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
 import { showToast as showUnifiedToast, showActionToast } from "./ui/toast";
-import { isCaptureLimitedToThisPage } from "./ext-transport";
+import { shouldShowPageOnlyNotice } from "./ext-transport";
 
 export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setNewCaptureHandler };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
@@ -1862,17 +1862,15 @@ function _getIntentColor(intent: string): string {
 
 /**
  * One-time-per-page hint for the keyboard-shortcut path when TraceBug has no
- * cross-site access. Only fires when we KNOW access was withheld — an unknown
- * state stays silent (see getHostAccess in src/ext-transport.ts).
+ * cross-site access. Both conditions — "known withheld" and "not shown yet" —
+ * live in shouldShowPageOnlyNotice (src/ext-transport.ts), where a test can
+ * reach them; this function only renders.
  *
  * Uses the action toast, not the 2s transient: this is an instruction, and
  * nobody reads an instruction in two seconds.
  */
-let _pageOnlyNoticeShown = false;
-
 function noteCaptureIsPageOnly(root: HTMLElement): void {
-  if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return;
-  _pageOnlyNoticeShown = true;
+  if (!shouldShowPageOnlyNotice()) return;
   showActionToast(
     "Capturing this page only. To keep capturing when you navigate to another site, " +
       "open the TraceBug toolbar icon and choose Allow when it asks for site access.",

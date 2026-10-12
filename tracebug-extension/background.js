@@ -112,6 +112,100 @@ async function updateBadge(tabId /* , hostname */) {
   } catch {}
 }
 
+// ── Injection, in two halves ────────────────────────────────────────────────
+// Split because they fail and recover independently. The bridge (isolated
+// world) dies with its extension instance; the page-world SDK does not — it
+// is ordinary page JS and keeps running across an extension reload. Repairing
+// an orphaned tab therefore means replacing the BRIDGE ONLY, or a second
+// toolbar mounts on top of the first. See ensureAlive().
+
+/** Isolated world: the message bridge. secret-migration.js first — content-script.js calls its planner. */
+async function injectBridge(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["secret-migration.js", "content-script.js"],
+  });
+}
+
+/** MAIN world: the SDK bundle and its initializer. */
+async function injectPageWorld(tabId) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["tracebug-sdk.js"],
+    world: "MAIN",
+  });
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ["tracebug-init.js"],
+    world: "MAIN",
+  });
+}
+
+// ── Health check and repair (Phase 3) ───────────────────────────────────────
+// The silent failure this replaces: a tab left open across an extension
+// update keeps a dead content script, `injectedTabs` still believed it was
+// fine, and every popup action dispatched into nothing. content-script.js
+// suppresses the orphan errors on purpose (a clean host-page console), so
+// there was nothing to see anywhere.
+//
+// 300ms is a generous ceiling for a message round trip to a live content
+// script in the same process; a dead one never answers at all, so the timeout
+// only bounds how long the user waits before the repair starts.
+const PING_TIMEOUT_MS = 300;
+
+function pingTab(tabId) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (v) => { if (settled) return; settled = true; resolve(v); };
+    const timer = setTimeout(() => done(null), PING_TIMEOUT_MS);
+    try {
+      chrome.tabs.sendMessage(tabId, { type: "TB_PING" }, { frameId: 0 }, (res) => {
+        // Reading lastError suppresses the unchecked-error console warning;
+        // an orphaned tab lands here with no response, which IS the answer.
+        void chrome.runtime.lastError;
+        clearTimeout(timer);
+        done(res || null);
+      });
+    } catch {
+      clearTimeout(timer);
+      done(null);
+    }
+  });
+}
+
+/**
+ * Make sure this tab has a live bridge before anything is dispatched to it.
+ * Throws if it cannot be repaired — the caller (popup) maps that to
+ * "Reload this tab to capture" with a Reload tab button. Never returns
+ * quietly on failure.
+ */
+async function ensureAlive(tabId) {
+  try { await _hydrated; } catch {}
+
+  if ((await pingTab(tabId))?.alive) return;
+
+  // Our bookkeeping was wrong — the tab is not actually injected.
+  injectedTabs.delete(tabId);
+
+  await injectBridge(tabId);
+
+  const pong = await pingTab(tabId);
+  if (!pong?.alive) {
+    // The bridge was injected and still cannot be reached. Nothing left to
+    // try from here; this exact wording is what page-support.js maps to the
+    // reload panel.
+    throw new Error("Receiving end does not exist");
+  }
+
+  // Only now do we know whether the page already has a running SDK.
+  if (!pong.pageSdk) await injectPageWorld(tabId);
+
+  injectedTabs.add(tabId);
+  activeTabs.add(tabId);
+  persistState();
+  try { updateBadge(tabId); } catch {}
+}
+
 // ── Inject SDK (once per tab) ───────────────────────────────────────────────
 
 async function injectSDK(tabId) {
@@ -127,26 +221,8 @@ async function injectSDK(tabId) {
   persistState();
 
   try {
-    // Inject content script (message bridge between extension and page)
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      // secret-migration.js first: content-script.js calls its planner.
-      files: ["secret-migration.js", "content-script.js"],
-    });
-
-    // Inject SDK bundle into page context
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["tracebug-sdk.js"],
-      world: "MAIN",
-    });
-
-    // Inject initializer into page context
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["tracebug-init.js"],
-      world: "MAIN",
-    });
+    await injectBridge(tabId);
+    await injectPageWorld(tabId);
 
     // Reflect "loaded" state in the toolbar badge for this tab.
     updateBadge(tabId);
@@ -176,8 +252,12 @@ async function handleComboAction(message, sender) {
   // No persistent site state — every action injects the SDK fresh. Tracking
   // only starts when the user explicitly takes an action. Reloading the tab
   // unloads everything (the onUpdated listener clears injectedTabs).
+  // A tab we believe is injected may be orphaned (extension updated while it
+  // was open), so verify rather than trust the bookkeeping. Both paths throw
+  // on failure, and the popup turns that into a sentence with a button.
   const wasAlreadyInjected = injectedTabs.has(tabId);
-  await injectSDK(tabId);
+  if (wasAlreadyInjected) await ensureAlive(tabId);
+  else await injectSDK(tabId);
 
   // Tell the page which action to run. Map the combo type to the bridge
   // message the content script forwards as a CustomEvent. On the very first
@@ -196,7 +276,15 @@ async function handleComboAction(message, sender) {
   if (!wasAlreadyInjected) {
     await new Promise((r) => setTimeout(r, 250));
   }
-  try { await chrome.tabs.sendMessage(tabId, actionMessage); } catch {}
+  try {
+    await chrome.tabs.sendMessage(tabId, actionMessage);
+  } catch (err) {
+    // This used to be swallowed, which is how an orphaned tab turned into a
+    // popup that closed with nothing happening. One repair attempt, then let
+    // it throw: the user gets "Reload this tab to capture" and a button.
+    await ensureAlive(tabId);
+    await chrome.tabs.sendMessage(tabId, actionMessage);
+  }
 }
 
 // ── Auto-inject on navigation complete ──────────────────────────────────────

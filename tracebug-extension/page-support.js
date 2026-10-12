@@ -96,8 +96,8 @@
         return {
           ok: false,
           reason: "browser-internal",
-          title: "TraceBug can't run on this page",
-          detail: "This is one of the browser's own pages, and no extension can read it. Open a regular website tab, or try TraceBug on our demo page.",
+          title: "TraceBug can’t run on this page",
+          detail: "Browsers block extensions on their own pages and the extension store.",
           action: "demo",
           url: DEMO_URL,
         };
@@ -110,8 +110,8 @@
         return {
           ok: false,
           reason: "file-no-access",
-          title: "TraceBug needs file access for this page",
-          detail: 'Local files are off by default. Open your browser\'s extension details for TraceBug and turn on "Allow access to file URLs", then reload this tab.',
+          title: "Allow access to local files",
+          detail: "To capture pages opened from your computer, turn on “Allow access to file URLs” for TraceBug.",
           action: "file-access",
         };
       }
@@ -122,8 +122,8 @@
       return {
         ok: false,
         reason: "webstore",
-        title: "TraceBug can't run on this page",
-        detail: "Browsers block extensions from reading their own add-on stores. Open the site you want to test, or try TraceBug on our demo page.",
+        title: "TraceBug can’t run on this page",
+        detail: "Browsers block extensions on their own pages and the extension store.",
         action: "demo",
         url: DEMO_URL,
       };
@@ -143,7 +143,7 @@
       test: /extension context invalidated|receiving end does not exist|could not establish connection/i,
       reason: "orphaned",
       title: "Reload this tab to capture",
-      detail: "This tab was open before TraceBug last updated, so the old copy on the page can no longer be reached. One reload fixes it.",
+      detail: "TraceBug was updated while this tab was open.",
       action: "reload",
     },
     {
@@ -155,8 +155,8 @@
       // that opens a browser page, an add-on store or the PDF viewer.
       test: /chrome:\/\/|chrome-untrusted:\/\/|chrome-extension:\/\/|edge:\/\/|moz-extension:\/\/|resource:\/\/|devtools:\/\/|view-source:|cannot be scripted|extensions gallery|\.pdf\b/i,
       reason: "restricted",
-      title: "TraceBug can't run on this page",
-      detail: "The browser blocks extensions here — this is usually a PDF, a browser page, or an add-on store. Open a regular website tab, or try TraceBug on our demo page.",
+      title: "TraceBug can’t run on this page",
+      detail: "Browsers block extensions on their own pages and the extension store.",
       action: "demo",
       url: DEMO_URL,
     },
@@ -173,8 +173,8 @@
       // Anything else the browser walls off, with no scheme in the message.
       test: /cannot access (the )?contents?|cannot access a chrome|showing error page/i,
       reason: "restricted",
-      title: "TraceBug can't run on this page",
-      detail: "The browser blocks extensions here — this is usually a PDF, a browser page, or an add-on store. Open a regular website tab, or try TraceBug on our demo page.",
+      title: "TraceBug can’t run on this page",
+      detail: "Browsers block extensions on their own pages and the extension store.",
       action: "demo",
       url: DEMO_URL,
     },

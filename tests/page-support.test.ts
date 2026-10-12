@@ -125,6 +125,7 @@ describe('classifyPage — file:// and the file-URL grant', () => {
     expect(v.ok).toBe(false);
     expect(v.reason).toBe('file-no-access');
     expect(v.action).toBe('file-access');
+    expect(v.title).toBe('Allow access to local files');
     expect(v.detail).toMatch(/Allow access to file URLs/);
   });
 

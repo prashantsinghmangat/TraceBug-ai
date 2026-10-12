@@ -11,12 +11,25 @@
 //
 // Idempotency: chrome.scripting.executeScript can re-run this file in the
 // same isolated world (page reload + re-inject, hash navigation, etc.).
-// Re-running top-level `const` declarations throws SyntaxError, so we
-// guard the whole script with a window flag and skip on re-injection.
+// Re-running top-level `const` declarations throws SyntaxError, so we guard
+// the whole script and skip on re-injection. Everything real lives inside the
+// IIFE below, so only this `if` and the marker are ever evaluated twice.
+//
+// Phase 3 — the marker is a LIVENESS PROBE, not a boolean. An orphaned tab
+// (one open across an extension update/reload/disable) keeps the previous
+// instance's content script in the isolated world, flag and all. A boolean
+// flag therefore made re-injection a silent no-op: the worker injected, this
+// file bailed at the guard, and the action did nothing — exactly the failure
+// Phase 3 exists to kill. The probe closes over the PREVIOUS instance's
+// `chrome`, so it answers false the moment that instance dies, and the fresh
+// injection runs. A pre-1.11 content script left `true` here, which is not a
+// function and so is also correctly treated as dead.
 // ─────────────────────────────────────────────────────────────────────────────
 
-if (!window.__TRACEBUG_CS_LOADED__) {
-  window.__TRACEBUG_CS_LOADED__ = true;
+if (!(typeof window.__TRACEBUG_CS_LOADED__ === "function" && window.__TRACEBUG_CS_LOADED__())) {
+  window.__TRACEBUG_CS_LOADED__ = function () {
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch (e) { return false; }
+  };
   (function tracebugContentScriptMain() {
 
 /**
@@ -632,6 +645,21 @@ if (isExtAlive()) {
       case "TB_INSPECT":
         dispatchToPage("tracebug-ext-action", { action: "inspect" });
         sendResponse({ ok: true });
+        break;
+
+      // ── Health check (Phase 3) ───────────────────────────────────────────
+      // The worker pings before dispatching any action. No answer means this
+      // tab has no live bridge — never injected, or orphaned by an extension
+      // update — and the worker repairs it instead of dispatching into the
+      // void. `pageSdk` is what stops that repair from mounting a SECOND
+      // toolbar: the page-world SDK is ordinary page JS and keeps running
+      // when the extension reloads, so only the bridge needs replacing.
+      // #tracebug-root is the dashboard's mount point (src/dashboard.ts).
+      case "TB_PING":
+        sendResponse({
+          alive: true,
+          pageSdk: !!document.getElementById("tracebug-root"),
+        });
         break;
     }
   }));

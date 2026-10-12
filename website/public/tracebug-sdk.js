@@ -28631,6 +28631,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
   // src/ext-transport.ts
   function setTransportMode(mode) {
     _mode2 = mode === "extension" ? "extension" : "page";
+    _pageOnlyNoticeShown = false;
   }
   function isExtensionMode() {
     return _mode2 === "extension";
@@ -28659,7 +28660,12 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
   function isCaptureLimitedToThisPage() {
     return isExtensionMode() && _hostAccess === false;
   }
-  var _mode2, EMPTY, _status, _hostAccess;
+  function shouldShowPageOnlyNotice() {
+    if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return false;
+    _pageOnlyNoticeShown = true;
+    return true;
+  }
+  var _mode2, EMPTY, _status, _hostAccess, _pageOnlyNoticeShown;
   var init_ext_transport = __esm({
     "src/ext-transport.ts"() {
       "use strict";
@@ -28667,6 +28673,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       EMPTY = { github: false, linear: false, slack: false, ai: false };
       _status = { ...EMPTY };
       _hostAccess = void 0;
+      _pageOnlyNoticeShown = false;
     }
   });
 
@@ -35557,8 +35564,7 @@ ${"-".repeat(40)}
     }
   }
   function noteCaptureIsPageOnly(root2) {
-    if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return;
-    _pageOnlyNoticeShown = true;
+    if (!shouldShowPageOnlyNotice()) return;
     showActionToast(
       "Capturing this page only. To keep capturing when you navigate to another site, open the TraceBug toolbar icon and choose Allow when it asks for site access.",
       "Got it",
@@ -35989,7 +35995,7 @@ ${"-".repeat(40)}
   function annActionBtnStyle() {
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
-  var PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _pageOnlyNoticeShown, _annotationEditorOnSave;
+  var PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
   var init_dashboard = __esm({
     "src/dashboard.ts"() {
       "use strict";
@@ -36024,7 +36030,6 @@ ${"-".repeat(40)}
         console_error: { label: "Console Err", icon: "\u26A0\uFE0F", color: "#fb923c", bg: "#2a1505" },
         unhandled_rejection: { label: "Rejection", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" }
       };
-      _pageOnlyNoticeShown = false;
     }
   });
 

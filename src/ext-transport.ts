@@ -22,6 +22,9 @@ let _mode: TransportMode = "page";
  */
 export function setTransportMode(mode: TransportMode | undefined): void {
   _mode = mode === "extension" ? "extension" : "page";
+  // A fresh init is a fresh page, so the once-per-page notice below is armed
+  // again. This is also what gives tests a clean slate between cases.
+  _pageOnlyNoticeShown = false;
 }
 
 /** True when the SDK was injected by the browser extension. */
@@ -90,4 +93,26 @@ export function getHostAccess(): boolean | undefined {
 /** Only true when we KNOW capture will stop at the next cross-origin load. */
 export function isCaptureLimitedToThisPage(): boolean {
   return isExtensionMode() && _hostAccess === false;
+}
+
+// The once-per-page guard for the "capturing this page only" notice. It lives
+// here rather than next to the toast it drives (src/dashboard.ts) for one
+// reason: the withheld-access path is the one Phase 1 could not cover
+// automatically — granting an optional permission needs a native dialog no
+// test runner can click — so the half that IS testable has to be reachable
+// from a test. See tests/ext-secrets.test.ts.
+let _pageOnlyNoticeShown = false;
+
+/**
+ * True at most once per SDK init, and only when access is KNOWN to be
+ * withheld. An `undefined` host-access state returns false: a wrong "you have
+ * no access" hint is worse than no hint.
+ *
+ * Calling this CONSUMES the one chance to show the notice, so call it only at
+ * the point of actually showing it.
+ */
+export function shouldShowPageOnlyNotice(): boolean {
+  if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return false;
+  _pageOnlyNoticeShown = true;
+  return true;
 }
