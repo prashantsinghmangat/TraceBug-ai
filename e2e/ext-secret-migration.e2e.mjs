@@ -19,9 +19,14 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
 const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const EXT_NEW = join(REPO, "tracebug-extension");
+// Site access is OPTIONAL from 1.11, and this harness injects from the
+// service worker rather than through a real toolbar click, so it cannot grant
+// itself access. Load a copy that declares it — see e2e/ext-host-access.mjs
+// for why, and for what this does NOT change.
+const EXT_NEW = withGrantedHostAccess(join(REPO, "tracebug-extension"), "migration-new");
 const EXT_OLD = process.env.TB_OLD_EXT || "D:/tmp/tb-1101/tracebug-extension";
 const PUBLIC_DIR = join(REPO, "website", "public");
 

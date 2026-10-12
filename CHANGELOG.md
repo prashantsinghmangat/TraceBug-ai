@@ -23,7 +23,13 @@ All notable changes to TraceBug are documented here.
 
 - **Added `optional_host_permissions`** for `api.github.com`, `api.linear.app`, `hooks.slack.com`, `api.openai.com`, `api.anthropic.com`, `localhost` and `127.0.0.1` — requested from TraceBug settings when you save that integration, and only the one host it talks to. Optional host permissions add **no install warning** and do not disable the extension for existing users.
 - **Added the `alarms` permission** — the send confirmation times out after two minutes, and that timer has to survive the service worker being shut down mid-decision. `alarms` triggers no install warning.
-- A custom Ollama base URL outside `localhost` / `127.0.0.1` fails with a clear message for now; requesting access to that one address is Phase 1 work.
+- **Site access is now optional: the install warning is gone** (`tracebug-extension/build/manifest.base.json`) — `<all_urls>` moved from `host_permissions` to `optional_host_permissions`, so a fresh install asks for **no permissions at all** instead of "Read and change all your data on all websites". Capture on the page you are looking at rides `activeTab`, granted by your own click. TraceBug asks for site access only for the thing that genuinely needs it — continuing to capture after you navigate to another site — from the popup, with the reason stated first. Declining is fine: capture keeps working on the current page and says so. **Existing users keep the access they already granted** (`docs/testing/upgrade-host-permission.md` is the test that proves it).
+- **A custom Ollama base URL now works** (`tracebug-extension/options.js`, `background.js`) — saving an Ollama provider pointed at any host requests access to that one address, instead of refusing anything that was not `localhost` or `127.0.0.1`. Only a URL that is not parseable HTTP is still rejected, and it says so in the settings page rather than at send time.
+- The keyboard shortcut (`Ctrl/Cmd+Shift+B`) keeps capturing the page you are on without any site access — it is a page-level shortcut inside TraceBug, so it cannot ask for a permission itself. When access has been withheld it now says that the capture covers this page only, and where to allow more.
+
+### Fixed
+
+- **Error and warning rows in the Actions tab say what happened** (`src/action-chips.ts`) — an error row showed the literal text `[object Object]`, and a `console.warn` row showed only the word "Warning" with no content. Collectors emit the text nested as `data.error.message`; the Actions builder was reading `data.message` and stringifying the error object when that came up empty. It now shows the message, falls back to the error name (a `TypeError` with no message is still worth reading), and never stringifies an object.
 
 ## [1.10.1] - 2026-07-29
 

@@ -12,6 +12,7 @@ import { chromium } from "playwright";
 import { mkdirSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, extname } from "node:path";
+import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
 const OUT = "D:/tmp/tracebug-shots";
 mkdirSync(OUT, { recursive: true });
@@ -472,6 +473,7 @@ console.log("Part 5: extension popup…");
 if (!existsSync(join(EXT_DIR, "manifest.json"))) {
   throw new MissingTarget(`no packaged extension at ${EXT_DIR} — run: npm run build:ext`);
 }
+const EXT_GRANTED = withGrantedHostAccess(EXT_DIR, "marketing");
 server = await servePublic(4173);
 
 const USER_DATA = join(OUT, ".chrome-profile");
@@ -483,8 +485,10 @@ extCtx = await chromium.launchPersistentContext(USER_DATA, {
   viewport: { width: 1440, height: 900 },
   deviceScaleFactor: 2,
   args: [
-    `--disable-extensions-except=${EXT_DIR}`,
-    `--load-extension=${EXT_DIR}`,
+    // Site access is OPTIONAL from 1.11 and the popup shot is driven without a
+    // real toolbar click, so load a copy that declares it (e2e/ext-host-access.mjs).
+    `--disable-extensions-except=${EXT_GRANTED}`,
+    `--load-extension=${EXT_GRANTED}`,
   ],
 });
 

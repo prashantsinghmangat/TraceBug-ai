@@ -62,3 +62,32 @@ export function setIntegrationStatus(status: Partial<IntegrationStatus> | null |
 export function getIntegrationStatus(): IntegrationStatus {
   return { ..._status };
 }
+
+// ── Cross-site capture access ───────────────────────────────────────────────
+// Phase 1 moved <all_urls> to optional_host_permissions, so capture surviving
+// a navigation to another origin is now something the user has to allow. The
+// SDK cannot ask: chrome.permissions is exposed to neither the page world nor
+// a content script. The worker answers, the content script publishes the
+// answer alongside the integration booleans on <html data-tb-caps>, and this
+// is where the SDK reads it.
+//
+// THREE states, and the third one matters: `undefined` means "we could not
+// find out" (pre-1.11 content script, attribute never published, hostile page
+// stripped it). The UI must stay silent then — a wrong "you have no access"
+// hint is worse than no hint.
+
+let _hostAccess: boolean | undefined = undefined;
+
+export function setHostAccess(granted: boolean | undefined | null): void {
+  _hostAccess = typeof granted === "boolean" ? granted : undefined;
+}
+
+/** true = granted · false = not granted · undefined = unknown, say nothing. */
+export function getHostAccess(): boolean | undefined {
+  return _hostAccess;
+}
+
+/** Only true when we KNOW capture will stop at the next cross-origin load. */
+export function isCaptureLimitedToThisPage(): boolean {
+  return isExtensionMode() && _hostAccess === false;
+}

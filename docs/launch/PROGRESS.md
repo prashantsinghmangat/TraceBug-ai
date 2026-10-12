@@ -100,3 +100,77 @@ Newest entry at the bottom.
   failure site. The real 2-minute timeout is asserted only as "the alarm is armed at ~120s" - the cancel path it
   runs is covered through the reaper instead. `tracebug-extension/manifest.json` still duplicates
   `manifest.base.json`; both were edited by hand again.
+
+## Phase 1 - permissions and trust (2026-10-12)
+- `<all_urls>` moved to `optional_host_permissions` in BOTH manifests, so a fresh install now asks for
+  **nothing**. The `!tab.url` guard at `background.js:189` is gone (with `<all_urls>` optional, `tab.url` is
+  undefined on most tabs and that guard would have killed re-injection after navigation outright); the decision
+  below it only ever needed `tabId`. Checked, not assumed: neither manifest has a `content_scripts` key, and the
+  two production `chrome.tabs.query` calls pass `{}` and read only `tab.id`, so neither needs host access.
+  `popup.js`'s existing request/decline/degrade flow was left alone - it already did exactly what the plan
+  specifies.
+- **Ctrl+Shift+B** (handed over by Phase 2b's `TODO`): it is a page-level keydown handler inside the injected
+  SDK, so it cannot call `permissions.request()` - and it does not need to. It still captures the current page;
+  when access is known to be withheld it now shows an 8-second action toast saying the capture covers this page
+  only and where to allow more. "Known" is the point: the worker answers `TB_HOST_ACCESS` (the permissions API
+  is exposed to neither the page world NOR a content script), the content script publishes it as `hostAccess`
+  on the existing `<html data-tb-caps>` snapshot, and `undefined` stays silent rather than guessing.
+  `permissions.onAdded/onRemoved` nudges injected tabs so a grant takes effect without a reload.
+- **Custom Ollama `baseUrl`** is no longer a refusal: the settings page requests that one origin on save
+  (`aiHostPatterns`, synchronous so the user gesture survives) and the worker checks the same origin. Only an
+  unparseable or non-HTTP URL is still rejected, now in the settings page rather than at send time.
+- Files: new `docs/testing/upgrade-host-permission.md`, `e2e/ext-host-access.mjs`; edited
+  `tracebug-extension/{build/manifest.base.json,manifest.json,background.js,content-script.js,options.js,tracebug-init.js}`,
+  `src/{ext-transport.ts,index.ts,dashboard.ts}`, `tests/ext-secrets.test.ts`, `CHANGELOG.md`, and the five e2e
+  harnesses' launch paths.
+- **Install warnings, before -> after (Chrome).** Before: one - *"Read and change all your data on all
+  websites"*. After: **none**. `activeTab`, `storage`, `unlimitedStorage`, `scripting`, `alarms` and `offscreen`
+  are all silent, and optional host permissions carry no install-time warning. Firefox: the *Access your data
+  for all websites* entry moves from the install prompt to the add-on's own opt-in Permissions list, which is
+  where Firefox already put it. No warning was added anywhere.
+- Verified: typecheck + lint clean; `npm test` 32 files / 495 passing (+29: 4 host-access, 10 Actions-tab,
+  15 body-cap); `build` + `build:ext` OK; `ext:lint` 0 errors / 69 warnings - the same total as 2a and 2b, so
+  nothing new; `ext:firefox` installs cleanly. `e2e/ext-provider-confirm.e2e.mjs` 57/57 (8 new),
+  `ext-secret-migration.e2e.mjs` 26/26 - and that run shows `data-tb-caps` carrying `"hostAccess":true`, so the
+  new bridge is confirmed in a real browser. `ext-redaction` and `ext-player-csp` also re-run green.
+- Open issues: the permission flip broke every e2e harness, for a reason worth knowing - they inject from the
+  service worker instead of through a real toolbar click, and the click is what grants `activeTab`; an OPTIONAL
+  permission cannot be granted without a native dialog Playwright can't click. All five now load a temp COPY of
+  the build with `<all_urls>` re-declared (`e2e/ext-host-access.mjs`), i.e. they test the state of a user who
+  granted access. The **withheld**-access path therefore has no automated coverage at all. **One item cannot be
+  verified automatically and is the highest risk in this phase:** `popup.js:144-166` reads `tab.url`, which now
+  comes from `activeTab` alone - if opening the popup does not grant it in time, EVERY page shows "Can't run on
+  this page". The manual script calls that out explicitly. The real-upgrade grant-survives test is manual by
+  nature (it needs two same-id signed builds) - `docs/testing/upgrade-host-permission.md`.
+  `tracebug-extension/manifest.json` still duplicates `manifest.base.json`; both edited by hand again.
+
+## Fix A - Actions-tab error and warning rows (2026-10-12)
+- Error rows in the Actions tab printed the literal `[object Object]` and `console.warn` rows printed the bare
+  word `Warning`, both from one cause: every collector emits the text NESTED as `data.error.message`
+  (`collectors.ts` `wrapConsoleLevel` / `collectErrors`), while `action-chips.ts:393` read `data.message` and
+  then stringified the `data.error` OBJECT when that came up empty. A new `errorText()` reads the nested message,
+  falls back to the error NAME (a `TypeError` with no message still beats "Runtime error"), accepts a plain
+  string, and never stringifies an object.
+- `src/action-chips.ts` only - `timeline-builder.ts` and `report-builder.ts` already read the nested field, so
+  this was the single wrong reader.
+- Verified: new `tests/action-chips.test.ts`, 10 cases built on the exact emitted shapes, so a collector change
+  that moves the message fails here instead of in a report.
+
+## Fix B - provider body caps (2026-10-12)
+- An over-limit body was not a degraded send but NO send: GitHub answers 422 "body is too long" and the whole
+  report is lost. `capProviderBody()` in `src/providers/api.ts` now caps it - GitHub **65,536** characters,
+  **Slack 40,000** (checked: the documented ceiling for a message's `text`), Linear matched to GitHub's since
+  Linear publishes none. The cut backs off to the last paragraph break, line break or space within 1,000
+  characters so no line is sheared, CLOSES a ``` fence the cut would have left open (otherwise the notice and
+  everything after it renders as code), and ends with a pointer to the full .html export.
+- The worker caps **before** opening the confirmation window, so the user approves the exact text that will be
+  sent: the "Before you send" box leads with "Shortened to fit GitHub: 240,000 characters became 65,527…" and
+  the body label reads "Body - shortened to fit". The post* functions cap again as a backstop, which is the only
+  cap in SDK (npm) mode.
+- Files: `src/providers/api.ts`, `tracebug-extension/{background.js,confirm-send.js}`,
+  `tests/provider-api.test.ts` (+15), `e2e/ext-provider-confirm.e2e.mjs` (+8).
+- Verified: 49 unit cases in `provider-api.test.ts` including a sweep at limit+1, 2x and 10x for all three
+  providers; the e2e proves the real confirmation window shows 65,527 characters, the cut on a line boundary,
+  the warning naming both sizes, and the shortened label. Not capped: the issue TITLE (GitHub's 256-character
+  limit) - out of scope here, and titles come from `generateBugTitle`, but it is the next thing a 422 could come
+  from.

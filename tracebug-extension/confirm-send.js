@@ -114,6 +114,9 @@ async function load() {
   }
 
   put("body", r.body || "");
+  // A shortened body is labelled at the body itself as well as warned about
+  // above: the label is where someone looks when they notice the text stops.
+  if (r.shortened) put("bodyLabel", (r.kind === "llm" ? "Prompt that will be sent" : "Body") + " — shortened to fit");
   renderWarnings(r.warnings);
   startCountdown(r.expiresAt);
 

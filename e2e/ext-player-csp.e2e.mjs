@@ -12,6 +12,7 @@ import { chromium } from "playwright";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
 // Known-good webm (the real site demo video) — removes MediaRecorder/canvas
 // flakiness from the test entirely.
@@ -19,7 +20,11 @@ const DEMO = readFileSync("D:/Project/TraceBug-ai/website/public/tracebug-demo.w
 const DEMO_B64 = DEMO.toString("base64"); // rebuilt to ArrayBuffer in-page
 console.log(`demo webm: ${(DEMO.length / 1024 / 1024).toFixed(1)} MB`);
 
-const EXT = "D:/Project/TraceBug-ai/tracebug-extension";
+// Site access is OPTIONAL from 1.11, and this harness injects from the
+// service worker rather than through a real toolbar click, so it cannot grant
+// itself access. Load a copy that declares it — see e2e/ext-host-access.mjs
+// for why, and for what this does NOT change.
+const EXT = withGrantedHostAccess("D:/Project/TraceBug-ai/tracebug-extension", "player-csp");
 const userDir = mkdtempSync(join(tmpdir(), "tb-ext-test-"));
 
 // Bundled Chromium, NOT channel:"chrome" — branded Chrome 137+ removed

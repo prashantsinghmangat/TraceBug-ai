@@ -10,8 +10,13 @@ import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname } from "node:path";
+import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
-const EXT = "D:/Project/TraceBug-ai/tracebug-extension";
+// Site access is OPTIONAL from 1.11, and this harness injects from the
+// service worker rather than through a real toolbar click, so it cannot grant
+// itself access. Load a copy that declares it — see e2e/ext-host-access.mjs
+// for why, and for what this does NOT change.
+const EXT = withGrantedHostAccess("D:/Project/TraceBug-ai/tracebug-extension", "redaction");
 const PUBLIC_DIR = "D:/Project/TraceBug-ai/website/public";
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };

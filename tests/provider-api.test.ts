@@ -14,6 +14,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   friendlyStatus, mapProviderError, PROVIDER_ORIGINS,
   postGitHubIssue, postLinearIssue, postSlackMessage, callLLM,
+  capProviderBody, PROVIDER_BODY_LIMITS,
 } from '../src/providers/api';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -273,5 +274,143 @@ describe('callLLM', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ choices: [{ message: { content: '  ' } }] }));
     await expect(callLLM({ provider: 'openai', apiKey: 'k', model: 'm' }, 'p'))
       .rejects.toThrow(/empty response/i);
+  });
+});
+
+// ── Body caps ──────────────────────────────────────────────────────────────
+// An over-limit body is not a degraded send, it is NO send: GitHub answers 422
+// "body is too long" and the whole report is lost. A TraceBug body is long by
+// design, so these tests pin that we cut it ourselves, cleanly, and say so.
+describe('capProviderBody', () => {
+  const GH = PROVIDER_BODY_LIMITS.github;
+
+  it("documents each provider's published limit", () => {
+    expect(PROVIDER_BODY_LIMITS.github).toBe(65536);
+    expect(PROVIDER_BODY_LIMITS.slack).toBe(40000);
+    // Linear publishes none; matched to GitHub's so there is always a ceiling.
+    expect(PROVIDER_BODY_LIMITS.linear).toBe(65536);
+  });
+
+  it('leaves a body that fits completely untouched', () => {
+    const body = '## Steps\n\n1. click login\n2. boom';
+    const r = capProviderBody('github', body);
+    expect(r.text).toBe(body);
+    expect(r.cutFrom).toBeUndefined();
+    expect(r.warning).toBeUndefined();
+  });
+
+  it('does not cut a body exactly at the limit', () => {
+    const r = capProviderBody('github', 'x'.repeat(GH));
+    expect(r.text.length).toBe(GH);
+    expect(r.cutFrom).toBeUndefined();
+  });
+
+  it('cuts one character over the limit, and lands under it', () => {
+    const r = capProviderBody('github', 'x'.repeat(GH + 1));
+    expect(r.cutFrom).toBe(GH + 1);
+    expect(r.text.length).toBeLessThanOrEqual(GH);
+  });
+
+  it('stays under the limit no matter how far over the input is', () => {
+    for (const provider of ['github', 'linear', 'slack'] as const) {
+      const limit = PROVIDER_BODY_LIMITS[provider];
+      for (const size of [limit + 1, limit * 2, limit * 10]) {
+        const r = capProviderBody(provider, 'word '.repeat(Math.ceil(size / 5)));
+        expect(r.text.length).toBeLessThanOrEqual(limit);
+      }
+    }
+  });
+
+  it('applies the smaller Slack limit to Slack only', () => {
+    const body = 'y'.repeat(50000);
+    expect(capProviderBody('slack', body).text.length).toBeLessThanOrEqual(40000);
+    // The same body fits GitHub, so it must come back whole there.
+    expect(capProviderBody('github', body).text).toBe(body);
+  });
+
+  it('ends with a notice naming the provider, the limit, and where the rest is', () => {
+    const r = capProviderBody('github', 'x'.repeat(GH * 2));
+    expect(r.text).toMatch(/Cut off here by TraceBug/);
+    expect(r.text).toMatch(/GitHub/);
+    expect(r.text).toMatch(/65,536 characters/);
+    expect(r.text).toMatch(/export the \.html/i);
+  });
+
+  it('cuts at a line boundary rather than mid-word', () => {
+    // 2,000 identical lines: the cut lands inside the block, and must fall on
+    // a newline so no half-line is left dangling before the notice.
+    const line = 'step: the user clicked the submit button and nothing happened';
+    const body = Array.from({ length: 2000 }, () => line).join('\n');
+    const r = capProviderBody('slack', body);
+    const kept = r.text.slice(0, r.text.indexOf('\n\n---'));
+    expect(kept.endsWith(line)).toBe(true);
+  });
+
+  it('closes a code fence the cut would have left open', () => {
+    // A stack trace in a fence is the realistic case: without the closing
+    // fence, the cut notice and everything after renders as code.
+    const head = '## Console\n\n```\n';
+    const r = capProviderBody('slack', head + 'TypeError: boom\n'.repeat(5000));
+    const fences = r.text.match(/^\s{0,3}```/gm) || [];
+    expect(fences.length % 2).toBe(0);
+    expect(r.text.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.slack);
+  });
+
+  it('leaves a balanced fence alone', () => {
+    const block = '```\nTypeError: boom\n```\n\n';
+    const r = capProviderBody('slack', block.repeat(3000));
+    const fences = r.text.match(/^\s{0,3}```/gm) || [];
+    expect(fences.length % 2).toBe(0);
+  });
+
+  it('gives the confirmation window one sentence with both sizes in it', () => {
+    const r = capProviderBody('github', 'x'.repeat(100000));
+    expect(r.warning).toMatch(/Shortened to fit GitHub/);
+    expect(r.warning).toMatch(/100,000 characters/);
+    expect(r.warning).toMatch(/exactly what will be sent/);
+  });
+
+  it('survives a non-string body without throwing', () => {
+    expect(capProviderBody('github', undefined as unknown as string).text).toBe('');
+    expect(capProviderBody('github', null as unknown as string).text).toBe('');
+  });
+});
+
+describe('the send paths cap the body themselves', () => {
+  it('GitHub never posts a body over the limit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(json({ html_url: 'https://github.com/o/r/issues/1', number: 1 }));
+    await postGitHubIssue({ token: 't', repo: 'o/r' }, { title: 'T', body: 'x'.repeat(200000) });
+    const sent = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(sent.body.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.github);
+    expect(sent.body).toMatch(/Cut off here by TraceBug/);
+    // The title is untouched — only the body is capped.
+    expect(sent.title).toBe('T');
+  });
+
+  it('Linear never posts a description over the limit', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValue(json({ data: { issueCreate: { success: true, issue: { url: 'u', identifier: 'ENG-1' } } } }));
+    await postLinearIssue({ apiKey: 'k', teamId: 'TEAM' }, { title: 'T', body: 'x'.repeat(200000) });
+    const sent = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(sent.variables.input.description.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.linear);
+    expect(sent.variables.input.teamId).toBe('TEAM');
+  });
+
+  it('Slack caps on both the opaque and the readable path', async () => {
+    const opaque = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 200 }));
+    await postSlackMessage({ webhookUrl: 'https://hooks.slack.com/services/x' }, { text: 'y'.repeat(90000) });
+    const form = String((opaque.mock.calls[0][1] as RequestInit).body);
+    const payload = JSON.parse(decodeURIComponent(form.replace(/^payload=/, '')));
+    expect(payload.text.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.slack);
+    vi.restoreAllMocks();
+
+    const readable = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok', { status: 200 }));
+    await postSlackMessage(
+      { webhookUrl: 'https://hooks.slack.com/services/x' },
+      { text: 'y'.repeat(90000) }, undefined, { readResponse: true },
+    );
+    const sent = JSON.parse(String((readable.mock.calls[0][1] as RequestInit).body));
+    expect(sent.text.length).toBeLessThanOrEqual(PROVIDER_BODY_LIMITS.slack);
   });
 });

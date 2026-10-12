@@ -125,6 +125,109 @@ export const PROVIDER_ORIGINS = {
   ollama127: "http://127.0.0.1/*",
 } as const;
 
+// ── Body size caps ────────────────────────────────────────────────────────
+// Each tracker has a hard ceiling on the text it will accept, and a report
+// that exceeds it is rejected OUTRIGHT — GitHub answers 422 "body is too long"
+// and the user loses the whole send. A TraceBug body is long by design (steps,
+// console, network, environment), so this is reachable on a busy session.
+//
+// So cap it ourselves: cut at a clean boundary, say in the body that we did,
+// and point at the full .html export. A shortened issue that files is worth
+// more than a complete one that 422s.
+
+/**
+ * Longest body each provider accepts, in CHARACTERS (that is the unit both
+ * document).
+ *
+ *  - GitHub: 65,536 — documented for an issue body, enforced as a 422.
+ *  - Slack: 40,000 — the documented ceiling for a message's `text` field.
+ *  - Linear: not published. Matched to GitHub's as a safe ceiling; at this
+ *    size the body is far past useful anyway, so a cap we never need costs
+ *    nothing and a missing one costs the whole send.
+ */
+export const PROVIDER_BODY_LIMITS: Record<TrackerProvider, number> = {
+  github: 65536,
+  slack: 40000,
+  linear: 65536,
+};
+
+export interface CappedBody {
+  /** The text to send. Never longer than `limit`. */
+  text: string;
+  limit: number;
+  /** Original length, set ONLY when the text was actually cut. */
+  cutFrom?: number;
+  /** One sentence for the confirmation window. Set only when cut. */
+  warning?: string;
+}
+
+/** 65536 → "65,536". Not toLocaleString(): the worker's locale is not ours. */
+function withCommas(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/** How far back we will search for a clean boundary rather than cutting mid-word. */
+const CUT_LOOKBACK = 1000;
+/** Room kept for a closing code fence, see below. */
+const FENCE_RESERVE = 4;
+
+function openFenceCount(text: string): number {
+  const m = text.match(/^\s{0,3}```/gm);
+  return m ? m.length : 0;
+}
+
+/**
+ * Cut `text` down to what `provider` accepts.
+ *
+ * Returns the original untouched when it already fits — the common case, and
+ * the reason this is safe to call on every send path (the service worker calls
+ * it before showing the confirmation, so the user approves the FINAL text; the
+ * post* functions below call it again as a backstop, which is then a no-op).
+ *
+ * The cut is deliberately not a raw `slice`:
+ *  - it backs off to the last paragraph break, line break or space within the
+ *    last 1,000 characters, so a sentence or a stack frame is not sheared in
+ *    half;
+ *  - if that leaves an unclosed ``` fence, it closes it — otherwise everything
+ *    after the cut notice renders as one giant code block in the issue;
+ *  - it ends with a notice saying it was cut and where the rest is.
+ */
+export function capProviderBody(provider: TrackerProvider, text: string): CappedBody {
+  const limit = PROVIDER_BODY_LIMITS[provider] ?? PROVIDER_BODY_LIMITS.github;
+  const label = provider === "github" ? "GitHub" : provider === "linear" ? "Linear" : "Slack";
+  const body = typeof text === "string" ? text : String(text ?? "");
+  if (body.length <= limit) return { text: body, limit };
+
+  const notice =
+    "\n\n---\n**Cut off here by TraceBug** — this report is longer than " + label +
+    " accepts (" + withCommas(limit) + " characters). The rest is in the full " +
+    "TraceBug report: export the .html from the ticket and attach it.";
+
+  const budget = Math.max(0, limit - notice.length - FENCE_RESERVE);
+  let keep = body.slice(0, budget);
+
+  // Prefer a paragraph break, then a line break, then a space — but only if one
+  // is close to the end, otherwise we would throw away usable report.
+  const floor = Math.max(0, keep.length - CUT_LOOKBACK);
+  const near = (i: number) => (i > floor ? i : -1);
+  const at = [near(keep.lastIndexOf("\n\n")), near(keep.lastIndexOf("\n")), near(keep.lastIndexOf(" "))]
+    .find((i) => i > 0);
+  if (at !== undefined) keep = keep.slice(0, at);
+  keep = keep.replace(/\s+$/, "");
+
+  if (openFenceCount(keep) % 2 === 1) keep += "\n```";
+
+  return {
+    text: keep + notice,
+    limit,
+    cutFrom: body.length,
+    warning:
+      "Shortened to fit " + label + ": " + withCommas(body.length) + " characters became " +
+      withCommas(keep.length + notice.length) + ", the most " + label +
+      " accepts. The body below is exactly what will be sent.",
+  };
+}
+
 // ── Error mapping ─────────────────────────────────────────────────────────
 
 /**
@@ -265,7 +368,9 @@ export async function postGitHubIssue(
     },
     body: JSON.stringify({
       title: content.title,
-      body: content.body,
+      // Backstop: the extension already capped this before the confirmation
+      // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
+      body: capProviderBody("github", content.body).text,
       labels: config.labels && config.labels.length ? config.labels : undefined,
     }),
   });
@@ -293,7 +398,13 @@ export async function postLinearIssue(
     },
     body: JSON.stringify({
       query,
-      variables: { input: { teamId: config.teamId, title: content.title, description: content.body } },
+      variables: {
+        input: {
+          teamId: config.teamId,
+          title: content.title,
+          description: capProviderBody("linear", content.body).text,
+        },
+      },
     }),
   });
   const data = await parseJsonOrThrow(res, "Linear", "tracker");
@@ -338,7 +449,7 @@ export async function postSlackMessage(
       signal,
       mode: "no-cors",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "payload=" + encodeURIComponent(JSON.stringify({ text: content.text })),
+      body: "payload=" + encodeURIComponent(JSON.stringify({ text: capProviderBody("slack", content.text).text })),
     });
     // We can't read an opaque response — report success optimistically.
     return { provider: "slack", ok: true, opaque: true };
@@ -348,7 +459,7 @@ export async function postSlackMessage(
     method: "POST",
     signal,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text: content.text }),
+    body: JSON.stringify({ text: capProviderBody("slack", content.text).text }),
   });
   const text = (await res.text().catch(() => "")).trim();
   if (!res.ok) {

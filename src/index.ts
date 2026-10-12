@@ -171,7 +171,7 @@ export type { NetworkErrorEntry, ClickedElementSummary, RootCauseHint, RedactRul
 export { setRedactRules } from "./sanitize/custom-redaction";
 // Extension-mode bridge: tracebug-init.js pushes the non-secret integration
 // status snapshot in through setIntegrationStatus (booleans only).
-export { setTransportMode, isExtensionMode, setIntegrationStatus, getIntegrationStatus } from "./ext-transport";
+export { setTransportMode, isExtensionMode, setIntegrationStatus, getIntegrationStatus, setHostAccess, getHostAccess } from "./ext-transport";
 export type { TransportMode, IntegrationStatus } from "./ext-transport";
 export { generateGitHubIssue, generateGitHubIssueUrl, openGitHubIssue } from "./github-issue";
 export { generateJiraTicket } from "./jira-issue";
