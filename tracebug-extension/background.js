@@ -30,6 +30,16 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
+// An update is ready. Chrome holds it until the extension reloads or the
+// browser restarts, so this is a decision, not a notification: reload now and
+// get it over with, or wait because the user is mid-recording.
+chrome.runtime.onUpdateAvailable.addListener(async () => {
+  try { await _hydrated; } catch {}
+  _updatePending = true;
+  // persistState records the flag AND reloads if nothing is recording.
+  persistState();
+});
+
 // Track which tabs have been injected (tab ID → true)
 const injectedTabs = new Set();
 // Tabs where the user has turned TraceBug ON. Unlike injectedTabs (current
@@ -46,6 +56,22 @@ const activeTabs = new Set();
 // reloading or navigating mid-recording would silently strip the on-page
 // UI while the offscreen document kept recording.
 let _recordingTabId = null;
+
+// ── Deferred extension update (Phase 3) ─────────────────────────────────────
+// chrome.runtime.onUpdateAvailable was not handled at all, which means an
+// auto-update landing mid-recording killed the recording: the worker and the
+// offscreen/recorder host are both torn down, and the video only exists in
+// the recorder's memory until the stop finalizes it. So an update that
+// arrives while recording is HELD, and applied once the recording has ended
+// and been persisted.
+let _updatePending = false;
+// How long to wait after the recording ends before reloading. Not a guess
+// about timing — it is so the in-flight stop response reaches the page and
+// the auto-stop broadcast fans out. runtime.reload() tears the worker down
+// synchronously, so reloading inside the stop handler would lose the reply
+// that opens the ticket modal.
+const UPDATE_RELOAD_DELAY_MS = 2000;
+let _updateTimer = null;
 
 // ── MV3 durability ──────────────────────────────────────────────────────────
 // The service worker is terminated after ~30s idle and restarts with blank
@@ -66,9 +92,33 @@ function persistState() {
         activeTabs: [...activeTabs],
         recordingTabId: _recordingTabId,
         recorderWindowId: _recorderWindowId,
+        updatePending: _updatePending,
+        // Stamped so hydration can tell a still-pending update from one that
+        // already landed — see the version check there.
+        updatePendingFrom: _updatePending ? currentVersion() : null,
       },
     });
   } catch {}
+  // Every path that ends a recording clears _recordingTabId and then calls
+  // this — tb:rec:stop, the auto-stop fan-out, the recorder window closing,
+  // the tab closing, and the toolbar's ✕. Hooking the single choke point
+  // here is why a held update cannot be forgotten by one of them.
+  maybeApplyUpdate();
+}
+
+/**
+ * Apply a held update, but only once nothing is being recorded. A no-op when
+ * no update is waiting, which is the normal case.
+ */
+function maybeApplyUpdate() {
+  if (!_updatePending || _recordingTabId != null || _updateTimer != null) return;
+  _updateTimer = setTimeout(() => {
+    _updateTimer = null;
+    // Re-check: a new recording may have started inside the delay, and
+    // interrupting that would be the very bug this is here to prevent.
+    if (!_updatePending || _recordingTabId != null) return;
+    try { chrome.runtime.reload(); } catch {}
+  }, UPDATE_RELOAD_DELAY_MS);
 }
 // Rehydrate on every worker startup. Every handler that MUTATES this state
 // must `await _hydrated` first: if the SW is woken BY a mutating event (tab
@@ -88,9 +138,26 @@ const _hydrated = (async () => {
       // the recorder popup after a restart never fans out the auto-stop, and
       // passive probes wrongly report "not recording".
       if (typeof s.recorderWindowId === "number") _recorderWindowId = s.recorderWindowId;
+      // A held update has to survive a worker restart too: the worker
+      // restarting is not the extension reloading, so without this the
+      // update would wait for a second onUpdateAvailable that never comes.
+      // ...but only if we are still the version that deferred it. Without
+      // this check a flag that outlived the update it was waiting for would
+      // reload the worker, find the flag again, and reload forever.
+      if (s.updatePending === true && s.updatePendingFrom === currentVersion()) {
+        _updatePending = true;
+      }
     }
   } catch {}
+  // A worker restart is not an extension reload, so a held update is still
+  // held. Nothing else would notice until the next state mutation.
+  maybeApplyUpdate();
 })();
+
+/** Our own version — the stamp that tells a pending update from a landed one. */
+function currentVersion() {
+  try { return chrome.runtime.getManifest().version || ""; } catch { return ""; }
+}
 
 // ── Badge ───────────────────────────────────────────────────────────────────
 // Reflects whether the SDK is currently injected in this tab. Clears
