@@ -20,7 +20,7 @@
       "Read(./docs/launch/PLAN-archive.md)",
       "Read(./docs/launch/PROGRESS-archive.md)",
       "Read(./docs/launch/phase0-findings-archive.md)",
-      "Read(./docs/launch/designs/**)",
+      "Read(./docs/launch/designs/**)"
     ],
     "deny": [
       "Read(./node_modules/**)",
