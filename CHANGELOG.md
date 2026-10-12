@@ -29,6 +29,8 @@ All notable changes to TraceBug are documented here.
 
 ### Fixed
 
+- **A blocked page now says which kind of blocked, and offers a way out** (`tracebug-extension/page-support.js`, `popup.js`) — the popup's "Can't run on this page" panel used to be a dead end that also missed three real cases: the Chrome Web Store and the other add-on galleries (the page a brand-new user most likely has open), `file://` pages when "Allow access to file URLs" is off, and the built-in PDF viewer. Each one now gets its own sentence plus a single button — **Try it on a demo page**, **Open extension settings** or **Reload tab**.
+- **An action that fails explains itself in English** (`tracebug-extension/page-support.js`) — raw browser strings like "Cannot access contents of the page…" or "Receiving end does not exist" are mapped to a sentence with a next step attached, and the ones carrying an instruction take over the popup instead of flashing past in a 2.5-second toast. An unrecognised error is shown verbatim rather than replaced with a vague catch-all.
 - **Error and warning rows in the Actions tab say what happened** (`src/action-chips.ts`) — an error row showed the literal text `[object Object]`, and a `console.warn` row showed only the word "Warning" with no content. Collectors emit the text nested as `data.error.message`; the Actions builder was reading `data.message` and stringifying the error object when that came up empty. It now shows the message, falls back to the error name (a `TypeError` with no message is still worth reading), and never stringifies an object.
 
 ## [1.10.1] - 2026-07-29
