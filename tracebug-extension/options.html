@@ -96,6 +96,20 @@
       margin-bottom: 20px;
     }
     .rotate { color: var(--muted); font-size: 12px; margin-top: 6px; }
+    .siterow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .siterow:last-child { border-bottom: 0; }
+    .siteorigin {
+      flex: 1 1 auto;
+      font: 12px/1.4 ui-monospace, monospace;
+      word-break: break-all;
+    }
+    .siterow button { padding: 5px 10px; font-size: 12px; }
     a { color: #A5B4FC; }
   </style>
 </head>
@@ -184,6 +198,18 @@
       </div>
       <div class="status" id="slStatus"></div>
     </div>
+
+    <section class="card">
+      <h2>Sites allowed to run AI analysis</h2>
+      <p class="hint">
+        The first time a site asks TraceBug to analyze a report, you approve it and TraceBug remembers. After
+        that each site is limited to 10 analyses a minute, so a page cannot quietly spend your API credits.
+        Remove a site here to be asked again.
+      </p>
+      <div id="llmSites"></div>
+      <p class="hint" id="llmSitesEmpty" style="margin:0">No sites approved yet.</p>
+      <div class="status" id="llmSitesStatus"></div>
+    </section>
 
     <p class="rotate">
       <strong>Upgrading from before 1.11?</strong> Earlier versions stored these tokens in each website's own

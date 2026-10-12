@@ -1892,6 +1892,14 @@ async function _fileViaTracker(
     setTimeout(close, 300);
     return true;
   } catch (err) {
+    // Cancelling the extension's confirmation window is a deliberate stop, not
+    // a failure: return true so the caller does NOT fall through to the
+    // URL-prefill / copy-markup path. Silently switching filing method after
+    // the user said no would be surprising (Phase 2b).
+    if ((err as Error)?.name === "TraceBugCancelled") {
+      showToast((err as Error).message || "Send cancelled.", root);
+      return true;
+    }
     showToast(`${TRACKER_LABELS[provider]} failed: ${(err as Error)?.message || "error"}`, root);
     return false;
   }

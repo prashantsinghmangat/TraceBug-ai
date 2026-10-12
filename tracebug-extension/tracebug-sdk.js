@@ -12267,9 +12267,9 @@ var TraceBugModule = (() => {
     };
     const queueNodeTrees = [];
     for (const mutation of queue) {
-      const { nextId, parentId } = mutation;
-      if (nextId && nextId in queueNodeMap) {
-        const nextInTree = queueNodeMap[nextId];
+      const { nextId: nextId2, parentId } = mutation;
+      if (nextId2 && nextId2 in queueNodeMap) {
+        const nextInTree = queueNodeMap[nextId2];
         if (nextInTree.parent) {
           const idx = nextInTree.parent.children.indexOf(nextInTree);
           nextInTree.parent.children.splice(
@@ -16389,12 +16389,12 @@ var TraceBugModule = (() => {
             const addList = new DoubleLinkedList();
             const getNextId = (n2) => {
               let ns = n2;
-              let nextId = IGNORED_NODE;
-              while (nextId === IGNORED_NODE) {
+              let nextId2 = IGNORED_NODE;
+              while (nextId2 === IGNORED_NODE) {
                 ns = ns && ns.nextSibling;
-                nextId = ns && this.mirror.getId(ns);
+                nextId2 = ns && this.mirror.getId(ns);
               }
-              return nextId;
+              return nextId2;
             };
             const pushAdd = (n2) => {
               const parent = index.parentNode(n2);
@@ -16411,8 +16411,8 @@ var TraceBugModule = (() => {
                 }
               }
               const parentId = isShadowRoot(parent) ? this.mirror.getId(getShadowHost(n2)) : this.mirror.getId(parent);
-              const nextId = getNextId(n2);
-              if (parentId === -1 || nextId === -1) {
+              const nextId2 = getNextId(n2);
+              if (parentId === -1 || nextId2 === -1) {
                 return addList.addNode(n2);
               }
               const sn = serializeNodeWithId(n2, {
@@ -16457,7 +16457,7 @@ var TraceBugModule = (() => {
               if (sn) {
                 adds.push({
                   parentId,
-                  nextId,
+                  nextId: nextId2,
                   node: sn
                 });
                 addedIds.add(sn.id);
@@ -16486,8 +16486,8 @@ var TraceBugModule = (() => {
               let node2 = null;
               if (candidate) {
                 const parentId = this.mirror.getId(index.parentNode(candidate.value));
-                const nextId = getNextId(candidate.value);
-                if (parentId !== -1 && nextId !== -1) {
+                const nextId2 = getNextId(candidate.value);
+                if (parentId !== -1 && nextId2 !== -1) {
                   node2 = candidate;
                 }
               }
@@ -16498,8 +16498,8 @@ var TraceBugModule = (() => {
                   tailNode = tailNode.previous;
                   if (_node) {
                     const parentId = this.mirror.getId(index.parentNode(_node.value));
-                    const nextId = getNextId(_node.value);
-                    if (nextId === -1) continue;
+                    const nextId2 = getNextId(_node.value);
+                    if (nextId2 === -1) continue;
                     else if (parentId !== -1) {
                       node2 = _node;
                       break;
@@ -19595,9 +19595,9 @@ var TraceBugModule = (() => {
           adoptStyleSheets(targetHost, data.styleIds);
         }
         legacy_resolveMissingNode(map, parent, target, targetMutation) {
-          const { previousId, nextId } = targetMutation;
+          const { previousId, nextId: nextId2 } = targetMutation;
           const previousInMap = previousId && map[previousId];
-          const nextInMap = nextId && map[nextId];
+          const nextInMap = nextId2 && map[nextId2];
           if (previousInMap) {
             const { node: node2, mutation } = previousInMap;
             parent.insertBefore(node2, target);
@@ -19831,6 +19831,86 @@ var TraceBugModule = (() => {
       CHECKOUT_EVERY_MS = 12e4;
       SOFT_MAX = 3e4;
       HARD_MAX = 6e4;
+    }
+  });
+
+  // src/ext-rpc.ts
+  function nextId(prefix) {
+    return `${prefix}_${++_rpcCounter}_${Date.now().toString(36)}`;
+  }
+  function rpcCall(type, data, timeoutMs = 6e4) {
+    return new Promise((resolve, reject) => {
+      const id = nextId("tb_rpc");
+      const handler = (e2) => {
+        const detail = e2.detail;
+        if (!detail || detail.id !== id) return;
+        window.removeEventListener("tracebug-rec-response", handler);
+        clearTimeout(timer);
+        if (detail.error) reject(new Error(detail.error));
+        else resolve(detail.result);
+      };
+      window.addEventListener("tracebug-rec-response", handler);
+      const timer = setTimeout(() => {
+        window.removeEventListener("tracebug-rec-response", handler);
+        reject(new Error(`RPC timeout: ${type}`));
+      }, timeoutMs);
+      window.dispatchEvent(new CustomEvent("tracebug-rec-request", {
+        detail: { id, type, data }
+      }));
+    });
+  }
+  function callProvider(verb, detail) {
+    return new Promise((resolve, reject) => {
+      const id = nextId("tb_send");
+      let settled = false;
+      const finish = (fn) => {
+        if (settled) return;
+        settled = true;
+        window.removeEventListener("tracebug-provider-ack", onAck);
+        window.removeEventListener("tracebug-provider-result", onResult);
+        clearTimeout(timer);
+        fn();
+      };
+      const onAck = (e2) => {
+        const d = e2.detail;
+        if (!d || d.id !== id) return;
+        if (d.error) finish(() => reject(new Error(d.error)));
+      };
+      const onResult = (e2) => {
+        const d = e2.detail;
+        if (!d || d.id !== id) return;
+        if (d.cancelled) finish(() => reject(new TraceBugCancelled(d.error || "Send cancelled.")));
+        else if (d.error || d.ok === false) finish(() => reject(new Error(d.error || "Send failed.")));
+        else finish(() => resolve(d.result));
+      };
+      window.addEventListener("tracebug-provider-ack", onAck);
+      window.addEventListener("tracebug-provider-result", onResult);
+      const timer = setTimeout(() => {
+        finish(() => reject(new TraceBugCancelled("Send timed out waiting for confirmation.")));
+      }, PROVIDER_TIMEOUT_MS);
+      window.dispatchEvent(new CustomEvent("tracebug-provider-request", {
+        detail: { id, type: verb, data: detail }
+      }));
+    });
+  }
+  function sendTrackerViaBridge(provider, content) {
+    return callProvider("tb:provider:send", { provider, payload: content });
+  }
+  function analyzeViaBridge(prompt) {
+    return callProvider("tb:llm:analyze", { payload: { prompt } });
+  }
+  var TraceBugCancelled, _rpcCounter, PROVIDER_TIMEOUT_MS;
+  var init_ext_rpc = __esm({
+    "src/ext-rpc.ts"() {
+      "use strict";
+      TraceBugCancelled = class extends Error {
+        constructor(message = "Send cancelled.") {
+          super(message);
+          this.name = "TraceBugCancelled";
+        }
+      };
+      _rpcCounter = 0;
+      PROVIDER_TIMEOUT_MS = 15e4;
     }
   });
 
@@ -20530,32 +20610,12 @@ var TraceBugModule = (() => {
       return new Blob([], { type: mime });
     }
   }
-  function rpcCall(type, data, timeoutMs = 6e4) {
-    return new Promise((resolve, reject) => {
-      const id = `tb_rpc_${++_rpcCounter}_${Date.now().toString(36)}`;
-      const handler = (e2) => {
-        const detail = e2.detail;
-        if (!detail || detail.id !== id) return;
-        window.removeEventListener("tracebug-rec-response", handler);
-        clearTimeout(timer);
-        if (detail.error) reject(new Error(detail.error));
-        else resolve(detail.result);
-      };
-      window.addEventListener("tracebug-rec-response", handler);
-      const timer = setTimeout(() => {
-        window.removeEventListener("tracebug-rec-response", handler);
-        reject(new Error(`RPC timeout: ${type}`));
-      }, timeoutMs);
-      window.dispatchEvent(new CustomEvent("tracebug-rec-request", {
-        detail: { id, type, data }
-      }));
-    });
-  }
-  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled, _rpcCounter;
+  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
       init_rrweb_recorder();
+      init_ext_rpc();
       _active = false;
       _startedAt = 0;
       _mimeType = "";
@@ -20583,7 +20643,6 @@ var TraceBugModule = (() => {
       _onStarted = null;
       _startedWired = false;
       _reloadGuardsInstalled = false;
-      _rpcCounter = 0;
     }
   });
 
@@ -28593,6 +28652,243 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   });
 
+  // src/providers/api.ts
+  function friendlyStatus(status, label, kind = "llm") {
+    const where = kind === "tracker" ? "token" : "API key";
+    switch (status) {
+      case 0:
+        return `Could not reach ${label}. Check your connection${label === "Ollama" ? " and that Ollama is running." : "."}`;
+      case 401:
+        return `${label} rejected the ${where}. Re-create it and enter the new one in TraceBug settings.`;
+      case 403:
+        return `${label} denied access \u2014 the ${where} may be missing a scope, or you have hit a rate limit.`;
+      case 404:
+        return kind === "tracker" ? `${label} could not find that destination, or the ${where} cannot see it.` : `${label} could not find that endpoint or model.`;
+      case 422:
+        return `${label} could not accept this report (it failed validation).`;
+      case 429:
+        return `Rate limited by ${label} \u2014 wait a moment and retry.`;
+      default:
+        if (status >= 500) return `${label} is temporarily unavailable (${status}).`;
+        return `${label} request failed (HTTP ${status}).`;
+    }
+  }
+  function extractProviderError(body) {
+    var _a2;
+    if (body && typeof body === "object") {
+      const b = body;
+      if (typeof b.error === "string") return b.error;
+      if (b.error && typeof b.error === "object" && b.error.message) return b.error.message;
+      if (typeof b.message === "string") return b.message;
+      if (Array.isArray(b.errors) && ((_a2 = b.errors[0]) == null ? void 0 : _a2.message)) return b.errors[0].message;
+    }
+    return null;
+  }
+  async function parseJsonOrThrow(res, label, kind) {
+    let body;
+    try {
+      body = await res.json();
+    } catch (e2) {
+      if (!res.ok) throw new Error(friendlyStatus(res.status, label, kind));
+      throw new Error(`${label} returned an unreadable response.`);
+    }
+    if (!res.ok) {
+      const own = extractProviderError(body);
+      const friendly = friendlyStatus(res.status, label, kind);
+      throw new Error(own && own !== friendly ? `${friendly} (${own})` : friendly);
+    }
+    return body;
+  }
+  async function postGitHubIssue(config, content, signal) {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(config.repo || "")) {
+      throw new Error(`Invalid repo "${config.repo}". Expected "owner/repo".`);
+    }
+    const res = await fetch(`https://api.github.com/repos/${config.repo}/issues`, {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        "accept": "application/vnd.github+json",
+        "authorization": `Bearer ${config.token}`
+      },
+      body: JSON.stringify({
+        title: content.title,
+        body: content.body,
+        labels: config.labels && config.labels.length ? config.labels : void 0
+      })
+    });
+    const data = await parseJsonOrThrow(res, "GitHub", "tracker");
+    return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
+  }
+  async function postLinearIssue(config, content, signal) {
+    var _a2, _b, _c, _d, _e;
+    const query = "mutation IssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }";
+    const res = await fetch("https://api.linear.app/graphql", {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        // Linear personal API keys go in Authorization verbatim (no "Bearer").
+        "authorization": config.apiKey
+      },
+      body: JSON.stringify({
+        query,
+        variables: { input: { teamId: config.teamId, title: content.title, description: content.body } }
+      })
+    });
+    const data = await parseJsonOrThrow(res, "Linear", "tracker");
+    if (Array.isArray(data.errors) && data.errors.length) {
+      throw new Error(((_a2 = data.errors[0]) == null ? void 0 : _a2.message) || "Linear rejected the request.");
+    }
+    const issue = (_c = (_b = data == null ? void 0 : data.data) == null ? void 0 : _b.issueCreate) == null ? void 0 : _c.issue;
+    if (!((_e = (_d = data == null ? void 0 : data.data) == null ? void 0 : _d.issueCreate) == null ? void 0 : _e.success) || !issue) {
+      throw new Error("Linear did not create the issue.");
+    }
+    return { provider: "linear", ok: true, url: issue.url, ref: issue.identifier };
+  }
+  async function postSlackMessage(config, content, signal, opts = {}) {
+    if (!/^https:\/\/hooks\.slack\.com\//.test(config.webhookUrl || "")) {
+      throw new Error("Invalid Slack webhook URL (expected https://hooks.slack.com/\u2026).");
+    }
+    if (!opts.readResponse) {
+      await fetch(config.webhookUrl, {
+        method: "POST",
+        signal,
+        mode: "no-cors",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "payload=" + encodeURIComponent(JSON.stringify({ text: content.text }))
+      });
+      return { provider: "slack", ok: true, opaque: true };
+    }
+    const res = await fetch(config.webhookUrl, {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: content.text })
+    });
+    const text = (await res.text().catch(() => "")).trim();
+    if (!res.ok) {
+      const friendly = friendlyStatus(res.status, "Slack", "tracker");
+      throw new Error(text ? `${friendly} (${text})` : friendly);
+    }
+    if (text && text !== "ok") throw new Error(`Slack rejected the message (${text}).`);
+    return { provider: "slack", ok: true };
+  }
+  async function callLLM(config, prompt, signal) {
+    const baseUrl = (config.baseUrl || DEFAULT_BASE_URLS[config.provider] || "").replace(/\/+$/, "");
+    switch (config.provider) {
+      case "anthropic":
+        return callAnthropic(config, baseUrl, prompt, signal);
+      case "openai":
+        return callOpenAI(config, baseUrl, prompt, signal);
+      case "ollama":
+        return callOllama(config, baseUrl, prompt, signal);
+      default:
+        throw new Error(`Unknown provider: ${String(config.provider)}`);
+    }
+  }
+  async function callAnthropic(config, baseUrl, userContent, signal) {
+    const res = await fetch(`${baseUrl}/v1/messages`, {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": config.apiKey,
+        "anthropic-version": "2023-06-01",
+        // Opt in to CORS from the browser — Anthropic gates direct browser
+        // access behind this header. The key is the user's own (BYO-key).
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userContent }]
+      })
+    });
+    const data = await parseJsonOrThrow(res, "Anthropic", "llm");
+    if (data.stop_reason === "refusal") {
+      throw new Error("The model declined to analyze this report.");
+    }
+    const text = extractAnthropicText(data);
+    if (!text) throw new Error("Anthropic returned an empty response.");
+    return {
+      text,
+      provider: "anthropic",
+      model: data.model || config.model,
+      usage: data.usage ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens } : void 0
+    };
+  }
+  function extractAnthropicText(data) {
+    if (!Array.isArray(data.content)) return "";
+    return data.content.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join("").trim();
+  }
+  async function callOpenAI(config, baseUrl, userContent, signal) {
+    var _a2, _b, _c;
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      signal,
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_completion_tokens: 4096,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent }
+        ]
+      })
+    });
+    const data = await parseJsonOrThrow(res, "OpenAI", "llm");
+    const text = String(((_c = (_b = (_a2 = data == null ? void 0 : data.choices) == null ? void 0 : _a2[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "").trim();
+    if (!text) throw new Error("OpenAI returned an empty response.");
+    return {
+      text,
+      provider: "openai",
+      model: data.model || config.model,
+      usage: data.usage ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens } : void 0
+    };
+  }
+  async function callOllama(config, baseUrl, userContent, signal) {
+    const res = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: config.model,
+        stream: false,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent }
+        ]
+      })
+    });
+    const data = await parseJsonOrThrow(res, "Ollama", "llm");
+    const msg = data == null ? void 0 : data.message;
+    const text = String((msg && typeof msg === "object" ? msg.content : "") || "").trim();
+    if (!text) throw new Error("Ollama returned an empty response.");
+    return {
+      text,
+      provider: "ollama",
+      model: data.model || config.model,
+      usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
+    };
+  }
+  var DEFAULT_BASE_URLS, SYSTEM_PROMPT;
+  var init_api = __esm({
+    "src/providers/api.ts"() {
+      "use strict";
+      DEFAULT_BASE_URLS = {
+        anthropic: "https://api.anthropic.com",
+        openai: "https://api.openai.com",
+        ollama: "http://localhost:11434"
+      };
+      SYSTEM_PROMPT = "You are an expert debugging assistant. You are given a structured bug report captured by TraceBug (console errors, network activity, reproduction steps, environment). Analyze it and respond in concise markdown with exactly these sections:\n\n## Root cause\nThe single most likely cause, stated plainly.\n\n## Evidence\nThe specific signals in the report that point to it (quote the error/status/step).\n\n## Where to look\nThe files, components, or endpoints a developer should inspect first.\n\n## Suggested fix\nA concrete fix, with a short code sketch when possible.\n\n## Edge cases to test\n2-4 things to verify once the fix lands.\n\nBe specific and grounded in the report \u2014 do not invent details it does not contain. If the report lacks enough signal, say so and list what to capture next.";
+    }
+  });
+
   // src/ai/llm-client.ts
   function getAIConfig() {
     if (isExtensionMode()) return null;
@@ -28651,153 +28947,27 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     return sanitizeTokenShapes(prompt);
   }
   async function runLLMAnalysis(report, options = {}) {
+    const userContent = buildAnalysisPrompt(report);
     if (isExtensionMode()) {
-      throw new Error("AI analysis runs from the extension \u2014 open TraceBug settings to configure your key.");
+      if (!hasAIKey()) throw new Error("No AI provider configured \u2014 open TraceBug settings to add a key.");
+      return analyzeViaBridge(userContent);
     }
     const config = getAIConfig();
     if (!config) throw new Error("No AI provider configured. Add an API key first.");
     if (config.provider !== "ollama" && !config.apiKey) {
       throw new Error(`Add an API key for ${PROVIDER_LABELS[config.provider]}.`);
     }
-    const userContent = buildAnalysisPrompt(report);
-    const baseUrl = (config.baseUrl || DEFAULT_BASE_URLS[config.provider]).replace(/\/+$/, "");
-    switch (config.provider) {
-      case "anthropic":
-        return callAnthropic(config, baseUrl, userContent, options.signal);
-      case "openai":
-        return callOpenAI(config, baseUrl, userContent, options.signal);
-      case "ollama":
-        return callOllama(config, baseUrl, userContent, options.signal);
-      default:
-        throw new Error(`Unknown provider: ${config.provider}`);
-    }
+    return callLLM(config, userContent, options.signal);
   }
-  async function callAnthropic(config, baseUrl, userContent, signal) {
-    const res = await fetch(`${baseUrl}/v1/messages`, {
-      method: "POST",
-      signal,
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": config.apiKey,
-        "anthropic-version": "2023-06-01",
-        // Opt in to CORS from the browser — Anthropic gates direct browser
-        // access behind this header. The key is the user's own (BYO-key).
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: config.model,
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userContent }]
-      })
-    });
-    const data = await parseJsonOrThrow(res, "Anthropic");
-    if (data.stop_reason === "refusal") {
-      throw new Error("The model declined to analyze this report.");
-    }
-    const text = extractAnthropicText(data);
-    if (!text) throw new Error("Anthropic returned an empty response.");
-    return {
-      text,
-      provider: "anthropic",
-      model: data.model || config.model,
-      usage: data.usage ? { inputTokens: data.usage.input_tokens, outputTokens: data.usage.output_tokens } : void 0
-    };
-  }
-  function extractAnthropicText(data) {
-    if (!Array.isArray(data.content)) return "";
-    return data.content.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join("").trim();
-  }
-  async function callOpenAI(config, baseUrl, userContent, signal) {
-    var _a2, _b, _c;
-    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      signal,
-      headers: {
-        "content-type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`
-      },
-      body: JSON.stringify({
-        model: config.model,
-        max_completion_tokens: 4096,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent }
-        ]
-      })
-    });
-    const data = await parseJsonOrThrow(res, "OpenAI");
-    const text = String(((_c = (_b = (_a2 = data == null ? void 0 : data.choices) == null ? void 0 : _a2[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) || "").trim();
-    if (!text) throw new Error("OpenAI returned an empty response.");
-    return {
-      text,
-      provider: "openai",
-      model: data.model || config.model,
-      usage: data.usage ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens } : void 0
-    };
-  }
-  async function callOllama(config, baseUrl, userContent, signal) {
-    var _a2;
-    const res = await fetch(`${baseUrl}/api/chat`, {
-      method: "POST",
-      signal,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        model: config.model,
-        stream: false,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent }
-        ]
-      })
-    });
-    const data = await parseJsonOrThrow(res, "Ollama");
-    const text = String(((_a2 = data == null ? void 0 : data.message) == null ? void 0 : _a2.content) || "").trim();
-    if (!text) throw new Error("Ollama returned an empty response.");
-    return {
-      text,
-      provider: "ollama",
-      model: data.model || config.model,
-      usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
-    };
-  }
-  async function parseJsonOrThrow(res, provider) {
-    let body;
-    try {
-      body = await res.json();
-    } catch (e2) {
-      if (!res.ok) throw new Error(friendlyStatus(res.status, provider));
-      throw new Error(`${provider} returned an unreadable response.`);
-    }
-    if (!res.ok) {
-      const msg = extractProviderError(body) || friendlyStatus(res.status, provider);
-      throw new Error(msg);
-    }
-    return body;
-  }
-  function extractProviderError(body) {
-    var _a2;
-    if (body && typeof body === "object") {
-      const b = body;
-      if (typeof b.error === "string") return b.error;
-      if ((_a2 = b.error) == null ? void 0 : _a2.message) return b.error.message;
-    }
-    return null;
-  }
-  function friendlyStatus(status, provider) {
-    if (status === 401 || status === 403) return `${provider}: invalid or unauthorized API key.`;
-    if (status === 429) return `${provider}: rate limited \u2014 wait a moment and retry.`;
-    if (status === 0) return `Could not reach ${provider}. Check your connection${provider === "Ollama" ? " and that Ollama is running." : "."}`;
-    if (status >= 500) return `${provider} is temporarily unavailable (${status}).`;
-    return `${provider} request failed (${status}).`;
-  }
-  var STORAGE_KEY, LEGACY_KEY, PROVIDER_LABELS, DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES, DEFAULT_BASE_URLS, SYSTEM_PROMPT;
+  var STORAGE_KEY, LEGACY_KEY, PROVIDER_LABELS, DEFAULT_MODELS, ANTHROPIC_MODEL_CHOICES;
   var init_llm_client = __esm({
     "src/ai/llm-client.ts"() {
       "use strict";
       init_ai_prompt();
       init_cloud_upload();
       init_ext_transport();
+      init_ext_rpc();
+      init_api();
       STORAGE_KEY = "tracebug_ai_config";
       LEGACY_KEY = "tracebug_ai_key";
       PROVIDER_LABELS = {
@@ -28815,12 +28985,6 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         { id: "claude-sonnet-4-6", label: "Sonnet 4.6 \u2014 balanced (recommended)" },
         { id: "claude-opus-4-8", label: "Opus 4.8 \u2014 most capable" }
       ];
-      DEFAULT_BASE_URLS = {
-        anthropic: "https://api.anthropic.com",
-        openai: "https://api.openai.com",
-        ollama: "http://localhost:11434"
-      };
-      SYSTEM_PROMPT = "You are an expert debugging assistant. You are given a structured bug report captured by TraceBug (console errors, network activity, reproduction steps, environment). Analyze it and respond in concise markdown with exactly these sections:\n\n## Root cause\nThe single most likely cause, stated plainly.\n\n## Evidence\nThe specific signals in the report that point to it (quote the error/status/step).\n\n## Where to look\nThe files, components, or endpoints a developer should inspect first.\n\n## Suggested fix\nA concrete fix, with a short code sketch when possible.\n\n## Edge cases to test\n2-4 things to verify once the fix lands.\n\nBe specific and grounded in the report \u2014 do not invent details it does not contain. If the report lacks enough signal, say so and list what to capture next.";
     }
   });
 
@@ -29232,85 +29396,23 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   function issueBody(report) {
     return generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, "");
   }
-  async function parseJsonOrThrow2(res, label) {
-    var _a2;
-    let data = null;
-    try {
-      data = await res.json();
-    } catch (e2) {
-    }
-    if (!res.ok) {
-      const msg = data && (data.message || data.error || Array.isArray(data.errors) && ((_a2 = data.errors[0]) == null ? void 0 : _a2.message)) || `${label} request failed (HTTP ${res.status}).`;
-      throw new Error(String(msg));
-    }
-    return data;
-  }
   async function createGitHubIssue(report, config, signal) {
-    if (!/^[\w.-]+\/[\w.-]+$/.test(config.repo)) {
-      throw new Error(`Invalid repo "${config.repo}". Expected "owner/repo".`);
-    }
-    const res = await fetch(`https://api.github.com/repos/${config.repo}/issues`, {
-      method: "POST",
-      signal,
-      headers: {
-        "content-type": "application/json",
-        "accept": "application/vnd.github+json",
-        "authorization": `Bearer ${config.token}`
-      },
-      body: JSON.stringify({
-        title: issueTitle(report),
-        body: issueBody(report),
-        labels: config.labels && config.labels.length ? config.labels : void 0
-      })
-    });
-    const data = await parseJsonOrThrow2(res, "GitHub");
-    return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : void 0 };
+    return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
   }
   async function createLinearIssue(report, config, signal) {
-    var _a2, _b, _c, _d, _e;
-    const query = "mutation IssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }";
-    const res = await fetch("https://api.linear.app/graphql", {
-      method: "POST",
-      signal,
-      headers: {
-        "content-type": "application/json",
-        // Linear personal API keys go in Authorization verbatim (no "Bearer").
-        "authorization": config.apiKey
-      },
-      body: JSON.stringify({
-        query,
-        variables: { input: { teamId: config.teamId, title: issueTitle(report), description: issueBody(report) } }
-      })
-    });
-    const data = await parseJsonOrThrow2(res, "Linear");
-    if (Array.isArray(data.errors) && data.errors.length) {
-      throw new Error(((_a2 = data.errors[0]) == null ? void 0 : _a2.message) || "Linear rejected the request.");
-    }
-    const issue = (_c = (_b = data == null ? void 0 : data.data) == null ? void 0 : _b.issueCreate) == null ? void 0 : _c.issue;
-    if (!((_e = (_d = data == null ? void 0 : data.data) == null ? void 0 : _d.issueCreate) == null ? void 0 : _e.success) || !issue) {
-      throw new Error("Linear did not create the issue.");
-    }
-    return { provider: "linear", ok: true, url: issue.url, ref: issue.identifier };
+    return postLinearIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
   }
   async function sendSlackMessage(report, config, signal) {
-    if (!/^https:\/\/hooks\.slack\.com\//.test(config.webhookUrl)) {
-      throw new Error("Invalid Slack webhook URL (expected https://hooks.slack.com/\u2026).");
-    }
-    await fetch(config.webhookUrl, {
-      method: "POST",
-      signal,
-      mode: "no-cors",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "payload=" + encodeURIComponent(JSON.stringify({ text: generateSlackPost(report) }))
-    });
-    return { provider: "slack", ok: true, opaque: true };
+    return postSlackMessage(config, { text: generateSlackPost(report) }, signal);
   }
   async function createTrackerIssue(provider, report, signal) {
     var _a2, _b, _c, _d, _e;
     if (isExtensionMode()) {
-      throw new Error(
-        `${TRACKER_LABELS[provider] || provider} is sent from the extension \u2014 open TraceBug settings to configure it.`
-      );
+      if (!hasIntegration(provider)) {
+        throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured \u2014 open TraceBug settings.`);
+      }
+      const content = provider === "slack" ? { text: generateSlackPost(report) } : { title: issueTitle(report), body: issueBody(report) };
+      return sendTrackerViaBridge(provider, content);
     }
     const c2 = getIntegrationsConfig();
     switch (provider) {
@@ -29335,6 +29437,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       init_slack_export();
       init_report_builder();
       init_ext_transport();
+      init_ext_rpc();
+      init_api();
       TRACKER_LABELS = {
         github: "GitHub",
         linear: "Linear",
@@ -30813,6 +30917,10 @@ ${report.steps}`;
       setTimeout(close, 300);
       return true;
     } catch (err) {
+      if ((err == null ? void 0 : err.name) === "TraceBugCancelled") {
+        showToast(err.message || "Send cancelled.", root2);
+        return true;
+      }
       showToast(`${TRACKER_LABELS[provider]} failed: ${(err == null ? void 0 : err.message) || "error"}`, root2);
       return false;
     }
@@ -36953,7 +37061,7 @@ Response: ${match.response.slice(0, 160)}` : "";
                 }
               }
               var id2 = 0;
-              function nextId() {
+              function nextId2() {
                 return id2++;
               }
               function makePromise(promise) {
@@ -37085,7 +37193,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               }
               var Promise$1 = (function() {
                 function Promise2(resolver) {
-                  this[PROMISE_ID] = nextId();
+                  this[PROMISE_ID] = nextId2();
                   this._result = this._state = void 0;
                   this._subscribers = [];
                   if (noop3 !== resolver) {

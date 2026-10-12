@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TraceBug — confirm send</title>
+  <!-- Extension page: CSP is script-src 'self', so all script is external.
+       Every value rendered here comes from the PAGE under test. It is written
+       with textContent only, never innerHTML — see confirm-send.js. -->
+  <style>
+    :root {
+      --bg: #0B0B10;
+      --panel: #11151A;
+      --text: #FAFAFA;
+      --muted: #A1A1AA;
+      --line: rgba(255, 255, 255, 0.08);
+      --accent: #6366F1;
+      --warn: #F59E0B;
+      --danger: #EF4444;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--line);
+      flex: 0 0 auto;
+    }
+    h1 { font-size: 15px; margin: 0 0 8px; }
+    .origin {
+      font: 12px/1.4 ui-monospace, monospace;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .origin b { color: var(--text); font-weight: 600; }
+    main { flex: 1 1 auto; overflow-y: auto; padding: 14px 18px; }
+    .meta {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 6px 12px;
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+    .meta dt { color: var(--muted); }
+    .meta dd { margin: 0; word-break: break-word; }
+    .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 6px; }
+    .title-box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-weight: 600;
+      word-break: break-word;
+    }
+    /* The body is shown in FULL — scrollable, never truncated. A user asked to
+       approve a send has to be able to read everything that will leave. */
+    .body-box {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: 12px/1.55 ui-monospace, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 320px;
+      overflow-y: auto;
+      margin: 0;
+    }
+    .warn {
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.08);
+      color: #FDE68A;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .warn ul { margin: 6px 0 0; padding-left: 18px; }
+    .warn li { margin: 3px 0; }
+    footer {
+      flex: 0 0 auto;
+      padding: 12px 18px 16px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .grow { flex: 1 1 auto; }
+    button {
+      padding: 9px 16px;
+      border: 0;
+      border-radius: 8px;
+      cursor: pointer;
+      font: 600 13px system-ui, -apple-system, sans-serif;
+      background: var(--accent);
+      color: #fff;
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+    }
+    button:disabled { opacity: .5; cursor: default; }
+    .countdown { font-size: 11px; color: var(--muted); }
+    .fatal { padding: 24px 18px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="heading">Send this report?</h1>
+    <div class="origin">Requested by <b id="origin">—</b></div>
+  </header>
+
+  <main id="main">
+    <div class="warn" id="warnBox" style="display:none">
+      <strong>Before you send</strong>
+      <ul id="warnList"></ul>
+    </div>
+
+    <dl class="meta">
+      <dt>Destination</dt><dd id="destination">—</dd>
+      <dt>Via</dt><dd id="provider">—</dd>
+    </dl>
+
+    <div id="titleWrap">
+      <div class="label">Title</div>
+      <div class="title-box" id="title"></div>
+    </div>
+
+    <div class="label" id="bodyLabel">Body</div>
+    <pre class="body-box" id="body"></pre>
+  </main>
+
+  <footer>
+    <span class="countdown" id="countdown"></span>
+    <span class="grow"></span>
+    <button class="ghost" id="cancel">Cancel</button>
+    <button id="send">Send</button>
+  </footer>
+
+  <script src="confirm-send.js"></script>
+</body>
+</html>

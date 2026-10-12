@@ -19,6 +19,9 @@
 // No backend, no API keys.
 
 import { startDomRecording, stopDomRecording, snapshotDomEvents } from "./rrweb-recorder";
+// The page→content-script→background RPC helper moved to src/ext-rpc.ts in
+// Phase 2b so the provider bridge could share its id/timeout shape.
+import { rpcCall } from "./ext-rpc";
 
 export interface VideoComment {
   /** Milliseconds since recording started. */
@@ -902,32 +905,4 @@ function dataUrlToBlob(dataUrl: string, fallbackMime: string): Blob {
     console.warn("[TraceBug] dataUrlToBlob: atob failed, falling back to empty blob. body len =", body.length, "err =", (err as Error)?.message);
     return new Blob([], { type: mime });
   }
-}
-
-// ── RPC helper (page → content script → background → offscreen) ─────────
-
-let _rpcCounter = 0;
-
-function rpcCall<T = unknown>(type: string, data?: unknown, timeoutMs = 60000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const id = `tb_rpc_${++_rpcCounter}_${Date.now().toString(36)}`;
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail || detail.id !== id) return;
-      window.removeEventListener("tracebug-rec-response", handler);
-      clearTimeout(timer);
-      if (detail.error) reject(new Error(detail.error));
-      else resolve(detail.result as T);
-    };
-    window.addEventListener("tracebug-rec-response", handler);
-
-    const timer = setTimeout(() => {
-      window.removeEventListener("tracebug-rec-response", handler);
-      reject(new Error(`RPC timeout: ${type}`));
-    }, timeoutMs);
-
-    window.dispatchEvent(new CustomEvent("tracebug-rec-request", {
-      detail: { id, type, data },
-    }));
-  });
 }

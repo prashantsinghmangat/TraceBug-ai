@@ -4,7 +4,7 @@ All notable changes to TraceBug are documented here.
 
 ## [Unreleased] - 1.11.0
 
-> Launch-readiness release. Phase 2a: integration tokens and the AI key move out of the websites you test and into the extension's own storage.
+> Launch-readiness release. Phase 2: integration tokens and the AI key move out of the websites you test and into the extension's own storage (2a), and every send to GitHub, Linear, Slack or an AI provider now happens inside the extension, behind a confirmation you see first (2b).
 
 ### Security
 
@@ -13,9 +13,17 @@ All notable changes to TraceBug are documented here.
 - **Secrets are no longer typed into the page either** (`tracebug-extension/options.html`, `options.js`) — there is a new **TraceBug settings** page (`options_ui`, opens in a tab, Chrome + Firefox). The old in-page forms both collected tokens inside the host page's DOM *and* pre-filled them as attribute values, so a page script could read a stored token the moment the modal opened. The in-page modal now links to settings instead. Saved values are never echoed back into a field — the page shows a "Configured" pill.
 - **Old page-stored keys are migrated automatically** (`tracebug-extension/secret-migration.js`) — when TraceBug next runs on a site that still holds `tracebug_integrations` / `tracebug_ai_config` (or the legacy `tracebug_ai_key`), they are moved into extension storage and deleted from the site. If extension storage already holds a config, the existing one is kept and settings shows a one-time notice naming the site whose older token was dropped, so nothing disappears silently.
 
-### Known limitation in this build
+- **Provider calls no longer run in the page** (`src/providers/api.ts`, `tracebug-extension/background.js`, `provider-bridge.js`) — GitHub, Linear, Slack and the AI providers are called by the extension's background worker, which reads the token from its own storage. Previously every call was a `fetch()` from the page's main world, so a site that had replaced `window.fetch` could read the `Authorization` header even when it could not read the stored token. The page now hands over the report **content only** — no repository, team, channel, webhook, base URL or key — and an unexpected field is rejected rather than ignored, at both the content script and the worker.
+- **Every send to GitHub, Linear or Slack is confirmed first** (`tracebug-extension/confirm-send.html`) — a window the extension owns shows which site asked, where it is going, the title and the **full** report body, and warns when the body contains a remote image (a read receipt for whoever hosts it) or an @mention (those notify real people). Nothing is sent until you click Send; Cancel, closing the window and a two-minute timeout all send nothing. A send cancelled this way no longer falls back to the copy/prefill path — it just stops. Approving is accepted only from that window, never from a page.
+- **AI analysis is approved per site, then rate limited** — the first analysis on a site asks once and is remembered (revocable under "Sites allowed to run AI analysis" in TraceBug settings); after that each site is capped at 10 analyses a minute, so a page cannot quietly spend your API credits.
+- **Slack delivery is now confirmed for real** (`src/providers/api.ts`) — with access to `hooks.slack.com` the worker is not bound by page CORS, so it reads Slack's actual reply instead of assuming success. A rejected webhook now says why (`invalid_payload`, `no_service`) instead of showing a bare "✓ Sent to Slack".
+- **Provider failures read as sentences** — 401, 403, 404, 422, rate limits and network failures become plain messages ("GitHub rejected the token. Re-create it and enter the new one in TraceBug settings."), keeping the provider's own wording where it helps.
 
-- Sending to GitHub, Linear and Slack, and AI analysis, are **unavailable in extension mode until Phase 2b** lands the background-worker send path with per-send confirmation. They fail with a message pointing at settings rather than silently doing nothing. SDK (npm) mode is unaffected.
+### Permissions
+
+- **Added `optional_host_permissions`** for `api.github.com`, `api.linear.app`, `hooks.slack.com`, `api.openai.com`, `api.anthropic.com`, `localhost` and `127.0.0.1` — requested from TraceBug settings when you save that integration, and only the one host it talks to. Optional host permissions add **no install warning** and do not disable the extension for existing users.
+- **Added the `alarms` permission** — the send confirmation times out after two minutes, and that timer has to survive the service worker being shut down mid-decision. `alarms` triggers no install warning.
+- A custom Ollama base URL outside `localhost` / `127.0.0.1` fails with a clear message for now; requesting access to that one address is Phase 1 work.
 
 ## [1.10.1] - 2026-07-29
 

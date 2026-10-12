@@ -371,6 +371,136 @@ window.addEventListener("tracebug-rec-request", (e) => safeRun(() => {
   }));
 }));
 
+
+// ── Provider bridge relay (Phase 2b) ───────────────────────────────────────
+// The page asks for a provider send by dispatching `tracebug-provider-request`.
+// SECURITY: e.detail is page-controlled, so this relay does three things and
+// nothing else —
+//
+//   1. allowlists the verb (exactly two, separate from the tb:rec:* set),
+//   2. REBUILDS the forwarded data field by field, so a key the page added
+//      cannot reach the worker even by accident,
+//   3. forwards it with no credential and no destination, because the page has
+//      none to give: the worker reads those from chrome.storage.local.
+//
+// The worker validates all of this again (provider-bridge.js). Two layers is
+// deliberate — this one can be bypassed by a future refactor of the event
+// shape, and that one can't.
+var PROVIDER_RPC_TYPES = new Set(["tb:provider:send", "tb:llm:analyze"]);
+
+// Above this, the payload goes through chrome.storage.local instead of
+// sendMessage, the same way recordings do. The worker deletes the key in a
+// finally block.
+var PROVIDER_VIA_STORAGE_BYTES = 512 * 1024;
+
+var _providerPayloadSeq = 0;
+
+/**
+ * Rebuild the forwarded payload from the expected fields only, and REJECT an
+ * unexpected one rather than dropping it.
+ *
+ * Rejecting matters twice over: a page probing the bridge is told no instead of
+ * getting a send with its extra field quietly ignored, and a future SDK change
+ * that adds a field fails loudly in testing instead of half-working. The
+ * worker enforces the same rule again (provider-bridge.js) — this layer can be
+ * bypassed by a refactor of the event shape, that one cannot.
+ */
+function rebuildProviderPayload(type, provider, raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { error: "Malformed payload." };
+  }
+  var keys = type === "tb:llm:analyze" ? ["prompt"]
+    : provider === "slack" ? ["text"]
+    : ["title", "body"];
+  var given = Object.keys(raw);
+  for (var i = 0; i < given.length; i++) {
+    if (keys.indexOf(given[i]) === -1) {
+      return { error: 'Unexpected field "' + given[i] + '" in payload.' };
+    }
+  }
+  var out = {};
+  for (var j = 0; j < keys.length; j++) {
+    var v = raw[keys[j]];
+    out[keys[j]] = typeof v === "string" ? v : "";
+  }
+  return { payload: out };
+}
+
+/** The request envelope carries exactly these — a destination is not one. */
+var PROVIDER_DATA_KEYS = ["provider", "payload"];
+
+window.addEventListener("tracebug-provider-request", (e) => safeRun(() => {
+  const { id, type, data } = e.detail || {};
+  if (!id || !type) return;
+
+  const ack = (error) => dispatchToPage("tracebug-provider-ack", { id, error });
+
+  if (!PROVIDER_RPC_TYPES.has(type)) { ack("Unsupported request type."); return; }
+  if (!isExtAlive()) { ack("Extension context invalidated"); return; }
+
+  if (!data || typeof data !== "object") { ack("Malformed request."); return; }
+  // Reject an extra envelope field too: repo / token / baseUrl at this level
+  // would otherwise be dropped silently, which reads as "accepted".
+  const extra = Object.keys(data).find((k) => PROVIDER_DATA_KEYS.indexOf(k) === -1);
+  if (extra) { ack('Unexpected field "' + extra + '" in request.'); return; }
+
+  const provider = (typeof data.provider === "string") ? data.provider : undefined;
+  const built = rebuildProviderPayload(type, provider, data.payload);
+  if (built.error) { ack(built.error); return; }
+  const payload = built.payload;
+
+  const forward = (extra) => {
+    const msg = { type, id, data: Object.assign({ provider, payload }, extra || {}) };
+    safeSendMessage(msg, (response) => safeRun(() => {
+      const err = (chrome.runtime && chrome.runtime.lastError && chrome.runtime.lastError.message)
+        || (response && response.error)
+        || (!response ? "Extension context invalidated" : null);
+      // An ack only ever reports a REJECTION. Success means a confirmation
+      // window is open and the outcome will arrive later as
+      // tb:provider:result — see src/ext-rpc.ts.
+      if (err) ack(err);
+    }));
+  };
+
+  // Large payloads: write once, pass a reference. If the write fails we send
+  // the payload inline anyway and let the worker's size check answer, rather
+  // than failing a send the user asked for.
+  var approxBytes = 0;
+  try { approxBytes = JSON.stringify(payload).length; } catch (err) { approxBytes = 0; }
+  if (approxBytes > PROVIDER_VIA_STORAGE_BYTES) {
+    var ref = String(Date.now()) + "_" + (++_providerPayloadSeq);
+    try {
+      var obj = {};
+      obj["tb_send_payload_" + ref] = payload;
+      chrome.storage.local.set(obj, function () {
+        var _ = chrome.runtime.lastError;
+        if (_) forward(); else forward({ _viaStorage: ref });
+      });
+      return;
+    } catch (err2) { /* fall through to inline */ }
+  }
+  forward();
+}));
+
+// ── Provider outcome fan-out ───────────────────────────────────────────────
+// The worker sends the result to THIS tab's top frame only, after the user has
+// approved it. Forward it to the page so the SDK's promise settles.
+if (isExtAlive()) {
+  try {
+    chrome.runtime.onMessage.addListener((message) => safeRun(() => {
+      if (message && message.type === "tb:provider:result") {
+        dispatchToPage("tracebug-provider-result", {
+          id: message.id,
+          ok: message.ok === true,
+          cancelled: message.cancelled === true,
+          error: message.error || null,
+          result: message.result || null,
+        });
+      }
+    }));
+  } catch (e) {}
+}
+
 // ── Auto-stop fan-out ──────────────────────────────────────────────────────
 // When the user clicks the browser's native "Stop sharing" button, the
 // offscreen document broadcasts `tb:rec:auto-stopped` via background to every
