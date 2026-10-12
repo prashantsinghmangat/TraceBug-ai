@@ -57,10 +57,23 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, r));
 
 let failures = 0;
+// Output only: counts every check, but stays quiet while they all pass. The
+// moment one fails it flushes the run so far and streams the rest — a failing
+// check is only legible next to the ones that got that far. `--verbose` prints
+// everything from the start. Assertions, timeouts and order are untouched.
+const VERBOSE = process.argv.includes("--verbose");
+let passes = 0;
+let _streaming = VERBOSE;
+const _held = [];
 const check = (name, ok, extra = "") => {
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`);
-  if (!ok) failures++;
+  const line = `${ok ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`;
+  if (ok) passes++;
+  else { failures++; _streaming = true; }
+  if (!_streaming) { _held.push(line); return; }
+  while (_held.length) console.log(_held.shift());
+  console.log(line);
 };
+const total = () => `${passes}/${passes + failures} checks passed`;
 
 // One browser profile, reused across both extension versions — that is what
 // makes this an upgrade rather than two unrelated runs.
@@ -232,5 +245,5 @@ try {
   server.close();
 }
 
-console.log(failures ? `\n${failures} check(s) failed` : "\nAll checks passed");
+console.log(failures ? `\n${failures} check(s) failed — ${total()}` : `\nAll checks passed — ${total()}`);
 process.exit(failures ? 1 : 0);
