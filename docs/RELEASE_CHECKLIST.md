@@ -94,3 +94,18 @@ fine print, Skip reaches the thank-you state. Then submit the form once for real
 submission appears in Netlify Forms under `uninstall` - a field-name mismatch is accepted and
 silently discarded, so this cannot be verified any other way.
 
+### 8. The review ask, and the export footer
+
+**Review ask.** In the popup's devtools console on the page under test, set
+`localStorage.tracebug_export_count = "2"` and
+`localStorage.tracebug_review_first_session = "old"`, then export a report. **Pass:** about two
+seconds after the export toast, a card appears bottom-right: "Did TraceBug save you time?", a **Rate
+TraceBug** button and **Not now**. It must not cover the ticket modal's own buttons. Esc, ✕ and
+**Not now** all close it, and it does not come back on the next export. **Rate TraceBug** must open
+the listing's reviews tab - click it once for real and check the URL.
+
+**Export footer.** Export a report and open it. **Pass:** the foot of the page reads "Captured with
+TraceBug - free & local." with "Capture your own" linking to the store listing with
+`utm_source=report&utm_medium=export`. Then set **Export footer: off** in the **More ▾** menu, export
+again, and confirm the bar is gone from the new file and the old one still has it.
+

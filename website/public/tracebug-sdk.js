@@ -25169,6 +25169,26 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     }
   });
 
+  // src/links.ts
+  function storeUrl(surface, medium) {
+    const params = new URLSearchParams({ utm_source: surface });
+    if (medium) params.set("utm_medium", medium);
+    return `${CHROME_STORE_BASE}?${params.toString()}`;
+  }
+  function reviewUrl(surface = "review") {
+    return `${CHROME_STORE_BASE}/reviews?utm_source=${surface}`;
+  }
+  var CHROME_STORE_ID, CHROME_STORE_BASE, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA;
+  var init_links = __esm({
+    "src/links.ts"() {
+      "use strict";
+      CHROME_STORE_ID = "fdemmibikigigkfjngclmdheeajhdgaj";
+      CHROME_STORE_BASE = `https://chromewebstore.google.com/detail/${CHROME_STORE_ID}`;
+      EXPORT_FOOTER_TEXT = "Captured with TraceBug \u2014 free & local.";
+      EXPORT_FOOTER_CTA = "Capture your own \u2192";
+    }
+  });
+
   // src/exporters/html-template.ts
   function buildReplayHtml(payload, extras) {
     const dataJson = JSON.stringify(payload).replace(/<\/script>/gi, "<\\/script>");
@@ -25184,6 +25204,13 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         <span id="rr-time" class="tb-vrrweb-time">0:00 / 0:00</span>
       </div>
     </div>` : "";
+    const footerBar = payload.showFooter === false ? "" : `<footer class="tb-vf">
+  ${escapeHtml3(EXPORT_FOOTER_TEXT)} <a href="${storeUrl("report", "export")}" target="_blank" rel="noopener">${escapeHtml3(EXPORT_FOOTER_CTA)}</a> \xB7 opens fully offline (links open in your browser)
+  <span class="tb-vf-fb">\xB7 Did this report give your dev / AI agent what they needed?
+    <a href="https://tracebug.dev/feedback?type=other&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict \u{1F44D} \u2014 my dev/AI agent got what they needed from the exported report.")}" target="_blank" rel="noopener" title="Yes">\u{1F44D}</a>
+    <a href="https://tracebug.dev/feedback?type=bug&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict \u{1F44E} \u2014 the exported report was missing: ")}" target="_blank" rel="noopener" title="No \u2014 tell us what was missing">\u{1F44E}</a>
+  </span>
+</footer>`;
     const replayPath = hasRrweb && !payload.video ? pagePath(payload.rrwebPage) : "";
     const replayHeading = replayPath ? `Replay of the last page <span class="tb-vh2-note">(${escapeHtml3(replayPath)})</span>` : "Replay";
     return `<!DOCTYPE html>
@@ -25269,13 +25296,7 @@ ${rrwebCssTag}
     </div>
   </section>
 </main>
-<footer class="tb-vf">
-  Captured with <a href="https://tracebug.dev/?ref=replay" target="_blank" rel="noopener">TraceBug</a> \u2014 free \xB7 local-first \xB7 <a href="https://tracebug.dev/?ref=replay" target="_blank" rel="noopener">capture your own</a> \xB7 opens fully offline (links open in your browser)
-  <span class="tb-vf-fb">\xB7 Did this report give your dev / AI agent what they needed?
-    <a href="https://tracebug.dev/feedback?type=other&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict \u{1F44D} \u2014 my dev/AI agent got what they needed from the exported report.")}" target="_blank" rel="noopener" title="Yes">\u{1F44D}</a>
-    <a href="https://tracebug.dev/feedback?type=bug&amp;area=not-sure&amp;msg=${encodeURIComponent("Report verdict \u{1F44E} \u2014 the exported report was missing: ")}" target="_blank" rel="noopener" title="No \u2014 tell us what was missing">\u{1F44E}</a>
-  </span>
-</footer>
+${footerBar}
 <!-- Help overlay: keyboard shortcut cheat sheet -->
 <div id="help-overlay" class="tb-vhelp" style="display:none">
   <div class="tb-vhelp-card">
@@ -25317,6 +25338,7 @@ ${REPLAY_RUNTIME}
   var init_html_template = __esm({
     "src/exporters/html-template.ts"() {
       "use strict";
+      init_links();
       REPLAY_CSS = `
 /* \u2500\u2500 Theme tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 /* Light is the unconditional default. Dark requires an explicit
@@ -27212,6 +27234,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       pushStorageRows("Cookies", report.storage.cookies, report.storage.cookiesTruncated);
     }
     const payload = {
+      showFooter: (options == null ? void 0 : options.showFooter) !== false,
       meta: {
         title: report.title,
         severity: report.severity,
@@ -27563,6 +27586,143 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       DONE_KEY = "tracebug_milestone_ask_done";
       CARD_ID = "tracebug-milestone-ask";
       MILESTONE = 5;
+    }
+  });
+
+  // src/ui/review-ask.ts
+  function readState() {
+    try {
+      return localStorage.getItem(STATE_KEY) || "";
+    } catch (e2) {
+      return "done";
+    }
+  }
+  function writeState(state) {
+    try {
+      localStorage.setItem(STATE_KEY, state);
+    } catch (e2) {
+    }
+  }
+  function recordExport(sessionId) {
+    const state = readState();
+    if (state === "done") return false;
+    let count2 = 0;
+    try {
+      count2 = Number(localStorage.getItem(COUNT_KEY) || "0") + 1;
+      localStorage.setItem(COUNT_KEY, String(count2));
+    } catch (e2) {
+      return false;
+    }
+    let firstSession = "";
+    try {
+      firstSession = localStorage.getItem(FIRST_SESSION_KEY) || "";
+      if (!firstSession && sessionId) {
+        localStorage.setItem(FIRST_SESSION_KEY, sessionId);
+        firstSession = sessionId;
+      }
+    } catch (e2) {
+    }
+    if (!sessionId || sessionId === firstSession) return false;
+    const threshold = state === "asked1" ? SECOND_ASK_AT : FIRST_ASK_AT;
+    return count2 >= threshold;
+  }
+  function showReviewAsk(root2) {
+    if (document.getElementById(CARD_ID2)) return;
+    writeState(readState() === "asked1" ? "done" : "asked1");
+    const card = document.createElement("div");
+    card.id = CARD_ID2;
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-label", "Review TraceBug \u2014 optional");
+    card.style.cssText = [
+      "position:fixed",
+      "right:16px",
+      "bottom:16px",
+      "width:320px",
+      "background:var(--tb-bg-secondary,#1a1a2e)",
+      "border:1px solid var(--tb-border-hover,#3a3a5e)",
+      "border-radius:12px",
+      "padding:14px 16px",
+      // Same ceiling as the ticket modal and milestone-ask: appended last, so it
+      // paints and clicks above the modal overlay. See milestone-ask.ts.
+      "z-index:2147483647",
+      "font-family:var(--tb-font-family,system-ui,sans-serif)",
+      "color:var(--tb-text-primary,#e0e0e0)",
+      "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
+    ].join(";");
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;gap:8px";
+    const title = document.createElement("div");
+    title.style.cssText = "font-size:15px;font-weight:600;line-height:1.3";
+    title.textContent = "Did TraceBug save you time?";
+    const close = document.createElement("button");
+    close.setAttribute("data-act", "close");
+    close.setAttribute("aria-label", "Dismiss");
+    close.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0;font-family:inherit";
+    close.textContent = "\u2715";
+    head.append(title, close);
+    const line = document.createElement("p");
+    line.style.cssText = "margin:6px 0 12px;font-size:13px;line-height:1.5;color:var(--tb-text-secondary,#aaa)";
+    line.textContent = "A short review helps other testers find it.";
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:12px";
+    const rate = document.createElement("a");
+    rate.href = reviewUrl("review");
+    rate.target = "_blank";
+    rate.rel = "noopener noreferrer";
+    rate.setAttribute("data-act", "rate");
+    rate.style.cssText = "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none";
+    const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    star.setAttribute("width", "13");
+    star.setAttribute("height", "13");
+    star.setAttribute("viewBox", "0 0 24 24");
+    star.setAttribute("fill", "none");
+    star.setAttribute("stroke", "currentColor");
+    star.setAttribute("stroke-width", "2");
+    star.setAttribute("stroke-linecap", "round");
+    star.setAttribute("stroke-linejoin", "round");
+    star.setAttribute("aria-hidden", "true");
+    const starPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    starPath.setAttribute("d", "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z");
+    star.appendChild(starPath);
+    const rateText = document.createElement("span");
+    rateText.textContent = "Rate TraceBug";
+    rate.append(star, rateText);
+    const notNow = document.createElement("button");
+    notNow.setAttribute("data-act", "not-now");
+    notNow.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#888);font-size:12.5px;cursor:pointer;padding:0;font-family:inherit";
+    notNow.textContent = "Not now";
+    row.append(rate, notNow);
+    card.append(head, line, row);
+    const dismiss = () => {
+      document.removeEventListener("keydown", onKey2, true);
+      card.remove();
+    };
+    const onKey2 = (e2) => {
+      if (e2.key === "Escape") {
+        e2.stopPropagation();
+        dismiss();
+      }
+    };
+    document.addEventListener("keydown", onKey2, true);
+    close.addEventListener("click", dismiss);
+    notNow.addEventListener("click", dismiss);
+    rate.addEventListener("click", () => {
+      writeState("done");
+      dismiss();
+    });
+    root2.appendChild(card);
+  }
+  var COUNT_KEY, STATE_KEY, FIRST_SESSION_KEY, CARD_ID2, FIRST_ASK_AT, SECOND_ASK_AT;
+  var init_review_ask = __esm({
+    "src/ui/review-ask.ts"() {
+      "use strict";
+      init_links();
+      COUNT_KEY = "tracebug_export_count";
+      STATE_KEY = "tracebug_review_ask";
+      FIRST_SESSION_KEY = "tracebug_review_first_session";
+      CARD_ID2 = "tracebug-review-ask";
+      FIRST_ASK_AT = 3;
+      SECOND_ASK_AT = 10;
     }
   });
 
@@ -29828,6 +29988,32 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const area = isExtensionContext() ? "extension" : "npm-sdk";
     return `https://tracebug.dev/feedback?type=${type}&area=${area}&msg=${encodeURIComponent(msg)}`;
   }
+  function showExportFooter() {
+    try {
+      return localStorage.getItem(EXPORT_FOOTER_KEY) !== "0";
+    } catch (e2) {
+      return true;
+    }
+  }
+  function setShowExportFooter(on2) {
+    try {
+      localStorage.setItem(EXPORT_FOOTER_KEY, on2 ? "1" : "0");
+    } catch (e2) {
+    }
+  }
+  function _maybeAskForReview(root2, sessionId) {
+    try {
+      if (!recordExport(sessionId)) return;
+    } catch (e2) {
+      return;
+    }
+    setTimeout(() => {
+      try {
+        showReviewAsk(root2);
+      } catch (e2) {
+      }
+    }, 1800);
+  }
   function _loadThemePref() {
     try {
       const v2 = localStorage.getItem(THEME_PREF_KEY);
@@ -30026,7 +30212,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -30253,6 +30439,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
             <button data-action="jira" class="tb-qb-more-item" role="menuitem">${_ic("ticket")} Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations\u2026</button>
+            <!-- The one promotional thing in an export, and therefore the one
+                 thing that has to be removable before the file is sent on. -->
+            <button data-action="toggle-export-footer" class="tb-qb-more-item" role="menuitemcheckbox" aria-checked="${showExportFooter() ? "true" : "false"}" title="The one-line \u201CCaptured with TraceBug\u201D bar at the foot of an exported .html. Turn it off for exports you attach to a public issue or send to a client.">${_ic("fileCode")} <span data-el="footer-label">${showExportFooter() ? "Export footer: on" : "Export footer: off"}</span></button>
           </div>
         </div>
       </div>
@@ -30622,8 +30811,18 @@ ${description}`;
         if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
       });
     }
-    (_z = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _z.addEventListener("click", async () => {
-      var _a3;
+    (_z = modal.querySelector('[data-action="toggle-export-footer"]')) == null ? void 0 : _z.addEventListener("click", (e2) => {
+      e2.stopPropagation();
+      const next = !showExportFooter();
+      setShowExportFooter(next);
+      const btn = e2.currentTarget;
+      btn.setAttribute("aria-checked", next ? "true" : "false");
+      const label = btn.querySelector('[data-el="footer-label"]');
+      if (label) label.textContent = next ? "Export footer: on" : "Export footer: off";
+      showToast(next ? "Export footer on" : "Export footer off - exports carry no TraceBug line", root2);
+    });
+    (_A = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _A.addEventListener("click", async () => {
+      var _a3, _b2, _c2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -30650,10 +30849,12 @@ ${description}`;
           descriptionOverride: userDesc ? report.steps ? `${userDesc}
 
 ${report.steps}` : userDesc : void 0,
-          githubRepo: _githubRepo || void 0
+          githubRepo: _githubRepo || void 0,
+          showFooter: showExportFooter()
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 Replay exported \xB7 ${sizeMb} MB`, root2);
+        _maybeAskForReview(root2, (_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.sessionId) != null ? _c2 : null);
         showMcpHandoffCard(result2.filename, result2.sizeBytes);
       } catch (err) {
         console.warn("[TraceBug] HTML replay export failed:", err);
@@ -30665,7 +30866,7 @@ ${report.steps}` : userDesc : void 0,
         }
       }
     });
-    (_A = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _A.addEventListener("click", () => {
+    (_B = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _B.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -30688,8 +30889,8 @@ ${report.steps}` : userDesc : void 0,
         showToast("Test export failed", root2);
       }
     });
-    (_B = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _B.addEventListener("click", async () => {
-      var _a3;
+    (_C = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _C.addEventListener("click", async () => {
+      var _a3, _b2, _c2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -30716,10 +30917,12 @@ ${report.steps}` : userDesc : void 0,
           descriptionOverride: userDesc ? report.steps ? `${userDesc}
 
 ${report.steps}` : userDesc : void 0,
-          githubRepo: _githubRepo || void 0
+          githubRepo: _githubRepo || void 0,
+          showFooter: showExportFooter()
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
         showToast(`\u2713 .zip exported \xB7 ${sizeMb} MB \u2014 drag it onto a GitHub issue to attach`, root2);
+        _maybeAskForReview(root2, (_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.sessionId) != null ? _c2 : null);
       } catch (err) {
         console.warn("[TraceBug] ZIP export failed:", err);
         showToast("Couldn't build the .zip \u2014 try again", root2);
@@ -30730,7 +30933,7 @@ ${report.steps}` : userDesc : void 0,
         }
       }
     });
-    (_C = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_D = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _D.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30750,7 +30953,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("HAR export failed", root2);
       }
     });
-    (_D = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _D.addEventListener("click", () => {
+    (_E = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _E.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30770,7 +30973,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Report export failed", root2);
       }
     });
-    (_E = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _E.addEventListener("click", () => {
+    (_F = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _F.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -30797,7 +31000,7 @@ ${report.steps}` : userDesc : void 0,
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_F = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _F.addEventListener("click", async (e2) => {
+    (_G = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _G.addEventListener("click", async (e2) => {
       if (!data.currentSession) {
         showToast("Nothing to share yet \u2014 capture something first", root2);
         return;
@@ -30957,7 +31160,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_G = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _G.addEventListener("click", () => {
+    (_H = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _H.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -30988,7 +31191,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_H = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _H.addEventListener("click", async () => {
+    (_I = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _I.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -31012,7 +31215,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_I = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _I.addEventListener("click", async () => {
+    (_J = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _J.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -32821,7 +33024,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey2);
   }
-  var _githubRepo, MODAL_ID, DRAFT_KEY, THEME_PREF_KEY, _isOpen, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, MODAL_ID, DRAFT_KEY, EXPORT_FOOTER_KEY, THEME_PREF_KEY, _isOpen, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -32830,6 +33033,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_dashboard();
       init_storage();
       init_milestone_ask();
+      init_review_ask();
       init_video_recorder();
       init_report_builder();
       init_github_issue();
@@ -32858,6 +33062,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _githubRepo = null;
       MODAL_ID = "tracebug-quick-bug-modal";
       DRAFT_KEY = "tracebug_last_bug_draft";
+      EXPORT_FOOTER_KEY = "tracebug_show_export_footer";
       THEME_PREF_KEY = "tracebug_theme_pref";
       _isOpen = false;
       _draftCleared = false;
@@ -70202,7 +70407,7 @@ First element: \`${exampleSnippet}\``,
     _injectStyles3();
     hideLiveBugCard();
     const overlay = document.createElement("div");
-    overlay.id = CARD_ID2;
+    overlay.id = CARD_ID3;
     overlay.dataset.tracebug = "live-bug-card";
     overlay.setAttribute("role", "alert");
     overlay.setAttribute("aria-live", "assertive");
@@ -70368,7 +70573,7 @@ First element: \`${exampleSnippet}\``,
       from { transform: translateY(20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
     }
-    #${CARD_ID2} {
+    #${CARD_ID3} {
       position: fixed !important;
       bottom: 16px !important;
       right: 16px !important;
@@ -70376,7 +70581,7 @@ First element: \`${exampleSnippet}\``,
       pointer-events: auto !important;
       animation: tb-lbc-in 0.18s ease !important;
     }
-    #${CARD_ID2} .tb-lbc-card {
+    #${CARD_ID3} .tb-lbc-card {
       box-sizing: border-box !important;
       max-width: 460px !important;
       min-width: 340px !important;
@@ -70389,31 +70594,31 @@ First element: \`${exampleSnippet}\``,
       padding: 12px 14px !important;
       box-shadow: 0 12px 36px rgba(0,0,0,0.45) !important;
     }
-    #${CARD_ID2} .tb-lbc-card *, #${CARD_ID2} .tb-lbc-card *::before, #${CARD_ID2} .tb-lbc-card *::after {
+    #${CARD_ID3} .tb-lbc-card *, #${CARD_ID3} .tb-lbc-card *::before, #${CARD_ID3} .tb-lbc-card *::after {
       box-sizing: border-box !important;
     }
-    #${CARD_ID2} .tb-lbc-head {
+    #${CARD_ID3} .tb-lbc-head {
       display: flex !important; align-items: flex-start !important; gap: 8px !important;
       margin-bottom: 8px !important;
     }
-    #${CARD_ID2} .tb-lbc-icon { font-size: 16px !important; line-height: 1.2 !important; flex-shrink: 0 !important; }
-    #${CARD_ID2} .tb-lbc-title {
+    #${CARD_ID3} .tb-lbc-icon { font-size: 16px !important; line-height: 1.2 !important; flex-shrink: 0 !important; }
+    #${CARD_ID3} .tb-lbc-title {
       flex: 1 !important; font-size: 13px !important; font-weight: 600 !important;
       color: var(--tb-error, #ef4444) !important; line-height: 1.35 !important; word-break: break-word !important;
     }
-    #${CARD_ID2} .tb-lbc-close {
+    #${CARD_ID3} .tb-lbc-close {
       background: none !important; border: none !important; color: var(--tb-text-muted, #888) !important;
       font-size: 20px !important; line-height: 1 !important; cursor: pointer !important;
       padding: 0 4px !important; font-family: inherit !important;
     }
-    #${CARD_ID2} .tb-lbc-loc {
+    #${CARD_ID3} .tb-lbc-loc {
       font-size: 11px !important; color: var(--tb-text-muted, #888) !important;
       font-family: var(--tb-font-mono, ui-monospace, monospace) !important;
       margin-bottom: 4px !important;
     }
-    #${CARD_ID2} .tb-lbc-file { color: var(--tb-text-secondary, #aaa) !important; }
-    #${CARD_ID2} .tb-lbc-no-source { font-style: italic !important; color: var(--tb-text-muted, #666) !important; }
-    #${CARD_ID2} .tb-lbc-source {
+    #${CARD_ID3} .tb-lbc-file { color: var(--tb-text-secondary, #aaa) !important; }
+    #${CARD_ID3} .tb-lbc-no-source { font-style: italic !important; color: var(--tb-text-muted, #666) !important; }
+    #${CARD_ID3} .tb-lbc-source {
       background: var(--tb-bg-primary, #0f0f1a) !important;
       border: 1px solid var(--tb-border, #2a2a3e) !important;
       border-radius: 6px !important;
@@ -70422,29 +70627,29 @@ First element: \`${exampleSnippet}\``,
       font-size: 11px !important;
       max-height: 110px !important; overflow: hidden !important;
     }
-    #${CARD_ID2} .tb-lbc-loading {
+    #${CARD_ID3} .tb-lbc-loading {
       font-style: italic !important; color: var(--tb-text-muted, #666) !important;
     }
-    #${CARD_ID2} .tb-lbc-line {
+    #${CARD_ID3} .tb-lbc-line {
       display: flex !important; gap: 8px !important; line-height: 1.45 !important;
       white-space: pre !important; color: var(--tb-text-secondary, #aaa) !important;
     }
-    #${CARD_ID2} .tb-lbc-line-hot {
+    #${CARD_ID3} .tb-lbc-line-hot {
       color: var(--tb-text-primary, #fff) !important; font-weight: 600 !important;
       background: rgba(239, 68, 68, 0.12) !important;
       margin: 0 -8px !important; padding: 0 8px !important;
     }
-    #${CARD_ID2} .tb-lbc-arrow { color: var(--tb-error, #ef4444) !important; width: 10px !important; flex-shrink: 0 !important; }
-    #${CARD_ID2} .tb-lbc-num { color: var(--tb-text-muted, #555) !important; user-select: none !important; flex-shrink: 0 !important; }
-    #${CARD_ID2} .tb-lbc-code { color: inherit !important; flex: 1 !important; }
-    #${CARD_ID2} .tb-lbc-action {
+    #${CARD_ID3} .tb-lbc-arrow { color: var(--tb-error, #ef4444) !important; width: 10px !important; flex-shrink: 0 !important; }
+    #${CARD_ID3} .tb-lbc-num { color: var(--tb-text-muted, #555) !important; user-select: none !important; flex-shrink: 0 !important; }
+    #${CARD_ID3} .tb-lbc-code { color: inherit !important; flex: 1 !important; }
+    #${CARD_ID3} .tb-lbc-action {
       font-size: 11px !important; color: var(--tb-text-muted, #888) !important;
       margin-bottom: 10px !important;
     }
-    #${CARD_ID2} .tb-lbc-buttons {
+    #${CARD_ID3} .tb-lbc-buttons {
       display: flex !important; gap: 6px !important; flex-wrap: wrap !important;
     }
-    #${CARD_ID2} .tb-lbc-btn {
+    #${CARD_ID3} .tb-lbc-btn {
       font-family: inherit !important;
       border: 1px solid var(--tb-border, #2a2a3e) !important;
       border-radius: 6px !important;
@@ -70453,33 +70658,33 @@ First element: \`${exampleSnippet}\``,
       cursor: pointer !important;
       transition: all 0.12s !important;
     }
-    #${CARD_ID2} .tb-lbc-primary {
+    #${CARD_ID3} .tb-lbc-primary {
       background: var(--tb-accent, #6366F1) !important;
       color: #fff !important;
       border-color: transparent !important;
     }
-    #${CARD_ID2} .tb-lbc-primary:hover { opacity: 0.9 !important; }
-    #${CARD_ID2} .tb-lbc-editor {
+    #${CARD_ID3} .tb-lbc-primary:hover { opacity: 0.9 !important; }
+    #${CARD_ID3} .tb-lbc-editor {
       background: transparent !important;
       color: var(--tb-text-primary, #e0e0e0) !important;
     }
-    #${CARD_ID2} .tb-lbc-editor:hover { background: var(--tb-btn-hover, #ffffff15) !important; }
-    #${CARD_ID2} .tb-lbc-ghost {
+    #${CARD_ID3} .tb-lbc-editor:hover { background: var(--tb-btn-hover, #ffffff15) !important; }
+    #${CARD_ID3} .tb-lbc-ghost {
       background: transparent !important;
       color: var(--tb-text-muted, #888) !important;
     }
-    #${CARD_ID2} .tb-lbc-ghost:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
+    #${CARD_ID3} .tb-lbc-ghost:hover { color: var(--tb-text-primary, #e0e0e0) !important; }
   `;
     document.head.appendChild(style);
   }
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID2, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID3, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
-      CARD_ID2 = "tracebug-live-bug-card";
+      CARD_ID3 = "tracebug-live-bug-card";
       STYLE_ID3 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();

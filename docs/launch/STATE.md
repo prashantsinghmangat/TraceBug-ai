@@ -13,7 +13,7 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
   macOS denial), the two Step-B additions (video pref in `chrome.storage.local`, replay heading names
   its page), **Step C** (bundled `welcome.html`; first run no longer needs the network) and **Step D**
   (per-version "What's new" card in the popup, no tab stolen on update), and **Step E** (popup "can't run here" states carry the page and a per-reason glyph; `/bye` uninstall survey; `setUninstallURL`).
-- **Next: Phase 4 Step F**, then Phases 5–9 in `PLAN.md`. Phase 8 needs rescoping — see gotchas.
+- **Next: Phases 5–9 in `PLAN.md`. Phase 8 needs rescoping — see gotchas.
 
 ## Phase 4, what is left
 
@@ -26,8 +26,14 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
   `tab.url` is invisible. One glyph per reason; `csp` / `needs-access` / `unknown` keep the pixel-bug
   fallback because `screens.md` names no glyph for them. `setUninstallURL` is set at worker start and
   carries `?v=<version>` and nothing else.
-- **Step F** — the review card (`screens.md` screen 5) and the exported-report footer (Phase 5's
-  first two items).
+- **Step F is done.** `src/links.ts` is the single source for store URLs and UTM tags; the export
+  footer points at the store listing and is removable (`tracebug_show_export_footer`, toggle in the
+  export menu); `src/ui/review-ask.ts` asks at the 3rd export, never in the first session, once more
+  at the 10th, then never.
+- **Phase 5 is now mostly done ahead of schedule** - its footer, review-prompt, uninstall-survey and
+  constants-file items all landed in Steps E and F. What remains of Phase 5 is the **issue signature**
+  ("Reported with TraceBug" appended to GitHub/Linear/Slack bodies, with a toggle). Update `PLAN.md`
+  Phase 5 before starting it.
 - `welcome.html` / `welcome.js` are done and in `SHARED_FILES`. The **"Rolling this out to a team?"
   card is deliberately absent** — `tracebug.dev/teams` does not exist and the page must not ship a
   404. `welcome.js` has an empty `TEAM_GUIDE_URL`; set it and the card builds itself.

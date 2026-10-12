@@ -26,6 +26,12 @@ export interface HtmlReplayOptions {
    *  issue" button with a prefilled URL. The copy-markdown button is
    *  included regardless. */
   githubRepo?: string;
+  /** Show the one-line "Captured with TraceBug" bar at the foot of the export.
+   *  Default true; the export modal offers a toggle (`showExportFooter`). It is
+   *  the only promotional thing in the file, and the person who reads an export
+   *  is usually not the person who made it — which is the whole point, and also
+   *  why it has to be removable before the file is sent. */
+  showFooter?: boolean;
 }
 
 export interface ExportedReplay {
@@ -212,6 +218,7 @@ async function buildReplayPayload(
   }
 
   const payload: BundlePayload = {
+    showFooter: options?.showFooter !== false,
     meta: {
       title: report.title,
       severity: report.severity,

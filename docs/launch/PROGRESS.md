@@ -158,3 +158,27 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - Open: neither the popup states nor `/bye` has been RENDERED. `/bye` also needs one real submission
   against Netlify to prove the form is collected - that cannot be tested locally.
 
+## Phase 4, Step F - the review ask, and a footer you can remove (2026-10-12)
+
+- New `src/links.ts` is the one place store URLs and UTM tags live (Phase 5's last item). **I had
+  invented a store id and an AMO slug on the first pass**; the real Chrome id is
+  `fdemmibikigigkfjngclmdheeajhdgaj`, verified against CHANGELOG.md and three docs that agree. The
+  repo has no confirmed AMO slug, so there is deliberately **no Firefox listing constant** - a guessed
+  store URL baked into an export is a dead link for whoever reads that report later. Also corrected the
+  invented slug I had put in `website/app/bye/ByeForm.tsx` during Step E.
+- The exported `.html` footer already existed, pointing at `tracebug.dev/?ref=replay`. Retargeted to the
+  store listing with `utm_source=report&utm_medium=export`, and made removable: `showFooter` on the
+  payload, `tracebug_show_export_footer` as the pref, and a `menuitemcheckbox` in the export menu. An
+  export is often attached to a public issue or sent to a client; a promotional line must not be
+  unremovable there.
+- New `src/ui/review-ask.ts`: asks after the 3rd successful export, **never in the user's first
+  session**, once more at the 10th if dismissed, then never. Marked asked at SHOW time, so ignoring it
+  counts. Counting hooks the two export paths only after a file exists. No rating, no count, no social
+  proof, no incentive - asserted as rules in the tests, not as implementation.
+- Files: new `src/links.ts`, `src/ui/review-ask.ts`, `tests/review-ask.test.ts`; edited
+  `src/exporters/{html-template,html-replay}.ts`, `src/ui/quick-bug.ts`, `website/app/bye/ByeForm.tsx`,
+  `docs/launch/{PLAN,STATE}.md`, `CHANGELOG.md`. Verified: check.mjs --full green, 730 passing /
+  44 files (+22), ext:lint 0/69; milestone-ask 5/5, ext-events-capture 22/22, ext-player-csp green.
+- Open: the card has never been RENDERED, and the review link cannot be clicked through in a test.
+  Phase 5 is now down to the **issue signature** alone; `PLAN.md` Phase 5 is annotated accordingly.
+

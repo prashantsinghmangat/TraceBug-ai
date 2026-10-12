@@ -7,6 +7,7 @@ import { captureRegionScreenshot } from "../region-screenshot";
 import { showAnnotationEditor } from "../dashboard";
 import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved, recordStorageStat } from "../storage";
 import { maybeShowMilestoneAsk } from "./milestone-ask";
+import { recordExport, showReviewAsk } from "./review-ask";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
@@ -89,6 +90,29 @@ function _feedbackUrl(type: "bug" | "idea" | "other", msg: string): string {
   return `https://tracebug.dev/feedback?type=${type}&area=${area}&msg=${encodeURIComponent(msg)}`;
 }
 const DRAFT_KEY = "tracebug_last_bug_draft";
+// The "Captured with TraceBug" bar in exported .html. On by default; the export
+// menu offers a toggle, because an export is often attached to a public issue
+// or sent to a client, and a promotional line must not be unremovable there.
+const EXPORT_FOOTER_KEY = "tracebug_show_export_footer";
+function showExportFooter(): boolean {
+  try { return localStorage.getItem(EXPORT_FOOTER_KEY) !== "0"; } catch { return true; }
+}
+function setShowExportFooter(on: boolean): void {
+  try { localStorage.setItem(EXPORT_FOOTER_KEY, on ? "1" : "0"); } catch { /* private mode */ }
+}
+
+/**
+ * Count the export, and ask for a review if this is the moment.
+ *
+ * Delayed so the ask never lands on top of the user's own success toast, and
+ * never before the export has visibly finished.
+ */
+function _maybeAskForReview(root: HTMLElement, sessionId: string | null): void {
+  try {
+    if (!recordExport(sessionId)) return;
+  } catch { return; }
+  setTimeout(() => { try { showReviewAsk(root); } catch { /* never block an export */ } }, 1800);
+}
 const THEME_PREF_KEY = "tracebug_theme_pref";
 
 // ── Theme toggle helpers ───────────────────────────────────────────────────
@@ -668,6 +692,9 @@ function _openModal(
             <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
             <button data-action="jira" class="tb-qb-more-item" role="menuitem">${_ic("ticket")} Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations…</button>
+            <!-- The one promotional thing in an export, and therefore the one
+                 thing that has to be removable before the file is sent on. -->
+            <button data-action="toggle-export-footer" class="tb-qb-more-item" role="menuitemcheckbox" aria-checked="${showExportFooter() ? "true" : "false"}" title="The one-line “Captured with TraceBug” bar at the foot of an exported .html. Turn it off for exports you attach to a public issue or send to a client.">${_ic("fileCode")} <span data-el="footer-label">${showExportFooter() ? "Export footer: on" : "Export footer: off"}</span></button>
           </div>
         </div>
       </div>
@@ -1101,6 +1128,19 @@ function _openModal(
 
   // Export Replay (.html) \u2014 bundles the entire session into a single
   // self-contained HTML file. Recipient opens offline \u2192 full interactive replay.
+  // The export-footer toggle. Persisted immediately and reflected in place, so
+  // the state is visible before the next export rather than discovered in it.
+  modal.querySelector('[data-action="toggle-export-footer"]')?.addEventListener("click", (e) => {
+    e.stopPropagation(); // a setting, not an export - keep the More menu open
+    const next = !showExportFooter();
+    setShowExportFooter(next);
+    const btn = e.currentTarget as HTMLElement;
+    btn.setAttribute("aria-checked", next ? "true" : "false");
+    const label = btn.querySelector('[data-el="footer-label"]');
+    if (label) label.textContent = next ? "Export footer: on" : "Export footer: off";
+    showToast(next ? "Export footer on" : "Export footer off - exports carry no TraceBug line", root);
+  });
+
   modal.querySelector('[data-action="export-replay"]')?.addEventListener("click", async () => {
     if (!data.currentSession) {
       showToast("Nothing to export yet — capture something first", root);
@@ -1132,9 +1172,13 @@ function _openModal(
           ? (report.steps ? `${userDesc}\n\n${report.steps}` : userDesc)
           : undefined,
         githubRepo: _githubRepo || undefined,
+        showFooter: showExportFooter(),
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`\u2713 Replay exported \u00b7 ${sizeMb} MB`, root);
+      // Counted only here, after a file actually exists. A review prompt
+      // "earned" by a failed export is worse than no prompt.
+      _maybeAskForReview(root, data.currentSession?.sessionId ?? null);
       // Offer the agent hand-off: the export is exactly what the MCP server
       // reads, so the natural next step is pasting this prompt into Claude
       // Code / Cursor next to the codebase that owns the bug.
@@ -1197,9 +1241,11 @@ function _openModal(
           ? (report.steps ? `${userDesc}\n\n${report.steps}` : userDesc)
           : undefined,
         githubRepo: _githubRepo || undefined,
+        showFooter: showExportFooter(),
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
       showToast(`✓ .zip exported · ${sizeMb} MB — drag it onto a GitHub issue to attach`, root);
+      _maybeAskForReview(root, data.currentSession?.sessionId ?? null);
     } catch (err) {
       console.warn("[TraceBug] ZIP export failed:", err);
       showToast("Couldn't build the .zip — try again", root);

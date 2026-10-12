@@ -21,8 +21,9 @@ const REASONS = [
 ] as const;
 
 const ISSUES_URL = "https://github.com/prashantsinghmangat/tracebug-ai/issues/new/choose";
+// The real listing id, same one as docs/chrome-extension.md and src/links.ts.
 const STORE_URL =
-  "https://chromewebstore.google.com/detail/tracebug-capture-the-bug/?utm_source=bye";
+  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj?utm_source=bye";
 
 export default function ByeForm() {
   // The extension appends ?v=<version>, and that is the ONLY thing it sends.

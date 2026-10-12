@@ -35,6 +35,15 @@ All notable changes to TraceBug are documented here.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
 
 - **One line before your browser asks what to share** (`src/ui/pre-record.ts`) — the share dialog is the browser's own, it offers three surfaces, and it says nothing about which one a bug report wants. Picking "Entire screen" records your whole desktop and picking the wrong tab records the wrong page, neither of which can be undone afterwards. TraceBug now explains it first, and the wording matches the dialog you are about to see: "already set to this tab — choose Share" when Capture is **Current tab**, "pick this tab" when it's **Desktop / window**.
+- **The TraceBug line in an exported report can be turned off** (`src/exporters/html-template.ts`) - the
+  footer of an exported `.html` now links straight to the extension listing rather than the marketing
+  site, so someone who receives your report can install it in one step. And because exports get
+  attached to public issues and sent to clients, **Export footer: on/off** in the export menu removes
+  it entirely.
+- **An optional, once-or-twice review ask** (`src/ui/review-ask.ts`) - after your third exported report,
+  in a later session than your first, a small card asks whether TraceBug saved you time. Dismiss it and
+  it asks once more, much later; dismiss that and it never asks again. No ratings on display, no
+  counts, no incentives, and nothing is gated on answering.
 - **A blocked page now tells you which page** (`tracebug-extension/popup.js`, `page-support.js`) - the
   "can't run here" panel shows the host and path above the explanation, with an icon that matches the
   reason. When TraceBug has no site access it cannot see the URL, so the card is left out rather than
