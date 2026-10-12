@@ -129,18 +129,8 @@ Install only the 1.11 build and confirm the opposite case. Keep Ollama unconfigu
   lives in the offscreen document and never depended on page access. Do not mark this failed because the
   recording continued — that is correct behaviour.
 - **Run it again and accept.** Capture now continues across the cross-site navigation, and nothing asks again.
-- **Press the shortcut on a fresh page, before touching the popup.** Open a brand-new page TraceBug has never
-  run on and press the capture shortcut (default `Ctrl+Shift+B` / `Cmd+Shift+B`). Record what happens — this is
-  a release-checklist row, not a one-off:
-  - The key must be **bound**: `chrome://extensions/shortcuts` shows a key against TraceBug's command, not a
-    blank. `Ctrl+Shift+B` is Chrome's bookmarks-bar toggle *and* Firefox's bookmarks Library shortcut, so a
-    collision can leave it silently unassigned. If it is blank, the shipped default needs to change
-    (`Alt+Shift+B`).
-  - Pressing it on that fresh page must **start a capture**. Before the manifest `commands` entry exists, the
-    shortcut is only a keydown handler inside the injected SDK and does nothing here — which is exactly what
-    this row is for.
-  - Whatever key is actually bound, the **UI must show that key**, read from `chrome.commands.getAll()` — never
-    a hardcoded string. Rebind it in `chrome://extensions/shortcuts` and confirm the popup tip, welcome page
-    and toast all show the new key; clear it and confirm they show "Set a shortcut" instead.
-  - One press must trigger the capture **once**, on a page where the SDK is already running as well as on a
-    fresh one.
+- **The capture shortcut** has its own script now, including the rows that were sketched here:
+  `docs/testing/restricted-pages.md`, section 6. The short version of what changed: the default is **`Alt+B`**,
+  not `Ctrl+Shift+B` — Chrome refuses to bind that (bookmarks bar) *and* refuses `Alt+Shift+B` (focus
+  bookmarks bar), leaving both silently unassigned. Check `chrome://extensions/shortcuts` shows a real key,
+  and that pressing it on a page TraceBug has never run on starts a capture.
