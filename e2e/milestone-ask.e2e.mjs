@@ -22,10 +22,23 @@ const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 
 let failures = 0;
+// Output only: counts every check, but stays quiet while they all pass. The
+// moment one fails it flushes the run so far and streams the rest — a failing
+// check is only legible next to the ones that got that far. `--verbose` prints
+// everything from the start. Assertions, timeouts and order are untouched.
+const VERBOSE = process.argv.includes("--verbose");
+let passes = 0;
+let _streaming = VERBOSE;
+const _held = [];
 const check = (name, ok, extra = "") => {
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`);
-  if (!ok) failures++;
+  const line = `${ok ? "PASS" : "FAIL"}  ${name}${extra ? " — " + extra : ""}`;
+  if (ok) passes++;
+  else { failures++; _streaming = true; }
+  if (!_streaming) { _held.push(line); return; }
+  while (_held.length) console.log(_held.shift());
+  console.log(line);
 };
+const total = () => `${passes}/${passes + failures} checks passed`;
 
 // Intercept the signup POST — asserts the payload without touching prod.
 let capturedBody = null;
@@ -91,4 +104,5 @@ try {
   server.close();
 }
 
+console.log(failures ? `\n${failures} CHECK(S) FAILED — ${total()}` : `\nALL CHECKS PASSED — ${total()}`);
 process.exit(failures ? 1 : 0);
