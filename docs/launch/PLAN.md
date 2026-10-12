@@ -81,7 +81,7 @@ page in the extension and keep the remote page only as a link from it.**
   5. A small "Rolling this out to a team?" link to `https://tracebug.dev/teams`.
   Design to follow: `docs/launch/designs/tracebug_welcome_quickstart_page/`.
 - **Step D.** On `reason === "update"`, do not open a tab; show a small "What's new" card in the popup instead,
-  dismissed state in `chrome.storage.local`. Copy is in `tracebug-stitch-prompts-screens.md` screen 4 - note its
+  dismissed state in `chrome.storage.local`. Copy is in `screens.md` screen 4 - note its
   capture line is phrased as an invitation, because an updating user keeps video on.
 - **Firefox check (this phase adds `welcome.html` and touches the extension):** run `npm run build:ext`, then
   `npm run ext:lint` and `npm run ext:firefox`. Confirm `welcome.html` is included in the Firefox build output

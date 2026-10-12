@@ -22,7 +22,7 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
   keep the remote page as a link from it. Content list is in `PLAN.md` Phase 4. Design to follow:
   `docs/launch/designs/tracebug_welcome_quickstart_page/`.
 - **Step D — "What's new" card** in the popup on `reason === "update"` (no tab opened). Copy is in
-  `docs/launch/tracebug-stitch-prompts-screens.md` screen 4. Dismissed state in `chrome.storage.local`.
+  `docs/launch/screens.md` screen 4. Dismissed state in `chrome.storage.local`.
 - The shortcut must be described as **`Alt+B`**, read from `chrome.commands` at runtime — never hardcoded.
   `Ctrl+Shift+B` is a page-level handler that only works once TraceBug is on the tab.
 - **Bump the version to 1.11.0** in `package.json` and `tracebug-extension/manifest.json`, then run
