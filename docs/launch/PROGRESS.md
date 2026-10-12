@@ -174,3 +174,52 @@ Newest entry at the bottom.
   the warning naming both sizes, and the shortened label. Not capped: the issue TITLE (GitHub's 256-character
   limit) - out of scope here, and titles come from `generateBugTitle`, but it is the next thing a 422 could come
   from.
+
+## Phase 3 - restricted pages, orphaned tabs, updates, a real shortcut (2026-10-12)
+- Two decisions moved into a new pure `tracebug-extension/page-support.js` (vm-testable, same pattern as
+  `provider-bridge.js`): `classifyPage()` before injecting and `explainInjectionError()` after a failure. The
+  popup's "can't run here" panel is now data-driven with one action button, and gained the three cases it was
+  missing - the add-on stores, `file://` without the file-URL grant, and the PDF viewer (mapped from the error,
+  since a `.pdf` URL is indistinguishable from HTML beforehand). **Dropped the old guard's `!tab.url`
+  condition**: with `<all_urls>` optional that is the normal state, so it would have shown "Can't run on this
+  page" on every page - Phase 1 flagged this as its highest-risk item and it now has a test.
+- Orphaned tabs: the worker pings before dispatching and repairs what doesn't answer. Injection is split into
+  `injectBridge` / `injectPageWorld` because they fail independently - the bridge dies with its extension
+  instance, the page-world SDK does not (it is ordinary page JS) - so the repair replaces the BRIDGE ONLY when
+  the ping answer reports a live `#tracebug-root`, or a second toolbar mounts. The `content-script.js` load
+  guard had to change with it: a boolean flag survives in the orphaned isolated world, which made re-injection
+  a silent no-op; it is now a liveness probe closing over its own instance's `chrome`.
+- `onUpdateAvailable` is held while recording and applied after. The re-check lives in `persistState()`, not on
+  one stop handler, because FIVE paths clear `_recordingTabId` and any of them could drop a held update. The
+  flag is version-stamped (`updatePendingFrom`) so a stale one cannot reload-loop the worker, and the reload
+  waits 2s so the stop reply still reaches the page.
+- **The shortcut is a real `commands` entry now, default `Alt+B` - NOT `Ctrl+Shift+B`.** Chrome refuses that
+  (bookmarks bar) *and* refuses `Alt+Shift+B` (focus bookmarks bar), returning an empty shortcut for both;
+  measured by probing 11 candidates, 9 of which bound fine, so it is a real collision not an environment
+  quirk. Approved 2026-10-12. Both keys now work and do different jobs: `Alt+B` captures from a cold start
+  anywhere, `Ctrl+Shift+B` opens Quick Bug on a page that already has TraceBug. No UI hardcodes the key - the
+  worker reads `commands.getAll()`, publishes it on the existing `data-tb-caps` snapshot, and the popup and
+  in-page tips render it (or offer "Set a shortcut"). `browserOwnsQuickCapture()` silences the in-page handler
+  only if the user rebinds the command onto that same combo. Also fixed `page-support.js` missing from Chrome's
+  `importScripts` list - Step 1 had registered it for Firefox only, so the worker would have thrown on Chrome.
+- New: `tests/helpers/chrome-mock.ts` runs the REAL `background.js` in a `node:vm` against a recording fake
+  `chrome` - the first automated coverage of the declined-host-access path, which Phase 1 recorded as having
+  none. `tests/background-tab-lifecycle.test.ts` (22) + `tests/page-support.test.ts` (46) + 13 in
+  `ext-secrets.test.ts`. Files: new `page-support.js`, `docs/testing/restricted-pages.md`; edited
+  `popup.{js,html}`, `styles.css`, `background.js`, `content-script.js`, `tracebug-init.js`, both manifests,
+  `build-ext.mjs`, `src/{ext-transport,dashboard,index}.ts`, `src/ui/quick-bug.ts`,
+  `e2e/ext-provider-confirm.e2e.mjs`, `docs/quickstart.md`, `docs/testing/upgrade-host-permission.md`,
+  `CHANGELOG.md`.
+- Verified: `npm test` 34 files / 576 passing (was 495, +81); typecheck + lint clean; `build` + `build:ext` OK;
+  `ext:lint` 0 errors / 69 warnings - byte-identical distribution to 2a/2b/Phase 1, so nothing new;
+  `ext:firefox` installs cleanly with the `commands` key and the 4-script `background.scripts` array.
+  `ext-provider-confirm` green including 3 new checks that prove `Alt+B` really bound and reached the page;
+  `ext-secret-migration` 26/26 and `ext-redaction` green (both depend on the rewritten content-script guard).
+- Open issues: (1) **no harness orphans a live tab** - they all open fresh tabs, so the liveness-probe guard is
+  unit-tested and reasoned but not proven in a browser; section 4 of `docs/testing/restricted-pages.md` is the
+  manual row. (2) The update deferral **cannot be triggered locally at all** - `onUpdateAvailable` never fires
+  for an unpacked extension - so it is a post-release watch item, not a pre-release check. (3) A recording that
+  STARTS inside the 2s reload delay is guarded in code but not covered, since driving `tb:rec:start` needs a
+  real offscreen host. (4) Whether branded Chrome and Firefox bind `Alt+B` is still manual; Chromium is a
+  signal, not proof. (5) `tracebug-extension/manifest.json` still duplicates `manifest.base.json`; both edited
+  by hand again - four phases running, worth generating.
