@@ -21,6 +21,7 @@
 import type { BugReport } from "../types";
 import { generateGitHubIssue } from "../github-issue";
 import { generateSlackPost } from "../slack-export";
+import { signIssueBody, signSlackPost } from "./issue-signature";
 import { severityTitlePrefix } from "../report-builder";
 import { isExtensionMode, getIntegrationStatus } from "../ext-transport";
 import { sendTrackerViaBridge } from "../ext-rpc";
@@ -120,9 +121,21 @@ function issueTitle(report: BugReport): string {
   return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
 }
 
-/** Report markdown with the leading "## title" line removed (title is separate). */
+/**
+ * Report markdown with the leading "## title" line removed (title is separate),
+ * plus the issue signature when it is enabled.
+ *
+ * Signed HERE rather than at each call site: GitHub, Linear, the page-world
+ * path and the extension bridge path all funnel through this one function, so
+ * one path cannot get out of step with another.
+ */
 function issueBody(report: BugReport): string {
-  return generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, "");
+  return signIssueBody(generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, ""));
+}
+
+/** The Slack text, signed. Slack's link syntax differs — see issue-signature. */
+function slackText(report: BugReport): string {
+  return signSlackPost(generateSlackPost(report));
 }
 
 // ── Provider adapters ──────────────────────────────────────────────────────
@@ -151,7 +164,7 @@ export async function sendSlackMessage(
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
   // Page-world mode only ever gets an opaque response — see postSlackMessage.
-  return postSlackMessage(config, { text: generateSlackPost(report) }, signal);
+  return postSlackMessage(config, { text: slackText(report) }, signal);
 }
 
 // ── Dispatch ───────────────────────────────────────────────────────────────
@@ -175,7 +188,7 @@ export async function createTrackerIssue(
       throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured — open TraceBug settings.`);
     }
     const content = provider === "slack"
-      ? { text: generateSlackPost(report) }
+      ? { text: slackText(report) }
       : { title: issueTitle(report), body: issueBody(report) };
     return sendTrackerViaBridge(provider, content);
   }

@@ -35,6 +35,11 @@ All notable changes to TraceBug are documented here.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
 
 - **One line before your browser asks what to share** (`src/ui/pre-record.ts`) — the share dialog is the browser's own, it offers three surfaces, and it says nothing about which one a bug report wants. Picking "Entire screen" records your whole desktop and picking the wrong tab records the wrong page, neither of which can be undone afterwards. TraceBug now explains it first, and the wording matches the dialog you are about to see: "already set to this tab — choose Share" when Capture is **Current tab**, "pick this tab" when it's **Desktop / window**.
+- **Issues you file carry one credit line, and you can turn it off** (`src/integrations/issue-signature.ts`)
+  - GitHub, Linear and Slack bodies end with "Reported with TraceBug". It is one line, it links to the
+  listing, and **Issue credit: on/off** in the export menu removes it - an issue body gets written into
+  someone else's tracker and stays there, so that has to be your call. Slack posts previously ended with
+  an unlinked "Reported via TraceBug"; that is now the same single line, linked.
 - **The TraceBug line in an exported report can be turned off** (`src/exporters/html-template.ts`) - the
   footer of an exported `.html` now links straight to the extension listing rather than the marketing
   site, so someone who receives your report can install it in one step. And because exports get

@@ -27726,6 +27726,56 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
+  // src/integrations/issue-signature.ts
+  function issueSignatureEnabled() {
+    try {
+      return localStorage.getItem(KEY) !== "0";
+    } catch (e2) {
+      return true;
+    }
+  }
+  function setIssueSignature(on2) {
+    try {
+      localStorage.setItem(KEY, on2 ? "1" : "0");
+    } catch (e2) {
+    }
+  }
+  function issueSignatureMarkdown() {
+    return `_[${TEXT}](${storeUrl("issue")})_`;
+  }
+  function issueSignatureSlack() {
+    return `_<${storeUrl("issue")}|${TEXT}>_`;
+  }
+  function signIssueBody(body) {
+    if (!issueSignatureEnabled()) return body;
+    if (body.includes(TEXT)) return body;
+    return `${body.replace(/\s+$/, "")}
+
+---
+
+${issueSignatureMarkdown()}`;
+  }
+  function signSlackPost(text) {
+    const legacy = /\n*_Reported via TraceBug_\s*$/;
+    const stripped = text.replace(legacy, "");
+    if (!issueSignatureEnabled()) return stripped === text ? text : `${stripped}
+
+_Reported via TraceBug_`;
+    if (stripped.includes(TEXT)) return stripped;
+    return `${stripped.replace(/\s+$/, "")}
+
+${issueSignatureSlack()}`;
+  }
+  var KEY, TEXT;
+  var init_issue_signature = __esm({
+    "src/integrations/issue-signature.ts"() {
+      "use strict";
+      init_links();
+      KEY = "tracebug_issue_signature";
+      TEXT = "Reported with TraceBug";
+    }
+  });
+
   // src/ui/replay-scrubber.ts
   function mountReplayScrubber(container2, options) {
     var _a2, _b, _c;
@@ -29906,7 +29956,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return raw.match(/^[🔴🟠🟡🟢]/u) ? raw : `${severityTitlePrefix(report.severity)}${raw}`;
   }
   function issueBody(report) {
-    return generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, "");
+    return signIssueBody(generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, ""));
+  }
+  function slackText(report) {
+    return signSlackPost(generateSlackPost(report));
   }
   async function createGitHubIssue(report, config, signal) {
     return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
@@ -29915,7 +29968,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return postLinearIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
   }
   async function sendSlackMessage(report, config, signal) {
-    return postSlackMessage(config, { text: generateSlackPost(report) }, signal);
+    return postSlackMessage(config, { text: slackText(report) }, signal);
   }
   async function createTrackerIssue(provider, report, signal) {
     var _a2, _b, _c, _d, _e;
@@ -29923,7 +29976,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (!hasIntegration(provider)) {
         throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured \u2014 open TraceBug settings.`);
       }
-      const content = provider === "slack" ? { text: generateSlackPost(report) } : { title: issueTitle(report), body: issueBody(report) };
+      const content = provider === "slack" ? { text: slackText(report) } : { title: issueTitle(report), body: issueBody(report) };
       return sendTrackerViaBridge(provider, content);
     }
     const c2 = getIntegrationsConfig();
@@ -29947,6 +30000,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       "use strict";
       init_github_issue();
       init_slack_export();
+      init_issue_signature();
       init_report_builder();
       init_ext_transport();
       init_ext_rpc();
@@ -30212,7 +30266,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -30442,6 +30496,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             <!-- The one promotional thing in an export, and therefore the one
                  thing that has to be removable before the file is sent on. -->
             <button data-action="toggle-export-footer" class="tb-qb-more-item" role="menuitemcheckbox" aria-checked="${showExportFooter() ? "true" : "false"}" title="The one-line \u201CCaptured with TraceBug\u201D bar at the foot of an exported .html. Turn it off for exports you attach to a public issue or send to a client.">${_ic("fileCode")} <span data-el="footer-label">${showExportFooter() ? "Export footer: on" : "Export footer: off"}</span></button>
+            <!-- Written into someone else's tracker, and it stays there. One
+                 toggle, remembered, default on. -->
+            <button data-action="toggle-issue-signature" class="tb-qb-more-item" role="menuitemcheckbox" aria-checked="${issueSignatureEnabled() ? "true" : "false"}" title="A one-line \u201CReported with TraceBug\u201D credit at the foot of GitHub, Linear and Slack bodies. Turn it off for trackers that shouldn\u2019t carry it.">${_ic("copy")} <span data-el="signature-label">${issueSignatureEnabled() ? "Issue credit: on" : "Issue credit: off"}</span></button>
           </div>
         </div>
       </div>
@@ -30811,7 +30868,17 @@ ${description}`;
         if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
       });
     }
-    (_z = modal.querySelector('[data-action="toggle-export-footer"]')) == null ? void 0 : _z.addEventListener("click", (e2) => {
+    (_z = modal.querySelector('[data-action="toggle-issue-signature"]')) == null ? void 0 : _z.addEventListener("click", (e2) => {
+      e2.stopPropagation();
+      const next = !issueSignatureEnabled();
+      setIssueSignature(next);
+      const btn = e2.currentTarget;
+      btn.setAttribute("aria-checked", next ? "true" : "false");
+      const label = btn.querySelector('[data-el="signature-label"]');
+      if (label) label.textContent = next ? "Issue credit: on" : "Issue credit: off";
+      showToast(next ? "Issue credit on" : "Issue credit off - issues carry no TraceBug line", root2);
+    });
+    (_A = modal.querySelector('[data-action="toggle-export-footer"]')) == null ? void 0 : _A.addEventListener("click", (e2) => {
       e2.stopPropagation();
       const next = !showExportFooter();
       setShowExportFooter(next);
@@ -30821,7 +30888,7 @@ ${description}`;
       if (label) label.textContent = next ? "Export footer: on" : "Export footer: off";
       showToast(next ? "Export footer on" : "Export footer off - exports carry no TraceBug line", root2);
     });
-    (_A = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _A.addEventListener("click", async () => {
+    (_B = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _B.addEventListener("click", async () => {
       var _a3, _b2, _c2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30866,7 +30933,7 @@ ${report.steps}` : userDesc : void 0,
         }
       }
     });
-    (_B = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _B.addEventListener("click", () => {
+    (_C = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _C.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -30889,7 +30956,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Test export failed", root2);
       }
     });
-    (_C = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _C.addEventListener("click", async () => {
+    (_D = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _D.addEventListener("click", async () => {
       var _a3, _b2, _c2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30933,7 +31000,7 @@ ${report.steps}` : userDesc : void 0,
         }
       }
     });
-    (_D = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _D.addEventListener("click", () => {
+    (_E = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _E.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30953,7 +31020,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("HAR export failed", root2);
       }
     });
-    (_E = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _E.addEventListener("click", () => {
+    (_F = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _F.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30973,7 +31040,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Report export failed", root2);
       }
     });
-    (_F = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _F.addEventListener("click", () => {
+    (_G = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _G.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -31000,7 +31067,7 @@ ${report.steps}` : userDesc : void 0,
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_G = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _G.addEventListener("click", async (e2) => {
+    (_H = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _H.addEventListener("click", async (e2) => {
       if (!data.currentSession) {
         showToast("Nothing to share yet \u2014 capture something first", root2);
         return;
@@ -31160,7 +31227,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_H = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _H.addEventListener("click", () => {
+    (_I = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _I.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -31191,7 +31258,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_I = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _I.addEventListener("click", async () => {
+    (_J = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _J.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -31215,7 +31282,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_J = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _J.addEventListener("click", async () => {
+    (_K = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _K.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -33034,6 +33101,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_storage();
       init_milestone_ask();
       init_review_ask();
+      init_issue_signature();
       init_video_recorder();
       init_report_builder();
       init_github_issue();
@@ -39924,7 +39992,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               var nativeIterator = IterablePrototype[ITERATOR] || IterablePrototype["@@iterator"] || DEFAULT && IterablePrototype[DEFAULT];
               var defaultIterator = !BUGGY_SAFARI_ITERATORS && nativeIterator || getIterationMethod(DEFAULT);
               var anyNativeIterator = NAME === "Array" ? IterablePrototype.entries || nativeIterator : nativeIterator;
-              var CurrentIteratorPrototype, methods, KEY;
+              var CurrentIteratorPrototype, methods, KEY2;
               if (anyNativeIterator) {
                 CurrentIteratorPrototype = getPrototypeOf(anyNativeIterator.call(new Iterable()));
                 if (CurrentIteratorPrototype !== Object.prototype && CurrentIteratorPrototype.next) {
@@ -39958,9 +40026,9 @@ Response: ${match.response.slice(0, 160)}` : "";
                   entries: getIterationMethod(ENTRIES)
                 };
                 if (FORCED) {
-                  for (KEY in methods) {
-                    if (BUGGY_SAFARI_ITERATORS || INCORRECT_VALUES_NAME || !(KEY in IterablePrototype)) {
-                      defineBuiltIn(IterablePrototype, KEY, methods[KEY]);
+                  for (KEY2 in methods) {
+                    if (BUGGY_SAFARI_ITERATORS || INCORRECT_VALUES_NAME || !(KEY2 in IterablePrototype)) {
+                      defineBuiltIn(IterablePrototype, KEY2, methods[KEY2]);
                     }
                   }
                 } else {

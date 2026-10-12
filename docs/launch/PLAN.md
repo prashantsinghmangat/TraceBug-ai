@@ -90,15 +90,14 @@ page in the extension and keep the remote page only as a link from it.**
 
 ## Phase 5 - Sharing loop and review ask (referral mechanics 1-3)
 
-**Mostly done already, in Phase 4 Steps E and F.** Still open: the **issue signature** only. The
-footer, the review prompt, the uninstall survey and the constants file all landed - the struck items
-below are kept for context, not as instructions.
+**PHASE 5 IS DONE**, across Phase 4 Steps E and F plus one follow-up. Every item below landed; they
+are kept for context, not as instructions. Nothing in this phase is outstanding.
 
 - **[DONE] Exported `.html` footer:** a small, unobtrusive bar: "Captured with TraceBug - free & local. Capture your
   own ->" linking to the Chrome Web Store listing with `?utm_source=report&utm_medium=export`. Pure inline
   HTML/CSS, no remote loads, works offline. Add a setting to hide it (`showExportFooter`, default true), shown in
   the export modal.
-- **Issue signature:** append one line to GitHub, Linear and Slack bodies: "Reported with TraceBug" linking to
+- **[DONE] Issue signature:** append one line to GitHub, Linear and Slack bodies: "Reported with TraceBug" linking to
   the listing with `utm_source=issue`. Show it in the export preview, with a one-click toggle to remove it,
   default on.
 - **[DONE] Review prompt:** count successful exports in extension storage. After the 3rd successful export (never in the

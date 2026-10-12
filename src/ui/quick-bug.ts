@@ -8,6 +8,7 @@ import { showAnnotationEditor } from "../dashboard";
 import { getAllSessions, getCachedSessions, setSessionPriority, markSessionSaved, recordStorageStat } from "../storage";
 import { maybeShowMilestoneAsk } from "./milestone-ask";
 import { recordExport, showReviewAsk } from "./review-ask";
+import { issueSignatureEnabled, setIssueSignature } from "../integrations/issue-signature";
 import { getLastVideoRecording, downloadVideoRecording, restoreLastRecordingFromOffscreen } from "../video-recorder";
 import type { VideoRecording } from "../video-recorder";
 /*  */import { buildReport, getSessionVideo, formatRootCauseLine, severityBadge, priorityLabel } from "../report-builder";
@@ -695,6 +696,9 @@ function _openModal(
             <!-- The one promotional thing in an export, and therefore the one
                  thing that has to be removable before the file is sent on. -->
             <button data-action="toggle-export-footer" class="tb-qb-more-item" role="menuitemcheckbox" aria-checked="${showExportFooter() ? "true" : "false"}" title="The one-line “Captured with TraceBug” bar at the foot of an exported .html. Turn it off for exports you attach to a public issue or send to a client.">${_ic("fileCode")} <span data-el="footer-label">${showExportFooter() ? "Export footer: on" : "Export footer: off"}</span></button>
+            <!-- Written into someone else's tracker, and it stays there. One
+                 toggle, remembered, default on. -->
+            <button data-action="toggle-issue-signature" class="tb-qb-more-item" role="menuitemcheckbox" aria-checked="${issueSignatureEnabled() ? "true" : "false"}" title="A one-line “Reported with TraceBug” credit at the foot of GitHub, Linear and Slack bodies. Turn it off for trackers that shouldn’t carry it.">${_ic("copy")} <span data-el="signature-label">${issueSignatureEnabled() ? "Issue credit: on" : "Issue credit: off"}</span></button>
           </div>
         </div>
       </div>
@@ -1125,6 +1129,19 @@ function _openModal(
       if (moreMenu.dataset.open === "true" && !moreMenu.contains(e.target as Node) && e.target !== moreBtn) setMoreOpen(false);
     });
   }
+
+  // The issue-signature toggle. Same place and shape as the footer toggle, so
+  // both "what leaves TraceBug carries a credit" settings sit together.
+  modal.querySelector('[data-action="toggle-issue-signature"]')?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const next = !issueSignatureEnabled();
+    setIssueSignature(next);
+    const btn = e.currentTarget as HTMLElement;
+    btn.setAttribute("aria-checked", next ? "true" : "false");
+    const label = btn.querySelector('[data-el="signature-label"]');
+    if (label) label.textContent = next ? "Issue credit: on" : "Issue credit: off";
+    showToast(next ? "Issue credit on" : "Issue credit off - issues carry no TraceBug line", root);
+  });
 
   // Export Replay (.html) \u2014 bundles the entire session into a single
   // self-contained HTML file. Recipient opens offline \u2192 full interactive replay.

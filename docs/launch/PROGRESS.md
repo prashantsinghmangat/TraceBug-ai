@@ -182,3 +182,22 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - Open: the card has never been RENDERED, and the review link cannot be clicked through in a test.
   Phase 5 is now down to the **issue signature** alone; `PLAN.md` Phase 5 is annotated accordingly.
 
+## Phase 5 closed - the issue signature (2026-10-12)
+
+- New `src/integrations/issue-signature.ts`: "Reported with TraceBug" linking to the listing with
+  `utm_source=issue`. Applied at `tracker-client.ts`'s `issueBody` and a new `slackText`, which is the
+  one chokepoint GitHub, Linear, the page-world path AND the extension bridge path all pass through -
+  signing at the call sites would have let the bridge path drift from the page path silently.
+- Slack already ended every post with an unlinked `_Reported via TraceBug_`. That line is REPLACED, not
+  appended to; two credits in one message would be worse than either. With the signature off, the old
+  line is left alone rather than silently deleted.
+- Idempotent by design (`body.includes(TEXT)` guard), because a body can pass through more than one
+  helper. Toggle sits beside the export-footer one in the export menu, default on, labelled
+  "Issue credit: on/off" - an issue body is written into someone else's tracker and stays there.
+- Files: new `src/integrations/issue-signature.ts`, `tests/issue-signature.test.ts`; edited
+  `src/integrations/tracker-client.ts`, `src/ui/quick-bug.ts`, `docs/launch/{PLAN,STATE}.md`,
+  `CHANGELOG.md`. Verified: check.mjs --full green, 746 passing / 45 files (+16), ext:lint 0/69,
+  ext-provider-confirm 61/61 (it inspects real send bodies).
+- **Phase 5 is now complete** and `PLAN.md` says so. `STATE.md` was rewritten rather than appended to:
+  it had grown a per-step changelog, which is what PROGRESS is for. Next: Phases 6-9.
+
