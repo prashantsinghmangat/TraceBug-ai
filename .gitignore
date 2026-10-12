@@ -8,7 +8,10 @@ dist/
 *.tgz
 
 # Editor / tooling local state — not part of the project
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/settings.json
+docs/launch/designs/*/code.html
 .cursor/
 .vscode/
 .idea/
@@ -25,6 +28,7 @@ releases/
 
 # Playwright e2e output
 e2e/bug-reports/
+e2e/output/
 test-results/
 playwright-report/
 docs-internal/
