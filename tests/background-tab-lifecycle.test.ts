@@ -200,3 +200,126 @@ describe('orphaned tabs — ping, repair, or say so', () => {
     expect(mock.injections.some((i) => i.files.includes('content-script.js'))).toBe(true);
   });
 });
+
+describe('an extension update never kills a recording', () => {
+  // chrome.runtime.onUpdateAvailable was unhandled before Phase 3, so an
+  // auto-update mid-recording tore down the worker AND the recorder host —
+  // and the video only exists in the recorder's memory until the stop
+  // finalizes it. Chrome holds the update until we reload, so this is a
+  // decision: reload now, or hold it until the recording has ended.
+
+  it('reloads straight away when nothing is being recorded', async () => {
+    const mock = createChromeMock();
+    loadBackground(mock);
+    await settle(20);
+
+    mock.events.onUpdateAvailable.emit({ version: '1.11.1' });
+    await settle(40);
+    expect(mock.runtimeReloads).toBe(0); // not synchronously, mid-handler
+    await settle(2200);
+    expect(mock.runtimeReloads).toBe(1);
+  });
+
+  it('holds the update while a recording is in progress', async () => {
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [TAB], recordingTabId: TAB } },
+    });
+    loadBackground(mock);
+    await settle(20);
+
+    mock.events.onUpdateAvailable.emit({ version: '1.11.1' });
+    await settle(2400);
+
+    expect(mock.runtimeReloads).toBe(0);
+    // And it is written down, so a worker restart mid-recording still knows.
+    const saved = mock.sessionStore[SESSION_KEY] as Record<string, unknown>;
+    expect(saved.updatePending).toBe(true);
+    expect(saved.updatePendingFrom).toBe('1.11.0'); // the mock's manifest version
+  });
+
+  it('applies the held update once the recording ends', async () => {
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [TAB], recordingTabId: TAB } },
+    });
+    loadBackground(mock);
+    await settle(20);
+
+    mock.events.onUpdateAvailable.emit({ version: '1.11.1' });
+    await settle(100);
+    expect(mock.runtimeReloads).toBe(0);
+
+    // The recording ends. Every end path clears _recordingTabId and then
+    // calls persistState, which is where the held update is re-checked —
+    // this one is the toolbar's ✕ / tab-disable path.
+    await ask(mock, { type: 'TB_DISABLE_TAB', tabId: TAB });
+    await settle(2400);
+
+    expect(mock.runtimeReloads).toBe(1);
+  });
+
+  it('applies a held update when the recording tab is simply closed', async () => {
+    // A different end path, to prove the choke point really is shared rather
+    // than one hook on one handler.
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [TAB], recordingTabId: TAB } },
+    });
+    loadBackground(mock);
+    await settle(20);
+
+    mock.events.onUpdateAvailable.emit({ version: '1.11.1' });
+    await settle(100);
+    mock.events.onTabRemoved.emit(TAB);
+    await settle(2400);
+
+    expect(mock.runtimeReloads).toBe(1);
+  });
+
+  it('a worker restart mid-recording still remembers the held update', async () => {
+    // The worker is terminated after ~30s idle and comes back with blank
+    // memory. The flag is rehydrated, and nothing reloads until the
+    // recording ends.
+    const mock = createChromeMock({
+      session: {
+        [SESSION_KEY]: {
+          activeTabs: [TAB],
+          recordingTabId: TAB,
+          updatePending: true,
+          updatePendingFrom: '1.11.0',
+        },
+      },
+    });
+    loadBackground(mock);
+    await settle(2400);
+    expect(mock.runtimeReloads).toBe(0);
+
+    await ask(mock, { type: 'TB_DISABLE_TAB', tabId: TAB });
+    await settle(2400);
+    expect(mock.runtimeReloads).toBe(1);
+  });
+
+  it('a worker restart with no recording applies the held update immediately', async () => {
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [], recordingTabId: null, updatePending: true, updatePendingFrom: '1.11.0' } },
+    });
+    loadBackground(mock);
+    await settle(2400);
+    expect(mock.runtimeReloads).toBe(1);
+  });
+
+  it('IGNORES a pending flag left behind by a version that already updated', async () => {
+    // The reload loop this prevents: reload applies the update, a stale flag
+    // survives, the new version reads it and reloads again, forever. The
+    // version stamp is what breaks the cycle.
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [], recordingTabId: null, updatePending: true, updatePendingFrom: '1.10.1' } },
+    });
+    loadBackground(mock);
+    await settle(2400);
+    expect(mock.runtimeReloads).toBe(0);
+  });
+
+  // NOT covered here: a recording that STARTS inside the 2-second reload
+  // delay. maybeApplyUpdate re-checks _recordingTabId before reloading for
+  // exactly that case, but driving a successful tb:rec:start needs a working
+  // offscreen/recorder host, which this fake deliberately does not model.
+});
