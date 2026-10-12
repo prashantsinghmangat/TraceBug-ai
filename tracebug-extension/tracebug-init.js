@@ -240,24 +240,29 @@
         }
         break;
 
-      // record: start tab-capture recording (silent — no screen-share picker).
-      // Triggers the same code path as clicking the 🎥 toolbar button.
-      // `withMic` flows from the popup's mic toggle through background +
-      // content-script; offscreen.js calls getUserMedia({audio: true}) when
-      // it's truthy, adding a mic track to the recording.
+      // record: the popup's Capture Bug. Since Phase 4 this is an EVENTS-ONLY
+      // capture by default — console, network, actions and an interactive DOM
+      // replay, with no screen-share picker and no OS permission. `video`
+      // (the popup's "Record video too") opts into the screen recording, and
+      // only then do `withMic` / `surfaceMode` mean anything: offscreen.js
+      // calls getUserMedia({audio: true}) when withMic is truthy.
       case "record":
+        var wantsVideo = !!(e.detail && e.detail.video);
         if (window.TraceBug.prepareRecording) {
-          // Pre-record flow: optional blur-first pass + countdown, then roll.
+          // Pre-capture flow: optional blur-first pass + countdown, then go.
           window.TraceBug.prepareRecording({
+            video: wantsVideo,
             withMicrophone: !!(e.detail && e.detail.withMic),
             blurFirst: !!(e.detail && e.detail.blurFirst),
             delaySec: (e.detail && e.detail.delaySec) || 0,
             surfaceMode: (e.detail && e.detail.surfaceMode) || undefined,
           });
+        } else if (!wantsVideo && window.TraceBug.startEventsCapture) {
+          window.TraceBug.startEventsCapture();
         } else if (window.TraceBug.startVideoRecording) {
           window.TraceBug.startVideoRecording({ withMicrophone: !!(e.detail && e.detail.withMic) });
         } else {
-          showToast("Recording requires the latest extension build");
+          showToast("Capture requires the latest extension build");
         }
         break;
 

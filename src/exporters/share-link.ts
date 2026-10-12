@@ -46,7 +46,10 @@ export async function shareSessionAsLink(
   options?: ShareReportOptions,
 ): Promise<ShareLinkResult> {
   const cloudEndpoint = resolveCloudEndpoint(options?.cloudEndpoint);
-  const includeVideo = options?.includeVideo ?? !!report.video;
+  // `!!report.video` is not the same question as "is there a video": an
+  // events-only capture carries a replay-only video object with no dataUrl, and
+  // asking to include it would trip the duration cap below over nothing.
+  const includeVideo = options?.includeVideo ?? !!report.video?.dataUrl;
 
   // Sanitize first so the cap calculations and the uploaded HTML both see the
   // same scrubbed content. The local download path keeps the original report.

@@ -11,6 +11,9 @@ const ACTIVE_SESSION_KEY = "tracebug_active_session";
 // on the next page, whereas a video session whose tab-share Chrome ended on
 // navigation should finalize and open its ticket. See index.ts init/restore.
 const ACTIVE_CAPTURE_MODE_KEY = "tracebug_active_capture_mode";
+// Start time of a HUD-driven events-only capture — see
+// getEventsCaptureStartedAt() for why this is a timestamp and not a boolean.
+const EVENTS_CAPTURE_START_KEY = "tracebug_events_capture_started";
 export type ActiveCaptureMode = "events" | "video";
 
 // ── Session ID — record-driven lifecycle ────────────────────────────────
@@ -43,6 +46,36 @@ export function clearActiveSessionId(): void {
   // Mode is meaningless without an active session — clear the two together so
   // a stale "video"/"events" flag can't leak into the next session.
   try { localStorage.removeItem(ACTIVE_CAPTURE_MODE_KEY); } catch {}
+  try { localStorage.removeItem(EVENTS_CAPTURE_START_KEY); } catch {}
+}
+
+/**
+ * When the HUD-driven events-only capture started (ms epoch), or null.
+ *
+ * This answers two questions at once, which is why it is a timestamp rather
+ * than a boolean. An "events" session can be armed from two places and they
+ * have different stop controls: the popup's Capture Bug mounts the recording
+ * HUD, while the floating toolbar's ■ track button is its own stop control. So
+ * after a navigation, only a session carrying this key re-mounts the HUD — a
+ * toolbar-tracked one must not, or the page would show two stop buttons. And
+ * because the value is the original start time, the HUD timer keeps counting
+ * from the real beginning instead of restarting at 00:00 on every page.
+ */
+export function getEventsCaptureStartedAt(): number | null {
+  try {
+    const v = Number(localStorage.getItem(EVENTS_CAPTURE_START_KEY));
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setEventsCaptureStartedAt(ts: number): void {
+  try { localStorage.setItem(EVENTS_CAPTURE_START_KEY, String(ts)); } catch {}
+}
+
+export function clearEventsCaptureStartedAt(): void {
+  try { localStorage.removeItem(EVENTS_CAPTURE_START_KEY); } catch {}
 }
 
 /** How the active session was armed. Defaults to "events" when a session is

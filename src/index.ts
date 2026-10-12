@@ -29,6 +29,9 @@ import {
   clearActiveSessionId,
   getActiveCaptureMode,
   setActiveCaptureMode,
+  getEventsCaptureStartedAt,
+  setEventsCaptureStartedAt,
+  clearEventsCaptureStartedAt,
   generateSessionId,
   appendEvent,
   updateSessionError,
@@ -98,6 +101,7 @@ import {
   type VideoRecording,
 } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
+import { startDomRecording, stopDomRecording, stashDomReplay, clearStashedDomReplay } from "./rrweb-recorder";
 import {
   mark as _mark,
   assertCondition as _assertCondition,
@@ -257,6 +261,11 @@ class TraceBugSDK {
   private _emit: ((type: EventType, data: TraceBugEvent["data"]) => void) | null = null;
   private _consoleLevel: "errors" | "warnings" | "all" | "none" = "all";
   private _lastErrorMsgPrompted: string | null = null;
+  // When the current events-only capture began, or null if none is running.
+  // There is no MediaRecorder to ask for elapsed time on that path, so the HUD
+  // timer and the stashed replay's duration both come from here. Reset to a
+  // fresh timestamp when the capture resumes on a new page after a navigation.
+  private _eventsCaptureStartedAt: number | null = null;
 
   /**
    * Initialize TraceBug. Call once on app startup.
@@ -545,6 +554,28 @@ class TraceBugSDK {
           this._attachConsoleCollectors();
           if (this._emit) drainPerformanceNetwork(this._emit);
           updateRecordingState(true);
+          // A HUD-driven events capture (the popup's Capture Bug) must get its
+          // Stop control back on the new page — the HUD is the only one it has.
+          // A toolbar-tracked session has no start timestamp persisted and is
+          // deliberately skipped here: its ■ button is its stop control, and
+          // compact-toolbar restores that itself.
+          const eventsStartedAt = getEventsCaptureStartedAt();
+          if (eventsStartedAt !== null) {
+            this._eventsCaptureStartedAt = eventsStartedAt;
+            // rrweb observers died with the previous document, so restart them.
+            // The replay therefore covers the page the capture ENDS on, not
+            // every page crossed — the console/network/action timeline spans
+            // them all, the DOM replay does not.
+            void startDomRecording();
+            const hudRoot = document.getElementById("tracebug-root");
+            if (hudRoot) {
+              showRecordingHUD(hudRoot, {
+                mode: "events",
+                startedAt: eventsStartedAt,
+                onStop: () => { this.stopEventsCapture().catch(() => {}); },
+              });
+            }
+          }
         }
       }
     }).catch(() => {});
@@ -956,18 +987,28 @@ class TraceBugSDK {
    * attached to the bug report.
    */
   /**
-   * Pre-recording flow: optionally let the user BLUR sensitive areas first
+   * Pre-capture flow: optionally let the user BLUR sensitive areas first
    * (the blur is real backdrop blur — the redacted pixels are what the
-   * recording captures), then an optional 3-2-1 countdown, then record.
+   * recording captures, and the element's text is masked in the DOM replay),
+   * then an optional 3-2-1 countdown, then capture.
+   *
+   * `video` decides which capture runs. It defaults to FALSE (Phase 4): the
+   * popup's Capture Bug no longer opens a screen-share picker unless the user
+   * has turned video on, so a first capture needs no OS dialog at all.
    */
   prepareRecording(opts: {
     blurFirst?: boolean;
     delaySec?: number;
     withMicrophone?: boolean;
     surfaceMode?: "tab" | "desktop";
+    video?: boolean;
   } = {}): void {
     const begin = () => {
       const go = () => {
+        if (!opts.video) {
+          void this.startEventsCapture();
+          return;
+        }
         void this.startVideoRecording({
           withMicrophone: !!opts.withMicrophone,
           surfaceMode: opts.surfaceMode,
@@ -980,6 +1021,81 @@ class TraceBugSDK {
     };
     if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
     else begin();
+  }
+
+  /**
+   * Start an events-only capture: console, network, clicks and keystrokes, plus
+   * an interactive DOM replay — and no screen share, so no picker and no OS
+   * permission. This is the popup's default capture since Phase 4.
+   *
+   * The session is armed in "events" mode, which is what lets it SURVIVE a
+   * navigation: `_restoreVideoSessionOnInit` resumes an "events" session on the
+   * next page instead of finalizing it (whereas a video session whose tab-share
+   * the browser killed has to be finalized).
+   *
+   * Returns false only when there is no dashboard root to mount the HUD into —
+   * without a Stop control the user would have no way to end the capture.
+   */
+  async startEventsCapture(): Promise<boolean> {
+    const root = document.getElementById("tracebug-root");
+    if (!root) {
+      console.warn("[TraceBug] Events capture needs the dashboard mounted (no #tracebug-root)");
+      return false;
+    }
+    // Same ordering as the video path: end any stale session first so events
+    // don't get appended to hours-old data, then arm a fresh one.
+    try { this._endActiveSession(); } catch {}
+    // Clear a previous capture's replay so a stop that produces nothing can't
+    // hand the last capture's DOM stream to this ticket.
+    try { clearStashedDomReplay(); } catch {}
+    try { this._startActiveSession(); } catch {}
+    this._eventsCaptureStartedAt = Date.now();
+    // Persisted so a navigation mid-capture re-mounts the HUD (and only for a
+    // HUD-driven capture — the toolbar's track button owns its own stop).
+    try { setEventsCaptureStartedAt(this._eventsCaptureStartedAt); } catch {}
+    // Best-effort: rrweb may be unavailable (import failure). The capture is
+    // still worth having without the replay — console, network and actions are
+    // the bulk of a bug report.
+    void startDomRecording();
+    this._attachConsoleCollectors();
+    showRecordingHUD(root, {
+      mode: "events",
+      startedAt: this._eventsCaptureStartedAt,
+      onStop: () => { this.stopEventsCapture().catch(() => {}); },
+    });
+    return true;
+  }
+
+  /**
+   * Stop an events-only capture, stash its DOM replay for the report, and open
+   * the ticket modal. Mirrors `stopVideoRecording`: the user clicked Stop, so
+   * the ticket opens even if the replay came back empty.
+   */
+  async stopEventsCapture(): Promise<void> {
+    // Prefer the persisted start: a capture that crossed a navigation has a
+    // real start time there and only a per-page one in memory.
+    const startedAt = getEventsCaptureStartedAt() ?? this._eventsCaptureStartedAt;
+    this._eventsCaptureStartedAt = null;
+    // Clear before _endActiveSession so an exception in the stash below can't
+    // leave the flag behind and re-mount a HUD for a session that has ended.
+    try { clearEventsCaptureStartedAt(); } catch {}
+    try {
+      const events = stopDomRecording();
+      if (startedAt !== null) stashDomReplay(events, startedAt, Date.now() - startedAt);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to collect the DOM replay:", err);
+    }
+    hideRecordingHUD();
+    try { this._endActiveSession(); } catch {}
+    if (!this.config?.enableDashboard) return;
+    const root = document.getElementById("tracebug-root");
+    if (!root) return;
+    try {
+      const m = await import("./ui/quick-bug");
+      if (!m.isQuickBugOpen()) await m.showQuickBugCapture(root);
+    } catch (err) {
+      console.warn("[TraceBug] Failed to open the ticket after an events capture:", err);
+    }
   }
 
   async startVideoRecording(options?: {
@@ -1792,8 +1908,10 @@ class TraceBugSDK {
     this.sessionId = null;
     clearScreenshots();
     clearVoiceTranscripts();
-    abortVideoRecording();
+    abortVideoRecording(); // also stops the rrweb observers
     clearVideoRecording();
+    this._eventsCaptureStartedAt = null;
+    clearStashedDomReplay();
     hideRecordingHUD();
     clearNetworkFailures();
     setRedactRules(undefined);

@@ -27,6 +27,7 @@ import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 import { getElementAnnotations } from "./annotation-store";
+import { getStashedDomReplay } from "./rrweb-recorder";
 
 /** Element annotations from the in-memory store — [] outside the browser. */
 function safeElementAnnotations() {
@@ -52,6 +53,42 @@ export function getSessionVideo(session: StoredSession | null | undefined): Vide
   const v = getLastVideoRecording();
   if (!v) return null;
   return v.startedAt >= (session.createdAt || 0) - VIDEO_SESSION_GRACE_MS ? v : null;
+}
+
+/**
+ * The DOM replay of an events-only capture (no video), shaped as the same
+ * `report.video` object the exporters already understand — with every video
+ * field empty. Phase 4 made events-only the popup's default capture, so this
+ * is the common case now, not an edge one.
+ *
+ * Why reuse `report.video` rather than add a field: every export path already
+ * prefers the rrweb branch and drops the video when `rrwebEvents` is present
+ * (`html-replay.ts` resolves `includeVideo = hasRrweb ? false : !!report.video`),
+ * so a replay-only object flows through the existing branches untouched and no
+ * `video` key reaches the payload. Consumers that mean *actual video* check
+ * `dataUrl`, not the object's presence.
+ *
+ * Deliberately NOT stashed into video-recorder's `_lastRecording`: the ticket
+ * modal reads `getSessionVideo()` directly and would render a `<video>` with an
+ * empty `src`, which trips its "CSP blocks embedded video" notice.
+ */
+function getSessionDomReplay(session: StoredSession | null | undefined) {
+  if (!session) return undefined;
+  const stash = getStashedDomReplay();
+  if (!stash || !stash.events.length) return undefined;
+  // Same ownership rule as getSessionVideo, so a replay from an abandoned
+  // capture can't bleed into a later ticket.
+  if (stash.startedAt < (session.createdAt || 0) - VIDEO_SESSION_GRACE_MS) return undefined;
+  return {
+    url: "",
+    dataUrl: "",
+    durationMs: stash.durationMs,
+    mimeType: "",
+    sizeBytes: 0,
+    comments: [],
+    startedAt: stash.startedAt,
+    rrwebEvents: stash.events,
+  };
 }
 
 export function buildReport(
@@ -183,7 +220,10 @@ export function buildReport(
   // Voice transcripts from memory
   const voiceTranscripts = getVoiceTranscripts();
 
-  // Most recent screen recording — only if it belongs to THIS session.
+  // Most recent screen recording — only if it belongs to THIS session. With no
+  // video (the events-only capture that Phase 4 made the default), fall back to
+  // this session's DOM replay, which carries the same `rrwebEvents` the .html
+  // exporter embeds.
   const lastVideo = getSessionVideo(session);
   const video = lastVideo ? {
     url: lastVideo.url,
@@ -194,7 +234,7 @@ export function buildReport(
     comments: lastVideo.comments.slice(),
     startedAt: lastVideo.startedAt,
     rrwebEvents: lastVideo.rrwebEvents, // DOM replay stream — embedded by the .html exporter
-  } : undefined;
+  } : getSessionDomReplay(session);
 
   // Auto-generate title
   const title = generateBugTitle(session);

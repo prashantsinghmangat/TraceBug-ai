@@ -393,3 +393,63 @@ describe('the keyboard command (Phase 3)', () => {
     expect(title).not.toMatch(/Cannot access contents/);
   });
 });
+
+// ── Phase 4: video is opt-in ───────────────────────────────────────────────
+// The popup's Capture Bug runs an events-only capture unless the user has
+// turned video on. The worker is the narrow point that whole choice passes
+// through, and it rebuilds the message field by field (an allowlist — a page
+// must not be able to smuggle options in), so a dropped field here means the
+// user's choice silently reverts. Which direction it reverts in matters: an
+// undefined `video` must mean NO screen-share picker, never "default to yes".
+describe('the video opt-in reaches the page', () => {
+  let mock: ChromeMock;
+
+  beforeEach(async () => {
+    mock = createChromeMock();
+    loadBackground(mock);
+    await settle(20);
+    mock.setTabLive(TAB, true, true);
+  });
+
+  it('forwards video:false when the option is off', async () => {
+    await ask(mock, { type: 'TB_START_RECORDING', tabId: TAB, video: false });
+    await settle(400);
+    const sent = mock.sentOfType('TB_START_RECORDING');
+    expect(sent.length).toBe(1);
+    expect(sent[0].message.video).toBe(false);
+  });
+
+  it('defaults to video:false when the field is absent', async () => {
+    // The dangerous direction. An older popup, a replayed message or a dropped
+    // field must land on the quiet capture, not open a screen-share picker.
+    await ask(mock, { type: 'TB_START_RECORDING', tabId: TAB });
+    await settle(400);
+    expect(mock.sentOfType('TB_START_RECORDING')[0].message.video).toBe(false);
+  });
+
+  it('forwards video:true with the surface and mic that only mean anything then', async () => {
+    await ask(mock, {
+      type: 'TB_START_RECORDING',
+      tabId: TAB,
+      video: true,
+      withMic: true,
+      surfaceMode: 'tab',
+      delaySec: 3,
+      blurFirst: true,
+    });
+    await settle(400);
+    expect(mock.sentOfType('TB_START_RECORDING')[0].message).toMatchObject({
+      video: true,
+      withMic: true,
+      surfaceMode: 'tab',
+      delaySec: 3,
+      blurFirst: true,
+    });
+  });
+
+  it('coerces a non-boolean video field rather than passing it through', async () => {
+    await ask(mock, { type: 'TB_START_RECORDING', tabId: TAB, video: 'yes' });
+    await settle(400);
+    expect(mock.sentOfType('TB_START_RECORDING')[0].message.video).toBe(true);
+  });
+});
