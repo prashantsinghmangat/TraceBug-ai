@@ -1,4 +1,33 @@
-# Phase 0 findings - v1.11 launch readiness
+# Phase 0 findings - ARCHIVED
+
+**Investigated 2026-10-11, and most of it has since been acted on.** Phases 1, 2a, 2b, 3 and Phase 4
+Steps A+B all landed after this was written, so large parts of it describe code that no longer exists.
+Its still-true findings were folded into `docs/launch/STATE.md` on 2026-10-12 - **read that instead.**
+
+Known to be out of date here, specifically:
+
+- Item 1's permission table: `<all_urls>` is now in `optional_host_permissions`, and `alarms` was added.
+  There is no longer any install warning at all.
+- Item 4 (secrets in page `localStorage`): fixed by Phase 2a/2b. Tokens and the AI key are in
+  `chrome.storage.local`, entered in the extension's own settings page, and every provider call runs in
+  the worker. Saved tickets are still per-origin page `localStorage` - that is the v2.0 IndexedDB item.
+- Item 5 (restricted pages): the webstore, PDF-viewer and `file://` gaps were closed by Phase 3, which
+  also added the demo-page button.
+- Item 6 (orphaned tabs, updates): both handled by Phase 3, on top of the `tb_sw_state_v1` persistence
+  this report found.
+- Item 7 (first run): still true - the remote welcome page is Phase 4 Step C, still open.
+- Item 8 (capture without video): wired to the popup by Phase 4 Step A.
+- Item 9's Slack item: resolved by Phase 2b, which reads Slack's real reply.
+- Every mention of **`Ctrl+Shift+B` as the capture shortcut** is now wrong. Phase 3 registered a real
+  browser command, default **`Alt+B`**. `Ctrl+Shift+B` only opens Quick Bug once TraceBug is on the tab.
+- The "Proposed order of changes" section is spent - Phases 1-4 are done in a different order than it
+  suggested.
+
+What is still live from this report: item 10 (Playwright/extension loading, which Phase 8 must respect),
+the two-manifest sync trap in item 1, and the Phase 9 doc contradictions at the end. All three are in
+`STATE.md` or `PLAN.md` already.
+
+---
 
 Investigated 2026-10-11 against `develop` (manifest version 1.10.1). Every line below is read from code, not docs.
 Verdicts: **CONFIRMED** = audit was right · **REFUTED** = already done or not true · **PARTLY** = right problem, wrong detail.
