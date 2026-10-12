@@ -22,6 +22,8 @@ import { startDomRecording, stopDomRecording, snapshotDomEvents } from "./rrweb-
 // The page→content-script→background RPC helper moved to src/ext-rpc.ts in
 // Phase 2b so the provider bridge could share its id/timeout shape.
 import { rpcCall } from "./ext-rpc";
+import { showPickerHint, hidePickerHint } from "./ui/pre-record";
+import { isSystemPermissionDenial, explainCaptureFailure } from "./capture-errors";
 
 export interface VideoComment {
   /** Milliseconds since recording started. */
@@ -83,7 +85,12 @@ let _mode: "rolling" | "standard" = "rolling";
 let _comments: VideoComment[] = [];
 let _capturesTaken = 0;
 let _lastRecording: VideoRecording | null = null;
-let _onStatus: ((status: "recording" | "stopped" | "error" | "warning", message?: string) => void) | null = null;
+// "blocked" is distinct from "error" on purpose (Phase 4): it means the capture
+// never started because the OPERATING SYSTEM refused, which is the one failure
+// here that has a specific fix and a one-click fallback. Callers render it as
+// an actionable notice rather than another red toast; the union makes TypeScript
+// point at any caller that forgets.
+let _onStatus: ((status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void) | null = null;
 
 // ── Cloud share duration cap ─────────────────────────────────────────────
 // Free-tier cloud share allows max 2 min videos (50 MB upload cap at typical
@@ -267,11 +274,21 @@ export async function startVideoRecording(options?: {
    *  Default "desktop" for backwards compatibility. */
   surfaceMode?: "tab" | "desktop";
   withMicrophone?: boolean;
-  onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
+  onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
 }): Promise<boolean> {
   if (_active) return false;
   if (_startInFlight) return _startInFlight;
-  _startInFlight = _startVideoRecordingInner(options).finally(() => { _startInFlight = null; });
+  // The one line explaining the browser's share dialog, shown here because
+  // every transport and every caller — popup, keyboard command, toolbar,
+  // SDK — funnels through this function. Cleared in the finally, which covers
+  // started, cancelled and failed alike. Guarded for non-DOM callers (tests,
+  // SSR): this module is otherwise DOM-agnostic at import time.
+  const hintable = typeof document !== "undefined" && !!document.body;
+  if (hintable) showPickerHint(options?.surfaceMode);
+  _startInFlight = _startVideoRecordingInner(options).finally(() => {
+    _startInFlight = null;
+    if (hintable) hidePickerHint();
+  });
   return _startInFlight;
 }
 
@@ -279,7 +296,7 @@ async function _startVideoRecordingInner(options?: {
   mode?: "rolling" | "standard";
   surfaceMode?: "tab" | "desktop";
   withMicrophone?: boolean;
-  onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
+  onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
 }): Promise<boolean> {
   _onStatus = options?.onStatus || null;
   const requestedMode = options?.mode === "standard" ? "standard" : "rolling";
@@ -294,6 +311,12 @@ async function _startVideoRecordingInner(options?: {
 
     if (!result || !result.ok) {
       if (result?.error === "cancelled") _onStatus?.("stopped", "cancelled");
+      else if (result?.error === "system-permission") {
+        // The recorder host could not even get a stream: the OS refused. Only
+        // the page can say so — the offscreen document has no UI, and a code is
+        // all that survives the RPC boundary.
+        _onStatus?.("blocked", explainCaptureFailure("system-permission")!);
+      }
       else _onStatus?.("error", result?.error || "Could not start screen capture.");
       return false;
     }
@@ -577,6 +600,12 @@ async function startVideoRecordingInPage(
     }
     displayStream = await navigator.mediaDevices.getDisplayMedia(constraints as MediaStreamConstraints);
   } catch (err) {
+    // Check the system denial FIRST: it also arrives as NotAllowedError, and
+    // the cancel branch below would otherwise swallow it (see capture-errors.ts).
+    if (isSystemPermissionDenial(err)) {
+      _onStatus?.("blocked", explainCaptureFailure("system-permission")!);
+      return false;
+    }
     const name = err instanceof Error ? err.name : "";
     if (name === "NotAllowedError" || name === "AbortError") {
       _onStatus?.("stopped", "cancelled");

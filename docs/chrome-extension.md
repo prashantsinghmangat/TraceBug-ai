@@ -60,13 +60,26 @@ A collapsible panel for app-specific PII the built-in token patterns can't know 
 
 Rules are validated on save, synced across your browsers via `chrome.storage.sync`, and applied **live** — even to a page that's already recording. Same engine as the SDK's [`redact` config](configuration.md#redact); the content script hands them to the page-world SDK via `<html data-tb-redact>`.
 
-### Recording flow
+### Capture flow
 
-1. Click **Capture Bug**. (Optionally set a capture surface, start delay, or blur-first in **⚙ Record options**.)
-2. The share-picker appears — with **Capture: Current tab** it's pre-selected to the tab you're on; for flows that span tab navigation, pick **Desktop / window** in Record options (or "Window" / "Entire screen" in the picker).
-3. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements, or the droplet **Blur** button to click-blur sensitive elements (captured into the recording, masked in the DOM replay).
-4. Click **Stop** in the HUD (or Chrome's native "Stop sharing" button).
-5. The ticket modal opens with video, screenshots, console, network, and action chips all populated. Fill in title/description and export as HTML, GitHub issue, Jira ticket, Linear issue, or Slack message.
+1. Click **Capture Bug**. No screen-share dialog appears: TraceBug records the console, the network, your clicks and an interactive **DOM replay**. (Optionally set a start delay or blur-first in **⚙ Record options**.)
+2. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements, or the droplet **Blur** button to click-blur sensitive elements (the element's text is masked in the DOM replay, and the blur is captured into the video if you're recording one).
+3. Click **Stop** in the HUD.
+4. The ticket modal opens with the replay, screenshots, console, network, and action chips all populated. Fill in title/description and export as HTML, GitHub issue, Jira ticket, Linear issue, or Slack message.
+
+The capture follows you across pages. If it spans more than one, the DOM replay covers the page you finished on — the console, network and action timeline cover all of them.
+
+#### Adding a screen recording
+
+Turn on **Record video too** in **⚙ Record options** to add a screen recording. The choice is remembered, so you only do it once. Then:
+
+1. Click **Capture Bug**. TraceBug shows one line explaining what's about to happen, then your browser's own "Choose what to share" dialog opens.
+2. What you see there depends on **Capture** in Record options:
+   - **Current tab** — the dialog is already set to the tab you're on; just confirm. (TraceBug asks the browser for this with `preferCurrentTab`.)
+   - **Desktop / window (picker)** — the full tab/window/screen choice. Pick this tab unless you need a window or the whole screen.
+3. Stop in the HUD, or with your browser's native "Stop sharing" button.
+
+**macOS:** screen recording needs your browser ticked under **System Settings → Privacy & Security → Screen Recording**, and the browser has to be quit and reopened afterwards. If it isn't, TraceBug says so and offers to capture without video instead — your browser reports an OS refusal the same way it reports you closing the dialog, so TraceBug reads the error text to tell them apart.
 
 ### Per-tab indicator
 

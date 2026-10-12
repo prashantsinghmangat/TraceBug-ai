@@ -3,13 +3,17 @@
 
 /**
  * Interactive toast with an action button. Used for error-detected prompts.
- * Auto-dismisses after 8s if no action taken.
+ * Auto-dismisses after 8s if no action taken, unless `autoDismissMs` says
+ * otherwise — pass `null` to keep it up until the user dismisses it or takes
+ * the action. A message that carries a multi-step instruction cannot be on a
+ * timer; 8 seconds is not long enough to read one and act on it.
  */
 export function showActionToast(
   message: string,
   actionLabel: string,
   onAction: () => void,
-  root: HTMLElement
+  root: HTMLElement,
+  options?: { autoDismissMs?: number | null }
 ): void {
   const existing = root.querySelector(".bt-toast");
   if (existing) existing.remove();
@@ -65,8 +69,36 @@ export function showActionToast(
   });
   toast.querySelector('[data-tb-action="dismiss"]')!.addEventListener("click", dismiss);
 
-  // Auto-dismiss after 8s
-  const autoTimer = setTimeout(dismiss, 8000);
+  // Auto-dismiss after 8s by default; `null` means it stays until dismissed.
+  const dwell = options?.autoDismissMs === undefined ? 8000 : options.autoDismissMs;
+  const autoTimer = dwell === null ? undefined : setTimeout(dismiss, dwell);
+}
+
+/**
+ * The capture could not start because the OPERATING SYSTEM refused — on macOS,
+ * a browser missing from System Settings → Privacy & Security → Screen
+ * Recording. Shown as a sticky notice rather than a toast for two reasons: the
+ * instruction has four steps and ends in "restart your browser", and the fix
+ * is somewhere TraceBug cannot take you.
+ *
+ * The button is the point. Before Phase 4 there was no fallback to offer, so
+ * this failure was terminal; now the user can have the capture they came for
+ * without the video, in one click, and deal with the permission later.
+ */
+export function showCaptureBlockedNotice(
+  message: string,
+  root: HTMLElement,
+  onCaptureWithoutVideo?: () => void
+): void {
+  if (!onCaptureWithoutVideo) {
+    // No fallback wired by this caller: the message still has to be readable,
+    // so keep it sticky and make the only button a dismiss.
+    showActionToast(message, "OK", () => {}, root, { autoDismissMs: null });
+    return;
+  }
+  showActionToast(message, "Capture without video", onCaptureWithoutVideo, root, {
+    autoDismissMs: null,
+  });
 }
 
 export function showToast(message: string, root: HTMLElement): void {
