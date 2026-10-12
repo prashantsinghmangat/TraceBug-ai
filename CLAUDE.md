@@ -14,11 +14,9 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
 - `docs/launch/` - current launch work: `STATE.md` (where things stand - **start here**), `PLAN.md` (what's left), `PROGRESS.md`. The `*-archive.md` files are closed history; don't read them unless you need why.
 
 ## Commands
+- **All gates: `node scripts/check.mjs`** (`--full` if extension files changed, `--firefox` at the end of a phase). One line per gate, full output only on failure. See the `gates` skill; don't run the npm scripts one by one.
 - Build SDK + extension bundle: `npm run build` (tsup; rewrites `tracebug-extension/tracebug-sdk.js`, then reload the unpacked extension)
-- Build packaged extension (chrome + firefox dirs): `npm run build:ext`
-- Tests: `npm test` (= `vitest run`); single file: `npx vitest run tests/storage.test.ts`
-- Typecheck: `npm run typecheck` | Lint: `npm run lint`
-- Firefox lint / run: `npm run ext:lint` / `npm run ext:firefox`
+- Single test file: `npx vitest run tests/storage.test.ts --reporter=dot` | e2e: `node e2e/<name>.e2e.mjs` (run only the related suite)
 - Benchmark: `node e2e/benchmark.mjs`
 
 ## Hard rules
@@ -34,7 +32,8 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
 - No `Co-Authored-By` trailers.
 
 ## Working style (saves tokens)
-- Before exploring, read `docs/launch/STATE.md`; don't re-investigate what it already answers.
+- Doing launch work? Use the **`phase`** skill. Verifying anything? Use **`gates`**.
+- Before exploring, read `docs/launch/STATE.md`, then `docs/launch/CODEMAP.md` to find the code; don't re-investigate what they already answer.
 - Use `rg`/grep with paths; read specific line ranges, not whole large files (`docs/api-reference.md`, `ARCHITECTURE.md` and the built bundle are big).
 - Make small diffs. Run only the tests related to the change, then the full suite once at the end of a phase.
 - At the end of each phase, rewrite `docs/launch/STATE.md` and add a <=5 line entry to `docs/launch/PROGRESS.md` (what changed, files, how verified, open issues).

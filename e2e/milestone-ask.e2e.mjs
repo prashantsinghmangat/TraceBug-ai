@@ -3,12 +3,17 @@
 // ticket, submits to /api/notify-me (intercepted here), shows the success
 // state, and never blocks anything. Guards the "ask, never a wall" rules.
 import { chromium } from "playwright";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "website", "public");
+// Run artefacts, not fixtures. These used to overwrite two PNGs committed next
+// to the script, so every run dirtied the working tree and the "diff" was a
+// re-encoded screenshot. e2e/output/ is gitignored.
+const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "output");
+mkdirSync(OUT_DIR, { recursive: true });
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 const server = createServer((req, res) => {
   const p = join(PUBLIC_DIR, decodeURIComponent(new URL(req.url, "http://x").pathname));
@@ -83,7 +88,7 @@ try {
   check("once-ever flag set at show time", flag === "1");
 
   if (card) {
-    await page.screenshot({ path: "e2e/milestone-ask-card.png" });
+    await page.screenshot({ path: join(OUT_DIR, "milestone-ask-card.png") });
     await page.fill('#tracebug-milestone-ask [data-act="email"]', "test@example.com");
     await page.click('#tracebug-milestone-ask [data-act="submit"]');
     await page.waitForTimeout(600);
@@ -92,7 +97,7 @@ try {
       JSON.stringify(capturedBody));
     const success = await page.textContent("#tracebug-milestone-ask").catch(() => "");
     check("success state shown", /on the list/i.test(success || ""), success?.trim());
-    await page.screenshot({ path: "e2e/milestone-ask-success.png" });
+    await page.screenshot({ path: join(OUT_DIR, "milestone-ask-success.png") });
   }
 
   // The wall test: saving ANOTHER ticket must work and must NOT re-show the card.
