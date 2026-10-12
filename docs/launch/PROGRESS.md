@@ -137,3 +137,24 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - Open: the card has never been RENDERED - no screenshot, no real popup. Needs a profile updated from
   a 1.11.0 build, which cannot exist until the version is bumped.
 
+## Phase 4, Step E - which page, and why you left (2026-10-12)
+
+- The popup's "can't run here" panel now says WHICH page it means: a host/path card fed by a new
+  `describePage` in `page-support.js` (there, not popup.js, so the worker could reuse it and it is unit
+  testable). It returns null - card absent, not blank - when `tab.url` is invisible, which since Phase 1
+  is the normal state. Plus one glyph per reason, indigo only where one click fixes it; `csp`,
+  `needs-access` and `unknown` keep the pixel-bug fallback, as `screens.md` names no glyph for them.
+- `runtime.setUninstallURL` -> `https://tracebug.dev/bye?v=<version>`, set at worker start rather than on
+  install so a profile running since before this version still gets it. Version only: a test asserts the
+  query string has exactly one key, because the page's fine print promises that.
+- New `website/app/bye` (page + client form): seven reasons, optional note and email, Send and an
+  equally prominent Skip, thank-you state with GitHub-issue and reinstall links. No navbar, no footer,
+  noindex - someone who just uninstalled is not a lead. POSTs via Netlify Forms like `/feedback`;
+  registered in `public/__forms.html`, without which submissions are accepted and silently dropped.
+- Files: new `website/app/bye/{page.tsx,ByeForm.tsx}`, `tests/uninstall-and-page-card.test.ts`; edited
+  `page-support.js`, `popup.{js,html}`, `styles.css`, `background.js`, `__forms.html`, chrome-mock
+  (records the uninstall URL), `CHANGELOG.md`. Verified: check.mjs --full green, 708 passing / 43 files
+  (+23), ext:lint 0/69, website `tsc --noEmit` clean, ext-events-capture 22/22, ext-redaction 4/4.
+- Open: neither the popup states nor `/bye` has been RENDERED. `/bye` also needs one real submission
+  against Netlify to prove the form is collected - that cannot be tested locally.
+

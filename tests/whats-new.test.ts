@@ -90,7 +90,12 @@ function sliceFunction(source: string, declaration: string): string {
 describe('the popup shows the card only when it has copy', () => {
   const BODY = sliceFunction(POPUP, 'async function initWhatsNew() {');
   // The copy table is a top-level const, so it slices cleanly too.
-  const TABLE = POPUP.slice(POPUP.indexOf('const WHATS_NEW = {'), POPUP.indexOf('const SVG_NS'));
+  // Both markers are searched FORWARD from the table's own start. Searching
+  // the whole file found `const SVG_NS_PS` (the "can't run here" glyphs, added
+  // later and declared earlier), which sliced to an empty string and failed
+  // every test below with no hint as to why.
+  const TABLE_AT = POPUP.indexOf('const WHATS_NEW = {');
+  const TABLE = POPUP.slice(TABLE_AT, POPUP.indexOf('const SVG_NS =', TABLE_AT));
 
   /** Minimal element stand-in: enough for textContent, display and append. */
   function el(id: string) {

@@ -35,6 +35,13 @@ All notable changes to TraceBug are documented here.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
 
 - **One line before your browser asks what to share** (`src/ui/pre-record.ts`) — the share dialog is the browser's own, it offers three surfaces, and it says nothing about which one a bug report wants. Picking "Entire screen" records your whole desktop and picking the wrong tab records the wrong page, neither of which can be undone afterwards. TraceBug now explains it first, and the wording matches the dialog you are about to see: "already set to this tab — choose Share" when Capture is **Current tab**, "pick this tab" when it's **Desktop / window**.
+- **A blocked page now tells you which page** (`tracebug-extension/popup.js`, `page-support.js`) - the
+  "can't run here" panel shows the host and path above the explanation, with an icon that matches the
+  reason. When TraceBug has no site access it cannot see the URL, so the card is left out rather than
+  showing an empty row.
+- **Uninstalling asks one optional question** (`website/app/bye`) - removing TraceBug opens a short page
+  with seven reasons, an optional note, and a Skip that is as easy to click as Send. The link carries
+  the version number and nothing else, which the page says in plain text.
 - **Updating tells you what changed, without taking over a tab** (`tracebug-extension/popup.js`) - after
   an update the popup shows a short "What's new" card the next time you open it, with a "Got it" that
   dismisses it for good. No new tab, no page stealing focus while you were doing something else. A fresh

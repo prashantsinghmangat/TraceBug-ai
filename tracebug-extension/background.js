@@ -154,6 +154,22 @@ const activeTabs = new Set();
 // UI while the offscreen document kept recording.
 let _recordingTabId = null;
 
+// ── Uninstall survey (Phase 4 Step E / Phase 5) ─────────────────────────────
+// The one moment someone will tell you why they left. The URL carries the
+// VERSION ONLY — no id, no install date, nothing that identifies a person or a
+// machine — and the page itself says so in its fine print. Set once at worker
+// start rather than on install, because a worker restart is cheap and an
+// unset uninstall URL is silent data loss.
+(function setUninstallSurvey() {
+  try {
+    if (!chrome.runtime.setUninstallURL) return;
+    const v = chrome.runtime.getManifest().version || "";
+    chrome.runtime.setUninstallURL("https://tracebug.dev/bye?v=" + encodeURIComponent(v));
+  } catch (err) {
+    console.warn("[TraceBug] couldn't set the uninstall URL", err);
+  }
+})();
+
 // ── Deferred extension update (Phase 3) ─────────────────────────────────────
 // chrome.runtime.onUpdateAvailable was not handled at all, which means an
 // auto-update landing mid-recording killed the recording: the worker and the

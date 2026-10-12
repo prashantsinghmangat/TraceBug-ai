@@ -32,7 +32,17 @@
          are all filled in by popup.js from TraceBugPageSupport, so there is one
          panel for every reason a page can be unusable. -->
     <div class="unavailable" id="unavailable" style="display:none;">
-      <div class="unavailable-icon"><svg viewBox="0 0 22 22" fill="none" shape-rendering="crispEdges" aria-hidden="true"><g fill="#4F46E5"><rect x="8" y="4" width="2" height="2"/><rect x="12" y="4" width="2" height="2"/></g><g fill="#818CF8"><rect x="6" y="2" width="2" height="2"/><rect x="14" y="2" width="2" height="2"/></g><g fill="#6366F1"><rect x="8" y="6" width="6" height="2"/><rect x="6" y="8" width="10" height="6"/><rect x="8" y="14" width="6" height="2"/></g><rect x="6" y="8" width="2" height="6" fill="#818CF8"/><g fill="#16163E"><rect class="px-eye" x="9" y="9" width="1.6" height="3"/><rect class="px-eye" x="12" y="9" width="1.6" height="3"/></g><g fill="#4F46E5"><rect x="2" y="9" width="3" height="2"/><rect x="17" y="9" width="3" height="2"/><rect x="3" y="13" width="3" height="2"/><rect x="16" y="13" width="3" height="2"/></g><rect x="10" y="17" width="2" height="2" fill="#818CF8"/></svg></div>
+      <!-- Which page this is about. Absent, not blank, when tab.url is
+           invisible — the normal state since <all_urls> became optional.
+           Filled by popup.js from TraceBugPageSupport.describePage. -->
+      <div class="pg" id="pageCard" style="display:none;">
+        <div class="pg-host" id="pageHost"></div>
+        <div class="pg-path" id="pagePath"></div>
+      </div>
+      <!-- One icon per reason, chosen by popup.js. The pixel-bug below is the
+           fallback for reasons screens.md does not name. -->
+      <div class="unavailable-icon" id="unavailableGlyph" style="display:none;"></div>
+      <div class="unavailable-icon" id="unavailableIconFallback"><svg viewBox="0 0 22 22" fill="none" shape-rendering="crispEdges" aria-hidden="true"><g fill="#4F46E5"><rect x="8" y="4" width="2" height="2"/><rect x="12" y="4" width="2" height="2"/></g><g fill="#818CF8"><rect x="6" y="2" width="2" height="2"/><rect x="14" y="2" width="2" height="2"/></g><g fill="#6366F1"><rect x="8" y="6" width="6" height="2"/><rect x="6" y="8" width="10" height="6"/><rect x="8" y="14" width="6" height="2"/></g><rect x="6" y="8" width="2" height="6" fill="#818CF8"/><g fill="#16163E"><rect class="px-eye" x="9" y="9" width="1.6" height="3"/><rect class="px-eye" x="12" y="9" width="1.6" height="3"/></g><g fill="#4F46E5"><rect x="2" y="9" width="3" height="2"/><rect x="17" y="9" width="3" height="2"/><rect x="3" y="13" width="3" height="2"/><rect x="16" y="13" width="3" height="2"/></g><rect x="10" y="17" width="2" height="2" fill="#818CF8"/></svg></div>
       <div class="unavailable-text" id="unavailableTitle">Can't run on this page</div>
       <div class="unavailable-sub" id="unavailableSub">TraceBug works on any website. Open a regular tab to get started.</div>
       <button id="unavailableAction" class="unavailable-btn" style="display:none;"></button>

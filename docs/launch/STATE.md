@@ -12,8 +12,8 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
   deferred updates, real `Alt+B` command), 4 Steps A+B (events-only default capture, picker hint,
   macOS denial), the two Step-B additions (video pref in `chrome.storage.local`, replay heading names
   its page), **Step C** (bundled `welcome.html`; first run no longer needs the network) and **Step D**
-  (per-version "What's new" card in the popup, no tab stolen on update).
-- **Next: Phase 4 Step E**, then F, then Phases 5–9 in `PLAN.md`. Phase 8 needs rescoping — see gotchas.
+  (per-version "What's new" card in the popup, no tab stolen on update), and **Step E** (popup "can't run here" states carry the page and a per-reason glyph; `/bye` uninstall survey; `setUninstallURL`).
+- **Next: Phase 4 Step F**, then Phases 5–9 in `PLAN.md`. Phase 8 needs rescoping — see gotchas.
 
 ## Phase 4, what is left
 
@@ -22,8 +22,10 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
   **The card is invisible until the version bump**: the table is keyed `1.11.0` and the manifest still
   says `1.10.1`, so an update today flags `1.10.1`, finds no copy and shows nothing. Adding a release
   means adding a `WHATS_NEW` entry - there is nothing else to wire.
-- **Step E** — popup states styled to match `screens.md` screen 3; the uninstall page at
-  `website/app/bye` with its thank-you state; `runtime.setUninstallURL`.
+- **Step E is done.** `describePage` (page-support.js) feeds the host/path card, which is ABSENT when
+  `tab.url` is invisible. One glyph per reason; `csp` / `needs-access` / `unknown` keep the pixel-bug
+  fallback because `screens.md` names no glyph for them. `setUninstallURL` is set at worker start and
+  carries `?v=<version>` and nothing else.
 - **Step F** — the review card (`screens.md` screen 5) and the exported-report footer (Phase 5's
   first two items).
 - `welcome.html` / `welcome.js` are done and in `SHARED_FILES`. The **"Rolling this out to a team?"
