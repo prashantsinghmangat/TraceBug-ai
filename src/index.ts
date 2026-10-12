@@ -102,6 +102,7 @@ import {
 } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
 import { startDomRecording, stopDomRecording, stashDomReplay, clearStashedDomReplay } from "./rrweb-recorder";
+import { showCaptureBlockedNotice } from "./ui/toast";
 import {
   mark as _mark,
   assertCondition as _assertCondition,
@@ -1098,11 +1099,25 @@ class TraceBugSDK {
     }
   }
 
+  /**
+   * The OS refused screen capture. Show the instruction, and offer the capture
+   * the user was actually after — events only. Needs the dashboard root; with
+   * no root there is nowhere to render, so the console is the last resort.
+   */
+  private _reportCaptureBlocked(message: string): void {
+    const root = document.getElementById("tracebug-root");
+    if (!root) {
+      console.warn("[TraceBug] " + message);
+      return;
+    }
+    showCaptureBlockedNotice(message, root, () => { void this.startEventsCapture(); });
+  }
+
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
     surfaceMode?: "tab" | "desktop";
     withMicrophone?: boolean;
-    onStatus?: (status: "recording" | "stopped" | "error" | "warning", message?: string) => void;
+    onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
   }): Promise<boolean> {
     // End any stale active session before starting a fresh one. Without this
     // a session id from a previous (abandoned) recording would be restored
@@ -1116,15 +1131,27 @@ class TraceBugSDK {
     // recording from bleeding into a new screenshot-only ticket).
     try { this._startActiveSession(); } catch {}
 
+    let blockedMessage: string | null = null;
     const ok = await _startVideoRecording({
       mode: options?.mode ?? "rolling",
       surfaceMode: options?.surfaceMode,
       withMicrophone: options?.withMicrophone,
-      onStatus: options?.onStatus,
+      // The popup's Capture Bug reaches here through prepareRecording(), which
+      // passes NO onStatus — so until Phase 4 a recording the operating system
+      // refused failed completely silently on that path: no picker, no toast,
+      // no capture, nothing in the UI at all. Capture the message here and
+      // surface it below once the session has been cleaned up, while still
+      // letting an explicit caller (the toolbar) handle its own reporting.
+      onStatus: (status, message) => {
+        if (status === "blocked" && message) blockedMessage = message;
+        options?.onStatus?.(status, message);
+      },
     });
     if (!ok) {
       // User cancelled the screen picker — discard the empty session
       try { this._endActiveSession(); } catch {}
+      // Only report it ourselves if the caller isn't already doing so.
+      if (blockedMessage && !options?.onStatus) this._reportCaptureBlocked(blockedMessage);
       return false;
     }
 

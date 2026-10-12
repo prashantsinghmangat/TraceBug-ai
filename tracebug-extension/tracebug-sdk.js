@@ -19953,13 +19953,330 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/dom-helpers.ts
+  function isTraceBugUiElement(el) {
+    var _a2;
+    let node2 = el;
+    while (node2) {
+      const h = node2;
+      const id = h.id || "";
+      if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
+      const cn = typeof h.className === "string" ? h.className : "";
+      if (cn && TB_WIDGET_CLASSES.some((p) => cn.includes(p))) return true;
+      if ((_a2 = h.dataset) == null ? void 0 : _a2.tracebug) return true;
+      node2 = node2.parentElement;
+    }
+    return false;
+  }
+  var TB_WIDGET_CLASSES;
+  var init_dom_helpers = __esm({
+    "src/dom-helpers.ts"() {
+      "use strict";
+      TB_WIDGET_CLASSES = ["tracebug-", "tb-qb", "tb-hud", "tb-rs"];
+    }
+  });
+
+  // src/ui/blur-tool.ts
+  function isBlurModeActive() {
+    return _active;
+  }
+  function getBlurEvents() {
+    return [..._events2];
+  }
+  function removeAllBlurBoxes() {
+    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
+  }
+  function undoLastBlur() {
+    const last = _blurred[_blurred.length - 1];
+    if (last) _unblur(last);
+    return _blurred.length;
+  }
+  function _isOurNode(el) {
+    return isTraceBugUiElement(el);
+  }
+  function _findBlurred(el) {
+    return _blurred.find((b) => b.el === el);
+  }
+  function _blur(el) {
+    const prevFilter = el.style.getPropertyValue("filter");
+    const prevPriority = el.style.getPropertyPriority("filter");
+    el.style.setProperty("filter", BLUR_FILTER, "important");
+    el.classList.add("tb-mask");
+    el.setAttribute("data-tb-blurred", "1");
+    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    _blurred.push({ el, prevFilter, prevPriority, evtId });
+    _events2.push({ id: evtId, timestamp: Date.now() });
+  }
+  function _unblur(entry) {
+    const { el, prevFilter, prevPriority, evtId } = entry;
+    try {
+      if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
+      else el.style.removeProperty("filter");
+      el.classList.remove("tb-mask");
+      el.removeAttribute("data-tb-blurred");
+    } catch (e2) {
+    }
+    _blurred = _blurred.filter((b) => b !== entry);
+    const i2 = _events2.findIndex((ev) => ev.id === evtId);
+    if (i2 >= 0) _events2.splice(i2, 1);
+  }
+  function activateBlurMode(_root4, onExit) {
+    if (_active) return;
+    _active = true;
+    _onExit = onExit || null;
+    const outline = document.createElement("div");
+    outline.id = OUTLINE_ID;
+    outline.setAttribute(
+      "style",
+      "position:fixed;display:none;pointer-events:none;z-index:2147483646;outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
+    );
+    document.body.appendChild(outline);
+    const hint = document.createElement("div");
+    hint.id = HINT_ID;
+    hint.setAttribute(
+      "style",
+      "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
+    );
+    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
+    document.body.appendChild(hint);
+    document.body.style.cursor = "crosshair";
+    _onMove = (e2) => {
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
+        outline.style.display = "none";
+        return;
+      }
+      const r2 = el.getBoundingClientRect();
+      outline.style.display = "block";
+      outline.style.left = r2.left + "px";
+      outline.style.top = r2.top + "px";
+      outline.style.width = r2.width + "px";
+      outline.style.height = r2.height + "px";
+    };
+    _onClick = (e2) => {
+      var _a2;
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
+      e2.preventDefault();
+      e2.stopPropagation();
+      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
+      const existing = _findBlurred(el);
+      if (existing) _unblur(existing);
+      else _blur(el);
+    };
+    _onKey = (e2) => {
+      if (e2.key === "Escape") {
+        e2.preventDefault();
+        deactivateBlurMode();
+      }
+    };
+    document.addEventListener("mousemove", _onMove, true);
+    document.addEventListener("click", _onClick, true);
+    document.addEventListener("keydown", _onKey, true);
+  }
+  function deactivateBlurMode() {
+    var _a2, _b;
+    if (!_active) return;
+    _active = false;
+    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
+    if (_onClick) document.removeEventListener("click", _onClick, true);
+    if (_onKey) document.removeEventListener("keydown", _onKey, true);
+    _onMove = _onClick = _onKey = null;
+    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
+    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
+    document.body.style.cursor = "";
+    const cb = _onExit;
+    _onExit = null;
+    cb == null ? void 0 : cb();
+  }
+  var HINT_ID, OUTLINE_ID, BLUR_FILTER, _active, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
+  var init_blur_tool = __esm({
+    "src/ui/blur-tool.ts"() {
+      "use strict";
+      init_dom_helpers();
+      HINT_ID = "tracebug-blur-hint";
+      OUTLINE_ID = "tracebug-blur-outline";
+      BLUR_FILTER = "blur(12px)";
+      _active = false;
+      _onExit = null;
+      _events2 = [];
+      _blurred = [];
+      _onMove = null;
+      _onClick = null;
+      _onKey = null;
+    }
+  });
+
+  // src/ui/pre-record.ts
+  function showPickerHint(surfaceMode) {
+    try {
+      hidePickerHint();
+      const el = document.createElement("div");
+      el.id = PICKER_HINT_ID;
+      el.setAttribute("role", "status");
+      el.setAttribute("aria-live", "polite");
+      el.setAttribute(
+        "style",
+        "position:fixed!important;top:18px!important;left:50%!important;transform:translateX(-50%)!important;z-index:2147483647!important;max-width:min(560px,calc(100vw - 32px))!important;background:#1b1d24!important;color:#e9eaee!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:12px!important;padding:11px 16px!important;box-sizing:border-box!important;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif!important;font-size:13px!important;font-weight:500!important;line-height:1.45!important;text-align:center!important;box-shadow:0 12px 40px rgba(0,0,0,0.55)!important;pointer-events:none!important;"
+      );
+      el.textContent = surfaceMode === "tab" ? "Your browser will ask what to share. It's already set to this tab \u2014 choose Share." : "Your browser will ask what to share. Pick this tab, unless you need a window or the whole screen.";
+      document.body.appendChild(el);
+    } catch (e2) {
+    }
+  }
+  function hidePickerHint() {
+    var _a2;
+    try {
+      (_a2 = document.getElementById(PICKER_HINT_ID)) == null ? void 0 : _a2.remove();
+    } catch (e2) {
+    }
+  }
+  function runRecordCountdown(seconds) {
+    const total = Math.max(1, Math.min(10, Math.round(seconds)));
+    return new Promise((resolve) => {
+      var _a2;
+      (_a2 = document.getElementById(COUNTDOWN_ID)) == null ? void 0 : _a2.remove();
+      const overlay = document.createElement("div");
+      overlay.id = COUNTDOWN_ID;
+      overlay.setAttribute(
+        "style",
+        "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
+      );
+      const num = document.createElement("div");
+      num.setAttribute(
+        "style",
+        "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);transition:transform 0.25s ease, opacity 0.25s ease;"
+      );
+      const hint = document.createElement("div");
+      hint.textContent = "Press Esc to cancel";
+      hint.setAttribute("style", "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
+      overlay.appendChild(num);
+      overlay.appendChild(hint);
+      document.body.appendChild(overlay);
+      let cancelled = false;
+      let timer;
+      const finish = (completed) => {
+        document.removeEventListener("keydown", onKey2, true);
+        overlay.remove();
+        resolve(completed);
+      };
+      const onKey2 = (e2) => {
+        if (e2.key !== "Escape") return;
+        e2.preventDefault();
+        e2.stopPropagation();
+        cancelled = true;
+        clearTimeout(timer);
+        finish(false);
+      };
+      document.addEventListener("keydown", onKey2, true);
+      let n2 = total;
+      const tick = () => {
+        if (cancelled) return;
+        if (n2 <= 0) {
+          finish(true);
+          return;
+        }
+        num.textContent = String(n2);
+        num.style.transform = "scale(1.25)";
+        num.style.opacity = "1";
+        setTimeout(() => {
+          num.style.transform = "scale(1)";
+          num.style.opacity = "0.75";
+        }, 200);
+        n2--;
+        timer = setTimeout(tick, 1e3);
+      };
+      tick();
+    });
+  }
+  function startBlurThenRecord(opts) {
+    var _a2;
+    (_a2 = document.getElementById(ARM_BAR_ID)) == null ? void 0 : _a2.remove();
+    const root2 = document.getElementById("tracebug-root") || document.body;
+    activateBlurMode(root2);
+    const bar = document.createElement("div");
+    bar.id = ARM_BAR_ID;
+    bar.setAttribute(
+      "style",
+      "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
+    );
+    bar.innerHTML = `
+    <span>\u{1FAE5} Click elements to blur/unblur \u2014 the blur is captured into the recording</span>
+    <button data-tb-arm="undo" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Undo</button>
+    <button data-tb-arm="start" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:7px 16px;font:600 13px inherit;cursor:pointer">\u25CF Start recording</button>
+    <button data-tb-arm="cancel" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Cancel</button>
+  `;
+    document.body.appendChild(bar);
+    bar.querySelector('[data-tb-arm="undo"]').addEventListener("click", () => {
+      undoLastBlur();
+    });
+    const cleanup = () => {
+      bar.remove();
+      if (isBlurModeActive()) {
+        try {
+          deactivateBlurMode();
+        } catch (e2) {
+        }
+      }
+    };
+    bar.querySelector('[data-tb-arm="start"]').addEventListener("click", () => {
+      cleanup();
+      opts.onStart();
+    });
+    bar.querySelector('[data-tb-arm="cancel"]').addEventListener("click", () => {
+      cleanup();
+      removeAllBlurBoxes();
+      if (opts.onCancel) opts.onCancel();
+    });
+  }
+  var COUNTDOWN_ID, ARM_BAR_ID, PICKER_HINT_ID;
+  var init_pre_record = __esm({
+    "src/ui/pre-record.ts"() {
+      "use strict";
+      init_blur_tool();
+      COUNTDOWN_ID = "tracebug-record-countdown";
+      ARM_BAR_ID = "tracebug-record-armbar";
+      PICKER_HINT_ID = "tracebug-picker-hint";
+    }
+  });
+
+  // src/capture-errors.ts
+  function isSystemPermissionDenial(err) {
+    if (!err) return false;
+    if (typeof err === "string") return SYSTEM_DENIAL_RE.test(err);
+    const e2 = err;
+    const name = e2.name || "";
+    const msg = String(e2.message || "");
+    if (name !== "NotAllowedError" && name !== "NotFoundError") return false;
+    return SYSTEM_DENIAL_RE.test(msg);
+  }
+  function explainCaptureFailure(codeOrError) {
+    const code = typeof codeOrError === "string" ? codeOrError : "";
+    if (code === "cancelled") return null;
+    if (code === "system-permission" || isSystemPermissionDenial(codeOrError)) {
+      return "Your system is blocking screen recording. Open System Settings \u2192 Privacy & Security \u2192 Screen Recording, switch your browser on, then quit and reopen it \u2014 the permission only takes effect after a restart. You can capture without video in the meantime: it records the console, network and an interactive replay.";
+    }
+    if (code === "unsupported" || /not supported/i.test(code)) {
+      return "This browser can't record the screen. Capture without video still works.";
+    }
+    return code || null;
+  }
+  var SYSTEM_DENIAL_RE;
+  var init_capture_errors = __esm({
+    "src/capture-errors.ts"() {
+      "use strict";
+      SYSTEM_DENIAL_RE = /\bby system\b|system permission|not permitted by system|screen recording/i;
+    }
+  });
+
   // src/ui/toast.ts
   var toast_exports = {};
   __export(toast_exports, {
     showActionToast: () => showActionToast,
+    showCaptureBlockedNotice: () => showCaptureBlockedNotice,
     showToast: () => showToast
   });
-  function showActionToast(message, actionLabel, onAction, root2) {
+  function showActionToast(message, actionLabel, onAction, root2, options) {
     const existing = root2.querySelector(".bt-toast");
     if (existing) existing.remove();
     const toast = document.createElement("div");
@@ -20006,7 +20323,18 @@ var TraceBugModule = (() => {
       onAction();
     });
     toast.querySelector('[data-tb-action="dismiss"]').addEventListener("click", dismiss);
-    const autoTimer = setTimeout(dismiss, 8e3);
+    const dwell = (options == null ? void 0 : options.autoDismissMs) === void 0 ? 8e3 : options.autoDismissMs;
+    const autoTimer = dwell === null ? void 0 : setTimeout(dismiss, dwell);
+  }
+  function showCaptureBlockedNotice(message, root2, onCaptureWithoutVideo) {
+    if (!onCaptureWithoutVideo) {
+      showActionToast(message, "OK", () => {
+      }, root2, { autoDismissMs: null });
+      return;
+    }
+    showActionToast(message, "Capture without video", onCaptureWithoutVideo, root2, {
+      autoDismissMs: null
+    });
   }
   function showToast(message, root2) {
     const existing = root2.querySelector(".bt-toast");
@@ -20079,15 +20407,15 @@ var TraceBugModule = (() => {
   function scheduleDurationCap() {
     clearDurationCapTimers();
     _warnTimer = setTimeout(() => {
-      if (!_active) return;
+      if (!_active2) return;
       _onStatus == null ? void 0 : _onStatus("warning", `${MAX_CLOUD_RECORDING_S - WARN_AT_S} seconds left in recording \u2014 cloud share limit is ${MAX_CLOUD_RECORDING_S / 60} min`);
     }, WARN_AT_S * 1e3);
     _finalWarnTimer = setTimeout(() => {
-      if (!_active) return;
+      if (!_active2) return;
       _onStatus == null ? void 0 : _onStatus("warning", `Recording stops in ${MAX_CLOUD_RECORDING_S - FINAL_WARN_AT_S} seconds`);
     }, FINAL_WARN_AT_S * 1e3);
     _autoStopTimer = setTimeout(async () => {
-      if (!_active) return;
+      if (!_active2) return;
       try {
         const recording2 = await stopVideoRecording();
         _onAutoStop == null ? void 0 : _onAutoStop(recording2);
@@ -20107,16 +20435,16 @@ var TraceBugModule = (() => {
     return !!(typeof navigator !== "undefined" && navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === "function" && typeof window.MediaRecorder === "function");
   }
   function isVideoRecording() {
-    return _active;
+    return _active2;
   }
   function isRollingMode() {
-    return _active && _mode === "rolling";
+    return _active2 && _mode === "rolling";
   }
   function getCaptureCount() {
     return _capturesTaken;
   }
   function getVideoElapsedMs() {
-    if (!_active) return 0;
+    if (!_active2) return 0;
     return Date.now() - _startedAt - _pausedMs - (_paused ? Date.now() - _pausedAt : 0);
   }
   function getLastVideoRecording() {
@@ -20126,7 +20454,7 @@ var TraceBugModule = (() => {
     return _paused;
   }
   function pauseVideoRecording() {
-    if (!_active || _paused) return;
+    if (!_active2 || _paused) return;
     _paused = true;
     _pausedAt = Date.now();
     if (_recorder && _recorder.state === "recording") {
@@ -20137,7 +20465,7 @@ var TraceBugModule = (() => {
     }
   }
   function resumeVideoRecording() {
-    if (!_active || !_paused) return;
+    if (!_active2 || !_paused) return;
     _pausedMs += Date.now() - _pausedAt;
     _paused = false;
     _pausedAt = 0;
@@ -20165,10 +20493,13 @@ var TraceBugModule = (() => {
     });
   }
   async function startVideoRecording(options) {
-    if (_active) return false;
+    if (_active2) return false;
     if (_startInFlight) return _startInFlight;
+    const hintable = typeof document !== "undefined" && !!document.body;
+    if (hintable) showPickerHint(options == null ? void 0 : options.surfaceMode);
     _startInFlight = _startVideoRecordingInner(options).finally(() => {
       _startInFlight = null;
+      if (hintable) hidePickerHint();
     });
     return _startInFlight;
   }
@@ -20184,10 +20515,12 @@ var TraceBugModule = (() => {
       }).catch((err) => ({ ok: false, error: err && err.message || String(err) }));
       if (!result2 || !result2.ok) {
         if ((result2 == null ? void 0 : result2.error) === "cancelled") _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
-        else _onStatus == null ? void 0 : _onStatus("error", (result2 == null ? void 0 : result2.error) || "Could not start screen capture.");
+        else if ((result2 == null ? void 0 : result2.error) === "system-permission") {
+          _onStatus == null ? void 0 : _onStatus("blocked", explainCaptureFailure("system-permission"));
+        } else _onStatus == null ? void 0 : _onStatus("error", (result2 == null ? void 0 : result2.error) || "Could not start screen capture.");
         return false;
       }
-      _active = true;
+      _active2 = true;
       _startedAt = Date.now();
       _mode = requestedMode;
       _capturesTaken = 0;
@@ -20201,7 +20534,7 @@ var TraceBugModule = (() => {
     return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode });
   }
   function stopVideoRecording() {
-    if (!_active) return Promise.resolve(null);
+    if (!_active2) return Promise.resolve(null);
     if (isExtensionContext2()) {
       return rpcCall("tb:rec:stop").then((rec) => {
         const domEvents = stopDomRecording();
@@ -20220,7 +20553,7 @@ var TraceBugModule = (() => {
     return stopVideoRecordingInPage();
   }
   function captureRollingBuffer() {
-    if (!_active) return Promise.resolve(null);
+    if (!_active2) return Promise.resolve(null);
     if (isExtensionContext2()) {
       return rpcCall("tb:rec:capture").then((rec) => {
         if (!rec || rec.error) return null;
@@ -20245,7 +20578,7 @@ var TraceBugModule = (() => {
   }
   function abortVideoRecording() {
     if (isExtensionContext2()) {
-      if (_active) rpcCall("tb:rec:stop").catch(() => {
+      if (_active2) rpcCall("tb:rec:stop").catch(() => {
       });
     } else {
       if (_recorder && _recorder.state !== "inactive") {
@@ -20260,7 +20593,7 @@ var TraceBugModule = (() => {
       _chunks = [];
     }
     stopDomRecording();
-    _active = false;
+    _active2 = false;
     _comments = [];
     _capturesTaken = 0;
     _startedAt = 0;
@@ -20281,7 +20614,7 @@ var TraceBugModule = (() => {
     if (!isExtensionContext2()) return false;
     const status = await rpcCall("tb:rec:status").catch(() => null);
     if (!status || !status.active) return false;
-    _active = true;
+    _active2 = true;
     _mode = status.mode === "standard" ? "standard" : "rolling";
     _capturesTaken = status.capturesTaken || 0;
     _comments = Array.isArray(status.comments) ? status.comments.slice() : [];
@@ -20337,8 +20670,8 @@ var TraceBugModule = (() => {
     _startedWired = true;
     window.addEventListener("tracebug-rec-started", (e2) => {
       const d = e2.detail || {};
-      if (!_active) {
-        _active = true;
+      if (!_active2) {
+        _active2 = true;
         _startedAt = typeof d.startedAt === "number" ? d.startedAt : Date.now();
         _mode = d.mode === "standard" ? "standard" : "rolling";
         _mimeType = typeof d.mimeType === "string" && d.mimeType ? d.mimeType : "video/webm";
@@ -20390,6 +20723,10 @@ var TraceBugModule = (() => {
       }
       displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
     } catch (err) {
+      if (isSystemPermissionDenial(err)) {
+        _onStatus == null ? void 0 : _onStatus("blocked", explainCaptureFailure("system-permission"));
+        return false;
+      }
       const name = err instanceof Error ? err.name : "";
       if (name === "NotAllowedError" || name === "AbortError") {
         _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
@@ -20425,7 +20762,7 @@ var TraceBugModule = (() => {
     };
     displayStream.getVideoTracks().forEach((track) => {
       track.addEventListener("ended", async () => {
-        if (!_active || _stopping) return;
+        if (!_active2 || _stopping) return;
         try {
           const recording2 = await stopVideoRecording();
           _onAutoStop == null ? void 0 : _onAutoStop(recording2);
@@ -20435,7 +20772,7 @@ var TraceBugModule = (() => {
       });
     });
     _recorder.start(1e3);
-    _active = true;
+    _active2 = true;
     _paused = false;
     _pausedMs = 0;
     _pausedAt = 0;
@@ -20553,12 +20890,12 @@ var TraceBugModule = (() => {
     if (_reloadGuardsInstalled) return;
     _reloadGuardsInstalled = true;
     window.addEventListener("beforeunload", (e2) => {
-      if (!_active || isExtensionContext2()) return;
+      if (!_active2 || isExtensionContext2()) return;
       e2.preventDefault();
       e2.returnValue = "Recording in progress. Reload anyway? (Your video will be auto-saved.)";
     });
     window.addEventListener("pagehide", () => {
-      if (!_active || isExtensionContext2()) return;
+      if (!_active2 || isExtensionContext2()) return;
       if (!_recorder || _recorder.state === "inactive") return;
       try {
         _recorder.requestData();
@@ -20579,7 +20916,7 @@ var TraceBugModule = (() => {
     });
   }
   function finalizeStop(_recording2) {
-    _active = false;
+    _active2 = false;
     _stopping = false;
     _comments = [];
     _capturesTaken = 0;
@@ -20649,13 +20986,15 @@ var TraceBugModule = (() => {
       return new Blob([], { type: mime });
     }
   }
-  var _active, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
+  var _active2, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
       init_rrweb_recorder();
       init_ext_rpc();
-      _active = false;
+      init_pre_record();
+      init_capture_errors();
+      _active2 = false;
       _startedAt = 0;
       _mimeType = "";
       _mode = "rolling";
@@ -23308,29 +23647,6 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     }
   });
 
-  // src/dom-helpers.ts
-  function isTraceBugUiElement(el) {
-    var _a2;
-    let node2 = el;
-    while (node2) {
-      const h = node2;
-      const id = h.id || "";
-      if (id.startsWith("tracebug-") || id.startsWith("bt-")) return true;
-      const cn = typeof h.className === "string" ? h.className : "";
-      if (cn && TB_WIDGET_CLASSES.some((p) => cn.includes(p))) return true;
-      if ((_a2 = h.dataset) == null ? void 0 : _a2.tracebug) return true;
-      node2 = node2.parentElement;
-    }
-    return false;
-  }
-  var TB_WIDGET_CLASSES;
-  var init_dom_helpers = __esm({
-    "src/dom-helpers.ts"() {
-      "use strict";
-      TB_WIDGET_CLASSES = ["tracebug-", "tb-qb", "tb-hud", "tb-rs"];
-    }
-  });
-
   // src/ui/helpers.ts
   function tbIsolationCss(root2) {
     return `
@@ -23379,11 +23695,11 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 
   // src/element-annotate.ts
   function isElementAnnotateActive() {
-    return _active2;
+    return _active3;
   }
   function activateElementAnnotateMode(root2, onUpdate, onDeactivate) {
-    if (_active2) return;
-    _active2 = true;
+    if (_active3) return;
+    _active3 = true;
     _onUpdate = onUpdate || null;
     _onDeactivate = onDeactivate || null;
     _badgeRoot = root2;
@@ -23449,7 +23765,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     window.addEventListener("wheel", preventScroll, { passive: false, capture: true });
     window.addEventListener("touchmove", preventScroll, { passive: false, capture: true });
     const onMouseMove = (e2) => {
-      if (!_active2 || !_highlightOverlay) return;
+      if (!_active3 || !_highlightOverlay) return;
       if (_popover) return;
       const el = document.elementFromPoint(e2.clientX, e2.clientY);
       if (!el || _isOurElement(el)) {
@@ -23466,7 +23782,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       _highlightOverlay.style.height = rect.height + "px";
     };
     const onClick2 = (e2) => {
-      if (!_active2) return;
+      if (!_active3) return;
       const target = e2.target;
       if (target && _isOurElement(target)) return;
       if (_popover) {
@@ -23498,7 +23814,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       }
     };
     const onContext = (e2) => {
-      if (!_active2) return;
+      if (!_active3) return;
       if (_selectedElements.size > 0) {
         e2.preventDefault();
         const firstEntry = _selectedElements.values().next().value;
@@ -23525,7 +23841,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     document.addEventListener("keydown", onKeyDown, { capture: true });
     _cleanup = () => {
       var _a2;
-      _active2 = false;
+      _active3 = false;
       document.removeEventListener("mousemove", onMouseMove, { capture: true });
       document.removeEventListener("click", onClick2, { capture: true });
       document.removeEventListener("contextmenu", onContext, { capture: true });
@@ -23915,7 +24231,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         return "#10b981";
     }
   }
-  var _active2, _cleanup, _selectedElements, _highlightOverlay, _selectionOverlays, _popover, _modeBanner, _counter, _onUpdate, _onDeactivate, _persistentBadges, _badgeRoot, HIGHLIGHT_COLOR, SELECTION_COLOR;
+  var _active3, _cleanup, _selectedElements, _highlightOverlay, _selectionOverlays, _popover, _modeBanner, _counter, _onUpdate, _onDeactivate, _persistentBadges, _badgeRoot, HIGHLIGHT_COLOR, SELECTION_COLOR;
   var init_element_annotate = __esm({
     "src/element-annotate.ts"() {
       "use strict";
@@ -23923,7 +24239,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       init_style_evidence();
       init_dom_helpers();
       init_helpers();
-      _active2 = false;
+      _active3 = false;
       _cleanup = null;
       _selectedElements = /* @__PURE__ */ new Map();
       _highlightOverlay = null;
@@ -23942,11 +24258,11 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 
   // src/draw-mode.ts
   function isDrawModeActive() {
-    return _active3;
+    return _active4;
   }
   function activateDrawMode(root2, onUpdate, onDeactivate, options) {
-    if (_active3) return;
-    _active3 = true;
+    if (_active4) return;
+    _active4 = true;
     _onUpdate2 = onUpdate || null;
     _onDeactivate2 = onDeactivate || null;
     const ephemeralMs = (options == null ? void 0 : options.ephemeralMs) && options.ephemeralMs > 0 ? options.ephemeralMs : 0;
@@ -24067,7 +24383,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
           if (ephemerals[i2].expiresAt <= now) ephemerals.splice(i2, 1);
         }
         redrawAll();
-        if (ephemerals.length > 0 && _active3) {
+        if (ephemerals.length > 0 && _active4) {
           rafId = requestAnimationFrame(tick);
         } else {
           rafId = null;
@@ -24085,7 +24401,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     };
     const onPointerDown = (e2) => {
       var _a2, _b;
-      if (!_active3) return;
+      if (!_active4) return;
       if ((_a2 = e2.target) == null ? void 0 : _a2.closest("#tracebug-draw-toolbar")) return;
       if ((_b = e2.target) == null ? void 0 : _b.closest("[data-tracebug='draw-comment-input']")) return;
       refreshRect();
@@ -24102,7 +24418,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       }
     };
     const onPointerMove = (e2) => {
-      if (!isDrawing || !_active3) return;
+      if (!isDrawing || !_active4) return;
       if (_currentShape === "pen") {
         const batch = typeof e2.getCoalescedEvents === "function" ? e2.getCoalescedEvents() : [];
         const pts = batch.length ? batch : [e2];
@@ -24116,7 +24432,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       }
     };
     const onPointerUp = (e2) => {
-      if (!isDrawing || !_active3) return;
+      if (!isDrawing || !_active4) return;
       isDrawing = false;
       try {
         canvas.releasePointerCapture(e2.pointerId);
@@ -24239,7 +24555,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       window.addEventListener("resize", onCanvasResize);
     }
     _cleanup2 = () => {
-      _active3 = false;
+      _active4 = false;
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -24626,12 +24942,12 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     }
     return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
   }
-  var _active3, _cleanup2, _currentShape, _currentColor, _onUpdate2, _onDeactivate2, COLORS, MAX_CANVAS_DIM;
+  var _active4, _cleanup2, _currentShape, _currentColor, _onUpdate2, _onDeactivate2, COLORS, MAX_CANVAS_DIM;
   var init_draw_mode = __esm({
     "src/draw-mode.ts"() {
       "use strict";
       init_annotation_store();
-      _active3 = false;
+      _active4 = false;
       _cleanup2 = null;
       _currentShape = "rect";
       _currentColor = "#6366F1";
@@ -27966,137 +28282,6 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         note: { color: "#f59e0b", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>` },
         blur: { color: "#A1A1AA", icon: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>` }
       };
-    }
-  });
-
-  // src/ui/blur-tool.ts
-  function isBlurModeActive() {
-    return _active4;
-  }
-  function getBlurEvents() {
-    return [..._events2];
-  }
-  function removeAllBlurBoxes() {
-    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
-  }
-  function undoLastBlur() {
-    const last = _blurred[_blurred.length - 1];
-    if (last) _unblur(last);
-    return _blurred.length;
-  }
-  function _isOurNode(el) {
-    return isTraceBugUiElement(el);
-  }
-  function _findBlurred(el) {
-    return _blurred.find((b) => b.el === el);
-  }
-  function _blur(el) {
-    const prevFilter = el.style.getPropertyValue("filter");
-    const prevPriority = el.style.getPropertyPriority("filter");
-    el.style.setProperty("filter", BLUR_FILTER, "important");
-    el.classList.add("tb-mask");
-    el.setAttribute("data-tb-blurred", "1");
-    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    _blurred.push({ el, prevFilter, prevPriority, evtId });
-    _events2.push({ id: evtId, timestamp: Date.now() });
-  }
-  function _unblur(entry) {
-    const { el, prevFilter, prevPriority, evtId } = entry;
-    try {
-      if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
-      else el.style.removeProperty("filter");
-      el.classList.remove("tb-mask");
-      el.removeAttribute("data-tb-blurred");
-    } catch (e2) {
-    }
-    _blurred = _blurred.filter((b) => b !== entry);
-    const i2 = _events2.findIndex((ev) => ev.id === evtId);
-    if (i2 >= 0) _events2.splice(i2, 1);
-  }
-  function activateBlurMode(_root4, onExit) {
-    if (_active4) return;
-    _active4 = true;
-    _onExit = onExit || null;
-    const outline = document.createElement("div");
-    outline.id = OUTLINE_ID;
-    outline.setAttribute(
-      "style",
-      "position:fixed;display:none;pointer-events:none;z-index:2147483646;outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
-    );
-    document.body.appendChild(outline);
-    const hint = document.createElement("div");
-    hint.id = HINT_ID;
-    hint.setAttribute(
-      "style",
-      "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
-    );
-    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
-    document.body.appendChild(hint);
-    document.body.style.cursor = "crosshair";
-    _onMove = (e2) => {
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
-        outline.style.display = "none";
-        return;
-      }
-      const r2 = el.getBoundingClientRect();
-      outline.style.display = "block";
-      outline.style.left = r2.left + "px";
-      outline.style.top = r2.top + "px";
-      outline.style.width = r2.width + "px";
-      outline.style.height = r2.height + "px";
-    };
-    _onClick = (e2) => {
-      var _a2;
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
-      e2.preventDefault();
-      e2.stopPropagation();
-      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
-      const existing = _findBlurred(el);
-      if (existing) _unblur(existing);
-      else _blur(el);
-    };
-    _onKey = (e2) => {
-      if (e2.key === "Escape") {
-        e2.preventDefault();
-        deactivateBlurMode();
-      }
-    };
-    document.addEventListener("mousemove", _onMove, true);
-    document.addEventListener("click", _onClick, true);
-    document.addEventListener("keydown", _onKey, true);
-  }
-  function deactivateBlurMode() {
-    var _a2, _b;
-    if (!_active4) return;
-    _active4 = false;
-    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
-    if (_onClick) document.removeEventListener("click", _onClick, true);
-    if (_onKey) document.removeEventListener("keydown", _onKey, true);
-    _onMove = _onClick = _onKey = null;
-    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
-    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
-    document.body.style.cursor = "";
-    const cb = _onExit;
-    _onExit = null;
-    cb == null ? void 0 : cb();
-  }
-  var HINT_ID, OUTLINE_ID, BLUR_FILTER, _active4, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
-  var init_blur_tool = __esm({
-    "src/ui/blur-tool.ts"() {
-      "use strict";
-      init_dom_helpers();
-      HINT_ID = "tracebug-blur-hint";
-      OUTLINE_ID = "tracebug-blur-outline";
-      BLUR_FILTER = "blur(12px)";
-      _active4 = false;
-      _onExit = null;
-      _events2 = [];
-      _blurred = [];
-      _onMove = null;
-      _onClick = null;
-      _onKey = null;
     }
   });
 
@@ -33394,7 +33579,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       surfaceMode: choice.surface,
       withMicrophone: choice.withMicrophone,
       onStatus: (status, message) => {
-        if (status === "error" && message) {
+        if (status === "blocked" && message) {
+          showCaptureBlockedNotice(message, root2, () => {
+            if (_trackBtn) void _toggleSessionTracking(root2, _trackBtn, showToast3);
+          });
+        } else if (status === "error" && message) {
           const internal = /extension context|rpc timeout|receiving end|establish connection/i.test(message);
           console.warn("[TraceBug] recording error:", message);
           showToast3(internal ? "Couldn't start the recording \u2014 reload this tab and try again" : `Recording error: ${message}`, root2);
@@ -71209,6 +71398,7 @@ First element: \`${exampleSnippet}\``,
   init_video_recorder();
   init_recording_hud();
   init_rrweb_recorder();
+  init_toast();
   init_dev_api();
   init_scanner();
   init_element_annotate();
@@ -71387,110 +71577,8 @@ ${summary}`;
     }, 1400);
   }
 
-  // src/ui/pre-record.ts
-  init_blur_tool();
-  var COUNTDOWN_ID = "tracebug-record-countdown";
-  var ARM_BAR_ID = "tracebug-record-armbar";
-  function runRecordCountdown(seconds) {
-    const total = Math.max(1, Math.min(10, Math.round(seconds)));
-    return new Promise((resolve) => {
-      var _a2;
-      (_a2 = document.getElementById(COUNTDOWN_ID)) == null ? void 0 : _a2.remove();
-      const overlay = document.createElement("div");
-      overlay.id = COUNTDOWN_ID;
-      overlay.setAttribute(
-        "style",
-        "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
-      );
-      const num = document.createElement("div");
-      num.setAttribute(
-        "style",
-        "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);transition:transform 0.25s ease, opacity 0.25s ease;"
-      );
-      const hint = document.createElement("div");
-      hint.textContent = "Press Esc to cancel";
-      hint.setAttribute("style", "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
-      overlay.appendChild(num);
-      overlay.appendChild(hint);
-      document.body.appendChild(overlay);
-      let cancelled = false;
-      let timer;
-      const finish = (completed) => {
-        document.removeEventListener("keydown", onKey2, true);
-        overlay.remove();
-        resolve(completed);
-      };
-      const onKey2 = (e2) => {
-        if (e2.key !== "Escape") return;
-        e2.preventDefault();
-        e2.stopPropagation();
-        cancelled = true;
-        clearTimeout(timer);
-        finish(false);
-      };
-      document.addEventListener("keydown", onKey2, true);
-      let n2 = total;
-      const tick = () => {
-        if (cancelled) return;
-        if (n2 <= 0) {
-          finish(true);
-          return;
-        }
-        num.textContent = String(n2);
-        num.style.transform = "scale(1.25)";
-        num.style.opacity = "1";
-        setTimeout(() => {
-          num.style.transform = "scale(1)";
-          num.style.opacity = "0.75";
-        }, 200);
-        n2--;
-        timer = setTimeout(tick, 1e3);
-      };
-      tick();
-    });
-  }
-  function startBlurThenRecord(opts) {
-    var _a2;
-    (_a2 = document.getElementById(ARM_BAR_ID)) == null ? void 0 : _a2.remove();
-    const root2 = document.getElementById("tracebug-root") || document.body;
-    activateBlurMode(root2);
-    const bar = document.createElement("div");
-    bar.id = ARM_BAR_ID;
-    bar.setAttribute(
-      "style",
-      "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
-    );
-    bar.innerHTML = `
-    <span>\u{1FAE5} Click elements to blur/unblur \u2014 the blur is captured into the recording</span>
-    <button data-tb-arm="undo" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Undo</button>
-    <button data-tb-arm="start" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:7px 16px;font:600 13px inherit;cursor:pointer">\u25CF Start recording</button>
-    <button data-tb-arm="cancel" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Cancel</button>
-  `;
-    document.body.appendChild(bar);
-    bar.querySelector('[data-tb-arm="undo"]').addEventListener("click", () => {
-      undoLastBlur();
-    });
-    const cleanup = () => {
-      bar.remove();
-      if (isBlurModeActive()) {
-        try {
-          deactivateBlurMode();
-        } catch (e2) {
-        }
-      }
-    };
-    bar.querySelector('[data-tb-arm="start"]').addEventListener("click", () => {
-      cleanup();
-      opts.onStart();
-    });
-    bar.querySelector('[data-tb-arm="cancel"]').addEventListener("click", () => {
-      cleanup();
-      removeAllBlurBoxes();
-      if (opts.onCancel) opts.onCancel();
-    });
-  }
-
   // src/index.ts
+  init_pre_record();
   init_annotation_store();
   init_theme();
 
@@ -71567,6 +71655,7 @@ ${summary}`;
   init_html_replay();
   init_playwright_test();
   init_style_evidence();
+  init_pre_record();
   init_blur_tool();
   init_llm_client();
   init_tracker_client();
@@ -72259,6 +72348,21 @@ ${summary}`;
         console.warn("[TraceBug] Failed to open the ticket after an events capture:", err);
       }
     }
+    /**
+     * The OS refused screen capture. Show the instruction, and offer the capture
+     * the user was actually after — events only. Needs the dashboard root; with
+     * no root there is nowhere to render, so the console is the last resort.
+     */
+    _reportCaptureBlocked(message) {
+      const root2 = document.getElementById("tracebug-root");
+      if (!root2) {
+        console.warn("[TraceBug] " + message);
+        return;
+      }
+      showCaptureBlockedNotice(message, root2, () => {
+        void this.startEventsCapture();
+      });
+    }
     async startVideoRecording(options) {
       var _a2;
       try {
@@ -72269,17 +72373,29 @@ ${summary}`;
         this._startActiveSession();
       } catch (e2) {
       }
+      let blockedMessage = null;
       const ok = await startVideoRecording({
         mode: (_a2 = options == null ? void 0 : options.mode) != null ? _a2 : "rolling",
         surfaceMode: options == null ? void 0 : options.surfaceMode,
         withMicrophone: options == null ? void 0 : options.withMicrophone,
-        onStatus: options == null ? void 0 : options.onStatus
+        // The popup's Capture Bug reaches here through prepareRecording(), which
+        // passes NO onStatus — so until Phase 4 a recording the operating system
+        // refused failed completely silently on that path: no picker, no toast,
+        // no capture, nothing in the UI at all. Capture the message here and
+        // surface it below once the session has been cleaned up, while still
+        // letting an explicit caller (the toolbar) handle its own reporting.
+        onStatus: (status, message) => {
+          var _a3;
+          if (status === "blocked" && message) blockedMessage = message;
+          (_a3 = options == null ? void 0 : options.onStatus) == null ? void 0 : _a3.call(options, status, message);
+        }
       });
       if (!ok) {
         try {
           this._endActiveSession();
         } catch (e2) {
         }
+        if (blockedMessage && !(options == null ? void 0 : options.onStatus)) this._reportCaptureBlocked(blockedMessage);
         return false;
       }
       const root2 = document.getElementById("tracebug-root");

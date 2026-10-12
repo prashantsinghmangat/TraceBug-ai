@@ -143,6 +143,13 @@ try {
     "the SDK does not think it is recording video",
     (await page.evaluate(() => !!window.TraceBugSDK && window.TraceBugSDK.isVideoRecording() === false)),
   );
+  // The "your browser will ask what to share" line belongs to the video path
+  // only. If it shows up here it is telling the user about a dialog that is
+  // never going to open.
+  check(
+    "no share-dialog hint was shown",
+    (await page.evaluate(() => !document.getElementById("tracebug-picker-hint"))),
+  );
 
   // The HUD is the only Stop control the user has once the popup closes.
   const hud = await page.evaluate(() => {

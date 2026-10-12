@@ -8,6 +8,57 @@ import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBo
 
 const COUNTDOWN_ID = "tracebug-record-countdown";
 const ARM_BAR_ID = "tracebug-record-armbar";
+const PICKER_HINT_ID = "tracebug-picker-hint";
+
+/**
+ * One line, shown in the instant before the browser's "Choose what to share"
+ * dialog opens.
+ *
+ * Why it needs to exist: the dialog is the browser's, not ours, and it offers
+ * three surfaces with no indication of which one a bug report wants. A tester
+ * who picks "Entire screen" gets a recording of their desktop — including
+ * whatever else is on it — and a tester who picks the wrong tab gets a
+ * recording of the wrong page. Neither is recoverable after the fact.
+ *
+ * The copy differs by mode because the dialog itself does: with "Current tab"
+ * chosen in Record options we pass `preferCurrentTab`, which collapses it to a
+ * one-click confirm, so telling that user to "pick this tab from the list"
+ * would describe a list they are not looking at.
+ *
+ * Mounted on document.body with inline !important styles, like the HUD: a host
+ * page's CSS must not be able to hide or restyle it.
+ */
+export function showPickerHint(surfaceMode?: "tab" | "desktop"): void {
+  try {
+    hidePickerHint();
+    const el = document.createElement("div");
+    el.id = PICKER_HINT_ID;
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.setAttribute(
+      "style",
+      "position:fixed!important;top:18px!important;left:50%!important;transform:translateX(-50%)!important;" +
+        "z-index:2147483647!important;max-width:min(560px,calc(100vw - 32px))!important;" +
+        "background:#1b1d24!important;color:#e9eaee!important;border:1px solid rgba(255,255,255,0.08)!important;" +
+        "border-radius:12px!important;padding:11px 16px!important;box-sizing:border-box!important;" +
+        "font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif!important;font-size:13px!important;" +
+        "font-weight:500!important;line-height:1.45!important;text-align:center!important;" +
+        "box-shadow:0 12px 40px rgba(0,0,0,0.55)!important;pointer-events:none!important;"
+    );
+    // textContent, never innerHTML — nothing here is user data, but this
+    // mounts into a hostile page and the habit is the point.
+    el.textContent =
+      surfaceMode === "tab"
+        ? "Your browser will ask what to share. It's already set to this tab — choose Share."
+        : "Your browser will ask what to share. Pick this tab, unless you need a window or the whole screen.";
+    document.body.appendChild(el);
+  } catch {}
+}
+
+/** Remove the picker hint. Safe to call when none is showing. */
+export function hidePickerHint(): void {
+  try { document.getElementById(PICKER_HINT_ID)?.remove(); } catch {}
+}
 
 /** Fullscreen 3-2-1 countdown. Resolves `true` at zero, `false` if the user
  *  cancels with Esc. The countdown exists for privacy prep ("wrong tab",

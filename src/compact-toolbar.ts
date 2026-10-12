@@ -11,7 +11,7 @@ import { getAllSessions, deleteSession, getActiveSessionId, getActiveCaptureMode
 import { buildReport } from "./report-builder";
 import { generateBugTitle } from "./title-generator";
 import { exportSessionAsHtml } from "./exporters/html-replay";
-import { showToast as toast, showActionToast } from "./ui/toast";
+import { showToast as toast, showActionToast, showCaptureBlockedNotice } from "./ui/toast";
 import type { StoredSession } from "./types";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
@@ -575,7 +575,17 @@ async function _toggleRecording(
     surfaceMode: choice.surface,
     withMicrophone: choice.withMicrophone,
     onStatus: (status, message) => {
-      if (status === "error" && message) {
+      if (status === "blocked" && message) {
+        // The OS refused — a 2.5s toast prefixed "Recording error:" is the
+        // wrong shape for a four-step instruction, and the fix is not in the
+        // browser at all. Show it as an actionable notice whose button is the
+        // thing the user actually wanted: a capture, just without the video —
+        // which on the toolbar is exactly what the ■ track button already does.
+        showCaptureBlockedNotice(message, root, () => {
+          if (_trackBtn) void _toggleSessionTracking(root, _trackBtn, showToast);
+        });
+      }
+      else if (status === "error" && message) {
         // Internal transport errors ("Extension context invalidated",
         // "RPC timeout: tb:rec:start", "Receiving end does not exist") mean
         // nothing to a tester — translate to the one recovery that fixes all

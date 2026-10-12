@@ -58,6 +58,28 @@ function waitForShareGesture() {
   });
 }
 
+/**
+ * Did the OPERATING SYSTEM refuse screen capture, rather than the user closing
+ * the picker? On macOS, a browser without Screen Recording in System Settings
+ * gets a NotAllowedError — the same error name as a user cancel — and the only
+ * thing separating them is the message. Chrome says "Permission denied by
+ * system"; Firefox's wording differs, so match the idea rather than one string.
+ *
+ * Intentionally a small local copy: the canonical version (with the sentence
+ * the user reads) is `isSystemPermissionDenial` in src/capture-errors.ts, but
+ * this file is a plain extension page that cannot import SDK modules, and
+ * standing up a tsup entry to share one predicate costs more than it saves.
+ * If this check changes, change both — the test in tests/capture-errors.test.ts
+ * runs THIS file's copy too, so a drift fails there.
+ */
+function isSystemPermissionDenial(err) {
+  if (!err) return false;
+  const name = err.name || "";
+  const msg = String(err.message || "");
+  if (name !== "NotAllowedError" && name !== "NotFoundError") return false;
+  return /\bby system\b|system permission|not permitted by system|screen recording/i.test(msg);
+}
+
 let _recorder = null;
 let _stream = null;
 let _chunks = [];
@@ -284,11 +306,18 @@ async function _startRecordingImpl(options) {
   if (typeof navigator === "undefined" || !navigator.mediaDevices) {
     return { ok: false, error: "MediaDevices not supported in this browser." };
   }
-  // Always use getDisplayMedia. Chrome's native "Choose what to share"
-  // picker appears so the user can record a tab, a window, or the whole
-  // screen. We deliberately DON'T pass preferCurrentTab — that hint
-  // collapses the picker to a single "Current tab" confirm step, which
-  // skips the tab/window/screen choice the user actually wants.
+  // Always use getDisplayMedia. Chrome's native "Choose what to share" picker
+  // appears so the user can record a tab, a window, or the whole screen.
+  //
+  // preferCurrentTab is passed ONLY when the user picked "Current tab" in the
+  // popup's Record options. It collapses the picker to a one-click "Current
+  // tab" confirm, which is wrong as a blanket default (it hides the
+  // tab/window/screen choice) and right when the user has already made that
+  // choice. Until Phase 4 it was never passed at all, so the dropdown was a
+  // no-op in the extension — the popup persisted surfaceMode, background.js
+  // and content-script.js forwarded it, and nothing here read it. The SDK path
+  // (src/video-recorder.ts) had honoured it all along, so the two transports
+  // also disagreed. docs/chrome-extension.md described the SDK's behaviour.
   //
   // surfaceSwitching: "include" lets Chrome keep the recording alive when
   // the captured tab navigates (e.g., link click, reload) instead of
@@ -306,14 +335,28 @@ async function _startRecordingImpl(options) {
   }
   let displayStream;
   try {
-    displayStream = await navigator.mediaDevices.getDisplayMedia({
+    const constraints = {
       video: { frameRate: { ideal: 30, max: 60 } },
       audio: true,
       surfaceSwitching: "include",
       selfBrowserSurface: "exclude",
-    });
+    };
+    // Mirrors src/video-recorder.ts's in-page path, so both transports now
+    // behave the same way for the same choice.
+    if (options?.surfaceMode === "tab") constraints.preferCurrentTab = true;
+    displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
   } catch (err) {
     setHostPanel("idle");
+    // A macOS Screen-Recording denial arrives as NotAllowedError — the same
+    // name as "the user closed the picker". Collapsing both into "cancelled"
+    // is how a blocked browser came to look like a change of mind, with no
+    // hint that the fix is in System Settings. Chrome distinguishes them in
+    // the MESSAGE ("Permission denied by system"), so branch on that. Not on
+    // the platform or the user agent: the error is the signal, and macOS is
+    // the only OS that gates screen capture this way.
+    if (isSystemPermissionDenial(err)) {
+      return { ok: false, error: "system-permission" };
+    }
     if (err && (err.name === "NotAllowedError" || err.name === "AbortError")) {
       return { ok: false, error: "cancelled" };
     }

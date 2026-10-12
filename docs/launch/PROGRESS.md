@@ -271,3 +271,47 @@ Newest entry at the bottom.
   uses repo-relative paths; the five older harnesses still hardcode `D:/Project/TraceBug-ai` (Phase
   8). (4) Steps B-D of Phase 4 still pending; the welcome page and "What's new" card are blocked on
   `docs/launch/screens.md` + the Stitch designs, which are not in the repo.
+
+## Phase 4, Step B - the share dialog explained, and macOS answered (2026-10-12)
+- **`surfaceMode` was a dead setting in the extension.** The popup persisted it, `background.js` and
+  `content-script.js` forwarded it, the `tb:rec:start` RPC carried it - and `offscreen.js` never read
+  it (grep: zero hits). Only `src/video-recorder.ts`'s in-page path honoured it, so the two
+  transports disagreed and `docs/chrome-extension.md:66` described the SDK's behaviour as the
+  extension's. `preferCurrentTab` is now passed when the user chose "Current tab", matching the SDK.
+- **A macOS Screen-Recording denial read as a user cancel.** `getDisplayMedia` raises
+  `NotAllowedError` for both, and `offscreen.js` collapsed every `NotAllowedError` into
+  `"cancelled"` - so a blocked browser produced "Recording cancelled" and nothing pointing at System
+  Settings. New `src/capture-errors.ts` branches on the MESSAGE ("Permission denied by system"), not
+  on the platform or the user agent: macOS is the only OS with this gate, so the error identifies the
+  situation and UA-sniffing would only add a worse guess on top of a good one. A new `"blocked"`
+  status (distinct from `"error"`) carries it, so the union makes TypeScript point at any caller that
+  forgets, and the notice is sticky with a **Capture without video** button rather than a 2.5s toast
+  - a four-step instruction ending in "restart your browser" cannot be on a timer. **Found while
+  wiring it:** the popup's capture path passes no `onStatus` at all, so this failure was previously
+  *completely silent* there - no dialog, no capture, no message.
+- **The picker line** lives in `src/ui/pre-record.ts` (the module that already owns the moment before
+  a recording) and is called from `video-recorder.startVideoRecording` - the one function every
+  transport and every caller funnels through - and cleared in its `finally`, which covers started,
+  cancelled and failed alike. Copy branches on the mode because the dialog does: with
+  `preferCurrentTab` there is no list to "pick this tab" from.
+- Files: new `src/capture-errors.ts`, `tests/{capture-errors,picker-hint,offscreen-capture}.test.ts`;
+  edited `src/{video-recorder,index,compact-toolbar}.ts`, `src/ui/{pre-record,toast}.ts`,
+  `tracebug-extension/offscreen.js`, `e2e/ext-events-capture.e2e.mjs`,
+  `docs/{quickstart.md,chrome-extension.md}`, `CHANGELOG.md`. `showActionToast` gained an optional
+  `autoDismissMs` (`null` = until dismissed); its 8s default is unchanged for existing callers.
+- Verified: typecheck + lint clean; `npm test` **37 files / 618 passing** (was 35/590: +18
+  capture-errors, +10 picker-hint, +8 offscreen-capture). `build` + `build:ext` OK; `ext:lint` 0
+  errors / **69** warnings, distribution unchanged again; `ext:firefox` installs.
+  `ext-events-capture` **22/22** (+1: no picker hint on the events path). `ext-provider-confirm`,
+  `ext-secret-migration` 26/26 and `ext-redaction` all still green.
+- Notable test choices: `tests/offscreen-capture.test.ts` runs the REAL `offscreen.js` in a
+  `node:vm` with a fake `navigator.mediaDevices` and asserts the constraints it passes - an offscreen
+  document is not a Playwright page, so no real browser can see them. `tests/capture-errors.test.ts`
+  pulls the local `isSystemPermissionDenial` copy out of `offscreen.js` and runs it against the same
+  cases as the SDK's, so the duplicated predicate (the file cannot import SDK modules) cannot drift
+  silently.
+- Open issues: (1) **the macOS block itself is still unverifiable here** - it needs a real Mac with
+  the permission off; what is tested is that the error string maps correctly, in both copies.
+  (2) Whether **Firefox** honours `preferCurrentTab` and what its OS-denial message says are both
+  manual rows. (3) The in-page (npm SDK) path's system-denial branch has unit coverage of the
+  predicate but no browser test, same reason as (1).

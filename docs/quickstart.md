@@ -12,7 +12,9 @@ matches you.
    [Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj)
    (works in Chrome, Edge, Brave, Opera).
 2. Open the site with the bug and click the **TraceBug** icon → **Capture Bug**
-   (or press the shortcut shown in the popup — default `Alt+B`). Pick **"this tab"** (not the entire screen) in Chrome's share picker — it captures just the site.
+   (or press the shortcut shown in the popup — default `Alt+B`). Nothing asks to
+   share your screen: TraceBug records the console, network, your clicks and an
+   interactive replay of the page.
 3. **Reproduce the bug** — click, type, navigate as you normally would. TraceBug
    records the DOM, console, network, and clicks. Clicking a link to another page
    keeps recording.
@@ -23,6 +25,13 @@ matches you.
 
 > Pasting into an AI chat instead? Use **More ▾ → Export for AI (.html)** — a tiny
 > text-only report that fits in a chat context.
+
+> **Want a screen recording too?** Turn on **Record video too** in **⚙ Record
+> options** — TraceBug remembers it. Your browser then asks what to share: with
+> **Capture: Current tab** it's already set to the tab you're on, and with
+> **Desktop / window** you pick from the list. On macOS this needs your browser
+> enabled under **System Settings → Privacy & Security → Screen Recording**, then
+> quit and reopened.
 
 ---
 
