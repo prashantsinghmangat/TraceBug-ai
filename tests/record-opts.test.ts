@@ -104,6 +104,8 @@ describe('the worker seeds the video default, differently per reason', () => {
   });
 
   it('still opens the welcome page on install, and only on install', async () => {
+    // The URL is asserted in tests/first-run.test.ts; counting tabs here is
+    // about the seed not disturbing the first-run tab, in either direction.
     await install(mock, 'install');
     expect(mock.createdTabs).toHaveLength(1);
     await install(mock, 'update');

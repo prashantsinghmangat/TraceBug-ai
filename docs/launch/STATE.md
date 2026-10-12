@@ -10,19 +10,25 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
 - **Done:** Phase 0 (investigate), 1 (optional `<all_urls>`, no install warning), 2a+2b (secrets and
   provider calls out of the host page, per-send confirmation), 3 (restricted pages, orphan re-inject,
   deferred updates, real `Alt+B` command), 4 Steps A+B (events-only default capture, picker hint,
-  macOS denial) and the two Step-B additions (video pref in `chrome.storage.local`, replay heading
-  names its page).
-- **Next: Phase 4 Steps C & D**, then Phases 5–9 in `PLAN.md`. Phase 8 needs rescoping — see gotchas.
+  macOS denial), the two Step-B additions (video pref in `chrome.storage.local`, replay heading names
+  its page), **Step C** (bundled `welcome.html`; first run no longer needs the network) and **Step D**
+  (per-version "What's new" card in the popup, no tab stolen on update).
+- **Next: Phase 4 Step E**, then F, then Phases 5–9 in `PLAN.md`. Phase 8 needs rescoping — see gotchas.
 
 ## Phase 4, what is left
 
-- **Step C — bundled welcome page.** `onInstalled` (`background.js`) still opens the REMOTE
-  `https://tracebug.dev/try.html?welcome=extension`, so first run needs the network. Build
-  `tracebug-extension/welcome.html` (no remote assets; add to `SHARED_FILES` in `build/build-ext.mjs`),
-  keep the remote page as a link from it. Content list is in `PLAN.md` Phase 4. Design to follow:
-  `docs/launch/designs/tracebug_welcome_quickstart_page/`.
-- **Step D — "What's new" card** in the popup on `reason === "update"` (no tab opened). Copy is in
-  `docs/launch/screens.md` screen 4. Dismissed state in `chrome.storage.local`.
+- **Step D is done.** `background.js` writes the landed version to `tb_whats_new`; `popup.js` holds the
+  copy in a per-version `WHATS_NEW` table and shows the card only when that version has an entry.
+  **The card is invisible until the version bump**: the table is keyed `1.11.0` and the manifest still
+  says `1.10.1`, so an update today flags `1.10.1`, finds no copy and shows nothing. Adding a release
+  means adding a `WHATS_NEW` entry - there is nothing else to wire.
+- **Step E** — popup states styled to match `screens.md` screen 3; the uninstall page at
+  `website/app/bye` with its thank-you state; `runtime.setUninstallURL`.
+- **Step F** — the review card (`screens.md` screen 5) and the exported-report footer (Phase 5's
+  first two items).
+- `welcome.html` / `welcome.js` are done and in `SHARED_FILES`. The **"Rolling this out to a team?"
+  card is deliberately absent** — `tracebug.dev/teams` does not exist and the page must not ship a
+  404. `welcome.js` has an empty `TEAM_GUIDE_URL`; set it and the card builds itself.
 - The shortcut must be described as **`Alt+B`**, read from `chrome.commands` at runtime — never hardcoded.
   `Ctrl+Shift+B` is a page-level handler that only works once TraceBug is on the tab.
 - **Bump the version to 1.11.0** in `package.json` and `tracebug-extension/manifest.json`, then run
@@ -34,6 +40,10 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
 ## Open human checks (cannot be automated here)
 
 - `docs/RELEASE_CHECKLIST.md` — three Record-options upgrade rows (the popup migration has no browser test).
+- **The welcome page has never been rendered.** Its tests assert the source, not the layout: install on
+  a clean profile and look at it, on Chrome and Firefox. Step 3 must show a real key or the empty state.
+- **Firefox and `about:addons`:** `welcome.js` falls back to text steps if `tabs.create` refuses it.
+  Which branch Firefox takes is unverified.
 - The **macOS Screen-Recording denial** needs a real Mac with the permission off. Only the error-string
   mapping is tested.
 - Whether **Firefox** honours `preferCurrentTab`, and what its OS-denial message says.

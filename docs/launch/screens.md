@@ -70,11 +70,12 @@ Button (primary): "Open the bug playground"
 
 Step 3 — Title: "Your capture shortcut"
 Help: "Start a capture on any page without opening the popup."
-Show a kbd group: "{{shortcut}}" (render it as three keys: Ctrl, Shift, B), then a text link "Change shortcut".
+Show a kbd group rendering whatever "{{shortcut}}" actually is - the page splits the browser's own string on "+" and draws one key cap per part - then a text link "Change shortcut". DO NOT draw a fixed key combination here. Phase 3 made capture a real browser command whose default is Alt+B, the user can rebind or clear it, and Ctrl+Shift+B is a different, page-level handler that does nothing until TraceBug is already running on the tab. A fixed three-key Ctrl/Shift/B group would teach a keystroke that captures nothing.
 Also design the EMPTY state of this card as a second variant: instead of keys, the text "No shortcut set" and a secondary button "Set a shortcut".
 
 PRIVACY BOX (info box, 24px below the steps):
 - Title with a shield line icon: "What TraceBug sees"
+- Three small pill chips in a row directly under the title, each with a 12px check icon: "No account", "No upload", "No telemetry". Muted text, indigo check, 1px border, fully rounded.
 - Two short paragraphs:
   "Only the tab you're capturing, only after you press Capture: clicks, console errors, network requests and a replay of the page. Passwords and tokens are masked as they're captured."
   "Nothing goes to TraceBug. Reports stay on your computer until you share them, and you choose what goes to GitHub, Linear, Slack or your AI provider."
@@ -82,6 +83,9 @@ PRIVACY BOX (info box, 24px below the steps):
 TWO SMALL SECONDARY CARDS side by side (equal width, 12px gap):
 - "Using an AI coding agent?" + line "Let Claude Code or Cursor read your reports locally." + a code chip "npx tracebug mcp"
 - "Rolling this out to a team?" + line "Setup tips for QA leads." + text link "Team setup guide →"
+  NOT SHIPPED YET: tracebug.dev/teams does not exist, and the welcome page must never link to a 404.
+  welcome.js holds a TEAM_GUIDE_URL constant, empty, and builds this card only when it is set. Until
+  then the MCP card stands alone. Design the single-card state too.
 
 FOOTER (muted, 13px, centered, 48px below): "Free and open source (MIT)" · "GitHub" · "Send feedback"
 

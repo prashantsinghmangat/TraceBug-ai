@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to TraceBug</title>
+  <!--
+    Opened once, by background.js, on runtime.onInstalled with reason
+    "install". Bundled rather than remote (it used to be
+    tracebug.dev/try.html?welcome=extension) so first run does not depend on
+    the network — see docs/adr and docs/launch/PLAN.md Phase 4.
+
+    No remote assets of any kind: the palette duplicates styles.css rather than
+    linking it, because that file is written for a 340px popup and sets
+    `body { width: 340px }`. Inline <style> matches options.html and
+    confirm-send.html; the CSP (script-src 'self') forbids inline SCRIPT only,
+    hence welcome.js alongside.
+  -->
+  <style>
+    :root {
+      --bg: #ffffff; --bg-2: #FAFAFA; --bg-3: #F4F4F5;
+      --text: #111113; --text-2: #52525B; --text-3: #82828C;
+      --border: #E4E4E7;
+      --accent: #4F46E5; --accent-2: #4338CA; --accent-soft: rgba(79, 70, 229, 0.10);
+      --shadow: 0 4px 20px rgba(16, 24, 40, 0.10);
+      --radius-sm: 10px; --radius-md: 12px; --radius-lg: 16px;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0B0B10; --bg-2: #16161D; --bg-3: #1E1E26;
+        --text: #FAFAFA; --text-2: #A1A1AA; --text-3: #71717A;
+        --border: #26262E;
+        --accent: #6366F1; --accent-2: #818CF8; --accent-soft: rgba(99, 102, 241, 0.14);
+        --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+    body { font-size: 15px; line-height: 1.55; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+    .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 64px; }
+
+    /* ── Top bar ───────────────────────────────────────── */
+    .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 48px; }
+    .top-logo { display: flex; align-items: center; gap: 9px; }
+    .top-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
+    .top-ver { font-size: 13px; color: var(--text-3); }
+
+    /* ── Hero ──────────────────────────────────────────── */
+    h1 { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; font-weight: 700; margin: 0 0 10px; }
+    .hero-sub { color: var(--text-2); margin: 0 0 28px; font-size: 16px; }
+
+    /* ── Step cards ────────────────────────────────────── */
+    .steps { display: flex; flex-direction: column; gap: 12px; }
+    .step {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 18px 20px;
+    }
+    .step-n {
+      flex: 0 0 26px; height: 26px; border-radius: 50%;
+      background: var(--accent-soft); color: var(--accent);
+      font-size: 13px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 1px;
+    }
+    .step-body { flex: 1 1 auto; min-width: 0; }
+    .step-t { font-weight: 620; font-size: 15px; margin-bottom: 3px; }
+    .step-h { color: var(--text-2); font-size: 14px; margin: 0; }
+    .step-aside { flex: 0 0 auto; }
+    .btn {
+      display: inline-block; margin-top: 12px;
+      background: var(--accent); color: #fff;
+      border: 0; border-radius: var(--radius-sm);
+      padding: 9px 16px; font-size: 14px; font-weight: 600;
+    }
+    .btn:hover { background: var(--accent-2); text-decoration: none; }
+    .btn-sec {
+      display: inline-block; margin-top: 12px;
+      background: var(--bg-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 8px 14px; font-size: 14px; font-weight: 600;
+    }
+    .btn-sec:hover { background: var(--bg-3); text-decoration: none; }
+
+    /* Keyboard shortcut chips. */
+    .keys { display: flex; align-items: center; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+    kbd {
+      font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-bottom-width: 2px; border-radius: 6px;
+      padding: 3px 8px; color: var(--text);
+    }
+    .keys-plus { color: var(--text-3); font-size: 13px; }
+    .keys-link { font-size: 13px; margin-left: 4px; }
+    .keys-none { font-size: 14px; color: var(--text-2); }
+
+    /* ── Privacy box ───────────────────────────────────── */
+    .privacy {
+      margin-top: 24px; background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
+      padding: 18px 20px;
+    }
+    .privacy-h { display: flex; align-items: center; gap: 8px; font-weight: 620; margin-bottom: 10px; }
+    .privacy p { color: var(--text-2); font-size: 14px; margin: 0 0 10px; }
+    .privacy p:last-of-type { margin-bottom: 0; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 999px; padding: 4px 11px;
+      font-size: 12.5px; font-weight: 600; color: var(--text-2);
+    }
+    .chip svg { color: var(--accent); flex: 0 0 auto; }
+
+    /* ── Secondary cards ───────────────────────────────── */
+    .cards { display: flex; gap: 12px; margin-top: 12px; }
+    .card {
+      flex: 1 1 0; min-width: 0;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 18px;
+    }
+    .card-t { font-weight: 620; font-size: 14px; margin-bottom: 3px; }
+    .card-l { color: var(--text-2); font-size: 13.5px; margin: 0 0 10px; }
+    code.chip-code {
+      display: inline-block; font-family: var(--mono); font-size: 12.5px;
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 9px; color: var(--text);
+    }
+
+    /* ── Footer ────────────────────────────────────────── */
+    footer { margin-top: 48px; text-align: center; font-size: 13px; color: var(--text-3); }
+    footer a { color: var(--text-3); }
+    .dot { margin: 0 8px; opacity: 0.5; }
+
+    @media (max-width: 620px) {
+      .cards { flex-direction: column; }
+      .step { flex-wrap: wrap; }
+      .step-aside { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="top">
+      <div class="top-logo">
+        <svg width="24" height="24" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="w-grad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#818CF8"/>
+              <stop offset="100%" stop-color="#4F46E5"/>
+            </linearGradient>
+          </defs>
+          <rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/>
+          <path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="52" y="41" width="14" height="14" rx="4" fill="url(#w-grad)"/>
+        </svg>
+        <span class="top-name">TraceBug</span>
+      </div>
+      <!-- Filled from chrome.runtime.getManifest() — never hardcoded. -->
+      <span class="top-ver" id="version"></span>
+    </div>
+
+    <h1>You're set up. Let's catch your first bug.</h1>
+    <p class="hero-sub">Three steps, about a minute. Nothing is recorded until you start a capture.</p>
+
+    <div class="steps">
+
+      <!-- 1 ── Pin ───────────────────────────────────────── -->
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-body">
+          <div class="step-t">Pin TraceBug to your toolbar</div>
+          <p class="step-h">Click the puzzle-piece icon next to the address bar, then the pin next to TraceBug.</p>
+        </div>
+        <div class="step-aside" aria-hidden="true">
+          <!-- Puzzle piece → pin, line icons, 1.5px stroke. -->
+          <svg width="112" height="34" viewBox="0 0 112 34" fill="none" stroke="currentColor"
+               stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-3)">
+            <rect x="1" y="4" width="26" height="26" rx="7"/>
+            <path d="M11 12h3a2 2 0 1 1 4 0h3v3a2 2 0 1 0 0 4v3h-3a2 2 0 1 0-4 0h-3v-10z"/>
+            <path d="M34 17h14" /><path d="M45 14l3 3-3 3"/>
+            <rect x="54" y="4" width="26" height="26" rx="7" style="color: var(--accent)" stroke="currentColor"/>
+            <g style="color: var(--accent)" stroke="currentColor">
+              <path d="M67 11v7"/><path d="M63 18h8l-4 5-4-5z"/>
+            </g>
+            <rect x="86" y="7" width="20" height="20" rx="6" fill="#0B0B10" stroke="none"/>
+            <path d="M92 13l3.5 3.5L92 20" stroke="#EAECF3" stroke-width="1.8"/>
+            <rect x="97" y="16" width="4" height="4" rx="1.2" fill="#6366F1" stroke="none"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 2 ── Playground ────────────────────────────────── -->
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-body">
+          <div class="step-t">Try it on a page with real bugs</div>
+          <p class="step-h">Our playground has a broken checkout on purpose. Click the TraceBug icon, then Capture Bug.</p>
+          <!-- href set by welcome.js so the UTM tag lives in one place. -->
+          <a class="btn" id="playground" href="#" target="_blank" rel="noopener noreferrer">Open the bug playground</a>
+        </div>
+      </div>
+
+      <!-- 3 ── Shortcut ──────────────────────────────────── -->
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-body">
+          <div class="step-t">Your capture shortcut</div>
+          <p class="step-h">Start a capture on any page without opening the popup.</p>
+          <!-- Both states live here; welcome.js shows one. Never hardcode a key:
+               Phase 3 made this a real browser command (default Alt+B) and the
+               user can rebind or clear it. -->
+          <div class="keys" id="keysBound" style="display:none"></div>
+          <div id="keysNone" style="display:none">
+            <div class="keys-none">No shortcut set</div>
+            <a class="btn-sec" id="setShortcut" href="#">Set a shortcut</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Privacy ─────────────────────────────────────────── -->
+    <div class="privacy">
+      <div class="privacy-h">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        What TraceBug sees
+      </div>
+      <div class="chips">
+        <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No account</span>
+        <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No upload</span>
+        <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No telemetry</span>
+      </div>
+      <p>Only the tab you're capturing, only after you press Capture: clicks, console errors, network requests and a replay of the page. Passwords and tokens are masked as they're captured.</p>
+      <p>Nothing goes to TraceBug. Reports stay on your computer until you share them, and you choose what goes to GitHub, Linear, Slack or your AI provider.</p>
+    </div>
+
+    <!-- ── Secondary cards ─────────────────────────────────── -->
+    <div class="cards">
+      <div class="card">
+        <div class="card-t">Using an AI coding agent?</div>
+        <p class="card-l">Let Claude Code or Cursor read your reports locally.</p>
+        <code class="chip-code">npx tracebug mcp</code>
+      </div>
+      <!-- The "Rolling this out to a team?" card from screens.md is deliberately
+           absent: tracebug.dev/teams does not exist yet and a welcome page must
+           not ship a 404. welcome.js adds it the moment TEAM_GUIDE_URL is set. -->
+    </div>
+
+    <footer>
+      Free and open source (MIT)
+      <span class="dot">·</span><a id="github" href="#" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="dot">·</span><a id="feedback" href="#" target="_blank" rel="noopener noreferrer">Send feedback</a>
+    </footer>
+
+  </div>
+  <script src="welcome.js"></script>
+</body>
+</html>

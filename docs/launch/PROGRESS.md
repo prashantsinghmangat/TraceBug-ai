@@ -101,3 +101,39 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   show it ticked too (the update seed) rather than cleared. (2) The reason split means the two
   populations now see different first captures, so any manual script that says "the first capture
   records events, not video" is only true of a fresh install.
+
+## Phase 4, Step C - a welcome page that works offline (2026-10-12)
+
+- First run opened the REMOTE `tracebug.dev/try.html`, so the first thing a new user saw depended on
+  their network and on a page that ships separately. Now `tracebug-extension/welcome.html` + `welcome.js`
+  (bundled, no remote assets, in `SHARED_FILES`), with that playground as its step 2.
+- Nothing is hardcoded that the page has no right to assert: version from `getManifest()`, the capture
+  shortcut from `chrome.commands` (plus the "No shortcut set" variant), and the rebind link branches on
+  the extension URL scheme with text-step fallback if Firefox refuses `about:addons`.
+- The "Rolling this out to a team?" card is ABSENT - `tracebug.dev/teams` does not exist. `TEAM_GUIDE_URL`
+  is empty and the card builds itself when set. Corrected `screens.md`, which told a future session to
+  draw a fixed Ctrl/Shift/B key group - a keystroke that captures nothing since Phase 3.
+- Files: new `welcome.html`, `welcome.js`, `tests/first-run.test.ts`; edited `background.js`,
+  `build/build-ext.mjs`, `screens.md`, `CHANGELOG.md`. Verified: check.mjs --full all green,
+  669 passing / 41 files (+11), ext:lint 0 errors / 69 warnings.
+- Open: the page has never been RENDERED (tests assert source, not layout); and `dist/**` is read-denied
+  by `.claude/settings.json`, so the build output could not be inspected here - only `SHARED_FILES`.
+
+## Phase 4, Step D - what's new, per version (2026-10-12)
+
+- An update no longer steals a tab. `background.js` `flagWhatsNew` writes the landed version to
+  `tb_whats_new` and holds no copy at all; `popup.js` owns a literal per-version `WHATS_NEW` table and
+  renders the card only when that version has an entry. A release that forgets an entry shows nothing
+  rather than an empty box, and the stale flag is dropped so it is not reconsidered on every open.
+- **The card is invisible until the version bump** - the table is keyed `1.11.0`, the manifest says
+  `1.10.1`. That is the design working, not a bug: copy appears when the release it describes ships.
+- `ext:lint` caught a real one. The check icon was built with `innerHTML`, which web-ext flags
+  UNSAFE_VAR_ASSIGNMENT - warnings went 69 -> 70 and the baseline failed the gate. Rebuilt with
+  `createElementNS` (`wnCheckIcon`); back to 69. Exactly what the baseline is for.
+- Files: new `tests/whats-new.test.ts`; edited `background.js`, `popup.js`, `popup.html`, `styles.css`,
+  `tests/helpers/chrome-mock.ts` (version now settable), `CHANGELOG.md`. Verified: check.mjs --full all
+  green, 685 passing / 42 files (+16), ext:lint 0 errors / 69 warnings; ext-events-capture 22/22,
+  ext-redaction 4/4.
+- Open: the card has never been RENDERED - no screenshot, no real popup. Needs a profile updated from
+  a 1.11.0 build, which cannot exist until the version is bumped.
+

@@ -42,6 +42,27 @@ if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "un
 // itself, which is why the seed below must not clobber a user's choice.
 const RECORD_OPTS_KEY = "tb_record_opts";
 
+// ── "What's new" after an update (Phase 4 Step D) ───────────────────────────
+// An update must not steal a tab — the user was doing something. So instead of
+// opening a page, the worker writes the version that landed and the popup shows
+// a card the next time it is opened. The worker deliberately holds no COPY: it
+// records "1.11.0 happened", and popup.js decides whether it has anything to
+// say about that version. A release that forgets to add copy shows nothing,
+// which is the right failure.
+const WHATS_NEW_KEY = "tb_whats_new";
+
+/** Record the version that just landed, for the popup to announce once. */
+async function flagWhatsNew() {
+  const version = currentVersion();
+  if (!version) return;
+  try {
+    await chrome.storage.local.set({ [WHATS_NEW_KEY]: version });
+  } catch (err) {
+    // Not fatal: the user misses one card. Never worth failing an update over.
+    console.warn("[TraceBug] couldn't flag what's new", err);
+  }
+}
+
 /**
  * Seed the video default once, without ever overriding a choice.
  *
@@ -83,18 +104,26 @@ async function seedRecordOptsDefault(reason) {
   }
 }
 
-// First install: open the live sandbox as the welcome experience — a page
-// with intentional bugs where the user can try a capture immediately, instead
-// of a static "thanks for installing" tab. Updates/reloads don't re-open it.
+// First install: open the BUNDLED welcome page (Phase 4 Step C). It used to
+// open https://tracebug.dev/try.html directly, which made the very first thing
+// a new user saw depend on their network — and on a page we cannot change in
+// lockstep with the extension. welcome.html links out to that playground as
+// its step 2 instead. Updates/reloads don't open a tab at all.
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
-    chrome.tabs.create({ url: "https://tracebug.dev/try.html?welcome=extension" });
+    chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
   }
   // Both reasons, but NOT the same default — see seedRecordOptsDefault. A new
   // user gets a quiet first capture; an upgrading user keeps the video they
   // have been getting all along.
   if (details.reason === "install" || details.reason === "update") {
     void seedRecordOptsDefault(details.reason);
+  }
+  // Only an update has something new to report. A fresh install has just been
+  // shown the welcome page; telling them what changed since a version they
+  // never ran would be noise.
+  if (details.reason === "update") {
+    void flagWhatsNew();
   }
 });
 

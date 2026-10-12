@@ -60,6 +60,9 @@ export interface ChromeMockOptions {
   local?: Record<string, unknown>;
   /** Keyboard commands chrome.commands.getAll() reports. */
   commands?: Array<{ name: string; shortcut: string; description?: string }>;
+  /** What getManifest() reports. Default '1.11.0'. Set it to test a version
+   *  the popup has no "what's new" copy for. */
+  version?: string;
 }
 
 export function createChromeMock(opts: ChromeMockOptions = {}) {
@@ -119,7 +122,7 @@ export function createChromeMock(opts: ChromeMockOptions = {}) {
         return e;
       },
       getURL: (p: string) => `chrome-extension://abcdefghijklmnopabcdefghijklmnop/${p}`,
-      getManifest: () => ({ version: '1.11.0' }),
+      getManifest: () => ({ version: opts.version ?? '1.11.0' }),
       onInstalled: events.onInstalled,
       onMessage: events.onMessage,
       onUpdateAvailable: events.onUpdateAvailable,
