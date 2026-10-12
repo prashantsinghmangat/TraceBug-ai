@@ -8,13 +8,65 @@
 // into the fields — the page shows a "Configured" pill instead, so a stored
 // token is never re-rendered anywhere, not even here.
 //
-// Phase 2b adds: requesting each provider's optional host permission on save,
-// and the background worker making the actual API calls.
+// Phase 2b: saving an integration also REQUESTS that provider's optional host
+// permission, because the background worker is what calls the API now and it
+// needs access to the one host it will talk to. Optional host permissions add
+// no install warning, so a fresh install still shows the smallest warning set.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INT_KEY = "tb_integrations_v1";
 const AI_KEY = "tb_ai_config_v1";
 const NOTICE_KEY = "tb_migration_notices";
+const LLM_SITES_KEY = "tb_llm_sites_v1";
+
+// One host per integration — the ONLY host that integration ever talks to.
+// Mirrors optional_host_permissions in build/manifest.base.json and
+// PROVIDER_ORIGINS in src/providers/api.ts.
+const HOSTS = {
+  github: ["https://api.github.com/*"],
+  linear: ["https://api.linear.app/*"],
+  slack: ["https://hooks.slack.com/*"],
+  anthropic: ["https://api.anthropic.com/*"],
+  openai: ["https://api.openai.com/*"],
+  // Match patterns cannot carry a port, so localhost/* already covers
+  // Ollama's default :11434 — but 127.0.0.1 is a different HOST and needs its
+  // own pattern.
+  ollama: ["http://localhost/*", "http://127.0.0.1/*"],
+};
+
+/**
+ * Wrap a click handler so it asks for host access FIRST.
+ *
+ * chrome.permissions.request() requires a user gesture, and an `await`
+ * before it loses that gesture in Chrome — so the request has to be the first
+ * statement in the handler, with the save running in its callback. The save
+ * proceeds either way: a declined permission is worth saving the token for,
+ * because the user can grant it later by clicking Save again.
+ *
+ * `granted` is true, false, or null when we could not ask at all.
+ */
+function withHostAccess(getPatterns, run) {
+  return function () {
+    let patterns;
+    try { patterns = getPatterns(); } catch { patterns = null; }
+    if (!patterns || !patterns.length) { run(null); return; }
+    try {
+      chrome.permissions.request({ origins: patterns }, (granted) => {
+        void chrome.runtime.lastError;
+        run(granted === true ? true : false);
+      });
+    } catch {
+      run(null);
+    }
+  };
+}
+
+/** Plain words for a decline, appended to whatever the save reported. */
+function accessNote(granted, hostLabel) {
+  if (granted !== false) return "";
+  return " TraceBug has no access to " + hostLabel + " yet, so sending will fail." +
+    " Click Save again and choose Allow to fix that — nothing else is needed.";
+}
 
 const DEFAULT_MODELS = {
   anthropic: "claude-sonnet-4-6",
@@ -46,10 +98,12 @@ function set(obj) {
   });
 }
 
-function say(el, msg, kind) {
-  el.textContent = msg;
+function say(el, msg, kind, extra) {
+  el.textContent = extra ? msg + extra : msg;
   el.className = "status" + (kind ? " " + kind : "");
-  if (kind === "ok") setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
+  // A decline note has to stay on screen — it is the one thing the user has
+  // to act on. Only a clean success self-clears.
+  if (kind === "ok" && !extra) setTimeout(() => { if (el.textContent === msg) el.textContent = ""; }, 4000);
 }
 
 function pill(el, on) {
@@ -118,7 +172,7 @@ function applyProviderUI() {
 
 $("aiProvider").addEventListener("change", applyProviderUI);
 
-$("aiSave").addEventListener("click", async () => {
+async function saveAI(granted) {
   const provider = $("aiProvider").value;
   const key = $("aiKey").value.trim();
   const model = $("aiModel").value.trim() || DEFAULT_MODELS[provider] || "";
@@ -139,11 +193,16 @@ $("aiSave").addEventListener("click", async () => {
     await set({ [AI_KEY]: { provider, apiKey, model, baseUrl: baseUrl || undefined } });
     $("aiKey").value = "";
     await refreshPills();
-    say(status, "Saved.", "ok");
+    say(status, "Saved.", "ok", accessNote(granted, provider === "ollama" ? "your local Ollama" : provider));
   } catch (e) {
     say(status, "Couldn't save: " + (e.message || "storage error"), "err");
   }
-});
+}
+
+$("aiSave").addEventListener("click", withHostAccess(
+  () => HOSTS[$("aiProvider").value] || null,
+  saveAI,
+));
 
 $("aiClear").addEventListener("click", async () => {
   try {
@@ -162,13 +221,13 @@ $("aiClear").addEventListener("click", async () => {
 // ── Trackers ────────────────────────────────────────────────────────────────
 
 /** Merge one provider's config into the stored integrations object. */
-async function saveProvider(name, value, statusEl) {
+async function saveProvider(name, value, statusEl, note) {
   try {
     const cfg = (await get([INT_KEY]))[INT_KEY] || {};
     cfg[name] = value;
     await set({ [INT_KEY]: cfg });
     await refreshPills();
-    say(statusEl, "Saved.", "ok");
+    say(statusEl, "Saved.", "ok", note);
     return true;
   } catch (e) {
     say(statusEl, "Couldn't save: " + (e.message || "storage error"), "err");
@@ -198,42 +257,99 @@ async function keptSecret(name, field) {
   return prev.token || prev.apiKey || prev.webhookUrl || "";
 }
 
-$("ghSave").addEventListener("click", async () => {
+async function saveGitHub(granted) {
   const status = $("ghStatus");
   const repo = $("ghRepo").value.trim();
   const token = await keptSecret("github", "ghToken");
   if (!token) { say(status, "Enter a personal access token.", "err"); return; }
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { say(status, 'Repository must look like "owner/repo".', "err"); return; }
-  if (await saveProvider("github", { token, repo }, status)) $("ghToken").value = "";
-});
+  const note = accessNote(granted, "api.github.com");
+  if (await saveProvider("github", { token, repo }, status, note)) $("ghToken").value = "";
+}
+
+$("ghSave").addEventListener("click", withHostAccess(() => HOSTS.github, saveGitHub));
 
 $("ghClear").addEventListener("click", () => clearProvider("github", $("ghStatus"), ["ghToken", "ghRepo"]));
 
-$("lnSave").addEventListener("click", async () => {
+async function saveLinear(granted) {
   const status = $("lnStatus");
   const teamId = $("lnTeam").value.trim();
   const apiKey = await keptSecret("linear", "lnKey");
   if (!apiKey) { say(status, "Enter a Linear API key.", "err"); return; }
   if (!teamId) { say(status, "Enter the team ID.", "err"); return; }
-  if (await saveProvider("linear", { apiKey, teamId }, status)) $("lnKey").value = "";
-});
+  const note = accessNote(granted, "api.linear.app");
+  if (await saveProvider("linear", { apiKey, teamId }, status, note)) $("lnKey").value = "";
+}
+
+$("lnSave").addEventListener("click", withHostAccess(() => HOSTS.linear, saveLinear));
 
 $("lnClear").addEventListener("click", () => clearProvider("linear", $("lnStatus"), ["lnKey", "lnTeam"]));
 
-$("slSave").addEventListener("click", async () => {
+async function saveSlack(granted) {
   const status = $("slStatus");
   const webhookUrl = await keptSecret("slack", "slHook");
   if (!/^https:\/\/hooks\.slack\.com\//.test(webhookUrl)) {
     say(status, "Enter a Slack incoming-webhook URL (https://hooks.slack.com/…).", "err");
     return;
   }
-  if (await saveProvider("slack", { webhookUrl }, status)) $("slHook").value = "";
-});
+  // Granting hooks.slack.com is what lets the worker read Slack's REAL reply
+  // instead of guessing from an opaque response — so a declined grant costs a
+  // real confirmation, not just future-proofing.
+  const note = granted === false
+    ? " TraceBug has no access to hooks.slack.com, so it can post but cannot confirm delivery." +
+      " Click Save again and choose Allow for real confirmation."
+    : "";
+  if (await saveProvider("slack", { webhookUrl }, status, note)) $("slHook").value = "";
+}
+
+$("slSave").addEventListener("click", withHostAccess(() => HOSTS.slack, saveSlack));
 
 $("slClear").addEventListener("click", () => clearProvider("slack", $("slStatus"), ["slHook"]));
+
+// ── Sites allowed to run AI analysis ────────────────────────────────────────
+// The first AI analysis on a site is confirmed by the user, and the approval is
+// remembered per origin so we only ask once. This is where it is revoked.
+
+async function renderLlmSites() {
+  const wrap = $("llmSites");
+  const empty = $("llmSitesEmpty");
+  if (!wrap) return;
+  const sites = (await get([LLM_SITES_KEY]))[LLM_SITES_KEY] || {};
+  const origins = Object.keys(sites).filter((o) => sites[o] && sites[o].allowed).sort();
+
+  wrap.textContent = "";
+  empty.style.display = origins.length ? "none" : "";
+
+  origins.forEach((origin) => {
+    const row = document.createElement("div");
+    row.className = "siterow";
+
+    const name = document.createElement("span");
+    // Origins are page-controlled strings — textContent, never innerHTML.
+    name.className = "siteorigin";
+    name.textContent = origin;
+
+    const btn = document.createElement("button");
+    btn.className = "ghost";
+    btn.type = "button";
+    btn.textContent = "Remove";
+    btn.addEventListener("click", async () => {
+      const current = (await get([LLM_SITES_KEY]))[LLM_SITES_KEY] || {};
+      delete current[origin];
+      await set({ [LLM_SITES_KEY]: current });
+      await renderLlmSites();
+      say($("llmSitesStatus"), "Removed. TraceBug will ask again on that site.", "ok");
+    });
+
+    row.appendChild(name);
+    row.appendChild(btn);
+    wrap.appendChild(row);
+  });
+}
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 
 applyProviderUI();
 refreshPills();
 showMigrationNotices();
+renderLlmSites();

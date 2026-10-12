@@ -97,6 +97,27 @@ export default defineConfig([
     target: "node18",
     outExtension: () => ({ js: ".mjs" }),
   },
+  // ── Provider API bundle for the extension's background worker ─────────
+  // Phase 2b moved every provider call into the service worker, which cannot
+  // import the page SDK. Rather than hand-duplicate ~200 lines of fetch and
+  // parse logic (model ids, API-version headers, error mapping) in plain JS,
+  // the shared layer in src/providers/api.ts is bundled here as an IIFE that
+  // publishes `TraceBugProviderAPI`. background.js loads it with
+  // importScripts() on Chrome and as a background script on Firefox.
+  //
+  // src/providers/api.ts must stay free of DOM, window and localStorage for
+  // this to run in a worker — see the header comment in that file.
+  {
+    entry: { "tracebug-provider-api": "src/providers/api.ts" },
+    format: ["iife"],
+    globalName: "TraceBugProviderAPI",
+    dts: false,
+    clean: false,
+    splitting: false,
+    sourcemap: false,
+    outDir: "tracebug-extension",
+    outExtension: () => ({ js: ".js" }),
+  },
   // ── IIFE build for Chrome Extension ───────────────────────────────────
   // IIFE can't split chunks, so esbuild inlines every dynamic import. We stub
   // html2canvas (unused in the extension — see stubHtml2Canvas above) to drop

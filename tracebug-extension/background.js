@@ -1,3 +1,19 @@
+// ── Worker-side scripts (Phase 2b) ──────────────────────────────────────────
+// tracebug-provider-api.js  — the fetch adapters, built from src/providers/api.ts
+//                             by tsup, so the page SDK and the worker share one
+//                             source of truth for every provider call.
+// provider-bridge.js        — the pure decision layer (verb allowlist, payload
+//                             validation, sender checks, rate limit).
+// Chrome runs background.js as a CLASSIC service worker, so importScripts
+// works. Firefox has no importScripts in an event page and lists both files
+// ahead of background.js in manifest background.scripts instead — hence the
+// guard. Either way the globals exist before the first message arrives.
+if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "undefined") {
+  try { importScripts("tracebug-provider-api.js", "provider-bridge.js"); } catch (e) {
+    console.error("[TraceBug] failed to load provider scripts", e);
+  }
+}
+
 // ── TraceBug Extension — Background Service Worker ──────────────────────────
 // SDK is injected on demand when the user clicks an action in the popup.
 // No persistent per-site allowlist — tracking is fully opt-in per action.
@@ -402,6 +418,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ── Provider sends (Phase 2b) ──────────────────────────────────────────
+  // Two verbs, and only two. Everything a hostile page would need in order to
+  // abuse them — a destination, a credential — is absent from the wire format
+  // by design, and every tracker send is confirmed by the user in a window
+  // this worker owns. See provider-bridge.js for the full reasoning.
+  if (message.type === "tb:provider:send" || message.type === "tb:llm:analyze") {
+    handleProviderRequest(message, sender)
+      .then((res) => sendResponse(res))
+      .catch((err) => sendResponse({ error: (err && err.message) || "Request failed." }));
+    return true;
+  }
+
+  // Content for the confirmation window. Accepted ONLY from that window.
+  if (message.type === "tb:confirm:get") {
+    if (!isConfirmSender(sender)) { sendResponse({ ok: false, error: "Rejected." }); return false; }
+    getPending(message.id)
+      .then((req) => sendResponse(req
+        ? { ok: true, request: confirmViewOf(req) }
+        : { ok: false, error: "This request is no longer waiting for confirmation." }))
+      .catch(() => sendResponse({ ok: false, error: "Could not read the request." }));
+    return true;
+  }
+
+  // The decision. This is the single message that turns a queued request into
+  // a real API call, so it is accepted ONLY from our own confirm-send.html —
+  // never from a content script, however well-formed the message looks.
+  if (message.type === "tb:confirm:decide") {
+    if (!isConfirmSender(sender)) { sendResponse({ ok: false, error: "Rejected." }); return false; }
+    resolvePending(message.id, !!message.approved)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
   // ── Recording RPC ──────────────────────────────────────────────────────
   // tb:rec:* messages come from content scripts. Background ensures the
   // offscreen document exists, then forwards the message to it WITH a
@@ -736,4 +786,471 @@ async function forwardAutoStopToTabs(message) {
     // tb:rec:start clears _lastBuiltRecording and reuses the document, so
     // there's no stale-recording risk.
   } catch {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Provider sends — Phase 2b
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Flow, and why it is shaped like this:
+//
+//   page → content script → tb:provider:send {provider, payload}
+//     ↓  validate verb + sender + payload (provider-bridge.js)
+//     ↓  write the request to chrome.storage.session
+//     ↓  open confirm-send.html in an extension-owned popup window
+//     ↓  respond {pending:true, id}  ← the response channel closes HERE
+//   …user reads it…
+//   confirm window → tb:confirm:decide {id, approved}
+//     ↓  read config from chrome.storage.local, call the provider
+//     ↓  chrome.tabs.sendMessage(tabId, result, {frameId: 0})
+//
+// The response channel is NOT held open across the human decision. An MV3
+// worker may be terminated while the user reads the window, which would strand
+// a pending sendResponse — so the request lives in storage.session, the
+// timeout lives in chrome.alarms, and the outcome is delivered as its own
+// message. All three survive a worker restart.
+
+const PENDING_KEY = "tb_pending_sends_v1";
+const RATE_KEY = "tb_llm_rates_v1";
+const LLM_SITES_KEY = "tb_llm_sites_v1";
+const INT_KEY = "tb_integrations_v1";
+const AI_CFG_KEY = "tb_ai_config_v1";
+const PAYLOAD_PREFIX = "tb_send_payload_";
+const CONFIRM_ALARM = "tb:confirm:expire:";
+
+const TB_PROVIDER_LABELS = { github: "GitHub", linear: "Linear", slack: "Slack" };
+const TB_AI_LABELS = { anthropic: "Anthropic (Claude)", openai: "OpenAI", ollama: "Ollama (local)" };
+
+function bridgeLib() {
+  // Read lazily so every call site is honest about the one failure mode that
+  // matters: the script didn't load, so nothing may be sent.
+  return typeof TraceBugProviderBridge !== "undefined" ? TraceBugProviderBridge : null;
+}
+function providerApi() {
+  return typeof TraceBugProviderAPI !== "undefined" ? TraceBugProviderAPI : null;
+}
+
+function isConfirmSender(sender) {
+  const b = bridgeLib();
+  if (!b) return false;
+  let url = "";
+  try { url = chrome.runtime.getURL("confirm-send.html"); } catch { return false; }
+  return b.validateConfirmSender(sender, chrome.runtime.id, url);
+}
+
+// ── storage helpers (callback form — works on Chrome and Firefox 128) ──────
+
+function sessionGet(key, fallback) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.session.get([key], (r) => {
+        void chrome.runtime.lastError;
+        resolve((r && r[key]) || fallback);
+      });
+    } catch { resolve(fallback); }
+  });
+}
+
+function sessionSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.session.set(obj, () => { void chrome.runtime.lastError; resolve(); }); }
+    catch { resolve(); }
+  });
+}
+
+function localGet(keys, fallback) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(keys, (r) => {
+        void chrome.runtime.lastError;
+        resolve(r || fallback);
+      });
+    } catch { resolve(fallback); }
+  });
+}
+
+function localSet(obj) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.set(obj, () => { void chrome.runtime.lastError; resolve(); }); }
+    catch { resolve(); }
+  });
+}
+
+function localRemove(keys) {
+  return new Promise((resolve) => {
+    try { chrome.storage.local.remove(keys, () => { void chrome.runtime.lastError; resolve(); }); }
+    catch { resolve(); }
+  });
+}
+
+async function getPending(id) {
+  if (!id) return null;
+  const all = await sessionGet(PENDING_KEY, {});
+  return all[id] || null;
+}
+
+/** Remove and return one pending request. This is the ONLY path that resolves
+ *  a request, so whichever of cancel / timeout / window-close arrives first
+ *  wins and the others find nothing. */
+async function dropPending(id) {
+  const all = await sessionGet(PENDING_KEY, {});
+  const req = all[id] || null;
+  delete all[id];
+  await sessionSet({ [PENDING_KEY]: all });
+  return req;
+}
+
+// ── Outcome delivery ───────────────────────────────────────────────────────
+
+/**
+ * Deliver a result to the ONE tab that asked, top frame only. Never a
+ * broadcast: another tab must not learn that a send happened, let alone
+ * receive its result, and a subframe has no business seeing it either.
+ */
+function tellTab(tabId, msg) {
+  if (typeof tabId !== "number") return;
+  try {
+    chrome.tabs.sendMessage(tabId, msg, { frameId: 0 }, () => { void chrome.runtime.lastError; });
+  } catch {}
+}
+
+function ackError(error) {
+  return { error };
+}
+
+// ── The request handler ────────────────────────────────────────────────────
+
+async function handleProviderRequest(message, sender) {
+  const b = bridgeLib();
+  if (!b) return ackError("TraceBug could not start the send (provider scripts missing). Reload the extension.");
+
+  const id = message.id;
+  const v = b.validateRequest(message.type, message.data, chrome.runtime.id, sender);
+  if (!v.ok) return ackError(v.error);
+
+  const tabId = sender.tab.id;
+  let origin = "";
+  try { origin = sender.origin || new URL(sender.url).origin; } catch { origin = "an unknown page"; }
+
+  // Payloads above the storage threshold travel through chrome.storage.local
+  // (the same trick recordings use) and are read back here. The key is deleted
+  // in a finally so a cancelled or failed send never leaves report text behind.
+  let payload = v.payload;
+  if (message.data && message.data._viaStorage) {
+    const key = PAYLOAD_PREFIX + String(message.data._viaStorage);
+    try {
+      const got = await localGet([key], {});
+      const stored = got[key];
+      const re = stored
+        ? b.validatePayload(v.target, stored)
+        : { ok: false, error: "The report could not be read — try again." };
+      if (!re.ok) return ackError(re.error);
+      payload = re.payload;
+    } finally {
+      await localRemove([key]);
+    }
+  }
+
+  const cfgAll = await localGet([INT_KEY, AI_CFG_KEY, LLM_SITES_KEY], {});
+
+  if (v.kind === "llm") {
+    const aiCfg = cfgAll[AI_CFG_KEY];
+    if (!aiCfg || !aiCfg.provider) return ackError("No AI provider configured — open TraceBug settings to add a key.");
+    if (aiCfg.provider !== "ollama" && !aiCfg.apiKey) return ackError("No API key saved — open TraceBug settings.");
+
+    // Rate limit BEFORE the per-site approval check, so an already-approved
+    // site cannot burn credits either. The window is persisted: a worker
+    // restart must not hand the page a fresh quota.
+    const rates = await sessionGet(RATE_KEY, {});
+    const rl = b.rateLimit(origin, Date.now(), rates);
+    await sessionSet({ [RATE_KEY]: rl.state });
+    if (!rl.allow) return ackError(rl.error);
+
+    const sites = cfgAll[LLM_SITES_KEY] || {};
+    if (sites[origin] && sites[origin].allowed) {
+      // Already trusted by the user: run it now, no window.
+      runAndReport(id, tabId, { kind: "llm", target: aiCfg.provider, payload, origin,
+        providerLabel: TB_AI_LABELS[aiCfg.provider] || aiCfg.provider });
+      return { pending: true, id };
+    }
+    return queueConfirmation({
+      id, tabId, origin, kind: "llm",
+      target: aiCfg.provider,
+      providerLabel: TB_AI_LABELS[aiCfg.provider] || aiCfg.provider,
+      destination: TB_AI_LABELS[aiCfg.provider] || aiCfg.provider,
+      payload,
+    });
+  }
+
+  // Tracker send. Confirmed EVERY time: one approval per session would let a
+  // hostile page spam for the rest of it, and "session" is vague anyway
+  // because the worker restarts.
+  const integrations = cfgAll[INT_KEY] || {};
+  if (!hasProviderConfig(v.target, integrations)) {
+    return ackError((TB_PROVIDER_LABELS[v.target] || v.target) + " is not configured — open TraceBug settings.");
+  }
+
+  return queueConfirmation({
+    id, tabId, origin, kind: "tracker",
+    target: v.target,
+    providerLabel: TB_PROVIDER_LABELS[v.target] || v.target,
+    destination: b.destinationLabel(v.target, integrations),
+    payload,
+  });
+}
+
+function hasProviderConfig(target, integrations) {
+  const i = integrations || {};
+  if (target === "github") return !!(i.github && i.github.token && i.github.repo);
+  if (target === "linear") return !!(i.linear && i.linear.apiKey && i.linear.teamId);
+  if (target === "slack") return !!(i.slack && i.slack.webhookUrl);
+  return false;
+}
+
+// ── Confirmation lifecycle ─────────────────────────────────────────────────
+
+function bodyTextOf(payload) {
+  if (!payload) return "";
+  if (payload.body != null) return payload.body;
+  if (payload.text != null) return payload.text;
+  return payload.prompt || "";
+}
+
+async function queueConfirmation(req) {
+  const b = bridgeLib();
+  const now = Date.now();
+
+  const all = await sessionGet(PENDING_KEY, {});
+  // Reap anything whose alarm never fired (worker asleep at the deadline).
+  for (const dead of b.reapExpired(all, now)) {
+    const stale = all[dead];
+    delete all[dead];
+    tellTab(stale && stale.tabId, {
+      type: "tb:provider:result", id: dead, cancelled: true,
+      error: "Send cancelled — the confirmation timed out.",
+    });
+  }
+  const room = b.canQueue(all, req.tabId, now);
+  if (!room.ok) {
+    await sessionSet({ [PENDING_KEY]: all });
+    return ackError(room.error);
+  }
+
+  const expiresAt = now + b.CONFIRM_TIMEOUT_MS;
+  const record = {
+    id: req.id,
+    tabId: req.tabId,
+    origin: req.origin,
+    kind: req.kind,
+    target: req.target,
+    providerLabel: req.providerLabel,
+    destination: req.destination,
+    payload: req.payload,
+    warnings: b.previewWarnings(bodyTextOf(req.payload)),
+    expiresAt,
+    windowId: null,
+  };
+  all[req.id] = record;
+  await sessionSet({ [PENDING_KEY]: all });
+
+  // The timeout runs on chrome.alarms, not setTimeout: a terminated worker
+  // takes its timers with it, and a confirmation that silently never expires
+  // would leave the page's promise hanging forever.
+  try { chrome.alarms.create(CONFIRM_ALARM + req.id, { when: expiresAt }); } catch {}
+
+  try {
+    const win = await chrome.windows.create({
+      // The id is the ONLY thing in the URL — no report text in a URL bar,
+      // a window title, or a history entry.
+      url: chrome.runtime.getURL("confirm-send.html") + "?id=" + encodeURIComponent(req.id),
+      type: "popup",
+      width: 560,
+      height: 680,
+      focused: true,
+    });
+    record.windowId = (win && win.id) != null ? win.id : null;
+    const again = await sessionGet(PENDING_KEY, {});
+    if (again[req.id]) { again[req.id] = record; await sessionSet({ [PENDING_KEY]: again }); }
+  } catch {
+    await dropPending(req.id);
+    try { chrome.alarms.clear(CONFIRM_ALARM + req.id); } catch {}
+    return ackError("TraceBug could not open the confirmation window, so nothing was sent.");
+  }
+
+  return { pending: true, id: req.id };
+}
+
+/** What the confirmation window is allowed to see. */
+function confirmViewOf(req) {
+  return {
+    kind: req.kind,
+    origin: req.origin,
+    providerLabel: req.providerLabel,
+    destination: req.destination,
+    title: (req.payload && req.payload.title) || "",
+    body: bodyTextOf(req.payload),
+    warnings: req.warnings || [],
+    expiresAt: req.expiresAt,
+  };
+}
+
+async function resolvePending(id, approved) {
+  const req = await dropPending(id);
+  try { chrome.alarms.clear(CONFIRM_ALARM + id); } catch {}
+  if (!req) return;
+  if (req.windowId != null) {
+    try { await chrome.windows.remove(req.windowId); } catch {}
+  }
+  if (!approved) {
+    tellTab(req.tabId, { type: "tb:provider:result", id, cancelled: true, error: "Send cancelled." });
+    return;
+  }
+  // An approved first AI analysis also records the site, so we only ask once.
+  // Revocable from the settings page.
+  if (req.kind === "llm") {
+    const got = await localGet([LLM_SITES_KEY], {});
+    const sites = got[LLM_SITES_KEY] || {};
+    sites[req.origin] = { allowed: true, at: Date.now() };
+    await localSet({ [LLM_SITES_KEY]: sites });
+  }
+  await runAndReport(id, req.tabId, req);
+}
+
+// ── The actual call ────────────────────────────────────────────────────────
+
+async function runAndReport(id, tabId, req) {
+  const api = providerApi();
+  if (!api) {
+    tellTab(tabId, {
+      type: "tb:provider:result", id,
+      error: "TraceBug could not load its provider code. Reload the extension.",
+    });
+    return;
+  }
+  try {
+    const result = req.kind === "llm"
+      ? await callLLMFromWorker(api, req)
+      : await callTrackerFromWorker(api, req);
+    tellTab(tabId, { type: "tb:provider:result", id, ok: true, result });
+  } catch (err) {
+    const label = req.providerLabel || req.target || "the provider";
+    tellTab(tabId, { type: "tb:provider:result", id, error: api.mapProviderError(err, label) });
+  }
+}
+
+/** Is a host pattern granted — either as an optional permission, or by the
+ *  still-required <all_urls> that Phase 1 will make optional? */
+function hasHostAccess(pattern) {
+  return new Promise((resolve) => {
+    try {
+      chrome.permissions.contains({ origins: [pattern] }, (granted) => {
+        void chrome.runtime.lastError;
+        resolve(!!granted);
+      });
+    } catch { resolve(false); }
+  });
+}
+
+async function callTrackerFromWorker(api, req) {
+  const got = await localGet([INT_KEY], {});
+  const cfg = got[INT_KEY] || {};
+  if (req.target === "github") {
+    if (!(await hasHostAccess(api.PROVIDER_ORIGINS.github))) throw new Error(noAccessMessage("api.github.com"));
+    return api.postGitHubIssue(cfg.github, { title: req.payload.title, body: req.payload.body });
+  }
+  if (req.target === "linear") {
+    if (!(await hasHostAccess(api.PROVIDER_ORIGINS.linear))) throw new Error(noAccessMessage("api.linear.app"));
+    return api.postLinearIssue(cfg.linear, { title: req.payload.title, body: req.payload.body });
+  }
+  // Slack: with host access the worker is not bound by page CORS, so it reads
+  // the REAL response instead of guessing — this is what resolves the Phase 6
+  // Slack item. Without access, fall back to the opaque no-cors post rather
+  // than failing outright, because that still delivers the message.
+  const readResponse = await hasHostAccess(api.PROVIDER_ORIGINS.slack);
+  return api.postSlackMessage(cfg.slack, { text: req.payload.text }, undefined, { readResponse });
+}
+
+function noAccessMessage(host) {
+  return "TraceBug doesn't have access to " + host + " yet. Open TraceBug settings and save this integration again to allow it.";
+}
+
+async function callLLMFromWorker(api, req) {
+  const got = await localGet([AI_CFG_KEY], {});
+  const cfg = got[AI_CFG_KEY];
+  if (!cfg || !cfg.provider) throw new Error("No AI provider configured — open TraceBug settings.");
+
+  // A user-edited Ollama baseUrl can point anywhere, and our optional
+  // permissions only cover localhost and 127.0.0.1. Fail with a sentence that
+  // says what happened, rather than letting it surface as a bare CORS error.
+  // TODO(phase-1): once <all_urls> is an optional host permission, the settings
+  // page can request this single origin instead of us refusing — see
+  // docs/launch/PLAN.md Phase 1, "Custom Ollama baseUrl".
+  let ollamaHost = "localhost";
+  if (cfg.provider === "ollama" && cfg.baseUrl) {
+    try { ollamaHost = new URL(cfg.baseUrl).hostname; }
+    catch { throw new Error("The Ollama base URL in TraceBug settings is not a valid URL."); }
+    if (ollamaHost !== "localhost" && ollamaHost !== "127.0.0.1") {
+      throw new Error("TraceBug can't reach " + ollamaHost + " yet — only localhost and 127.0.0.1 are covered. Change the Ollama base URL in settings.");
+    }
+  }
+
+  // 127.0.0.1 is a different HOST from localhost, so it has its own pattern —
+  // checking the wrong one would pass today (<all_urls> is still required) and
+  // start failing the moment Phase 1 makes it optional.
+  const pattern = cfg.provider === "ollama"
+    ? (ollamaHost === "127.0.0.1" ? api.PROVIDER_ORIGINS.ollama127 : api.PROVIDER_ORIGINS.ollama)
+    : api.PROVIDER_ORIGINS[cfg.provider];
+  if (pattern && !(await hasHostAccess(pattern))) {
+    throw new Error(noAccessMessage(cfg.provider === "ollama" ? "localhost" : "the AI provider"));
+  }
+  return api.callLLM(cfg, req.payload.prompt);
+}
+
+// ── Expiry, window-close, tab-close ────────────────────────────────────────
+
+if (chrome.alarms && chrome.alarms.onAlarm) {
+  chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (!alarm || typeof alarm.name !== "string" || alarm.name.indexOf(CONFIRM_ALARM) !== 0) return;
+    const id = alarm.name.slice(CONFIRM_ALARM.length);
+    const req = await dropPending(id);
+    if (!req) return;
+    if (req.windowId != null) {
+      try { await chrome.windows.remove(req.windowId); } catch {}
+    }
+    tellTab(req.tabId, {
+      type: "tb:provider:result", id, cancelled: true,
+      error: "Send cancelled — the confirmation timed out.",
+    });
+  });
+}
+
+// Closing the confirmation window with the titlebar ✕ is a cancel. The window
+// also posts a decision on beforeunload; whichever arrives first wins, because
+// dropPending() is the only path that resolves a request.
+if (chrome.windows && chrome.windows.onRemoved) {
+  chrome.windows.onRemoved.addListener(async (windowId) => {
+    const all = await sessionGet(PENDING_KEY, {});
+    const hit = Object.keys(all).find((k) => all[k] && all[k].windowId === windowId);
+    if (!hit) return;
+    const req = await dropPending(hit);
+    try { chrome.alarms.clear(CONFIRM_ALARM + hit); } catch {}
+    if (!req) return;
+    tellTab(req.tabId, { type: "tb:provider:result", id: hit, cancelled: true, error: "Send cancelled." });
+  });
+}
+
+// A tab that goes away can have no pending confirmation, and its window should
+// not be left on screen asking about a page that no longer exists.
+if (chrome.tabs && chrome.tabs.onRemoved) {
+  chrome.tabs.onRemoved.addListener(async (tabId) => {
+    const all = await sessionGet(PENDING_KEY, {});
+    const hits = Object.keys(all).filter((k) => all[k] && all[k].tabId === tabId);
+    for (const id of hits) {
+      const req = await dropPending(id);
+      try { chrome.alarms.clear(CONFIRM_ALARM + id); } catch {}
+      if (req && req.windowId != null) {
+        try { await chrome.windows.remove(req.windowId); } catch {}
+      }
+    }
+  });
 }

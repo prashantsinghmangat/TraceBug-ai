@@ -11,12 +11,23 @@
     "storage",
     "unlimitedStorage",
     "scripting",
+    "alarms",
     "offscreen"
   ],
   "minimum_chrome_version": "116",
 
   "host_permissions": [
     "<all_urls>"
+  ],
+
+  "optional_host_permissions": [
+    "https://api.github.com/*",
+    "https://api.linear.app/*",
+    "https://hooks.slack.com/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
   ],
 
   "content_security_policy": {

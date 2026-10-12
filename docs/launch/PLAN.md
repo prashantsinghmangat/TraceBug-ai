@@ -263,11 +263,13 @@ page in the extension and keep the remote page only as a link from it.**
 
 - **Large exports:** before export, show the estimated file size. Above 20 MB, warn that GitHub attachments cap
   at 25 MB, and offer "DOM replay only (no video)" or `.zip`.
-- **Slack:** **check what Phase 2b landed first.** If the `https://hooks.slack.com/*` optional permission is
-  granted, the POST can drop `mode: "no-cors"` and read a real response - report real success/failure instead of
-  rewording. Only when the permission is *not* granted does the honest-caveat copy apply: "Sent to Slack (Slack
-  doesn't confirm delivery)". Note `tracker-client.ts:232` already returns `opaque: true` and the UI ignores it
-  (`src/ui/quick-bug.ts:1884` shows a bare "✓ Sent to Slack") - so both branches are a small change.
+- **Slack: RESOLVED by Phase 2b (2026-10-12) - nothing left to do here.** The worker drops `mode: "no-cors"`
+  when `https://hooks.slack.com/*` is granted and reads Slack's real reply, including its terse rejection
+  reasons (`invalid_payload`, `no_service`); the options page requests that origin when Slack is saved, so the
+  grant is in place before the first send. Without the grant it falls back to the opaque post, which still
+  delivers the message. Page-mode (npm) SDK keeps `opaque: true` - it cannot read a cross-origin opaque
+  response and never will. See `postSlackMessage` / `readResponse` in `src/providers/api.ts` and
+  `tests/provider-api.test.ts`.
 - **Jira:** rename the button to "Copy for Jira" wherever it implies filing.
 - **Strict-CSP and canvas/WebGL pages:** detect a heavy canvas or a CSP that blocks the inline pieces, and show a
   one-line notice recommending video capture.

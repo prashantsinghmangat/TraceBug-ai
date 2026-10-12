@@ -23,46 +23,20 @@ import { generateGitHubIssue } from "../github-issue";
 import { generateSlackPost } from "../slack-export";
 import { severityTitlePrefix } from "../report-builder";
 import { isExtensionMode, getIntegrationStatus } from "../ext-transport";
+import { sendTrackerViaBridge } from "../ext-rpc";
+import { postGitHubIssue, postLinearIssue, postSlackMessage } from "../providers/api";
+import type {
+  TrackerProvider, GitHubConfig, LinearConfig, SlackConfig,
+  IntegrationsConfig, CreateIssueResult,
+} from "../providers/api";
 
-export type TrackerProvider = "github" | "linear" | "slack";
-
-export interface GitHubConfig {
-  /** Personal access token with `repo` (or `public_repo`) scope. */
-  token: string;
-  /** "owner/repo", e.g. "facebook/react". */
-  repo: string;
-  /** Optional default labels applied to created issues. */
-  labels?: string[];
-}
-
-export interface LinearConfig {
-  /** Personal API key (lin_api_…). */
-  apiKey: string;
-  /** Team id the issue is filed under. */
-  teamId: string;
-}
-
-export interface SlackConfig {
-  /** Incoming-webhook URL (https://hooks.slack.com/services/…). */
-  webhookUrl: string;
-}
-
-export interface IntegrationsConfig {
-  github?: GitHubConfig;
-  linear?: LinearConfig;
-  slack?: SlackConfig;
-}
-
-export interface CreateIssueResult {
-  provider: TrackerProvider;
-  ok: boolean;
-  /** Web URL of the created issue, when the provider returns one. */
-  url?: string;
-  /** Human-readable identifier (issue number / Linear identifier). */
-  ref?: string;
-  /** True when the provider gives no readable response (Slack no-cors). */
-  opaque?: boolean;
-}
+// The wire types and the fetch adapters live in src/providers/api.ts, which is
+// also bundled into the extension's service worker (Phase 2b). Re-exported
+// here so this module stays the public surface the SDK and src/index.ts use.
+export type {
+  TrackerProvider, GitHubConfig, LinearConfig, SlackConfig,
+  IntegrationsConfig, CreateIssueResult,
+};
 
 export const TRACKER_LABELS: Record<TrackerProvider, string> = {
   github: "GitHub",
@@ -151,122 +125,33 @@ function issueBody(report: BugReport): string {
   return generateGitHubIssue(report).replace(/^##\s+[^\n]+\n+/, "");
 }
 
-/** The union of response fields we read off provider JSON — GitHub REST
- *  (html_url/number) and Linear GraphQL (data.issueCreate). All optional:
- *  bodies are dynamic and only trusted after the checks at each call site. */
-interface TrackerJsonResponse {
-  message?: string;
-  error?: string;
-  errors?: Array<{ message?: string }>;
-  html_url?: string;
-  number?: number;
-  data?: {
-    issueCreate?: {
-      success?: boolean;
-      issue?: { url?: string; identifier?: string };
-    };
-  };
-}
-
-async function parseJsonOrThrow(res: Response, label: string): Promise<TrackerJsonResponse> {
-  let data: TrackerJsonResponse | null = null;
-  try { data = await res.json(); } catch { /* non-JSON error body */ }
-  if (!res.ok) {
-    const msg =
-      (data && (data.message || data.error || (Array.isArray(data.errors) && data.errors[0]?.message))) ||
-      `${label} request failed (HTTP ${res.status}).`;
-    throw new Error(String(msg));
-  }
-  // res.ok with an unparseable body is a provider bug — keep the historical
-  // shape (callers read fields off whatever came back) rather than inventing
-  // a fallback object here.
-  return data!;
-}
-
-// ── GitHub (REST: create an issue) ─────────────────────────────────────────
+// ── Provider adapters ──────────────────────────────────────────────────────
+// The HTTP calls live in src/providers/api.ts (shared with the service worker).
+// What stays here is the page-side rendering: BugReport → title/body/text.
 
 export async function createGitHubIssue(
   report: BugReport,
   config: GitHubConfig,
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(config.repo)) {
-    throw new Error(`Invalid repo "${config.repo}". Expected "owner/repo".`);
-  }
-  const res = await fetch(`https://api.github.com/repos/${config.repo}/issues`, {
-    method: "POST",
-    signal,
-    headers: {
-      "content-type": "application/json",
-      "accept": "application/vnd.github+json",
-      "authorization": `Bearer ${config.token}`,
-    },
-    body: JSON.stringify({
-      title: issueTitle(report),
-      body: issueBody(report),
-      labels: config.labels && config.labels.length ? config.labels : undefined,
-    }),
-  });
-  const data = await parseJsonOrThrow(res, "GitHub");
-  return { provider: "github", ok: true, url: data.html_url, ref: data.number ? `#${data.number}` : undefined };
+  return postGitHubIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
 }
-
-// ── Linear (GraphQL: issueCreate) ──────────────────────────────────────────
 
 export async function createLinearIssue(
   report: BugReport,
   config: LinearConfig,
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
-  const query =
-    "mutation IssueCreate($input: IssueCreateInput!) {" +
-    " issueCreate(input: $input) { success issue { id identifier url } } }";
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    signal,
-    headers: {
-      "content-type": "application/json",
-      // Linear personal API keys go in Authorization verbatim (no "Bearer").
-      "authorization": config.apiKey,
-    },
-    body: JSON.stringify({
-      query,
-      variables: { input: { teamId: config.teamId, title: issueTitle(report), description: issueBody(report) } },
-    }),
-  });
-  const data = await parseJsonOrThrow(res, "Linear");
-  if (Array.isArray(data.errors) && data.errors.length) {
-    throw new Error(data.errors[0]?.message || "Linear rejected the request.");
-  }
-  const issue = data?.data?.issueCreate?.issue;
-  if (!data?.data?.issueCreate?.success || !issue) {
-    throw new Error("Linear did not create the issue.");
-  }
-  return { provider: "linear", ok: true, url: issue.url, ref: issue.identifier };
+  return postLinearIssue(config, { title: issueTitle(report), body: issueBody(report) }, signal);
 }
-
-// ── Slack (incoming webhook: fire-and-forget) ──────────────────────────────
 
 export async function sendSlackMessage(
   report: BugReport,
   config: SlackConfig,
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
-  if (!/^https:\/\/hooks\.slack\.com\//.test(config.webhookUrl)) {
-    throw new Error("Invalid Slack webhook URL (expected https://hooks.slack.com/…).");
-  }
-  // no-cors: Slack webhooks send no CORS headers, so the response is opaque.
-  // Content-type must stay CORS-safelisted, so we post the payload as a
-  // urlencoded `payload=` field (Slack accepts this form).
-  await fetch(config.webhookUrl, {
-    method: "POST",
-    signal,
-    mode: "no-cors",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "payload=" + encodeURIComponent(JSON.stringify({ text: generateSlackPost(report) })),
-  });
-  // We can't read an opaque response — report success optimistically.
-  return { provider: "slack", ok: true, opaque: true };
+  // Page-world mode only ever gets an opaque response — see postSlackMessage.
+  return postSlackMessage(config, { text: generateSlackPost(report) }, signal);
 }
 
 // ── Dispatch ───────────────────────────────────────────────────────────────
@@ -281,13 +166,18 @@ export async function createTrackerIssue(
   signal?: AbortSignal,
 ): Promise<CreateIssueResult> {
   // Extension mode: tokens are deliberately unreachable from the page world,
-  // so this call cannot be made here. The background service worker owns it
-  // (Phase 2b, with per-send confirmation) — until then, fail with a message
-  // that tells the user where the token now lives.
+  // so the call is made by the background service worker. We hand it CONTENT
+  // only — no repo, no team, no webhook, no token. The worker reads those from
+  // chrome.storage.local and shows the user a confirmation window naming the
+  // destination before anything leaves the browser (Phase 2b).
   if (isExtensionMode()) {
-    throw new Error(
-      `${TRACKER_LABELS[provider] || provider} is sent from the extension — open TraceBug settings to configure it.`,
-    );
+    if (!hasIntegration(provider)) {
+      throw new Error(`${TRACKER_LABELS[provider] || provider} is not configured — open TraceBug settings.`);
+    }
+    const content = provider === "slack"
+      ? { text: generateSlackPost(report) }
+      : { title: issueTitle(report), body: issueBody(report) };
+    return sendTrackerViaBridge(provider, content);
   }
   const c = getIntegrationsConfig();
   switch (provider) {
