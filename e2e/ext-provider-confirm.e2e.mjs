@@ -473,6 +473,42 @@ try {
   const chatHits = hits.filter((h) => h.path === "/api/chat").length;
   check("no more than 10 analyses reached the provider", chatHits <= 10, String(chatHits));
 
+  // ══ 9b. The keyboard command really bound ═════════════════════════════════
+  // `suggested_key` is a request, not a guarantee: Chrome leaves a colliding
+  // suggestion UNBOUND and reports an empty string. Measured here, not
+  // assumed — Ctrl+Shift+B (bookmarks bar) and Alt+Shift+B (focus bookmarks
+  // bar) BOTH come back empty, while Ctrl+Shift+Y binds, which is how we know
+  // it is a real collision and not an artifact of this environment. Hence the
+  // shipped default Alt+B. If this check ever fails, the shortcut the docs
+  // name does nothing on a fresh install — the whole bug Phase 3 set out to
+  // fix — so pick another key rather than relaxing the assertion. Chromium is
+  // a strong signal, not proof for branded Chrome or Firefox; those are manual
+  // rows in docs/testing/restricted-pages.md.
+  const cmd = await sw.evaluate(async () => {
+    const all = await new Promise((r) => chrome.commands.getAll((l) => r(l || [])));
+    return (all.find((c) => c.name === "tb-quick-capture") || null);
+  });
+  check("the capture command is registered", !!cmd, JSON.stringify(cmd));
+  check(
+    "Chrome actually BOUND a key to it (empty = collided with a browser shortcut)",
+    !!(cmd && cmd.shortcut),
+    cmd ? `shortcut="${cmd.shortcut}"` : "no command",
+  );
+
+  // The worker hands that same value to the page over data-tb-caps, which is
+  // where the SDK reads it — that is the hop that lets the in-page tip show
+  // the real key and lets the page handler stand down when the browser owns it.
+  const capsShortcut = await page.evaluate(() => {
+    try {
+      return JSON.parse(document.documentElement.getAttribute("data-tb-caps") || "{}").shortcut;
+    } catch { return undefined; }
+  });
+  check(
+    "the bound shortcut reaches the page on data-tb-caps",
+    cmd ? capsShortcut === cmd.shortcut : false,
+    `caps="${capsShortcut}" command="${cmd && cmd.shortcut}"`,
+  );
+
   // ══ 10. Nothing leaked into the page ══════════════════════════════════════
   const leak = await page.evaluate((secrets) => {
     const hay = [document.documentElement.outerHTML, JSON.stringify(window.__tb || {})];

@@ -51,6 +51,13 @@
     if (window.TraceBugSDK && window.TraceBugSDK.setHostAccess) {
       window.TraceBugSDK.setHostAccess(caps ? caps.hostAccess : undefined);
     }
+    // ...and the shortcut the browser bound to TraceBug's command. The SDK
+    // shows it instead of a hardcoded key, and stands down from its own
+    // Ctrl+Shift+B handler when the browser owns that combo — otherwise one
+    // press would fire the command AND the page handler.
+    if (window.TraceBugSDK && window.TraceBugSDK.setBoundShortcut) {
+      window.TraceBugSDK.setBoundShortcut(caps ? caps.shortcut : undefined);
+    }
   }
 
   // Initialize the SDK. `transport: "extension"` is the explicit declaration

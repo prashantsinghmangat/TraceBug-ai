@@ -169,7 +169,15 @@
       <!-- Hint (purely informational — no pre-arm step needed) -->
       <div class="hint" id="hint">
         <span class="hint-dot" id="hintDot"></span>
-        <span class="hint-text" id="hintText">Nothing is tracked until you pick an action above. Tip: once TraceBug is on a page, <b>Ctrl+Shift+B</b> quick-captures anytime.</span>
+        <!-- Filled in by popup.js. The shortcut is read from
+             chrome.commands.getAll(), never written in here: the user can
+             rebind or clear it, and Ctrl+Shift+B collides with the bookmarks
+             bar in Chrome and the bookmarks Library in Firefox, so it may not
+             be bound at all. -->
+        <span class="hint-body">
+          <span class="hint-text" id="hintText">Nothing is tracked until you pick an action above.</span>
+          <button id="hintShortcut" class="hint-link" style="display:none;">Set a shortcut</button>
+        </span>
       </div>
 
     </main>

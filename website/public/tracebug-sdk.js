@@ -28632,6 +28632,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
   function setTransportMode(mode) {
     _mode2 = mode === "extension" ? "extension" : "page";
     _pageOnlyNoticeShown = false;
+    _boundShortcut = "";
   }
   function isExtensionMode() {
     return _mode2 === "extension";
@@ -28665,7 +28666,21 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     _pageOnlyNoticeShown = true;
     return true;
   }
-  var _mode2, EMPTY, _status, _hostAccess, _pageOnlyNoticeShown;
+  function setBoundShortcut(shortcut) {
+    _boundShortcut = typeof shortcut === "string" ? shortcut : "";
+  }
+  function getBoundShortcut() {
+    return _boundShortcut;
+  }
+  function shortcutParts(shortcut) {
+    return shortcut.replace(/⌘/g, "+command+").replace(/⇧/g, "+shift+").replace(/⌥/g, "+alt+").replace(/⌃/g, "+ctrl+").toLowerCase().split("+").map((p) => p.trim()).filter(Boolean).map((p) => p === "command" || p === "cmd" || p === "meta" || p === "control" || p === "macctrl" ? "ctrl" : p).sort();
+  }
+  function browserOwnsQuickCapture() {
+    if (!isExtensionMode() || !_boundShortcut) return false;
+    const parts = shortcutParts(_boundShortcut);
+    return parts.length === 3 && parts[0] === "b" && parts[1] === "ctrl" && parts[2] === "shift";
+  }
+  var _mode2, EMPTY, _status, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
   var init_ext_transport = __esm({
     "src/ext-transport.ts"() {
       "use strict";
@@ -28674,6 +28689,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       _status = { ...EMPTY };
       _hostAccess = void 0;
       _pageOnlyNoticeShown = false;
+      _boundShortcut = "";
     }
   });
 
@@ -29533,6 +29549,14 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   }
   function setCloudEndpoint(_endpoint) {
   }
+  function quickCaptureTipHtml() {
+    if (isExtensionMode()) {
+      const key = getBoundShortcut();
+      if (!key) return "";
+      return `Tip: <kbd>${escapeHtml2(key)}</kbd> to quick-capture anytime`;
+    }
+    return `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`;
+  }
   function _feedbackUrl(type, msg) {
     const area = isExtensionContext() ? "extension" : "npm-sdk";
     return `https://tracebug.dev/feedback?type=${type}&area=${area}&msg=${encodeURIComponent(msg)}`;
@@ -29966,7 +29990,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         </div>
       </div>
       <div class="tb-qb-tip">
-        <span>${redactionLine ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture \u2014 they never enter the report. See docs \u2192 Privacy for the full pattern list.">\u{1F6E1} ${escapeHtml2(redactionLine)}</span>` : `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`}</span>
+        <span>${redactionLine ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture \u2014 they never enter the report. See docs \u2192 Privacy for the full pattern list.">\u{1F6E1} ${escapeHtml2(redactionLine)}</span>` : quickCaptureTipHtml()}</span>
         <span class="tb-qb-tip-right">
           <span class="tb-qb-fb">Enough info to reproduce?
             <a href="${_feedbackUrl("other", "Capture quality \u{1F44D} \u2014 the ticket had enough to reproduce the bug.")}" target="_blank" rel="noopener" title="Yes \u2014 send a quick thumbs up">\u{1F44D}</a>
@@ -34028,6 +34052,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const screenshotShortcut = (shortcuts == null ? void 0 : shortcuts.screenshot) || "ctrl+shift+s";
     const keyHandler = async (e2) => {
       if (matchesShortcut(e2, "ctrl+shift+b")) {
+        if (browserOwnsQuickCapture()) return;
         e2.preventDefault();
         if (!isQuickBugOpen()) {
           showQuickBugCapture(root2).catch((err) => {
@@ -70570,6 +70595,7 @@ First element: \`${exampleSnippet}\``,
     generateSmartSummary: () => generateSmartSummary,
     getAIConfig: () => getAIConfig,
     getAllSessions: () => getAllSessions,
+    getBoundShortcut: () => getBoundShortcut,
     getCaptureCount: () => getCaptureCount,
     getHostAccess: () => getHostAccess,
     getIntegrationStatus: () => getIntegrationStatus,
@@ -70605,6 +70631,7 @@ First element: \`${exampleSnippet}\``,
     scan: () => scan,
     sendSlackMessage: () => sendSlackMessage,
     setAIConfig: () => setAIConfig,
+    setBoundShortcut: () => setBoundShortcut,
     setHostAccess: () => setHostAccess,
     setIntegrationStatus: () => setIntegrationStatus,
     setIntegrationsConfig: () => setIntegrationsConfig,

@@ -4,12 +4,16 @@
 //                             source of truth for every provider call.
 // provider-bridge.js        — the pure decision layer (verb allowlist, payload
 //                             validation, sender checks, rate limit).
+// page-support.js           — "can TraceBug run on this page", and the mapping
+//                             from a browser error to a sentence. The popup
+//                             loads it too; the worker needs it because the
+//                             keyboard command has no popup to talk through.
 // Chrome runs background.js as a CLASSIC service worker, so importScripts
 // works. Firefox has no importScripts in an event page and lists both files
 // ahead of background.js in manifest background.scripts instead — hence the
 // guard. Either way the globals exist before the first message arrives.
 if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "undefined") {
-  try { importScripts("tracebug-provider-api.js", "provider-bridge.js"); } catch (e) {
+  try { importScripts("tracebug-provider-api.js", "provider-bridge.js", "page-support.js"); } catch (e) {
     console.error("[TraceBug] failed to load provider scripts", e);
   }
 }
@@ -426,6 +430,93 @@ if (chrome.permissions && chrome.permissions.onRemoved) {
   chrome.permissions.onRemoved.addListener(notifyHostAccessChanged);
 }
 
+// ── Keyboard command (Phase 3) ──────────────────────────────────────────────
+// Until now Ctrl/Cmd+Shift+B was ONLY a keydown handler inside the injected
+// SDK, so it did nothing on a page TraceBug had never been started on — which
+// is exactly what docs/quickstart.md told a brand-new user to press. This
+// makes it a real browser command: it works on any tab, from a cold start.
+//
+// No new permission is involved. Invoking an extension command grants
+// activeTab in both Chrome and Firefox, the same way clicking the toolbar
+// icon does, so the injection below needs no host access.
+const QUICK_CAPTURE_COMMAND = "tb-quick-capture";
+
+/** The shortcut the browser actually bound, or "" if the user has none. */
+async function boundQuickCaptureShortcut() {
+  try {
+    if (!chrome.commands || !chrome.commands.getAll) return "";
+    const all = await new Promise((resolve) => {
+      try {
+        const maybe = chrome.commands.getAll((list) => {
+          void chrome.runtime.lastError;
+          resolve(list || []);
+        });
+        // Firefox returns a promise and ignores the callback.
+        if (maybe && typeof maybe.then === "function") maybe.then((l) => resolve(l || []), () => resolve([]));
+      } catch { resolve([]); }
+    });
+    const found = (all || []).find((c) => c && c.name === QUICK_CAPTURE_COMMAND);
+    return (found && found.shortcut) || "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * The command fired and something went wrong. A service worker has no popup
+ * to explain itself in and TraceBug has no notifications permission, so the
+ * toolbar button is the whole surface: a red "!" plus the mapped sentence as
+ * its tooltip, for 8 seconds. Documented in docs/testing/restricted-pages.md
+ * rather than left as a surprise.
+ */
+const ACTION_ERROR_MS = 8000;
+
+async function flashActionError(tabId, err) {
+  const S = globalThis.TraceBugPageSupport;
+  const v = S ? S.explainInjectionError(err) : null;
+  const title = v
+    ? "TraceBug — " + v.title + "\n" + v.detail
+    : "TraceBug — " + ((err && err.message) || String(err || "couldn't start here"));
+  try {
+    await chrome.action.setBadgeText({ tabId, text: "!" });
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: "#ef4444" });
+    await chrome.action.setTitle({ tabId, title });
+  } catch {}
+  setTimeout(() => {
+    try { updateBadge(tabId); } catch {}
+    try { chrome.action.setTitle({ tabId, title: "TraceBug — QA Bug Reporter" }); } catch {}
+  }, ACTION_ERROR_MS);
+}
+
+if (chrome.commands && chrome.commands.onCommand) {
+  chrome.commands.onCommand.addListener(async (command) => {
+    if (command !== QUICK_CAPTURE_COMMAND) return;
+    let tabId = null;
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      tabId = tab?.id ?? null;
+      if (tabId == null) return;
+      // Check the URL only when we can see it — without site access tab.url
+      // is undefined, and that is not a reason to refuse (the command grants
+      // activeTab, so the injection below will work).
+      const S = globalThis.TraceBugPageSupport;
+      if (S && tab?.url) {
+        const verdict = S.classifyPage(tab.url, {});
+        if (!verdict.ok) {
+          await flashActionError(tabId, verdict.detail);
+          return;
+        }
+      }
+      // Same pipeline as the popup's Screenshot action, which is what the
+      // in-page Ctrl+Shift+B does: fresh screenshot, then the Quick Bug modal
+      // (tracebug-init.js, case "capture-now").
+      await handleComboAction({ type: "TB_CAPTURE_NOW", tabId }, null);
+    } catch (err) {
+      if (tabId != null) await flashActionError(tabId, err);
+    }
+  });
+}
+
 // ── Message handler ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -444,8 +535,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // world has no chrome.permissions, and NEITHER DOES A CONTENT SCRIPT — the
   // permissions API is not exposed there — so the worker answers it and the
   // content script publishes the boolean on <html data-tb-caps>.
+  // Also carries the bound keyboard shortcut, for the same reason: neither the
+  // page nor a content script can read chrome.commands, and no UI may hardcode
+  // the key — the user can rebind or clear it. "" means nothing is bound.
   if (message.type === "TB_HOST_ACCESS") {
-    hasHostAccess("<all_urls>").then((granted) => sendResponse({ granted }));
+    Promise.all([hasHostAccess("<all_urls>"), boundQuickCaptureShortcut()])
+      .then(([granted, shortcut]) => sendResponse({ granted, shortcut }))
+      .catch(() => sendResponse({ granted: false, shortcut: "" }));
     return true; // async
   }
 

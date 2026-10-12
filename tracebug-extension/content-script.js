@@ -150,16 +150,19 @@ safeRun(function () {
 // Phase 2: integration tokens and the AI key live in chrome.storage.local, NOT
 // in the host page, because the page-world SDK shares storage with the site
 // under test. But the SDK still renders "GitHub is configured" states
-// synchronously, so we publish a BOOLEAN-ONLY snapshot on <html data-tb-caps>
-// — same bridge shape as data-tb-redact above. Never publish a token here: the
-// attribute is readable by every script on the page.
+// synchronously, so we publish a NON-SECRET snapshot on <html data-tb-caps>
+// — same bridge shape as data-tb-redact above. Booleans, plus the one short
+// string the browser owns (the bound keyboard shortcut). Never publish a
+// token here: the attribute is readable by every script on the page.
 var TB_INT_KEY = "tb_integrations_v1";
 var TB_AI_KEY = "tb_ai_config_v1";
 
 safeRun(function () {
   if (!isExtAlive() || !document.documentElement) return;
 
-  function toStatus(integrations, ai, hostAccess) {
+  function toStatus(integrations, ai, workerAnswer) {
+    var hostAccess = workerAnswer && workerAnswer.granted;
+    var shortcut = (workerAnswer && workerAnswer.shortcut) || "";
     var i = integrations || {};
     var a = ai || null;
     return {
@@ -169,6 +172,12 @@ safeRun(function () {
       // either, so the worker answers it (TB_HOST_ACCESS). Left undefined
       // when we could not ask, so the SDK stays quiet rather than guessing.
       hostAccess: typeof hostAccess === "boolean" ? hostAccess : undefined,
+      // The keyboard shortcut the BROWSER has bound to TraceBug's command, or
+      // "" when the user has none. Not a secret, and the only non-boolean
+      // here: no UI may hardcode the key, because the user can rebind it, and
+      // the SDK needs to know when the browser owns Ctrl+Shift+B so one press
+      // does not fire both the command and the in-page handler.
+      shortcut: typeof shortcut === "string" ? shortcut : "",
       github: !!(i.github && i.github.token && i.github.repo),
       linear: !!(i.linear && i.linear.apiKey && i.linear.teamId),
       slack: !!(i.slack && i.slack.webhookUrl),
@@ -193,7 +202,7 @@ safeRun(function () {
         try {
           chrome.runtime.sendMessage({ type: "TB_HOST_ACCESS" }, function (res) {
             var _e = chrome.runtime.lastError;
-            publishStatus(toStatus(ints, ai, res && res.granted));
+            publishStatus(toStatus(ints, ai, res));
           });
         } catch (e2) {
           publishStatus(toStatus(ints, ai, undefined));

@@ -25,6 +25,10 @@ export function setTransportMode(mode: TransportMode | undefined): void {
   // A fresh init is a fresh page, so the once-per-page notice below is armed
   // again. This is also what gives tests a clean slate between cases.
   _pageOnlyNoticeShown = false;
+  // The shortcut is re-published by the content script on every init; until
+  // then we know nothing, and claiming a key is bound would silence the
+  // in-page handler for no reason.
+  _boundShortcut = "";
 }
 
 /** True when the SDK was injected by the browser extension. */
@@ -115,4 +119,69 @@ export function shouldShowPageOnlyNotice(): boolean {
   if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return false;
   _pageOnlyNoticeShown = true;
   return true;
+}
+
+// ── The browser's own keyboard shortcut ─────────────────────────────────────
+// Phase 3 made Ctrl/Cmd+Shift+B a real `commands` entry, so the key now has
+// two possible owners. Two consequences the SDK has to respect:
+//
+//   1. No UI may hardcode the key. The user can rebind it or clear it, and
+//      the default is NOT Ctrl+Shift+B: Chrome refuses that (bookmarks bar)
+//      and also refuses Alt+Shift+B (focus bookmarks bar), returning an empty
+//      shortcut for both, so the shipped default is Alt+B.
+//   2. If the user rebinds the command ONTO Ctrl/Cmd+Shift+B, the in-page
+//      keydown handler must stand down, or one press opens Quick Bug twice.
+//
+// The worker reads chrome.commands.getAll() (the page world and content
+// scripts cannot), and the content script publishes the result on
+// <html data-tb-caps>. "" means nothing is bound.
+
+let _boundShortcut = "";
+
+export function setBoundShortcut(shortcut: string | null | undefined): void {
+  _boundShortcut = typeof shortcut === "string" ? shortcut : "";
+}
+
+/** The shortcut the browser bound, or "" — show this, never a literal key. */
+export function getBoundShortcut(): string {
+  return _boundShortcut;
+}
+
+/**
+ * Normalise a shortcut into comparable parts. `chrome.commands.getAll()`
+ * reports "Ctrl+Shift+B" on Windows/Linux and either "Command+Shift+B" or the
+ * glyph form "⌘⇧B" on macOS, so both spellings have to reduce to the same
+ * thing. Command, Ctrl and macOS's MacCtrl collapse together deliberately —
+ * that is exactly what matchesShortcut() does when it matches "ctrl+shift+b"
+ * against either a Cmd or a Ctrl press.
+ */
+function shortcutParts(shortcut: string): string[] {
+  return shortcut
+    .replace(/⌘/g, "+command+")
+    .replace(/⇧/g, "+shift+")
+    .replace(/⌥/g, "+alt+")
+    .replace(/⌃/g, "+ctrl+")
+    .toLowerCase()
+    .split("+")
+    .map((p) => p.trim())
+    .filter(Boolean)
+    // "macctrl" is Chrome's manifest token for the LITERAL Control key on
+    // macOS, as opposed to Command. It collapses here too, because
+    // matchesShortcut() treats a real Ctrl press as a match for
+    // "ctrl+shift+b" on every platform.
+    .map((p) => (p === "command" || p === "cmd" || p === "meta" || p === "control" || p === "macctrl" ? "ctrl" : p))
+    .sort();
+}
+
+/**
+ * True when the BROWSER owns Ctrl/Cmd+Shift+B, so the SDK's own keydown
+ * handler must ignore it. False in SDK (npm) mode, where there is no browser
+ * command at all and the page handler is the only thing there is — and false
+ * when the user rebound the command to some other key, because then
+ * Ctrl+Shift+B really does still belong to the page.
+ */
+export function browserOwnsQuickCapture(): boolean {
+  if (!isExtensionMode() || !_boundShortcut) return false;
+  const parts = shortcutParts(_boundShortcut);
+  return parts.length === 3 && parts[0] === "b" && parts[1] === "ctrl" && parts[2] === "shift";
 }
