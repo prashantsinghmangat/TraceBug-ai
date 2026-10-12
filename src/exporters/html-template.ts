@@ -52,6 +52,14 @@ export interface BundlePayload {
    *  ~4×. The viewer inflates it with the native `DecompressionStream` at load.
    *  `rrwebEvents` is the uncompressed fallback for old browsers on either end. */
   rrwebEventsGz?: string;
+  /** The page the DOM replay covers, as a path (e.g. `/checkout`).
+   *
+   *  The replay is per-page by construction: rrweb is started fresh on each
+   *  document, so an events capture that crossed a navigation replays only the
+   *  page it ended on, while the console, network and action lists beside it
+   *  span the whole session. Without this the heading just says "Replay" and a
+   *  recipient reasonably reads it as covering everything they can see. */
+  rrwebPage?: string;
   /** Precomputed issue-filing helpers — the file's recipient is often the
    *  person who files the ticket. Only token-free actions belong in a
    *  shareable file: a prefilled github.com URL and copyable markdown.
@@ -156,6 +164,15 @@ export function buildReplayHtml(
       </div>
     </div>`
     : "";
+  // Name the page when the DOM replay is the surface being shown. Not on the
+  // video path: a screen recording keeps rolling across navigations, so there
+  // "the last page" would be the inaccuracy. The timeline scrubber below keeps
+  // its own "Replay" label — it is built from the session's events and really
+  // does span the whole capture.
+  const replayPath = hasRrweb && !payload.video ? pagePath(payload.rrwebPage) : "";
+  const replayHeading = replayPath
+    ? `Replay of the last page <span class="tb-vh2-note">(${escapeHtml(replayPath)})</span>`
+    : "Replay";
   // The renderer below is written defensively — it reads `tb-data` and renders
   // the report + scrubber + screenshot preview. Self-contained, no externals.
   return `<!DOCTYPE html>
@@ -195,7 +212,7 @@ ${rrwebCssTag}
 </header>
 <main class="tb-vmain">
   <section class="tb-vleft">
-    <h2 class="tb-vh2">Replay</h2>
+    <h2 class="tb-vh2">${replayHeading}</h2>
     ${rrwebBlock}
     <div class="tb-vpreview" id="preview-wrap">
       <video id="video" controls playsinline style="display:none"></video>
@@ -271,6 +288,22 @@ ${REPLAY_RUNTIME}
 </script>
 </body>
 </html>`;
+}
+
+/**
+ * The path of a URL, for the replay heading — `/checkout?step=2` from a full
+ * href. Falls back to the input when it will not parse (a `file://` capture,
+ * or a path already), and to "" when there is nothing worth showing: a bare
+ * "/" tells the reader less than the origin they already have in Info.
+ */
+function pagePath(href: string | undefined): string {
+  if (!href) return "";
+  let path = href;
+  try {
+    const u = new URL(href);
+    path = u.pathname + u.search;
+  } catch { /* not absolute — show what we were given */ }
+  return path === "/" ? "" : path;
 }
 
 // ── Escape helper for the title in <head> ───────────────────────────────
@@ -390,6 +423,10 @@ body { min-height: 100vh; }
 @media (max-width: 900px) { .tb-vmain { grid-template-columns: 1fr; } }
 .tb-vh2 { font-size: 10px; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: .6px; margin: 14px 0 10px; font-weight: 700; }
 .tb-vh2:first-child { margin-top: 0; }
+/* The page a per-page DOM replay covers. Same size as the heading, dropped to
+   a lighter weight and no letter-spacing so the path stays readable — a URL
+   path in uppercase tracked-out caps is not. */
+.tb-vh2-note { font-weight: 500; letter-spacing: 0; text-transform: none; }
 .tb-vleft { min-width: 0; }
 
 /* ── Replay preview ─────────────────────────────── */

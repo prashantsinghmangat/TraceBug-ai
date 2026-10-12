@@ -299,8 +299,10 @@ Newest entry at the bottom.
   `tracebug-extension/offscreen.js`, `e2e/ext-events-capture.e2e.mjs`,
   `docs/{quickstart.md,chrome-extension.md}`, `CHANGELOG.md`. `showActionToast` gained an optional
   `autoDismissMs` (`null` = until dismissed); its 8s default is unchanged for existing callers.
-- Verified: typecheck + lint clean; `npm test` **37 files / 618 passing** (was 35/590: +18
-  capture-errors, +10 picker-hint, +8 offscreen-capture). `build` + `build:ext` OK; `ext:lint` 0
+- Verified: typecheck + lint clean; `npm test` **38 files / 626 passing** (+36 across
+  capture-errors, picker-hint and offscreen-capture). *(Corrected: this line first said
+  37 files / 618 - a misread run. The commit `fde3619` adds exactly those three files, and a
+  re-run of the suite at that commit gives 38/626.)* `build` + `build:ext` OK; `ext:lint` 0
   errors / **69** warnings, distribution unchanged again; `ext:firefox` installs.
   `ext-events-capture` **22/22** (+1: no picker hint on the events path). `ext-provider-confirm`,
   `ext-secret-migration` 26/26 and `ext-redaction` all still green.
@@ -315,3 +317,46 @@ Newest entry at the bottom.
   (2) Whether **Firefox** honours `preferCurrentTab` and what its OS-denial message says are both
   manual rows. (3) The in-page (npm SDK) path's system-denial branch has unit coverage of the
   predicate but no browser test, same reason as (1).
+
+## Phase 4 - two additions after Step B (2026-10-12)
+
+- **The video pref moved to `chrome.storage.local`.** It lived in the popup's own `localStorage`,
+  which a service worker can neither read nor write, so one question had no answer: has this user
+  chosen whether to record video, or have they never been asked? A missing field is not a choice -
+  and that ambiguity is what silently flipped a 1.10 always-video user to no-video. The blob is now
+  `tb_record_opts` with an explicit `videoSetBy: "user" | "default"`; `runtime.onInstalled` seeds
+  the no-video default on **install and update** without ever overwriting a `"user"` value, and the
+  popup migrates the legacy `tracebug_record_opts` blob on first open. The migration has to merge
+  rather than skip-if-present: onInstalled always runs before the popup is first opened, so the seed
+  is already there, and "only migrate when the key is absent" would discard the choice of a 1.11
+  user who had turned video on.
+- **The exported replay heading names its page.** rrweb restarts on every document while an events
+  capture deliberately survives a navigation, so the console/network/action lists span the whole
+  capture and the replay beside them covers only the page it ended on. The heading now reads
+  "Replay of the last page (/checkout/payment)" on the DOM-replay path. Not on the video path - a
+  screen recording keeps rolling across navigations, so there the label would be the inaccuracy -
+  and the timeline scrubber keeps its own "Replay" label, which is built from the session's events
+  and really does span everything. The href is read from the rrweb Meta event (`type: 4`) and stored
+  as `payload.rrwebPage` **before** gzipping, so the viewer need not inflate the stream to render a
+  heading.
+- Files: new `tests/{record-opts,replay-page-label}.test.ts`; edited
+  `tracebug-extension/{background.js,popup.js}`, `src/exporters/{html-template,html-replay}.ts`.
+  Deleted `docs/launch/designs/tracebug_welcome_page_variant_{a_split_workbench,b_guided_timeline}/`
+  (unused, and carried invented claims a later session could have copied).
+- Verified: typecheck + lint clean; `npm test` **40 files / 649 passing** (+23: 16 record-opts,
+  7 replay-page-label). `build` + `build:ext` OK; `ext:lint` 0 errors / **69** warnings, baseline
+  unchanged. `ext-events-capture` **22/22** - and its navigation checks corroborate the label: the
+  capture crosses a navigation, the timer keeps counting, and the report comes back with 9 rrweb
+  events, i.e. the last page's stream only.
+- Notable test choice: `popup.js` is one `DOMContentLoaded` closure over the whole popup DOM, so it
+  cannot be evaluated in a `node:vm` the way `offscreen.js` can. `tests/record-opts.test.ts` slices
+  the real `loadRecordOpts` text out of the shipped file and runs that, injecting the two key
+  constants and pinning their literals against the source so a rename cannot pass silently. Weaker
+  than loading the file; stronger than a copy of the logic.
+- Open issues: (1) The popup migration is **not** covered end-to-end in a browser - the slice tests
+  the precedence rules, not the popup actually opening. Worth one manual pass: a profile with a
+  `tracebug_record_opts` blob holding `video: true`, updated, should still show the checkbox ticked.
+  (2) `saveRecordOpts` marks `videoSetBy: "user"` when Capture Bug is clicked, not only when the
+  checkbox is touched - accepting the default counts as being asked. Harmless today (the default it
+  records is the same `false` a later seed would write) but it does mean a future default change
+  would not reach those users.

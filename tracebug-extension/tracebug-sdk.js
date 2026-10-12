@@ -25184,6 +25184,8 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         <span id="rr-time" class="tb-vrrweb-time">0:00 / 0:00</span>
       </div>
     </div>` : "";
+    const replayPath = hasRrweb && !payload.video ? pagePath(payload.rrwebPage) : "";
+    const replayHeading = replayPath ? `Replay of the last page <span class="tb-vh2-note">(${escapeHtml3(replayPath)})</span>` : "Replay";
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25221,7 +25223,7 @@ ${rrwebCssTag}
 </header>
 <main class="tb-vmain">
   <section class="tb-vleft">
-    <h2 class="tb-vh2">Replay</h2>
+    <h2 class="tb-vh2">${replayHeading}</h2>
     ${rrwebBlock}
     <div class="tb-vpreview" id="preview-wrap">
       <video id="video" controls playsinline style="display:none"></video>
@@ -25297,6 +25299,16 @@ ${REPLAY_RUNTIME}
 </script>
 </body>
 </html>`;
+  }
+  function pagePath(href) {
+    if (!href) return "";
+    let path = href;
+    try {
+      const u2 = new URL(href);
+      path = u2.pathname + u2.search;
+    } catch (e2) {
+    }
+    return path === "/" ? "" : path;
   }
   function escapeHtml3(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -25408,6 +25420,10 @@ body { min-height: 100vh; }
 @media (max-width: 900px) { .tb-vmain { grid-template-columns: 1fr; } }
 .tb-vh2 { font-size: 10px; color: var(--tb-text-3); text-transform: uppercase; letter-spacing: .6px; margin: 14px 0 10px; font-weight: 700; }
 .tb-vh2:first-child { margin-top: 0; }
+/* The page a per-page DOM replay covers. Same size as the heading, dropped to
+   a lighter weight and no letter-spacing so the path stays readable \u2014 a URL
+   path in uppercase tracked-out caps is not. */
+.tb-vh2-note { font-weight: 500; letter-spacing: 0; text-transform: none; }
 .tb-vleft { min-width: 0; }
 
 /* \u2500\u2500 Replay preview \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
@@ -27258,6 +27274,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       ...buildPlaywrightPayload(report)
     };
     if (hasRrweb && rrwebEvents) {
+      payload.rrwebPage = rrwebMetaHref(rrwebEvents);
       const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
       if (gz) payload.rrwebEventsGz = gz;
       else payload.rrwebEvents = rrwebEvents;
@@ -27274,6 +27291,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     const html = buildReplayHtml(payload, rrwebExtras);
     const blob2 = new Blob([html], { type: "text/html;charset=utf-8" });
     return { blob: blob2, html };
+  }
+  function rrwebMetaHref(events) {
+    var _a2;
+    for (const ev of events) {
+      const e2 = ev;
+      if ((e2 == null ? void 0 : e2.type) === 4 && typeof ((_a2 = e2.data) == null ? void 0 : _a2.href) === "string") return e2.data.href;
+    }
+    return "";
   }
   function safeStyleSummary(styles) {
     try {

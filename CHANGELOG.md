@@ -35,6 +35,18 @@ All notable changes to TraceBug are documented here.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
 
 - **One line before your browser asks what to share** (`src/ui/pre-record.ts`) — the share dialog is the browser's own, it offers three surfaces, and it says nothing about which one a bug report wants. Picking "Entire screen" records your whole desktop and picking the wrong tab records the wrong page, neither of which can be undone afterwards. TraceBug now explains it first, and the wording matches the dialog you are about to see: "already set to this tab — choose Share" when Capture is **Current tab**, "pick this tab" when it's **Desktop / window**.
+- **The exported replay says which page it covers** (`src/exporters/html-template.ts`) — the heading
+  on a DOM-replay export now reads "Replay of the last page (/checkout/payment)" instead of just
+  "Replay". The console, network and action lists beside it span every page the capture crossed, so
+  a recipient — usually not the person who captured it — could reasonably read a bare "Replay" as
+  covering all of them and conclude the earlier pages had nothing on them. A screen recording does
+  keep rolling across navigations, so the video export is unchanged, and so is the timeline
+  scrubber's own label.
+- **Your "Record video too" choice survives the upgrade** (`tracebug-extension/popup.js`,
+  `background.js`) — the setting moved into the extension's own storage, where the part of TraceBug
+  that handles installs and updates can see it. It could not before, which meant TraceBug had no way
+  to tell "chose not to record video" from "has never been asked", and the new no-video default was
+  applied to both. If you have turned video on, it stays on.
 - **"Capture: Current tab" now does something in the extension** (`tracebug-extension/offscreen.js`) — the setting was persisted by the popup and forwarded through the background worker and the content script, and then ignored by the recorder, so the share dialog always showed the full tab/window/screen choice. Only the npm SDK honoured it. Choosing **Current tab** now passes `preferCurrentTab`, which collapses the dialog to a one-click confirm, and `docs/chrome-extension.md` no longer describes the SDK's behaviour as if it were the extension's.
 
 ### Fixed
