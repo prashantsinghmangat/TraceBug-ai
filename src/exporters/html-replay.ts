@@ -280,6 +280,10 @@ async function buildReplayPayload(
   // fallback when the exporting browser lacks CompressionStream — the viewer
   // then reads whichever one is present.
   if (hasRrweb && rrwebEvents) {
+    // Record which page the replay covers BEFORE compressing: the viewer only
+    // ever sees the gzipped blob, and reading the href back out would mean
+    // inflating the whole stream to render a heading.
+    payload.rrwebPage = rrwebMetaHref(rrwebEvents);
     const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
     if (gz) payload.rrwebEventsGz = gz;
     else payload.rrwebEvents = rrwebEvents;
@@ -300,6 +304,25 @@ async function buildReplayPayload(
   const html = buildReplayHtml(payload, rrwebExtras);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   return { blob, html };
+}
+
+/**
+ * The href of the document an rrweb stream replays.
+ *
+ * rrweb emits a Meta event (`type: 4`) carrying `href` as the first event of
+ * every recording, so the first one in the stream is the page the replay
+ * starts on. With `checkoutEveryNms` there can be later Meta events too, and
+ * they are the same document — rrweb is restarted from scratch on navigation
+ * (see `startDomRecording`), so one stream never spans two pages. Returns ""
+ * for a stream without a readable Meta event; the heading then falls back to
+ * plain "Replay" rather than naming a page we are guessing at.
+ */
+function rrwebMetaHref(events: unknown[]): string {
+  for (const ev of events) {
+    const e = ev as { type?: number; data?: { href?: unknown } };
+    if (e?.type === 4 && typeof e.data?.href === "string") return e.data.href;
+  }
+  return "";
 }
 
 function safeStyleSummary(styles: StyleEvidence): string | undefined {

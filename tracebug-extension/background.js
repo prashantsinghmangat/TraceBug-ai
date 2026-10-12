@@ -25,12 +25,54 @@ if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "un
 // "loaded" state.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Record options, worker-writable (Phase 4) ───────────────────────────────
+// The popup's Record options used to live in the popup's own localStorage,
+// which a service worker cannot read or write. That made one question
+// unanswerable: "has this user chosen whether to record video, or have they
+// just never been asked?" The popup could only see a missing field, and a
+// missing field is not a choice. So the blob moved here, and carries an
+// explicit `videoSetBy` discriminator:
+//   "default" — written by this worker on install/update; safe to overwrite
+//   "user"    — the user toggled the checkbox; never overwrite it
+// The popup migrates its legacy localStorage blob into this key on first open
+// (see popup.js `loadRecordOpts`) — the worker cannot do that migration
+// itself, which is why the seed below must not clobber a user's choice.
+const RECORD_OPTS_KEY = "tb_record_opts";
+
+/**
+ * Seed "no video" as the default capture, once, without overriding a choice.
+ *
+ * On install there is nothing to preserve. On update there may be: a user who
+ * turned "Record video too" on keeps it. An update from a build that predates
+ * the option has no `videoSetBy`, so it gets the new default — which is the
+ * intended behaviour change, not an accident of a missing key.
+ */
+async function seedRecordOptsDefault() {
+  try {
+    const stored = (await chrome.storage.local.get(RECORD_OPTS_KEY))[RECORD_OPTS_KEY];
+    if (stored && stored.videoSetBy === "user") return;
+    await chrome.storage.local.set({
+      [RECORD_OPTS_KEY]: { ...(stored || {}), video: false, videoSetBy: "default" },
+    });
+  } catch (err) {
+    // A failed seed is not fatal: the popup defaults video off when the key
+    // is absent too. Losing the explicit record only costs us the ability to
+    // tell "never asked" from "chose off".
+    console.warn("[TraceBug] couldn't seed record options", err);
+  }
+}
+
 // First install: open the live sandbox as the welcome experience — a page
 // with intentional bugs where the user can try a capture immediately, instead
 // of a static "thanks for installing" tab. Updates/reloads don't re-open it.
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     chrome.tabs.create({ url: "https://tracebug.dev/try.html?welcome=extension" });
+  }
+  // Both reasons: an update from a pre-1.11 build has no stored choice either,
+  // and its first capture should be as quiet as a fresh install's.
+  if (details.reason === "install" || details.reason === "update") {
+    void seedRecordOptsDefault();
   }
 });
 

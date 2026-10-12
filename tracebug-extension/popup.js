@@ -369,23 +369,69 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Jam's "video is always there" default — the screenshot-only path is a
   // secondary option for users who just want a quick snap.
   // ── Record options — persisted, passed with the record message ───────
-  const OPTS_KEY = "tracebug_record_opts";
+  // These live in chrome.storage.local, not the popup's localStorage, because
+  // the service worker writes the video default on install/update and cannot
+  // see localStorage (background.js `seedRecordOptsDefault`). LEGACY_OPTS_KEY
+  // is the pre-1.11 localStorage blob, migrated once on first open.
+  const OPTS_KEY = "tb_record_opts";
+  const LEGACY_OPTS_KEY = "tracebug_record_opts";
   const surfaceSel = document.getElementById("optSurface");
   const delaySel = document.getElementById("optDelay");
   const blurCb = document.getElementById("optBlurFirst");
   const videoCb = document.getElementById("optVideo");
   const optsState = document.getElementById("recordOptsState");
-  function loadRecordOpts() {
-    try { return JSON.parse(localStorage.getItem(OPTS_KEY)) || {}; } catch { return {}; }
+  /**
+   * Read the options, migrating the legacy localStorage blob on the way.
+   *
+   * The migration adopts the legacy blob's fields but only lets its `video`
+   * win when the stored value is the worker's seed (`videoSetBy !== "user"`).
+   * Ordering makes that necessary: onInstalled runs before the popup is ever
+   * opened, so the seed is always already there by the time we get here, and
+   * an "only migrate when the key is absent" rule would throw away the choice
+   * of a 1.11 user who had turned video on.
+   */
+  async function loadRecordOpts() {
+    let stored = {};
+    try { stored = (await chrome.storage.local.get(OPTS_KEY))[OPTS_KEY] || {}; } catch {}
+    let legacy = null;
+    try { legacy = JSON.parse(localStorage.getItem(LEGACY_OPTS_KEY)); } catch {}
+    if (!legacy || typeof legacy !== "object") return stored;
+    // An explicit boolean means a 1.11 popup wrote it, i.e. the user was asked
+    // and answered — off counts as much as on. A blob with no `video` field at
+    // all predates the option and carries no answer.
+    const legacyAnswered = typeof legacy.video === "boolean";
+    const chosen = stored.videoSetBy === "user" || legacyAnswered;
+    const merged = {
+      surfaceMode: legacy.surfaceMode ?? stored.surfaceMode,
+      delaySec: legacy.delaySec ?? stored.delaySec,
+      blurFirst: legacy.blurFirst ?? stored.blurFirst,
+      video: stored.videoSetBy === "user" ? stored.video : legacyAnswered ? legacy.video : false,
+      videoSetBy: chosen ? "user" : "default",
+    };
+    try { await chrome.storage.local.set({ [OPTS_KEY]: merged }); } catch { return stored; }
+    // Only drop the old copy once the new one is committed, so a failed write
+    // leaves the user's settings where they still get read from.
+    try { localStorage.removeItem(LEGACY_OPTS_KEY); } catch {}
+    return merged;
   }
+  /**
+   * Persist the current control values and return them synchronously.
+   *
+   * The write is deliberately not awaited: the Capture Bug handler calls this
+   * and then starts a capture, and gating the hero action on a storage round
+   * trip to record a preference the caller already holds buys nothing.
+   */
   function saveRecordOpts() {
     const o = {
       video: !!videoCb.checked,
       surfaceMode: surfaceSel.value,
       delaySec: Number(delaySel.value) || 0,
       blurFirst: !!blurCb.checked,
+      // Reached only from the controls and the hero button, both of which mean
+      // the user has now been asked. See background.js RECORD_OPTS_KEY.
+      videoSetBy: "user",
     };
-    try { localStorage.setItem(OPTS_KEY, JSON.stringify(o)); } catch {}
+    try { void chrome.storage.local.set({ [OPTS_KEY]: o }); } catch {}
     updateOptsState(o);
     applyVideoUI(o.video);
     return o;
@@ -431,7 +477,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (iconVideo) iconVideo.style.display = on ? "" : "none";
   }
   {
-    const o = loadRecordOpts();
+    const o = await loadRecordOpts();
     // Default OFF for a stored blob that predates this option, not just for a
     // missing one — an existing user's first 1.11 capture should also be quiet.
     videoCb.checked = o.video === true;
