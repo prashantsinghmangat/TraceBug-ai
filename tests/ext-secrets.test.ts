@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   setTransportMode, isExtensionMode, setIntegrationStatus, getIntegrationStatus,
-  setHostAccess, getHostAccess, isCaptureLimitedToThisPage,
+  setHostAccess, getHostAccess, isCaptureLimitedToThisPage, shouldShowPageOnlyNotice,
 } from '../src/ext-transport';
 import {
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
@@ -249,5 +249,65 @@ describe('cross-site capture access', () => {
     // Page-mode capture has no extension permission in the picture at all.
     setHostAccess(false);
     expect(isCaptureLimitedToThisPage()).toBe(false);
+  });
+});
+
+describe('the page-only notice fires once, and only when access is withheld', () => {
+  // Phase 3. The "capturing this page only" toast (noteCaptureIsPageOnly in
+  // src/dashboard.ts) has to be a once-per-page instruction: it fires on the
+  // keyboard-shortcut path, which a user may hit repeatedly, and repeating an
+  // instruction they have already read is noise. The decision lives in
+  // ext-transport so it is reachable from here — the withheld-access path
+  // cannot be driven end-to-end by any harness, because granting an optional
+  // permission needs a native dialog (Phase 1's open issue).
+
+  it('shows once, then never again for that page', () => {
+    setTransportMode('extension');
+    setHostAccess(false);
+    expect(shouldShowPageOnlyNotice()).toBe(true);
+    expect(shouldShowPageOnlyNotice()).toBe(false);
+    expect(shouldShowPageOnlyNotice()).toBe(false);
+  });
+
+  it('stays silent when access is granted', () => {
+    setTransportMode('extension');
+    setHostAccess(true);
+    expect(shouldShowPageOnlyNotice()).toBe(false);
+  });
+
+  it('stays silent when access is UNKNOWN', () => {
+    // A wrong "you have no access" hint is worse than no hint, and `undefined`
+    // is a real state: a pre-1.11 content script, or a page that stripped the
+    // attribute.
+    setTransportMode('extension');
+    setHostAccess(undefined);
+    expect(shouldShowPageOnlyNotice()).toBe(false);
+  });
+
+  it('stays silent in SDK (npm) mode even with access withheld', () => {
+    setTransportMode('page');
+    setHostAccess(false);
+    expect(shouldShowPageOnlyNotice()).toBe(false);
+  });
+
+  it('does not burn its one chance while access is still unknown', () => {
+    // Ordering that really happens: the shortcut is pressed before the
+    // content script has published data-tb-caps. The early call must not
+    // consume the notice, or the user never sees it.
+    setTransportMode('extension');
+    setHostAccess(undefined);
+    expect(shouldShowPageOnlyNotice()).toBe(false);
+    setHostAccess(false);
+    expect(shouldShowPageOnlyNotice()).toBe(true);
+  });
+
+  it('re-arms on a fresh init', () => {
+    setTransportMode('extension');
+    setHostAccess(false);
+    expect(shouldShowPageOnlyNotice()).toBe(true);
+    // A new page load re-runs init(), and the notice is per page.
+    setTransportMode('extension');
+    setHostAccess(false);
+    expect(shouldShowPageOnlyNotice()).toBe(true);
   });
 });
