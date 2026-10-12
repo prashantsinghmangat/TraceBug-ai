@@ -33,31 +33,52 @@ if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "un
 // missing field is not a choice. So the blob moved here, and carries an
 // explicit `videoSetBy` discriminator:
 //   "default" — written by this worker on install/update; safe to overwrite
-//   "user"    — the user toggled the checkbox; never overwrite it
+//   "user"    — the user toggled the checkbox themselves; never overwrite it
+// The default itself depends on which of the two it was: off for a new
+// install, on for an update, because a pre-Phase-4 user has been recording
+// video on every capture whether they asked to or not.
 // The popup migrates its legacy localStorage blob into this key on first open
 // (see popup.js `loadRecordOpts`) — the worker cannot do that migration
 // itself, which is why the seed below must not clobber a user's choice.
 const RECORD_OPTS_KEY = "tb_record_opts";
 
 /**
- * Seed "no video" as the default capture, once, without overriding a choice.
+ * Seed the video default once, without ever overriding a choice.
  *
- * On install there is nothing to preserve. On update there may be: a user who
- * turned "Record video too" on keeps it. An update from a build that predates
- * the option has no `videoSetBy`, so it gets the new default — which is the
- * intended behaviour change, not an accident of a missing key.
+ * The default differs by reason, because the two populations differ:
+ *
+ *   install — a new user. Their first capture should not open a share dialog
+ *             before they have seen TraceBug do anything, so: video off.
+ *   update  — someone who has been using TraceBug. Before Phase 4 EVERY
+ *             capture was a screen recording, there being no way to ask for
+ *             anything else, so video off would silently take away the thing
+ *             they have been doing all along: video on.
+ *
+ * Two guards keep that from running away:
+ *
+ *   • `videoSetBy: "user"` is never touched, in either direction.
+ *   • On update, a stored `video` boolean means this build's own install or
+ *     update seed has already run, so the update default does NOT apply a
+ *     second time. Without this, a fresh 1.11 installer who never opened
+ *     Record options would have video switched ON by their next update.
+ *     "No boolean here on an update" is what identifies a pre-1.11 install.
  */
-async function seedRecordOptsDefault() {
+async function seedRecordOptsDefault(reason) {
   try {
     const stored = (await chrome.storage.local.get(RECORD_OPTS_KEY))[RECORD_OPTS_KEY];
     if (stored && stored.videoSetBy === "user") return;
+    if (reason === "update" && stored && typeof stored.video === "boolean") return;
     await chrome.storage.local.set({
-      [RECORD_OPTS_KEY]: { ...(stored || {}), video: false, videoSetBy: "default" },
+      [RECORD_OPTS_KEY]: {
+        ...(stored || {}),
+        video: reason === "update",
+        videoSetBy: "default",
+      },
     });
   } catch (err) {
-    // A failed seed is not fatal: the popup defaults video off when the key
-    // is absent too. Losing the explicit record only costs us the ability to
-    // tell "never asked" from "chose off".
+    // A failed seed is not fatal — the popup falls back to video off when the
+    // key is absent. What it costs is this distinction: an upgrading user
+    // would then be treated like a new one.
     console.warn("[TraceBug] couldn't seed record options", err);
   }
 }
@@ -69,10 +90,11 @@ chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     chrome.tabs.create({ url: "https://tracebug.dev/try.html?welcome=extension" });
   }
-  // Both reasons: an update from a pre-1.11 build has no stored choice either,
-  // and its first capture should be as quiet as a fresh install's.
+  // Both reasons, but NOT the same default — see seedRecordOptsDefault. A new
+  // user gets a quiet first capture; an upgrading user keeps the video they
+  // have been getting all along.
   if (details.reason === "install" || details.reason === "update") {
-    void seedRecordOptsDefault();
+    void seedRecordOptsDefault(details.reason);
   }
 });
 

@@ -29,7 +29,7 @@ All notable changes to TraceBug are documented here.
 
 ### Changed
 
-- **A capture no longer asks to share your screen** (`src/index.ts`, `tracebug-extension/popup.js`) — **Capture Bug** now records the console, the network, your clicks and an interactive **DOM replay**, with no screen-share picker and no operating-system permission. Previously the first thing a brand-new user met was Chrome's "Choose what to share" dialog, before they had seen TraceBug do anything. A screen recording is still one checkbox away — **Record options → Record video too** — and the choice is remembered, so if you want video you turn it on once. Capture / surface / microphone are greyed out until you do, because they only describe a video.
+- **A new install's capture no longer asks to share your screen** (`src/index.ts`, `tracebug-extension/popup.js`) — **Capture Bug** now records the console, the network, your clicks and an interactive **DOM replay**, with no screen-share picker and no operating-system permission. Previously the first thing a brand-new user met was Chrome's "Choose what to share" dialog, before they had seen TraceBug do anything. A screen recording is still one checkbox away — **Record options → Record video too** — and the choice is remembered, so if you want video you turn it on once. Capture / surface / microphone are greyed out until you do, because they only describe a video. **Upgrading from an earlier version keeps video on** — see "If you already use TraceBug" below.
   - The DOM replay is what lands in the exported `.html` in place of the video: tens or hundreds of KB of inspectable DOM events instead of tens of MB of opaque WebM. A report from an events-only capture carries everything a video report does except the pixels.
   - The capture now survives navigation by default, which the video path could not always do, and the on-page HUD comes back on the new page with its timer still running. One limitation worth knowing: the DOM replay covers the page the capture ends on, while the console, network and action timeline span every page you crossed.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
@@ -42,11 +42,15 @@ All notable changes to TraceBug are documented here.
   covering all of them and conclude the earlier pages had nothing on them. A screen recording does
   keep rolling across navigations, so the video export is unchanged, and so is the timeline
   scrubber's own label.
-- **Your "Record video too" choice survives the upgrade** (`tracebug-extension/popup.js`,
-  `background.js`) — the setting moved into the extension's own storage, where the part of TraceBug
-  that handles installs and updates can see it. It could not before, which meant TraceBug had no way
-  to tell "chose not to record video" from "has never been asked", and the new no-video default was
-  applied to both. If you have turned video on, it stays on.
+- **If you already use TraceBug, your captures still record video** (`tracebug-extension/popup.js`,
+  `background.js`) — the no-video default above is for **new installs**. On an **update** TraceBug
+  leaves video on, because before this release every capture was a screen recording and there was
+  no way to ask for anything else: turning that off for you silently would take away the thing you
+  have been using it for. Turn it off whenever you like under **Record options**, and that answer is
+  then yours — no later update will change it back. The setting had to move into the extension's own
+  storage for any of this to be possible: it lived in each popup's page storage, which the part of
+  TraceBug that handles installs and updates cannot read, so "chose not to record video" and "has
+  never been asked" were the same missing value.
 - **"Capture: Current tab" now does something in the extension** (`tracebug-extension/offscreen.js`) — the setting was persisted by the popup and forwarded through the background worker and the content script, and then ignored by the recorder, so the share dialog always showed the full tab/window/screen choice. Only the npm SDK honoured it. Choosing **Current tab** now passes `preferCurrentTab`, which collapses the dialog to a one-click confirm, and `docs/chrome-extension.md` no longer describes the SDK's behaviour as if it were the extension's.
 
 ### Fixed

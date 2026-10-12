@@ -405,7 +405,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       surfaceMode: legacy.surfaceMode ?? stored.surfaceMode,
       delaySec: legacy.delaySec ?? stored.delaySec,
       blurFirst: legacy.blurFirst ?? stored.blurFirst,
-      video: stored.videoSetBy === "user" ? stored.video : legacyAnswered ? legacy.video : false,
+      // No answer anywhere → keep the worker's seed. It must NOT fall back to
+      // a literal here: an update seeds video ON for an existing user, and a
+      // hardcoded `false` would undo that on the first popup open, which is
+      // exactly the silent change the seed exists to prevent.
+      video: stored.videoSetBy === "user"
+        ? stored.video
+        : legacyAnswered ? legacy.video : !!stored.video,
       videoSetBy: chosen ? "user" : "default",
     };
     try { await chrome.storage.local.set({ [OPTS_KEY]: merged }); } catch { return stored; }
@@ -414,6 +420,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     try { localStorage.removeItem(LEGACY_OPTS_KEY); } catch {}
     return merged;
   }
+  // Who last decided the video setting. Only the checkbox promotes this to
+  // "user" (markVideoChosen below) — not a surface change, not a delay change,
+  // and not clicking Capture Bug. Accepting a default is not choosing one, and
+  // the difference matters: a "user" value is never overwritten by a future
+  // install or update seed, so stamping it on a click would freeze someone on
+  // a default they never saw. Initialised from storage in the block below.
+  let videoSetBy = "default";
+  function markVideoChosen() { videoSetBy = "user"; }
   /**
    * Persist the current control values and return them synchronously.
    *
@@ -427,9 +441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       surfaceMode: surfaceSel.value,
       delaySec: Number(delaySel.value) || 0,
       blurFirst: !!blurCb.checked,
-      // Reached only from the controls and the hero button, both of which mean
-      // the user has now been asked. See background.js RECORD_OPTS_KEY.
-      videoSetBy: "user",
+      videoSetBy,
     };
     try { void chrome.storage.local.set({ [OPTS_KEY]: o }); } catch {}
     updateOptsState(o);
@@ -478,9 +490,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   {
     const o = await loadRecordOpts();
-    // Default OFF for a stored blob that predates this option, not just for a
-    // missing one — an existing user's first 1.11 capture should also be quiet.
+    // The default itself now comes from the worker (off on install, on on
+    // update) and from the legacy migration, so this only has to render what
+    // was decided. Still `=== true` rather than truthy: a storage read that
+    // came back empty must land on off, not on whatever coerces.
     videoCb.checked = o.video === true;
+    if (o.videoSetBy === "user") videoSetBy = "user";
     if (o.surfaceMode) surfaceSel.value = o.surfaceMode;
     if (o.delaySec) delaySel.value = String(o.delaySec);
     blurCb.checked = !!o.blurFirst;
@@ -491,7 +506,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       blurFirst: blurCb.checked,
     });
     applyVideoUI(videoCb.checked);
-    [videoCb, surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
+    // The checkbox gets its own handler: toggling it is the one action that
+    // means "I have decided about video".
+    videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });
+    [surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
   }
 
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {
