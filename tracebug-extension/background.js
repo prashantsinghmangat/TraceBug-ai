@@ -202,8 +202,14 @@ async function handleComboAction(message, sender) {
 // ── Auto-inject on navigation complete ──────────────────────────────────────
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // Only act on full page load (not partial updates)
-  if (changeInfo.status !== "complete" || !tab.url) return;
+  // Only act on full page load (not partial updates).
+  //
+  // Deliberately does NOT look at tab.url. Phase 1 made <all_urls> an optional
+  // host permission, so until it is granted `tab.url` is undefined on almost
+  // every tab — a `!tab.url` guard here would return early and kill
+  // re-injection after navigation entirely. The decision below needs only the
+  // tabId, checked against activeTabs / _recordingTabId.
+  if (changeInfo.status !== "complete") return;
 
   // Ensure persisted state (activeTabs / _recordingTabId) is rehydrated before
   // we decide whether to re-inject — a cold worker wake could otherwise miss it.
@@ -243,6 +249,28 @@ chrome.tabs.onActivated.addListener((activeInfo) => {
   updateBadge(activeInfo.tabId);
 });
 
+// ── Cross-site access changes ───────────────────────────────────────────────
+// Granting or revoking <all_urls> changes what an ALREADY-RUNNING SDK should
+// tell the user, so nudge every injected tab to re-read it. Only tabs we
+// injected are touched, and the message carries a boolean, never a URL.
+
+function notifyHostAccessChanged() {
+  injectedTabs.forEach((tabId) => {
+    try {
+      chrome.tabs.sendMessage(tabId, { type: "TB_HOST_ACCESS_CHANGED" }, { frameId: 0 }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {}
+  });
+}
+
+if (chrome.permissions && chrome.permissions.onAdded) {
+  chrome.permissions.onAdded.addListener(notifyHostAccessChanged);
+}
+if (chrome.permissions && chrome.permissions.onRemoved) {
+  chrome.permissions.onRemoved.addListener(notifyHostAccessChanged);
+}
+
 // ── Message handler ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -253,6 +281,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || sender?.tab?.id;
     sendResponse({ loaded: tabId ? injectedTabs.has(tabId) : false });
     return false;
+  }
+
+  // ── Cross-site access, asked by the content script ──────────────────────
+  // Phase 1 made <all_urls> optional, so "can TraceBug keep capturing after
+  // the user navigates?" is now a real question with two answers. The page
+  // world has no chrome.permissions, and NEITHER DOES A CONTENT SCRIPT — the
+  // permissions API is not exposed there — so the worker answers it and the
+  // content script publishes the boolean on <html data-tb-caps>.
+  if (message.type === "TB_HOST_ACCESS") {
+    hasHostAccess("<all_urls>").then((granted) => sendResponse({ granted }));
+    return true; // async
   }
 
   // User turned TraceBug OFF from the floating toolbar (✕). Forget the tab so
@@ -990,13 +1029,38 @@ async function handleProviderRequest(message, sender) {
     return ackError((TB_PROVIDER_LABELS[v.target] || v.target) + " is not configured — open TraceBug settings.");
   }
 
+  // Cap the body to what the provider actually accepts BEFORE the confirmation
+  // window opens. Two reasons it has to happen here and not at the fetch:
+  //   1. the user must approve the EXACT text that will be sent, and
+  //   2. an over-long body is a 422 that loses the whole send, so cutting it is
+  //      the difference between a shortened issue and no issue.
+  const cap = capTrackerPayload(v.target, payload);
+
   return queueConfirmation({
     id, tabId, origin, kind: "tracker",
     target: v.target,
     providerLabel: TB_PROVIDER_LABELS[v.target] || v.target,
     destination: b.destinationLabel(v.target, integrations),
-    payload,
+    payload: cap.payload,
+    cutWarning: cap.warning,
   });
+}
+
+/**
+ * Shorten the one text field this provider carries, if it exceeds the
+ * provider's limit. Returns the payload unchanged when it fits (the usual
+ * case) and a one-sentence warning when it did not, which the confirmation
+ * window shows in its "Before you send" box.
+ */
+function capTrackerPayload(target, payload) {
+  const api = providerApi();
+  if (!api || typeof api.capProviderBody !== "function") return { payload };
+  const field = target === "slack" ? "text" : "body";
+  const capped = api.capProviderBody(target, payload[field] || "");
+  if (!capped.cutFrom) return { payload };
+  const next = Object.assign({}, payload);
+  next[field] = capped.text;
+  return { payload: next, warning: capped.warning };
 }
 
 function hasProviderConfig(target, integrations) {
@@ -1046,7 +1110,10 @@ async function queueConfirmation(req) {
     providerLabel: req.providerLabel,
     destination: req.destination,
     payload: req.payload,
-    warnings: b.previewWarnings(bodyTextOf(req.payload)),
+    // The cut notice goes FIRST: it is the one warning that changes what the
+    // user is approving, rather than just describing it.
+    warnings: (req.cutWarning ? [req.cutWarning] : []).concat(b.previewWarnings(bodyTextOf(req.payload))),
+    shortened: !!req.cutWarning,
     expiresAt,
     windowId: null,
   };
@@ -1090,6 +1157,7 @@ function confirmViewOf(req) {
     title: (req.payload && req.payload.title) || "",
     body: bodyTextOf(req.payload),
     warnings: req.warnings || [],
+    shortened: !!req.shortened,
     expiresAt: req.expiresAt,
   };
 }
@@ -1179,29 +1247,35 @@ async function callLLMFromWorker(api, req) {
   const cfg = got[AI_CFG_KEY];
   if (!cfg || !cfg.provider) throw new Error("No AI provider configured — open TraceBug settings.");
 
-  // A user-edited Ollama baseUrl can point anywhere, and our optional
-  // permissions only cover localhost and 127.0.0.1. Fail with a sentence that
-  // says what happened, rather than letting it surface as a bare CORS error.
-  // TODO(phase-1): once <all_urls> is an optional host permission, the settings
-  // page can request this single origin instead of us refusing — see
-  // docs/launch/PLAN.md Phase 1, "Custom Ollama baseUrl".
-  let ollamaHost = "localhost";
-  if (cfg.provider === "ollama" && cfg.baseUrl) {
-    try { ollamaHost = new URL(cfg.baseUrl).hostname; }
-    catch { throw new Error("The Ollama base URL in TraceBug settings is not a valid URL."); }
-    if (ollamaHost !== "localhost" && ollamaHost !== "127.0.0.1") {
-      throw new Error("TraceBug can't reach " + ollamaHost + " yet — only localhost and 127.0.0.1 are covered. Change the Ollama base URL in settings.");
+  // A user-edited Ollama baseUrl can point anywhere. Phase 1 made <all_urls>
+  // an optional host permission, so a custom host is no longer a refusal: the
+  // settings page requests that ONE origin when the provider is saved, and we
+  // check the same origin here. Only an unparseable or non-HTTP URL is still a
+  // hard error — nothing to request for those.
+  //
+  // 127.0.0.1 is a different HOST from localhost, so it gets its own pattern.
+  // Match patterns carry no port, so :11434 needs no special handling.
+  let pattern = api.PROVIDER_ORIGINS[cfg.provider];
+  let hostLabel = cfg.provider === "ollama" ? "localhost" : "the AI provider";
+  if (cfg.provider === "ollama") {
+    let u = null;
+    if (cfg.baseUrl) {
+      try { u = new URL(cfg.baseUrl); }
+      catch { throw new Error("The Ollama base URL in TraceBug settings is not a valid URL."); }
+      if (u.protocol !== "http:" && u.protocol !== "https:") {
+        throw new Error("The Ollama base URL must start with http:// or https:// — fix it in TraceBug settings.");
+      }
     }
+    const host = u ? u.hostname : "localhost";
+    hostLabel = host;
+    pattern = host === "localhost"
+      ? api.PROVIDER_ORIGINS.ollama
+      : host === "127.0.0.1"
+        ? api.PROVIDER_ORIGINS.ollama127
+        : u.protocol + "//" + host + "/*";
   }
-
-  // 127.0.0.1 is a different HOST from localhost, so it has its own pattern —
-  // checking the wrong one would pass today (<all_urls> is still required) and
-  // start failing the moment Phase 1 makes it optional.
-  const pattern = cfg.provider === "ollama"
-    ? (ollamaHost === "127.0.0.1" ? api.PROVIDER_ORIGINS.ollama127 : api.PROVIDER_ORIGINS.ollama)
-    : api.PROVIDER_ORIGINS[cfg.provider];
   if (pattern && !(await hasHostAccess(pattern))) {
-    throw new Error(noAccessMessage(cfg.provider === "ollama" ? "localhost" : "the AI provider"));
+    throw new Error(noAccessMessage(hostLabel));
   }
   return api.callLLM(cfg, req.payload.prompt);
 }

@@ -41,8 +41,15 @@
   }
 
   function syncIntegrationStatus() {
+    var caps = readIntegrationStatus();
     if (window.TraceBugSDK && window.TraceBugSDK.setIntegrationStatus) {
-      window.TraceBugSDK.setIntegrationStatus(readIntegrationStatus());
+      window.TraceBugSDK.setIntegrationStatus(caps);
+    }
+    // Same attribute also carries `hostAccess` — whether <all_urls> is granted,
+    // which Phase 1 made optional. Absent means "unknown", and the SDK stays
+    // quiet about it rather than claiming the capture is limited.
+    if (window.TraceBugSDK && window.TraceBugSDK.setHostAccess) {
+      window.TraceBugSDK.setHostAccess(caps ? caps.hostAccess : undefined);
     }
   }
 

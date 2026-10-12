@@ -22,9 +22,11 @@ var TraceBugProviderAPI = (() => {
   var api_exports = {};
   __export(api_exports, {
     DEFAULT_BASE_URLS: () => DEFAULT_BASE_URLS,
+    PROVIDER_BODY_LIMITS: () => PROVIDER_BODY_LIMITS,
     PROVIDER_ORIGINS: () => PROVIDER_ORIGINS,
     SYSTEM_PROMPT: () => SYSTEM_PROMPT,
     callLLM: () => callLLM,
+    capProviderBody: () => capProviderBody,
     friendlyStatus: () => friendlyStatus,
     mapProviderError: () => mapProviderError,
     postGitHubIssue: () => postGitHubIssue,
@@ -46,6 +48,42 @@ var TraceBugProviderAPI = (() => {
     ollama: "http://localhost/*",
     ollama127: "http://127.0.0.1/*"
   };
+  var PROVIDER_BODY_LIMITS = {
+    github: 65536,
+    slack: 4e4,
+    linear: 65536
+  };
+  function withCommas(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+  var CUT_LOOKBACK = 1e3;
+  var FENCE_RESERVE = 4;
+  function openFenceCount(text) {
+    const m = text.match(/^\s{0,3}```/gm);
+    return m ? m.length : 0;
+  }
+  function capProviderBody(provider, text) {
+    var _a;
+    const limit = (_a = PROVIDER_BODY_LIMITS[provider]) != null ? _a : PROVIDER_BODY_LIMITS.github;
+    const label = provider === "github" ? "GitHub" : provider === "linear" ? "Linear" : "Slack";
+    const body = typeof text === "string" ? text : String(text != null ? text : "");
+    if (body.length <= limit) return { text: body, limit };
+    const notice = "\n\n---\n**Cut off here by TraceBug** \u2014 this report is longer than " + label + " accepts (" + withCommas(limit) + " characters). The rest is in the full TraceBug report: export the .html from the ticket and attach it.";
+    const budget = Math.max(0, limit - notice.length - FENCE_RESERVE);
+    let keep = body.slice(0, budget);
+    const floor = Math.max(0, keep.length - CUT_LOOKBACK);
+    const near = (i) => i > floor ? i : -1;
+    const at = [near(keep.lastIndexOf("\n\n")), near(keep.lastIndexOf("\n")), near(keep.lastIndexOf(" "))].find((i) => i > 0);
+    if (at !== void 0) keep = keep.slice(0, at);
+    keep = keep.replace(/\s+$/, "");
+    if (openFenceCount(keep) % 2 === 1) keep += "\n```";
+    return {
+      text: keep + notice,
+      limit,
+      cutFrom: body.length,
+      warning: "Shortened to fit " + label + ": " + withCommas(body.length) + " characters became " + withCommas(keep.length + notice.length) + ", the most " + label + " accepts. The body below is exactly what will be sent."
+    };
+  }
   function friendlyStatus(status, label, kind = "llm") {
     const where = kind === "tracker" ? "token" : "API key";
     switch (status) {
@@ -117,7 +155,9 @@ var TraceBugProviderAPI = (() => {
       },
       body: JSON.stringify({
         title: content.title,
-        body: content.body,
+        // Backstop: the extension already capped this before the confirmation
+        // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
+        body: capProviderBody("github", content.body).text,
         labels: config.labels && config.labels.length ? config.labels : void 0
       })
     });
@@ -137,7 +177,13 @@ var TraceBugProviderAPI = (() => {
       },
       body: JSON.stringify({
         query,
-        variables: { input: { teamId: config.teamId, title: content.title, description: content.body } }
+        variables: {
+          input: {
+            teamId: config.teamId,
+            title: content.title,
+            description: capProviderBody("linear", content.body).text
+          }
+        }
       })
     });
     const data = await parseJsonOrThrow(res, "Linear", "tracker");
@@ -160,7 +206,7 @@ var TraceBugProviderAPI = (() => {
         signal,
         mode: "no-cors",
         headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: "payload=" + encodeURIComponent(JSON.stringify({ text: content.text }))
+        body: "payload=" + encodeURIComponent(JSON.stringify({ text: capProviderBody("slack", content.text).text }))
       });
       return { provider: "slack", ok: true, opaque: true };
     }
@@ -168,7 +214,7 @@ var TraceBugProviderAPI = (() => {
       method: "POST",
       signal,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: content.text })
+      body: JSON.stringify({ text: capProviderBody("slack", content.text).text })
     });
     const text = (await res.text().catch(() => "")).trim();
     if (!res.ok) {

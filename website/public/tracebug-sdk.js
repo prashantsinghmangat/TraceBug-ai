@@ -21599,8 +21599,18 @@ var TraceBugModule = (() => {
     }
     return map;
   }
+  function errorText(data, fallback) {
+    const d = data || {};
+    const str = (v2) => typeof v2 === "string" ? v2.trim() : "";
+    const err = d.error;
+    if (err && typeof err === "object" && !Array.isArray(err)) {
+      const e2 = err;
+      return str(e2.message) || str(e2.name) || str(d.message) || fallback;
+    }
+    return str(err) || str(d.message) || fallback;
+  }
   function buildActionChips(events) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
     if (!events || events.length === 0) return [];
     const frustration = detectFrustration(events);
     const offset = events.length > MAX_CHIPS ? events.length - MAX_CHIPS : 0;
@@ -21719,28 +21729,26 @@ var TraceBugModule = (() => {
         case "error":
         case "console_error":
         case "unhandled_rejection": {
-          const msg = String(((_h = e2.data) == null ? void 0 : _h.message) || ((_i = e2.data) == null ? void 0 : _i.error) || "Runtime error");
           chips.push({
             verb: "Error",
             kind: "error",
-            detail: truncate2(msg, MAX_DETAIL_LEN),
+            detail: truncate2(errorText(e2.data, "Runtime error"), MAX_DETAIL_LEN),
             timestamp: e2.timestamp,
             isError: true
           });
           break;
         }
         case "console_warn": {
-          const msg = String(((_j = e2.data) == null ? void 0 : _j.message) || "Warning");
           chips.push({
             verb: "Warning",
             kind: "error",
-            detail: truncate2(msg, MAX_DETAIL_LEN),
+            detail: truncate2(errorText(e2.data, "Warning"), MAX_DETAIL_LEN),
             timestamp: e2.timestamp
           });
           break;
         }
         case "mark": {
-          const label = String(((_k = e2.data) == null ? void 0 : _k.label) || "Mark");
+          const label = String(((_h = e2.data) == null ? void 0 : _h.label) || "Mark");
           chips.push({
             verb: "Mark",
             kind: "mark",
@@ -28642,17 +28650,56 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
   function getIntegrationStatus() {
     return { ..._status };
   }
-  var _mode2, EMPTY, _status;
+  function setHostAccess(granted) {
+    _hostAccess = typeof granted === "boolean" ? granted : void 0;
+  }
+  function getHostAccess() {
+    return _hostAccess;
+  }
+  function isCaptureLimitedToThisPage() {
+    return isExtensionMode() && _hostAccess === false;
+  }
+  var _mode2, EMPTY, _status, _hostAccess;
   var init_ext_transport = __esm({
     "src/ext-transport.ts"() {
       "use strict";
       _mode2 = "page";
       EMPTY = { github: false, linear: false, slack: false, ai: false };
       _status = { ...EMPTY };
+      _hostAccess = void 0;
     }
   });
 
   // src/providers/api.ts
+  function withCommas(n2) {
+    return String(n2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+  function openFenceCount(text) {
+    const m = text.match(/^\s{0,3}```/gm);
+    return m ? m.length : 0;
+  }
+  function capProviderBody(provider, text) {
+    var _a2;
+    const limit = (_a2 = PROVIDER_BODY_LIMITS[provider]) != null ? _a2 : PROVIDER_BODY_LIMITS.github;
+    const label = provider === "github" ? "GitHub" : provider === "linear" ? "Linear" : "Slack";
+    const body = typeof text === "string" ? text : String(text != null ? text : "");
+    if (body.length <= limit) return { text: body, limit };
+    const notice = "\n\n---\n**Cut off here by TraceBug** \u2014 this report is longer than " + label + " accepts (" + withCommas(limit) + " characters). The rest is in the full TraceBug report: export the .html from the ticket and attach it.";
+    const budget = Math.max(0, limit - notice.length - FENCE_RESERVE);
+    let keep = body.slice(0, budget);
+    const floor = Math.max(0, keep.length - CUT_LOOKBACK);
+    const near = (i2) => i2 > floor ? i2 : -1;
+    const at = [near(keep.lastIndexOf("\n\n")), near(keep.lastIndexOf("\n")), near(keep.lastIndexOf(" "))].find((i2) => i2 > 0);
+    if (at !== void 0) keep = keep.slice(0, at);
+    keep = keep.replace(/\s+$/, "");
+    if (openFenceCount(keep) % 2 === 1) keep += "\n```";
+    return {
+      text: keep + notice,
+      limit,
+      cutFrom: body.length,
+      warning: "Shortened to fit " + label + ": " + withCommas(body.length) + " characters became " + withCommas(keep.length + notice.length) + ", the most " + label + " accepts. The body below is exactly what will be sent."
+    };
+  }
   function friendlyStatus(status, label, kind = "llm") {
     const where = kind === "tracker" ? "token" : "API key";
     switch (status) {
@@ -28713,7 +28760,9 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       },
       body: JSON.stringify({
         title: content.title,
-        body: content.body,
+        // Backstop: the extension already capped this before the confirmation
+        // window, so this is a no-op there. It is the ONLY cap in SDK (npm) mode.
+        body: capProviderBody("github", content.body).text,
         labels: config.labels && config.labels.length ? config.labels : void 0
       })
     });
@@ -28733,7 +28782,13 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       },
       body: JSON.stringify({
         query,
-        variables: { input: { teamId: config.teamId, title: content.title, description: content.body } }
+        variables: {
+          input: {
+            teamId: config.teamId,
+            title: content.title,
+            description: capProviderBody("linear", content.body).text
+          }
+        }
       })
     });
     const data = await parseJsonOrThrow(res, "Linear", "tracker");
@@ -28756,7 +28811,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         signal,
         mode: "no-cors",
         headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: "payload=" + encodeURIComponent(JSON.stringify({ text: content.text }))
+        body: "payload=" + encodeURIComponent(JSON.stringify({ text: capProviderBody("slack", content.text).text }))
       });
       return { provider: "slack", ok: true, opaque: true };
     }
@@ -28764,7 +28819,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       method: "POST",
       signal,
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: content.text })
+      body: JSON.stringify({ text: capProviderBody("slack", content.text).text })
     });
     const text = (await res.text().catch(() => "")).trim();
     if (!res.ok) {
@@ -28876,7 +28931,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       usage: data.prompt_eval_count ? { inputTokens: data.prompt_eval_count, outputTokens: data.eval_count } : void 0
     };
   }
-  var DEFAULT_BASE_URLS, SYSTEM_PROMPT;
+  var DEFAULT_BASE_URLS, SYSTEM_PROMPT, PROVIDER_BODY_LIMITS, CUT_LOOKBACK, FENCE_RESERVE;
   var init_api = __esm({
     "src/providers/api.ts"() {
       "use strict";
@@ -28886,6 +28941,13 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
         ollama: "http://localhost:11434"
       };
       SYSTEM_PROMPT = "You are an expert debugging assistant. You are given a structured bug report captured by TraceBug (console errors, network activity, reproduction steps, environment). Analyze it and respond in concise markdown with exactly these sections:\n\n## Root cause\nThe single most likely cause, stated plainly.\n\n## Evidence\nThe specific signals in the report that point to it (quote the error/status/step).\n\n## Where to look\nThe files, components, or endpoints a developer should inspect first.\n\n## Suggested fix\nA concrete fix, with a short code sketch when possible.\n\n## Edge cases to test\n2-4 things to verify once the fix lands.\n\nBe specific and grounded in the report \u2014 do not invent details it does not contain. If the report lacks enough signal, say so and list what to capture next.";
+      PROVIDER_BODY_LIMITS = {
+        github: 65536,
+        slack: 4e4,
+        linear: 65536
+      };
+      CUT_LOOKBACK = 1e3;
+      FENCE_RESERVE = 4;
     }
   });
 
@@ -33965,6 +34027,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
             console.warn("[TraceBug] Quick bug capture failed:", err);
             showToast2("Quick capture failed", root2);
           });
+          noteCaptureIsPageOnly(root2);
         }
         return;
       }
@@ -35493,6 +35556,17 @@ ${"-".repeat(40)}
         return "#888";
     }
   }
+  function noteCaptureIsPageOnly(root2) {
+    if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return;
+    _pageOnlyNoticeShown = true;
+    showActionToast(
+      "Capturing this page only. To keep capturing when you navigate to another site, open the TraceBug toolbar icon and choose Allow when it asks for site access.",
+      "Got it",
+      () => {
+      },
+      root2
+    );
+  }
   function showToast2(message, root2) {
     const existing = root2.querySelector(".bt-toast");
     if (existing) existing.remove();
@@ -35915,7 +35989,7 @@ ${"-".repeat(40)}
   function annActionBtnStyle() {
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
-  var PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
+  var PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _pageOnlyNoticeShown, _annotationEditorOnSave;
   var init_dashboard = __esm({
     "src/dashboard.ts"() {
       "use strict";
@@ -35931,6 +36005,7 @@ ${"-".repeat(40)}
       init_annotation_store();
       init_compact_toolbar();
       init_toast();
+      init_ext_transport();
       init_element_annotate();
       init_onboarding();
       init_quick_bug();
@@ -35949,6 +36024,7 @@ ${"-".repeat(40)}
         console_error: { label: "Console Err", icon: "\u26A0\uFE0F", color: "#fb923c", bg: "#2a1505" },
         unhandled_rejection: { label: "Rejection", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" }
       };
+      _pageOnlyNoticeShown = false;
     }
   });
 
@@ -70490,6 +70566,7 @@ First element: \`${exampleSnippet}\``,
     getAIConfig: () => getAIConfig,
     getAllSessions: () => getAllSessions,
     getCaptureCount: () => getCaptureCount,
+    getHostAccess: () => getHostAccess,
     getIntegrationStatus: () => getIntegrationStatus,
     getIntegrationsConfig: () => getIntegrationsConfig,
     getIssueById: () => getIssueById,
@@ -70523,6 +70600,7 @@ First element: \`${exampleSnippet}\``,
     scan: () => scan,
     sendSlackMessage: () => sendSlackMessage,
     setAIConfig: () => setAIConfig,
+    setHostAccess: () => setHostAccess,
     setIntegrationStatus: () => setIntegrationStatus,
     setIntegrationsConfig: () => setIntegrationsConfig,
     setPlan: () => setPlan,

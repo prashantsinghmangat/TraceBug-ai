@@ -14,7 +14,8 @@ import { generateBugTitle } from "./title-generator";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, clearVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, copyToClipboard } from "./annotation-store";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
-import { showToast as showUnifiedToast } from "./ui/toast";
+import { showToast as showUnifiedToast, showActionToast } from "./ui/toast";
+import { isCaptureLimitedToThisPage } from "./ext-transport";
 
 export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setNewCaptureHandler };
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
@@ -184,6 +185,13 @@ export function mountDashboard(
           console.warn("[TraceBug] Quick bug capture failed:", err);
           showToast("Quick capture failed", root);
         });
+        // This shortcut is a PAGE-level keydown handler inside the injected
+        // SDK, not a browser command — so it cannot ask for the optional
+        // <all_urls> permission (chrome.permissions.request needs a user
+        // gesture in an EXTENSION page). The capture of this page still works
+        // without it; what stops is carrying on after a cross-origin
+        // navigation. Say so, and say where the one-click grant lives.
+        noteCaptureIsPageOnly(root);
       }
       return;
     }
@@ -1851,6 +1859,28 @@ function _getIntentColor(intent: string): string {
 }
 
 // ── Toast notification ────────────────────────────────────────────────────
+
+/**
+ * One-time-per-page hint for the keyboard-shortcut path when TraceBug has no
+ * cross-site access. Only fires when we KNOW access was withheld — an unknown
+ * state stays silent (see getHostAccess in src/ext-transport.ts).
+ *
+ * Uses the action toast, not the 2s transient: this is an instruction, and
+ * nobody reads an instruction in two seconds.
+ */
+let _pageOnlyNoticeShown = false;
+
+function noteCaptureIsPageOnly(root: HTMLElement): void {
+  if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return;
+  _pageOnlyNoticeShown = true;
+  showActionToast(
+    "Capturing this page only. To keep capturing when you navigate to another site, " +
+      "open the TraceBug toolbar icon and choose Allow when it asks for site access.",
+    "Got it",
+    () => {},
+    root,
+  );
+}
 
 function showToast(message: string, root: HTMLElement): void {
   const existing = root.querySelector(".bt-toast");

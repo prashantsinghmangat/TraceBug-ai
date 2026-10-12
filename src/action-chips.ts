@@ -254,6 +254,33 @@ function detectFrustration(events: TraceBugEvent[]): FrustrationMap {
  * Turn a list of session events into action chips. Caps the result at the
  * last MAX_CHIPS events so the UI stays scrollable but useful.
  */
+/**
+ * The message to show for an error-ish event.
+ *
+ * Every collector emits the text NESTED, as `data.error.message` — window
+ * errors, unhandled rejections and console.error/warn/info alike (see
+ * `wrapConsoleLevel` and `collectErrors` in src/collectors.ts). Reading
+ * `data.message` therefore found nothing: the error row stringified
+ * `data.error`, printing **[object Object]**, and the warning row fell all the
+ * way through to the bare word **Warning** with no content at all.
+ *
+ * So: nested message first, then the error NAME (a `TypeError` with no message
+ * is still worth more than "Runtime error"), then a top-level `message` for
+ * any shape that grows one later. An object is never stringified — that is the
+ * bug this function exists to prevent.
+ */
+function errorText(data: TraceBugEvent["data"] | undefined, fallback: string): string {
+  const d = (data || {}) as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+  const err: unknown = d.error;
+  if (err && typeof err === "object" && !Array.isArray(err)) {
+    const e = err as { message?: unknown; name?: unknown };
+    return str(e.message) || str(e.name) || str(d.message) || fallback;
+  }
+  return str(err) || str(d.message) || fallback;
+}
+
 export function buildActionChips(events: TraceBugEvent[]): ActionChip[] {
   if (!events || events.length === 0) return [];
 
@@ -390,22 +417,20 @@ export function buildActionChips(events: TraceBugEvent[]): ActionChip[] {
       case "error":
       case "console_error":
       case "unhandled_rejection": {
-        const msg = String(e.data?.message || e.data?.error || "Runtime error");
         chips.push({
           verb: "Error",
           kind: "error",
-          detail: truncate(msg, MAX_DETAIL_LEN),
+          detail: truncate(errorText(e.data, "Runtime error"), MAX_DETAIL_LEN),
           timestamp: e.timestamp,
           isError: true,
         });
         break;
       }
       case "console_warn": {
-        const msg = String(e.data?.message || "Warning");
         chips.push({
           verb: "Warning",
           kind: "error",
-          detail: truncate(msg, MAX_DETAIL_LEN),
+          detail: truncate(errorText(e.data, "Warning"), MAX_DETAIL_LEN),
           timestamp: e.timestamp,
         });
         break;

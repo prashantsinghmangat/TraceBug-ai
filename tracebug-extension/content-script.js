@@ -146,10 +146,16 @@ var TB_AI_KEY = "tb_ai_config_v1";
 safeRun(function () {
   if (!isExtAlive() || !document.documentElement) return;
 
-  function toStatus(integrations, ai) {
+  function toStatus(integrations, ai, hostAccess) {
     var i = integrations || {};
     var a = ai || null;
     return {
+      // Can TraceBug keep capturing after the user navigates to another
+      // origin? Phase 1 made <all_urls> optional, so this is now a real
+      // question. The permissions API is not exposed to content scripts
+      // either, so the worker answers it (TB_HOST_ACCESS). Left undefined
+      // when we could not ask, so the SDK stays quiet rather than guessing.
+      hostAccess: typeof hostAccess === "boolean" ? hostAccess : undefined,
       github: !!(i.github && i.github.token && i.github.repo),
       linear: !!(i.linear && i.linear.apiKey && i.linear.teamId),
       slack: !!(i.slack && i.slack.webhookUrl),
@@ -169,12 +175,29 @@ safeRun(function () {
     try {
       chrome.storage.local.get([TB_INT_KEY, TB_AI_KEY], function (r) {
         var _ = chrome.runtime.lastError;
-        publishStatus(toStatus(r && r[TB_INT_KEY], r && r[TB_AI_KEY]));
+        var ints = r && r[TB_INT_KEY];
+        var ai = r && r[TB_AI_KEY];
+        try {
+          chrome.runtime.sendMessage({ type: "TB_HOST_ACCESS" }, function (res) {
+            var _e = chrome.runtime.lastError;
+            publishStatus(toStatus(ints, ai, res && res.granted));
+          });
+        } catch (e2) {
+          publishStatus(toStatus(ints, ai, undefined));
+        }
       });
     } catch (e) {}
   }
 
   readAndPublish();
+
+  // The worker tells us when <all_urls> is granted or revoked, so a running
+  // SDK stops showing the "this page only" hint the moment access is allowed.
+  try {
+    chrome.runtime.onMessage.addListener(function (message) {
+      if (message && message.type === "TB_HOST_ACCESS_CHANGED") readAndPublish();
+    });
+  } catch (e) {}
 
   // Live updates: a token saved in the options page reaches an already-running
   // SDK without a reload (tracebug-init.js observes the attribute).

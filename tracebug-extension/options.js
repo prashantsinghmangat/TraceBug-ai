@@ -35,6 +35,29 @@ const HOSTS = {
 };
 
 /**
+ * The host pattern for the AI provider being saved. Ollama is the only one the
+ * user can point somewhere else, and since Phase 1 declared `<all_urls>` as an
+ * optional host permission we can request that ONE origin instead of refusing
+ * it — so a self-hosted Ollama on another machine works.
+ *
+ * Must stay SYNCHRONOUS: it runs inside the click handler, before
+ * permissions.request(), and an await there would lose the user gesture.
+ * Returns null for a URL we cannot parse — the save handler reports that.
+ */
+function aiHostPatterns(provider, baseUrl) {
+  if (provider !== "ollama") return HOSTS[provider] || null;
+  var raw = (baseUrl || "").trim();
+  if (!raw) return HOSTS.ollama;
+  var u;
+  try { u = new URL(raw); } catch (e) { return null; }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+  if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return HOSTS.ollama;
+  // Match patterns cannot carry a port, so the port in baseUrl is dropped here
+  // on purpose — the pattern covers every port on that host.
+  return [u.protocol + "//" + u.hostname + "/*"];
+}
+
+/**
  * Wrap a click handler so it asks for host access FIRST.
  *
  * chrome.permissions.request() requires a user gesture, and an `await`
@@ -188,19 +211,34 @@ async function saveAI(granted) {
     say(status, "Enter an API key for this provider.", "err");
     return;
   }
+  // A base URL we cannot parse is the one case there is no origin to ask for,
+  // so it is rejected here rather than saved and failing at send time.
+  if (provider === "ollama" && baseUrl && !aiHostPatterns(provider, baseUrl)) {
+    say(status, "That base URL isn't usable — enter a full http:// or https:// URL, e.g. http://localhost:11434.", "err");
+    return;
+  }
 
   try {
     await set({ [AI_KEY]: { provider, apiKey, model, baseUrl: baseUrl || undefined } });
     $("aiKey").value = "";
     await refreshPills();
-    say(status, "Saved.", "ok", accessNote(granted, provider === "ollama" ? "your local Ollama" : provider));
+    // Name the host when Ollama points somewhere other than this machine —
+    // "your local Ollama" would be wrong, and the decline note has to say
+    // which site the user is being asked to allow.
+    var label = provider;
+    if (provider === "ollama") {
+      var h = "";
+      try { h = baseUrl ? new URL(baseUrl).hostname : ""; } catch (e) {}
+      label = (!h || h === "localhost" || h === "127.0.0.1") ? "your local Ollama" : h;
+    }
+    say(status, "Saved.", "ok", accessNote(granted, label));
   } catch (e) {
     say(status, "Couldn't save: " + (e.message || "storage error"), "err");
   }
 }
 
 $("aiSave").addEventListener("click", withHostAccess(
-  () => HOSTS[$("aiProvider").value] || null,
+  () => aiHostPatterns($("aiProvider").value, $("aiBaseUrl").value),
   saveAI,
 ));
 

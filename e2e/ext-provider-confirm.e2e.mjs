@@ -18,9 +18,14 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
 const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
-const EXT = join(REPO, "tracebug-extension");
+// Site access is OPTIONAL from 1.11, and this harness injects from the
+// service worker rather than through a real toolbar click, so it cannot grant
+// itself access. Load a copy that declares it — see e2e/ext-host-access.mjs
+// for why, and for what this does NOT change.
+const EXT = withGrantedHostAccess(join(REPO, "tracebug-extension"), "confirm");
 const PUBLIC_DIR = join(REPO, "website", "public");
 
 const PORT = 4178;
@@ -240,6 +245,50 @@ try {
     check("closing the window cancels and sends nothing", hits.length === before, String(hits.length));
     check("closing the window tells the page it was cancelled",
       !!r3.result && r3.result.cancelled === true, JSON.stringify(r3.result));
+  }
+
+  // ══ 4b. An over-long body is cut BEFORE the user approves ════════════════
+  // GitHub refuses a body over 65,536 characters with a 422, which loses the
+  // whole send. The worker caps it first, so what the user approves in this
+  // window is exactly what will be posted — and the window has to say that it
+  // was shortened, or the approval is of something the user cannot see the end
+  // of.
+  const LONG_LINE = "step: the user clicked submit and the spinner never stopped\n";
+  const id3b = await page.evaluate((line) => window.__tbSend({
+    type: "tb:provider:send",
+    data: { provider: "github", payload: { title: "Huge report", body: line.repeat(4000) } },
+  }), LONG_LINE);
+  const win3b = await waitForConfirmWindow();
+  check("window opens for the over-long payload", !!win3b);
+  if (win3b) {
+    const view = await win3b.evaluate(() => ({
+      body: document.getElementById("body").textContent,
+      label: document.getElementById("bodyLabel").textContent,
+      warn: document.getElementById("warnList").textContent,
+      warnShown: document.getElementById("warnBox").style.display !== "none",
+    }));
+    check("the body shown is within GitHub's 65,536-character limit",
+      view.body.length <= 65536, String(view.body.length));
+    check("the body shown is still most of the report, not a stub",
+      view.body.length > 60000, String(view.body.length));
+    check("the cut is marked at the end of the body",
+      /Cut off here by TraceBug/.test(view.body) && /export the \.html/i.test(view.body),
+      view.body.slice(-160));
+    check("the cut fell on a line boundary",
+      view.body.slice(0, view.body.indexOf("\n\n---")).endsWith(LONG_LINE.trim()),
+      JSON.stringify(view.body.slice(0, view.body.indexOf("\n\n---")).slice(-70)));
+    check("the shortening is warned about before the user approves",
+      view.warnShown && /Shortened to fit GitHub/.test(view.warn), JSON.stringify(view.warn).slice(0, 200));
+    check("the warning names both sizes",
+      /Shortened to fit GitHub: [\d,]+ characters became [\d,]+/.test(view.warn), view.warn.slice(0, 200));
+    check("the body label says it was shortened", /shortened to fit/i.test(view.label), view.label);
+
+    // Cancel: this case is about what the window shows, not about delivery.
+    const beforeCap = hits.length;
+    await win3b.close();
+    await sleep(900);
+    await outcome(id3b);
+    check("nothing was sent for the cancelled over-long report", hits.length === beforeCap);
   }
 
   // ══ 5. A forged request cannot pick its own destination ═══════════════════

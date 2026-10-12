@@ -16,11 +16,8 @@
   ],
   "minimum_chrome_version": "116",
 
-  "host_permissions": [
-    "<all_urls>"
-  ],
-
   "optional_host_permissions": [
+    "<all_urls>",
     "https://api.github.com/*",
     "https://api.linear.app/*",
     "https://hooks.slack.com/*",

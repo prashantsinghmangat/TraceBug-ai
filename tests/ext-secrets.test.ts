@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   setTransportMode, isExtensionMode, setIntegrationStatus, getIntegrationStatus,
+  setHostAccess, getHostAccess, isCaptureLimitedToThisPage,
 } from '../src/ext-transport';
 import {
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
@@ -52,6 +53,7 @@ afterEach(() => {
   // Leave every test in SDK mode so one failure can't mask another file's.
   setTransportMode('page');
   setIntegrationStatus(null);
+  setHostAccess(undefined);
   localStorage.clear();
 });
 
@@ -203,5 +205,49 @@ describe('SDK (npm) mode — behaviour unchanged', () => {
     // Nothing configured locally, so SDK mode must still report false.
     expect(hasIntegration('github')).toBe(false);
     expect(hasAIKey()).toBe(false);
+  });
+});
+
+// ── Phase 1: cross-site capture access ─────────────────────────────────────
+// <all_urls> is an OPTIONAL host permission from 1.11, so "will capture
+// survive a navigation?" has three answers, and the third one is "we don't
+// know". A wrong "you have no access" hint is worse than no hint, so unknown
+// must stay silent.
+describe('cross-site capture access', () => {
+  it('starts unknown, and unknown is not a limitation', () => {
+    setTransportMode('extension');
+    expect(getHostAccess()).toBeUndefined();
+    expect(isCaptureLimitedToThisPage()).toBe(false);
+  });
+
+  it('reports a limitation only when access is explicitly withheld', () => {
+    setTransportMode('extension');
+    setHostAccess(false);
+    expect(getHostAccess()).toBe(false);
+    expect(isCaptureLimitedToThisPage()).toBe(true);
+
+    setHostAccess(true);
+    expect(isCaptureLimitedToThisPage()).toBe(false);
+  });
+
+  it('treats a missing or non-boolean value as unknown', () => {
+    setTransportMode('extension');
+    setHostAccess(false);
+    // JSON.stringify drops an undefined key, so the attribute simply omits it.
+    setHostAccess(undefined);
+    expect(getHostAccess()).toBeUndefined();
+    setHostAccess(null);
+    expect(getHostAccess()).toBeUndefined();
+    // A hostile page can rewrite data-tb-caps; a truthy non-boolean must not
+    // become `true`, and must not become a limitation claim either.
+    setHostAccess('yes' as unknown as boolean);
+    expect(getHostAccess()).toBeUndefined();
+    expect(isCaptureLimitedToThisPage()).toBe(false);
+  });
+
+  it('never claims a limitation in SDK (npm) mode', () => {
+    // Page-mode capture has no extension permission in the picture at all.
+    setHostAccess(false);
+    expect(isCaptureLimitedToThisPage()).toBe(false);
   });
 });
