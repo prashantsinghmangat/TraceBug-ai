@@ -28,6 +28,103 @@ try {
   });
 } catch {}
 
+// ── Page support (page-support.js, loaded ahead of this file) ───────────────
+// build-ext.mjs refuses to produce a build without this file, so a miss means
+// a broken dev checkout. Degrade to "allow everything, show the raw error"
+// rather than throwing out of DOMContentLoaded — a blank popup would be a
+// worse failure than the one we are here to fix.
+const PageSupport = globalThis.TraceBugPageSupport || {
+  DEMO_URL: "https://tracebug.dev/try.html",
+  classifyPage: () => ({ ok: true }),
+  explainInjectionError: (e) => ({
+    ok: false,
+    reason: "unknown",
+    title: "TraceBug couldn't start on this page",
+    detail: (e && e.message) || String(e || "Reload the tab and try again"),
+    action: "reload",
+  }),
+};
+if (!globalThis.TraceBugPageSupport) console.error("[TraceBug] page-support.js did not load");
+
+/**
+ * Is "Allow access to file URLs" on? Chrome-only API — Firefox has no
+ * equivalent, and there a file:// injection simply works or fails on its own.
+ * Returns undefined when it could not be asked, which page-support.js treats
+ * as "unknown, don't claim a denial".
+ */
+function fileSchemeAccess() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.extension || !chrome.extension.isAllowedFileSchemeAccess) return resolve(undefined);
+      chrome.extension.isAllowedFileSchemeAccess((allowed) => {
+        void chrome.runtime.lastError;
+        resolve(typeof allowed === "boolean" ? allowed : undefined);
+      });
+    } catch { resolve(undefined); }
+  });
+}
+
+/**
+ * Replace the four actions with one explanation and at most one button.
+ * Every branch here comes from page-support.js — this function only renders.
+ * Phase 3: nothing in the popup may end in a no-op.
+ */
+function showUnavailable(verdict) {
+  const main = document.getElementById("mainContent");
+  const panel = document.getElementById("unavailable");
+  const title = document.getElementById("unavailableTitle");
+  const sub = document.getElementById("unavailableSub");
+  const btn = document.getElementById("unavailableAction");
+  if (!panel || !title || !sub || !btn) return;
+
+  if (main) main.style.display = "none";
+  panel.style.display = "block";
+  // textContent, not innerHTML: `detail` can carry a browser error string.
+  title.textContent = verdict.title || "Can't run on this page";
+  sub.textContent = verdict.detail || "";
+
+  const action = verdict.action;
+  btn.onclick = null;
+  if (!action) {
+    btn.style.display = "none";
+    return;
+  }
+  btn.style.display = "inline-block";
+
+  if (action === "demo") {
+    btn.textContent = "Try it on a demo page";
+    btn.onclick = () => {
+      chrome.tabs.create({ url: verdict.url || PageSupport.DEMO_URL });
+      window.close();
+    };
+  } else if (action === "file-access") {
+    btn.textContent = "Open extension settings";
+    btn.onclick = () => {
+      // chrome://extensions/?id=… is the only page carrying the file-URL
+      // toggle, and chrome.tabs.create may open it even though we can never
+      // inject into it. This branch is reachable on Chrome-family browsers
+      // only: the verdict needs isAllowedFileSchemeAccess() to have returned
+      // a hard false, and Firefox has no such API.
+      try {
+        chrome.tabs.create({ url: "chrome://extensions/?id=" + chrome.runtime.id });
+        window.close();
+      } catch {
+        showToast("Open your browser's extensions page and enable file access for TraceBug", true);
+      }
+    };
+  } else if (action === "reload") {
+    btn.textContent = "Reload tab";
+    btn.onclick = () => {
+      if (currentTabId == null) return;
+      try { chrome.tabs.reload(currentTabId); } catch {}
+      window.close();
+    };
+  } else if (action === "retry") {
+    btn.textContent = "Try again";
+    btn.onclick = () => window.location.reload();
+  }
+}
+
 async function loadCloudEndpoint() {
   try {
     const r = await chrome.storage.local.get(CLOUD_ENDPOINT_KEY);
@@ -142,34 +239,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   void initRedactionUI();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  currentTabId = tab?.id ?? null;
 
-  // Bail out on browser-internal pages where content scripts can't run
-  // (Chrome AND Firefox schemes, plus Mozilla's injection-restricted sites).
-  const restrictedHosts = ["addons.mozilla.org", "accounts.firefox.com"];
-  let tabHost = "";
-  try { tabHost = new URL(tab?.url || "").hostname; } catch {}
-  if (
-    !tab?.url ||
-    tab.url.startsWith("chrome://") ||
-    tab.url.startsWith("chrome-extension://") ||
-    tab.url.startsWith("edge://") ||
-    tab.url.startsWith("about:") ||
-    tab.url.startsWith("moz-extension://") ||
-    tab.url.startsWith("view-source:") ||
-    tab.url.startsWith("resource://") ||
-    restrictedHosts.includes(tabHost)
-  ) {
-    document.getElementById("mainContent").style.display = "none";
-    document.getElementById("unavailable").style.display = "block";
+  // Can TraceBug run here at all? The scheme/host list and every sentence live
+  // in page-support.js so the service worker reaches the same answers (the
+  // keyboard command has no popup to talk through) and so they are unit
+  // testable. Note what is NOT a blocker any more: a missing tab.url. Phase 1
+  // made <all_urls> optional, so an unknown URL is now the normal state on a
+  // tab the user hasn't acted on — treating it as "restricted" would have
+  // shown "Can't run on this page" on every single page.
+  const verdict = PageSupport.classifyPage(tab?.url, { fileAccess: await fileSchemeAccess() });
+  if (!verdict.ok) {
+    showUnavailable(verdict);
     return;
   }
 
-  const url = new URL(tab.url);
-  currentHostname = url.hostname;
-  currentTabId = tab.id;
+  let url = null;
+  try { url = new URL(tab.url); } catch {}
+  currentHostname = url ? url.hostname : "";
 
-  document.getElementById("hostname").textContent = currentHostname;
-  document.getElementById("sitePath").textContent = url.pathname || "/";
+  // With site access withheld there is no URL to show. Say "this tab" rather
+  // than rendering an empty header that looks broken.
+  document.getElementById("hostname").textContent = currentHostname || "this tab";
+  document.getElementById("sitePath").textContent = url ? (url.pathname || "/") : "";
 
   // Show whether the SDK is currently loaded on this tab. Informational
   // only — there's no enable/disable toggle here. Reloading the tab is
@@ -320,8 +412,7 @@ async function runCombo(messageType, busyText, extra) {
   try {
     const res = await chrome.runtime.sendMessage({ type: messageType, tabId: currentTabId, ...(extra || {}) });
     if (res?.error) {
-      showToast(res.error, true);
-      setBusy(false);
+      reportFailure(res.error);
       return;
     }
     // Success — close popup so focus returns to the page, where the modal /
@@ -334,9 +425,21 @@ async function runCombo(messageType, busyText, extra) {
       setTimeout(() => window.close(), 350);
     }
   } catch (err) {
-    showToast(err?.message || "Couldn't reach the page — reload the tab and try again", true);
-    setBusy(false);
+    reportFailure(err);
   }
+}
+
+/**
+ * An action failed. Phase 3's rule: never a no-op, and never a raw browser
+ * string on its own. A mapping that carries a next step takes over the whole
+ * popup (a 2.5s toast scrolls an instruction away before it can be read); a
+ * mapping without one stays a toast so the user can retry immediately.
+ */
+function reportFailure(err) {
+  setBusy(false);
+  const verdict = PageSupport.explainInjectionError(err);
+  if (verdict.action) showUnavailable(verdict);
+  else showToast(verdict.detail || verdict.title, true);
 }
 
 function setBusy(busy) {
