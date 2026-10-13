@@ -5,26 +5,60 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
 
 ## Where we are
 
-- Branch `develop`, preparing **1.11.0**. Version strings still say **1.10.1** (`package.json`,
-  `tracebug-extension/manifest.json`) — that is the live store build. Bumping is a release step, not done.
-- **Phases 0–7 are done.** Permissions optional, secrets and provider calls out of the host page,
-  restricted pages and orphaned tabs handled, events-only capture as the default, bundled welcome page,
-  per-version "What's new" card, uninstall survey, review ask and the export footer / issue credit.
-  Phase 6 added the oversize-export notice, the canvas-replay warning and the Jira relabel; Phase 7
-  added diagnostics the user copies out themselves.
-  Per-phase history is in `PROGRESS.md`; `PLAN.md` marks the finished items.
-- **Next: Phases 8–9 in `PLAN.md`.** Phase 8 needs rescoping — see gotchas.
+**All engineering for 1.11.0 is done. Everything left is human-only.** Last updated 2026-10-13.
+
+- Branch `develop`, version **1.11.0** across all eight surfaces `check:versions` guards.
+- Store archives built and verified (`PK`, 30 files, right manifest in each):
+  - `releases/tracebug-extension-v1.11.0.zip` (824 KB) -> Chrome Web Store
+  - `releases/tracebug-firefox-v1.11.0.zip` (824 KB) -> Firefox AMO
+- **Phases 0-7 and 9 are done.** Permissions optional, secrets and provider calls out of the host
+  page, restricted pages and orphaned tabs handled, events-only capture as the default, bundled
+  welcome page, per-version "What's new" card, uninstall survey, review ask, export footer and issue
+  credit, oversize-export notice, canvas-replay warning, copy-and-docs consistency.
+- **Phase 8 is deferred to after submission**, except two items done early: the e2e harnesses run
+  anywhere and headless (`e2e/paths.mjs`), and `e2e/ext-no-secrets-in-page.e2e.mjs` is in CI.
+  Outstanding: `e2e/fixtures/`, `extension-smoke.spec.ts`, the golden-report check, the CI nightly.
+
+## What is left before submission - all of it needs a person
+
+Automated gates are green and cannot say more than they already have:
+`check.mjs --full` = 796 passing / 47 files, `ext:lint` 0 errors / 69 warnings, `check:versions` 1.11.0.
+
+1. **Run `npm run ext:firefox` and look at it.** NOT a gate - `web-ext run` stays open until the
+   browser is closed, so check.mjs refuses it. Firefox is unverified for 1.11.
+2. **Work `docs/RELEASE_CHECKLIST.md` rows 1-10** plus
+   `docs/testing/{restricted-pages,upgrade-host-permission}.md`. Several surfaces have never been
+   RENDERED, only source-tested: the welcome page, the "What's new" card (testable for the first time
+   now the version is 1.11.0), the three "can't run here" states, `/bye`, the review card, the
+   oversize notice and the canvas warning. Three things need hardware or an OS state no runner has:
+   the **macOS Screen-Recording denial** (a Mac with the permission off), whether **Firefox** honours
+   `preferCurrentTab` and what its OS-denial message says, and which branch Firefox takes when
+   `welcome.js` asks `tabs.create` for `about:addons`.
+3. **Submit one real `/bye` form** and confirm it lands in Netlify Forms under `uninstall`. A
+   field-name mismatch is accepted and silently discarded - there is no other way to check.
+4. **Read the diagnostics output properly**, hunting for any URL, hostname, path or page text. The
+   scrubber is tested against the cases I could think of; users will paste this into public issues.
+5. **Rewrite section 7b of `docs-internal/CHROME-WEB-STORE-LISTING.md`** (permission
+   justifications). It carries a DO-NOT-PASTE warning listing four problems; the data-collection
+   disclosure in particular is a judgement call, not a copy-paste.
+6. **Decide whether `manifest.json`'s `name`/`description` should match the new store listing.**
+   They deliberately differ now - the listing leads with search terms, the manifest with the promise.
+7. **Confirm the `/demo.html` -> `/try.html` redirect actually fires.** It lives in
+   `next.config.js`, which is inert on a static export; if the site deploys statically it belongs in
+   `netlify.toml` or `_redirects` instead.
 
 ## Carried forward from Phases 4–7
 
-- **Bump the version to 1.11.0** in `package.json` and `tracebug-extension/manifest.json`, then run
-  `npm run check:versions` — it names every other surface that has to move with them (the npm package,
-  `server.json` ×2, `website/lib/version.ts` ×2, the `CHANGELOG.md` heading, a docs example).
-  `manifest.base.json` has **no** version field by design: `build-ext.mjs` injects it from `package.json`.
-  `check:versions` is already wired into `zip:ext`, so a store zip cannot be built with a stale manifest.
-- **The "What's new" card is invisible until that bump.** `popup.js`'s `WHATS_NEW` table is keyed
-  `1.11.0` while the manifest says `1.10.1`, so an update today flags `1.10.1`, finds no copy and shows
-  nothing. A future release means adding one `WHATS_NEW` entry — nothing else to wire.
+- **Version bumps touch eight surfaces**, not two. `npm run check:versions` names them all (the npm
+  package, `server.json` ×2, `website/lib/version.ts` ×2 — including the `v1.11` minor tag — the
+  `CHANGELOG.md` heading and a docs example). `manifest.base.json` has **no** version field by design:
+  `build-ext.mjs` injects it from `package.json`. `check:versions` runs inside `zip:ext`.
+- **A release needs one new `WHATS_NEW` entry** in `popup.js`, keyed by version. No entry means no
+  card, which is the intended failure. 1.11.0's is written.
+- **`zip:ext` calls bsdtar by ABSOLUTE path** (`System32	ar.exe`) and refuses to report success
+  unless the output starts with `PK`. Bare `tar` resolves to GNU tar wherever Git Bash is on PATH, and
+  GNU tar silently writes an uncompressed TAR named `.zip` — 1.11.0's first archives were exactly
+  that, and both stores would have rejected them after an "[OK] store zip" line.
 - **No Firefox store link exists anywhere in `src/`.** `src/links.ts` holds the Chrome listing id only;
   the repo has no confirmed AMO slug and a guessed one would be a dead link inside exported reports. Add
   it there, once, when the real URL is known. A test blocks it creeping back in elsewhere.
@@ -44,18 +78,6 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
 - Two credit settings sit together in the export **More ▾** menu and both default on:
   `tracebug_show_export_footer` (the bar in an exported `.html`) and `tracebug_issue_signature`
   (the line in GitHub / Linear / Slack bodies).
-
-## Open human checks (cannot be automated here)
-
-- `docs/RELEASE_CHECKLIST.md` — three Record-options upgrade rows (the popup migration has no browser test).
-- **The welcome page has never been rendered.** Its tests assert the source, not the layout: install on
-  a clean profile and look at it, on Chrome and Firefox. Step 3 must show a real key or the empty state.
-- **Firefox and `about:addons`:** `welcome.js` falls back to text steps if `tabs.create` refuses it.
-  Which branch Firefox takes is unverified.
-- The **macOS Screen-Recording denial** needs a real Mac with the permission off. Only the error-string
-  mapping is tested.
-- Whether **Firefox** honours `preferCurrentTab`, and what its OS-denial message says.
-- `docs/testing/upgrade-host-permission.md` — an already-granted `<all_urls>` surviving the upgrade.
 
 ## Gotchas that are still true
 
