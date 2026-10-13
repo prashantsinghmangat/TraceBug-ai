@@ -6,9 +6,14 @@
 //
 //   node scripts/check.mjs             fast gates: typecheck, lint, test, build
 //   node scripts/check.mjs --full      + build:ext, ext:lint, check:versions
-//   node scripts/check.mjs --firefox   + ext:firefox (opens a browser)
 //   node scripts/check.mjs test lint   only the named gates
 //   node scripts/check.mjs --verbose   print full output even when a gate passes
+//
+// There is deliberately NO --firefox. `npm run ext:firefox` is `web-ext run`,
+// which launches Firefox and stays running until the browser is closed — it is
+// an interactive session, not a gate that returns a verdict. Wrapping it here
+// just hung the runner until it timed out. Run it directly, and look at it:
+//   npm run ext:firefox
 //
 // The summaries below are parsed from real output, line-anchored on purpose:
 // web-ext prints its counts in a "Validation Summary:" block and THEN dumps
@@ -19,18 +24,29 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const FAST = ["typecheck", "lint", "test", "build"];
 const FULL = [...FAST, "build:ext", "ext:lint", "check:versions"];
+/** Scripts that never exit on their own, so they can never be gates. */
+const INTERACTIVE = new Set(["ext:firefox", "dev", "test:watch", "ext:run"]);
 
 const args = process.argv.slice(2);
 const flags = new Set(args.filter((a) => a.startsWith("--")));
 const named = args.filter((a) => !a.startsWith("--"));
 const verbose = flags.has("--verbose");
 
-let gates = named.length
-  ? named
-  : flags.has("--full") || flags.has("--firefox")
-    ? FULL
-    : FAST;
-if (flags.has("--firefox") && !gates.includes("ext:firefox")) gates = [...gates, "ext:firefox"];
+let gates = named.length ? named : flags.has("--full") ? FULL : FAST;
+
+// Refuse rather than hang. A reviewer who types --firefox, or names a watch
+// script, gets told why in one line instead of waiting out a timeout.
+if (flags.has("--firefox")) {
+  console.log("check.mjs has no --firefox: `npm run ext:firefox` is `web-ext run`,");
+  console.log("which stays open until you close Firefox. Run it directly and look at it.");
+  process.exit(2);
+}
+const blocked = gates.filter((g) => INTERACTIVE.has(g));
+if (blocked.length) {
+  console.log(`not a gate (never exits on its own): ${blocked.join(", ")}`);
+  console.log("Run it directly instead.");
+  process.exit(2);
+}
 
 const BASE = "scripts/check-baseline.json";
 const baseline = existsSync(BASE) ? JSON.parse(readFileSync(BASE, "utf8")) : {};

@@ -8,7 +8,10 @@ their full output — a passing `ext:lint` alone is 751 lines that have been byt
 
 - Code only: `node scripts/check.mjs`  (typecheck, lint, test, build)
 - Extension files touched: `node scripts/check.mjs --full`  (adds build:ext, ext:lint, check:versions)
-- End of a phase: `node scripts/check.mjs --firefox`  (adds ext:firefox, which opens a browser)
+- **Firefox is NOT a gate.** `npm run ext:firefox` is `web-ext run`: it opens Firefox and stays
+  running until the browser is closed, so it returns no verdict and cannot be wrapped. check.mjs
+  refuses it. At the end of a phase that touched the extension, run `npm run ext:firefox` directly
+  and LOOK at the result — then report what you saw, or say you could not check it.
 - One gate: `node scripts/check.mjs test`
 - `--verbose` prints full output even when a gate passes. Rarely what you want.
 

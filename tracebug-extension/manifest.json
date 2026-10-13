@@ -1,11 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "TraceBug — Capture the Bug, Let AI Fix It",
-  "version": "1.10.1",
-  "description": "Capture a browser bug — replay, console, network — into one local report your AI agent (Claude, Cursor) reads and fixes. Free.",
+  "name": "TraceBug \u2014 Capture the Bug, Let AI Fix It",
+  "version": "1.11.0",
+  "description": "Capture a browser bug \u2014 replay, console, network \u2014 into one local report your AI agent (Claude, Cursor) reads and fixes. Free.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
-
   "permissions": [
     "activeTab",
     "storage",
@@ -15,7 +14,6 @@
     "offscreen"
   ],
   "minimum_chrome_version": "116",
-
   "commands": {
     "tb-quick-capture": {
       "suggested_key": {
@@ -24,7 +22,6 @@
       "description": "Capture a bug on the current tab"
     }
   },
-
   "optional_host_permissions": [
     "<all_urls>",
     "https://api.github.com/*",
@@ -35,20 +32,16 @@
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
-
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
-
   "background": {
     "service_worker": "background.js"
   },
-
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
   },
-
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -56,16 +49,21 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "TraceBug — QA Bug Reporter"
+    "default_title": "TraceBug \u2014 QA Bug Reporter"
   },
-
   "web_accessible_resources": [
     {
-      "resources": ["tracebug-sdk.js", "tracebug-init.js", "player.html", "player.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "tracebug-sdk.js",
+        "tracebug-init.js",
+        "player.html",
+        "player.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
-
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

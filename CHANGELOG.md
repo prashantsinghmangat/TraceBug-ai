@@ -2,7 +2,7 @@
 
 All notable changes to TraceBug are documented here.
 
-## [Unreleased] - 1.11.0
+## [1.11.0] - 2026-10-13
 
 > Launch-readiness release. Phase 2: integration tokens and the AI key move out of the websites you test and into the extension's own storage (2a), and every send to GitHub, Linear, Slack or an AI provider now happens inside the extension, behind a confirmation you see first (2b).
 
