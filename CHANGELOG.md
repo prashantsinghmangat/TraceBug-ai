@@ -35,6 +35,25 @@ All notable changes to TraceBug are documented here.
   - The HUD drops Pause and the microphone (there is nothing to pause or mute) and keeps Stop, Screenshot, Draw and Blur. Blur is not a video-only tool: it masks the element's text in the DOM replay too.
 
 - **One line before your browser asks what to share** (`src/ui/pre-record.ts`) — the share dialog is the browser's own, it offers three surfaces, and it says nothing about which one a bug report wants. Picking "Entire screen" records your whole desktop and picking the wrong tab records the wrong page, neither of which can be undone afterwards. TraceBug now explains it first, and the wording matches the dialog you are about to see: "already set to this tab — choose Share" when Capture is **Current tab**, "pick this tab" when it's **Desktop / window**.
+- **"Having trouble?" in the popup, with nothing phoning home** (`tracebug-extension/diagnostics.js`) -
+  **Copy diagnostics** puts TraceBug's version, your browser and OS, the permissions you've granted and
+  TraceBug's own recent internal errors on your clipboard. **Report a TraceBug bug** opens a prefilled
+  GitHub issue you read and submit yourself. Neither sends anything: there is no upload path in that
+  file at all. No URLs, no page content, no stored values and no captured data go in - error messages
+  and stack traces are scrubbed of hostnames, file paths, emails, tokens and long number runs, stack
+  frames are reduced to TraceBug's own code, and a provider origin you added yourself is counted rather
+  than named.
+- **A big export warns you before you wait for it** (`src/ui/quick-bug.ts`) - if the estimate is over
+  20 MB the modal says so and names GitHub's 25 MB attachment limit, with one click to **Export without
+  video** (keeping the report, console, network and screenshots) or to download the recording
+  separately.
+- **A canvas page says what the replay can't show** (`src/replay-fidelity.ts`) - on pages that draw
+  their content in a `<canvas>` (charts, maps, WebGL), the interactive replay renders an empty space,
+  because recording canvas pixel-by-pixel would make captures enormous. TraceBug now says so **when the
+  capture starts**, while turning on video is still an option, instead of leaving you to discover it in
+  the report. Console, network and your clicks are unaffected.
+- **"Jira" is now "Copy for Jira"** - it copies the report as Jira markup for you to paste. It never
+  filed anything, and the old label implied it did.
 - **Issues you file carry one credit line, and you can turn it off** (`src/integrations/issue-signature.ts`)
   - GitHub, Linear and Slack bodies end with "Reported with TraceBug". It is one line, it links to the
   listing, and **Issue credit: on/off** in the export menu removes it - an issue body gets written into

@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { extensionLaunchOptions } from "./paths.mjs";
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -60,10 +61,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(PORT, r));
 
 const userDir = mkdtempSync(join(tmpdir(), "tb-events-e2e-"));
-const ctx = await chromium.launchPersistentContext(userDir, {
-  headless: false,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-});
+const ctx = await chromium.launchPersistentContext(
+  userDir,
+  // Headless by default (new headless loads extensions; the old one does not),
+  // `--headful` or TB_E2E_HEADFUL=1 to watch it. See e2e/paths.mjs.
+  extensionLaunchOptions([`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`]),
+);
 
 let failures = 0;
 // Output only: counts every check, but stays quiet while they all pass. The

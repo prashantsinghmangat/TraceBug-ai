@@ -102,7 +102,8 @@ import {
 } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
 import { startDomRecording, stopDomRecording, stashDomReplay, clearStashedDomReplay } from "./rrweb-recorder";
-import { showCaptureBlockedNotice } from "./ui/toast";
+import { showCaptureBlockedNotice, showActionToast } from "./ui/toast";
+import { eventsCaptureFidelityWarning } from "./replay-fidelity";
 import {
   mark as _mark,
   assertCondition as _assertCondition,
@@ -1064,6 +1065,18 @@ class TraceBugSDK {
       startedAt: this._eventsCaptureStartedAt,
       onStop: () => { this.stopEventsCapture().catch(() => {}); },
     });
+    // Phase 6: say what this capture cannot show, while "turn on video" is
+    // still an option. Only canvas qualifies — see src/replay-fidelity.ts. The
+    // capture is already running, so this never blocks it; a failure here must
+    // not take the capture down with it.
+    try {
+      const warning = eventsCaptureFidelityWarning();
+      if (warning) {
+        showActionToast(warning.message, "Stop", () => {
+          this.stopEventsCapture().catch(() => {});
+        }, root, { autoDismissMs: 12_000 });
+      }
+    } catch { /* a warning is never worth failing a capture over */ }
     return true;
   }
 

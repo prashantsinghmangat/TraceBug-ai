@@ -30188,6 +30188,20 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       setTimeout(() => downloadScreenshot(ss.dataUrl, ss.filename), i2 * 120);
     });
   }
+  function _oversizeExportNotice(report) {
+    const bytes = _estimateHtmlExportBytes(report);
+    if (bytes < EXPORT_WARN_BYTES) return "";
+    const v2 = report == null ? void 0 : report.video;
+    const hasRrweb = Array.isArray(v2 == null ? void 0 : v2.rrwebEvents) && v2.rrwebEvents.length > 0;
+    const size = _formatBytes(bytes);
+    const offer = hasRrweb ? `<button data-action="export-zip" class="tb-qb-size-act">Download .zip instead</button>` : `<button data-action="export-no-video" class="tb-qb-size-act">Export without video</button><button data-action="download-video" class="tb-qb-size-act">Download .webm separately</button>`;
+    return `
+    <div class="tb-qb-size-warn" role="status">
+      <strong>This export is about ${size}.</strong> GitHub rejects attachments over ${GITHUB_ATTACHMENT_CAP},
+      and most trackers are slower above that${hasRrweb ? "" : " \u2014 the screen recording is what makes it big"}.
+      <div class="tb-qb-size-acts">${offer}</div>
+    </div>`;
+  }
   function _estimateHtmlExportBytes(report) {
     var _a2;
     let bytes = 120 * 1024;
@@ -30266,7 +30280,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     return lines.join("\n");
   }
   function _openModal(root2, data) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L;
     _isOpen = true;
     const primary = data.screenshots[0] || null;
     const screenshots2 = data.screenshots;
@@ -30477,6 +30491,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
+        ${_oversizeExportNotice(data.report)}
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">\u2197 Share link</button>
         PHASE2-CLOUD -->
@@ -30491,7 +30506,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
             <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
-            <button data-action="jira" class="tb-qb-more-item" role="menuitem">${_ic("ticket")} Jira</button>
+            <button data-action="jira" class="tb-qb-more-item" role="menuitem" title="Copies the report as Jira markup for you to paste \u2014 TraceBug cannot file into Jira (its API is CORS-blocked for browsers)">${_ic("ticket")} Copy for Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations\u2026</button>
             <!-- The one promotional thing in an export, and therefore the one
                  thing that has to be removable before the file is sent on. -->
@@ -30868,7 +30883,36 @@ ${description}`;
         if (moreMenu.dataset.open === "true" && !moreMenu.contains(e2.target) && e2.target !== moreBtn) setMoreOpen(false);
       });
     }
-    (_z = modal.querySelector('[data-action="toggle-issue-signature"]')) == null ? void 0 : _z.addEventListener("click", (e2) => {
+    (_z = modal.querySelector('[data-action="export-no-video"]')) == null ? void 0 : _z.addEventListener("click", async () => {
+      var _a3, _b2;
+      if (!data.currentSession) {
+        showToast("Nothing to export yet \u2014 capture something first", root2);
+        return;
+      }
+      showToast("Bundling without the recording\u2026", root2);
+      try {
+        const report = buildReport(data.currentSession);
+        if (data.suppressVideo) report.video = void 0;
+        const draft = getDraft();
+        if (draft.title.trim()) report.title = draft.title.trim();
+        const userDesc = draft.description.trim();
+        const result2 = await exportSessionAsHtml(data.currentSession, report, {
+          descriptionOverride: userDesc ? report.steps ? `${userDesc}
+
+${report.steps}` : userDesc : void 0,
+          githubRepo: _githubRepo || void 0,
+          showFooter: showExportFooter(),
+          includeVideo: false
+        });
+        const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
+        showToast(`\u2713 Exported without video \xB7 ${sizeMb} MB`, root2);
+        _maybeAskForReview(root2, (_b2 = (_a3 = data.currentSession) == null ? void 0 : _a3.sessionId) != null ? _b2 : null);
+      } catch (err) {
+        console.warn("[TraceBug] Video-free export failed:", err);
+        showToast("Couldn't build the export \u2014 try again", root2);
+      }
+    });
+    (_A = modal.querySelector('[data-action="toggle-issue-signature"]')) == null ? void 0 : _A.addEventListener("click", (e2) => {
       e2.stopPropagation();
       const next = !issueSignatureEnabled();
       setIssueSignature(next);
@@ -30878,7 +30922,7 @@ ${description}`;
       if (label) label.textContent = next ? "Issue credit: on" : "Issue credit: off";
       showToast(next ? "Issue credit on" : "Issue credit off - issues carry no TraceBug line", root2);
     });
-    (_A = modal.querySelector('[data-action="toggle-export-footer"]')) == null ? void 0 : _A.addEventListener("click", (e2) => {
+    (_B = modal.querySelector('[data-action="toggle-export-footer"]')) == null ? void 0 : _B.addEventListener("click", (e2) => {
       e2.stopPropagation();
       const next = !showExportFooter();
       setShowExportFooter(next);
@@ -30888,7 +30932,7 @@ ${description}`;
       if (label) label.textContent = next ? "Export footer: on" : "Export footer: off";
       showToast(next ? "Export footer on" : "Export footer off - exports carry no TraceBug line", root2);
     });
-    (_B = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _B.addEventListener("click", async () => {
+    (_C = modal.querySelector('[data-action="export-replay"]')) == null ? void 0 : _C.addEventListener("click", async () => {
       var _a3, _b2, _c2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -30933,7 +30977,7 @@ ${report.steps}` : userDesc : void 0,
         }
       }
     });
-    (_C = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _C.addEventListener("click", () => {
+    (_D = modal.querySelector('[data-action="export-spec"]')) == null ? void 0 : _D.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -30956,7 +31000,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Test export failed", root2);
       }
     });
-    (_D = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _D.addEventListener("click", async () => {
+    (_E = modal.querySelector('[data-action="export-zip"]')) == null ? void 0 : _E.addEventListener("click", async () => {
       var _a3, _b2, _c2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -31000,7 +31044,7 @@ ${report.steps}` : userDesc : void 0,
         }
       }
     });
-    (_E = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _E.addEventListener("click", () => {
+    (_F = modal.querySelector('[data-action="export-har"]')) == null ? void 0 : _F.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -31020,7 +31064,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("HAR export failed", root2);
       }
     });
-    (_F = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _F.addEventListener("click", () => {
+    (_G = modal.querySelector('[data-action="download-md"]')) == null ? void 0 : _G.addEventListener("click", () => {
       var _a3, _b2;
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
@@ -31040,7 +31084,7 @@ ${report.steps}` : userDesc : void 0,
         showToast("Report export failed", root2);
       }
     });
-    (_G = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _G.addEventListener("click", () => {
+    (_H = modal.querySelector('[data-action="export-ai-html"]')) == null ? void 0 : _H.addEventListener("click", () => {
       if (!data.currentSession) {
         showToast("Nothing to export yet \u2014 capture something first", root2);
         return;
@@ -31067,7 +31111,7 @@ ${report.steps}` : userDesc : void 0,
         showToast(`\u2713 Downloading ${screenshots2.length} screenshot${screenshots2.length === 1 ? "" : "s"}`, root2);
       });
     });
-    (_H = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _H.addEventListener("click", async (e2) => {
+    (_I = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _I.addEventListener("click", async (e2) => {
       if (!data.currentSession) {
         showToast("Nothing to share yet \u2014 capture something first", root2);
         return;
@@ -31227,7 +31271,7 @@ ${report.steps}` : userDesc : void 0,
         }
       });
     });
-    (_I = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _I.addEventListener("click", () => {
+    (_J = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _J.addEventListener("click", () => {
       var _a3, _b2;
       const ssId = (_b2 = (_a3 = modal.querySelector('[data-action="annotate-primary"]')) == null ? void 0 : _a3.dataset) == null ? void 0 : _b2.ssId;
       const target = screenshots2.find((s2) => s2.id === ssId) || screenshots2[0];
@@ -31258,7 +31302,7 @@ ${report.steps}` : userDesc : void 0,
         });
       });
     });
-    (_J = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _J.addEventListener("click", async () => {
+    (_K = modal.querySelector('[data-action="add-screenshot"]')) == null ? void 0 : _K.addEventListener("click", async () => {
       const prevModal = modal.style.display;
       const prevOverlay = overlay.style.display;
       modal.style.display = "none";
@@ -31282,7 +31326,7 @@ ${report.steps}` : userDesc : void 0,
     });
     const _ifr = { win: null, origin: "" };
     let _ifrFramePending = null;
-    (_K = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _K.addEventListener("click", async () => {
+    (_L = modal.querySelector('[data-action="grab-frame"]')) == null ? void 0 : _L.addEventListener("click", async () => {
       if (_ifr.win) {
         const data2 = await new Promise((resolve) => {
           _ifrFramePending = resolve;
@@ -32494,6 +32538,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
     #${MODAL_ID} .tb-qb-btn-sm:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+    /* Oversize-export notice (Phase 6). Amber, not red: the export still
+       works, it is just awkward to attach anywhere. */
+    #${MODAL_ID} .tb-qb-size-warn { margin:8px 0 0; padding:9px 11px; background:rgba(180,83,9,0.12); border:1px solid rgba(180,83,9,0.28); border-radius:var(--tb-radius-sm); font-size:11.5px; line-height:1.5; color:var(--tb-text-secondary); }
+    #${MODAL_ID} .tb-qb-size-warn strong { color:var(--tb-text-primary); font-weight:650; }
+    #${MODAL_ID} .tb-qb-size-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+    #${MODAL_ID} .tb-qb-size-act { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:6px; padding:4px 9px; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer; }
+    #${MODAL_ID} .tb-qb-size-act:hover { border-color:var(--tb-accent); color:var(--tb-accent); }
     #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
     #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }
@@ -33091,7 +33142,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     document.addEventListener("keydown", onKey2);
   }
-  var _githubRepo, MODAL_ID, DRAFT_KEY, EXPORT_FOOTER_KEY, THEME_PREF_KEY, _isOpen, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
+  var _githubRepo, MODAL_ID, DRAFT_KEY, EXPORT_FOOTER_KEY, THEME_PREF_KEY, _isOpen, EXPORT_WARN_BYTES, GITHUB_ATTACHMENT_CAP, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
     "src/ui/quick-bug.ts"() {
       "use strict";
@@ -33133,6 +33184,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       EXPORT_FOOTER_KEY = "tracebug_show_export_footer";
       THEME_PREF_KEY = "tracebug_theme_pref";
       _isOpen = false;
+      EXPORT_WARN_BYTES = 20 * 1024 * 1024;
+      GITHUB_ATTACHMENT_CAP = "25 MB";
       _draftCleared = false;
       _LU = {
         link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
@@ -71697,6 +71750,56 @@ First element: \`${exampleSnippet}\``,
   init_recording_hud();
   init_rrweb_recorder();
   init_toast();
+
+  // src/replay-fidelity.ts
+  var HEAVY_CANVAS_VIEWPORT_SHARE = 0.25;
+  var MIN_CANVAS_PX = 4e4;
+  function findHeavyCanvas(doc = document) {
+    var _a2, _b;
+    let viewport = 0;
+    try {
+      viewport = (((_a2 = doc.defaultView) == null ? void 0 : _a2.innerWidth) || 0) * (((_b = doc.defaultView) == null ? void 0 : _b.innerHeight) || 0);
+    } catch (e2) {
+    }
+    if (!viewport) return null;
+    let best = null;
+    let bestArea = 0;
+    let canvases = [];
+    try {
+      canvases = Array.from(doc.querySelectorAll("canvas"));
+    } catch (e2) {
+      return null;
+    }
+    for (const c2 of canvases) {
+      if (c2.id === "tracebug-draw-canvas" || c2.closest("#tracebug-root")) continue;
+      let rect;
+      try {
+        rect = c2.getBoundingClientRect();
+      } catch (e2) {
+        continue;
+      }
+      const area = rect.width * rect.height;
+      if (area < MIN_CANVAS_PX) continue;
+      if (area / viewport < HEAVY_CANVAS_VIEWPORT_SHARE) continue;
+      if (area > bestArea) {
+        best = c2;
+        bestArea = area;
+      }
+    }
+    return best;
+  }
+  function eventsCaptureFidelityWarning(doc = document) {
+    const canvas = findHeavyCanvas(doc);
+    if (!canvas) return null;
+    return {
+      kind: "canvas",
+      // Says what is missing, why, and the one thing that fixes it. No jargon:
+      // "rrweb" and "DOM replay" mean nothing to a tester.
+      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. For a visual record here, stop and turn on \u201CRecord video too\u201D."
+    };
+  }
+
+  // src/index.ts
   init_dev_api();
   init_scanner();
   init_element_annotate();
@@ -72610,6 +72713,16 @@ ${summary}`;
           });
         }
       });
+      try {
+        const warning2 = eventsCaptureFidelityWarning();
+        if (warning2) {
+          showActionToast(warning2.message, "Stop", () => {
+            this.stopEventsCapture().catch(() => {
+            });
+          }, root2, { autoDismissMs: 12e3 });
+        }
+      } catch (e2) {
+      }
       return true;
     }
     /**

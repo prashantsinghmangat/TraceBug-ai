@@ -180,7 +180,16 @@ describe('the export footer can be turned off', () => {
     expect(QUICKBUG).toContain('localStorage.getItem(EXPORT_FOOTER_KEY) !== "0"');
   });
 
-  it('passes the preference into both export paths', () => {
-    expect(QUICKBUG.match(/showFooter: showExportFooter\(\)/g) ?? []).toHaveLength(2);
+  it('passes the preference into every export path', () => {
+    // Coverage, not a count: Phase 6 added a third path ("Export without
+    // video") and any future one must honour the preference too. An export
+    // that quietly ignores it is the bug this guards.
+    const paths = ['export-replay', 'export-zip', 'export-no-video'];
+    for (const action of paths) {
+      const handler = QUICKBUG.slice(QUICKBUG.indexOf(`'[data-action="${action}"]'`));
+      expect(handler.slice(0, 2000)).toContain('showFooter: showExportFooter()');
+    }
+    expect((QUICKBUG.match(/showFooter: showExportFooter\(\)/g) ?? []).length)
+      .toBeGreaterThanOrEqual(paths.length);
   });
 });

@@ -13,10 +13,11 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { PUBLIC_DIR, EXT_SRC_DIR, outDir, extensionLaunchOptions } from "./paths.mjs";
 
 // Known-good webm (the real site demo video) — removes MediaRecorder/canvas
 // flakiness from the test entirely.
-const DEMO = readFileSync("D:/Project/TraceBug-ai/website/public/tracebug-demo.webm");
+const DEMO = readFileSync(join(PUBLIC_DIR, "tracebug-demo.webm"));
 const DEMO_B64 = DEMO.toString("base64"); // rebuilt to ArrayBuffer in-page
 console.log(`demo webm: ${(DEMO.length / 1024 / 1024).toFixed(1)} MB`);
 
@@ -24,15 +25,17 @@ console.log(`demo webm: ${(DEMO.length / 1024 / 1024).toFixed(1)} MB`);
 // service worker rather than through a real toolbar click, so it cannot grant
 // itself access. Load a copy that declares it — see e2e/ext-host-access.mjs
 // for why, and for what this does NOT change.
-const EXT = withGrantedHostAccess("D:/Project/TraceBug-ai/tracebug-extension", "player-csp");
+const EXT = withGrantedHostAccess(EXT_SRC_DIR, "player-csp");
 const userDir = mkdtempSync(join(tmpdir(), "tb-ext-test-"));
 
 // Bundled Chromium, NOT channel:"chrome" — branded Chrome 137+ removed
 // --load-extension support, silently ignoring the flag.
-const ctx = await chromium.launchPersistentContext(userDir, {
-  headless: false,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-});
+const ctx = await chromium.launchPersistentContext(
+  userDir,
+  // Headless by default (new headless loads extensions; the old one does not),
+  // `--headful` or TB_E2E_HEADFUL=1 to watch it. See e2e/paths.mjs.
+  extensionLaunchOptions([`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`]),
+);
 
 const page = await ctx.newPage();
 await page.goto("https://github.com/prashantsinghmangat/tracebug-ai", { waitUntil: "domcontentloaded" });
@@ -99,8 +102,8 @@ const result = await page.evaluate(async ({ playerUrl, b64 }) => {
 }, { playerUrl: attr, b64: DEMO_B64 });
 
 // Write result to a file too — stdout can stay buffered if browser close hangs.
-writeFileSync("D:/tmp/player-e2e-result.json", JSON.stringify(result, null, 2));
+writeFileSync(join(outDir(), "player-e2e-result.json"), JSON.stringify(result, null, 2));
 console.log("2) chain result:", JSON.stringify(result, null, 2));
-await page.screenshot({ path: "D:/tmp/player-e2e.png" });
+await page.screenshot({ path: join(outDir(), "player-e2e.png") });
 await ctx.close().catch(() => {});
 process.exit(0);

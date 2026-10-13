@@ -13,7 +13,7 @@
 // ahead of background.js in manifest background.scripts instead — hence the
 // guard. Either way the globals exist before the first message arrives.
 if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "undefined") {
-  try { importScripts("tracebug-provider-api.js", "provider-bridge.js", "page-support.js"); } catch (e) {
+  try { importScripts("tracebug-provider-api.js", "provider-bridge.js", "page-support.js", "diagnostics.js"); } catch (e) {
     console.error("[TraceBug] failed to load provider scripts", e);
   }
 }
@@ -24,6 +24,15 @@ if (typeof importScripts === "function" && typeof TraceBugProviderBridge === "un
 // Tracks injected tabs so we don't double-inject and so the badge can show
 // "loaded" state.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Internal error capture (Phase 7) ────────────────────────────────────────
+// TraceBug sends nothing anywhere, so a bug nobody can describe is a bug
+// nobody can fix. These handlers put the worker's own failures in a session
+// ring buffer the user can copy out of the popup. No URLs, no page data — see
+// diagnostics.js, which does the scrubbing.
+if (typeof TraceBugDiagnostics !== "undefined") {
+  TraceBugDiagnostics.install("worker");
+}
 
 // ── Record options, worker-writable (Phase 4) ───────────────────────────────
 // The popup's Record options used to live in the popup's own localStorage,

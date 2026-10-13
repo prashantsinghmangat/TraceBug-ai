@@ -354,6 +354,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   void initRedactionUI();
   void initWhatsNew();
+  initDiagnosticsUI();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -848,6 +849,86 @@ async function initWhatsNew() {
     try { void chrome.storage.local.remove(WHATS_NEW_KEY); } catch {}
   });
   card.style.display = "";
+}
+
+// ── Diagnostics (Phase 7) ───────────────────────────────────────────────────
+// Both buttons produce the same scrubbed text. The popup's job is only to say
+// what page state the user is on - a CLASSIFICATION from page-support, never a
+// URL - and to put the result somewhere the user controls.
+const DIAG_ISSUE_URL = "https://github.com/prashantsinghmangat/TraceBug-ai/issues/new";
+
+/** The page's classification, for the report. Never the URL itself. */
+function diagPageState() {
+  try {
+    if (!currentTabUrl) return "unknown (no site access)";
+    const verdict = PageSupport.classifyPage(currentTabUrl, {});
+    return verdict.ok ? "ok" : String(verdict.reason || "blocked");
+  } catch { return "unknown"; }
+}
+
+async function buildDiagnostics() {
+  if (typeof TraceBugDiagnostics === "undefined") return "";
+  return TraceBugDiagnostics.build({ pageState: diagPageState() });
+}
+
+function initDiagnosticsUI() {
+  const copyBtn = document.getElementById("diagCopy");
+  const reportBtn = document.getElementById("diagReport");
+  const state = document.getElementById("diagState");
+  if (!copyBtn || !reportBtn) return;
+
+  // Say up front whether there is anything to report. Someone with no errors
+  // should not go hunting for a problem that is not recorded.
+  if (typeof TraceBugDiagnostics !== "undefined" && state) {
+    TraceBugDiagnostics.readErrors().then((list) => {
+      state.textContent = list.length
+        ? `${list.length} error${list.length === 1 ? "" : "s"} this session`
+        : "no errors";
+    }).catch(() => {});
+  }
+
+  copyBtn.addEventListener("click", async () => {
+    const text = await buildDiagnostics();
+    if (!text) { showToast("Diagnostics unavailable", true); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("Diagnostics copied - paste it into an issue");
+    } catch {
+      // A popup can lose clipboard permission; never leave a dead button.
+      showToast("Couldn't copy - open the browser console for the text", true);
+      console.log(text);
+    }
+  });
+
+  reportBtn.addEventListener("click", async () => {
+    const text = await buildDiagnostics();
+    // Prefilled, but the user reads and submits it themselves. GitHub caps the
+    // whole URL around 8 KB, so the body is trimmed rather than silently
+    // truncated by the browser into something that ends mid-stack.
+    const body = [
+      "**What happened?**",
+      "",
+      "",
+      "**Steps**",
+      "",
+      "1. ",
+      "",
+      "<details><summary>Diagnostics</summary>",
+      "",
+      "```",
+      text.slice(0, 5500),
+      "```",
+      "",
+      "</details>",
+    ].join("\n");
+    const url = `${DIAG_ISSUE_URL}?labels=bug&body=${encodeURIComponent(body)}`;
+    try {
+      chrome.tabs.create({ url });
+      window.close();
+    } catch {
+      showToast("Couldn't open GitHub - copy the diagnostics instead", true);
+    }
+  });
 }
 
 async function initRedactionUI() {

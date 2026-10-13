@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { extensionLaunchOptions } from "./paths.mjs";
 
 const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 // Site access is OPTIONAL from 1.11, and this harness injects from the
@@ -86,10 +87,12 @@ const check = (name, ok, extra = "") => {
 const total = () => `${passes}/${passes + failures} checks passed`;
 
 const userDir = mkdtempSync(join(tmpdir(), "tb-confirm-e2e-"));
-const ctx = await chromium.launchPersistentContext(userDir, {
-  headless: false,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-});
+const ctx = await chromium.launchPersistentContext(
+  userDir,
+  // Headless by default (new headless loads extensions; the old one does not),
+  // `--headful` or TB_E2E_HEADFUL=1 to watch it. See e2e/paths.mjs.
+  extensionLaunchOptions([`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`]),
+);
 
 /** Wait for the confirmation window's page object to appear. */
 async function waitForConfirmWindow(timeout = 8000) {

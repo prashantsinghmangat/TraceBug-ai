@@ -11,13 +11,14 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, extname } from "node:path";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { PUBLIC_DIR as PATHS_PUBLIC_DIR, EXT_SRC_DIR, extensionLaunchOptions } from "./paths.mjs";
 
 // Site access is OPTIONAL from 1.11, and this harness injects from the
 // service worker rather than through a real toolbar click, so it cannot grant
 // itself access. Load a copy that declares it — see e2e/ext-host-access.mjs
 // for why, and for what this does NOT change.
-const EXT = withGrantedHostAccess("D:/Project/TraceBug-ai/tracebug-extension", "redaction");
-const PUBLIC_DIR = "D:/Project/TraceBug-ai/website/public";
+const EXT = withGrantedHostAccess(EXT_SRC_DIR, "redaction");
+const PUBLIC_DIR = PATHS_PUBLIC_DIR;
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
 const server = createServer((req, res) => {
@@ -29,10 +30,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(4174, r));
 
 const userDir = mkdtempSync(join(tmpdir(), "tb-redact-e2e-"));
-const ctx = await chromium.launchPersistentContext(userDir, {
-  headless: false,
-  args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-});
+const ctx = await chromium.launchPersistentContext(
+  userDir,
+  // Headless by default (new headless loads extensions; the old one does not),
+  // `--headful` or TB_E2E_HEADFUL=1 to watch it. See e2e/paths.mjs.
+  extensionLaunchOptions([`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`]),
+);
 
 let failures = 0;
 // Output only: counts every check, but stays quiet while they all pass. The

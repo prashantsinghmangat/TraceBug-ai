@@ -203,6 +203,22 @@
         </div>
       </details>
 
+      <!-- Having trouble (Phase 7). TraceBug sends nothing anywhere, so the
+           only route for a bug report is the user's own clipboard. Both
+           buttons produce the SAME scrubbed text — no URLs, no page content,
+           no stored values; see diagnostics.js. -->
+      <details class="redact" id="diagBox">
+        <summary class="redact-sum">
+          <span class="redact-sum-label">🩺 Having trouble?</span>
+          <span class="redact-state" id="diagState"></span>
+        </summary>
+        <div class="redact-body">
+          <div class="redact-help">Copies TraceBug's version, your browser and OS, which permissions you've granted, and TraceBug's own recent errors. No URLs, no page content, nothing you've captured.</div>
+          <button class="redact-save" id="diagCopy">Copy diagnostics</button>
+          <button class="redact-save" id="diagReport" style="margin-top:6px;background:transparent;color:var(--accent);border:1px solid var(--border)">Report a TraceBug bug</button>
+        </div>
+      </details>
+
       <!-- Toast slot -->
       <div class="toast" id="toast" style="display:none;"></div>
 
@@ -236,6 +252,7 @@
   </div>
   <!-- page-support.js first: popup.js calls into TraceBugPageSupport at DOMContentLoaded. -->
   <script src="page-support.js"></script>
+  <script src="diagnostics.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
