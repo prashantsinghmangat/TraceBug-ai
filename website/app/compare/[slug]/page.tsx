@@ -64,7 +64,7 @@ const comparisons: Record<string, {
       "AI-agent ready — machine-readable over a local MCP server, plus a generated failing Playwright test to verify the fix",
       "Zero infrastructure and zero event quotas — no API key, no server, no per-event billing",
       "Deliberate capture — you record the bug that matters instead of triaging thousands of grouped events",
-      "Privacy-first — nothing leaves the browser; captured secrets are auto-masked",
+      "Privacy-first — nothing goes to TraceBug; you choose what's sent to GitHub, Linear, Slack or your AI provider, and captured secrets are auto-masked",
       "QA-friendly — testers capture with the extension (Chrome, Edge, Firefox), no code access needed",
     ],
     disadvantages: [

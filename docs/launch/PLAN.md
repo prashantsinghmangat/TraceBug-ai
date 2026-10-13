@@ -143,6 +143,18 @@ error ring and the report; the popup's "Having trouble?" panel offers **Copy dia
 
 ## Phase 8 - Smoke-test harness and release checklist
 
+**DEFERRED TO AFTER SUBMISSION**, except two items already done:
+
+- **[DONE] The harnesses run anywhere, headless.** `e2e/paths.mjs` replaced the hardcoded
+  `D:/Project/TraceBug-ai` paths, and all five extension suites run in Chromium's new headless mode.
+  **Verified:** bundled Chromium loads an unpacked MV3 extension headless and the service worker
+  registers (manifest version read back through it). Branded Chrome 137+ still ignores
+  `--load-extension`, so the nightly-against-Chrome-Beta item below cannot work and stays a manual row.
+- **[DONE] The no-token-in-the-page test:** `e2e/ext-no-secrets-in-page.e2e.mjs`, in CI.
+
+Everything else here - fixtures, `extension-smoke.spec.ts`, the golden report check, the nightly - is
+post-submission work.
+
 - Add `e2e/extension-smoke.spec.ts` (Playwright, Chromium). Launch a persistent context with
   `--disable-extensions-except` and `--load-extension` pointing to the built extension, plus
   `--use-fake-ui-for-media-stream` and `--auto-select-desktop-capture-source=<fixture tab title>`.
@@ -153,7 +165,7 @@ error ring and the report; the popup's "Having trouble?" panel offers **Copy dia
   network and replay; navigation mid-capture survives; restricted-page message appears for `chrome://extensions`;
   `.html` export opens offline and contains the footer; redaction masks all three seeded values in every export
   format; diagnostics contain no URLs.
-- **No token anywhere in the page - the Phase 2a guarantee, tested in a real DOM.** Seed a GitHub PAT, a Linear
+- **[DONE] No token anywhere in the page - the Phase 2a guarantee, tested in a real DOM.** Seed a GitHub PAT, a Linear
   key, a Slack webhook and an AI key into extension storage, open the Quick Bug modal on a fixture page, and
   assert none of those strings appears anywhere in the page: `document.documentElement.outerHTML`, every
   `input`/`textarea` `.value` (not just the attribute), every open shadow root, and page `localStorage` /

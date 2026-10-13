@@ -73,7 +73,7 @@ The capture follows you across pages. If it spans more than one, the DOM replay 
 
 Turn on **Record video too** in **⚙ Record options** to add a screen recording. The choice is remembered, so you only do it once. Then:
 
-1. Click **Capture Bug**. TraceBug shows one line explaining what's about to happen, then your browser's own "Choose what to share" dialog opens.
+1. Click **Capture Bug**. With **Record video too** on, TraceBug shows one line explaining what's about to happen, then your browser's own "Choose what to share" dialog opens. (With it off — the default — nothing asks to share your screen.)
 2. What you see there depends on **Capture** in Record options:
    - **Current tab** — the dialog is already set to the tab you're on; just confirm. (TraceBug asks the browser for this with `preferCurrentTab`.)
    - **Desktop / window (picker)** — the full tab/window/screen choice. Pick this tab unless you need a window or the whole screen.

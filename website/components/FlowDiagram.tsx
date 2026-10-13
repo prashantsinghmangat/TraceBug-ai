@@ -91,7 +91,7 @@ export default function FlowDiagram() {
         <SectionHeading
           eyebrow="One report, everything connected"
           title="The whole bug flows into one file — and out to any AI"
-          subtitle="Replay, console, network, and repro steps land in a single .html. From there, any MCP-connected agent reads it and starts fixing — no uploads, no accounts."
+          subtitle="Replay, console, network, and repro steps land in a single .html. From there, any MCP-connected agent reads it and starts fixing — nothing goes to TraceBug, no accounts."
         />
 
         <div ref={containerRef} className="relative mt-14 lg:mt-16">

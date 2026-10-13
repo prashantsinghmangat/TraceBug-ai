@@ -248,3 +248,24 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - `ext:lint` caught a broken string literal in popup.js that `typecheck` and `lint` both missed -
   extension JS is outside the TS pipeline, so web-ext is the only parser that sees it.
 
+## Phase 8 (partial) - the Phase 2a guarantee, in a real DOM (2026-10-13)
+
+- New `e2e/ext-no-secrets-in-page.e2e.mjs`. Seeds a GitHub PAT, a Linear key, a Slack webhook and an AI
+  key into `chrome.storage.local`, runs the real injection chain, opens the ticket modal and the
+  settings pointer, then harvests everything a page script could read - FROM INSIDE THE PAGE, because
+  that is the threat model. 13 checks, all passing.
+- **Proved it can fail.** Planted the token as a `.value` PROPERTY only, the way the old
+  `value="${escapeHtml(tok)}"` prefill did: `clean: outerHTML` passed while the `.value` check failed.
+  An outerHTML-only test would have missed it entirely - which is the whole reason PLAN.md asked for
+  this one.
+- That exercise found two reporting flaws of mine: shadow-root input values were bucketed as plain
+  inputs (so a failure pointed at the wrong part of the DOM), and the settings-pointer check printed
+  "DOM still clean" even when it wasn't. Both fixed, then re-verified with a shadow-only leak, which
+  now reports as a shadow leak with the other buckets correctly clean.
+- The suite also asserts the harvester can see the page's OWN values (`hunter2`, a shadow value, a
+  storage value). Without that, every "clean" result could be a false negative from a broken harvester.
+- Added to `ci.yml`'s e2e job - possible now that extension loading works headless - and to
+  `e2e/README.md`. Verified: check.mjs green, 796 passing / 47 files; the suite 13/13.
+- **Phase 8 steps 2-4 (fixtures, smoke spec, golden report, CI nightly) are deferred to after
+  submission**, by decision. Only this item was pulled forward.
+

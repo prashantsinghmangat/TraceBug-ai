@@ -73,7 +73,7 @@ Then ask your agent to `get_bug_report(...)` and fix from the evidence. See
 - Auto-generated **title, summary, reproduction steps, root-cause hint**
 - **Environment** (browser, OS, viewport, device) and a redacted storage snapshot
 
-It's one self-contained file. It works offline. Nothing leaves the machine unless
+It's one self-contained file. It works offline. Nothing goes to TraceBug; you choose what's sent to GitHub, Linear, Slack or your AI provider, and nothing else leaves the machine unless
 you share it.
 
 **Next:** [getting-started.md](getting-started.md) · [configuration.md](configuration.md) · [ticket-flow.md](ticket-flow.md)

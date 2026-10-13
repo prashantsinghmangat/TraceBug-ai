@@ -12,8 +12,11 @@ const nextConfig = {
         source: '/(.*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          // SAMEORIGIN (not DENY) so the interactive demo iframe on /
-          // can embed /demo.html. Still blocks external clickjacking.
+          // SAMEORIGIN (not DENY) so a same-origin iframe can embed a page -
+          // /share/[token] renders an exported report that way. The old
+          // /demo.html this comment named was retired in 1.11 (unreferenced,
+          // and still claiming v1.6.0 and "No API keys").
+          // Still blocks external clickjacking.
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },

@@ -12,7 +12,7 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "Does my data leave the browser?",
-    a: "No. Captures are stored in your browser and exported as local files on your machine. There are no uploads, no analytics, and no telemetry — you can audit the source on GitHub. Sensitive inputs (passwords, tokens, card numbers) are redacted before storage.",
+    a: "Nothing goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider. Captures are stored in your browser and exported as local files on your machine; there is no TraceBug backend, no analytics and no telemetry, and you can audit the source on GitHub. Sensitive inputs (passwords, tokens, card numbers) are redacted before storage.",
   },
   {
     q: "How do AI coding agents use TraceBug reports?",
