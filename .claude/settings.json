@@ -20,7 +20,8 @@
       "Read(./docs/launch/PLAN-archive.md)",
       "Read(./docs/launch/PROGRESS-archive.md)",
       "Read(./docs/launch/phase0-findings-archive.md)",
-      "Read(./docs/launch/designs/**)"
+      "Read(./docs/launch/designs/**)",
+      "Read(./docs-internal/**)"
     ],
     "deny": [
       "Read(./node_modules/**)",
@@ -41,8 +42,7 @@
       "Read(./website/node_modules/**)",
       "Read(./e2e/output/**)",
       "Read(./e2e/bug-reports/**)",
-      "Read(./e2e/**/*.png)",
-      "Read(./docs-internal/**)"
+      "Read(./e2e/**/*.png)"
     ]
   }
 }

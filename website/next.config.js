@@ -46,6 +46,20 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        // /demo.html was retired in 1.11 (unreferenced, and still showing the
+        // old logo, v1.6.0 and a "No API keys" claim that the BYO-key AI
+        // debugger made false). It is a permanent move, not a temporary one,
+        // and /try.html is the live equivalent: a page with real bugs to
+        // capture. 308 so anything that linked to it keeps working.
+        source: '/demo.html',
+        destination: '/try.html',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
