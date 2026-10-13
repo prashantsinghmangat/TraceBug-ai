@@ -775,6 +775,20 @@ function _openModal(
 
   _injectStyles();
 
+  // Every scrollable region in the ticket, driven by our own wheel handler.
+  // A canvas app (Figma, Miro, maps) preventDefaults wheel from a
+  // capture-phase window listener, which beats anything we can register - the
+  // scrollbars work, the wheel does not. Confirmed on figma.com. See
+  // _ownWheelScroll. Innermost first, so a code block consumes the wheel
+  // before the panel behind it does.
+  for (const sel of [
+    ".tb-qb-log-stack", ".tb-qb-feed-stack", ".tb-qb-net-snippet",
+    ".tb-qb-comments", ".tb-qb-ai-code",
+    ".tb-qb-tabpanels", ".tb-qb-left",
+  ]) {
+    modal.querySelectorAll<HTMLElement>(sel).forEach(_ownWheelScroll);
+  }
+
   // Remember what had focus so we can restore it when the modal closes
   // (WCAG 2.4.3 focus order). Guard against our own root element.
   const _prevFocus = document.activeElement as HTMLElement | null;

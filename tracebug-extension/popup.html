@@ -167,6 +167,11 @@
         <span class="mic-opt-text" title="Adds your voice to the recording — your browser asks for permission">Microphone — narrate your steps</span>
         <span class="mic-opt-pill" id="micOptState">Off</span>
       </button>
+      <!-- Mic problems are reported HERE, directly under the control they are
+           about. The shared toast sits at the foot of the popup, far enough
+           below the fold that a user has to scroll to find out why their click
+           did nothing. -->
+      <div id="micNotice" class="mic-notice" style="display:none"></div>
 
       <!-- Secondary row -->
       <div class="cta-row">
@@ -202,6 +207,17 @@
           <button class="redact-save" id="redactSave">Save rules</button>
         </div>
       </details>
+
+      <!-- Cross-site capture. The ONE thing site access buys, asked for where
+           that is the subject rather than ambushing the first capture click.
+           The row states the reason; the browser dialog comes after. -->
+      <button class="redact" id="crossSiteRow" style="display:none;width:100%;text-align:left;border:1px solid var(--border);background:var(--bg-2);padding:10px 12px;cursor:pointer;font-family:inherit">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span style="font-size:12.5px;font-weight:600;color:var(--text)">Keep capturing across sites</span>
+          <span id="crossSiteState" style="font-size:11px;color:var(--text-3)"></span>
+        </div>
+        <div id="crossSiteHelp" style="font-size:11px;color:var(--text-2);line-height:1.45;margin-top:3px"></div>
+      </button>
 
       <!-- Having trouble (Phase 7). TraceBug sends nothing anywhere, so the
            only route for a bug report is the user's own clipboard. Both

@@ -391,3 +391,65 @@ applyProviderUI();
 refreshPills();
 showMigrationNotices();
 renderLlmSites();
+
+// ── Microphone grant ────────────────────────────────────────────────────────
+// Lives here, not in the popup, for one concrete reason: an extension popup is
+// dismissed the instant it loses focus, and Chrome's microphone prompt takes
+// focus. The prompt therefore kills the popup and the pending getUserMedia
+// rejects with NotAllowedError - the user sees a refusal having never been
+// asked, and TraceBug appears in no blocked list because it was never blocked.
+// An options tab survives the prompt, and the grant persists for the extension
+// origin, so the offscreen recorder gets the mic for every later recording.
+(function initMicrophoneCard() {
+  const grant = document.getElementById("micGrant");
+  const check = document.getElementById("micCheck");
+  const pill = document.getElementById("micPill");
+  const status = document.getElementById("micStatus");
+  if (!grant) return;
+
+  function setState(state, message) {
+    if (pill) {
+      pill.textContent = state;
+      pill.className = "pill" + (state === "Granted" ? " ok" : "");
+    }
+    if (status) status.textContent = message || "";
+  }
+
+  async function refresh() {
+    // navigator.permissions is the non-intrusive way to ask - it never prompts.
+    try {
+      const st = await navigator.permissions.query({ name: "microphone" });
+      if (st.state === "granted") setState("Granted", "TraceBug can use the microphone when you turn it on for a recording.");
+      else if (st.state === "denied") setState("Blocked", "Blocked for this extension. Use the padlock in the address bar of this page, or chrome://settings/content/microphone, to allow it.");
+      else setState("Not granted", "Not asked yet.");
+    } catch {
+      setState("Unknown", "This browser will not say without asking. Use Allow microphone.");
+    }
+  }
+
+  grant.addEventListener("click", async () => {
+    setState("Asking…", "Answer the browser's prompt.");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // We only wanted the grant - stop the tracks so no mic light stays on.
+      stream.getTracks().forEach((t) => t.stop());
+      setState("Granted", "Done. Turn the microphone on in the TraceBug popup before a recording.");
+    } catch (err) {
+      const name = (err && err.name) || "";
+      if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        setState("No microphone", "No microphone found on this computer.");
+      } else if (name === "NotAllowedError") {
+        setState("Blocked", "You declined, or the browser is blocking it. Use the padlock in this page's address bar to allow it, then Re-check.");
+      } else {
+        setState("Failed", (err && err.message) || "Could not access the microphone.");
+      }
+    }
+  });
+
+  check.addEventListener("click", refresh);
+  void refresh();
+  // Deep-linked from the popup's mic notice.
+  if (location.hash === "#mic") {
+    document.getElementById("micCard")?.scrollIntoView({ block: "center" });
+  }
+})();

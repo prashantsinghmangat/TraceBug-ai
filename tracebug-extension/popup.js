@@ -358,6 +358,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   void initRedactionUI();
   void initWhatsNew();
   initDiagnosticsUI();
+  void initCrossSiteOptIn();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -430,12 +431,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         micOn = false;
         try { localStorage.setItem(MIC_KEY, "0"); } catch {}
         applyMicUI();
-        showToast(
-          err && err.name === "NotAllowedError"
-            ? "Microphone blocked — allow it for this extension, then toggle again"
-            : "Couldn't access the microphone",
-          true,
-        );
+        showMicNotice(err);
         return;
       }
     }
@@ -626,27 +622,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function runCombo(messageType, busyText, extra) {
   if (!currentTabId) return;
-  // Firefox MV3 treats manifest host_permissions as OPT-IN: without a granted
-  // origin, re-injection after navigation and captureVisibleTab fail once the
-  // one-shot activeTab grant expires. Request it here — this runs inside the
-  // button's click handler and MUST be the first await (Firefox rejects
-  // permissions.request made after unrelated awaits in the input handler).
-  // On Chrome the permission is already granted, so this resolves instantly.
-  // If the user declines, activeTab still covers the immediate action — and
-  // we remember the decline so they aren't re-prompted on every click.
-  let declinedThisClick = false;
-  if (!hostPermDeclined) {
-    try {
-      const granted = await chrome.permissions.request({ origins: ["<all_urls>"] });
-      if (granted === false) {
-        hostPermDeclined = true;
-        declinedThisClick = true;
-        try { chrome.storage.local.set({ tb_host_perm_declined: true }); } catch {}
-      } else {
-        try { chrome.storage.local.set({ tb_host_perm_declined: false }); } catch {}
-      }
-    } catch {}
-  }
+  // NO permission request here, deliberately.
+  //
+  // This used to call permissions.request({origins:["<all_urls>"]}) as its
+  // first await, so a user's very first click on ANY action met Chrome's
+  // "Read and change all your data on all websites" dialog - unexplained, and
+  // immediately after an install screen that asked for nothing. That reads as
+  // a bait and switch, and it is the opposite of what 1.11 is for.
+  //
+  // `activeTab` already covers the action the user just clicked: the capture
+  // works on this page either way. Site access buys exactly one thing - the
+  // capture SURVIVING a navigation to another origin - so it is asked for
+  // where that is the subject, as an explicit opt-in row in the popup
+  // (`initCrossSiteOptIn`), with the reason stated before the browser asks.
   setBusy(true);
   showToast(busyText);
   try {
@@ -658,12 +646,7 @@ async function runCombo(messageType, busyText, extra) {
     // Success — close popup so focus returns to the page, where the modal /
     // HUD / panel is about to appear. If site access was just declined, leave
     // the honest limitation on screen a beat longer before closing.
-    if (declinedThisClick) {
-      showToast("Works on this page for now — TraceBug stops after navigation without site access (grant it anytime in your browser's extension settings)");
-      setTimeout(() => window.close(), 2400);
-    } else {
-      setTimeout(() => window.close(), 350);
-    }
+    setTimeout(() => window.close(), 350);
   } catch (err) {
     reportFailure(err);
   }
@@ -734,6 +717,103 @@ function showToast(msg, isError) {
   t.className = "toast" + (isError ? " error" : "");
   t.style.display = "block";
   setTimeout(() => { t.style.display = "none"; }, 2500);
+}
+
+/**
+ * A toast that tells the user how to fix something, and does not time out.
+ *
+ * 2.5 seconds is enough to read "Copied", and nowhere near enough to read an
+ * instruction and act on it. Anything that names a fix has to stay on screen
+ * until it is dismissed, and carry the route to that fix - Phase 3's rule was
+ * that nothing in this popup may end in a no-op, and "allow it somewhere" with
+ * no way to get there is a no-op with extra steps.
+ */
+function showToastAction(msg, actionLabel, onAction, steps) {
+  const t = document.getElementById("toast");
+  t.className = "toast error";
+  t.textContent = "";
+  t.style.display = "block";
+
+  const line = document.createElement("div");
+  line.textContent = msg;
+  t.appendChild(line);
+
+  if (steps) {
+    const hint = document.createElement("div");
+    hint.style.cssText = "margin-top:5px;font-weight:400;opacity:0.85;line-height:1.45";
+    hint.textContent = steps;
+    t.appendChild(hint);
+  }
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px;margin-top:8px";
+  if (onAction) {
+    const act = document.createElement("button");
+    act.textContent = actionLabel;
+    act.style.cssText = "background:var(--error);color:#fff;border:0;border-radius:6px;padding:5px 10px;font:600 11.5px inherit;cursor:pointer";
+    act.addEventListener("click", onAction);
+    row.appendChild(act);
+  }
+  const dismiss = document.createElement("button");
+  dismiss.textContent = "Dismiss";
+  dismiss.style.cssText = "background:none;border:0;color:inherit;opacity:0.75;font:600 11.5px inherit;cursor:pointer;padding:5px 2px";
+  dismiss.addEventListener("click", () => { t.style.display = "none"; });
+  row.appendChild(dismiss);
+  t.appendChild(row);
+}
+
+/**
+ * Report a microphone problem under the microphone control, with a route out.
+ *
+ * WHY THE POPUP CANNOT DO THIS ITSELF: an extension popup closes the instant it
+ * loses focus, and Chrome's microphone prompt takes focus. So the prompt kills
+ * the popup, the pending getUserMedia rejects, and the user sees NotAllowedError
+ * having never been asked anything. That is why TraceBug appeared under NO
+ * blocked list in chrome://settings - it was never blocked; it was never asked.
+ *
+ * The grant therefore has to happen on a page that survives: TraceBug settings,
+ * which is a real tab. It asks there, the grant persists for the extension
+ * origin, and the offscreen recorder then gets the mic for every later recording.
+ */
+function showMicNotice(err) {
+  const box = document.getElementById("micNotice");
+  if (!box) return;
+  box.textContent = "";
+  box.style.display = "block";
+
+  const name = (err && err.name) || "";
+  const noDevice = name === "NotFoundError" || name === "DevicesNotFoundError";
+
+  const line = document.createElement("div");
+  line.textContent = noDevice
+    ? "No microphone found on this computer."
+    : "Chrome can't ask for the microphone from this popup.";
+  box.appendChild(line);
+
+  if (!noDevice) {
+    const steps = document.createElement("div");
+    steps.className = "mic-notice-steps";
+    steps.textContent = "The popup closes as soon as the permission prompt opens, so the request never completes. Grant it once in TraceBug settings and it applies to every recording.";
+    box.appendChild(steps);
+
+    const go = document.createElement("button");
+    go.textContent = "Grant in TraceBug settings";
+    go.addEventListener("click", () => {
+      try {
+        chrome.runtime.openOptionsPage();
+        window.close();
+      } catch {
+        try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#mic") }); window.close(); } catch {}
+      }
+    });
+    box.appendChild(go);
+  }
+
+  const dismiss = document.createElement("button");
+  dismiss.className = "ghost";
+  dismiss.textContent = "Dismiss";
+  dismiss.addEventListener("click", () => { box.style.display = "none"; });
+  box.appendChild(dismiss);
 }
 
 // ── Redaction rules ─────────────────────────────────────────────────────────
@@ -852,6 +932,59 @@ async function initWhatsNew() {
     try { void chrome.storage.local.remove(WHATS_NEW_KEY); } catch {}
   });
   card.style.display = "";
+}
+
+// ── Cross-site capture opt-in ───────────────────────────────────────────────
+// Site access does exactly one thing: it lets a capture keep running after the
+// user navigates to a DIFFERENT site. Everything else works from `activeTab`,
+// granted by their own click. So this is the only place that asks for it, and
+// it says what it is for before the browser's dialog appears.
+//
+// permissions.request must be the FIRST await inside a user-gesture handler -
+// Firefox rejects it otherwise - which is why this row is its own button
+// rather than a confirm step bolted onto a capture.
+async function initCrossSiteOptIn() {
+  const row = document.getElementById("crossSiteRow");
+  const state = document.getElementById("crossSiteState");
+  const help = document.getElementById("crossSiteHelp");
+  if (!row) return;
+
+  const render = (granted) => {
+    state.textContent = granted ? "On" : "Off";
+    state.style.color = granted ? "var(--success)" : "var(--text-3)";
+    help.textContent = granted
+      ? "A capture keeps running when you move to another site."
+      : "Right now a capture stops at the first move to another site. Turn this on to follow along — your browser will ask to allow it.";
+    row.style.display = "block";
+  };
+
+  let granted = false;
+  try { granted = await chrome.permissions.contains({ origins: ["<all_urls>"] }); } catch {}
+  render(granted);
+
+  row.addEventListener("click", async () => {
+    let has = false;
+    try { has = await chrome.permissions.contains({ origins: ["<all_urls>"] }); } catch {}
+    if (has) {
+      // Giving it back has to be as easy as granting it.
+      try { await chrome.permissions.remove({ origins: ["<all_urls>"] }); } catch {}
+      render(false);
+      showToast("Site access removed — capture still works on the page you are on");
+      return;
+    }
+    try {
+      const ok = await chrome.permissions.request({ origins: ["<all_urls>"] });
+      render(!!ok);
+      if (!ok) {
+        try { chrome.storage.local.set({ tb_host_perm_declined: true }); } catch {}
+        showToast("No problem — capture works on this page either way");
+      } else {
+        try { chrome.storage.local.set({ tb_host_perm_declined: false }); } catch {}
+      }
+    } catch {
+      showToast("Couldn't ask for site access — try from your browser's extensions page", true);
+    }
+  });
 }
 
 // ── Diagnostics (Phase 7) ───────────────────────────────────────────────────

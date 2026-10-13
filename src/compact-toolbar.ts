@@ -129,8 +129,14 @@ export function mountCompactToolbar(
   dragHandle.dataset.tracebug = "toolbar-handle";
   dragHandle.title = "Drag to move TraceBug";
   dragHandle.setAttribute("aria-label", "Drag to move TraceBug");
+  // Themed, NOT hardcoded white. The toolbar renders light on a light host
+  // page, where white dots at 45% are invisible - the grip read as a blank gap
+  // at the top of the bar, which is exactly how it was reported. `--tb-btn-text`
+  // is what the buttons beside it use, so the grip now matches them.
   dragHandle.style.cssText =
-    "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;color:rgba(255,255,255,0.45);";
+    "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;opacity:0.55;color:var(--tb-btn-text,#aaa);transition:opacity 0.12s;";
+  dragHandle.addEventListener("mouseenter", () => { dragHandle.style.opacity = "1"; });
+  dragHandle.addEventListener("mouseleave", () => { dragHandle.style.opacity = "0.55"; });
   dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
   toolbar.appendChild(dragHandle);
 
