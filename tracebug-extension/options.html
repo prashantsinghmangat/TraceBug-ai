@@ -199,6 +199,24 @@
       <div class="status" id="slStatus"></div>
     </div>
 
+    <section class="card" id="micCard">
+      <h2>Microphone <span class="pill" id="micPill">Not granted</span></h2>
+      <p class="hint">
+        Only used if you turn the microphone on for a recording, to narrate what you are doing. Nothing
+        is recorded until you start a recording, and the audio stays in the report on your device.
+      </p>
+      <p class="hint">
+        It has to be granted <strong>here</strong> rather than from the toolbar popup: a popup closes the
+        moment Chrome's permission prompt takes focus, which cancels the request before you can answer it.
+        This page stays open, so the prompt works.
+      </p>
+      <div class="row">
+        <button id="micGrant" type="button">Allow microphone</button>
+        <button class="ghost" id="micCheck" type="button">Re-check</button>
+      </div>
+      <div class="status" id="micStatus"></div>
+    </section>
+
     <section class="card">
       <h2>Sites allowed to run AI analysis</h2>
       <p class="hint">

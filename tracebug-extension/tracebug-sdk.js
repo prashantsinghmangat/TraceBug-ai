@@ -30546,6 +30546,17 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     overlay.appendChild(modal);
     root2.appendChild(overlay);
     _injectStyles2();
+    for (const sel of [
+      ".tb-qb-log-stack",
+      ".tb-qb-feed-stack",
+      ".tb-qb-net-snippet",
+      ".tb-qb-comments",
+      ".tb-qb-ai-code",
+      ".tb-qb-tabpanels",
+      ".tb-qb-left"
+    ]) {
+      modal.querySelectorAll(sel).forEach(_ownWheelScroll);
+    }
     const _prevFocus = document.activeElement;
     setTimeout(() => {
       const titleInput = modal.querySelector("#tb-qb-title");
@@ -33572,7 +33583,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     dragHandle.dataset.tracebug = "toolbar-handle";
     dragHandle.title = "Drag to move TraceBug";
     dragHandle.setAttribute("aria-label", "Drag to move TraceBug");
-    dragHandle.style.cssText = "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;color:rgba(255,255,255,0.45);";
+    dragHandle.style.cssText = "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;opacity:0.55;color:var(--tb-btn-text,#aaa);transition:opacity 0.12s;";
+    dragHandle.addEventListener("mouseenter", () => {
+      dragHandle.style.opacity = "1";
+    });
+    dragHandle.addEventListener("mouseleave", () => {
+      dragHandle.style.opacity = "0.55";
+    });
     dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
     toolbar.appendChild(dragHandle);
     toolbar.appendChild(_createToolbarBtn(

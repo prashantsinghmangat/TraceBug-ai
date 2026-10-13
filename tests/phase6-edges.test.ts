@@ -164,3 +164,58 @@ describe('the Jira button no longer implies filing', () => {
     expect(btn.slice(0, 400)).toMatch(/cannot file|CORS/i);
   });
 });
+
+// ── Manual-testing findings (2026-10-13) ───────────────────────────────────
+// Three bugs found by actually using the thing on figma.com. Each is the kind
+// that unit tests miss because it only shows up inside a real, hostile page.
+describe('copying a ticket does not destroy it', () => {
+  const SRC = readFileSync(join(root, 'src', 'ui', 'quick-bug.ts'), 'utf8');
+
+  /** The handler body for one action, up to the next listener registration. */
+  function handler(action: string): string {
+    const i = SRC.indexOf(`'[data-action="${action}"]'`);
+    expect(i, `no handler for ${action}`).toBeGreaterThan(-1);
+    // Without the paren: the next registration may be
+    // `modal.querySelector<HTMLButtonElement>(`, and the generic breaks a
+    // substring match on `modal.querySelector(` - which ran the Jira slice on
+    // into the Save Ticket block and its legitimate _clearDraft().
+    const next = SRC.indexOf('modal.querySelector', i + 10);
+    return SRC.slice(i, next > 0 ? next : i + 3000);
+  }
+
+  it.each(['github', 'jira', 'slack'])('copy action "%s" leaves the modal open', (action) => {
+    // Copying is not filing. The user may paste it, decide it needs an edit,
+    // and copy again - or copy AND export. Closing destroyed unsaved work.
+    const body = handler(action);
+    expect(body).not.toContain('setTimeout(close, 300)');
+    expect(body).not.toContain('_clearDraft()');
+  });
+
+  it('still closes after the ticket is actually FILED', () => {
+    // The distinction that makes the above safe: opening a prefilled issue
+    // page, or creating one through the API, does finish the ticket.
+    const filed = SRC.slice(SRC.indexOf('function _fileViaTracker'));
+    expect(filed.slice(0, 3000)).toContain('setTimeout(close, 300)');
+  });
+});
+
+describe('scrollable UI survives a host page that eats the wheel', () => {
+  const SRC = readFileSync(join(root, 'src', 'ui', 'quick-bug.ts'), 'utf8');
+
+  it('scrolls by setting scrollTop, not by relying on the default', () => {
+    // A canvas app preventDefaults wheel from a capture-phase window listener,
+    // which beats anything registered later. stopPropagation cannot help; only
+    // doing the scroll ourselves can.
+    const fn = SRC.slice(SRC.indexOf('function _ownWheelScroll'), SRC.indexOf('// \u2500\u2500 AI prompt popover'));
+    expect(fn).toContain('el.scrollTop = before');
+    expect(fn).toContain('{ passive: false }');
+    // And hands the event back at its own limits, so the user is not trapped.
+    expect(fn).toContain('if (el.scrollTop !== before)');
+  });
+
+  it('is applied to the AI preview and the ticket modal panels', () => {
+    expect(SRC).toContain('_ownWheelScroll(preview)');
+    expect(SRC).toContain('.tb-qb-tabpanels');
+    expect(SRC).toContain('.tb-qb-left');
+  });
+});
