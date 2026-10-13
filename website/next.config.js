@@ -54,6 +54,14 @@ const nextConfig = {
         // debugger made false). It is a permanent move, not a temporary one,
         // and /try.html is the live equivalent: a page with real bugs to
         // capture. 308 so anything that linked to it keeps working.
+        //
+        // This belongs HERE and not in netlify.toml. The site is not a static
+        // export (`next build`, `publish = ".next"`, @netlify/plugin-nextjs),
+        // so the Next runtime serves requests — and as netlify.toml's own
+        // comment notes, it runs BEFORE Netlify's redirect layer, which is why
+        // the primary-domain 301 had to be forced there. A netlify.toml rule
+        // for this path would be the less reliable of the two.
+        // Verified against `next dev`: /demo.html -> 308 -> /try.html.
         source: '/demo.html',
         destination: '/try.html',
         permanent: true,

@@ -38,14 +38,20 @@ Automated gates are green and cannot say more than they already have:
    field-name mismatch is accepted and silently discarded - there is no other way to check.
 4. **Read the diagnostics output properly**, hunting for any URL, hostname, path or page text. The
    scrubber is tested against the cases I could think of; users will paste this into public issues.
-5. **Rewrite section 7b of `docs-internal/CHROME-WEB-STORE-LISTING.md`** (permission
-   justifications). It carries a DO-NOT-PASTE warning listing four problems; the data-collection
-   disclosure in particular is a judgement call, not a copy-paste.
-6. **Decide whether `manifest.json`'s `name`/`description` should match the new store listing.**
-   They deliberately differ now - the listing leads with search terms, the manifest with the promise.
-7. **Confirm the `/demo.html` -> `/try.html` redirect actually fires.** It lives in
-   `next.config.js`, which is inert on a static export; if the site deploys statically it belongs in
-   `netlify.toml` or `_redirects` instead.
+5. **Check `tracebug.dev/privacy` renders correctly** after the rewrite, and decide whether it needs
+   a sentence distinguishing extension mode from npm-SDK mode: the new token paragraph describes the
+   extension, while the SDK still stores tokens in the page's own localStorage.
+
+### Closed since the bump
+
+- **Store listing is submission-ready.** Name `TraceBug: Bug Report Recorder & Replay` (38 chars) and
+  the search-led description are in BOTH manifests and in the listing doc; §7b carries the current
+  permission table and the data-use disclosure, warning removed.
+- **`/demo.html` -> `/try.html` verified.** 308, tested against `next dev`. It stays in
+  `next.config.js`: the site is not a static export, and the Next runtime serves requests ahead of
+  Netlify's redirect layer.
+- **The privacy policy no longer claims "no data is ever sent to any server."** It says nothing goes
+  to TraceBug, and documents the three things that do leave the device.
 
 ## Carried forward from Phases 4–7
 
@@ -75,6 +81,10 @@ Automated gates are green and cannot say more than they already have:
   pastes into a public GitHub issue. Its rules run in a fixed order (markup FIRST, before placeholders
   that look like tags), and `tests/diagnostics.test.ts` asserts against real browser error text rather
   than against the regexes. Add a rule there, with a case, rather than filtering at a call site.
+- **Firefox AMO caps manifest `name` at 45 characters; Chrome allows 75.** One manifest feeds both
+  builds, so 45 binds. Exceed it and `ext:lint` fails with `JSON_INVALID "/name"` while Chrome accepts
+  it happily - a Chrome-only check will not catch it. Limits table in
+  `docs/launch/store-submission-pack.md` §1.
 - Two credit settings sit together in the export **More ▾** menu and both default on:
   `tracebug_show_export_footer` (the bar in an exported `.html`) and `tracebug_issue_signature`
   (the line in GitHub / Linear / Slack bodies).
