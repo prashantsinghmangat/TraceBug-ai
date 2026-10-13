@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "TraceBug \u2014 Capture the Bug, Let AI Fix It",
+  "name": "TraceBug: Bug Report Recorder & Replay",
+  "short_name": "TraceBug",
   "version": "1.11.0",
-  "description": "Capture a browser bug \u2014 replay, console, network \u2014 into one local report your AI agent (Claude, Cursor) reads and fixes. Free.",
+  "description": "Record a bug once: replay, console errors and network in one offline file. For QA and devs. Free, no account, no upload.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
   "permissions": [

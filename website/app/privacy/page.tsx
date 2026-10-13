@@ -3,7 +3,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Privacy Policy — TraceBug",
   description:
-    "TraceBug privacy policy. All data stays in your browser. No servers, no tracking, no third-party transfers.",
+    "TraceBug privacy policy. Nothing goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider.",
 };
 
 export default function PrivacyPage() {
@@ -19,7 +19,7 @@ export default function PrivacyPage() {
 
         <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: March 23, 2026
+          Last updated: October 13, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -32,9 +32,12 @@ export default function PrivacyPage() {
               during testing sessions and generates developer-ready bug reports.
               TraceBug is designed with privacy as a core principle:{" "}
               <strong className="text-text-primary">
-                all data stays in your browser
+                nothing goes to TraceBug
               </strong>
-              . No data is ever sent to external servers.
+              . There is no TraceBug server that receives your reports. A
+              capture&apos;s content stays on your device until you choose to
+              send it somewhere, and the only destinations are services you
+              configure yourself: GitHub, Linear, Slack, or an AI provider.
             </p>
           </section>
 
@@ -99,7 +102,19 @@ export default function PrivacyPage() {
                 <code className="text-accent">chrome.storage.local</code>
               </li>
               <li>
-                <strong className="text-text-primary">No data is sent to any server, API, or third-party service</strong>
+                <strong className="text-text-primary">
+                  No capture is sent anywhere unless you send it
+                </strong>{" "}
+                — and never to TraceBug. See &ldquo;What leaves your device, and
+                when&rdquo; below.
+              </li>
+              <li>
+                API tokens and keys you enter (GitHub, Linear, Slack, OpenAI,
+                Anthropic, Ollama) are stored in{" "}
+                <code className="text-accent">chrome.storage.local</code> on
+                your own device, and are sent only to the service they belong
+                to. They are never stored on the websites you test, and never
+                reach TraceBug.
               </li>
             </ul>
           </section>
@@ -128,11 +143,51 @@ export default function PrivacyPage() {
               TraceBug does <strong className="text-text-primary">not</strong>:
             </p>
             <ul className="list-disc pl-6 space-y-1 mt-2">
-              <li>Send any data to external servers or APIs</li>
+              <li>Run a server that receives your reports — there isn&apos;t one</li>
               <li>Use analytics, telemetry, or tracking of any kind</li>
-              <li>Share, sell, or transfer user data to third parties</li>
+              <li>Share, sell, or transfer your data to anyone of its own accord</li>
               <li>Use data for advertising, profiling, or creditworthiness</li>
-              <li>Store any data outside the user&apos;s browser</li>
+              <li>Send anything you have not chosen to send</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-text-primary mb-3">
+              What leaves your device, and when
+            </h2>
+            <p className="mb-3">
+              Three things can leave your device. All three are started by you,
+              and none of them goes to TraceBug.
+            </p>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>
+                <strong className="text-text-primary">
+                  A report you send to an issue tracker or an AI provider
+                </strong>{" "}
+                — when you click Send for GitHub, Linear, Slack, or ask for AI
+                analysis, the report content is sent directly from your browser
+                to that service, using the token you supplied. In the extension
+                you see the full report and the destination in a confirmation
+                window first, and nothing is sent until you approve it. Those
+                services then handle that data under their own privacy policies.
+              </li>
+              <li>
+                <strong className="text-text-primary">
+                  The uninstall survey
+                </strong>{" "}
+                — removing the extension opens a page that receives the version
+                number you had installed, plus whatever you choose to type in
+                the optional form. Nothing else, and answering is optional:
+                Skip sends nothing at all.
+              </li>
+              <li>
+                <strong className="text-text-primary">
+                  Anything you export and share yourself
+                </strong>{" "}
+                — an exported <code className="text-accent">.html</code> report
+                is a file on your machine. Where it goes afterwards is entirely
+                up to you.
+              </li>
             </ul>
           </section>
 
@@ -171,14 +226,30 @@ export default function PrivacyPage() {
                 recording
               </div>
               <div>
-                <strong className="text-text-primary">tabs</strong> — To
-                identify the current tab&apos;s URL and prevent duplicate injection
+                <strong className="text-text-primary">unlimitedStorage</strong>{" "}
+                — A report with a replay or a video can exceed the default
+                storage limit. It is stored only on your device.
               </div>
               <div>
-                <strong className="text-text-primary">Host permissions</strong>{" "}
-                — TraceBug works on any website the user chooses, so broad host
-                access is required. It only activates on sites explicitly enabled
-                by the user.
+                <strong className="text-text-primary">offscreen</strong> — To
+                keep an optional screen recording running while you move between
+                pages.
+              </div>
+              <div>
+                <strong className="text-text-primary">alarms</strong> — To
+                cancel an unanswered send-confirmation window after two minutes.
+              </div>
+              <div>
+                <strong className="text-text-primary">
+                  Optional host permissions
+                </strong>{" "}
+                — <strong className="text-text-primary">Not requested at
+                install.</strong> TraceBug captures the tab you are on from your
+                own click. It asks for site access only if you want a capture to
+                keep running after you navigate to another site, and for one
+                specific address when you save a GitHub, Linear, Slack, OpenAI,
+                Anthropic or Ollama integration. Declining is fine — capture
+                still works on the page you are on.
               </div>
             </div>
           </section>
