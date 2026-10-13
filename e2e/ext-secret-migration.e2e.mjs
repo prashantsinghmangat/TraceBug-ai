@@ -20,6 +20,7 @@ import { tmpdir } from "node:os";
 import { join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
+import { extensionLaunchOptions } from "./paths.mjs";
 
 const REPO = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 // Site access is OPTIONAL from 1.11, and this harness injects from the
@@ -80,10 +81,10 @@ const total = () => `${passes}/${passes + failures} checks passed`;
 const userDir = mkdtempSync(join(tmpdir(), "tb-migration-e2e-"));
 
 async function launch(extDir) {
-  const ctx = await chromium.launchPersistentContext(userDir, {
-    headless: false,
-    args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`],
-  });
+  const ctx = await chromium.launchPersistentContext(
+    userDir,
+    extensionLaunchOptions([`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`]),
+  );
   let [sw] = ctx.serviceWorkers();
   if (!sw) sw = await ctx.waitForEvent("serviceworker", { timeout: 15000 });
   return { ctx, sw };

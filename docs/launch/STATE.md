@@ -7,13 +7,15 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
 
 - Branch `develop`, preparing **1.11.0**. Version strings still say **1.10.1** (`package.json`,
   `tracebug-extension/manifest.json`) — that is the live store build. Bumping is a release step, not done.
-- **Phases 0–5 are done.** Permissions optional, secrets and provider calls out of the host page,
+- **Phases 0–7 are done.** Permissions optional, secrets and provider calls out of the host page,
   restricted pages and orphaned tabs handled, events-only capture as the default, bundled welcome page,
   per-version "What's new" card, uninstall survey, review ask and the export footer / issue credit.
+  Phase 6 added the oversize-export notice, the canvas-replay warning and the Jira relabel; Phase 7
+  added diagnostics the user copies out themselves.
   Per-phase history is in `PROGRESS.md`; `PLAN.md` marks the finished items.
-- **Next: Phases 6–9 in `PLAN.md`.** Phase 8 needs rescoping — see gotchas.
+- **Next: Phases 8–9 in `PLAN.md`.** Phase 8 needs rescoping — see gotchas.
 
-## Carried forward from Phases 4–5
+## Carried forward from Phases 4–7
 
 - **Bump the version to 1.11.0** in `package.json` and `tracebug-extension/manifest.json`, then run
   `npm run check:versions` — it names every other surface that has to move with them (the npm package,
@@ -31,6 +33,14 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
   builds itself.
 - The capture shortcut must always be read from `chrome.commands` at runtime, never hardcoded — default
   **`Alt+B`**. `Ctrl+Shift+B` is a page-level handler that only works once TraceBug is on the tab.
+- **The DOM replay never records canvas** (`recordCanvas: false` in `rrweb-recorder.ts`), so a
+  canvas-driven page replays as an empty box. `src/replay-fidelity.ts` warns at events-capture start
+  when a canvas covers >25% of the viewport; video is the only fix. Don't "fix" this by enabling
+  `recordCanvas` without measuring - it is off for size and speed reasons.
+- **`diagnostics.js` `scrub()` is a privacy boundary, not a nicety** - whatever it misses, the user
+  pastes into a public GitHub issue. Its rules run in a fixed order (markup FIRST, before placeholders
+  that look like tags), and `tests/diagnostics.test.ts` asserts against real browser error text rather
+  than against the regexes. Add a rule there, with a case, rather than filtering at a call site.
 - Two credit settings sit together in the export **More ▾** menu and both default on:
   `tracebug_show_export_footer` (the bar in an exported `.html`) and `tracebug_issue_signature`
   (the line in GitHub / Linear / Slack bodies).

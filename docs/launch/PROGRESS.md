@@ -201,3 +201,50 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Phase 5 is now complete** and `PLAN.md` says so. `STATE.md` was rewritten rather than appended to:
   it had grown a per-step changelog, which is what PROGRESS is for. Next: Phases 6-9.
 
+## Phase 6 - edge cases (2026-10-13)
+
+- **Oversize exports.** Above a 20 MB estimate the modal now says so, names GitHub's 25 MB attachment
+  cap, and offers what is actually possible. PLAN.md's "DOM replay only (no video)" fallback **cannot
+  fire**: when a DOM replay exists the exporter already drops the video, so that is the small export.
+  The oversize case is the opposite branch - no replay, WebM base64-embedded - where the offers are
+  "Export without video" (new path, `includeVideo: false`) and taking the `.webm` separately. Warned at
+  20 rather than 25 because the figure is an estimate and a 26 MB surprise after a wait is the failure.
+- **Canvas pages.** New `src/replay-fidelity.ts`: rrweb runs with `recordCanvas: false`, so a
+  canvas-driven page replays as a correctly-sized empty box. Warned at events-capture start, where
+  "turn on video" is still an option, measured on RENDERED area vs viewport (>25%) so sparklines and
+  2000px-backing-store icons don't trigger it. TraceBug's own draw canvas and anything under
+  `#tracebug-root` are excluded. Auto-dismisses after 12s with a Stop action - a sticky notice over the
+  page you are reproducing a bug on would be worse than the problem.
+- **Jira** menu item is now "Copy for Jira", with a tooltip saying why it cannot file (Jira Cloud is
+  CORS-blocked for browser XHR). The Slack item needed nothing - resolved by Phase 2b.
+- Files: new `src/replay-fidelity.ts`, `tests/phase6-edges.test.ts`; edited `src/index.ts`,
+  `src/ui/quick-bug.ts`, `tests/review-ask.test.ts`, `docs/launch/{PLAN,STATE}.md`, `CHANGELOG.md`.
+  Verified: check.mjs --full green, 763 passing / 46 files (+17), ext:lint 0/69; ext-events-capture
+  22/22, blur-tracking 7/7, pre-record 7/7.
+- One test of mine needed loosening: `review-ask` pinned `showFooter` to exactly 2 call sites, and the
+  new no-video path is a legitimate third. Now asserts coverage of every export path instead of a count.
+
+## Phase 7 - diagnostics without telemetry (2026-10-13)
+
+- New `tracebug-extension/diagnostics.js`: a scrubber, a 20-entry error ring in
+  `chrome.storage.session`, and a report builder. Loaded by the worker (importScripts + Firefox
+  `background.scripts`) and the popup, same pattern as `page-support.js`. No `fetch`, no
+  `sendBeacon`, no `WebSocket` - a test asserts that, because a network call here would make "no
+  telemetry" false.
+- The scrubber is the privacy boundary: whatever it misses, the user pastes into a public issue.
+  **The leak test PLAN.md asked for found a real leak on the first run** - a 16-digit card number
+  inside `<input value="...">` passed every rule (my opaque-run rule needed 24+ chars). Fixed with a
+  12+-digit rule AND an HTML-markup strip that runs FIRST, before the placeholders that themselves
+  look like tags. Tests assert against real browser error strings, not against the regexes.
+- Stack frames are filtered to TraceBug's own files, so a host-page script path - which is both a URL
+  and useless for fixing TraceBug - never appears. Granted origins are matched against our own
+  declared list and anything else is counted, not named: a user who pointed Ollama at
+  `llm.acme.internal` has granted their own infrastructure.
+- The UA is read in exactly one place, reduced to a browser name + MAJOR version and an OS family.
+  That is reporting, not branching - the project's feature-detect rule is about deciding behaviour.
+- Files: new `diagnostics.js`, `tests/diagnostics.test.ts`; edited `background.js`, `popup.{js,html}`,
+  `build/build-ext.mjs`. Verified: check.mjs --full green, 796 passing / 47 files (+33), ext:lint
+  0 errors / 69 warnings; ext-redaction 4/4, ext-events-capture 22/22, ext-provider-confirm 61/61.
+- `ext:lint` caught a broken string literal in popup.js that `typecheck` and `lint` both missed -
+  extension JS is outside the TS pipeline, so web-ext is the only parser that sees it.
+

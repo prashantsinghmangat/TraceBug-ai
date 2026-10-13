@@ -32,6 +32,7 @@ const SHARED_FILES = [
   "secret-migration.js",
   "provider-bridge.js",
   "page-support.js",
+  "diagnostics.js",
   "tracebug-provider-api.js",
   "offscreen.js",
   "offscreen.html",
@@ -72,7 +73,7 @@ function firefoxManifest() {
     version,
     // Firefox event pages have no importScripts, so the worker-side scripts
     // are listed ahead of background.js and run in the same global.
-    background: { scripts: ["tracebug-provider-api.js", "provider-bridge.js", "page-support.js", "background.js"] },
+    background: { scripts: ["tracebug-provider-api.js", "provider-bridge.js", "page-support.js", "diagnostics.js", "background.js"] },
     browser_specific_settings: {
       gecko: {
         id: "tracebug@prashantsinghmangat",

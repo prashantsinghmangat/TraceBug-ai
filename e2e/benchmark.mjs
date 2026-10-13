@@ -8,8 +8,9 @@ import { chromium } from "playwright";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, extname } from "node:path";
+import { PUBLIC_DIR as PATHS_PUBLIC_DIR } from "./paths.mjs";
 
-const PUBLIC_DIR = "D:/Project/TraceBug-ai/website/public";
+const PUBLIC_DIR = PATHS_PUBLIC_DIR;
 const BENCH_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>bench</title></head>
 <body><main id="app">${'<section><h2>Card</h2><p>Row of content with <a href="#x">links</a> and <button class="b">Buttons</button></p><input name="field" /></section>'.repeat(40)}</main>
 <script src="/tracebug-sdk.js"></script></body></html>`;

@@ -334,6 +334,44 @@ function _downloadAllScreenshots(screenshots: ScreenshotData[]): void {
  * restored before the modal renders, so `report.video.sizeBytes`/`rrwebEvents`
  * are reliably present here when a recording exists.
  */
+// GitHub rejects attachments over 25 MB. Warn at 20 so there is room for the
+// estimate to be wrong in the unhelpful direction — it is an estimate, and a
+// file that turns out to be 26 MB after the user has waited for it is the
+// failure this exists to prevent.
+const EXPORT_WARN_BYTES = 20 * 1024 * 1024;
+const GITHUB_ATTACHMENT_CAP = "25 MB";
+
+/**
+ * The oversize-export notice, or "" when the estimate is comfortable.
+ *
+ * What it offers depends on what is actually possible, which is NOT what
+ * PLAN.md assumed. The plan offers "DOM replay only (no video)" — but when a
+ * DOM replay exists the exporter already drops the video, so that export is
+ * the small one and this notice never fires. The big file is the OTHER branch:
+ * no DOM replay, so the WebM is base64-embedded and dominates. There is no DOM
+ * replay to fall back to there; what helps is dropping the video (keeping
+ * report, console, network and screenshots) or taking the `.webm` separately.
+ */
+function _oversizeExportNotice(report: import("../types").BugReport | null): string {
+  const bytes = _estimateHtmlExportBytes(report);
+  if (bytes < EXPORT_WARN_BYTES) return "";
+  const v = report?.video;
+  const hasRrweb = Array.isArray(v?.rrwebEvents) && v.rrwebEvents.length > 0;
+  const size = _formatBytes(bytes);
+  // With a DOM replay the video is already out, so the bulk is the event stream
+  // and screenshots; there is nothing to drop without losing the replay itself.
+  const offer = hasRrweb
+    ? `<button data-action="export-zip" class="tb-qb-size-act">Download .zip instead</button>`
+    : `<button data-action="export-no-video" class="tb-qb-size-act">Export without video</button>`
+      + `<button data-action="download-video" class="tb-qb-size-act">Download .webm separately</button>`;
+  return `
+    <div class="tb-qb-size-warn" role="status">
+      <strong>This export is about ${size}.</strong> GitHub rejects attachments over ${GITHUB_ATTACHMENT_CAP},
+      and most trackers are slower above that${hasRrweb ? "" : " — the screen recording is what makes it big"}.
+      <div class="tb-qb-size-acts">${offer}</div>
+    </div>`;
+}
+
 function _estimateHtmlExportBytes(report: import("../types").BugReport | null): number {
   let bytes = 120 * 1024;
   const v = report?.video;
@@ -677,6 +715,7 @@ function _openModal(
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
         <button data-action="export-har" class="tb-qb-btn" title="Export captured network activity as a standard .har file (opens in DevTools, Charles, Postman)">${_ic("network")} Export HAR</button>
+        ${_oversizeExportNotice(data.report)}
         <!-- PHASE2-CLOUD: share link button disabled for Phase 1 offline release
         <button data-action="share-link" class="tb-qb-btn" title="Upload and copy a shareable link (sign-in required)">↗ Share link</button>
         PHASE2-CLOUD -->
@@ -691,7 +730,7 @@ function _openModal(
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
             <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
             <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
-            <button data-action="jira" class="tb-qb-more-item" role="menuitem">${_ic("ticket")} Jira</button>
+            <button data-action="jira" class="tb-qb-more-item" role="menuitem" title="Copies the report as Jira markup for you to paste — TraceBug cannot file into Jira (its API is CORS-blocked for browsers)">${_ic("ticket")} Copy for Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations…</button>
             <!-- The one promotional thing in an export, and therefore the one
                  thing that has to be removable before the file is sent on. -->
@@ -1129,6 +1168,40 @@ function _openModal(
       if (moreMenu.dataset.open === "true" && !moreMenu.contains(e.target as Node) && e.target !== moreBtn) setMoreOpen(false);
     });
   }
+
+  // "Export without video", from the oversize notice. Same export path with
+  // includeVideo forced off: the report, console, network, actions and
+  // screenshots all survive — only the embedded recording goes.
+  modal.querySelector('[data-action="export-no-video"]')?.addEventListener("click", async () => {
+    if (!data.currentSession) {
+      showToast("Nothing to export yet — capture something first", root);
+      return;
+    }
+    showToast("Bundling without the recording…", root);
+    try {
+      const report = buildReport(data.currentSession);
+      if (data.suppressVideo) report.video = undefined;
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const userDesc = draft.description.trim();
+      const result = await exportSessionAsHtml(data.currentSession, report, {
+        descriptionOverride: userDesc
+          ? (report.steps ? `${userDesc}
+
+${report.steps}` : userDesc)
+          : undefined,
+        githubRepo: _githubRepo || undefined,
+        showFooter: showExportFooter(),
+        includeVideo: false,
+      });
+      const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+      showToast(`✓ Exported without video · ${sizeMb} MB`, root);
+      _maybeAskForReview(root, data.currentSession?.sessionId ?? null);
+    } catch (err) {
+      console.warn("[TraceBug] Video-free export failed:", err);
+      showToast("Couldn't build the export — try again", root);
+    }
+  });
 
   // The issue-signature toggle. Same place and shape as the footer toggle, so
   // both "what leaves TraceBug carries a credit" settings sit together.
@@ -3018,6 +3091,13 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-imgmeta { font-size:11px; color:var(--tb-text-muted); margin-bottom:12px; font-family:var(--tb-font-mono); }
     #${MODAL_ID} .tb-qb-btn-sm { background:transparent; color:var(--tb-text-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:500; font-family:inherit; transition:all 0.15s; }
     #${MODAL_ID} .tb-qb-btn-sm:hover { background:var(--tb-btn-hover); color:var(--tb-text-primary); border-color:var(--tb-border-hover); }
+    /* Oversize-export notice (Phase 6). Amber, not red: the export still
+       works, it is just awkward to attach anywhere. */
+    #${MODAL_ID} .tb-qb-size-warn { margin:8px 0 0; padding:9px 11px; background:rgba(180,83,9,0.12); border:1px solid rgba(180,83,9,0.28); border-radius:var(--tb-radius-sm); font-size:11.5px; line-height:1.5; color:var(--tb-text-secondary); }
+    #${MODAL_ID} .tb-qb-size-warn strong { color:var(--tb-text-primary); font-weight:650; }
+    #${MODAL_ID} .tb-qb-size-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+    #${MODAL_ID} .tb-qb-size-act { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:6px; padding:4px 9px; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer; }
+    #${MODAL_ID} .tb-qb-size-act:hover { border-color:var(--tb-accent); color:var(--tb-accent); }
     #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
     #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }

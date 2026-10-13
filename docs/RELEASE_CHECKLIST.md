@@ -109,3 +109,32 @@ TraceBug - free & local." with "Capture your own" linking to the store listing w
 `utm_source=report&utm_medium=export`. Then set **Export footer: off** in the **More ▾** menu, export
 again, and confirm the bar is gone from the new file and the old one still has it.
 
+### 9. The oversize-export notice and the canvas warning
+
+**Oversize export.** Capture with **Record video too** on, record for long enough that the estimate on
+the **Export replay (.html)** button passes 20 MB (roughly 2-3 minutes of tab video), then open the
+ticket modal. **Pass:** an amber notice above the export row names the size and GitHub's 25 MB cap,
+with **Export without video** and **Download .webm separately**. The first must produce a far smaller
+file that still has the console, network, actions and screenshots. With a DOM-replay capture (video
+off) the notice should not appear at all, however long the capture.
+
+**Canvas warning.** Start a capture with video OFF on a page whose content is a large canvas - a
+charting page, Google Maps, any WebGL demo. **Pass:** a toast appears naming the canvas, saying
+console/network/clicks are still captured, and pointing at **Record video too**; it offers **Stop** and
+disappears on its own after about 12 seconds. It must NOT appear on an ordinary page, nor on a
+dashboard of small sparkline charts.
+
+### 10. Diagnostics
+
+Open the popup, expand **Having trouble?**. **Pass:** the summary says "no errors" on a clean session.
+Click **Copy diagnostics** and paste it somewhere: it must name TraceBug's version, your browser and
+OS, the granted permissions, and end with "No URLs, page content or stored values are included".
+
+Then force an error - open the popup on a `chrome://` page, or reload the extension mid-capture - and
+copy again. **Pass:** the error appears with a TraceBug file name and line number, and **no URL,
+hostname, file path or page text anywhere in the output**. Read it properly; this is the text users
+will paste into public issues.
+
+Finally click **Report a TraceBug bug**. **Pass:** GitHub's new-issue form opens with the diagnostics
+in a collapsed block, nothing is submitted, and the URL is not so long the browser truncates it.
+

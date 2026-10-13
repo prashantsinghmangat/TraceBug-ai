@@ -109,7 +109,13 @@ are kept for context, not as instructions. Nothing in this phase is outstanding.
 
 ## Phase 6 - Edge cases (week-2 audit items)
 
-- **Large exports:** before export, show the estimated file size. Above 20 MB, warn that GitHub attachments cap
+**PHASE 6 IS DONE** (2026-10-13). One correction worth keeping: the large-export item asked for a
+"DOM replay only (no video)" fallback, which cannot fire - when a DOM replay exists the exporter
+already drops the video, so that IS the small export. The oversize case is the opposite branch (no
+replay, video embedded), where the offers are "Export without video" and taking the `.webm`
+separately. See `_oversizeExportNotice` in `src/ui/quick-bug.ts`.
+
+- **[DONE] Large exports:** before export, show the estimated file size. Above 20 MB, warn that GitHub attachments cap
   at 25 MB, and offer "DOM replay only (no video)" or `.zip`.
 - **Slack: RESOLVED by Phase 2b (2026-10-12) - nothing left to do here.** The worker drops `mode: "no-cors"`
   when `https://hooks.slack.com/*` is granted and reads Slack's real reply, including its terse rejection
@@ -118,18 +124,22 @@ are kept for context, not as instructions. Nothing in this phase is outstanding.
   delivers the message. Page-mode (npm) SDK keeps `opaque: true` - it cannot read a cross-origin opaque
   response and never will. See `postSlackMessage` / `readResponse` in `src/providers/api.ts` and
   `tests/provider-api.test.ts`.
-- **Jira:** rename the button to "Copy for Jira" wherever it implies filing.
-- **Strict-CSP and canvas/WebGL pages:** detect a heavy canvas or a CSP that blocks the inline pieces, and show a
+- **[DONE] Jira:** rename the button to "Copy for Jira" wherever it implies filing.
+- **[DONE] Strict-CSP and canvas/WebGL pages:** detect a heavy canvas or a CSP that blocks the inline pieces, and show a
   one-line notice recommending video capture.
 
 ## Phase 7 - Diagnostics without telemetry
 
-- Add a popup menu item **Copy diagnostics**. It copies extension version, browser and version, OS, granted
+**PHASE 7 IS DONE** (2026-10-13). `tracebug-extension/diagnostics.js` owns the scrubbing, the session
+error ring and the report; the popup's "Having trouble?" panel offers **Copy diagnostics** and
+**Report a TraceBug bug**.
+
+- **[DONE]** Add a popup menu item **Copy diagnostics**. It copies extension version, browser and version, OS, granted
   permissions, whether the current page is restricted, and the last 20 TraceBug-internal errors (message + stack
   from extension code only). Keep that error ring buffer in `chrome.storage.session` or memory.
-- **Strip all URLs, page content, storage values and user data.** Add a test that fails if a URL or a DOM string
+- **[DONE]** **Strip all URLs, page content, storage values and user data.** Add a test that fails if a URL or a DOM string
   leaks into diagnostics.
-- Add **Report a TraceBug bug**: it opens the GitHub new-issue page for the repo, prefilled with the diagnostics.
+- **[DONE]** Add **Report a TraceBug bug**: it opens the GitHub new-issue page for the repo, prefilled with the diagnostics.
 
 ## Phase 8 - Smoke-test harness and release checklist
 

@@ -14,8 +14,8 @@ relevant one after touching its feature:
 | `blur-tracking.e2e.mjs` | Element-level blur: click-to-blur/unblur, zero scroll lag, `tb-mask`, Undo, cancel cleanup. |
 | `pre-record.e2e.mjs` | Blur-first arming bar, cancel path, 3-2-1 countdown. |
 | `inspect-mode.e2e.mjs` | Inspect mode overlay + style-evidence capture. |
-| `ext-player-csp.e2e.mjs` | Extension player iframe on a strict-CSP page (headful, loads the real extension). |
-| `ext-redaction.e2e.mjs` | Popup redaction rules → storage → page bridge → `[REDACTED]` capture (headful, real extension). |
+| `ext-player-csp.e2e.mjs` | Extension player iframe on a strict-CSP page (loads the real extension). |
+| `ext-redaction.e2e.mjs` | Popup redaction rules → storage → page bridge → `[REDACTED]` capture (real extension). |
 
 These are **not** in `npm test` (they need a browser binary and are slower);
 unit tests live in `tests/` and run with vitest.
@@ -35,5 +35,17 @@ Run with `npx playwright test e2e/demo-failure.spec.ts`.
 | `marketing-screenshots.mjs` | Current-build product screenshots + a fresh sample export → `D:/tmp/tracebug-shots/`. |
 
 Conventions: each script serves `website/public` on its own port (no shared
-state), checks print `PASS`/`FAIL` lines, and headful mode is only used
-where extensions require it.
+state), and every path is derived from `e2e/paths.mjs` rather than hardcoded -
+these scripts used to only run on one laptop.
+
+Output: quiet while passing. Each script prints one totals line
+(`ALL CHECKS PASSED - 22/22 checks passed`); the first failure flushes the whole
+run so a failing check is readable next to the ones that got there. `--verbose`
+prints everything from the start.
+
+Headless by default, including the extension suites: Chromium's NEW headless
+mode loads unpacked extensions (the OLD one ignored them, which is where
+"extension tests must be headful" came from). Pass `--headful`, or set
+`TB_E2E_HEADFUL=1`, to watch a run. Always bundled Chromium, never
+`channel: "chrome"` - branded Chrome 137+ silently ignores `--load-extension`,
+so an extension test against it passes by testing nothing.
