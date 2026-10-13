@@ -30785,8 +30785,6 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       showToast(ok ? `\u2713 Copied as GitHub Issue${tail}` : "Copy failed", root2);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
       if (ok) _downloadVideoIfPresent();
-      _clearDraft();
-      setTimeout(close, 300);
     });
     modal.querySelector('[data-action="jira"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
@@ -30814,8 +30812,6 @@ ${description}`;
       showToast(ok ? `\u2713 Copied as Jira Ticket${jiraTail}` : "Copy failed", root2);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
       if (ok) _downloadVideoIfPresent();
-      _clearDraft();
-      setTimeout(close, 300);
     });
     const saveTicketBtn = modal.querySelector('[data-action="save-ticket"]');
     if (saveTicketBtn) {
@@ -31239,8 +31235,6 @@ ${report.steps}` : userDesc : void 0,
       const ok = await _copyToClipboard(text);
       showToast(ok ? "\u2713 Slack-formatted summary copied" : "Copy failed", root2);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
-      _clearDraft();
-      setTimeout(close, 300);
     });
     modal.addEventListener("click", (e2) => {
       var _a3, _b2, _c2;
@@ -32855,6 +32849,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   `;
     document.head.appendChild(style);
   }
+  function _ownWheelScroll(el) {
+    el.addEventListener("wheel", (e2) => {
+      const before = el.scrollTop;
+      const step = e2.deltaMode === 1 ? 16 : e2.deltaMode === 2 ? el.clientHeight : 1;
+      el.scrollTop = before + e2.deltaY * step;
+      if (el.scrollTop !== before) {
+        e2.preventDefault();
+        e2.stopPropagation();
+      }
+    }, { passive: false });
+  }
   function showAIPromptPopover(_anchor, prompt, _root4) {
     var _a2;
     (_a2 = document.getElementById("tb-ai-popover")) == null ? void 0 : _a2.remove();
@@ -32943,6 +32948,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     overlay.appendChild(card);
     const host2 = document.getElementById(MODAL_ID) || document.body;
     host2.appendChild(overlay);
+    const preview = card.querySelector("pre");
+    if (preview) _ownWheelScroll(preview);
     card.querySelectorAll("button[data-ai-action]").forEach((b) => {
       b.addEventListener("mouseenter", () => {
         b.style.filter = "brightness(1.1)";

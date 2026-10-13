@@ -1049,8 +1049,9 @@ function _openModal(
     showToast(ok ? `\u2713 Copied as GitHub Issue${tail}` : "Copy failed", root);
     if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
     if (ok) _downloadVideoIfPresent();
-    _clearDraft();
-    setTimeout(close, 300);
+    // Deliberately NOT closing, and NOT clearing the draft. Copying is not
+    // filing: the user may paste it, decide it needs an edit, and copy again -
+    // or copy AND export. Closing here destroyed an unsaved ticket.
   });
 
   // Jira formatting is local export output — never plan-gated (pricing
@@ -1071,8 +1072,9 @@ function _openModal(
     showToast(ok ? `\u2713 Copied as Jira Ticket${jiraTail}` : "Copy failed", root);
     if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
     if (ok) _downloadVideoIfPresent();
-    _clearDraft();
-    setTimeout(close, 300);
+    // Deliberately NOT closing, and NOT clearing the draft. Copying is not
+    // filing: the user may paste it, decide it needs an edit, and copy again -
+    // or copy AND export. Closing here destroyed an unsaved ticket.
   });
 
   // Save Ticket \u2014 marks this session as explicitly saved so it appears in the
@@ -1649,8 +1651,9 @@ ${report.steps}` : userDesc)
     const ok = await _copyToClipboard(text);
     showToast(ok ? "\u2713 Slack-formatted summary copied" : "Copy failed", root);
     if (ok && screenshots.length) _downloadAllScreenshots(screenshots);
-    _clearDraft();
-    setTimeout(close, 300);
+    // Deliberately NOT closing, and NOT clearing the draft. Copying is not
+    // filing: the user may paste it, decide it needs an edit, and copy again -
+    // or copy AND export. Closing here destroyed an unsaved ticket.
   });
 
   // AI tab — Configure (BYO-key modal) + Generate (run analysis). Delegated so
@@ -3409,6 +3412,36 @@ function _injectStyles(): void {
   document.head.appendChild(style);
 }
 
+/**
+ * Make an element scroll with the wheel even when the host page fights us.
+ *
+ * TraceBug's UI is injected into somebody else's page, and canvas apps drive
+ * their own zoom/pan from a capture-phase `wheel` listener on window that calls
+ * preventDefault - Figma does exactly this. A capture-phase listener registered
+ * before ours wins, so stopPropagation cannot save us and the browser's default
+ * scroll never happens: the scrollbar is there and draggable, but the wheel is
+ * dead. Reported from real testing on figma.com.
+ *
+ * So do the scroll ourselves. Setting scrollTop directly is immune to anyone
+ * else's preventDefault, and we stop propagation so the host does not ALSO pan
+ * its canvas under our dialog.
+ */
+function _ownWheelScroll(el: HTMLElement): void {
+  el.addEventListener("wheel", (e: WheelEvent) => {
+    const before = el.scrollTop;
+    // deltaMode 1 is lines, 2 is pages; normalise to something pixel-ish.
+    const step = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientHeight : 1;
+    el.scrollTop = before + e.deltaY * step;
+    // Only swallow the event if we actually consumed it. At the top or bottom
+    // of our own content, let the page have it back - otherwise we trap the
+    // user inside a box they have already read to the end of.
+    if (el.scrollTop !== before) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, { passive: false });
+}
+
 // ── AI prompt popover ───────────────────────────────────────────────────
 // Shown after "Fix with AI" copies the prompt. Centered modal-style sheet so
 // it's impossible to miss — earlier version was a tiny popover anchored
@@ -3513,6 +3546,9 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
   // both used the max z-index, so DOM order decided and the modal won.
   const host = document.getElementById(MODAL_ID) || document.body;
   host.appendChild(overlay);
+  // The prompt preview is the thing people actually need to scroll.
+  const preview = card.querySelector<HTMLElement>("pre");
+  if (preview) _ownWheelScroll(preview);
 
   card.querySelectorAll<HTMLButtonElement>("button[data-ai-action]").forEach((b) => {
     b.addEventListener("mouseenter", () => { b.style.filter = "brightness(1.1)"; });
