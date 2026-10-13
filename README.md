@@ -654,7 +654,7 @@ npm run dev
 - ~20 token-shape patterns masked at capture (JWT, `Bearer` headers, cloud provider keys) — a logged secret never enters the report object
 - The export flow and the exported report show exactly what was masked: `🛡 N sensitive values auto-masked`
 - App-specific PII covered via `redact: { fields, patterns }` in config — also settable in the extension popup's 🛡 Redaction rules section
-- All data stays in `localStorage` — nothing leaves the browser
+- All data stays in `localStorage` — nothing goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider
 - SDK never captures its own UI interactions
 - No external servers, no tracking, no analytics
 

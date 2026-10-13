@@ -19,7 +19,7 @@ claim a ✅ we haven't verified.
 | HTML / HAR / zip / Playwright exports | ✅ | ✅ | ⚠ untested |
 | Element-level blur (CSS filter + `tb-mask`) | ✅ | ✅ | ✅ (standard CSS) |
 | Compressed exports (`CompressionStream`) | ✅ | ✅ | ✅ (16.4+); older ships uncompressed fallback |
-| **Browser extension** | ✅ Chrome Web Store (Edge can sideload) | ✅ Firefox 128+ (AMO submission in progress) | ❌ not planned |
+| **Browser extension** | ✅ [Chrome Web Store](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) (Edge can sideload) | ✅ [live on AMO](https://addons.mozilla.org/firefox/addon/tracebug/), Firefox 128+ | ❌ not planned |
 | Site access after navigation | ✅ automatic | ✅ after the one-time host-permission prompt on first capture | n/a |
 | MCP server (`npx tracebug mcp`) | n/a — runs in Node 18+, any OS | n/a | n/a |
 

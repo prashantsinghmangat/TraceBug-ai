@@ -8,7 +8,7 @@ import {
 const FEATURES = [
   {
     Icon: Zap, title: "Instant capture", span: "lg:col-span-2",
-    desc: "Report a bug in 2 clicks with Ctrl+Shift+B. No menus, no forms — the modal opens pre-filled with title, summary, and a root-cause hint.",
+    desc: "Report a bug in 2 clicks with your capture shortcut (default Alt+B). No menus, no forms — the modal opens pre-filled with title, summary, and a root-cause hint.",
     chip: "Core",
   },
   {

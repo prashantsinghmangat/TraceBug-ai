@@ -1,8 +1,11 @@
 // ── TraceBug Extension — Popup ──────────────────────────────────────────────
-// Minimal three-action surface:
-//   1. Capture Bug Now  → enable site + inject + open Quick Bug modal w/ screenshot
-//   2. Record session   → enable site + inject + start tab-capture recording
+// Minimal four-action surface:
+//   1. Capture Bug      → enable site + inject + start an events-only capture
+//                         (console, network, clicks, DOM replay). No screen
+//                         share unless "Record video too" is on.
+//   2. Screenshot only  → enable site + inject + open Quick Bug w/ a screenshot
 //   3. View tickets     → enable site + inject + open dashboard panel
+//   4. Inspect element  → enable site + inject + start inspect mode
 // Background handles the enable-and-inject pipeline atomically.
 
 const STORAGE_KEY = "tracebug_enabled_sites";

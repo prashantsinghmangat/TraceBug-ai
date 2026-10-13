@@ -15,6 +15,7 @@ relevant one after touching its feature:
 | `pre-record.e2e.mjs` | Blur-first arming bar, cancel path, 3-2-1 countdown. |
 | `inspect-mode.e2e.mjs` | Inspect mode overlay + style-evidence capture. |
 | `ext-player-csp.e2e.mjs` | Extension player iframe on a strict-CSP page (loads the real extension). |
+| `ext-no-secrets-in-page.e2e.mjs` | The Phase 2a guarantee in a real DOM: four seeded secrets must not appear in `outerHTML`, any `input`/`textarea` **`.value`**, any open shadow root, or page storage. |
 | `ext-redaction.e2e.mjs` | Popup redaction rules → storage → page bridge → `[REDACTED]` capture (real extension). |
 
 These are **not** in `npm test` (they need a browser binary and are slower);

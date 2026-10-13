@@ -40,9 +40,12 @@ jobs:
           fi
 
   e2e:
-    # Browser-driven checks against the real built SDK. The extension-loading
-    # e2e scripts (ext-*.e2e.mjs) are headful and stay local-only; these three
-    # run headless against website/public/tracebug-sdk.js.
+    # Browser-driven checks against the real built SDK. The first three run
+    # against website/public/tracebug-sdk.js; the last loads the real unpacked
+    # extension, which works headless in Chromium's NEW headless mode (the old
+    # one ignored extensions, which is why these used to be local-only).
+    # Bundled Chromium only - branded Chrome 137+ silently drops
+    # --load-extension, so a run there would pass by testing nothing.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,3 +64,7 @@ jobs:
         run: node e2e/pre-record.e2e.mjs
       - name: E2E — inspect mode
         run: node e2e/inspect-mode.e2e.mjs
+      - name: E2E — no secret reaches the page (Phase 2a guarantee)
+        # The unit test proves the SDK's getters refuse to return a secret.
+        # This proves the DOM is clean, which is where the leak actually was.
+        run: node e2e/ext-no-secrets-in-page.e2e.mjs
