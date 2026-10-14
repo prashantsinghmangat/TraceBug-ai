@@ -101,7 +101,7 @@ All notable changes to TraceBug are documented here.
   storage for any of this to be possible: it lived in each popup's page storage, which the part of
   TraceBug that handles installs and updates cannot read, so "chose not to record video" and "has
   never been asked" were the same missing value.
-- **"Capture: Current tab" now does something in the extension** (`tracebug-extension/offscreen.js`) — the setting was persisted by the popup and forwarded through the background worker and the content script, and then ignored by the recorder, so the share dialog always showed the full tab/window/screen choice. Only the npm SDK honoured it. Choosing **Current tab** now passes `preferCurrentTab`, which collapses the dialog to a one-click confirm, and `docs/chrome-extension.md` no longer describes the SDK's behaviour as if it were the extension's.
+- **"Capture: Current tab" steers the npm SDK only, and the extension now says so** (`tracebug-extension/offscreen.js`, `docs/chrome-extension.md`) — in the extension the share dialog always shows the full tab/window/screen choice. It cannot do otherwise: the recorder runs in an offscreen document, and the browser hint for "record the current tab" means *the tab of the page that asked*, which an offscreen document does not have. An earlier 1.11 build tried to pass that hint anyway and broke recording outright. The docs no longer describe the SDK's behaviour as if it were the extension's.
 
 ### Fixed
 

@@ -74,9 +74,13 @@ The capture follows you across pages. If it spans more than one, the DOM replay 
 Turn on **Record video too** in **⚙ Record options** to add a screen recording. The choice is remembered, so you only do it once. Then:
 
 1. Click **Capture Bug**. With **Record video too** on, TraceBug shows one line explaining what's about to happen, then your browser's own "Choose what to share" dialog opens. (With it off — the default — nothing asks to share your screen.)
-2. What you see there depends on **Capture** in Record options:
-   - **Current tab** — the dialog is already set to the tab you're on; just confirm. (TraceBug asks the browser for this with `preferCurrentTab`.)
-   - **Desktop / window (picker)** — the full tab/window/screen choice. Pick this tab unless you need a window or the whole screen.
+2. The dialog shows the full tab / window / screen choice. **Pick this tab** unless you need a window or the whole screen.
+
+   The **Capture** setting in Record options does not change this dialog in the
+   extension, and cannot: the recorder runs in a hidden background page, and the
+   browser hint for "record the current tab" means *the tab of the page that
+   asked* — which that background page does not have. The setting still works in
+   the npm SDK, where TraceBug runs in your own tab.
 3. Stop in the HUD, or with your browser's native "Stop sharing" button.
 
 **macOS:** screen recording needs your browser ticked under **System Settings → Privacy & Security → Screen Recording**, and the browser has to be quit and reopened afterwards. If it isn't, TraceBug says so and offers to capture without video instead — your browser reports an OS refusal the same way it reports you closing the dialog, so TraceBug reads the error text to tell them apart.

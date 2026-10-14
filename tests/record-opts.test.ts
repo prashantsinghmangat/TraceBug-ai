@@ -308,7 +308,11 @@ describe('popup.js only calls the video setting "chosen" when it was', () => {
     // and that the other three controls share the plain handler — adding
     // markVideoChosen to any of them would silently re-freeze users.
     expect(SOURCE).toContain('videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });');
-    expect(SOURCE).toContain('[surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));');
+    // .filter(Boolean) because the Capture select was removed from the markup
+    // - it could not work in the extension. The point of this assertion is
+    // unchanged: these three share the PLAIN handler, and none of them promotes
+    // videoSetBy to "user".
+    expect(SOURCE).toContain('[surfaceSel, delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));');
     // The declaration plus exactly one call.
     expect(SOURCE.match(/markVideoChosen\(\)/g) ?? []).toHaveLength(2);
   });
