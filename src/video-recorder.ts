@@ -237,6 +237,33 @@ export function resumeVideoRecording(): void {
 // whether the mic came from displayMedia's audio:true or a separately
 // captured getUserMedia track.
 
+/**
+ * Is screen recording offered in the EXTENSION? Not in 1.11.
+ *
+ * ── THE ONE SWITCH. Set this true in 1.11.1 to bring video back. ──
+ *
+ * The extension's recorder runs in an offscreen document and the page only
+ * holds a handle to it. Four bugs in that seam surfaced in real use and are
+ * written up in docs/launch/video-1.11.1.md: a lost recording on stop, no
+ * fullscreen in the preview, a microphone that cannot be granted from any
+ * surface that can prompt, and a HUD mute button wired to a stream the page
+ * does not own. Events-only capture - the 1.11 default and the headline
+ * feature - is unaffected by all of them, so video is paused rather than
+ * shipped broken.
+ *
+ * This gates the EXTENSION only. The npm SDK records in the page, owns its own
+ * stream, and is untouched.
+ *
+ * The stored preference (`tb_record_opts.video`) is deliberately NOT cleared,
+ * so a user who had video on gets it back in 1.11.1 without re-choosing.
+ */
+export const VIDEO_ENABLED_IN_EXTENSION = false;
+
+/** Can this transport start a screen recording at all? */
+export function isVideoOffered(): boolean {
+  return !isExtensionContext() || VIDEO_ENABLED_IN_EXTENSION;
+}
+
 export function hasMicrophoneTrack(): boolean {
   if (!_stream) return false;
   // Audio tracks from getDisplayMedia's `audio: true` are system/tab audio,
@@ -301,6 +328,15 @@ async function _startVideoRecordingInner(options?: {
   _onStatus = options?.onStatus || null;
   const requestedMode = options?.mode === "standard" ? "standard" : "rolling";
   const surfaceMode = options?.surfaceMode === "tab" ? "tab" : "desktop";
+
+  // Refuse here, not just in the UI. Entry points that never touch the popup -
+  // the Alt+B command, a replayed message, a stored pref read at startup - all
+  // funnel through this function, so this is the only place that can make the
+  // guarantee hold. See VIDEO_ENABLED_IN_EXTENSION.
+  if (!isVideoOffered()) {
+    _onStatus?.("error", "Screen recording is paused in this version — capturing console, network and a replay instead.");
+    return false;
+  }
 
   if (isExtensionContext()) {
     const result = await rpcCall<{ ok: boolean; error?: string }>("tb:rec:start", {
@@ -436,6 +472,10 @@ export function downloadVideoRecording(recording: VideoRecording, filename = "tr
 
 export async function restoreFromOffscreenIfActive(): Promise<boolean> {
   if (!isExtensionContext()) return false;
+  // With video paused there is never a recording to restore, and this RPC runs
+  // on EVERY page load. Asking would wake a recorder host that 1.11 no longer
+  // ships - see VIDEO_ENABLED_IN_EXTENSION.
+  if (!isVideoOffered()) return false;
   const status = await rpcCall<OffscreenStatus | null>("tb:rec:status").catch(() => null);
   if (!status || !status.active) return false;
 
@@ -458,6 +498,8 @@ export async function restoreFromOffscreenIfActive(): Promise<boolean> {
  * recording to give (e.g., never started, already cleared, RPC failed).
  */
 export async function restoreLastRecordingFromOffscreen(): Promise<VideoRecording | null> {
+  // Same reason as above: called on every ticket open and every export.
+  if (isExtensionContext() && !isVideoOffered()) return null;
   if (!isExtensionContext()) return null;
   if (isUsableRecording(_lastRecording)) return _lastRecording;
   try {

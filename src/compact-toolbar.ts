@@ -4,6 +4,7 @@
 // Primary actions as small icons, settings in a pop-out card.
 
 import { deactivateElementAnnotateMode } from "./element-annotate";
+import { isExtensionMode } from "./ext-transport";
 import { deactivateDrawMode } from "./draw-mode";
 import { captureScreenshot } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
@@ -17,7 +18,7 @@ import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./u
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
 import { matchesShortcut } from "./ui/helpers";
-import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, getCaptureCount } from "./video-recorder";
+import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, getCaptureCount, isVideoOffered } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
@@ -196,18 +197,23 @@ export function mountCompactToolbar(
   // and whether to include the mic; the native picker then confirms the
   // surface. (Replaced the old separate tab/desktop buttons — two entry points
   // for the same action just confused people, and the picker already chooses.)
-  const recordBtn = _createToolbarBtn(
-    "Record (video + session)",
-    _recordIconSvg(false),
-    () => _toggleRecording(root, recordBtn, showToast),
-    "tracebug-toolbar-record-btn"
-  );
-  if (!isVideoSupported()) {
-    recordBtn.style.opacity = "0.4";
-    recordBtn.style.cursor = "not-allowed";
-    recordBtn.title = "Screen recording not supported in this browser";
+  // Not rendered at all where video is paused - a disabled button invites
+  // clicking and explaining; an absent one asks nothing. See
+  // VIDEO_ENABLED_IN_EXTENSION in video-recorder.ts.
+  if (isVideoOffered()) {
+    const recordBtn = _createToolbarBtn(
+      "Record (video + session)",
+      _recordIconSvg(false),
+      () => _toggleRecording(root, recordBtn, showToast),
+      "tracebug-toolbar-record-btn"
+    );
+    if (!isVideoSupported()) {
+      recordBtn.style.opacity = "0.4";
+      recordBtn.style.cursor = "not-allowed";
+      recordBtn.title = "Screen recording not supported in this browser";
+    }
+    toolbar.appendChild(recordBtn);
   }
-  toolbar.appendChild(recordBtn);
 
   // Track session — event-only capture (no video, no screenshots required).
   // Click to arm a session; every click/input/navigation/API call/console
@@ -671,8 +677,18 @@ function _showRecordPreflight(
     // Use a theme-agnostic translucent fill (not --tb-bg-tertiary, whose dark
     // fallback rendered as an unreadable black block on light pages).
     const segBase = "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:9px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.12s;border:1px solid var(--tb-border, #2a2a3e);background:rgba(127,127,140,0.14);color:var(--tb-text-secondary, #9aa0aa)";
+    // The surface choice is shown ONLY where it can do something.
+    //
+    // In the npm SDK the caller is the user's own tab, so `preferCurrentTab`
+    // works and "This tab" collapses the picker to a one-click confirm. In the
+    // EXTENSION the recorder runs in an offscreen document, which has no tab to
+    // prefer, so both buttons produced the identical picker - a control that
+    // changes nothing, which is what the popup's copy of it was removed for.
+    // See the note in tracebug-extension/offscreen.js.
+    const showSurfaceChoice = !isExtensionMode();
     pop.innerHTML = `
       <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
+      ${showSurfaceChoice ? `
       <div style="display:flex;gap:7px;margin-bottom:10px">
         <button data-tb-pre="surface-tab" style="${segBase}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg>
@@ -682,7 +698,10 @@ function _showRecordPreflight(
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>
           Screen / window
         </button>
-      </div>
+      </div>` : `
+      <div style="margin-bottom:10px;font-size:11px;line-height:1.45;color:var(--tb-text-secondary, #9aa0aa)">
+        Your browser will ask what to share — pick this tab unless you need a window or the whole screen.
+      </div>`}
       <label style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;background:rgba(127,127,140,0.14);user-select:none;margin-bottom:10px">
         <input type="checkbox" data-tb-pre="mic" style="margin:0;cursor:pointer" />
         <span style="display:flex;align-items:center;gap:6px;flex:1">
@@ -698,21 +717,25 @@ function _showRecordPreflight(
 
     root.appendChild(pop);
 
-    let surface: "tab" | "desktop" = "tab";
-    const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]') as HTMLButtonElement;
-    const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]') as HTMLButtonElement;
+    // "desktop" when there is no choice: it is the only honest value, since the
+    // extension always gets the full picker.
+    let surface: "tab" | "desktop" = showSurfaceChoice ? "tab" : "desktop";
+    const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]') as HTMLButtonElement | null;
+    const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]') as HTMLButtonElement | null;
     const micEl = pop.querySelector('[data-tb-pre="mic"]') as HTMLInputElement;
     const cancelEl = pop.querySelector('[data-tb-pre="cancel"]') as HTMLButtonElement;
     const startEl = pop.querySelector('[data-tb-pre="start"]') as HTMLButtonElement;
 
-    const paintSurface = () => {
-      const on = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
-      tabBtn.style.cssText = segBase + (surface === "tab" ? on : "");
-      deskBtn.style.cssText = segBase + (surface === "desktop" ? on : "");
-    };
-    paintSurface();
-    tabBtn.addEventListener("click", () => { surface = "tab"; paintSurface(); });
-    deskBtn.addEventListener("click", () => { surface = "desktop"; paintSurface(); });
+    if (tabBtn && deskBtn) {
+      const paintSurface = () => {
+        const on = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
+        tabBtn.style.cssText = segBase + (surface === "tab" ? on : "");
+        deskBtn.style.cssText = segBase + (surface === "desktop" ? on : "");
+      };
+      paintSurface();
+      tabBtn.addEventListener("click", () => { surface = "tab"; paintSurface(); });
+      deskBtn.addEventListener("click", () => { surface = "desktop"; paintSurface(); });
+    }
 
     let settled = false;
     const finish = (value: { surface: "tab" | "desktop"; withMicrophone: boolean } | null) => {

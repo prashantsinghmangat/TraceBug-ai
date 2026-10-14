@@ -104,6 +104,7 @@ import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/reco
 import { startDomRecording, stopDomRecording, stashDomReplay, clearStashedDomReplay } from "./rrweb-recorder";
 import { showCaptureBlockedNotice, showActionToast } from "./ui/toast";
 import { eventsCaptureFidelityWarning } from "./replay-fidelity";
+import { isVideoOffered } from "./video-recorder";
 import {
   mark as _mark,
   assertCondition as _assertCondition,
@@ -1007,7 +1008,10 @@ class TraceBugSDK {
   } = {}): void {
     const begin = () => {
       const go = () => {
-        if (!opts.video) {
+        // A stored `video: true` must not start a recording in 1.11 - an
+        // updater was seeded exactly that. The preference is left alone in
+        // storage so 1.11.1 can honour it again; it is simply not acted on.
+        if (!opts.video || !isVideoOffered()) {
           void this.startEventsCapture();
           return;
         }

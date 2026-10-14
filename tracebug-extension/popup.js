@@ -407,12 +407,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   const micBtn = document.getElementById("micOpt");
   const micPill = document.getElementById("micOptState");
   function applyMicUI() {
+    // The row is not rendered in 1.11 - see popup.html. Everything below is
+    // kept, not deleted, so restoring the markup in 1.11.1 restores the
+    // behaviour with it.
+    if (!micBtn || !micPill) return;
     micBtn.classList.toggle("mic-opt-on", micOn);
     micBtn.setAttribute("aria-pressed", micOn ? "true" : "false");
     micPill.textContent = micOn ? "On" : "Off";
   }
   applyMicUI();
-  micBtn.addEventListener("click", async () => {
+  micBtn?.addEventListener("click", async () => {
     const turningOn = !micOn;
     if (turningOn) {
       // Request mic permission HERE. The popup is an extension page that can
@@ -516,7 +520,10 @@ document.addEventListener("DOMContentLoaded", async () => {
    */
   function saveRecordOpts() {
     const o = {
-      video: !!videoCb.checked,
+      // Always false in 1.11: the control is gone and the capture is
+      // events-only. The STORED value is left untouched - see
+      // VIDEO_ENABLED_IN_EXTENSION - so this never writes over it.
+      video: videoCb ? !!videoCb.checked : false,
       surfaceMode: surfaceSel ? surfaceSel.value : "desktop",
       delaySec: Number(delaySel.value) || 0,
       blurFirst: !!blurCb.checked,
@@ -574,21 +581,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     // update) and from the legacy migration, so this only has to render what
     // was decided. Still `=== true` rather than truthy: a storage read that
     // came back empty must land on off, not on whatever coerces.
-    videoCb.checked = o.video === true;
+    if (videoCb) videoCb.checked = o.video === true;
     if (o.videoSetBy === "user") videoSetBy = "user";
     if (o.surfaceMode && surfaceSel) surfaceSel.value = o.surfaceMode;
     if (o.delaySec) delaySel.value = String(o.delaySec);
     blurCb.checked = !!o.blurFirst;
     updateOptsState({
-      video: videoCb.checked,
+      video: videoCb ? videoCb.checked : false,
       surfaceMode: surfaceSel ? surfaceSel.value : "desktop",
       delaySec: Number(delaySel.value) || 0,
       blurFirst: blurCb.checked,
     });
-    applyVideoUI(videoCb.checked);
+    applyVideoUI(videoCb ? videoCb.checked : false);
     // The checkbox gets its own handler: toggling it is the one action that
     // means "I have decided about video".
-    videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });
+    if (videoCb) videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });
     [surfaceSel, delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));
   }
 
