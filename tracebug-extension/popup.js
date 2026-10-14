@@ -452,6 +452,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   // is the pre-1.11 localStorage blob, migrated once on first open.
   const OPTS_KEY = "tb_record_opts";
   const LEGACY_OPTS_KEY = "tracebug_record_opts";
+  // The Capture select is gone from the markup - see popup.html for why.
+  // Null-safe below so nothing here has to know that.
   const surfaceSel = document.getElementById("optSurface");
   const delaySel = document.getElementById("optDelay");
   const blurCb = document.getElementById("optBlurFirst");
@@ -515,7 +517,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function saveRecordOpts() {
     const o = {
       video: !!videoCb.checked,
-      surfaceMode: surfaceSel.value,
+      surfaceMode: surfaceSel ? surfaceSel.value : "desktop",
       delaySec: Number(delaySel.value) || 0,
       blurFirst: !!blurCb.checked,
       videoSetBy,
@@ -529,7 +531,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const bits = [];
     // Lead with the thing that changes what the browser will do to you.
     bits.push(o.video ? "video" : "no video");
-    if (o.video && o.surfaceMode === "desktop") bits.push("desktop");
     if (o.delaySec > 0) bits.push(`${o.delaySec}s delay`);
     if (o.blurFirst) bits.push("blur first");
     if (optsState) optsState.textContent = bits.join(" · ");
@@ -542,8 +543,10 @@ document.addEventListener("DOMContentLoaded", async () => {
    * user in a hurry reads, and it must not promise a recording it won't make.
    */
   function applyVideoUI(on) {
-    surfaceSel.disabled = !on;
-    surfaceSel.style.opacity = on ? "" : "0.45";
+    if (surfaceSel) {
+      surfaceSel.disabled = !on;
+      surfaceSel.style.opacity = on ? "" : "0.45";
+    }
     const micRow = document.getElementById("micOpt");
     if (micRow) {
       micRow.disabled = !on;
@@ -573,12 +576,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     // came back empty must land on off, not on whatever coerces.
     videoCb.checked = o.video === true;
     if (o.videoSetBy === "user") videoSetBy = "user";
-    if (o.surfaceMode) surfaceSel.value = o.surfaceMode;
+    if (o.surfaceMode && surfaceSel) surfaceSel.value = o.surfaceMode;
     if (o.delaySec) delaySel.value = String(o.delaySec);
     blurCb.checked = !!o.blurFirst;
     updateOptsState({
       video: videoCb.checked,
-      surfaceMode: surfaceSel.value,
+      surfaceMode: surfaceSel ? surfaceSel.value : "desktop",
       delaySec: Number(delaySel.value) || 0,
       blurFirst: blurCb.checked,
     });
@@ -586,7 +589,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The checkbox gets its own handler: toggling it is the one action that
     // means "I have decided about video".
     videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });
-    [surfaceSel, delaySel, blurCb].forEach((el) => el.addEventListener("change", saveRecordOpts));
+    [surfaceSel, delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));
   }
 
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {

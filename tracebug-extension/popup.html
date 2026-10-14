@@ -140,11 +140,14 @@
             Record video too
           </label>
           <div class="redact-help">Off by default: a capture records console, network, clicks and an interactive DOM replay without asking your browser to share the screen. Turn this on to add a screen recording — your browser will ask what to share.</div>
-          <label class="redact-label" for="optSurface">Capture</label>
-          <select id="optSurface" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
-            <option value="tab" selected>Current tab</option>
-            <option value="desktop">Desktop / window (picker)</option>
-          </select>
+          <!-- The "Capture: Current tab / Desktop" select used to live here.
+               It is gone because in the EXTENSION it cannot do anything: the
+               recorder runs in an offscreen document, and the browser hint for
+               "record the current tab" means the tab of the calling page, which
+               an offscreen document does not have. Shipping it as a control
+               that silently does nothing is the exact dead-setting bug Phase 0
+               found. The npm SDK keeps the option, where it genuinely works.
+               See the note in offscreen.js before putting it back. -->
           <label class="redact-label" for="optDelay">Start delay</label>
           <select id="optDelay" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
             <option value="0" selected>No delay</option>

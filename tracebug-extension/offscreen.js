@@ -309,15 +309,10 @@ async function _startRecordingImpl(options) {
   // Always use getDisplayMedia. Chrome's native "Choose what to share" picker
   // appears so the user can record a tab, a window, or the whole screen.
   //
-  // preferCurrentTab is passed ONLY when the user picked "Current tab" in the
-  // popup's Record options. It collapses the picker to a one-click "Current
-  // tab" confirm, which is wrong as a blanket default (it hides the
-  // tab/window/screen choice) and right when the user has already made that
-  // choice. Until Phase 4 it was never passed at all, so the dropdown was a
-  // no-op in the extension — the popup persisted surfaceMode, background.js
-  // and content-script.js forwarded it, and nothing here read it. The SDK path
-  // (src/video-recorder.ts) had honoured it all along, so the two transports
-  // also disagreed. docs/chrome-extension.md described the SDK's behaviour.
+  // The popup's "Capture" choice does NOT change this call - see the note at
+  // the constraints below for why preferCurrentTab cannot work from an
+  // offscreen document. The setting still does what it says in the npm SDK,
+  // where the caller really is the user's tab.
   //
   // surfaceSwitching: "include" lets Chrome keep the recording alive when
   // the captured tab navigates (e.g., link click, reload) instead of
@@ -339,11 +334,34 @@ async function _startRecordingImpl(options) {
       video: { frameRate: { ideal: 30, max: 60 } },
       audio: true,
       surfaceSwitching: "include",
+      // Keep TraceBug's own extension surfaces out of the picker when the user
+      // is choosing one. Overridden below for the current-tab case.
       selfBrowserSurface: "exclude",
     };
-    // Mirrors src/video-recorder.ts's in-page path, so both transports now
-    // behave the same way for the same choice.
-    if (options?.surfaceMode === "tab") constraints.preferCurrentTab = true;
+    // Mirrors src/video-recorder.ts's in-page path, so both transports behave
+    // the same way for the same choice.
+    // NOTE: no preferCurrentTab here, deliberately.
+    //
+    // It cannot work from this document. `preferCurrentTab` hints the browser
+    // to offer "the current tab" - the tab of the CALLING document. This is an
+    // offscreen document: a hidden page with no tab at all, so there is no
+    // current tab to prefer, and the hint is meaningless at best. Phase 4
+    // Step B added it here believing it mirrored the in-page SDK path, where
+    // the caller really is the user's tab and it really does work.
+    //
+    // It also made things actively worse twice: paired with the
+    // `selfBrowserSurface: "exclude"` above, Chrome rejected the whole call as
+    // self-contradictory ("Recording cancelled", no recording); and once that
+    // was fixed, the capture it negotiated was not the user's page.
+    //
+    // Capturing a SPECIFIC tab from an offscreen document is a different API -
+    // chrome.tabCapture.getMediaStreamId - which needs the `tabCapture`
+    // permission this extension deliberately dropped in 1.10.1 to lose the
+    // browsing-history install warning. Adding it back is a manifest change and
+    // a product decision, not a bug fix.
+    //
+    // So the extension shows the normal picker with the current tab in it, the
+    // way it did before Step B.
     displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
   } catch (err) {
     setHostPanel("idle");
