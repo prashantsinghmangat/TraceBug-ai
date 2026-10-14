@@ -25253,12 +25253,14 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
   function reviewUrl(surface = "review") {
     return `${CHROME_STORE_BASE}/reviews?utm_source=${surface}`;
   }
-  var CHROME_STORE_ID, CHROME_STORE_BASE, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA;
+  var CHROME_STORE_ID, CHROME_STORE_BASE, FIREFOX_STORE_SLUG, FIREFOX_STORE_BASE, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA;
   var init_links = __esm({
     "src/links.ts"() {
       "use strict";
       CHROME_STORE_ID = "fdemmibikigigkfjngclmdheeajhdgaj";
       CHROME_STORE_BASE = `https://chromewebstore.google.com/detail/${CHROME_STORE_ID}`;
+      FIREFOX_STORE_SLUG = "tracebug-bug-reports-for-ai";
+      FIREFOX_STORE_BASE = `https://addons.mozilla.org/firefox/addon/${FIREFOX_STORE_SLUG}`;
       EXPORT_FOOTER_TEXT = "Captured with TraceBug \u2014 free & local.";
       EXPORT_FOOTER_CTA = "Capture your own \u2192";
     }

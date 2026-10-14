@@ -17,14 +17,26 @@
  * docs/{chrome-extension,getting-started,quickstart}.md, which all agree. Do
  * not retype it anywhere else — import from here.
  *
- * There is deliberately NO Firefox equivalent in this file. TraceBug is live on
- * AMO, but this repo contains no confirmed listing slug (only an API query in
- * someone's shell history), and a guessed store URL baked into an export is a
- * dead link for every Firefox user who reads that report. Add it here, in one
- * place, once the real slug is known.
  */
 const CHROME_STORE_ID = "fdemmibikigigkfjngclmdheeajhdgaj";
 const CHROME_STORE_BASE = `https://chromewebstore.google.com/detail/${CHROME_STORE_ID}`;
+
+/**
+ * The AMO listing slug — **verified, 2026-10-14**, not guessed.
+ *
+ * This file used to refuse a Firefox link because the slug was unknown and a
+ * guess baked into an exported report is a dead link months later. The guess
+ * that was circulating (`/addon/tracebug/`) is in fact a 404.
+ *
+ * Resolved by GUID instead of by name, which is the part that cannot be
+ * mistaken: AMO's API for `tracebug@prashantsinghmangat` — the exact `gecko.id`
+ * in `build/manifest.base.json` — returns slug `tracebug-bug-reports-for-ai`,
+ * status `public`, current version 1.10.1 (the build that is live). The listing
+ * TITLE is still the old "TraceBug — Bug Reports for AI"; 1.11 renames it, and
+ * the slug does not change with it.
+ */
+const FIREFOX_STORE_SLUG = "tracebug-bug-reports-for-ai";
+const FIREFOX_STORE_BASE = `https://addons.mozilla.org/firefox/addon/${FIREFOX_STORE_SLUG}`;
 
 export type LinkSurface = "report" | "issue" | "review" | "welcome" | "bye";
 
@@ -39,6 +51,20 @@ export function storeUrl(surface: LinkSurface, medium?: string): string {
   const params = new URLSearchParams({ utm_source: surface });
   if (medium) params.set("utm_medium", medium);
   return `${CHROME_STORE_BASE}?${params.toString()}`;
+}
+
+/**
+ * The Firefox listing, tagged the same way.
+ *
+ * Nothing consumes this yet: which store an exported report should point at is
+ * a product question (the reader's browser is not known at export time), and
+ * this file's job is only to make sure the URL exists in exactly one place when
+ * something does need it.
+ */
+export function firefoxStoreUrl(surface: LinkSurface, medium?: string): string {
+  const params = new URLSearchParams({ utm_source: surface });
+  if (medium) params.set("utm_medium", medium);
+  return `${FIREFOX_STORE_BASE}?${params.toString()}`;
 }
 
 /** Where to leave a review — the listing's own reviews tab. */

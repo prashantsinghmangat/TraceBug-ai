@@ -43,9 +43,9 @@ Dated in `docs-internal/GROWTH-PLAN-30DAY.md` week 1 (Wed 14 – Thu 15; submit 
 - **`zip:ext` calls bsdtar by ABSOLUTE path** (`C:\Windows\System32\tar.exe`) and refuses to report success unless
   the output starts with `PK`. Bare `tar` is GNU tar wherever Git Bash is on PATH, and GNU tar
   silently writes an uncompressed TAR named `.zip` — 1.11.0's first archives were exactly that.
-- **AMO caps manifest `name` at 45 chars, Chrome 75**, and one manifest feeds both. **No Firefox store
-  link exists in `src/`**: no slug is confirmed, a guess is a dead link inside exported reports — yet
-  `docs/compatibility.md` publishes one, so one of the two is wrong.
+- **AMO caps manifest `name` at 45 chars, Chrome 75**, and one manifest feeds both. The AMO slug is
+  **`tracebug-bug-reports-for-ai`**, verified 2026-10-14 by GUID through AMO's API, and now in
+  `src/links.ts`. `/addon/tracebug/`, published in `docs/compatibility.md` for weeks, is a 404.
 - **`tab.url` is normally `undefined`** now `<all_urls>` is optional — classify with `classifyPage`
   (`page-support.js`); read the shortcut from `chrome.commands` at runtime (`Alt+B`).
 - **The DOM replay never records canvas**, so a canvas page replays as an empty box;
