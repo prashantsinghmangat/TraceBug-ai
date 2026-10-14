@@ -4,6 +4,13 @@ Run one phase at a time, each in a **fresh Claude Code session**. After each pha
 checks, then start the next session with "Use the phase skill: Phase N." That reads `docs/launch/STATE.md` and
 this file's live sections only - not the archives.
 
+**As of 2026-10-14 every engineering phase for 1.11.0 is closed.** What is left before submission
+needs a person, not a session: `STATE.md` § "Left before submission". The marketing,
+distribution and release calendar - and the status of all 32 items from the Oct 11 growth audit -
+live in `docs-internal/GROWTH-PLAN-30DAY.md`, which is gitignored and deliberately not in this
+repo. The phases below that are still open are **post-submission**: Phase 8's
+remainder, Phase 10 (1.11.1, video) and Phase 11 (1.12, Site Audit).
+
 ## How this is run
 
 - **Plan mode is read-only.** If a phase is investigated in plan mode, the plan must be approved before any file
@@ -55,91 +62,22 @@ Full text in `PLAN-archive.md`. What survived as a live fact is in `STATE.md`. D
   sentence and a button; a ping re-injects orphaned tabs; `onUpdateAvailable` is held during a recording; the
   capture shortcut is a real browser command, `Alt+B`.
 - **Phase 4 Steps A + B.** Done. Events-only capture is the popup's default, the share dialog is explained
-  before it opens, and a macOS Screen-Recording denial is no longer reported as a user cancel. **Steps C and D
-  are still open - see below.**
+  before it opens, and a macOS Screen-Recording denial is no longer reported as a user cancel.
+- **Phase 4 Steps C + D.** Done. `tracebug-extension/welcome.html` is bundled and opened on install, with no
+  remote assets; an update shows the per-version "What's new" card in the popup instead of a tab.
+- **Phase 5 - Sharing loop and review ask.** Done. Export footer, issue signature, the review ask after the
+  3rd export, the uninstall survey, and all store URLs + UTM values in `src/links.ts`.
+- **Phase 6 - Edge cases.** Done. Oversize-export notice, "Copy for Jira", the canvas/CSP replay warning.
+  Slack was already resolved by Phase 2b. One correction worth keeping: the plan's "DOM replay only (no
+  video)" fallback cannot fire - when a replay exists the exporter already drops the video, so that IS the
+  small export; the oversize branch is the opposite one.
+- **Phase 7 - Diagnostics without telemetry.** Done. `diagnostics.js` owns the scrubbing, the session error
+  ring and the report; the popup's "Having trouble?" panel offers **Copy diagnostics** and **Report a
+  TraceBug bug**. The leak test it asked for found a real leak on its first run.
+- **Phase 9 - Docs and copy consistency.** Done. Firefox documented as live, the four-action popup, the new
+  permission table, the "nothing goes to TraceBug" wording, the Product Hunt badge removed from the website.
 
-## Phase 4 - First run (Steps C and D remain)
-
-Steps A and B are done; their text is in `PLAN-archive.md`. What is left:
-
-There is already an `onInstalled` handler in `background.js` but it opens the **remote**
-`https://tracebug.dev/try.html?welcome=extension`, so first run depends on the network. **Bundle the welcome
-page in the extension and keep the remote page only as a link from it.**
-
-- **Step C.** On `runtime.onInstalled` with `reason === "install"`, open a bundled welcome page
-  (`welcome.html` inside the extension; no remote assets - add it to `SHARED_FILES` in `build/build-ext.mjs`).
-  It includes:
-  1. Pin TraceBug to the toolbar (with an image).
-  2. A **Try it now** button that opens `https://tracebug.dev/try.html` (a deliberately broken demo) - now a
-     link *from* the bundled page, not the landing page itself.
-  3. The capture shortcut, **stated accurately**: Phase 3 registered a real `commands` entry, default
-     **`Alt+B`**, and the page must read the bound key from `chrome.commands` rather than hardcode it (the user
-     can rebind or clear it). `Ctrl+Shift+B` is a separate page-level handler that only opens Quick Bug once
-     TraceBug is already running on the tab - do not present it as the capture shortcut.
-  4. A plain-language privacy box: what's captured, that nothing goes to TraceBug, and that you choose what goes
-     to GitHub, Slack or your LLM.
-  5. A small "Rolling this out to a team?" link to `https://tracebug.dev/teams`.
-  Design to follow: `docs/launch/designs/tracebug_welcome_quickstart_page/`.
-- **Step D.** On `reason === "update"`, do not open a tab; show a small "What's new" card in the popup instead,
-  dismissed state in `chrome.storage.local`. Copy is in `screens.md` screen 4 - note its
-  capture line is phrased as an invitation, because an updating user keeps video on.
-- **Firefox check (this phase adds `welcome.html` and touches the extension):** run `npm run build:ext`, then
-  `npm run ext:lint` and `npm run ext:firefox`. Confirm `welcome.html` is included in the Firefox build output
-  and that `runtime.onInstalled` fires there; note that the shortcut and `getDisplayMedia` picker copy differ on
-  Firefox.
-
-## Phase 5 - Sharing loop and review ask (referral mechanics 1-3)
-
-**PHASE 5 IS DONE**, across Phase 4 Steps E and F plus one follow-up. Every item below landed; they
-are kept for context, not as instructions. Nothing in this phase is outstanding.
-
-- **[DONE] Exported `.html` footer:** a small, unobtrusive bar: "Captured with TraceBug - free & local. Capture your
-  own ->" linking to the Chrome Web Store listing with `?utm_source=report&utm_medium=export`. Pure inline
-  HTML/CSS, no remote loads, works offline. Add a setting to hide it (`showExportFooter`, default true), shown in
-  the export modal.
-- **[DONE] Issue signature:** append one line to GitHub, Linear and Slack bodies: "Reported with TraceBug" linking to
-  the listing with `utm_source=issue`. Show it in the export preview, with a one-click toggle to remove it,
-  default on.
-- **[DONE] Review prompt:** count successful exports in extension storage. After the 3rd successful export (never in the
-  first session), show a dismissible prompt: "Did TraceBug save you time? Rate it ->" linking to the store
-  reviews page. If dismissed, ask once more after the 10th export, then never again. No incentives.
-- **[DONE] Uninstall survey:** call `runtime.setUninstallURL("https://tracebug.dev/bye?v=<version>")`. Send the version
-  only, no identifiers.
-- **[DONE]** Store-listing URLs and UTM values live in one constants file.
-
-## Phase 6 - Edge cases (week-2 audit items)
-
-**PHASE 6 IS DONE** (2026-10-13). One correction worth keeping: the large-export item asked for a
-"DOM replay only (no video)" fallback, which cannot fire - when a DOM replay exists the exporter
-already drops the video, so that IS the small export. The oversize case is the opposite branch (no
-replay, video embedded), where the offers are "Export without video" and taking the `.webm`
-separately. See `_oversizeExportNotice` in `src/ui/quick-bug.ts`.
-
-- **[DONE] Large exports:** before export, show the estimated file size. Above 20 MB, warn that GitHub attachments cap
-  at 25 MB, and offer "DOM replay only (no video)" or `.zip`.
-- **Slack: RESOLVED by Phase 2b (2026-10-12) - nothing left to do here.** The worker drops `mode: "no-cors"`
-  when `https://hooks.slack.com/*` is granted and reads Slack's real reply, including its terse rejection
-  reasons (`invalid_payload`, `no_service`); the options page requests that origin when Slack is saved, so the
-  grant is in place before the first send. Without the grant it falls back to the opaque post, which still
-  delivers the message. Page-mode (npm) SDK keeps `opaque: true` - it cannot read a cross-origin opaque
-  response and never will. See `postSlackMessage` / `readResponse` in `src/providers/api.ts` and
-  `tests/provider-api.test.ts`.
-- **[DONE] Jira:** rename the button to "Copy for Jira" wherever it implies filing.
-- **[DONE] Strict-CSP and canvas/WebGL pages:** detect a heavy canvas or a CSP that blocks the inline pieces, and show a
-  one-line notice recommending video capture.
-
-## Phase 7 - Diagnostics without telemetry
-
-**PHASE 7 IS DONE** (2026-10-13). `tracebug-extension/diagnostics.js` owns the scrubbing, the session
-error ring and the report; the popup's "Having trouble?" panel offers **Copy diagnostics** and
-**Report a TraceBug bug**.
-
-- **[DONE]** Add a popup menu item **Copy diagnostics**. It copies extension version, browser and version, OS, granted
-  permissions, whether the current page is restricted, and the last 20 TraceBug-internal errors (message + stack
-  from extension code only). Keep that error ring buffer in `chrome.storage.session` or memory.
-- **[DONE]** **Strip all URLs, page content, storage values and user data.** Add a test that fails if a URL or a DOM string
-  leaks into diagnostics.
-- **[DONE]** Add **Report a TraceBug bug**: it opens the GitHub new-issue page for the repo, prefilled with the diagnostics.
+Full text of Phases 4-7: `PLAN-archive.md`.
 
 ## Phase 8 - Smoke-test harness and release checklist
 
@@ -192,7 +130,10 @@ post-submission work.
   surviving, macOS screen-recording permission, Edge, Brave, Firefox 128 ESR + latest, real
   GitHub/Linear/Slack test targets, MCP `npx tracebug mcp --dir` listing the new report.
 
-## Phase 9 - Docs and copy consistency
+## Phase 9 - Docs and copy consistency (DONE)
+
+**PHASE 9 IS DONE** (2026-10-13/14). Every item below landed; they are kept for context, not as
+instructions. The listing copy that came out of it is in `store-submission-pack.md`.
 
 - `docs/chrome-extension.md`: Firefox **is** supported (link the AMO listing). Fix "three-action popup" (there
   are four actions). Update the permissions table to the new manifest. Explain why site access is optional.
@@ -211,6 +152,58 @@ post-submission work.
   - `website/components/FAQ.tsx:21` subtitle claims "including the catch (there isn't one)" - keep or reword to
     match whatever the answers now say.
 - List any other contradictions found between the docs, the website and the code.
+
+## Phase 10 - 1.11.1: video back in the extension (post-submission, week of Oct 19)
+
+Screen recording is paused in 1.11 behind `VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`.
+**The full brief is `docs/launch/video-1.11.1.md` - read it, not this summary.** The order:
+
+- **Bug 1 (worst): a recording is lost on stop.** The capture runs, the ticket opens empty. The hand-off
+  offscreen -> `chrome.storage.local` -> page is where it fails. The stated cause is a **hypothesis, and two
+  earlier guesses on this path were wrong** - reproduce in a real browser first, instrumenting all three hops.
+  Check `getSessionVideo()`'s `VIDEO_SESSION_GRACE_MS` window too: a session created after the recording starts
+  discards a perfectly good video.
+- **Bug 4: the HUD mic button is wired to `_stream`, which is null in the page** in extension mode. The gap is
+  an RPC - `tb:rec:mic-mute`, plus a `micIncluded` flag in `tb:rec:status` that `offscreen.js` already
+  broadcasts.
+- **Bug 3 is half done** (the options-page Microphone card grants it from a real tab). What remains is the
+  popup's mic row and - copying Jam's placement - the "no microphone permission yet" line **on the HUD**,
+  where the user is actually trying to use it.
+- **Bug 2 (polish): no working fullscreen in the preview.** Check the modal and the exported viewer
+  separately; they are different documents and can fail for different reasons.
+- **Do not restore `preferCurrentTab` in `offscreen.js`.** It means "the tab of the calling document" and an
+  offscreen document has no tab; paired with `selfBrowserSurface: "exclude"` Chrome rejects the whole call.
+  Offering "This tab" needs `chrome.tabCapture.getMediaStreamId` and the **`tabCapture` permission** - a
+  product decision (it brings back the browsing-history install warning), not a bug fix.
+- Flipping the switch also restores: the popup's `optVideo` checkbox and `micOpt` row (commented, not deleted),
+  the `offscreen` permission in **both** manifests, and the `offscreen` row in §7b of the two store docs.
+- `tests/video-paused-1-11.test.ts` will fail wholesale. That is correct - it pins 1.11's behaviour. **Replace
+  it, don't weaken it.** And extend `e2e/ext-shipping-path.e2e.mjs` to record for real: all four bugs survived
+  817 unit tests because the fake `getDisplayMedia` accepts constraint pairs a browser rejects.
+
+## Phase 11 - 1.12: the Site Audit tab (post-submission, after 1.11.1)
+
+Build it only once 1.11 is approved and 1.11.1 has brought video back. The pitch is "find the bug, then trace
+it". Three things keep it from being a copy of Exploratory Tester: **every finding becomes a ticket** through
+the existing confirm window; **findings ride in the report**, so the `.html` a developer opens shows both; and
+**the MCP server exposes the audit**, so "fix the 6 accessibility errors on /checkout" works in Claude Code.
+
+Design rules: no new install warnings (`activeTab` + `scripting`, on an explicit **Run audit**; other-domain
+link checks ask for optional host access at that moment). Read-only by default - active tests that fill or
+toggle anything are opt-in per run, with a warning, because on a real site they can place an order. Offline
+and bundled - axe-core and any dictionary ship in the package and load only when an audit starts. Honest
+numbers - a category with nothing to test shows N/A and never counts as passed. Reuse the report builder, the
+provider send and redaction; no new export formats.
+
+- **1.12a (the one worth announcing):** accessibility (axe-core, WCAG 2.1 AA), SEO meta tags, images, links,
+  resource/API failures, page-load and slow requests, console errors, page-type detection - plus ticket and
+  export.
+- **1.12b:** passive form checks, spelling (bundled en-US), security basics (mixed content, CSP/HSTS/XFO via a
+  same-origin fetch), and a `get_audit` MCP tool.
+- **1.12c:** active form validation and control toggling (opt-in, never submits), and an audit diff between two
+  runs of the same URL.
+- **Open question before committing to 1.12b's dictionary:** axe-core alone is ~0.5 MB minified. Measure the
+  1.12a zip first.
 
 ## Final report
 

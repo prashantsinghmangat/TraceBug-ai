@@ -191,3 +191,96 @@ Steps C and D.
   in System Settings. *(Done, Step B.)*
 - Fix the copy mismatch: the quickstart says "pick this tab", and the extension doc says it's pre-selected. Make
   the UI and both docs agree with real behaviour. *(Done, Step B.)*
+
+---
+
+# Phases 4-7 - full text (collapsed in PLAN.md 2026-10-14)
+
+All four are DONE. Kept for why, not how.
+
+## Phase 4 - First run (DONE)
+
+Steps A and B are in `PLAN-archive.md`. Steps C and D are **done**; the text below is kept for context, not
+as instructions. The only live facts out of it are in `STATE.md`: the shortcut must be read from
+`chrome.commands` at runtime (default `Alt+B`), the "Rolling this out to a team?" card is deliberately absent
+until `tracebug.dev/teams` exists (`welcome.js` `TEAM_GUIDE_URL` is empty), and a release needs one new
+`WHATS_NEW` entry in `popup.js` keyed by version.
+
+There is already an `onInstalled` handler in `background.js` but it opens the **remote**
+`https://tracebug.dev/try.html?welcome=extension`, so first run depends on the network. **Bundle the welcome
+page in the extension and keep the remote page only as a link from it.**
+
+- **Step C.** On `runtime.onInstalled` with `reason === "install"`, open a bundled welcome page
+  (`welcome.html` inside the extension; no remote assets - add it to `SHARED_FILES` in `build/build-ext.mjs`).
+  It includes:
+  1. Pin TraceBug to the toolbar (with an image).
+  2. A **Try it now** button that opens `https://tracebug.dev/try.html` (a deliberately broken demo) - now a
+     link *from* the bundled page, not the landing page itself.
+  3. The capture shortcut, **stated accurately**: Phase 3 registered a real `commands` entry, default
+     **`Alt+B`**, and the page must read the bound key from `chrome.commands` rather than hardcode it (the user
+     can rebind or clear it). `Ctrl+Shift+B` is a separate page-level handler that only opens Quick Bug once
+     TraceBug is already running on the tab - do not present it as the capture shortcut.
+  4. A plain-language privacy box: what's captured, that nothing goes to TraceBug, and that you choose what goes
+     to GitHub, Slack or your LLM.
+  5. A small "Rolling this out to a team?" link to `https://tracebug.dev/teams`.
+  Design to follow: `docs/launch/designs/tracebug_welcome_quickstart_page/`.
+- **Step D.** On `reason === "update"`, do not open a tab; show a small "What's new" card in the popup instead,
+  dismissed state in `chrome.storage.local`. Copy is in `screens.md` screen 4 - note its
+  capture line is phrased as an invitation, because an updating user keeps video on.
+- **Firefox check (this phase adds `welcome.html` and touches the extension):** run `npm run build:ext`, then
+  `npm run ext:lint` and `npm run ext:firefox`. Confirm `welcome.html` is included in the Firefox build output
+  and that `runtime.onInstalled` fires there; note that the shortcut and `getDisplayMedia` picker copy differ on
+  Firefox.
+
+## Phase 5 - Sharing loop and review ask (referral mechanics 1-3)
+
+**PHASE 5 IS DONE**, across Phase 4 Steps E and F plus one follow-up. Every item below landed; they
+are kept for context, not as instructions. Nothing in this phase is outstanding.
+
+- **[DONE] Exported `.html` footer:** a small, unobtrusive bar: "Captured with TraceBug - free & local. Capture your
+  own ->" linking to the Chrome Web Store listing with `?utm_source=report&utm_medium=export`. Pure inline
+  HTML/CSS, no remote loads, works offline. Add a setting to hide it (`showExportFooter`, default true), shown in
+  the export modal.
+- **[DONE] Issue signature:** append one line to GitHub, Linear and Slack bodies: "Reported with TraceBug" linking to
+  the listing with `utm_source=issue`. Show it in the export preview, with a one-click toggle to remove it,
+  default on.
+- **[DONE] Review prompt:** count successful exports in extension storage. After the 3rd successful export (never in the
+  first session), show a dismissible prompt: "Did TraceBug save you time? Rate it ->" linking to the store
+  reviews page. If dismissed, ask once more after the 10th export, then never again. No incentives.
+- **[DONE] Uninstall survey:** call `runtime.setUninstallURL("https://tracebug.dev/bye?v=<version>")`. Send the version
+  only, no identifiers.
+- **[DONE]** Store-listing URLs and UTM values live in one constants file.
+
+## Phase 6 - Edge cases (week-2 audit items)
+
+**PHASE 6 IS DONE** (2026-10-13). One correction worth keeping: the large-export item asked for a
+"DOM replay only (no video)" fallback, which cannot fire - when a DOM replay exists the exporter
+already drops the video, so that IS the small export. The oversize case is the opposite branch (no
+replay, video embedded), where the offers are "Export without video" and taking the `.webm`
+separately. See `_oversizeExportNotice` in `src/ui/quick-bug.ts`.
+
+- **[DONE] Large exports:** before export, show the estimated file size. Above 20 MB, warn that GitHub attachments cap
+  at 25 MB, and offer "DOM replay only (no video)" or `.zip`.
+- **Slack: RESOLVED by Phase 2b (2026-10-12) - nothing left to do here.** The worker drops `mode: "no-cors"`
+  when `https://hooks.slack.com/*` is granted and reads Slack's real reply, including its terse rejection
+  reasons (`invalid_payload`, `no_service`); the options page requests that origin when Slack is saved, so the
+  grant is in place before the first send. Without the grant it falls back to the opaque post, which still
+  delivers the message. Page-mode (npm) SDK keeps `opaque: true` - it cannot read a cross-origin opaque
+  response and never will. See `postSlackMessage` / `readResponse` in `src/providers/api.ts` and
+  `tests/provider-api.test.ts`.
+- **[DONE] Jira:** rename the button to "Copy for Jira" wherever it implies filing.
+- **[DONE] Strict-CSP and canvas/WebGL pages:** detect a heavy canvas or a CSP that blocks the inline pieces, and show a
+  one-line notice recommending video capture.
+
+## Phase 7 - Diagnostics without telemetry
+
+**PHASE 7 IS DONE** (2026-10-13). `tracebug-extension/diagnostics.js` owns the scrubbing, the session
+error ring and the report; the popup's "Having trouble?" panel offers **Copy diagnostics** and
+**Report a TraceBug bug**.
+
+- **[DONE]** Add a popup menu item **Copy diagnostics**. It copies extension version, browser and version, OS, granted
+  permissions, whether the current page is restricted, and the last 20 TraceBug-internal errors (message + stack
+  from extension code only). Keep that error ring buffer in `chrome.storage.session` or memory.
+- **[DONE]** **Strip all URLs, page content, storage values and user data.** Add a test that fails if a URL or a DOM string
+  leaks into diagnostics.
+- **[DONE]** Add **Report a TraceBug bug**: it opens the GitHub new-issue page for the repo, prefilled with the diagnostics.
