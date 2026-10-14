@@ -94,10 +94,29 @@ describe('a canvas page is warned about before the capture is wasted', () => {
     expect(msg).toMatch(/canvas/i);
     // Reassurance, so nobody stops a capture that is still worth having.
     expect(msg).toMatch(/console, network/i);
-    // The one actionable fix.
+    // The one actionable fix — in the npm SDK, where video works.
     expect(msg).toMatch(/Record video too/);
     // No jargon: "rrweb" and "DOM replay" mean nothing to a tester.
     expect(msg).not.toMatch(/rrweb|DOM replay/i);
+  });
+
+  it('does not point an extension user at a checkbox 1.11 removed', () => {
+    // isExtensionContext() reads window.__TRACEBUG_INITIALIZED__, and in the
+    // extension "Record video too" is not in the popup at all (video is paused
+    // behind VIDEO_ENABLED_IN_EXTENSION). Advice to tick it would send the user
+    // hunting for a control that does not exist.
+    const w = window as Window & { __TRACEBUG_INITIALIZED__?: boolean };
+    w.__TRACEBUG_INITIALIZED__ = true;
+    try {
+      canvas(1200, 700);
+      const msg = eventsCaptureFidelityWarning(document)!.message;
+      expect(msg).not.toMatch(/Record video too/);
+      expect(msg).toMatch(/1\.11\.1/);
+      // The reassurance must survive the branch.
+      expect(msg).toMatch(/console, network/i);
+    } finally {
+      delete w.__TRACEBUG_INITIALIZED__;
+    }
   });
 });
 

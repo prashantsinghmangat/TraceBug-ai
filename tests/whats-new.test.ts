@@ -188,16 +188,21 @@ describe('the popup shows the card only when it has copy', () => {
     expect(store[KEY]).toBeUndefined();
   });
 
-  it('phrases the capture line as an invitation, not an announcement', async () => {
-    // This card is only ever shown on UPDATE, and an updating user keeps video
-    // ON. "Captures no longer share your screen" would be false for every
-    // person who reads it — see background.js seedRecordOptsDefault.
+  it('tells an updating user that video is paused, and that nothing was lost', async () => {
+    // This card is only ever shown on UPDATE, and an updating user HAD video
+    // on — so it is the one surface that owes them an explanation. It must not
+    // name "Record video too": that checkbox is not in the 1.11 popup (see
+    // tests/video-paused-1-11.test.ts), so the old invitation sent them
+    // hunting for a control that is not there.
     const { nodes } = await render('1.11.0');
     const first = (nodes.whatsNewList.children as Array<Record<string, unknown>>)[0];
     const text = (first.children as Array<Record<string, unknown>>)
       .map((c) => String(c.textContent ?? '')).join('');
-    expect(text).toMatch(/Turn off Record video too/);
-    expect(text).not.toMatch(/no longer (share|asks)/i);
+    expect(text).not.toMatch(/Record video too/);
+    // Paused, when it returns, and that the preference survives.
+    expect(text).toMatch(/paused/i);
+    expect(text).toMatch(/1\.11\.1/);
+    expect(text).toMatch(/setting is kept/i);
   });
 
   it('never touches innerHTML, for the copy or the icon', () => {

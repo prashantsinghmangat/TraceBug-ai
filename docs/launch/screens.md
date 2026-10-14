@@ -166,14 +166,15 @@ SCREEN: the same 340px extension popup, with a dismissible "What's new" card ins
 THE CARD (info box style, indigo-soft):
 - Small uppercase label 12px indigo: "NEW IN 1.11"
 - Four short lines, each with a 14px check icon:
-  "New: capture without screen sharing. Turn off Record video too in Record options to try it."
+  "Screen recording is paused in this version and returns in 1.11.1 - your setting is kept. Console, network, clicks and replay are captured as usual."
   "No more 'read all your data' warning at install"
   "Tokens and API keys now live in TraceBug settings, not in the sites you test"
   "Every GitHub, Linear or Slack send asks you first"
-  The capture line is phrased as an invitation, not an announcement, because
-  this card is only ever shown on UPDATE and an updating user keeps video ON
-  (background.js `seedRecordOptsDefault`). "Captures no longer share your
-  screen" would be false for every single person who reads this card.
+  REVISED for the video pause. The capture line was an invitation ("turn off
+  Record video too to try it") until that checkbox left the 1.11 popup. This
+  card is the only surface that owes an updating user an explanation, because
+  they HAD video on, so it says what happened, when it returns, and that
+  their preference survived (background.js `seedRecordOptsDefault`).
 - A separate small warning line (amber #B45309 text, amber-soft background, 8px radius): "Set up GitHub, Linear, Slack or an AI key before 1.11? Please revoke and re-create it."
 - Bottom right: text button "Got it".
 ```
