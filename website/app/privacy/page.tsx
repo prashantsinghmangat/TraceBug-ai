@@ -227,13 +227,8 @@ export default function PrivacyPage() {
               </div>
               <div>
                 <strong className="text-text-primary">unlimitedStorage</strong>{" "}
-                — A report with a replay or a video can exceed the default
+                — A report with an interactive replay can exceed the default
                 storage limit. It is stored only on your device.
-              </div>
-              <div>
-                <strong className="text-text-primary">offscreen</strong> — To
-                keep an optional screen recording running while you move between
-                pages.
               </div>
               <div>
                 <strong className="text-text-primary">alarms</strong> — To

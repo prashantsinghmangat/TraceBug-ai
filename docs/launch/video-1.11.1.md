@@ -3,7 +3,8 @@
 Screen recording is **paused in the extension** for 1.11. One switch turns it
 back on: `VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`. Do not flip it
 until the four bugs below are fixed, because all four were found by using the
-product for an hour and none of them was caught by 817 unit tests.
+product for an hour and none of them was caught by the suite (818 passing /
+48 files as of 2026-10-14).
 
 **The npm SDK is unaffected and was never paused.** It records in the page and
 owns its own stream, which is precisely why it works.
@@ -136,7 +137,20 @@ keeps both, where they work).
 **The `offscreen` permission** is out of both manifests, since nothing creates
 an offscreen document any more. Restore it in `build-ext.mjs` `chromeManifest()`
 and in `tracebug-extension/manifest.json` together with the feature — and put
-the row back in §7b of the two store docs.
+the row back in **four** places that justify permissions to a reader:
+§7b of `docs/launch/store-submission-pack.md`, §7b of
+`docs-internal/CHROME-WEB-STORE-LISTING.md`, the permissions table in
+`docs/chrome-extension.md` (which also names it in a "not present, deliberately"
+line to delete), and the **live privacy page**,
+`website/app/privacy/page.tsx` — its Chrome-extension permission list. The
+wording removed from the site was: *"offscreen — To keep an optional screen
+recording running while you move between pages."* The same edit also narrowed
+`unlimitedStorage` there and in the submission pack to "a report with an
+interactive replay"; widen it back to "a replay or a video".
+
+A store listing that justifies a permission the manifest does not request is a
+review flag, and a privacy page that does it is simply wrong — which is why this
+is on the restore list rather than left as a harmless leftover.
 
 ## Flipping the switch
 
@@ -149,6 +163,14 @@ the row back in §7b of the two store docs.
    — they early-return while video is off.
 5. `tests/video-paused-1-11.test.ts` will fail wholesale. That is correct: it
    exists to pin 1.11's behaviour. Replace it, don't weaken it.
+5b. **The copy that was rewritten for the pause.** The canvas toast needs no
+   edit — `src/replay-fidelity.ts` branches on `isVideoOffered()` and reverts to
+   "turn on Record video too" by itself. These do need editing, and each has a
+   test or a note naming the revert: the `WHATS_NEW` card in `popup.js` (plus
+   `tests/whats-new.test.ts` and `docs/launch/screens.md` screen 4),
+   `docs/RELEASE_CHECKLIST.md` rows 1-3 (UI-based steps, see the block quote
+   there) and row 9's oversize half, and the video sentences in
+   `docs/{quickstart,chrome-extension}.md` and `README.md`.
 6. Extend `e2e/ext-shipping-path.e2e.mjs` to record for real and assert the
    video arrives in the ticket. **A unit test cannot make this guarantee.**
 

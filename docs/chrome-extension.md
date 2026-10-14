@@ -36,18 +36,17 @@ The extension popup has four actions:
 
 | Action | What it does |
 |--------|--------------|
-| **Capture Bug** (primary) | Starts a screen recording. A floating HUD shows the recording timer plus Pause, Mic, Screenshot, Draw, Blur (droplet icon — click an element to blur it, click again to unblur; captured into the recording), and Stop. |
+| **Capture Bug** (primary) | Starts an events-only capture — console, network, your clicks and an interactive DOM replay. No screen-share dialog opens. A floating HUD shows the capture timer plus Screenshot, Draw, Blur (droplet icon — click an element to blur it, click again to unblur), and Stop. |
 | **Screenshot** | One-shot capture of the current viewport. Opens the ticket modal directly with the screenshot attached. |
 | **View tickets** | Opens the dashboard panel on the current page. |
 | **Inspect element** | DevTools-style inspection: hover shows a box-model highlight + computed-style tooltip; click attaches the element with its full style evidence (typography, colors as hex, box model, WCAG contrast) to the report as an `inspect` annotation. |
 
-A 🎤 toggle in the popup adds microphone audio to the recording.
-
 ### ⚙ Record options
 
-A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`:
+A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`. The capture-surface and microphone rows are not shown in 1.11: they only describe a screen recording, and screen recording is paused (see above).
 
-- **Capture** — record the **current tab** directly, or open Chrome's **desktop / window picker**.
+What remains:
+
 - **Start delay** — none, **3 s**, or **5 s**, with an on-page 3-2-1 countdown overlay before recording rolls.
 - **Blur before recording** — arms the element-level blur tool *before* capture starts: click elements to blur/unblur, then a floating **"● Start recording / Cancel"** bar (with **Undo** for the last blur) begins the recording with the redaction applied from the very first frame. Cancel clears the blurs.
 
@@ -63,7 +62,7 @@ Rules are validated on save, synced across your browsers via `chrome.storage.syn
 ### Capture flow
 
 1. Click **Capture Bug**. No screen-share dialog appears: TraceBug records the console, the network, your clicks and an interactive **DOM replay**. (Optionally set a start delay or blur-first in **⚙ Record options**.)
-2. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements, or the droplet **Blur** button to click-blur sensitive elements (the element's text is masked in the DOM replay, and the blur is captured into the video if you're recording one).
+2. Reproduce the bug. The HUD timer ticks; use **Draw** to highlight elements, or the droplet **Blur** button to click-blur sensitive elements (the element's text is masked in the DOM replay).
 3. Click **Stop** in the HUD.
 4. The ticket modal opens with the replay, screenshots, console, network, and action chips all populated. Fill in title/description and export as HTML, GitHub issue, Jira ticket, Linear issue, or Slack message.
 
@@ -76,7 +75,7 @@ The capture follows you across pages. If it spans more than one, the DOM replay 
 > pixels. Video returns in 1.11.1; the npm SDK records it today. If you had the
 > option on, your setting is kept and comes back with the feature.
 
-**macOS:** screen recording needs your browser ticked under **System Settings → Privacy & Security → Screen Recording**, and the browser has to be quit and reopened afterwards. If it isn't, TraceBug says so and offers to capture without video instead — your browser reports an OS refusal the same way it reports you closing the dialog, so TraceBug reads the error text to tell them apart.
+**macOS, for when it returns (and for the npm SDK today):** screen recording needs your browser ticked under **System Settings → Privacy & Security → Screen Recording**, and the browser has to be quit and reopened afterwards. If it isn't, TraceBug says so and offers to capture without video instead — your browser reports an OS refusal the same way it reports you closing the dialog, so TraceBug reads the error text to tell them apart.
 
 ### Per-tab indicator
 
@@ -84,7 +83,7 @@ The toolbar icon shows a green **ON** badge while TraceBug is injected in the cu
 
 ## How It Works
 
-Manifest V3 architecture with four extension contexts:
+Manifest V3 architecture with three extension contexts in 1.11:
 
 ```
 Popup ──sendMessage──▶ Background (service worker)
@@ -93,42 +92,76 @@ Popup ──sendMessage──▶ Background (service worker)
                          │                                          │
                          │                                          └─ CustomEvent ─▶ SDK (page main world)
                          │
-                         └─ chrome.offscreen.createDocument ─▶ Offscreen document (holds MediaRecorder)
+                         └─ provider sends (GitHub / Linear / Slack / AI), behind a confirmation window
 ```
 
-**Why an offscreen document?** Service workers can't hold a `MediaStream`; they get killed when idle. The offscreen document keeps the recording alive across page reloads, navigation, and tab switches. It owns the `MediaRecorder` and persists the finalized recording to `chrome.storage.local` (proxied through the service worker because some Chrome builds don't expose `chrome.storage` to offscreen documents).
+**Why do provider calls run here?** The SDK runs in the host page's main world, so anything it holds
+is readable by the site under test. Tokens live in `chrome.storage.local` and never reach the page:
+the worker makes the call and shows you what it is about to send first.
 
-**Why proxy storage through the background?** `chrome.runtime.sendMessage` silently truncates responses larger than ~10 MB. A 30-second recording's base64 dataUrl is several MB, so we keep it out of IPC entirely: offscreen writes to storage, content-script reads from storage, page receives the bytes via a CustomEvent (in-process, no size limit).
+**A fourth context returns in 1.11.1.** Screen recording runs in an **offscreen document**, because
+service workers can't hold a `MediaStream` and get killed when idle; the offscreen document keeps a
+recording alive across page reloads, navigation and tab switches. It is not created in 1.11 — see
+`docs/launch/video-1.11.1.md`.
+
+**Why proxy storage through the background?** `chrome.runtime.sendMessage` silently truncates responses larger than ~10 MB. A 30-second recording's base64 dataUrl is several MB, so we keep it out of IPC entirely: the recorder writes to storage, content-script reads from storage, page receives the bytes via a CustomEvent (in-process, no size limit).
 
 ## Permissions
 
+Rebuilt from `tracebug-extension/build/manifest.base.json`. **A fresh install shows no
+permission warning at all** — everything that would trigger one is optional and asked for later,
+in context.
+
+Required:
+
 | Permission | Why |
 |-----------|-----|
-| `activeTab` | Access the current tab when the popup is used |
-| `storage` + `unlimitedStorage` | Persist the recording dataUrl (multi-MB) |
-| `scripting` | Inject SDK into pages on demand |
-| `tabs` | Detect navigation on the recording tab for HUD re-mount |
-| `offscreen` | Create the offscreen document that holds `MediaRecorder` |
-| `tabCapture` | Reserved (currently unused — recording uses `getDisplayMedia`) |
-| `<all_urls>` | Work on any website |
+| `activeTab` | Act on the tab you are looking at, from your own click on the popup or the shortcut |
+| `storage` | Remember your options, your redaction rules and your saved tickets |
+| `unlimitedStorage` | A report with a DOM replay can exceed the default storage quota. It is stored only on your device |
+| `scripting` | Inject the TraceBug SDK into the page when you start a capture |
+| `alarms` | Cancel an unanswered send-confirmation window after two minutes |
 
-All recording data stays in `chrome.storage.local` and the page's `localStorage`. Nothing leaves the browser.
+Optional host permissions — **not requested at install**, asked for only at the moment they are
+needed, and the extension degrades gracefully if you decline:
+
+| Origin | Asked when |
+|---|---|
+| `<all_urls>` | Only if you want a capture to keep running after you navigate to another site |
+| `https://api.github.com/*` | You save a GitHub token in TraceBug settings |
+| `https://api.linear.app/*` | You save a Linear key |
+| `https://hooks.slack.com/*` | You save a Slack webhook (this one also lets TraceBug read Slack's real reply instead of guessing) |
+| `https://api.openai.com/*`, `https://api.anthropic.com/*` | You save an AI key for that provider |
+| `http://localhost/*`, `http://127.0.0.1/*` | You point the AI debugger at a local model (Ollama) |
+
+Not present, and deliberately so: **`tabs`** (removed in 1.10.1 — it caused the "Read your browsing
+history" warning), **`tabCapture`** (removed with it), and **`offscreen`** (removed in 1.11 with the
+screen-recording pause; it returns in 1.11.1 with the feature).
+
+Capture data stays in `chrome.storage.local` and the page's `localStorage`. **Nothing goes to TraceBug.** You choose what's sent to GitHub, Linear, Slack or your AI provider, and every send asks you first. See the [privacy policy](https://tracebug.dev/privacy).
 
 ## Files
 
 ```
 tracebug-extension/
 ├── manifest.json       # Extension config (Manifest V3)
-├── background.js       # Service worker — SDK injection, offscreen lifecycle, storage proxy
+├── background.js       # Service worker — SDK injection, provider sends, storage proxy
 ├── content-script.js   # Bridge between extension contexts and the page SDK
-├── offscreen.html      # Host document for the recording context
-├── offscreen.js        # MediaRecorder lifecycle, persists to chrome.storage.local
+├── page-support.js     # Classifies restricted pages (webstore, PDF, file://)
+├── diagnostics.js      # Copy-diagnostics report + the scrubber that keeps it private
+├── secret-migration.js # Moves pre-1.11 page-stored tokens into extension storage
 ├── tracebug-init.js    # Page-context bootstrapper
 ├── tracebug-sdk.js     # Auto-built IIFE bundle (DO NOT EDIT)
-├── popup.html          # Three-action popup
-├── popup.js            # Popup logic
+├── popup.html          # Four-action popup
+├── popup.js            # Popup logic, Record options, "What's new" card
+├── options.html / .js  # TraceBug settings — tokens and API keys live here
+├── welcome.html / .js  # Bundled first-run page (no remote assets)
+├── player.html / .js   # CSP-proof replay iframe
 ├── styles.css          # Popup styles
 └── icons/              # 16 / 48 / 128 px extension icons
+
+`offscreen.html` / `offscreen.js` are not in 1.11 — they host the `MediaRecorder` and come back
+with screen recording in 1.11.1.
 ```
 
 `tracebug-sdk.js` is auto-generated by `npm run build`. Do not edit it manually.
