@@ -134,6 +134,18 @@ made, "This tab" cannot be offered in the extension**, which is why both the
 popup dropdown and the preflight's surface choice are gone there (the npm SDK
 keeps both, where they work).
 
+**The offscreen files return automatically with the flag.** `offscreen.html`
+and `offscreen.js` are excluded from the store build while video is off, and
+`build/build-ext.mjs` decides that by **parsing `VIDEO_ENABLED_IN_EXTENSION`
+out of `src/video-recorder.ts`** - not a second flag. Flip the constant and
+they ship again; no build step to remember. The parser throws rather than
+defaulting if that constant is renamed, because a silent "off" would ship a
+build with no recorder at all. (28 files in each zip with video off, 30 with it
+on.) `background.js` still computes `chrome.runtime.getURL("offscreen.html")`
+at load - a string, never fetched unless a `tb:rec:*` message arrives, and
+nothing sends one while video is off; `e2e/ext-shipping-path.e2e.mjs` passes
+16/16 with the files absent.
+
 **The `offscreen` permission** is out of both manifests, since nothing creates
 an offscreen document any more. Restore it in `build-ext.mjs` `chromeManifest()`
 and in `tracebug-extension/manifest.json` together with the feature — and put

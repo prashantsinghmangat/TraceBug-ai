@@ -24,6 +24,47 @@ const DIST_DIR = join(EXT_DIR, "dist");
 const version = JSON.parse(readFileSync(join(ROOT_DIR, "package.json"), "utf8")).version;
 const base = JSON.parse(readFileSync(join(__dirname, "manifest.base.json"), "utf8"));
 
+/**
+ * Is screen recording switched on in the extension?
+ *
+ * Read from `src/video-recorder.ts` rather than duplicated here, because a
+ * second flag is a second thing to forget: 1.11.1 flips ONE constant and the
+ * recorder files come back with it. Parsed, not imported - this is a plain
+ * node script and the constant lives in TypeScript.
+ *
+ * If the shape ever changes, fail loudly rather than guessing: silently
+ * defaulting to "off" would ship a build with no recorder at all.
+ */
+function videoEnabledInExtension() {
+  const src = readFileSync(join(ROOT_DIR, "src", "video-recorder.ts"), "utf8");
+  const m = /export const VIDEO_ENABLED_IN_EXTENSION\s*=\s*(true|false)\s*;/.exec(src);
+  if (!m) {
+    throw new Error(
+      "build-ext: could not read VIDEO_ENABLED_IN_EXTENSION from src/video-recorder.ts. " +
+      "If it was renamed or its shape changed, update this parser - do not guess a default."
+    );
+  }
+  return m[1] === "true";
+}
+
+const VIDEO_ON = videoEnabledInExtension();
+
+/**
+ * The recorder document, shipped only when it can be opened.
+ *
+ * `offscreen.html` hosts the MediaRecorder (as an offscreen document on
+ * Chrome, as a small popup window on Firefox, which has no offscreen API).
+ * While video is paused nothing sends a `tb:rec:*` message, so nothing ever
+ * creates it - and a whole document the manifest can never open is an obvious
+ * oddity in a reviewed package. Excluded with the feature, restored with it.
+ *
+ * Note `background.js` still computes `chrome.runtime.getURL("offscreen.html")`
+ * at load. That is a string, never fetched unless a `tb:rec:*` message
+ * arrives, so a missing file costs nothing. `web_accessible_resources` does
+ * not list it, so nothing is orphaned there either.
+ */
+const RECORDER_FILES = ["offscreen.js", "offscreen.html"];
+
 // Shared runtime files copied verbatim into every target. Dev-only helpers
 // (generate-*.html) and generated artifacts are intentionally excluded.
 const SHARED_FILES = [
@@ -34,8 +75,7 @@ const SHARED_FILES = [
   "page-support.js",
   "diagnostics.js",
   "tracebug-provider-api.js",
-  "offscreen.js",
-  "offscreen.html",
+  ...(VIDEO_ON ? RECORDER_FILES : []),
   "popup.js",
   "popup.html",
   "options.js",
