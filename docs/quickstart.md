@@ -26,8 +26,8 @@ matches you.
 > Pasting into an AI chat instead? Use **More ▾ → Export for AI (.html)** — a tiny
 > text-only report that fits in a chat context.
 
-> **Want a screen recording too?** Turn on **Record video too** in **⚙ Record
-> options** — TraceBug remembers it. Your browser then asks what to share: with
+> **Screen recording is paused in 1.11** and returns in 1.11.1. Everything else
+> — console, network, clicks and the replay — is captured as described above.
 > **Capture: Current tab** it's already set to the tab you're on, and with
 > **Desktop / window** you pick from the list. On macOS this needs your browser
 > enabled under **System Settings → Privacy & Security → Screen Recording**, then

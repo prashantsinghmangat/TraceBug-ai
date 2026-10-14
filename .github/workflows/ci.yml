@@ -64,6 +64,11 @@ jobs:
         run: node e2e/pre-record.e2e.mjs
       - name: E2E — inspect mode
         run: node e2e/inspect-mode.e2e.mjs
+      - name: E2E — the 1.11 shipping path, for an updater
+        # Seeds the video:true an updater was given, then proves the capture is
+        # still events-only and no offscreen document appears. The guarantee
+        # the unit tests cannot make.
+        run: node e2e/ext-shipping-path.e2e.mjs
       - name: E2E — no secret reaches the page (Phase 2a guarantee)
         # The unit test proves the SDK's getters refuse to return a secret.
         # This proves the DOM is clean, which is where the leak actually was.

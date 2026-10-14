@@ -15,6 +15,7 @@ relevant one after touching its feature:
 | `pre-record.e2e.mjs` | Blur-first arming bar, cancel path, 3-2-1 countdown. |
 | `inspect-mode.e2e.mjs` | Inspect mode overlay + style-evidence capture. |
 | `ext-player-csp.e2e.mjs` | Extension player iframe on a strict-CSP page (loads the real extension). |
+| `ext-shipping-path.e2e.mjs` | The 1.11 shipping path as an UPDATER sees it: seeds `tb_record_opts.video: true`, then asserts the capture is events-only, no video/mic control renders, no offscreen document is created, the ticket carries replay + console + network, and the stored preference survives for 1.11.1. |
 | `ext-no-secrets-in-page.e2e.mjs` | The Phase 2a guarantee in a real DOM: four seeded secrets must not appear in `outerHTML`, any `input`/`textarea` **`.value`**, any open shadow root, or page storage. |
 | `ext-redaction.e2e.mjs` | Popup redaction rules → storage → page bridge → `[REDACTED]` capture (real extension). |
 

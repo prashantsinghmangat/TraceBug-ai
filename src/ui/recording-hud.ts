@@ -18,6 +18,7 @@
 // so it is not a video-only tool.
 
 import {
+  isVideoOffered,
   getVideoElapsedMs,
   isVideoRecording,
   pauseVideoRecording,
@@ -141,7 +142,10 @@ export function showRecordingHUD(
     document.head.appendChild(style);
   }
 
-  const micAvailable = !eventsOnly && hasMicrophoneTrack();
+  // Also false in the extension: the stream lives in the offscreen document,
+  // so the page cannot read or mute its tracks - the button could only ever be
+  // dead there. See VIDEO_ENABLED_IN_EXTENSION in video-recorder.ts.
+  const micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
 
   hud.innerHTML = `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">

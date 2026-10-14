@@ -20476,6 +20476,9 @@ var TraceBugModule = (() => {
       }
     }
   }
+  function isVideoOffered() {
+    return !isExtensionContext2() || VIDEO_ENABLED_IN_EXTENSION;
+  }
   function hasMicrophoneTrack() {
     if (!_stream) return false;
     return _stream.getAudioTracks().length > 0;
@@ -20507,6 +20510,10 @@ var TraceBugModule = (() => {
     _onStatus = (options == null ? void 0 : options.onStatus) || null;
     const requestedMode = (options == null ? void 0 : options.mode) === "standard" ? "standard" : "rolling";
     const surfaceMode = (options == null ? void 0 : options.surfaceMode) === "tab" ? "tab" : "desktop";
+    if (!isVideoOffered()) {
+      _onStatus == null ? void 0 : _onStatus("error", "Screen recording is paused in this version \u2014 capturing console, network and a replay instead.");
+      return false;
+    }
     if (isExtensionContext2()) {
       const result2 = await rpcCall("tb:rec:start", {
         mode: requestedMode,
@@ -20612,6 +20619,7 @@ var TraceBugModule = (() => {
   }
   async function restoreFromOffscreenIfActive() {
     if (!isExtensionContext2()) return false;
+    if (!isVideoOffered()) return false;
     const status = await rpcCall("tb:rec:status").catch(() => null);
     if (!status || !status.active) return false;
     _active2 = true;
@@ -20623,6 +20631,7 @@ var TraceBugModule = (() => {
     return true;
   }
   async function restoreLastRecordingFromOffscreen() {
+    if (isExtensionContext2() && !isVideoOffered()) return null;
     if (!isExtensionContext2()) return null;
     if (isUsableRecording(_lastRecording)) return _lastRecording;
     try {
@@ -20986,7 +20995,7 @@ var TraceBugModule = (() => {
       return new Blob([], { type: mime });
     }
   }
-  var _active2, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
+  var _active2, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, VIDEO_ENABLED_IN_EXTENSION, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
@@ -21016,6 +21025,7 @@ var TraceBugModule = (() => {
       _paused = false;
       _pausedAt = 0;
       _pausedMs = 0;
+      VIDEO_ENABLED_IN_EXTENSION = false;
       _startInFlight = null;
       _autoStopWired = false;
       _onStarted = null;
@@ -24253,6 +24263,71 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       _badgeRoot = null;
       HIGHLIGHT_COLOR = "#6366F1";
       SELECTION_COLOR = "#4F46E5";
+    }
+  });
+
+  // src/ext-transport.ts
+  function setTransportMode(mode) {
+    _mode2 = mode === "extension" ? "extension" : "page";
+    _pageOnlyNoticeShown = false;
+    _boundShortcut = "";
+  }
+  function isExtensionMode() {
+    return _mode2 === "extension";
+  }
+  function setIntegrationStatus(status) {
+    if (!status || typeof status !== "object") {
+      _status = { ...EMPTY };
+      return;
+    }
+    _status = {
+      github: !!status.github,
+      linear: !!status.linear,
+      slack: !!status.slack,
+      ai: !!status.ai
+    };
+  }
+  function getIntegrationStatus() {
+    return { ..._status };
+  }
+  function setHostAccess(granted) {
+    _hostAccess = typeof granted === "boolean" ? granted : void 0;
+  }
+  function getHostAccess() {
+    return _hostAccess;
+  }
+  function isCaptureLimitedToThisPage() {
+    return isExtensionMode() && _hostAccess === false;
+  }
+  function shouldShowPageOnlyNotice() {
+    if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return false;
+    _pageOnlyNoticeShown = true;
+    return true;
+  }
+  function setBoundShortcut(shortcut) {
+    _boundShortcut = typeof shortcut === "string" ? shortcut : "";
+  }
+  function getBoundShortcut() {
+    return _boundShortcut;
+  }
+  function shortcutParts(shortcut) {
+    return shortcut.replace(/⌘/g, "+command+").replace(/⇧/g, "+shift+").replace(/⌥/g, "+alt+").replace(/⌃/g, "+ctrl+").toLowerCase().split("+").map((p) => p.trim()).filter(Boolean).map((p) => p === "command" || p === "cmd" || p === "meta" || p === "control" || p === "macctrl" ? "ctrl" : p).sort();
+  }
+  function browserOwnsQuickCapture() {
+    if (!isExtensionMode() || !_boundShortcut) return false;
+    const parts = shortcutParts(_boundShortcut);
+    return parts.length === 3 && parts[0] === "b" && parts[1] === "ctrl" && parts[2] === "shift";
+  }
+  var _mode2, EMPTY, _status, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
+  var init_ext_transport = __esm({
+    "src/ext-transport.ts"() {
+      "use strict";
+      _mode2 = "page";
+      EMPTY = { github: false, linear: false, slack: false, ai: false };
+      _status = { ...EMPTY };
+      _hostAccess = void 0;
+      _pageOnlyNoticeShown = false;
+      _boundShortcut = "";
     }
   });
 
@@ -29105,71 +29180,6 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   });
 
-  // src/ext-transport.ts
-  function setTransportMode(mode) {
-    _mode2 = mode === "extension" ? "extension" : "page";
-    _pageOnlyNoticeShown = false;
-    _boundShortcut = "";
-  }
-  function isExtensionMode() {
-    return _mode2 === "extension";
-  }
-  function setIntegrationStatus(status) {
-    if (!status || typeof status !== "object") {
-      _status = { ...EMPTY };
-      return;
-    }
-    _status = {
-      github: !!status.github,
-      linear: !!status.linear,
-      slack: !!status.slack,
-      ai: !!status.ai
-    };
-  }
-  function getIntegrationStatus() {
-    return { ..._status };
-  }
-  function setHostAccess(granted) {
-    _hostAccess = typeof granted === "boolean" ? granted : void 0;
-  }
-  function getHostAccess() {
-    return _hostAccess;
-  }
-  function isCaptureLimitedToThisPage() {
-    return isExtensionMode() && _hostAccess === false;
-  }
-  function shouldShowPageOnlyNotice() {
-    if (_pageOnlyNoticeShown || !isCaptureLimitedToThisPage()) return false;
-    _pageOnlyNoticeShown = true;
-    return true;
-  }
-  function setBoundShortcut(shortcut) {
-    _boundShortcut = typeof shortcut === "string" ? shortcut : "";
-  }
-  function getBoundShortcut() {
-    return _boundShortcut;
-  }
-  function shortcutParts(shortcut) {
-    return shortcut.replace(/⌘/g, "+command+").replace(/⇧/g, "+shift+").replace(/⌥/g, "+alt+").replace(/⌃/g, "+ctrl+").toLowerCase().split("+").map((p) => p.trim()).filter(Boolean).map((p) => p === "command" || p === "cmd" || p === "meta" || p === "control" || p === "macctrl" ? "ctrl" : p).sort();
-  }
-  function browserOwnsQuickCapture() {
-    if (!isExtensionMode() || !_boundShortcut) return false;
-    const parts = shortcutParts(_boundShortcut);
-    return parts.length === 3 && parts[0] === "b" && parts[1] === "ctrl" && parts[2] === "shift";
-  }
-  var _mode2, EMPTY, _status, _hostAccess, _pageOnlyNoticeShown, _boundShortcut;
-  var init_ext_transport = __esm({
-    "src/ext-transport.ts"() {
-      "use strict";
-      _mode2 = "page";
-      EMPTY = { github: false, linear: false, slack: false, ai: false };
-      _status = { ...EMPTY };
-      _hostAccess = void 0;
-      _pageOnlyNoticeShown = false;
-      _boundShortcut = "";
-    }
-  });
-
   // src/providers/api.ts
   function withCommas(n2) {
     return String(n2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -33335,7 +33345,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     `;
       document.head.appendChild(style);
     }
-    const micAvailable = !eventsOnly && hasMicrophoneTrack();
+    const micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
     hud.innerHTML = `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
       <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
@@ -33648,18 +33658,20 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       "tracebug-toolbar-region-btn"
     ));
     toolbar.appendChild(_divider());
-    const recordBtn = _createToolbarBtn(
-      "Record (video + session)",
-      _recordIconSvg(false),
-      () => _toggleRecording(root2, recordBtn, showToast3),
-      "tracebug-toolbar-record-btn"
-    );
-    if (!isVideoSupported()) {
-      recordBtn.style.opacity = "0.4";
-      recordBtn.style.cursor = "not-allowed";
-      recordBtn.title = "Screen recording not supported in this browser";
+    if (isVideoOffered()) {
+      const recordBtn = _createToolbarBtn(
+        "Record (video + session)",
+        _recordIconSvg(false),
+        () => _toggleRecording(root2, recordBtn, showToast3),
+        "tracebug-toolbar-record-btn"
+      );
+      if (!isVideoSupported()) {
+        recordBtn.style.opacity = "0.4";
+        recordBtn.style.cursor = "not-allowed";
+        recordBtn.title = "Screen recording not supported in this browser";
+      }
+      toolbar.appendChild(recordBtn);
     }
-    toolbar.appendChild(recordBtn);
     const trackBtn = _createToolbarBtn(
       "Track session (events only, no video)",
       _trackIconSvg(false),
@@ -34017,8 +34029,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         document.head.appendChild(st);
       }
       const segBase = "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:9px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.12s;border:1px solid var(--tb-border, #2a2a3e);background:rgba(127,127,140,0.14);color:var(--tb-text-secondary, #9aa0aa)";
+      const showSurfaceChoice = !isExtensionMode();
       pop.innerHTML = `
       <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
+      ${showSurfaceChoice ? `
       <div style="display:flex;gap:7px;margin-bottom:10px">
         <button data-tb-pre="surface-tab" style="${segBase}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/></svg>
@@ -34028,7 +34042,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="10" rx="1.5"/><rect x="8" y="10" width="14" height="10" rx="1.5"/></svg>
           Screen / window
         </button>
-      </div>
+      </div>` : `
+      <div style="margin-bottom:10px;font-size:11px;line-height:1.45;color:var(--tb-text-secondary, #9aa0aa)">
+        Your browser will ask what to share \u2014 pick this tab unless you need a window or the whole screen.
+      </div>`}
       <label style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;background:rgba(127,127,140,0.14);user-select:none;margin-bottom:10px">
         <input type="checkbox" data-tb-pre="mic" style="margin:0;cursor:pointer" />
         <span style="display:flex;align-items:center;gap:6px;flex:1">
@@ -34042,26 +34059,28 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       </div>
     `;
       root2.appendChild(pop);
-      let surface = "tab";
+      let surface = showSurfaceChoice ? "tab" : "desktop";
       const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]');
       const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]');
       const micEl = pop.querySelector('[data-tb-pre="mic"]');
       const cancelEl = pop.querySelector('[data-tb-pre="cancel"]');
       const startEl = pop.querySelector('[data-tb-pre="start"]');
-      const paintSurface = () => {
-        const on2 = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
-        tabBtn.style.cssText = segBase + (surface === "tab" ? on2 : "");
-        deskBtn.style.cssText = segBase + (surface === "desktop" ? on2 : "");
-      };
-      paintSurface();
-      tabBtn.addEventListener("click", () => {
-        surface = "tab";
+      if (tabBtn && deskBtn) {
+        const paintSurface = () => {
+          const on2 = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
+          tabBtn.style.cssText = segBase + (surface === "tab" ? on2 : "");
+          deskBtn.style.cssText = segBase + (surface === "desktop" ? on2 : "");
+        };
         paintSurface();
-      });
-      deskBtn.addEventListener("click", () => {
-        surface = "desktop";
-        paintSurface();
-      });
+        tabBtn.addEventListener("click", () => {
+          surface = "tab";
+          paintSurface();
+        });
+        deskBtn.addEventListener("click", () => {
+          surface = "desktop";
+          paintSurface();
+        });
+      }
       let settled = false;
       const finish = (value) => {
         if (settled) return;
@@ -34505,6 +34524,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     "src/compact-toolbar.ts"() {
       "use strict";
       init_element_annotate();
+      init_ext_transport();
       init_draw_mode();
       init_screenshot();
       init_region_screenshot();
@@ -71824,6 +71844,7 @@ First element: \`${exampleSnippet}\``,
   }
 
   // src/index.ts
+  init_video_recorder();
   init_dev_api();
   init_scanner();
   init_element_annotate();
@@ -72673,7 +72694,7 @@ ${summary}`;
     prepareRecording(opts = {}) {
       const begin = () => {
         const go = () => {
-          if (!opts.video) {
+          if (!opts.video || !isVideoOffered()) {
             void this.startEventsCapture();
             return;
           }

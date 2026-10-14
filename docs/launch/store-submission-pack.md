@@ -43,10 +43,13 @@ each file's convention or the diff becomes a whole-file re-encode.
 | `scripting` | Injects the capture script into the current tab, only after the user starts a capture. |
 | `storage` | Saves the user's settings, redaction rules and saved bug tickets on their own device. |
 | `unlimitedStorage` | Reports with replays or optional video can exceed the default storage limit. They are stored only on the user's device. |
-| `offscreen` | Keeps an optional screen recording running while the user moves between pages; background service workers can't hold a recording. |
 | `alarms` | Cancels an unanswered send-confirmation window after two minutes. |
 | Optional host permissions | Requested only when the user wants a capture to continue across sites, or saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration, so TraceBug can send the report the user approves to that service. |
 | Remote code | No. All code ships in the package. |
+
+`offscreen` is **not** requested in 1.11. It existed only to host screen
+recording, which is paused in this release - so the permission is gone rather
+than requested and unused. It returns with the feature in 1.11.1.
 
 **Single purpose:** Capture a browser bug (replay, console errors, network requests) into a report the user can export or send to their own issue tracker.
 
@@ -63,7 +66,7 @@ Declare on the cautious side. TraceBug never sends data to its developer. But at
 ## 4. What's new in 1.11 (store description, top)
 
 - No more "read and change all your data" warning: site access is asked for only when you need it.
-- Capture without screen sharing: console, network, clicks and a DOM replay by default; video is one checkbox away.
+- Video recording is paused while we finish it. It's back in 1.11.1.
 - Tokens and API keys moved into TraceBug's own settings, and every GitHub, Linear or Slack send asks you first.
 - If you set up GitHub, Linear, Slack or an AI key before 1.11, please revoke it and create a new one.
 

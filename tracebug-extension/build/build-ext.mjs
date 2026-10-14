@@ -52,12 +52,21 @@ const SHARED_FILES = [
 ];
 const SHARED_DIRS = ["icons"];
 
-/** Chrome MV3: service-worker background + the offscreen API for recording. */
+/**
+ * Chrome MV3: service-worker background.
+ *
+ * NO `offscreen` permission in 1.11. The offscreen document existed solely to
+ * host the screen recorder, and screen recording is paused in the extension -
+ * see VIDEO_ENABLED_IN_EXTENSION in src/video-recorder.ts and
+ * docs/launch/video-1.11.1.md. Nothing sends a `tb:rec:*` message any more, so
+ * nothing would create one. Shipping a permission the code cannot exercise is
+ * a question at review for no benefit. Restore this line with the feature.
+ */
 function chromeManifest() {
   return {
     ...base,
     version,
-    permissions: [...base.permissions, "offscreen"],
+    permissions: [...base.permissions],
     background: { service_worker: "background.js" },
     // Hard API floors: offscreen (109), storage.session (102),
     // runtime.getContexts (116). Without this, Chrome ≤108 installs the

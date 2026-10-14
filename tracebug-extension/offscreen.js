@@ -388,10 +388,14 @@ async function _startRecordingImpl(options) {
       mic.getAudioTracks().forEach(t => displayStream.addTrack(t));
       micIncluded = mic.getAudioTracks().length > 0;
     } catch (err) {
-      // Mic permission not granted to the extension. We can't prompt from an
-      // offscreen document — the popup's mic toggle is where the user grants it.
-      // Keep recording (screen + tab audio) so they still get a video.
-      console.warn("[TraceBug offscreen] microphone unavailable — grant it from the extension popup:", (err && err.name) || err);
+      // Mic permission not granted to the extension. Neither this document nor
+      // the popup can prompt for it: an offscreen document has no UI, and a
+      // popup is dismissed the moment Chrome's prompt takes focus, which
+      // cancels the request. It has to be granted from TraceBug settings, which
+      // is a real tab that survives the prompt.
+      // The recording continues (screen + tab audio) so the user still gets a
+      // video rather than losing the capture over missing narration.
+      console.warn("[TraceBug offscreen] microphone unavailable — grant it in TraceBug settings (right-click the toolbar icon → Options):", (err && err.name) || err);
     }
   }
 
