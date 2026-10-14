@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { recordExport, getExportCount, _resetReviewAsk } from '../src/ui/review-ask';
-import { storeUrl, reviewUrl } from '../src/links';
+import { storeUrl, reviewUrl, firefoxStoreUrl } from '../src/links';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CARD = readFileSync(join(root, 'src', 'ui', 'review-ask.ts'), 'utf8');
@@ -153,9 +153,23 @@ describe('store links come from one place', () => {
     expect(docs).toContain(String(id));
   });
 
-  it('declares no Firefox listing it cannot verify', () => {
-    const links = readFileSync(join(root, 'src', 'links.ts'), 'utf8');
-    expect(links).not.toMatch(/addons\.mozilla\.org\/[a-z-]*\/?firefox\/addon\/\S+/);
+  it('uses the AMO slug the docs use, and not the 404 guess', () => {
+    // This assertion used to be the opposite - "declares no Firefox listing it
+    // cannot verify" - because the slug was unknown. It is now verified by GUID
+    // (see src/links.ts), so the risk inverts: the danger is no longer declaring
+    // a link, it is declaring the WRONG one. `/addon/tracebug/` is a real 404
+    // and was published in compatibility.md for weeks.
+    const url = firefoxStoreUrl('report');
+    expect(url).toContain('tracebug-bug-reports-for-ai');
+    expect(url).not.toMatch(/addon\/tracebug[?/]/);
+    const docs = readFileSync(join(root, 'docs', 'compatibility.md'), 'utf8');
+    expect(docs).toContain('tracebug-bug-reports-for-ai');
+  });
+
+  it('tags the Firefox link like the Chrome one', () => {
+    const url = firefoxStoreUrl('report', 'export');
+    expect(url).toContain('utm_source=report');
+    expect(url).toContain('utm_medium=export');
   });
 });
 
