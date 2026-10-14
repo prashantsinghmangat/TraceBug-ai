@@ -868,7 +868,7 @@ const WHATS_NEW = {
   "1.11.0": {
     label: "New in 1.11",
     lines: [
-      "New: capture without screen sharing. Turn off Record video too in Record options to try it.",
+      "Screen recording is paused in this version and returns in 1.11.1 — your setting is kept. Console, network, clicks and replay are captured as usual.",
       "No more “read all your data” warning at install",
       "Tokens and API keys now live in TraceBug settings, not in the sites you test",
       "Every GitHub, Linear or Slack send asks you first",

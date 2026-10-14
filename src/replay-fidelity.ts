@@ -8,11 +8,16 @@
 // WebGL view) the DOM replay renders a correctly-sized empty box. Everything
 // else in the report is still right; the replay just shows nothing where the
 // bug is. Telling someone that afterwards is useless, so it is checked at
-// capture start, where "turn on video" is still an option.
+// capture start, where "turn on video" is still an option — in the npm SDK.
+// In the extension it is NOT an option in 1.11 (VIDEO_ENABLED_IN_EXTENSION),
+// so the advice branches on `isVideoOffered()`: telling a user to turn on a
+// checkbox that is not in their popup is worse than saying nothing.
 //
 // Deliberately NOT a blocker and not a dialog: it is one line, and a capture
 // without video is still worth having on these pages — console, network and
 // actions are unaffected.
+
+import { isVideoOffered } from "./video-recorder";
 
 /** How much of the viewport a canvas must cover before it is "the content". */
 const HEAVY_CANVAS_VIEWPORT_SHARE = 0.25;
@@ -76,6 +81,8 @@ export function eventsCaptureFidelityWarning(doc: Document = document): Fidelity
     message:
       "Most of this page is drawn in a canvas, which the replay can't record — " +
       "it will show an empty space. Console, network and your clicks are still captured. " +
-      "For a visual record here, stop and turn on “Record video too”.",
+      (isVideoOffered()
+        ? "For a visual record here, stop and turn on “Record video too”."
+        : "For a visual record here, take screenshots as you go — screen recording returns in 1.11.1."),
   };
 }
