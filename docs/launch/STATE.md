@@ -5,16 +5,24 @@ Current state only. History is in `PROGRESS-archive.md`; the full text of finish
 
 ## Where we are
 
-**All engineering for 1.11.0 is done. Everything left is human-only.** Last updated 2026-10-13.
+**All engineering for 1.11.0 is done. Everything left is human-only.** Last updated 2026-10-14.
 
 - Branch `develop`, version **1.11.0** across all eight surfaces `check:versions` guards.
-- Store archives built and verified (`PK`, 30 files, right manifest in each):
+- Store archives **must be rebuilt**: the ones on disk predate the video pause and the
+  `offscreen` removal. `npm run zip:ext`, then confirm `PK` and no `offscreen` in the manifest.
+- Store archives last verified (`PK`, 30 files, right manifest in each):
   - `releases/tracebug-extension-v1.11.0.zip` (824 KB) -> Chrome Web Store
   - `releases/tracebug-firefox-v1.11.0.zip` (824 KB) -> Firefox AMO
 - **Phases 0-7 and 9 are done.** Permissions optional, secrets and provider calls out of the host
   page, restricted pages and orphaned tabs handled, events-only capture as the default, bundled
   welcome page, per-version "What's new" card, uninstall survey, review ask, export footer and issue
   credit, oversize-export notice, canvas-replay warning, copy-and-docs consistency.
+- **Screen recording is PAUSED in the extension for 1.11.** One switch,
+  `VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`, enforced at the transport so no entry
+  point can start one - a stored `tb_record_opts.video: true` is read and ignored, never erased, so
+  1.11.1 restores the user's choice by flipping the constant. The `offscreen` permission is out of
+  both manifests with it. **Four bugs, the unverified lead on the worst one, and the restore
+  checklist: `docs/launch/video-1.11.1.md`.** The npm SDK is untouched and records video as before.
 - **Phase 8 is deferred to after submission**, except two items done early: the e2e harnesses run
   anywhere and headless (`e2e/paths.mjs`), and `e2e/ext-no-secrets-in-page.e2e.mjs` is in CI.
   Outstanding: `e2e/fixtures/`, `extension-smoke.spec.ts`, the golden-report check, the CI nightly.
