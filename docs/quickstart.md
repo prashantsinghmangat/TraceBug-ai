@@ -28,10 +28,7 @@ matches you.
 
 > **Screen recording is paused in 1.11** and returns in 1.11.1. Everything else
 > — console, network, clicks and the replay — is captured as described above.
-> **Capture: Current tab** it's already set to the tab you're on, and with
-> **Desktop / window** you pick from the list. On macOS this needs your browser
-> enabled under **System Settings → Privacy & Security → Screen Recording**, then
-> quit and reopened.
+> The npm SDK records video today.
 
 ---
 
