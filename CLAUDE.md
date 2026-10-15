@@ -28,7 +28,10 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
 - In extension mode the SDK runs in the page's main world: page `localStorage` is readable by the host site. Never store secrets there.
 
 ## Git
-- Work on `develop`. Do not commit - leave changes uncommitted and suggest a commit message.
+- Work on `develop`. **Suggest commits only** - leave changes uncommitted and suggest a message.
+- If explicitly asked to commit: `git commit --only <explicit paths>`. **Never** `git add -A` or
+  `git add .`, and **never push**. A bare `git add` once swept 19 files into a commit meant for 7,
+  and the message then described a fraction of what it contained.
 - No `Co-Authored-By` trailers.
 
 ## Working style (saves tokens)
