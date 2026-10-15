@@ -4,20 +4,6 @@ Add <=5 lines per phase: what changed, files touched, how it was verified, open 
 Newest entry at the bottom. Keep the last two entries here; move older ones to
 `PROGRESS-archive.md` when this file passes ~150 lines. Current state lives in `STATE.md`, not here.
 
-## Growth audit reconciled into the plan (2026-10-14)
-
-- Rewrote `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored): the Oct 11 "25 -> 1,000 installs"
-  audit, re-scored against code.
-  **24 of 32 items done, 1 deferred to v2.0 (saved tickets -> IndexedDB), 7 open** - and every
-  open one needs a person, a browser or an outside channel, not a session. Calendar redated from
-  Oct 14; submission Thu Oct 16; Show HN moved behind 1.11.1 because a paused feature reads as a
-  broken one to the HN crowd.
-- Recorded two collisions the audit could not see: the video pause overtakes its fix #7 entirely,
-  and "This tab" capture needs the `tabCapture` permission its own fix #2 told us to drop - which
-  is the install warning fix #1 told us to avoid. That trade is a product decision, now written down.
-- `PLAN.md`: Phase 4 C/D and Phase 9 marked done; new **Phase 10** (1.11.1 video, pointing at
-  `video-1.11.1.md`) and **Phase 11** (1.12 Site Audit, with the 1.12a/b/c split and the axe-core
-  size question). `STATE.md` gained a pointer to it. Docs only - no code touched, no gates run.
 ## Doc and copy pass for the video pause (2026-10-14)
 
 - **Two user-visible strings still told people to use a control 1.11 removed.** The canvas toast
@@ -65,4 +51,22 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   (`website/app/privacy/page.tsx`); `unlimitedStorage` there and in the submission pack is justified
   by the replay alone. Restoring all of it is step 5b / the `offscreen` block in `video-1.11.1.md`.
 - Open: the AMO slug contradiction (`docs/compatibility.md` publishes a URL `src/links.ts` refuses
-  to hold) - left alone deliberately, pending confirmation of the real slug.
+  to hold) - left alone deliberately, pending confirmation of the real slug. **CLOSED 2026-10-15:
+  the published URL was a 404; the real slug is `tracebug-bug-reports-for-ai`.**
+## Offscreen files, the AMO slug, and a git rule (2026-10-15)
+
+- **`offscreen.{html,js}` no longer ship while video is paused.** They were inert - no permission,
+  and no `tb:rec:*` is sent when `isVideoOffered()` is false - but a document the manifest cannot
+  open is an oddity in a reviewed package. `build-ext.mjs` parses `VIDEO_ENABLED_IN_EXTENSION` out
+  of `src/video-recorder.ts` rather than carrying a second flag, and throws if it is renamed.
+  Archives 30 -> 28 files, both targets, `PK` confirmed; `ext-shipping-path` 16/16 with them absent.
+- **The AMO link we published was a 404.** `/addon/tracebug/` does not exist. Resolved by GUID, not
+  by name: AMO's API for `tracebug@prashantsinghmangat` returns slug `tracebug-bug-reports-for-ai`,
+  public, 1.10.1. Now in `src/links.ts`; the guard test was INVERTED (it asserted no Firefox link
+  could be declared - the risk is now declaring the wrong one) and cross-checks `compatibility.md`.
+- **Privacy page stopped justifying `offscreen`**, which 1.11 does not request; restore notes for
+  all four permission surfaces are in `video-1.11.1.md`.
+- **Git: `--only <paths>` is now a rule** (`CLAUDE.md`), plus `Bash(git push:*)` in the settings
+  deny list. A bare `git add` had swept 19 files into a commit meant for 7.
+- Verified: `check.mjs --full` green - **819 passing / 48 files**, ext:lint 0 errors / 69 warnings.
+  Five commits on `develop`. Open: nothing blocking; the remaining items need a person.

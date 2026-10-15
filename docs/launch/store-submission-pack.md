@@ -1,6 +1,6 @@
 # TraceBug 1.11.0 — store submission pack
 
-## 1. Manifest name and description (decide before the final zip)
+## 1. Manifest name and description
 
 The Chrome Web Store shows the manifest `name` as the listing title and the manifest `description` as the summary. They can't differ from the listing, so the new title only appears if the manifest carries it.
 
@@ -30,7 +30,8 @@ Set them in both `manifest.base.json` and the dev `manifest.json` — `npm run c
 that the two agree on `name` and `description`, though **not** on `short_name`. Then rebuild with
 `npm run zip:ext` and check `ext:lint` before uploading anywhere.
 
-Note the base manifest stores non-ASCII raw (`—`) while the dev manifest escapes it (`—`). Keep
+Note the base manifest stores non-ASCII raw (a literal `—`) while the dev manifest stores the
+JSON escape (`\u2014`). Both are the same character; only the encoding differs. Keep
 each file's convention or the diff becomes a whole-file re-encode.
 
 ## 2. Section 7b — permission justifications

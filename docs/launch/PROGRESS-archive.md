@@ -539,3 +539,18 @@ on the day. Read it only to answer "why was it done that way", and say so when y
   `e2e/README.md`. Verified: check.mjs green, 796 passing / 47 files; the suite 13/13.
 - **Phase 8 steps 2-4 (fixtures, smoke spec, golden report, CI nightly) are deferred to after
   submission**, by decision. Only this item was pulled forward.
+
+## Growth audit reconciled into the plan (2026-10-14)
+
+- Rewrote `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored): the Oct 11 "25 -> 1,000 installs"
+  audit, re-scored against code.
+  **24 of 32 items done, 1 deferred to v2.0 (saved tickets -> IndexedDB), 7 open** - and every
+  open one needs a person, a browser or an outside channel, not a session. Calendar redated from
+  Oct 14; submission Thu Oct 16; Show HN moved behind 1.11.1 because a paused feature reads as a
+  broken one to the HN crowd.
+- Recorded two collisions the audit could not see: the video pause overtakes its fix #7 entirely,
+  and "This tab" capture needs the `tabCapture` permission its own fix #2 told us to drop - which
+  is the install warning fix #1 told us to avoid. That trade is a product decision, now written down.
+- `PLAN.md`: Phase 4 C/D and Phase 9 marked done; new **Phase 10** (1.11.1 video, pointing at
+  `video-1.11.1.md`) and **Phase 11** (1.12 Site Audit, with the 1.12a/b/c split and the axe-core
+  size question). `STATE.md` gained a pointer to it. Docs only - no code touched, no gates run.
