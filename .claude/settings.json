@@ -24,6 +24,7 @@
       "Read(./docs-internal/**)"
     ],
     "deny": [
+      "Bash(git push:*)",
       "Read(./node_modules/**)",
       "Read(./dist/**)",
       "Read(./coverage/**)",
