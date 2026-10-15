@@ -8,8 +8,8 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - Rewrote `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored): the Oct 11 "25 -> 1,000 installs"
   audit, re-scored against code.
-  **26 of 32 items done, 1 deferred to v2.0 (saved tickets -> IndexedDB), 5 open** - and all five
-  open ones need a person, a browser or an outside channel, not a session. Calendar redated from
+  **24 of 32 items done, 1 deferred to v2.0 (saved tickets -> IndexedDB), 7 open** - and every
+  open one needs a person, a browser or an outside channel, not a session. Calendar redated from
   Oct 14; submission Thu Oct 16; Show HN moved behind 1.11.1 because a paused feature reads as a
   broken one to the HN crowd.
 - Recorded two collisions the audit could not see: the video pause overtakes its fix #7 entirely,
