@@ -56,6 +56,7 @@ import {
   collectApiRequests,
   collectPerformanceNetwork,
   drainPerformanceNetwork,
+  resetPerformanceSeen,
   collectXhrRequests,
   collectErrors,
   collectConsoleErrors,
@@ -684,7 +685,18 @@ class TraceBugSDK {
     // fetch/XHR wraps missed because libs cached references to the
     // originals. Without this, lazy-injected SDKs miss the entire page
     // load.
-    if (this._emit) drainPerformanceNetwork(this._emit);
+    //
+    // resetPerformanceSeen() first: the drain that ran when collectors
+    // attached marked every page-load entry as seen while `recording` was
+    // still false, so its emits were dropped AND this drain then skipped
+    // them — the page load vanished from every extension capture, which
+    // always injects late. Passing captureStartedAt keeps the rule honest in
+    // the other direction: only pre-capture requests that FAILED or were slow
+    // come through, marked `phase: "page-load"`.
+    if (this._emit) {
+      resetPerformanceSeen();
+      drainPerformanceNetwork(this._emit, { captureStartedAt: Date.now() });
+    }
 
     // Capture environment + user once at session start so the report has
     // them even if the user reloads several times before stopping.

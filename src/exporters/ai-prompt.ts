@@ -100,13 +100,13 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
       lines.push(`**Failures:**`);
       failures.forEach((f) => {
         const responseBit = f.response ? ` — ${truncate(f.response, 120).replace(/\n/g, " ")}` : "";
-        lines.push(`- ${f.method} ${truncate(f.url, 120)} → ${f.status}${responseBit}`);
+        lines.push(`- ${f.method || "—"} ${truncate(f.url, 120)} → ${f.status}${responseBit}`);
       });
     }
     if (recentSuccess.length > 0) {
       lines.push(`**Recent successful calls (for context):**`);
       recentSuccess.forEach((r) => {
-        lines.push(`- ${r.method} ${truncate(r.url, 120)} → ${r.status}`);
+        lines.push(`- ${r.method || "—"} ${truncate(r.url, 120)} → ${r.status}`);
       });
     }
   }

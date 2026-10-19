@@ -423,7 +423,7 @@ function _buildDescription(session: StoredSession | null, prebuilt?: import("../
         .map((n) => {
           const status = n.status === 0 ? "Network Error" : String(n.status);
           const snippet = n.response ? ` — ${n.response.replace(/\s+/g, " ").slice(0, 80)}` : "";
-          return `- ${n.method} ${n.url.slice(0, 60)} → ${status}${snippet}`;
+          return `- ${n.method || "—"} ${n.url.slice(0, 60)} → ${status}${snippet}`;
         });
     }
   } catch {}
@@ -2531,7 +2531,7 @@ function _buildNetworkTab(report: import("../types").BugReport | null): string {
       <summary class="tb-qb-net-summary">
         <span class="tb-qb-net-c-n">${i + 1}</span>
         <span class="tb-qb-net-c-name" title="${escapeHtml(n.url)}">${escapeHtml(n._name)}</span>
-        <span class="tb-qb-net-c-meth">${escapeHtml(n.method)}</span>
+        <span class="tb-qb-net-c-meth">${escapeHtml(n.method || "—")}</span>
         <span class="tb-qb-net-c-stat ${statusClass}">${status}</span>
         <span class="tb-qb-net-c-dom" title="${escapeHtml(n._dom)}">${escapeHtml(n._dom)}</span>
         <span class="tb-qb-net-c-type">${n._t}</span>
