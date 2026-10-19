@@ -22,7 +22,7 @@
 //   • Re-seeding. A fresh installer who never opens Record options must not
 //     have video switched ON by their next update.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readText } from './helpers/read-source';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -128,7 +128,7 @@ function sliceFunction(source: string, declaration: string): string {
 }
 
 describe('popup.js migrates the legacy localStorage blob', () => {
-  const SOURCE = readFileSync(join(extDir, 'popup.js'), 'utf8');
+  const SOURCE = readText(join(extDir, 'popup.js'));
   const BODY = sliceFunction(SOURCE, '  async function loadRecordOpts() {');
 
   /** Run the real function against a given storage + localStorage state. */
@@ -260,7 +260,7 @@ describe('popup.js migrates the legacy localStorage blob', () => {
 // real decision freezes someone on a default they never saw — which is why
 // clicking Capture Bug must NOT stamp it, even though it saves the options.
 describe('popup.js only calls the video setting "chosen" when it was', () => {
-  const SOURCE = readFileSync(join(extDir, 'popup.js'), 'utf8');
+  const SOURCE = readText(join(extDir, 'popup.js'));
   const BODY = sliceFunction(SOURCE, '  function saveRecordOpts() {');
 
   /** Run the real saveRecordOpts with fake controls and a given videoSetBy. */

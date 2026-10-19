@@ -9,22 +9,23 @@
 //     invisible. Since Phase 1 made `<all_urls>` optional that is the normal
 //     state, so a card that renders an empty row would be the common case.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createChromeMock, loadBackground, settle, type ChromeMock } from './helpers/chrome-mock';
+import { readText } from './helpers/read-source';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const extDir = join(root, 'tracebug-extension');
-const POPUP = readFileSync(join(extDir, 'popup.js'), 'utf8');
-const HTML = readFileSync(join(extDir, 'popup.html'), 'utf8');
+
+const POPUP = readText(join(extDir, 'popup.js'));
+const HTML = readText(join(extDir, 'popup.html'));
 
 /** Load page-support.js and hand back its real describePage. */
 function pageSupport() {
   const sandbox: Record<string, unknown> = { URL, chrome: undefined, console };
   const ctx = createContext(sandbox);
-  runInContext(readFileSync(join(extDir, 'page-support.js'), 'utf8'), ctx);
+  runInContext(readText(join(extDir, 'page-support.js')), ctx);
   return runInContext('TraceBugPageSupport', ctx) as {
     describePage: (u?: string) => { host: string; path: string } | null;
   };
@@ -158,9 +159,9 @@ describe('the popup renders the card and one glyph per reason', () => {
 });
 
 describe('the /bye page keeps its promises', () => {
-  const FORM = readFileSync(join(root, 'website', 'app', 'bye', 'ByeForm.tsx'), 'utf8');
-  const PAGE = readFileSync(join(root, 'website', 'app', 'bye', 'page.tsx'), 'utf8');
-  const FORMS = readFileSync(join(root, 'website', 'public', '__forms.html'), 'utf8');
+  const FORM = readText(join(root, 'website', 'app', 'bye', 'ByeForm.tsx'));
+  const PAGE = readText(join(root, 'website', 'app', 'bye', 'page.tsx'));
+  const FORMS = readText(join(root, 'website', 'public', '__forms.html'));
 
   it('declares the uninstall form so Netlify collects it', () => {
     // Netlify scans static HTML at build time. Without this twin the POST is
