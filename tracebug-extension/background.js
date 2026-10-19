@@ -155,6 +155,39 @@ const injectedTabs = new Set();
 // user explicitly turns TraceBug off from the toolbar.
 const activeTabs = new Set();
 
+// ── Who is capturing, and where (Phase 1.11.1) ──────────────────────────────
+// A capture's own state used to live ONLY in the host page's localStorage,
+// which is per-origin. Moving to another site therefore killed the capture in
+// silence: the HUD vanished with no Stop control, nothing said why, and coming
+// back to the first site RESURRECTED it — the flag was still sitting in that
+// origin's storage, so the page re-mounted a HUD for a capture that had been
+// over for minutes.
+//
+// The worker is the one thing that spans origins, so it owns the answer now:
+// tabId -> { origin, startedAt }. The page asks before it resumes anything
+// (tb:capture:status) and is told plainly when the capture is gone.
+const captureTabs = new Map();
+
+// One pending "your capture ended" notice per tab, consumed by the first page
+// that asks. The page that needs to show it is on the NEW origin and has no
+// state of its own — the notice is the only way it can know.
+const captureEndedNotices = new Map();
+
+/** Host part of an origin, for a sentence. Never the path or the query. */
+function originHost(origin) {
+  try { return new URL(origin).host || origin; } catch { return String(origin || ""); }
+}
+
+/** End the capture this tab was running, and leave a note saying why. */
+function endCapture(tabId, reason) {
+  const live = captureTabs.get(tabId);
+  if (!live) return false;
+  captureTabs.delete(tabId);
+  captureEndedNotices.set(tabId, { reason, host: originHost(live.origin), at: Date.now() });
+  persistState();
+  return true;
+}
+
 // The tab that's currently being screen-recorded by the offscreen document.
 // Set when tb:rec:start succeeds; cleared on tb:rec:stop or auto-stop. We
 // use this in chrome.tabs.onUpdated to re-inject the SDK after a page
@@ -212,6 +245,11 @@ function persistState() {
     chrome.storage.session.set({
       [SESSION_STATE_KEY]: {
         activeTabs: [...activeTabs],
+        // A capture must survive a worker restart: MV3 kills the worker after
+        // ~30s idle, and a capture the worker forgot would be reported as
+        // "not running" to a page that is still capturing happily.
+        captureTabs: [...captureTabs.entries()],
+        captureEndedNotices: [...captureEndedNotices.entries()],
         recordingTabId: _recordingTabId,
         recorderWindowId: _recorderWindowId,
         updatePending: _updatePending,
@@ -255,6 +293,8 @@ const _hydrated = (async () => {
     const s = got && got[SESSION_STATE_KEY];
     if (s) {
       if (Array.isArray(s.activeTabs)) s.activeTabs.forEach((t) => activeTabs.add(t));
+      if (Array.isArray(s.captureTabs)) s.captureTabs.forEach(([k, v]) => captureTabs.set(k, v));
+      if (Array.isArray(s.captureEndedNotices)) s.captureEndedNotices.forEach(([k, v]) => captureEndedNotices.set(k, v));
       if (typeof s.recordingTabId === "number") _recordingTabId = s.recordingTabId;
       // Firefox event pages restart mid-recording too — without this, closing
       // the recorder popup after a restart never fans out the auto-stop, and
@@ -468,6 +508,15 @@ async function handleComboAction(message, sender) {
   if (!wasAlreadyInjected) {
     await new Promise((r) => setTimeout(r, 250));
   }
+  // A capture now has an owner outside the page. The origin comes from the
+  // page itself (tb:capture:started) because `tab.url` is normally undefined
+  // without <all_urls> — see STATE.md — and a capture must not depend on a
+  // permission the user declined.
+  if (message.type === "TB_START_RECORDING") {
+    captureEndedNotices.delete(tabId);
+    captureTabs.set(tabId, { origin: "", startedAt: Date.now() });
+    persistState();
+  }
   try {
     await chrome.tabs.sendMessage(tabId, actionMessage);
   } catch (err) {
@@ -521,6 +570,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   try { await _hydrated; } catch {}
   injectedTabs.delete(tabId);
   activeTabs.delete(tabId);
+  captureTabs.delete(tabId);
+  captureEndedNotices.delete(tabId);
   if (_recordingTabId === tabId) _recordingTabId = null;
   persistState();
 });
@@ -648,6 +699,68 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const tabId = message.tabId || sender?.tab?.id;
     sendResponse({ loaded: tabId ? injectedTabs.has(tabId) : false });
     return false;
+  }
+
+  // ── Is this tab's capture still running? (Phase 1.11.1) ─────────────────
+  // Asked by the page before it resumes anything after a navigation, and by
+  // every freshly-injected page so it can deliver a notice it has no other
+  // way of knowing about.
+  //
+  // The page sends its CURRENT origin and the worker compares: same origin,
+  // the capture is simply continuing across a reload or an SPA route change;
+  // a different one means the user left the site the capture started on, and
+  // the capture ends HERE, in the one place that can see both sides. Page
+  // localStorage is per-origin and cannot.
+  if (message.type === "tb:capture:status") {
+    const tabId = sender?.tab?.id;
+    if (tabId == null) { sendResponse({ running: false }); return false; }
+    (async () => {
+      try { await _hydrated; } catch {}
+      const origin = typeof message.data?.origin === "string" ? message.data.origin : "";
+      const live = captureTabs.get(tabId);
+      if (live && live.origin && origin && live.origin !== origin) {
+        endCapture(tabId, "cross-site");
+      }
+      const still = captureTabs.get(tabId);
+      // A notice is delivered once, to the first page that asks for it.
+      const notice = captureEndedNotices.get(tabId) || null;
+      if (notice) { captureEndedNotices.delete(tabId); persistState(); }
+      sendResponse({ running: !!still, startedAt: still?.startedAt ?? null, ended: notice });
+    })();
+    return true;
+  }
+
+  // The page reports the origin its capture is running on. Sent right after a
+  // capture arms — the worker cannot read it itself without <all_urls>.
+  if (message.type === "tb:capture:started") {
+    const tabId = sender?.tab?.id;
+    if (tabId == null) { sendResponse({ ok: false }); return false; }
+    (async () => {
+      try { await _hydrated; } catch {}
+      const origin = typeof message.data?.origin === "string" ? message.data.origin : "";
+      const startedAt = Number(message.data?.startedAt) || Date.now();
+      captureEndedNotices.delete(tabId);
+      captureTabs.set(tabId, { origin, startedAt });
+      persistState();
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
+  // The user pressed Stop (or the capture finalized itself). Nothing is
+  // running on this tab any more, and no notice is owed — the user watched it
+  // end.
+  if (message.type === "tb:capture:stopped") {
+    const tabId = sender?.tab?.id;
+    if (tabId == null) { sendResponse({ ok: false }); return false; }
+    (async () => {
+      try { await _hydrated; } catch {}
+      captureTabs.delete(tabId);
+      captureEndedNotices.delete(tabId);
+      persistState();
+      sendResponse({ ok: true });
+    })();
+    return true;
   }
 
   // ── Cross-site access, asked by the content script ──────────────────────

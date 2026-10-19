@@ -68,6 +68,14 @@ import {
 } from "./collectors";
 import { setRedactRules } from "./sanitize/custom-redaction";
 import { setTransportMode } from "./ext-transport";
+import {
+  getCaptureStatus,
+  announceCaptureStarted,
+  announceCaptureStopped,
+  captureEndedMessage,
+  type CaptureStatus,
+} from "./capture-ownership";
+import { dedupeNetworkRows } from "./network-dedupe";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
@@ -104,7 +112,7 @@ import {
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
 import { startDomRecording, stopDomRecording, stashDomReplay, clearStashedDomReplay } from "./rrweb-recorder";
 import { showCaptureBlockedNotice, showActionToast } from "./ui/toast";
-import { eventsCaptureFidelityWarning } from "./replay-fidelity";
+import { eventsCaptureFidelityWarning, framesCaptureWarning } from "./replay-fidelity";
 import { isVideoOffered } from "./video-recorder";
 import {
   mark as _mark,
@@ -270,6 +278,15 @@ class TraceBugSDK {
   // timer and the stashed replay's duration both come from here. Reset to a
   // fresh timestamp when the capture resumes on a new page after a navigation.
   private _eventsCaptureStartedAt: number | null = null;
+  /** The ONE capture-status answer this page load gets. Both consumers read
+   *  it: the resume path (may I keep capturing?) and the notice path (did a
+   *  capture end because the user left the last site?). Asking twice would
+   *  race — the worker delivers an ended-notice exactly once. */
+  private _captureStatusAtInit: Promise<CaptureStatus> | null = null;
+  /** A capture-ended sentence is shown once per page load. */
+  private _captureNoticeShown = false;
+  /** Memo for the HUD tally, invalidated by the session's event count. */
+  private _countsCache: { id: string; len: number; counts: { events: number; requests: number } } | null = null;
 
   /**
    * Initialize TraceBug. Call once on app startup.
@@ -511,6 +528,14 @@ class TraceBugSDK {
    *  reload doesn't kill it: ping for status, re-mount the HUD if still armed,
    *  otherwise clear a stale active-session id so the next Record starts fresh. */
   private _restoreVideoSessionOnInit(): void {
+    // Ask the worker once, for both questions below. A page that just landed
+    // from another site has NO state of its own — different origin, empty
+    // localStorage — so the worker's notice is the only way it can know a
+    // capture ended, and why.
+    this._captureStatusAtInit = getCaptureStatus();
+    void this._captureStatusAtInit.then((status) => {
+      if (status.ended) this._showCaptureEndedNotice(captureEndedMessage(status.ended));
+    }).catch(() => {});
     _wireAutoStop();
     _setAutoStopHandler((recording) => this._handleAutoStop(recording));
     // Mount the HUD the instant the offscreen doc signals capture began —
@@ -565,20 +590,16 @@ class TraceBugSDK {
           // compact-toolbar restores that itself.
           const eventsStartedAt = getEventsCaptureStartedAt();
           if (eventsStartedAt !== null) {
-            this._eventsCaptureStartedAt = eventsStartedAt;
-            // rrweb observers died with the previous document, so restart them.
-            // The replay therefore covers the page the capture ENDS on, not
-            // every page crossed — the console/network/action timeline spans
-            // them all, the DOM replay does not.
-            void startDomRecording();
-            const hudRoot = document.getElementById("tracebug-root");
-            if (hudRoot) {
-              showRecordingHUD(hudRoot, {
-                mode: "events",
-                startedAt: eventsStartedAt,
-                onStop: () => { this.stopEventsCapture().catch(() => {}); },
-              });
-            }
+            // ASK FIRST. This flag lives in the page's own localStorage, which
+            // is per-origin: after a cross-site move it is still sitting here,
+            // on the origin the capture started on, long after the capture
+            // died. Resuming on it is what produced a HUD counting up for a
+            // capture that had been over for minutes, with a Stop button that
+            // finalized a ticket the user had abandoned.
+            //
+            // The worker spans origins, so it is the authority. Anything other
+            // than a confirmed "yes" clears the flag and ends the session.
+            void this._resumeEventsCaptureIfLive(eventsStartedAt);
           }
         }
       }
@@ -1041,6 +1062,107 @@ class TraceBugSDK {
     else begin();
   }
 
+  /** What this capture has recorded so far, for the HUD's live tally. Read
+   *  from the cached session array, not localStorage — this is polled twice a
+   *  second and must never touch the disk-backed blob.
+   *
+   *  "Requests" are network rows; "events" is everything else the user can
+   *  recognise — their own clicks and typing, route changes, console errors. */
+  private _captureCounts(): { events: number; requests: number } {
+    const id = this.sessionId;
+    if (!id) return { events: 0, requests: 0 };
+    try {
+      const session = getCachedSessions().find(s => s.sessionId === id);
+      const all = session?.events || [];
+      // Polled twice a second, so recompute only when something arrived.
+      if (this._countsCache && this._countsCache.id === id && this._countsCache.len === all.length) {
+        return this._countsCache.counts;
+      }
+      let events = 0;
+      const rows: { url: string; duration: number; timestamp: number; source?: string; initiatorType?: string; startedAt?: number }[] = [];
+      for (const e of all) {
+        if (e.type !== "api_request") { events++; continue; }
+        const r = e.data.request;
+        rows.push({
+          url: r?.url || "",
+          duration: r?.durationMs || 0,
+          timestamp: e.timestamp,
+          source: r?.source as string | undefined,
+          initiatorType: r?.initiatorType as string | undefined,
+          startedAt: r?.startedAt as number | undefined,
+        });
+      }
+      // The SAME dedupe the ticket will apply. Counting raw rows here showed
+      // "2 requests" for one fetch — the wrapper's row and Resource Timing's
+      // twin — and then the ticket showed one. A live tally that disagrees
+      // with the report it is previewing is worse than no tally.
+      const base = typeof location !== "undefined" ? location.href : undefined;
+      const counts = { events, requests: dedupeNetworkRows(rows, { baseUrl: base }).length };
+      this._countsCache = { id, len: all.length, counts };
+      return counts;
+    } catch { /* a tally is never worth throwing over */ }
+    return { events: 0, requests: 0 };
+  }
+
+  /**
+   * Resume a HUD-driven events capture only if the worker says it is still
+   * running. Called with the start timestamp this origin has persisted.
+   *
+   * The three outcomes:
+   *   • running      — re-arm rrweb and re-mount the HUD (the old behaviour).
+   *   • not running  — a stale flag. Clear it, end the session, no HUD. The
+   *                    events already captured stay in storage: the user can
+   *                    still open the ticket, they just are not accumulating.
+   *   • ended notice — the same, plus a sentence naming the site they left.
+   */
+  private async _resumeEventsCaptureIfLive(eventsStartedAt: number): Promise<void> {
+    const status = await (this._captureStatusAtInit ?? getCaptureStatus());
+    if (!status.running) {
+      this._discardStaleCapture(status.ended ? captureEndedMessage(status.ended) : null);
+      return;
+    }
+    this._eventsCaptureStartedAt = eventsStartedAt;
+    // rrweb observers died with the previous document, so restart them.
+    // The replay therefore covers the page the capture ENDS on, not
+    // every page crossed — the console/network/action timeline spans
+    // them all, the DOM replay does not.
+    void startDomRecording();
+    const hudRoot = document.getElementById("tracebug-root");
+    if (hudRoot) {
+      showRecordingHUD(hudRoot, {
+        mode: "events",
+        startedAt: eventsStartedAt,
+        onStop: () => { this.stopEventsCapture().catch(() => {}); },
+        getCounts: () => this._captureCounts(),
+      });
+    }
+  }
+
+  /** Drop a capture the worker no longer recognises: clear the per-origin
+   *  flags so it cannot be resurrected again, end the session, and say why if
+   *  we were told. */
+  private _discardStaleCapture(message: string | null): void {
+    try { clearEventsCaptureStartedAt(); } catch {}
+    this._eventsCaptureStartedAt = null;
+    try { this._endActiveSession(); } catch {}
+    updateRecordingState(false);
+    hideRecordingHUD();
+    if (message) this._showCaptureEndedNotice(message);
+  }
+
+  /** Surface a capture-ended sentence, with the toolbar as the fallback when
+   *  the toast surface is not mounted. Never throws: a notice is not worth
+   *  failing an init over. */
+  private _showCaptureEndedNotice(message: string): void {
+    if (this._captureNoticeShown) return;
+    this._captureNoticeShown = true;
+    try {
+      const root = document.getElementById("tracebug-root");
+      if (root) showActionToast(message, "", () => {}, root, { autoDismissMs: 10_000 });
+      else console.info("[TraceBug] " + message);
+    } catch { /* a notice must never break the page */ }
+  }
+
   /**
    * Start an events-only capture: console, network, clicks and keystrokes, plus
    * an interactive DOM replay — and no screen share, so no picker and no OS
@@ -1071,6 +1193,10 @@ class TraceBugSDK {
     // Persisted so a navigation mid-capture re-mounts the HUD (and only for a
     // HUD-driven capture — the toolbar's track button owns its own stop).
     try { setEventsCaptureStartedAt(this._eventsCaptureStartedAt); } catch {}
+    // Tell the worker this tab is capturing, and on which origin. From here
+    // the WORKER decides whether a capture is running — page storage is
+    // per-origin and cannot answer that after a cross-site move.
+    void announceCaptureStarted(this._eventsCaptureStartedAt);
     // Best-effort: rrweb may be unavailable (import failure). The capture is
     // still worth having without the replay — console, network and actions are
     // the bulk of a bug report.
@@ -1080,13 +1206,19 @@ class TraceBugSDK {
       mode: "events",
       startedAt: this._eventsCaptureStartedAt,
       onStop: () => { this.stopEventsCapture().catch(() => {}); },
+      getCounts: () => this._captureCounts(),
     });
-    // Phase 6: say what this capture cannot show, while "turn on video" is
-    // still an option. Only canvas qualifies — see src/replay-fidelity.ts. The
-    // capture is already running, so this never blocks it; a failure here must
-    // not take the capture down with it.
+    // Say what this capture cannot show, NOW, while the user can still do
+    // something about it — see src/replay-fidelity.ts. Two gaps qualify:
+    // canvas content (not recorded, by choice) and anything inside an embedded
+    // frame (not captured at all in 1.11.x, by choice — see §2.2 of the
+    // capture audit). Canvas wins when both are true: it is the one the user
+    // can fix with video once that returns.
+    //
+    // The capture is already running, so this never blocks it, and a failure
+    // here must not take the capture down with it.
     try {
-      const warning = eventsCaptureFidelityWarning();
+      const warning = eventsCaptureFidelityWarning() || framesCaptureWarning();
       if (warning) {
         showActionToast(warning.message, "Stop", () => {
           this.stopEventsCapture().catch(() => {});
@@ -1109,6 +1241,7 @@ class TraceBugSDK {
     // Clear before _endActiveSession so an exception in the stash below can't
     // leave the flag behind and re-mount a HUD for a session that has ended.
     try { clearEventsCaptureStartedAt(); } catch {}
+    void announceCaptureStopped();
     try {
       const events = stopDomRecording();
       if (startedAt !== null) stashDomReplay(events, startedAt, Date.now() - startedAt);

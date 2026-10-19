@@ -384,6 +384,11 @@ function reattachDataUrl(rec, cb) {
 const REC_RPC_TYPES = new Set([
   "tb:rec:start", "tb:rec:stop", "tb:rec:capture",
   "tb:rec:comment", "tb:rec:status", "tb:rec:last-recording",
+  // Capture ownership (1.11.1). These three carry no secret and no
+  // destination: the page asks whether ITS OWN tab is still capturing, and
+  // reports its own origin. The worker answers for sender.tab.id only, so a
+  // page cannot ask about, start or stop a capture on any other tab.
+  "tb:capture:status", "tb:capture:started", "tb:capture:stopped",
 ]);
 
 window.addEventListener("tracebug-rec-request", (e) => safeRun(() => {

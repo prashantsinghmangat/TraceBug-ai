@@ -155,7 +155,10 @@ export function setAutoStopHandler(cb: ((recording: VideoRecording | null) => vo
 
 // ── Transport detection ──────────────────────────────────────────────────
 
-function isExtensionContext(): boolean {
+/** True when the SDK is running inside the browser extension (the init script
+ *  sets this flag), rather than as the npm SDK on a plain page. Exported so
+ *  capture-ownership can decide whether there is a worker to ask at all. */
+export function isExtensionContext(): boolean {
   return !!(window as Window & { __TRACEBUG_INITIALIZED__?: boolean }).__TRACEBUG_INITIALIZED__;
 }
 

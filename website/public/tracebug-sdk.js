@@ -33488,13 +33488,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     return `${m}:${s2}`;
   }
   function showRecordingHUD(root2, options) {
-    var _a2;
+    var _a2, _b;
     if (_hud) return;
     const eventsOnly = options.mode === "events";
     if (!eventsOnly && !isVideoRecording()) return;
     _root = root2;
     _onStopRequested = options.onStop;
-    _eventsStartedAt = eventsOnly ? (_a2 = options.startedAt) != null ? _a2 : Date.now() : null;
+    _getCounts = eventsOnly ? (_a2 = options.getCounts) != null ? _a2 : null : null;
+    _eventsStartedAt = eventsOnly ? (_b = options.startedAt) != null ? _b : Date.now() : null;
     const hud = document.createElement("div");
     hud.id = HUD_ID;
     hud.dataset.tracebug = "recording-hud";
@@ -33565,6 +33566,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       /* Events-only capture: says what is being captured where the mic button
          sits in a video recording, so "no picker appeared" isn't read as
          "nothing is happening". */
+      #${HUD_ID} .tb-hud-kind { font-size: 10px !important; font-weight: 600 !important; letter-spacing: 0.02em !important; color: rgba(255,255,255,0.45) !important; text-transform: uppercase !important; white-space: nowrap !important; }
+      #${HUD_ID} .tb-hud-count { font-size: 11px !important; font-weight: 500 !important; color: rgba(255,255,255,0.72) !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; }
+      #${HUD_ID} .tb-hud-count[data-tb-empty="1"] { color: rgba(255,186,120,0.95) !important; }
       #${HUD_ID} .tb-hud-label { font-size: 12px !important; font-weight: 500 !important; color: rgba(255,255,255,0.62) !important; padding: 0 4px !important; white-space: nowrap !important; }
     `;
       document.head.appendChild(style);
@@ -33583,7 +33587,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     </button>`}
     <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
     ${eventsOnly ? `
-    <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording \u2014 nothing is being shared with your browser's screen-share.">Capturing</span>` : `
+    <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording \u2014 nothing is being shared with your browser's screen-share.">Capturing</span>
+    <span class="tb-hud-kind" data-tb-hud="kind" title="This capture records the page's DOM, console and network and replays them. It is not a screen recording \u2014 your browser is not sharing your screen.">Replay, not video</span>
+    <span class="tb-hud-count" data-tb-hud="count" title="What this capture has recorded so far. If these stay at zero, the page is not producing anything TraceBug can see \u2014 content inside embedded frames is the usual reason.">0 events</span>` : `
     <button class="tb-hud-btn" data-tb-hud="mic"
       title="${micAvailable ? "Mute / unmute microphone" : "No microphone in this recording"}"
       aria-label="Toggle microphone"
@@ -33613,9 +33619,27 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const blurBtn = hud.querySelector('[data-tb-hud="blur"]');
     const shotBtn = hud.querySelector('[data-tb-hud="shot"]');
     const stopBtn = hud.querySelector('[data-tb-hud="stop"]');
+    const countEl = hud.querySelector('[data-tb-hud="count"]');
+    const renderCounts = () => {
+      if (!countEl || !_getCounts) return;
+      let counts;
+      try {
+        counts = _getCounts();
+      } catch (e2) {
+        return;
+      }
+      const parts = [`${counts.events} event${counts.events === 1 ? "" : "s"}`];
+      if (counts.requests > 0) parts.push(`${counts.requests} request${counts.requests === 1 ? "" : "s"}`);
+      countEl.textContent = parts.join(" \xB7 ");
+      const empty = counts.events === 0 && counts.requests === 0;
+      if (empty) countEl.setAttribute("data-tb-empty", "1");
+      else countEl.removeAttribute("data-tb-empty");
+    };
+    renderCounts();
     _timerInterval = setInterval(() => {
       if (_eventsStartedAt !== null) {
         timerEl.textContent = _formatElapsed(Date.now() - _eventsStartedAt);
+        renderCounts();
         return;
       }
       if (!isVideoRecording()) return;
@@ -33742,6 +33766,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }, 400);
   }
   function hideRecordingHUD() {
+    _getCounts = null;
     if (_timerInterval) {
       clearInterval(_timerInterval);
       _timerInterval = null;
@@ -33765,7 +33790,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     _onStopRequested = null;
     _eventsStartedAt = null;
   }
-  var HUD_ID, _root, _hud, _timerInterval, _onStopRequested, _eventsStartedAt;
+  var HUD_ID, _root, _hud, _timerInterval, _onStopRequested, _eventsStartedAt, _getCounts;
   var init_recording_hud = __esm({
     "src/ui/recording-hud.ts"() {
       "use strict";
@@ -33779,6 +33804,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _timerInterval = null;
       _onStopRequested = null;
       _eventsStartedAt = null;
+      _getCounts = null;
     }
   });
 
@@ -71533,6 +71559,53 @@ First element: \`${exampleSnippet}\``,
   init_collectors();
   init_custom_redaction();
   init_ext_transport();
+
+  // src/capture-ownership.ts
+  init_ext_rpc();
+  init_video_recorder();
+  var NOT_APPLICABLE = { running: false, startedAt: null, ended: null };
+  function currentOrigin() {
+    try {
+      return location.origin || "";
+    } catch (e2) {
+      return "";
+    }
+  }
+  async function getCaptureStatus() {
+    var _a2;
+    if (!isExtensionContext2()) return NOT_APPLICABLE;
+    try {
+      const res = await rpcCall("tb:capture:status", { origin: currentOrigin() }, 3e3);
+      return {
+        running: !!(res == null ? void 0 : res.running),
+        startedAt: typeof (res == null ? void 0 : res.startedAt) === "number" ? res.startedAt : null,
+        ended: (_a2 = res == null ? void 0 : res.ended) != null ? _a2 : null
+      };
+    } catch (e2) {
+      return NOT_APPLICABLE;
+    }
+  }
+  async function announceCaptureStarted(startedAt) {
+    if (!isExtensionContext2()) return;
+    try {
+      await rpcCall("tb:capture:started", { origin: currentOrigin(), startedAt }, 3e3);
+    } catch (e2) {
+    }
+  }
+  async function announceCaptureStopped() {
+    if (!isExtensionContext2()) return;
+    try {
+      await rpcCall("tb:capture:stopped", {}, 3e3);
+    } catch (e2) {
+    }
+  }
+  function captureEndedMessage(notice) {
+    const host2 = notice.host ? notice.host : "the previous site";
+    return `Capture ended when you left ${host2}. Everything captured there was kept \u2014 open TraceBug on ${host2} to review it.`;
+  }
+
+  // src/index.ts
+  init_network_dedupe();
   init_environment();
   init_screenshot();
   init_region_screenshot();
@@ -72023,6 +72096,8 @@ First element: \`${exampleSnippet}\``,
   init_video_recorder();
   var HEAVY_CANVAS_VIEWPORT_SHARE = 0.25;
   var MIN_CANVAS_PX = 4e4;
+  var HEAVY_FRAME_VIEWPORT_SHARE = 0.25;
+  var MIN_FRAME_PX = 4e4;
   function findHeavyCanvas(doc = document) {
     var _a2, _b;
     let viewport = 0;
@@ -72065,6 +72140,52 @@ First element: \`${exampleSnippet}\``,
       // Says what is missing, why, and the one thing that fixes it. No jargon:
       // "rrweb" and "DOM replay" mean nothing to a tester.
       message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording returns in 1.11.1.")
+    };
+  }
+  function findHeavyFrame(doc = document) {
+    var _a2, _b;
+    let viewport = 0;
+    try {
+      viewport = (((_a2 = doc.defaultView) == null ? void 0 : _a2.innerWidth) || 0) * (((_b = doc.defaultView) == null ? void 0 : _b.innerHeight) || 0);
+    } catch (e2) {
+    }
+    if (!viewport) return null;
+    let frames = [];
+    try {
+      frames = Array.from(doc.querySelectorAll("iframe, frame"));
+    } catch (e2) {
+      return null;
+    }
+    let total = 0;
+    let largest = null;
+    let largestArea = 0;
+    for (const f2 of frames) {
+      if (f2.closest("#tracebug-root")) continue;
+      let rect;
+      try {
+        rect = f2.getBoundingClientRect();
+      } catch (e2) {
+        continue;
+      }
+      if (rect.width <= 0 || rect.height <= 0) continue;
+      const area = rect.width * rect.height;
+      if (area < MIN_FRAME_PX) continue;
+      total += area;
+      if (area > largestArea) {
+        largestArea = area;
+        largest = f2;
+      }
+    }
+    if (!largest) return null;
+    return total / viewport >= HEAVY_FRAME_VIEWPORT_SHARE ? largest : null;
+  }
+  function framesCaptureWarning(doc = document) {
+    if (!findHeavyFrame(doc)) return null;
+    return {
+      kind: "iframe",
+      // Names what is missing and what still works. No "iframe" jargon alone:
+      // "embedded frames" is what the words on the page look like to a tester.
+      message: "A large part of this page is inside an embedded frame. Clicks, typing, console and network INSIDE that frame aren't captured yet \u2014 the rest of the page is. If your bug is in there, add screenshots as you go."
     };
   }
 
@@ -72366,6 +72487,15 @@ ${summary}`;
       // timer and the stashed replay's duration both come from here. Reset to a
       // fresh timestamp when the capture resumes on a new page after a navigation.
       this._eventsCaptureStartedAt = null;
+      /** The ONE capture-status answer this page load gets. Both consumers read
+       *  it: the resume path (may I keep capturing?) and the notice path (did a
+       *  capture end because the user left the last site?). Asking twice would
+       *  race — the worker delivers an ended-notice exactly once. */
+      this._captureStatusAtInit = null;
+      /** A capture-ended sentence is shown once per page load. */
+      this._captureNoticeShown = false;
+      /** Memo for the HUD tally, invalidated by the session's event count. */
+      this._countsCache = null;
     }
     /**
      * Initialize TraceBug. Call once on app startup.
@@ -72562,6 +72692,11 @@ ${summary}`;
      *  reload doesn't kill it: ping for status, re-mount the HUD if still armed,
      *  otherwise clear a stale active-session id so the next Record starts fresh. */
     _restoreVideoSessionOnInit() {
+      this._captureStatusAtInit = getCaptureStatus();
+      void this._captureStatusAtInit.then((status) => {
+        if (status.ended) this._showCaptureEndedNotice(captureEndedMessage(status.ended));
+      }).catch(() => {
+      });
       wireAutoStopListener();
       setAutoStopHandler((recording2) => this._handleAutoStop(recording2));
       wireStartedListener();
@@ -72588,19 +72723,7 @@ ${summary}`;
             updateRecordingState(true);
             const eventsStartedAt = getEventsCaptureStartedAt();
             if (eventsStartedAt !== null) {
-              this._eventsCaptureStartedAt = eventsStartedAt;
-              void startDomRecording();
-              const hudRoot = document.getElementById("tracebug-root");
-              if (hudRoot) {
-                showRecordingHUD(hudRoot, {
-                  mode: "events",
-                  startedAt: eventsStartedAt,
-                  onStop: () => {
-                    this.stopEventsCapture().catch(() => {
-                    });
-                  }
-                });
-              }
+              void this._resumeEventsCaptureIfLive(eventsStartedAt);
             }
           }
         }
@@ -72940,6 +73063,110 @@ ${summary}`;
       if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
       else begin();
     }
+    /** What this capture has recorded so far, for the HUD's live tally. Read
+     *  from the cached session array, not localStorage — this is polled twice a
+     *  second and must never touch the disk-backed blob.
+     *
+     *  "Requests" are network rows; "events" is everything else the user can
+     *  recognise — their own clicks and typing, route changes, console errors. */
+    _captureCounts() {
+      const id = this.sessionId;
+      if (!id) return { events: 0, requests: 0 };
+      try {
+        const session = getCachedSessions().find((s2) => s2.sessionId === id);
+        const all = (session == null ? void 0 : session.events) || [];
+        if (this._countsCache && this._countsCache.id === id && this._countsCache.len === all.length) {
+          return this._countsCache.counts;
+        }
+        let events = 0;
+        const rows = [];
+        for (const e2 of all) {
+          if (e2.type !== "api_request") {
+            events++;
+            continue;
+          }
+          const r2 = e2.data.request;
+          rows.push({
+            url: (r2 == null ? void 0 : r2.url) || "",
+            duration: (r2 == null ? void 0 : r2.durationMs) || 0,
+            timestamp: e2.timestamp,
+            source: r2 == null ? void 0 : r2.source,
+            initiatorType: r2 == null ? void 0 : r2.initiatorType,
+            startedAt: r2 == null ? void 0 : r2.startedAt
+          });
+        }
+        const base = typeof location !== "undefined" ? location.href : void 0;
+        const counts = { events, requests: dedupeNetworkRows(rows, { baseUrl: base }).length };
+        this._countsCache = { id, len: all.length, counts };
+        return counts;
+      } catch (e2) {
+      }
+      return { events: 0, requests: 0 };
+    }
+    /**
+     * Resume a HUD-driven events capture only if the worker says it is still
+     * running. Called with the start timestamp this origin has persisted.
+     *
+     * The three outcomes:
+     *   • running      — re-arm rrweb and re-mount the HUD (the old behaviour).
+     *   • not running  — a stale flag. Clear it, end the session, no HUD. The
+     *                    events already captured stay in storage: the user can
+     *                    still open the ticket, they just are not accumulating.
+     *   • ended notice — the same, plus a sentence naming the site they left.
+     */
+    async _resumeEventsCaptureIfLive(eventsStartedAt) {
+      var _a2;
+      const status = await ((_a2 = this._captureStatusAtInit) != null ? _a2 : getCaptureStatus());
+      if (!status.running) {
+        this._discardStaleCapture(status.ended ? captureEndedMessage(status.ended) : null);
+        return;
+      }
+      this._eventsCaptureStartedAt = eventsStartedAt;
+      void startDomRecording();
+      const hudRoot = document.getElementById("tracebug-root");
+      if (hudRoot) {
+        showRecordingHUD(hudRoot, {
+          mode: "events",
+          startedAt: eventsStartedAt,
+          onStop: () => {
+            this.stopEventsCapture().catch(() => {
+            });
+          },
+          getCounts: () => this._captureCounts()
+        });
+      }
+    }
+    /** Drop a capture the worker no longer recognises: clear the per-origin
+     *  flags so it cannot be resurrected again, end the session, and say why if
+     *  we were told. */
+    _discardStaleCapture(message) {
+      try {
+        clearEventsCaptureStartedAt();
+      } catch (e2) {
+      }
+      this._eventsCaptureStartedAt = null;
+      try {
+        this._endActiveSession();
+      } catch (e2) {
+      }
+      updateRecordingState(false);
+      hideRecordingHUD();
+      if (message) this._showCaptureEndedNotice(message);
+    }
+    /** Surface a capture-ended sentence, with the toolbar as the fallback when
+     *  the toast surface is not mounted. Never throws: a notice is not worth
+     *  failing an init over. */
+    _showCaptureEndedNotice(message) {
+      if (this._captureNoticeShown) return;
+      this._captureNoticeShown = true;
+      try {
+        const root2 = document.getElementById("tracebug-root");
+        if (root2) showActionToast(message, "", () => {
+        }, root2, { autoDismissMs: 1e4 });
+        else console.info("[TraceBug] " + message);
+      } catch (e2) {
+      }
+    }
     /**
      * Start an events-only capture: console, network, clicks and keystrokes, plus
      * an interactive DOM replay — and no screen share, so no picker and no OS
@@ -72976,6 +73203,7 @@ ${summary}`;
         setEventsCaptureStartedAt(this._eventsCaptureStartedAt);
       } catch (e2) {
       }
+      void announceCaptureStarted(this._eventsCaptureStartedAt);
       void startDomRecording();
       this._attachConsoleCollectors();
       showRecordingHUD(root2, {
@@ -72984,10 +73212,11 @@ ${summary}`;
         onStop: () => {
           this.stopEventsCapture().catch(() => {
           });
-        }
+        },
+        getCounts: () => this._captureCounts()
       });
       try {
-        const warning2 = eventsCaptureFidelityWarning();
+        const warning2 = eventsCaptureFidelityWarning() || framesCaptureWarning();
         if (warning2) {
           showActionToast(warning2.message, "Stop", () => {
             this.stopEventsCapture().catch(() => {
@@ -73011,6 +73240,7 @@ ${summary}`;
         clearEventsCaptureStartedAt();
       } catch (e2) {
       }
+      void announceCaptureStopped();
       try {
         const events = stopDomRecording();
         if (startedAt !== null) stashDomReplay(events, startedAt, Date.now() - startedAt);
