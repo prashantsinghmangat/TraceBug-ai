@@ -89,3 +89,20 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   `ext-{events-capture,redaction,shipping-path}` 22/4/16. Live fixtures for every claim above.
 - **Open:** replay masking with user patterns runs a regex pass per text node — unbenchmarked on a
   2.6 MB snapshot. Video (Phase 10) is still untouched and comes next.
+
+## 1.11.1 release prep, and three checks before it (2026-10-19)
+
+- **Worker restart:** `captureTabs` is in `tb_sw_state_v1` and `tb:capture:status` awaits `_hydrated`
+  — now proven, not inspected. `tests/capture-ownership-worker.test.ts` loads background.js against a
+  seeded `storage.session` (exactly a restarted worker); the e2e stops the real worker over CDP and
+  asserts a sentinel global is gone first, so the case cannot pass vacuously. 13/13.
+- **Origin now comes from Chrome** (`sender.origin` → `sender.url` → the page's claim, in that order),
+  so a page cannot name its own origin to keep or kill its capture.
+- **Benchmarked the mask pass** on 20,000 text nodes / 1.8 MB of text, 5 patterns, 30s of typing
+  (~9,000 keystrokes): snapshot 743/820/824 ms without rules vs 687/785/802 ms with — the delta is
+  below run-to-run noise and far under the 50 ms budget; typing p95 gap 5.0 ms both ways, **zero long
+  tasks**. Patterns are now compiled into one alternation. The tester's real 2.6 MB snapshot is 118
+  text nodes / 931 chars — its weight is inlined images, not text.
+- **Released as 1.11.1:** eight surfaces bumped, CHANGELOG + "What's new" card, four new
+  RELEASE_CHECKLIST rows (10a-10d), Phase 10 renamed to 1.11.2. `check.mjs --full` 904 passing / 54
+  files; zips 28 files, `PK`, no `offscreen`; cross-site 13/13, events 22/22, shipping 16/16.

@@ -4,19 +4,20 @@ Engineering state only, verified against code. Last updated 2026-10-19. Calendar
 32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored).
 History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`. Post-submission phases: `PLAN.md` 8, 10, 11, 12.
 
-**1.11.1 capture fixes are in** (the audit's Option A — see below). **All engineering for 1.11.0 is
-done; everything left there is human-only.** Branch `develop`, 1.11.0 on
-the eight surfaces `check:versions` guards. `check.mjs --full`: **894 passing / 53 files**,
+**1.11.1 is the capture fixes and is release-ready** (the audit's Option A — see below); zips built,
+28 files, `PK`. **Video moved to 1.11.2** (PLAN Phase 10): the capture fixes are done and help every
+user, video bug 1 still has no confirmed cause. **All engineering for 1.11.0 is
+done; everything left there is human-only.** Branch `develop`, **1.11.1** on the eight surfaces `check:versions` guards. `check.mjs --full`: **894 passing / 53 files**,
 `ext:lint` 0 errors / 69 warnings. Phases 0–7 and 9 are closed (permissions optional, secrets and
 provider calls out of the host page, restricted pages and orphaned tabs handled, events-only capture
 the default, bundled welcome page, "What's new" card, uninstall survey, review ask, export footer,
 issue credit, oversize notice, canvas warning, docs and copy consistency). Phase 8 is deferred but
 for `e2e/paths.mjs` (headless anywhere) and `e2e/ext-no-secrets-in-page.e2e.mjs` (in CI).
 
-**Screen recording is PAUSED in the extension.** `VIDEO_ENABLED_IN_EXTENSION` in
+**Screen recording is PAUSED in the extension — it returns in 1.11.2.** `VIDEO_ENABLED_IN_EXTENSION` in
 `src/video-recorder.ts`, enforced at the transport; a stored `tb_record_opts.video: true` is read and
 ignored, never erased, and the `offscreen` permission is out of both manifests with it. Four bugs and
-the restore checklist: `video-1.11.1.md`. The npm SDK is untouched and records video as before.
+the restore checklist: `video-1.11.1.md` (the FILE name is historical — video is now 1.11.2). The npm SDK is untouched and records video as before.
 
 ## 1.11.1 so far — capture, before video
 
@@ -74,7 +75,7 @@ Dated in `docs-internal/GROWTH-PLAN-30DAY.md` week 1; submit **Fri Oct 16**.
 - **`tab.url` is normally `undefined`** now `<all_urls>` is optional — classify with `classifyPage`
   (`page-support.js`); read the shortcut from `chrome.commands` at runtime (`Alt+B`).
 - **The offscreen files follow `VIDEO_ENABLED_IN_EXTENSION`.** `build-ext.mjs` parses it out of
-  `src/video-recorder.ts` and ships `offscreen.{html,js}` only when true, so 1.11.1 flips one
+  `src/video-recorder.ts` and ships `offscreen.{html,js}` only when true, so 1.11.2 flips one
   constant and they return (28 files -> 30). It **throws** if the constant is renamed: a silent
   "off" would ship a build with no recorder.
 - **The DOM replay never records canvas**, so a canvas page replays as an empty box;

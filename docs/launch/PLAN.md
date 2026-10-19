@@ -9,7 +9,7 @@ needs a person, not a session: `STATE.md` § "Left before submission". The marke
 distribution and release calendar - and the status of all 32 items from the Oct 11 growth audit -
 live in `docs-internal/GROWTH-PLAN-30DAY.md`, which is gitignored and deliberately not in this
 repo. The phases below that are still open are **post-submission**: Phase 8's
-remainder, Phase 10 (1.11.1, video) and Phase 11 (1.12, Site Audit).
+remainder, Phase 10 (1.11.2, video), Phase 11 (1.12, Site Audit) and Phase 12 (v2.0, ADR 008).
 
 ## How this is run
 
@@ -153,7 +153,12 @@ instructions. The listing copy that came out of it is in `store-submission-pack.
     match whatever the answers now say.
 - List any other contradictions found between the docs, the website and the code.
 
-## Phase 10 - 1.11.1: video back in the extension (post-submission, week of Oct 19)
+## Phase 10 - 1.11.2: video back in the extension (after 1.11.1 ships)
+
+**Renamed from 1.11.1 on 2026-10-19.** 1.11.1 is the capture fixes (the audit's Option A): they are
+done, verified, and they are what turns an empty ticket into a useful one for EVERY user, while
+video bug 1 still has no confirmed cause. Holding the capture fixes behind an unsolved video bug
+would delay them for everyone, so video moves here.
 
 Screen recording is paused in 1.11 behind `VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`.
 **The full brief is `docs/launch/video-1.11.1.md` - read it, not this summary.** The order:
@@ -181,9 +186,9 @@ Screen recording is paused in 1.11 behind `VIDEO_ENABLED_IN_EXTENSION` in `src/v
   it, don't weaken it.** And extend `e2e/ext-shipping-path.e2e.mjs` to record for real: all four bugs survived
   817 unit tests because the fake `getDisplayMedia` accepts constraint pairs a browser rejects.
 
-## Phase 11 - 1.12: the Site Audit tab (post-submission, after 1.11.1)
+## Phase 11 - 1.12: the Site Audit tab (post-submission, after 1.11.2)
 
-Build it only once 1.11 is approved and 1.11.1 has brought video back. The pitch is "find the bug, then trace
+Build it only once 1.11 is approved and 1.11.2 has brought video back. The pitch is "find the bug, then trace
 it". Three things keep it from being a copy of Exploratory Tester: **every finding becomes a ticket** through
 the existing confirm window; **findings ride in the report**, so the `.html` a developer opens shows both; and
 **the MCP server exposes the audit**, so "fix the 6 accessibility errors on /checkout" works in Claude Code.
