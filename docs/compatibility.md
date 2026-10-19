@@ -51,6 +51,14 @@ DOM replay) rather than break.
   - *Site access is a one-time prompt*: Firefox treats host permissions as
     opt-in, so the first capture asks for site access; declining limits
     TraceBug to the current page view until re-invoked (navigation loses it).
+  - *Failed requests from before the capture are not listed*: when a session
+    arms, TraceBug pulls requests that already happened from the browser's
+    Resource Timing buffer, keeping the ones that **failed** or were **slow**
+    (>1s) and grouping them as "Before capture". Firefox does not implement
+    `PerformanceResourceTiming.responseStatus` (Chrome 109+ only), so it
+    cannot tell a 500 from a 200 there and only the slow ones are listed.
+    Requests made *during* the capture are unaffected — those go through the
+    fetch/XHR wrappers, which see the real status on every browser.
 - **Canvas/WebGL-heavy apps lose replay fidelity** — rrweb records DOM, and
   `recordCanvas` is off for size. Use video recording for those apps.
 - **Very large reports:** sessions with embedded video reach tens of MB.
@@ -59,6 +67,10 @@ DOM replay) rather than break.
 - **Background tabs** are throttled by browsers; timers and rrweb activity
   in a backgrounded tab may be coarser. Recording a tab you're actively
   using is the supported path.
+- **A method shown as "—"** is one Resource Timing reported without a verb
+  (it has no method field). It means "the browser did not tell us", and is
+  only ever shown for a request TraceBug saw through the timing buffer alone
+  — never for one its fetch/XHR wrappers captured.
 - **Redaction is pattern-based.** Token *shapes* and declared `redact`
   fields are masked; free-form PII the patterns can't know about, and
   anything visible in screenshots/video, is not auto-detected — use

@@ -612,21 +612,41 @@ export function collectXhrRequests(emit: Emit): () => void {
 // Module-level so drainPerformanceNetwork() and the observer share state.
 const _perfSeen = new Set<string>();
 
-function _emitPerfEntry(emit: Emit, e: PerformanceResourceTiming): void {
+/** Resource Timing initiator types whose method is genuinely knowable: the
+ *  browser issues these itself, always with GET. Anything else — fetch,
+ *  xmlhttprequest, beacon, an empty initiator — has a method Resource Timing
+ *  does not expose, and inventing GET for it put a request in the report that
+ *  never happened. Those rows carry an empty method, rendered as "—". */
+const GET_ONLY_INITIATORS = new Set([
+  "img", "image", "css", "link", "script", "font",
+  "media", "video", "audio", "track", "embed", "object", "iframe", "frame",
+]);
+
+/** A pre-capture request slower than this is worth reporting on its own. */
+export const PAGE_LOAD_SLOW_MS = 1000;
+
+function _emitPerfEntry(
+  emit: Emit,
+  e: PerformanceResourceTiming,
+  opts?: { captureStartedAt?: number },
+): void {
   if (!e || !e.name) return;
   try { if (isInternalUrl(e.name)) return; } catch {}
   // Skip our own injected scripts so we don't show up in our own report.
   if (typeof e.name === "string" && e.name.indexOf("tracebug") !== -1) return;
   const key = `${e.name}|${Math.round(e.startTime)}`;
   if (_perfSeen.has(key)) return;
-  _perfSeen.add(key);
 
   const navStart = (typeof performance.timeOrigin === "number") ? performance.timeOrigin : Date.now();
   // `method`/`responseStatus` are newer Resource Timing fields not present in
   // every lib.dom version — read them via a widened view of the entry.
   const ext = e as PerformanceResourceTiming & { method?: string; responseStatus?: number };
   const initiator = e.initiatorType || "";
-  const method = (ext.method || "GET").toUpperCase();
+  // Use the real method if a browser ever exposes one; otherwise GET only
+  // where GET is a fact, and "" (unknown) everywhere else.
+  const method = ext.method
+    ? ext.method.toUpperCase()
+    : GET_ONLY_INITIATORS.has(initiator) ? "GET" : "";
   // responseStatus needs same-origin (or Timing-Allow-Origin header) to be
   // exposed. When the browser hides it we report 0; report-builder treats
   // 0 as "unknown" rather than "error", so it lands in the Network tab
@@ -635,9 +655,45 @@ function _emitPerfEntry(emit: Emit, e: PerformanceResourceTiming): void {
   const url = sanitizeUrl(e.name).slice(0, 500);
   const timestamp = Math.round(navStart + e.startTime);
   const durationMs = Math.round(e.duration || 0);
+
+  // ── Requests from before the capture ────────────────────────────────────
+  // The whole page load sits in this buffer when the session arms. Emitting
+  // all of it buries the few events the user actually produced, so only the
+  // two kinds that explain a bug on their own come through: it FAILED, or it
+  // was SLOW. They are marked `phase: "page-load"` so the report can group
+  // them under "Before capture" rather than implying the user caused them.
+  //
+  // Firefox does not implement `responseStatus` (Chrome 109+ only), so every
+  // status reads 0 there and the failure half of this rule cannot fire — on
+  // Firefox only the slow ones are included. That is a known, documented gap
+  // (docs/compatibility.md): a guess at which pre-capture requests failed
+  // would be worse than a smaller, honest set.
+  let phase: "page-load" | undefined;
+  if (typeof opts?.captureStartedAt === "number" && timestamp < opts.captureStartedAt) {
+    const failed = status >= 400;
+    const slow = durationMs > PAGE_LOAD_SLOW_MS;
+    if (!failed && !slow) return; // uninteresting page-load noise — and NOT marked seen
+    phase = "page-load";
+  }
+
+  _perfSeen.add(key);
   try {
     emit("api_request", {
-      request: { url, method, statusCode: status, durationMs, initiatorType: initiator },
+      // `source` and `startedAt` are what let report-builder tell this row
+      // apart from the fetch/XHR wrapper's row for the SAME request and drop
+      // this one (see src/network-dedupe.ts). `startedAt` is the browser's own
+      // request start — the wrapper only knows when it finished, so pairing on
+      // start needs the exact value from this side.
+      request: {
+        url,
+        method,
+        statusCode: status,
+        durationMs,
+        initiatorType: initiator,
+        source: "resource-timing",
+        startedAt: timestamp,
+        ...(phase ? { phase } : {}),
+      },
       _ts: timestamp,
     });
   } catch {}
@@ -649,12 +705,27 @@ function _emitPerfEntry(emit: Emit, e: PerformanceResourceTiming): void {
  * recording (e.g., the initial page load + lazy SDK inject window) still
  * make it into the bug ticket.
  */
-export function drainPerformanceNetwork(emit: Emit): void {
+export function drainPerformanceNetwork(emit: Emit, opts?: { captureStartedAt?: number }): void {
   if (typeof performance === "undefined") return;
   try {
     const entries = performance.getEntriesByType("resource") as PerformanceResourceTiming[];
-    for (const e of entries) _emitPerfEntry(emit, e);
+    for (const e of entries) _emitPerfEntry(emit, e, opts);
   } catch {}
+}
+
+/**
+ * Forget which timing entries have already been emitted.
+ *
+ * `_perfSeen` means "already in the CURRENT session". The drain that runs when
+ * collectors attach happens before any session is armed, so every emit from it
+ * is dropped by the recording check — but the entries were still marked seen,
+ * and the drain at session start then skipped the entire page load. The result
+ * was a capture with no page-load network at all, which is exactly what the
+ * backfill exists to prevent. Arming a session clears the set so that drain
+ * sees a clean buffer.
+ */
+export function resetPerformanceSeen(): void {
+  _perfSeen.clear();
 }
 
 export function collectPerformanceNetwork(emit: Emit): () => void {

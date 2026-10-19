@@ -1038,7 +1038,7 @@ const REPLAY_RUNTIME = `(function(){
         '<summary class="tb-vnet-summary">' +
           '<span class="tb-vnet-c-n">' + (i + 1) + '</span>' +
           '<span class="tb-vnet-c-name" title="' + esc(n.url) + '">' + esc(item.name) + '</span>' +
-          '<span class="tb-vnet-c-meth">' + esc(n.method) + '</span>' +
+          '<span class="tb-vnet-c-meth">' + esc(n.method || '—') + '</span>' +
           '<span class="tb-vnet-c-stat ' + statusCls + '">' + statusTxt + '</span>' +
           '<span class="tb-vnet-c-dom" title="' + esc(item.dom) + '">' + esc(item.dom) + '</span>' +
           '<span class="tb-vnet-c-type">' + item.t + '</span>' +

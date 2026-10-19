@@ -1725,7 +1725,7 @@ var TraceBugModule = (() => {
       OrigXHR.prototype.send = origSend;
     };
   }
-  function _emitPerfEntry(emit, e2) {
+  function _emitPerfEntry(emit, e2, opts) {
     if (!e2 || !e2.name) return;
     try {
       if (isInternalUrl(e2.name)) return;
@@ -1734,30 +1734,54 @@ var TraceBugModule = (() => {
     if (typeof e2.name === "string" && e2.name.indexOf("tracebug") !== -1) return;
     const key = `${e2.name}|${Math.round(e2.startTime)}`;
     if (_perfSeen.has(key)) return;
-    _perfSeen.add(key);
     const navStart = typeof performance.timeOrigin === "number" ? performance.timeOrigin : Date.now();
     const ext = e2;
     const initiator = e2.initiatorType || "";
-    const method = (ext.method || "GET").toUpperCase();
+    const method = ext.method ? ext.method.toUpperCase() : GET_ONLY_INITIATORS.has(initiator) ? "GET" : "";
     const status = ext.responseStatus || 0;
     const url = sanitizeUrl2(e2.name).slice(0, 500);
     const timestamp = Math.round(navStart + e2.startTime);
     const durationMs = Math.round(e2.duration || 0);
+    let phase;
+    if (typeof (opts == null ? void 0 : opts.captureStartedAt) === "number" && timestamp < opts.captureStartedAt) {
+      const failed = status >= 400;
+      const slow = durationMs > PAGE_LOAD_SLOW_MS;
+      if (!failed && !slow) return;
+      phase = "page-load";
+    }
+    _perfSeen.add(key);
     try {
       emit("api_request", {
-        request: { url, method, statusCode: status, durationMs, initiatorType: initiator },
+        // `source` and `startedAt` are what let report-builder tell this row
+        // apart from the fetch/XHR wrapper's row for the SAME request and drop
+        // this one (see src/network-dedupe.ts). `startedAt` is the browser's own
+        // request start — the wrapper only knows when it finished, so pairing on
+        // start needs the exact value from this side.
+        request: {
+          url,
+          method,
+          statusCode: status,
+          durationMs,
+          initiatorType: initiator,
+          source: "resource-timing",
+          startedAt: timestamp,
+          ...phase ? { phase } : {}
+        },
         _ts: timestamp
       });
     } catch (e3) {
     }
   }
-  function drainPerformanceNetwork(emit) {
+  function drainPerformanceNetwork(emit, opts) {
     if (typeof performance === "undefined") return;
     try {
       const entries = performance.getEntriesByType("resource");
-      for (const e2 of entries) _emitPerfEntry(emit, e2);
+      for (const e2 of entries) _emitPerfEntry(emit, e2, opts);
     } catch (e2) {
     }
+  }
+  function resetPerformanceSeen() {
+    _perfSeen.clear();
   }
   function collectPerformanceNetwork(emit) {
     if (typeof performance === "undefined" || typeof PerformanceObserver === "undefined") {
@@ -1900,7 +1924,7 @@ var TraceBugModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -1929,6 +1953,23 @@ var TraceBugModule = (() => {
         /\/@react-refresh/
       ];
       _perfSeen = /* @__PURE__ */ new Set();
+      GET_ONLY_INITIATORS = /* @__PURE__ */ new Set([
+        "img",
+        "image",
+        "css",
+        "link",
+        "script",
+        "font",
+        "media",
+        "video",
+        "audio",
+        "track",
+        "embed",
+        "object",
+        "iframe",
+        "frame"
+      ]);
+      PAGE_LOAD_SLOW_MS = 1e3;
       CONSOLE_MSG_MAX = 1e4;
       CONSOLE_LEVEL_CAP = 50;
     }
@@ -21821,6 +21862,80 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/network-dedupe.ts
+  function normalizeUrl(url, base) {
+    if (!url) return "";
+    try {
+      const u2 = new URL(url, base || void 0);
+      u2.hash = "";
+      return u2.href;
+    } catch (e2) {
+      return url;
+    }
+  }
+  function startOf(row) {
+    if (typeof row.startedAt === "number" && row.startedAt > 0) return row.startedAt;
+    return row.timestamp - (row.duration || 0);
+  }
+  function dedupeNetworkRows(rows, opts) {
+    var _a2;
+    if (!Array.isArray(rows) || rows.length < 2) return Array.isArray(rows) ? rows : [];
+    const base = opts == null ? void 0 : opts.baseUrl;
+    const windowMs = (_a2 = opts == null ? void 0 : opts.windowMs) != null ? _a2 : DEDUPE_WINDOW_MS;
+    const isTiming = (r2) => r2.source === "resource-timing";
+    const wrapperStarts = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      if (isTiming(row)) continue;
+      const key = normalizeUrl(row.url, base);
+      const list = wrapperStarts.get(key);
+      const entry = { start: startOf(row), used: false };
+      if (list) list.push(entry);
+      else wrapperStarts.set(key, [entry]);
+    }
+    if (wrapperStarts.size === 0) return rows;
+    return rows.filter((row) => {
+      if (!isTiming(row)) return true;
+      if (row.initiatorType && STATIC_INITIATORS.has(row.initiatorType)) return true;
+      const candidates = wrapperStarts.get(normalizeUrl(row.url, base));
+      if (!candidates) return true;
+      const start = startOf(row);
+      let best = null;
+      let bestDelta = Infinity;
+      for (const c2 of candidates) {
+        if (c2.used) continue;
+        const delta = Math.abs(c2.start - start);
+        if (delta <= windowMs && delta < bestDelta) {
+          best = c2;
+          bestDelta = delta;
+        }
+      }
+      if (!best) return true;
+      best.used = true;
+      return false;
+    });
+  }
+  var STATIC_INITIATORS, DEDUPE_WINDOW_MS;
+  var init_network_dedupe = __esm({
+    "src/network-dedupe.ts"() {
+      "use strict";
+      STATIC_INITIATORS = /* @__PURE__ */ new Set([
+        "img",
+        "image",
+        "css",
+        "link",
+        "script",
+        "font",
+        "media",
+        "video",
+        "audio",
+        "track",
+        "embed",
+        "object"
+      ]);
+      DEDUPE_WINDOW_MS = 50;
+    }
+  });
+
   // src/action-chips.ts
   function pickAttrs(el) {
     if (!el || typeof el !== "object") return { attrs: [], moreCount: 0 };
@@ -22310,7 +22425,7 @@ var TraceBugModule = (() => {
     };
   }
   function buildReport(session, extraScreenshots) {
-    var _a2, _b, _c, _d;
+    var _a2, _b, _c, _d, _e;
     const environment = session.environment || captureEnvironment();
     const _ssForAnchor = [...getScreenshots(), ...extraScreenshots || []];
     const _vidForAnchor = getSessionVideo(session);
@@ -22356,17 +22471,27 @@ var TraceBugModule = (() => {
         timestamp: e2.timestamp
       };
     }).filter((e2) => !!e2.message);
-    const networkRequests = events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
-      var _a3, _b2, _c2, _d2;
+    const networkRows = events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
+      var _a3, _b2, _c2, _d2, _e2, _f, _g, _h;
       return {
-        method: ((_a3 = e2.data.request) == null ? void 0 : _a3.method) || "GET",
+        // No `|| "GET"`: a Resource-Timing-only row for a fetch/XHR has a method
+        // the browser never told us, and the report renders that empty value as
+        // "—". Defaulting it to GET is how a POST ended up shown twice, once as
+        // a request that never happened.
+        method: typeof ((_a3 = e2.data.request) == null ? void 0 : _a3.method) === "string" ? e2.data.request.method : "GET",
         url: ((_b2 = e2.data.request) == null ? void 0 : _b2.url) || "",
         status: ((_c2 = e2.data.request) == null ? void 0 : _c2.statusCode) || 0,
         duration: ((_d2 = e2.data.request) == null ? void 0 : _d2.durationMs) || 0,
-        timestamp: e2.timestamp
+        timestamp: e2.timestamp,
+        phase: (_e2 = e2.data.request) == null ? void 0 : _e2.phase,
+        source: (_f = e2.data.request) == null ? void 0 : _f.source,
+        initiatorType: (_g = e2.data.request) == null ? void 0 : _g.initiatorType,
+        startedAt: (_h = e2.data.request) == null ? void 0 : _h.startedAt
       };
     });
-    const sessionStart = (_c = (_b = events[0]) == null ? void 0 : _b.timestamp) != null ? _c : captureTs || session.createdAt || 0;
+    const pageUrl = ((_b = session.environment) == null ? void 0 : _b.url) || (typeof location !== "undefined" ? location.href : void 0);
+    const networkRequests = dedupeNetworkRows(networkRows, { baseUrl: pageUrl }).map(({ source: _s, initiatorType: _i, startedAt: _st, ...row }) => row);
+    const sessionStart = (_d = (_c = events[0]) == null ? void 0 : _c.timestamp) != null ? _d : captureTs || session.createdAt || 0;
     const buffer = getNetworkFailures().filter((b) => b.timestamp >= sessionStart);
     for (const entry of networkRequests) {
       if (entry.status < 400 && entry.status !== 0) continue;
@@ -22443,7 +22568,7 @@ var TraceBugModule = (() => {
     report.summary = generateSmartSummary(report);
     report.rootCause = generateRootCauseHint(report);
     report.severity = determineSeverity(report);
-    report.priority = (_d = session.priority) != null ? _d : derivePriorityFromSeverity(report.severity);
+    report.priority = (_e = session.priority) != null ? _e : derivePriorityFromSeverity(report.severity);
     return report;
   }
   function derivePriorityFromSeverity(severity) {
@@ -22469,14 +22594,14 @@ var TraceBugModule = (() => {
     const clickPhrase = click ? describeClickPhrase(click) : "";
     const pagePhrase = ` on ${page}`;
     if (firstNet && clickPhrase) {
-      return `API ${firstNet.method} ${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)} when ${clickPhrase}${pagePhrase}`;
+      return `API ${firstNet.method ? firstNet.method + " " : ""}${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)} when ${clickPhrase}${pagePhrase}`;
     }
     if (firstErr && clickPhrase) {
       const errType = classifyErrorType(firstErr.message);
       return `${errType} thrown when ${clickPhrase}${pagePhrase} \u2014 ${truncateMsg(firstErr.message, 80)}`;
     }
     if (firstNet) {
-      return `API ${firstNet.method} ${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)}${pagePhrase}`;
+      return `API ${firstNet.method ? firstNet.method + " " : ""}${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)}${pagePhrase}`;
     }
     if (firstErr) {
       const errType = classifyErrorType(firstErr.message);
@@ -22581,10 +22706,10 @@ var TraceBugModule = (() => {
     if (firstNet) {
       const endpoint = shortPath(firstNet.url);
       const status = firstNet.status === 0 ? "Network Error" : String(firstNet.status);
-      const method = firstNet.method || "GET";
+      const method = firstNet.method ? firstNet.method + " " : "";
       const actionPhrase = click ? ` after clicking '${clickLabel(click)}'` : "";
       return {
-        hint: `API ${method} ${endpoint} failed with ${status}${actionPhrase}`,
+        hint: `API ${method}${endpoint} failed with ${status}${actionPhrase}`,
         confidence: "high"
       };
     }
@@ -22701,6 +22826,7 @@ var TraceBugModule = (() => {
       init_title_generator();
       init_timeline_builder();
       init_repro_generator();
+      init_network_dedupe();
       init_collectors();
       init_action_chips();
       init_url_hygiene();
@@ -26116,7 +26242,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         '<summary class="tb-vnet-summary">' +
           '<span class="tb-vnet-c-n">' + (i + 1) + '</span>' +
           '<span class="tb-vnet-c-name" title="' + esc(n.url) + '">' + esc(item.name) + '</span>' +
-          '<span class="tb-vnet-c-meth">' + esc(n.method) + '</span>' +
+          '<span class="tb-vnet-c-meth">' + esc(n.method || '\u2014') + '</span>' +
           '<span class="tb-vnet-c-stat ' + statusCls + '">' + statusTxt + '</span>' +
           '<span class="tb-vnet-c-dom" title="' + esc(item.dom) + '">' + esc(item.dom) + '</span>' +
           '<span class="tb-vnet-c-type">' + item.t + '</span>' +
@@ -28920,13 +29046,13 @@ ${issueSignatureSlack()}`;
         lines.push(`**Failures:**`);
         failures.forEach((f2) => {
           const responseBit = f2.response ? ` \u2014 ${truncate3(f2.response, 120).replace(/\n/g, " ")}` : "";
-          lines.push(`- ${f2.method} ${truncate3(f2.url, 120)} \u2192 ${f2.status}${responseBit}`);
+          lines.push(`- ${f2.method || "\u2014"} ${truncate3(f2.url, 120)} \u2192 ${f2.status}${responseBit}`);
         });
       }
       if (recentSuccess.length > 0) {
         lines.push(`**Recent successful calls (for context):**`);
         recentSuccess.forEach((r2) => {
-          lines.push(`- ${r2.method} ${truncate3(r2.url, 120)} \u2192 ${r2.status}`);
+          lines.push(`- ${r2.method || "\u2014"} ${truncate3(r2.url, 120)} \u2192 ${r2.status}`);
         });
       }
     }
@@ -30256,7 +30382,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         networkLines = (report.networkErrors || []).slice(0, 3).map((n2) => {
           const status = n2.status === 0 ? "Network Error" : String(n2.status);
           const snippet = n2.response ? ` \u2014 ${n2.response.replace(/\s+/g, " ").slice(0, 80)}` : "";
-          return `- ${n2.method} ${n2.url.slice(0, 60)} \u2192 ${status}${snippet}`;
+          return `- ${n2.method || "\u2014"} ${n2.url.slice(0, 60)} \u2192 ${status}${snippet}`;
         });
       }
     } catch (e2) {
@@ -32000,7 +32126,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <summary class="tb-qb-net-summary">
         <span class="tb-qb-net-c-n">${i2 + 1}</span>
         <span class="tb-qb-net-c-name" title="${escapeHtml2(n2.url)}">${escapeHtml2(n2._name)}</span>
-        <span class="tb-qb-net-c-meth">${escapeHtml2(n2.method)}</span>
+        <span class="tb-qb-net-c-meth">${escapeHtml2(n2.method || "\u2014")}</span>
         <span class="tb-qb-net-c-stat ${statusClass}">${status}</span>
         <span class="tb-qb-net-c-dom" title="${escapeHtml2(n2._dom)}">${escapeHtml2(n2._dom)}</span>
         <span class="tb-qb-net-c-type">${n2._t}</span>
@@ -32570,6 +32696,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(99,102,241,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    /* Only the FIRST trailing button absorbs the free space. Without this the
+       second one ("Download") takes a margin-left:auto of its own and the two
+       split the gap between them \u2014 "Add page shot" ends up stranded mid-row
+       instead of sitting next to Download at the right edge. */
+    #${MODAL_ID} .tb-qb-ss-add + .tb-qb-ss-add { margin-left:0; }
     #${MODAL_ID} .tb-qb-ss-add svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-ss-add:hover { filter:brightness(1.15); }
     #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
@@ -72441,7 +72572,10 @@ ${summary}`;
       }
       if (!(opts == null ? void 0 : opts.keepScreenshots)) clearScreenshots();
       this._attachConsoleCollectors();
-      if (this._emit) drainPerformanceNetwork(this._emit);
+      if (this._emit) {
+        resetPerformanceSeen();
+        drainPerformanceNetwork(this._emit, { captureStartedAt: Date.now() });
+      }
       try {
         const env = captureEnvironment();
         saveEnvironment(id, env);

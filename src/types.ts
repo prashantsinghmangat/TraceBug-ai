@@ -344,6 +344,11 @@ export interface NetworkRequestEntry {
   timestamp: number;
   /** First ~200 chars of the response body — captured only on failures. */
   response?: string;
+  /** `"page-load"` when the request started BEFORE this capture did — pulled
+   *  from the browser's Resource Timing buffer when the session armed, and
+   *  only kept when it failed or was slow. Lets the report group these under
+   *  "Before capture" instead of implying the user triggered them. */
+  phase?: "page-load";
 }
 
 /** One attribute on an ActionChip's element preview (rendered as name="value"). */

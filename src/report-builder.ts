@@ -23,6 +23,7 @@ import { matchErrorPattern, formatPatternMatch } from "./patterns";
 import { generateBugTitle } from "./title-generator";
 import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
+import { dedupeNetworkRows } from "./network-dedupe";
 import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
@@ -159,15 +160,31 @@ export function buildReport(
 
   // Collect ALL captured requests (success + failure) for the Network tab.
   // URLs are already sanitized in collectors.ts (sensitive query params replaced).
-  const networkRequests: import("./types").NetworkRequestEntry[] = events
+  // Every fetch/XHR arrives twice — once from the wrapper, once from the
+  // Resource Timing backfill, the second one always claiming `GET` because
+  // timing has no method. `source`/`initiatorType`/`startedAt` ride along only
+  // so dedupeNetworkRows can pair them; they are stripped before the rows
+  // reach the report, which keeps NetworkRequestEntry unchanged.
+  const networkRows = events
     .filter(e => e.type === "api_request" && e.data.request)
     .map(e => ({
-      method: e.data.request?.method || "GET",
+      // No `|| "GET"`: a Resource-Timing-only row for a fetch/XHR has a method
+      // the browser never told us, and the report renders that empty value as
+      // "—". Defaulting it to GET is how a POST ended up shown twice, once as
+      // a request that never happened.
+      method: typeof e.data.request?.method === "string" ? e.data.request.method : "GET",
       url: e.data.request?.url || "",
       status: e.data.request?.statusCode || 0,
       duration: e.data.request?.durationMs || 0,
       timestamp: e.timestamp,
+      phase: e.data.request?.phase as "page-load" | undefined,
+      source: e.data.request?.source as string | undefined,
+      initiatorType: e.data.request?.initiatorType as string | undefined,
+      startedAt: e.data.request?.startedAt as number | undefined,
     }));
+  const pageUrl = session.environment?.url || (typeof location !== "undefined" ? location.href : undefined);
+  const networkRequests: import("./types").NetworkRequestEntry[] = dedupeNetworkRows(networkRows, { baseUrl: pageUrl })
+    .map(({ source: _s, initiatorType: _i, startedAt: _st, ...row }) => row);
 
   // Enrich failed requests in `networkRequests` with response snippets from the
   // in-memory failure buffer (last 10 only; snippets not persisted).
@@ -337,7 +354,7 @@ export function generateSmartSummary(report: BugReport): string {
 
   // 1. Network failure + click → richest summary
   if (firstNet && clickPhrase) {
-    return `API ${firstNet.method} ${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)} when ${clickPhrase}${pagePhrase}`;
+    return `API ${firstNet.method ? firstNet.method + " " : ""}${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)} when ${clickPhrase}${pagePhrase}`;
   }
 
   // 2. Error + click → runtime failure tied to an action
@@ -348,7 +365,7 @@ export function generateSmartSummary(report: BugReport): string {
 
   // 3. Network failure alone
   if (firstNet) {
-    return `API ${firstNet.method} ${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)}${pagePhrase}`;
+    return `API ${firstNet.method ? firstNet.method + " " : ""}${shortPath(firstNet.url)} failed with ${formatStatus(firstNet.status)}${pagePhrase}`;
   }
 
   // 4. Error alone
@@ -500,10 +517,12 @@ export function generateRootCauseHint(report: BugReport): RootCauseHint {
   if (firstNet) {
     const endpoint = shortPath(firstNet.url);
     const status = firstNet.status === 0 ? "Network Error" : String(firstNet.status);
-    const method = firstNet.method || "GET";
+    // Unknown method (a timing-only row): name the endpoint without a verb
+    // rather than asserting a GET that may never have happened.
+    const method = firstNet.method ? firstNet.method + " " : "";
     const actionPhrase = click ? ` after clicking '${clickLabel(click)}'` : "";
     return {
-      hint: `API ${method} ${endpoint} failed with ${status}${actionPhrase}`,
+      hint: `API ${method}${endpoint} failed with ${status}${actionPhrase}`,
       confidence: "high",
     };
   }
