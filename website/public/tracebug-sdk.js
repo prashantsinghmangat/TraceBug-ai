@@ -1438,12 +1438,36 @@ var TraceBugModule = (() => {
     }
     return parts.join(" > ");
   }
+  function isSensitiveField(name, inputType = "") {
+    return ["password", "credit-card", "ssn"].includes(inputType) || /password|secret|token|ssn|credit/i.test(name || "") || isCustomSensitiveKey(name);
+  }
+  function contentEditableHost(t2) {
+    if (!t2) return null;
+    try {
+      const host2 = t2.closest(EDITABLE_SELECTOR);
+      if (host2) return host2;
+    } catch (e2) {
+    }
+    return t2.isContentEditable ? t2 : null;
+  }
+  function editableText(el) {
+    const it = el.innerText;
+    if (typeof it === "string") return it;
+    return el.textContent || "";
+  }
+  function fieldLabel(el) {
+    const named = el;
+    return named.name || el.id || el.getAttribute("aria-label") || el.getAttribute("data-placeholder") || el.getAttribute("placeholder") || el.getAttribute("data-testid") || "";
+  }
   function collectInputs(emit) {
     const timers = /* @__PURE__ */ new Map();
     const handler = (e2) => {
       try {
-        const t2 = e2.target;
-        if (!t2 || !("value" in t2) || isTraceBugElement(t2)) return;
+        const raw = e2.target;
+        if (!raw || isTraceBugElement(raw)) return;
+        const editable = "value" in raw ? null : contentEditableHost(raw);
+        const t2 = editable || raw;
+        if (!editable && !("value" in t2)) return;
         if (t2.tagName.toLowerCase() === "select") return;
         const prev = timers.get(t2);
         if (prev) clearTimeout(prev);
@@ -1452,26 +1476,29 @@ var TraceBugModule = (() => {
           setTimeout(() => {
             try {
               const tag = t2.tagName.toLowerCase();
-              const inputType = t2.type || "";
-              const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) || /password|secret|token|ssn|credit/i.test(t2.name || t2.id || "") || isCustomSensitiveKey(t2.name || t2.id);
+              const inputType = editable ? "contenteditable" : t2.type || "";
+              const name = editable ? fieldLabel(editable) : t2.name || t2.id || "";
+              const rawValue = editable ? editableText(editable) : t2.value || "";
+              const isSensitive = isSensitiveField(name, inputType);
               const element = {
                 tag,
-                name: t2.name || t2.id || "",
+                name,
                 type: inputType,
-                valueLength: (t2.value || "").length,
-                value: isSensitive ? "[REDACTED]" : (t2.value || "").slice(0, 200),
-                placeholder: t2.placeholder || ""
+                valueLength: rawValue.length,
+                value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
+                placeholder: (editable ? editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "" : t2.placeholder) || ""
               };
+              if (editable) element.contentEditable = true;
               try {
-                element.selector = buildSelector(t2);
+                element.selector = buildSelector(editable || t2);
               } catch (e3) {
               }
               const data = { element };
-              if (inputType === "checkbox" || inputType === "radio") {
+              if (!editable && (inputType === "checkbox" || inputType === "radio")) {
                 element.checked = t2.checked;
                 element.value = t2.checked ? "checked" : "unchecked";
               }
-              if (inputType === "number" || inputType === "range") {
+              if (!editable && (inputType === "number" || inputType === "range")) {
                 element.value = t2.value;
               }
               emit("input", data);
@@ -1924,7 +1951,7 @@ var TraceBugModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -1952,6 +1979,8 @@ var TraceBugModule = (() => {
         /\/@vite\/client/,
         /\/@react-refresh/
       ];
+      INPUT_VALUE_MAX = 200;
+      EDITABLE_SELECTOR = '[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
       _perfSeen = /* @__PURE__ */ new Set();
       GET_ONLY_INITIATORS = /* @__PURE__ */ new Set([
         "img",
