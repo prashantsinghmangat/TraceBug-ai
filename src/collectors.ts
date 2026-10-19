@@ -289,10 +289,18 @@ export const INPUT_VALUE_MAX = 200;
 
 /** Does this field's name/id/label mark it as something we must not record?
  *  One function so `<input>` and `contenteditable` cannot drift apart. */
+export const SENSITIVE_FIELD_WORDS = ["password", "secret", "token", "ssn", "credit"] as const;
+const SENSITIVE_FIELD_RE = new RegExp(SENSITIVE_FIELD_WORDS.join("|"), "i");
+
+/** Attributes that can carry a field's human name, best first. A rich editor
+ *  rarely has name/id; it almost always has one of the rest. Exported so the
+ *  DOM replay's mask selector covers exactly the same attributes. */
+export const FIELD_LABEL_ATTRS = ["name", "id", "aria-label", "data-placeholder", "placeholder", "data-testid"] as const;
+
 export function isSensitiveField(name: string, inputType = ""): boolean {
   return (
     ["password", "credit-card", "ssn"].includes(inputType) ||
-    /password|secret|token|ssn|credit/i.test(name || "") ||
+    SENSITIVE_FIELD_RE.test(name || "") ||
     isCustomSensitiveKey(name)
   );
 }
@@ -311,17 +319,23 @@ export function isSensitiveField(name: string, inputType = ""): boolean {
  */
 const EDITABLE_SELECTOR = '[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
 
-function contentEditableHost(t: HTMLElement | null): HTMLElement | null {
+export function contentEditableHost(t: HTMLElement | null): HTMLElement | null {
   if (!t) return null;
   // Resolve by attribute FIRST: an `input` event inside an editor can target
   // a child node that inherits editability without carrying the attribute, and
   // `closest` is what walks up to the host. `isContentEditable` is then the
   // backstop for cases the selector cannot see (it is also absent in jsdom,
   // where the unit tests run, so the attribute path is the tested one).
-  try {
+  //
+  // Deliberately NOT wrapped in try/catch: a node that cannot answer
+  // `closest()` leaves editability UNKNOWN, and the two callers want opposite
+  // defaults for that. The capture path (collectInputs' own try/catch) drops
+  // the event; the replay path (maskReplayText) masks the text. Swallowing it
+  // here would silently give both the "not editable" answer, which leaks.
+  if (typeof t.closest === "function") {
     const host = t.closest<HTMLElement>(EDITABLE_SELECTOR);
     if (host) return host;
-  } catch { /* closest unavailable — fall through */ }
+  }
   return t.isContentEditable ? t : null;
 }
 
@@ -337,17 +351,14 @@ function editableText(el: HTMLElement): string {
 
 /** The best human name for a field, for the repro steps and the timeline.
  *  A rich editor rarely has name/id, but almost always has one of the rest. */
-function fieldLabel(el: HTMLElement): string {
+export function fieldLabel(el: HTMLElement): string {
   const named = el as HTMLElement & { name?: string };
-  return (
-    named.name ||
-    el.id ||
-    el.getAttribute("aria-label") ||
-    el.getAttribute("data-placeholder") ||
-    el.getAttribute("placeholder") ||
-    el.getAttribute("data-testid") ||
-    ""
-  );
+  if (named.name) return named.name;
+  for (const attr of FIELD_LABEL_ATTRS) {
+    const v = attr === "id" ? el.id : el.getAttribute(attr);
+    if (v) return v;
+  }
+  return "";
 }
 
 export function collectInputs(emit: Emit): () => void {

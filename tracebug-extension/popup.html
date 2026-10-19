@@ -202,7 +202,7 @@
           <div class="redact-help">Comma or newline separated. Matches form fields, storage keys, URL params, and JSON keys in captured data — "email" also covers "customer_email".</div>
           <textarea id="redactFields" class="redact-ta" rows="2" spellcheck="false" placeholder="email, customer_id, phone"></textarea>
           <label class="redact-label" for="redactPatterns">Mask patterns</label>
-          <div class="redact-help">One regex per line, case-insensitive, masked anywhere in captured text.</div>
+          <div class="redact-help">One regex per line, case-insensitive. Masked in console output, network response bodies, error text and the DOM replay — not in URLs, screenshots or video.</div>
           <textarea id="redactPatterns" class="redact-ta" rows="2" spellcheck="false" placeholder="\d{3}-\d{2}-\d{4}"></textarea>
           <button class="redact-save" id="redactSave">Save rules</button>
         </div>
