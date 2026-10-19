@@ -283,13 +283,85 @@ function buildSelector(el: HTMLElement | null): string {
 
 // ── Inputs (debounced per element) ────────────────────────────────────────
 
+/** Longest captured field value. The full length is reported separately as
+ *  `valueLength`, so a cap never hides that more was typed. */
+export const INPUT_VALUE_MAX = 200;
+
+/** Does this field's name/id/label mark it as something we must not record?
+ *  One function so `<input>` and `contenteditable` cannot drift apart. */
+export function isSensitiveField(name: string, inputType = ""): boolean {
+  return (
+    ["password", "credit-card", "ssn"].includes(inputType) ||
+    /password|secret|token|ssn|credit/i.test(name || "") ||
+    isCustomSensitiveKey(name)
+  );
+}
+
+/**
+ * The editing host a contenteditable `input` event belongs to, or null when
+ * the event came from something else.
+ *
+ * Rich editors — ProseMirror, Lexical, Slate, Quill, TipTap — are a
+ * `contenteditable` div, not an `<input>`, so `"value" in target` was false
+ * and everything typed into them was dropped on the floor. That is most of
+ * the text in a modern app: chat composers, comment boxes, document editors.
+ *
+ * Browsers target the editing host itself, but a nested editable (or a
+ * browser that targets the inner node) still resolves upward.
+ */
+const EDITABLE_SELECTOR = '[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
+
+function contentEditableHost(t: HTMLElement | null): HTMLElement | null {
+  if (!t) return null;
+  // Resolve by attribute FIRST: an `input` event inside an editor can target
+  // a child node that inherits editability without carrying the attribute, and
+  // `closest` is what walks up to the host. `isContentEditable` is then the
+  // backstop for cases the selector cannot see (it is also absent in jsdom,
+  // where the unit tests run, so the attribute path is the tested one).
+  try {
+    const host = t.closest<HTMLElement>(EDITABLE_SELECTOR);
+    if (host) return host;
+  } catch { /* closest unavailable — fall through */ }
+  return t.isContentEditable ? t : null;
+}
+
+/** Visible text of an editing host. `innerText` is what the user can see, so
+ *  it is preferred; `textContent` is the fallback where innerText does not
+ *  exist (jsdom) — never a silent empty string, which would record a typed
+ *  message as blank. */
+function editableText(el: HTMLElement): string {
+  const it = (el as HTMLElement & { innerText?: string }).innerText;
+  if (typeof it === "string") return it;
+  return el.textContent || "";
+}
+
+/** The best human name for a field, for the repro steps and the timeline.
+ *  A rich editor rarely has name/id, but almost always has one of the rest. */
+function fieldLabel(el: HTMLElement): string {
+  const named = el as HTMLElement & { name?: string };
+  return (
+    named.name ||
+    el.id ||
+    el.getAttribute("aria-label") ||
+    el.getAttribute("data-placeholder") ||
+    el.getAttribute("placeholder") ||
+    el.getAttribute("data-testid") ||
+    ""
+  );
+}
+
 export function collectInputs(emit: Emit): () => void {
   const timers = new Map<EventTarget, ReturnType<typeof setTimeout>>();
 
   const handler = (e: Event) => {
     try {
-      const t = e.target as HTMLInputElement | HTMLTextAreaElement;
-      if (!t || !("value" in t) || isTraceBugElement(t)) return;
+      const raw = e.target as HTMLElement | null;
+      if (!raw || isTraceBugElement(raw)) return;
+      // A contenteditable surface reports through the same debounce, the same
+      // redaction and the same cap as a plain field — see contentEditableHost.
+      const editable = ("value" in raw) ? null : contentEditableHost(raw);
+      const t = (editable || raw) as HTMLInputElement | HTMLTextAreaElement;
+      if (!editable && !("value" in t)) return;
       if (t.tagName.toLowerCase() === "select") return;
 
       const prev = timers.get(t);
@@ -300,25 +372,31 @@ export function collectInputs(emit: Emit): () => void {
         setTimeout(() => {
           try {
             const tag = t.tagName.toLowerCase();
-            const inputType = (t as HTMLInputElement).type || "";
-            const isSensitive = ["password", "credit-card", "ssn"].includes(inputType) ||
-              /password|secret|token|ssn|credit/i.test(t.name || t.id || "") ||
-              isCustomSensitiveKey(t.name || t.id);
+            // `contenteditable` is not an input type the DOM knows about; it
+            // is reported as one so the repro steps, the timeline and the
+            // generated Playwright test can tell a rich editor from a field.
+            const inputType = editable ? "contenteditable" : ((t as HTMLInputElement).type || "");
+            const name = editable ? fieldLabel(editable) : (t.name || t.id || "");
+            // innerText, not textContent: it is what the user can actually
+            // see, and it keeps the line breaks a block editor renders.
+            const rawValue = editable ? editableText(editable) : (t.value || "");
+            const isSensitive = isSensitiveField(name, inputType);
 
             const element: Record<string, unknown> = {
-              tag, name: t.name || t.id || "", type: inputType,
-              valueLength: (t.value || "").length,
-              value: isSensitive ? "[REDACTED]" : (t.value || "").slice(0, 200),
-              placeholder: t.placeholder || "",
+              tag, name, type: inputType,
+              valueLength: rawValue.length,
+              value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
+              placeholder: (editable ? (editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "") : t.placeholder) || "",
             };
+            if (editable) element.contentEditable = true;
             // Stable selector so generated repro tests can target the field.
-            try { element.selector = buildSelector(t); } catch {}
+            try { element.selector = buildSelector(editable || t); } catch {}
             const data: Record<string, unknown> = { element };
-            if (inputType === "checkbox" || inputType === "radio") {
+            if (!editable && (inputType === "checkbox" || inputType === "radio")) {
               element.checked = (t as HTMLInputElement).checked;
               element.value = (t as HTMLInputElement).checked ? "checked" : "unchecked";
             }
-            if (inputType === "number" || inputType === "range") { element.value = t.value; }
+            if (!editable && (inputType === "number" || inputType === "range")) { element.value = t.value; }
             emit("input", data);
           } catch (err) {
             if (typeof console !== 'undefined') console.warn('[TraceBug] Input capture error:', err);
