@@ -137,7 +137,7 @@ again, and confirm the bar is gone from the new file and the old one still has i
 **Oversize export — SKIPPED IN 1.11, VIDEO PAUSED.** The notice only fires on the branch where a
 video is embedded and there is no DOM replay, which the extension cannot produce while screen
 recording is off. There is nothing to drive it with, and `_oversizeExportNotice` is unchanged.
-**Restore this row in 1.11.1**, in full: capture with **Record video too** on, record past the
+**Restore this row in 1.12 (video moved there — see PLAN Phase 10)**, in full: capture with **Record video too** on, record past the
 20 MB estimate on the **Export replay (.html)** button (roughly 2-3 minutes of tab video), then open
 the ticket modal. Pass: an amber notice above the export row names the size and GitHub's 25 MB cap,
 offering **Export without video** and **Download .webm separately**; the first produces a far
@@ -145,15 +145,67 @@ smaller file that still has the console, network, actions and screenshots. With 
 capture the notice must not appear at all, however long the capture.
 
 *(The npm SDK still records video, so this path can be exercised there if you want coverage before
-1.11.1 — but it is the SDK's exporter you would be testing, not the extension's.)*
+1.11.2 — but it is the SDK's exporter you would be testing, not the extension's.)*
 
 **Canvas warning — RUN THIS.** Start a capture on a page whose content is a large canvas - a
 charting page, Google Maps, any WebGL demo. **Pass:** a toast appears naming the canvas, saying
 console/network/clicks are still captured, and - because video is paused - pointing at
-**screenshots** and naming 1.11.1, **not** "Record video too". It offers **Stop** and disappears on
+**screenshots** and naming 1.11.2, **not** "Record video too". It offers **Stop** and disappears on
 its own after about 12 seconds. It must NOT appear on an ordinary page, nor on a dashboard of small
-sparkline charts. (In 1.11.1 the advice reverts to **Record video too** on its own: the copy
+sparkline charts. (In 1.11.2 the advice reverts to **Record video too** on its own: the copy
 branches on `isVideoOffered()`.)
+
+### 10a. A capture ends when you leave the site, and does not come back (1.11.1)
+
+Turn **Keep capturing across sites** ON in the popup first. Start a capture on one site, click
+something, then navigate to a **different site** (a different host, not another page). **Pass:** the
+capture bar is gone, and a notice on the new site reads *"Capture ended when you left `<host>` …
+go back to `<host>` to open its ticket"* - naming the host you actually left. Nothing is capturing
+here: open TraceBug and there is no Stop control.
+
+Now go **back** to the first site. **Pass:** no capture bar reappears, no timer is counting, and
+TraceBug's saved tickets still contain what you captured there. A bar that returns with a running
+timer is the 1.11.0 bug and is a **stop-ship**.
+
+Finally, same-site navigation must still work: start a capture and click a link **within** the same
+site. **Pass:** the bar comes back and the timer keeps counting from the original start, not 00:00.
+(`e2e/ext-cross-site-capture.e2e.mjs` covers all three plus a service-worker restart, but these are
+rendered surfaces - read the sentence on screen.)
+
+### 10b. The capture bar says what it is, and what it has (1.11.1)
+
+Start a capture on any ordinary page. **Pass:** beside the dot it reads **"Replay, not video"**, and
+the tally starts at **"0 events"** in amber. Click a few things and type into a field. **Pass:** the
+tally rises - `N events · M requests` - and loses the amber once something lands. Stop, and check the
+ticket's own header: **the request count must match what the bar last showed** (they run the same
+de-duplication; a mismatch means the bar is counting rows the ticket throws away).
+
+### 10c. The embedded-frame warning (1.11.1)
+
+Start a capture on a page whose main content is in an `<iframe>` covering a good part of the window
+(a CodePen/JSFiddle result pane, an embedded editor, a page with a large embedded map). **Pass:** a
+toast says a large part of the page is inside an embedded frame, that clicks/typing/console/network
+inside it are not captured and the rest of the page is, and suggests screenshots. It must NOT appear
+on an ordinary page, nor for small embedded widgets (a YouTube thumbnail, a chat bubble).
+
+Then click **inside the frame** several times while the capture runs. **Pass:** the HUD tally stays
+at 0 - which is the warning being true, and is exactly what a tester needs to see before spending a
+capture. Everything you do outside the frame still counts.
+
+### 10d. A sensitive editor is masked in the replay (1.11.1)
+
+Find or build a page with a `contenteditable` editor whose label, id or `aria-label` contains
+"password", "secret", "token", "ssn" or "credit" (a note field named "Password hint" is enough), plus
+a normal editor beside it. Put text in BOTH **before** starting the capture, start it, then type more
+into each. Export the replay and open the `.html`.
+
+**Pass:** in the replayed page the sensitive editor shows `*` characters - both the text that was
+there before the capture and what was typed during it - while the normal editor's text is readable.
+The ticket's Actions tab shows `[REDACTED]` for the sensitive one. **Fail (stop-ship):** the
+sensitive text is legible anywhere in the exported file - search the `.html` for it.
+
+If you have **Mask patterns** configured in the popup, repeat with text matching one of them in an
+ordinary paragraph: it must be masked in the replay too.
 
 ### 10. Diagnostics
 

@@ -1043,7 +1043,7 @@ class TraceBugSDK {
       const go = () => {
         // A stored `video: true` must not start a recording in 1.11 - an
         // updater was seeded exactly that. The preference is left alone in
-        // storage so 1.11.1 can honour it again; it is simply not acted on.
+        // storage so 1.11.2 can honour it again; it is simply not acted on.
         if (!opts.video || !isVideoOffered()) {
           void this.startEventsCapture();
           return;

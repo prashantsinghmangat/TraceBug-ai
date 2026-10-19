@@ -243,7 +243,7 @@ export function resumeVideoRecording(): void {
 /**
  * Is screen recording offered in the EXTENSION? Not in 1.11.
  *
- * ── THE ONE SWITCH. Set this true in 1.11.1 to bring video back. ──
+ * ── THE ONE SWITCH. Set this true in 1.11.2 to bring video back. ──
  *
  * The extension's recorder runs in an offscreen document and the page only
  * holds a handle to it. Four bugs in that seam surfaced in real use and are
@@ -258,7 +258,7 @@ export function resumeVideoRecording(): void {
  * stream, and is untouched.
  *
  * The stored preference (`tb_record_opts.video`) is deliberately NOT cleared,
- * so a user who had video on gets it back in 1.11.1 without re-choosing.
+ * so a user who had video on gets it back in 1.11.2 without re-choosing.
  */
 export const VIDEO_ENABLED_IN_EXTENSION = false;
 

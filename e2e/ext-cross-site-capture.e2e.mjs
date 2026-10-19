@@ -100,6 +100,43 @@ try {
   check("a same-origin navigation keeps the capture", sameOrigin.hud, JSON.stringify(sameOrigin.timer));
   check("its timer kept counting", /^00:0[2-9]|^00:[1-9]/.test(sameOrigin.timer), sameOrigin.timer);
 
+  // ── The worker is killed mid-capture ────────────────────────────────────
+  // MV3 stops an idle service worker after ~30s and restarts it with BLANK
+  // module state. If the status answer came from that blank memory, a
+  // restarted worker would say "not running" about a live capture and the
+  // page would end it — someone reads a page for a minute, clicks a link on
+  // the same site, and loses everything.
+  //
+  // The sentinel matters: if stopAllWorkers did NOT actually wipe memory,
+  // this whole section would pass while testing nothing, so the wipe itself
+  // is asserted first.
+  await sw.evaluate(() => { globalThis.__tbRestartProbe = "alive"; });
+  const cdp = await ctx.newCDPSession(p);
+  await cdp.send("ServiceWorker.enable");
+  await cdp.send("ServiceWorker.stopAllWorkers");
+  await p.waitForTimeout(800);
+
+  // Any message from a tab wakes a stopped worker; the navigation below does.
+  await p.goto(`${A}/third`, { waitUntil: "load" });
+  let swAfter = ctx.serviceWorkers()[0];
+  if (!swAfter) swAfter = await ctx.waitForEvent("serviceworker", { timeout: 8000 });
+  let wiped = false;
+  try {
+    wiped = (await swAfter.evaluate(() => globalThis.__tbRestartProbe ?? null)) === null;
+  } catch { wiped = true; } // the handle died with the worker — also a restart
+  check("the worker really was restarted (blank module state)", wiped);
+
+  await inject(swAfter, `${A}/*`);
+  await p.waitForTimeout(2000);
+  const afterRestart = await hudState(p);
+  check("the capture survives a worker restart", afterRestart.hud, JSON.stringify(afterRestart.timer));
+  check(
+    "and its timer still counts from the original start",
+    /^00:(0[5-9]|[1-9]\d)|^0[1-9]:/.test(afterRestart.timer),
+    afterRestart.timer,
+  );
+  sw = swAfter;
+
   // ── Cross-origin: the capture ends, and says so ─────────────────────────
   await p.goto(`${B}/`, { waitUntil: "load" });
   await inject(sw, `${B}/*`);

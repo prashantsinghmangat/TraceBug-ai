@@ -173,6 +173,29 @@ const captureTabs = new Map();
 // state of its own — the notice is the only way it can know.
 const captureEndedNotices = new Map();
 
+/**
+ * The origin a message really came from.
+ *
+ * `sender.origin` and `sender.url` are filled in by Chrome itself: they need
+ * no host permission and a page cannot forge them. The page's own claim is
+ * only a fallback for a browser that supplies neither (Firefox does not always
+ * set `sender.origin`), because treating "unknown" as cross-site would end
+ * every capture there.
+ *
+ * What a lie could buy, if we trusted the page: a script could keep ITS OWN
+ * tab's capture alive past a navigation, or end it early. Small — but this is
+ * a few lines and removes the question.
+ */
+function senderOrigin(sender, claimed) {
+  if (sender && typeof sender.origin === "string" && sender.origin && sender.origin !== "null") {
+    return sender.origin;
+  }
+  if (sender && typeof sender.url === "string" && sender.url) {
+    try { return new URL(sender.url).origin; } catch { /* opaque or malformed */ }
+  }
+  return typeof claimed === "string" ? claimed : "";
+}
+
 /** Host part of an origin, for a sentence. Never the path or the query. */
 function originHost(origin) {
   try { return new URL(origin).host || origin; } catch { return String(origin || ""); }
@@ -716,7 +739,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (tabId == null) { sendResponse({ running: false }); return false; }
     (async () => {
       try { await _hydrated; } catch {}
-      const origin = typeof message.data?.origin === "string" ? message.data.origin : "";
+      const origin = senderOrigin(sender, message.data?.origin);
       const live = captureTabs.get(tabId);
       if (live && live.origin && origin && live.origin !== origin) {
         endCapture(tabId, "cross-site");
@@ -737,7 +760,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (tabId == null) { sendResponse({ ok: false }); return false; }
     (async () => {
       try { await _hydrated; } catch {}
-      const origin = typeof message.data?.origin === "string" ? message.data.origin : "";
+      const origin = senderOrigin(sender, message.data?.origin);
       const startedAt = Number(message.data?.startedAt) || Date.now();
       captureEndedNotices.delete(tabId);
       captureTabs.set(tabId, { origin, startedAt });
