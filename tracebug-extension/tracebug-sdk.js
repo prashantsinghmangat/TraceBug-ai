@@ -988,6 +988,7 @@ var TraceBugModule = (() => {
     _fields = [];
     _fieldTextRes = [];
     _patterns = [];
+    _patternsCombined = null;
     if (!rules2) return;
     const fields = (rules2.fields || []).filter((f2) => typeof f2 === "string" && f2.trim().length > 0);
     if (fields.length > 0) {
@@ -1016,6 +1017,16 @@ var TraceBugModule = (() => {
       } catch (e2) {
       }
     }
+    if (_patterns.length > 0) {
+      try {
+        const sources = _patterns.map((r2) => `(?:${r2.source})`).join("|");
+        const combined = new RegExp(sources, "gi");
+        "probe".replace(combined, "");
+        _patternsCombined = combined;
+      } catch (e2) {
+        _patternsCombined = null;
+      }
+    }
   }
   function isCustomSensitiveKey(key) {
     if (!key || !_fieldRe) return false;
@@ -1025,7 +1036,8 @@ var TraceBugModule = (() => {
     if (!s2 || _fieldTextRes.length === 0 && _patterns.length === 0) return s2;
     let out = s2;
     for (const { re, replace } of _fieldTextRes) out = out.replace(re, replace);
-    for (const re of _patterns) out = out.replace(re, REDACTED);
+    if (_patternsCombined) out = out.replace(_patternsCombined, REDACTED);
+    else for (const re of _patterns) out = out.replace(re, REDACTED);
     return out;
   }
   function getCustomSensitiveFields() {
@@ -1034,7 +1046,7 @@ var TraceBugModule = (() => {
   function hasCustomRedaction() {
     return _fieldTextRes.length > 0 || _patterns.length > 0;
   }
-  var REDACTED, _fieldRe, _fields, _fieldTextRes, _patterns;
+  var REDACTED, _fieldRe, _fields, _fieldTextRes, _patterns, _patternsCombined;
   var init_custom_redaction = __esm({
     "src/sanitize/custom-redaction.ts"() {
       "use strict";
@@ -1043,6 +1055,7 @@ var TraceBugModule = (() => {
       _fields = [];
       _fieldTextRes = [];
       _patterns = [];
+      _patternsCombined = null;
     }
   });
 
@@ -71601,7 +71614,7 @@ First element: \`${exampleSnippet}\``,
   }
   function captureEndedMessage(notice) {
     const host2 = notice.host ? notice.host : "the previous site";
-    return `Capture ended when you left ${host2}. Everything captured there was kept \u2014 open TraceBug on ${host2} to review it.`;
+    return `Capture ended when you left ${host2} \u2014 captures can't follow you across sites yet. What you captured there was kept: go back to ${host2} to open its ticket.`;
   }
 
   // src/index.ts
@@ -72139,7 +72152,7 @@ First element: \`${exampleSnippet}\``,
       kind: "canvas",
       // Says what is missing, why, and the one thing that fixes it. No jargon:
       // "rrweb" and "DOM replay" mean nothing to a tester.
-      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording returns in 1.11.1.")
+      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording returns in 1.11.2.")
     };
   }
   function findHeavyFrame(doc = document) {
