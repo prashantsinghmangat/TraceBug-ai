@@ -70,3 +70,22 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   deny list. A bare `git add` had swept 19 files into a commit meant for 7.
 - Verified: `check.mjs --full` green - **819 passing / 48 files**, ext:lint 0 errors / 69 warnings.
   Five commits on `develop`. Open: nothing blocking; the remaining items need a person.
+
+## 1.11.1 capture fixes — the audit's Option A (2026-10-19)
+
+- **Why:** a tester's ticket read "1 screenshot attached · 0 events". `docs/audit/capture-architecture.md`
+  reproduced every cause in a real browser; this is its Option A, in the agreed order.
+- **Shipped:** network dedupe (wrapper row wins, paired on resolved URL + start within 50ms) ·
+  page-load backfill rebuilt (failed-or-slow only, `phase: "page-load"`, no invented `GET`) ·
+  contenteditable typing captured under the input redaction rules and cap · the DOM replay now masks
+  sensitive editors and applies the user's Mask patterns · the **zombie capture is gone** (the worker
+  owns "is a capture running", `tb:capture:status`) with "Capture ended when you left <host>" on the
+  next page · honest HUD ("Replay, not video" + a live tally that matches the ticket) · an iframe
+  warning on the canvas pattern, **no `allFrames`** (ADR 008 / Phase 12 instead).
+- **Files:** `src/{collectors,network-dedupe,replay-masking,capture-ownership,replay-fidelity,
+  rrweb-recorder,report-builder,index}.ts`, `tracebug-extension/{background,content-script,popup}.js`,
+  `popup.html`, `docs/{compatibility,chrome-extension}.md`, `docs/adr/008-*`, PLAN Phase 12.
+- **Verified:** `check.mjs --full` 894 passing / 53 files; new e2e `ext-cross-site-capture` 10/10;
+  `ext-{events-capture,redaction,shipping-path}` 22/4/16. Live fixtures for every claim above.
+- **Open:** replay masking with user patterns runs a regex pass per text node — unbenchmarked on a
+  2.6 MB snapshot. Video (Phase 10) is still untouched and comes next.

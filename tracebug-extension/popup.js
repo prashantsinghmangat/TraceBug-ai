@@ -962,9 +962,15 @@ async function initCrossSiteOptIn() {
   const render = (granted) => {
     state.textContent = granted ? "On" : "Off";
     state.style.color = granted ? "var(--success)" : "var(--text-3)";
+    // What this actually buys, as of 1.11.1: TraceBug stays loaded on the next
+    // site, so a capture there is one click away. It does NOT carry a running
+    // capture across — a capture's data lives in the page's own storage, which
+    // is per-origin, so leaving the site ends it (TraceBug now says so on the
+    // page you land on instead of going quiet). Carrying a capture across
+    // origins needs the session to move into the extension — ADR 008, v2.0.
     help.textContent = granted
-      ? "A capture keeps running when you move to another site."
-      : "Right now a capture stops at the first move to another site. Turn this on to follow along — your browser will ask to allow it.";
+      ? "TraceBug stays loaded as you move between sites, so a capture is one click away on any of them. A capture itself still ends when you leave the site it started on — you'll see a note saying so."
+      : "TraceBug only loads on the site you start it from. Turn this on and it follows you to other sites, ready to capture there too — your browser will ask to allow it.";
     row.style.display = "block";
   };
 

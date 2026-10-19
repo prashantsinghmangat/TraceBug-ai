@@ -41,14 +41,18 @@ choice. The service worker holds no capture data at all — it is only an inject
 
 ## 2. Verified defects, worst first
 
-| # | Defect | Severity | Reproduced |
-|---|---|---|---|
-| 1 | A cross-origin navigation silently kills the capture; returning resurrects a zombie | **Critical** | yes |
-| 2 | Nothing inside any iframe is captured — clicks, console, network | **Critical** | yes |
-| 3 | Every fetch/XHR is recorded twice, the duplicate carrying a wrong method | **High** | yes, incl. in the user's own export |
-| 4 | Typing into `contenteditable` is never recorded | **High** | yes |
-| 5 | "Capturing" HUD promises more than the capture delivers | **Medium** | by inspection |
-| 6 | "Add page shot" button stranded mid-row | **Low** | yes — **fixed** in this change |
+| # | Defect | Severity | Reproduced | Status |
+|---|---|---|---|---|
+| 1 | A cross-origin navigation silently kills the capture; returning resurrects a zombie | **Critical** | yes | **fixed 1.11.1** — worker owns it; `e2e/ext-cross-site-capture` |
+| 2 | Nothing inside any iframe is captured — clicks, console, network | **Critical** | yes | **warned 1.11.1**, fixed in v2.0 (Phase 12) — no `allFrames` before redaction covers frames |
+| 3 | Every fetch/XHR is recorded twice, the duplicate carrying a wrong method | **High** | yes, incl. in the user's own export | **fixed 1.11.1** — `src/network-dedupe.ts` |
+| 4 | Typing into `contenteditable` is never recorded | **High** | yes | **fixed 1.11.1**, and the replay now masks sensitive editors |
+| 5 | "Capturing" HUD promises more than the capture delivers | **Medium** | by inspection | **fixed 1.11.1** — "Replay, not video" + live tally |
+| 6 | "Add page shot" button stranded mid-row | **Low** | yes | **fixed** |
+
+Two more found while fixing these, both now closed: the page-load backfill marked every entry "seen"
+while recording was off, so a capture contained no page-load network at all; and the user's **Mask
+patterns never reached replay text**, which the popup described as "masked anywhere in captured text".
 
 ### 2.1 — Cross-origin navigation kills the capture, and the HUD lies about it
 

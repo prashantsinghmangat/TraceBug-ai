@@ -122,9 +122,24 @@ describe('a canvas page is warned about before the capture is wasted', () => {
 
 describe('the warning never endangers the capture', () => {
   it('fires after the HUD is up, inside a try/catch', () => {
-    const block = INDEX.slice(INDEX.indexOf('eventsCaptureFidelityWarning()') - 600, INDEX.indexOf('eventsCaptureFidelityWarning()') + 600);
-    expect(block).toContain('showRecordingHUD');
+    // Ordering by index, not by a fixed-size window around the call: the
+    // window version broke when the comment above the call grew, which says
+    // nothing about whether the capture is safe.
+    const callAt = INDEX.indexOf('eventsCaptureFidelityWarning()');
+    const hudAt = INDEX.lastIndexOf('showRecordingHUD(root, {', callAt);
+    expect(hudAt).toBeGreaterThan(-1);
+    expect(hudAt).toBeLessThan(callAt);
+    const block = INDEX.slice(hudAt, callAt + 600);
     expect(block).toMatch(/try \{[\s\S]*eventsCaptureFidelityWarning\(\)[\s\S]*\} catch/);
+  });
+
+  it('shows the embedded-frame warning on the same path', () => {
+    // Collectors are top-frame only in 1.11.x on purpose (allFrames would put
+    // input capture inside Stripe and Auth0 frames), so a frame-heavy page has
+    // to be TOLD, not silently given an empty ticket.
+    const callAt = INDEX.indexOf('eventsCaptureFidelityWarning()');
+    const block = INDEX.slice(callAt, callAt + 300);
+    expect(block).toContain('framesCaptureWarning()');
   });
 
   it('offers Stop, and auto-dismisses', () => {

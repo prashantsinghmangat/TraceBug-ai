@@ -205,6 +205,35 @@ provider send and redaction; no new export formats.
 - **Open question before committing to 1.12b's dictionary:** axe-core alone is ~0.5 MB minified. Measure the
   1.12a zip first.
 
+## Phase 12 - v2.0: the extension owns the session (ADR 008 draft)
+
+**Read `docs/audit/capture-architecture.md` first** - every claim in it was reproduced in a real browser, and
+this phase exists because of §3: capture state and data live in the host page's `localStorage` (per-origin,
+page-readable) while the thing being captured is a TAB (spans origins, navigations, frames). The design and
+the rejected alternatives are `docs/adr/008-extension-owns-the-session.md`.
+
+1.11.1 shipped the **first slice**: the worker now owns *whether a capture is running* (`captureTabs`,
+`tb:capture:status`), which killed the zombie capture and let TraceBug say "Capture ended when you left
+<host>". The data did not move. This phase moves it.
+
+- **Event sink in the service worker.** Collectors post `{frameId, url, type, data, ts}`; the worker appends
+  to an in-memory buffer mirrored into `chrome.storage.session` (the `tb_sw_state_v1` pattern, `_hydrated`
+  discipline included). Batch the posts - 50-200 mutations/s is the rate to design for - and bound the buffer
+  the way `trimEventBuffer` already bounds rrweb's.
+- **Collectors become stateless producers.** Only `emit`'s destination changes, from `appendEvent()` to a port
+  message. Then and only then, inject with `allFrames: true`: that is safe once every frame's input passes
+  through the redaction rules on the way into the worker, and NOT before - it puts input capture inside
+  Stripe and Auth0 frames. Deleting `framesCaptureWarning` in `src/replay-fidelity.ts` is how this phase
+  proves it landed.
+- **`src/storage.ts` gains a second engine** behind the interface the `docs/ticket-flow.md` invariants are
+  written against (localStorage for the npm SDK, worker port for the extension), so those tests keep meaning
+  and the npm SDK is untouched.
+- **Do it with the IndexedDB migration**, not before or after: both open the same storage seam, and it should
+  be opened once.
+- **The e2e that proves it:** `e2e/ext-cross-site-capture.e2e.mjs` currently asserts that a cross-origin move
+  ENDS the capture. When this phase lands, that spec inverts - the capture continues and the ticket carries
+  both origins.
+
 ## Final report
 
 When all phases are done, produce:

@@ -2,7 +2,9 @@
 // What an events-only capture CANNOT show, detected before the user has spent
 // a capture finding out.
 //
-// The one real gap is canvas. rrweb records with `recordCanvas: false`
+// There are two real gaps.
+//
+// The first is canvas. rrweb records with `recordCanvas: false`
 // (src/rrweb-recorder.ts) — deliberately, because canvas recording is enormous
 // and slow — so on a page whose content IS a canvas (a chart, a map, a game, a
 // WebGL view) the DOM replay renders a correctly-sized empty box. Everything
@@ -12,6 +14,13 @@
 // In the extension it is NOT an option in 1.11 (VIDEO_ENABLED_IN_EXTENSION),
 // so the advice branches on `isVideoOffered()`: telling a user to turn on a
 // checkbox that is not in their popup is worse than saying nothing.
+//
+// The second is iframes. Collectors are injected into the TOP FRAME ONLY, and
+// deliberately stay that way in 1.11.x: `allFrames: true` would put input
+// capture inside payment and identity frames (Stripe, Auth0, 3-D Secure) and
+// record card numbers and passwords. So an app whose real UI is in a frame
+// produces a near-empty ticket, and the honest move is to say so up front —
+// see docs/audit/capture-architecture.md §2.2.
 //
 // Deliberately NOT a blocker and not a dialog: it is one line, and a capture
 // without video is still worth having on these pages — console, network and
@@ -24,8 +33,14 @@ const HEAVY_CANVAS_VIEWPORT_SHARE = 0.25;
 /** Below this, a canvas is a sparkline or an icon — not worth a warning. */
 const MIN_CANVAS_PX = 40_000; // ~200×200
 
+/** Same share, same reasoning, for iframes: below this an iframe is a widget
+ *  at the edge of the page, not the thing being tested. */
+const HEAVY_FRAME_VIEWPORT_SHARE = 0.25;
+/** Below this an iframe is a badge, a tracking pixel or an ad slot. */
+const MIN_FRAME_PX = 40_000; // ~200×200
+
 export interface FidelityWarning {
-  kind: "canvas";
+  kind: "canvas" | "iframe";
   message: string;
 }
 
@@ -84,5 +99,72 @@ export function eventsCaptureFidelityWarning(doc: Document = document): Fidelity
       (isVideoOffered()
         ? "For a visual record here, stop and turn on “Record video too”."
         : "For a visual record here, take screenshots as you go — screen recording returns in 1.11.1."),
+  };
+}
+
+/**
+ * Does this page put its content inside an iframe the capture cannot see into?
+ *
+ * Collectors are injected into the TOP FRAME ONLY — `allFrames` appears
+ * nowhere in the extension, deliberately. Injecting everywhere would put
+ * TraceBug's input capture inside payment and identity frames (Stripe, Auth0,
+ * 3-D Secure) and start recording card numbers and passwords, and every
+ * cross-origin frame would need site access for its own origin. That is only
+ * safe once every frame's input goes through the redaction rules, which is
+ * v2.0 work (docs/audit/capture-architecture.md §2.2, ADR 008).
+ *
+ * Until then the honest move is to say so BEFORE the capture, not to hand
+ * someone a confident-looking empty ticket afterwards. Measured the same way
+ * as canvas: rendered area against the viewport, because one full-bleed editor
+ * frame matters and twelve small widgets do not.
+ */
+export function findHeavyFrame(doc: Document = document): HTMLElement | null {
+  let viewport = 0;
+  try {
+    viewport = (doc.defaultView?.innerWidth || 0) * (doc.defaultView?.innerHeight || 0);
+  } catch { /* detached document */ }
+  if (!viewport) return null;
+
+  let frames: HTMLElement[] = [];
+  try {
+    frames = Array.from(doc.querySelectorAll("iframe, frame"));
+  } catch { return null; }
+
+  // Area is SUMMED, not maxed: an app split into three side-by-side frames
+  // hides just as much as one big one, and no single frame would trip a
+  // per-element threshold.
+  let total = 0;
+  let largest: HTMLElement | null = null;
+  let largestArea = 0;
+  for (const f of frames) {
+    // TraceBug's own UI (the CSP-proof player iframe) is not the page.
+    if (f.closest("#tracebug-root")) continue;
+    let rect: DOMRect;
+    try { rect = f.getBoundingClientRect(); } catch { continue; }
+    // Offscreen and display:none frames render nothing and hide nothing.
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    const area = rect.width * rect.height;
+    if (area < MIN_FRAME_PX) continue;
+    total += area;
+    if (area > largestArea) { largestArea = area; largest = f; }
+  }
+  if (!largest) return null;
+  return total / viewport >= HEAVY_FRAME_VIEWPORT_SHARE ? largest : null;
+}
+
+/**
+ * The frame warning, or null. Separate from the canvas one so a page with both
+ * does not produce a paragraph — the caller shows whichever it asks for.
+ */
+export function framesCaptureWarning(doc: Document = document): FidelityWarning | null {
+  if (!findHeavyFrame(doc)) return null;
+  return {
+    kind: "iframe",
+    // Names what is missing and what still works. No "iframe" jargon alone:
+    // "embedded frames" is what the words on the page look like to a tester.
+    message:
+      "A large part of this page is inside an embedded frame. Clicks, typing, console and " +
+      "network INSIDE that frame aren't captured yet — the rest of the page is. " +
+      "If your bug is in there, add screenshots as you go.",
   };
 }

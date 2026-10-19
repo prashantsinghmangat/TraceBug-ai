@@ -41,6 +41,7 @@ let _onStopRequested: (() => void) | null = null;
 // "events" mode has no MediaRecorder to ask for elapsed time, so the HUD keeps
 // the capture's start timestamp and counts from it.
 let _eventsStartedAt: number | null = null;
+let _getCounts: (() => { events: number; requests: number }) | null = null;
 
 function _formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -56,7 +57,15 @@ function _formatElapsed(ms: number): string {
  *  passes its own start timestamp instead. */
 export function showRecordingHUD(
   root: HTMLElement,
-  options: { onStop: () => void; mode?: "video" | "events"; startedAt?: number }
+  options: {
+    onStop: () => void;
+    mode?: "video" | "events";
+    startedAt?: number;
+    /** Live tally for the events HUD. A tester watching "Capturing" count up
+     *  from 0 and STAY at 0 learns in three seconds what an empty ticket used
+     *  to teach them after the fact. Polled with the timer. */
+    getCounts?: () => { events: number; requests: number };
+  }
 ): void {
   if (_hud) return;
   const eventsOnly = options.mode === "events";
@@ -64,6 +73,7 @@ export function showRecordingHUD(
 
   _root = root;
   _onStopRequested = options.onStop;
+  _getCounts = eventsOnly ? (options.getCounts ?? null) : null;
   _eventsStartedAt = eventsOnly ? (options.startedAt ?? Date.now()) : null;
 
   const hud = document.createElement("div");
@@ -137,6 +147,9 @@ export function showRecordingHUD(
       /* Events-only capture: says what is being captured where the mic button
          sits in a video recording, so "no picker appeared" isn't read as
          "nothing is happening". */
+      #${HUD_ID} .tb-hud-kind { font-size: 10px !important; font-weight: 600 !important; letter-spacing: 0.02em !important; color: rgba(255,255,255,0.45) !important; text-transform: uppercase !important; white-space: nowrap !important; }
+      #${HUD_ID} .tb-hud-count { font-size: 11px !important; font-weight: 500 !important; color: rgba(255,255,255,0.72) !important; white-space: nowrap !important; font-variant-numeric: tabular-nums !important; }
+      #${HUD_ID} .tb-hud-count[data-tb-empty="1"] { color: rgba(255,186,120,0.95) !important; }
       #${HUD_ID} .tb-hud-label { font-size: 12px !important; font-weight: 500 !important; color: rgba(255,255,255,0.62) !important; padding: 0 4px !important; white-space: nowrap !important; }
     `;
     document.head.appendChild(style);
@@ -160,7 +173,9 @@ export function showRecordingHUD(
     </button>`}
     <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
     ${eventsOnly ? `
-    <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording — nothing is being shared with your browser's screen-share.">Capturing</span>` : `
+    <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording — nothing is being shared with your browser's screen-share.">Capturing</span>
+    <span class="tb-hud-kind" data-tb-hud="kind" title="This capture records the page's DOM, console and network and replays them. It is not a screen recording — your browser is not sharing your screen.">Replay, not video</span>
+    <span class="tb-hud-count" data-tb-hud="count" title="What this capture has recorded so far. If these stay at zero, the page is not producing anything TraceBug can see — content inside embedded frames is the usual reason.">0 events</span>` : `
     <button class="tb-hud-btn" data-tb-hud="mic"
       title="${micAvailable ? "Mute / unmute microphone" : "No microphone in this recording"}"
       aria-label="Toggle microphone"
@@ -193,9 +208,26 @@ export function showRecordingHUD(
   const shotBtn = hud.querySelector('[data-tb-hud="shot"]') as HTMLButtonElement | null;
   const stopBtn = hud.querySelector('[data-tb-hud="stop"]') as HTMLButtonElement;
 
+  const countEl = hud.querySelector('[data-tb-hud="count"]') as HTMLElement | null;
+  const renderCounts = () => {
+    if (!countEl || !_getCounts) return;
+    let counts: { events: number; requests: number };
+    try { counts = _getCounts(); } catch { return; }
+    const parts = [`${counts.events} event${counts.events === 1 ? "" : "s"}`];
+    if (counts.requests > 0) parts.push(`${counts.requests} request${counts.requests === 1 ? "" : "s"}`);
+    countEl.textContent = parts.join(" · ");
+    // Zero after a few seconds is the signal worth seeing: it is what an
+    // iframe-only page looks like while it is still fixable.
+    const empty = counts.events === 0 && counts.requests === 0;
+    if (empty) countEl.setAttribute("data-tb-empty", "1");
+    else countEl.removeAttribute("data-tb-empty");
+  };
+  renderCounts();
+
   _timerInterval = setInterval(() => {
     if (_eventsStartedAt !== null) {
       timerEl.textContent = _formatElapsed(Date.now() - _eventsStartedAt);
+      renderCounts();
       return;
     }
     if (!isVideoRecording()) return;
@@ -316,6 +348,7 @@ export function flashRecordingHUD(): void {
 
 /** Remove the HUD from the DOM and stop the timer. */
 export function hideRecordingHUD(): void {
+  _getCounts = null;
   if (_timerInterval) {
     clearInterval(_timerInterval);
     _timerInterval = null;

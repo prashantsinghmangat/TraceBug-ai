@@ -1,11 +1,12 @@
 # Launch state — read this, not the archives
 
-Engineering state only, verified against code. Last updated 2026-10-15. Calendar, channels and the
+Engineering state only, verified against code. Last updated 2026-10-19. Calendar, channels and the
 32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored).
-History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`. Post-submission phases: `PLAN.md` 8, 10, 11.
+History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`. Post-submission phases: `PLAN.md` 8, 10, 11, 12.
 
-**All engineering for 1.11.0 is done; everything left is human-only.** Branch `develop`, 1.11.0 on
-the eight surfaces `check:versions` guards. `check.mjs --full`: **819 passing / 48 files**,
+**1.11.1 capture fixes are in** (the audit's Option A — see below). **All engineering for 1.11.0 is
+done; everything left there is human-only.** Branch `develop`, 1.11.0 on
+the eight surfaces `check:versions` guards. `check.mjs --full`: **894 passing / 53 files**,
 `ext:lint` 0 errors / 69 warnings. Phases 0–7 and 9 are closed (permissions optional, secrets and
 provider calls out of the host page, restricted pages and orphaned tabs handled, events-only capture
 the default, bundled welcome page, "What's new" card, uninstall survey, review ask, export footer,
@@ -16,6 +17,33 @@ for `e2e/paths.mjs` (headless anywhere) and `e2e/ext-no-secrets-in-page.e2e.mjs`
 `src/video-recorder.ts`, enforced at the transport; a stored `tb_record_opts.video: true` is read and
 ignored, never erased, and the `offscreen` permission is out of both manifests with it. Four bugs and
 the restore checklist: `video-1.11.1.md`. The npm SDK is untouched and records video as before.
+
+## 1.11.1 so far — capture, before video
+
+`docs/audit/capture-architecture.md` is the source: a tester's "0 events" ticket, with every cause
+reproduced in a real browser. Its **Option A is now shipped** (uncommitted on `develop` unless noted):
+
+- **The worker owns "is a capture running"** (`captureTabs` + `tb:capture:status` in `background.js`,
+  `src/capture-ownership.ts`). A cross-origin move ends the capture and the next page says *"Capture
+  ended when you left <host>"*; the stale per-origin flag is cleared instead of resurrecting a HUD.
+  This is **slice one of ADR 008** — `docs/adr/008-extension-owns-the-session.md`, PLAN Phase 12.
+- **Network rows are deduped** (`src/network-dedupe.ts`) — the Resource Timing twin of every fetch/XHR
+  is dropped, wrapper row wins, static assets kept. No more phantom `GET` beside a real `POST`.
+- **The page load is reported again** — the attach-time drain used to mark it all "seen" while
+  recording was false. Now failed-or-slow pre-capture requests come through as `phase: "page-load"`.
+- **contenteditable typing is captured** under the same redaction and 200-char cap as `<input>`, and
+  the DOM replay **masks sensitive editors** (`src/replay-masking.ts`) — it used to hold in full what
+  the event row had redacted.
+- **The HUD is honest**: "Replay, not video" next to the dot, plus a live `N events · M requests`
+  tally that runs the same dedupe the ticket will.
+- **Frame-heavy pages are warned** (`framesCaptureWarning`), on the canvas pattern. **No `allFrames`
+  in 1.11.x, deliberately** — it would put input capture inside Stripe/Auth0 frames. v2.0 instead.
+
+**`e2e/ext-cross-site-capture.e2e.mjs` is new and must stay green** (A → B → A: same-origin resumes,
+cross-origin ends and says so, no zombie on return). When Phase 12 lands, that spec inverts.
+
+Still open: video (Phase 10) is untouched, and the replay's pattern pass is unbenchmarked on a large
+snapshot.
 
 ## Left before submission — all of it needs a person
 
