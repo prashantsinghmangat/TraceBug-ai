@@ -11,7 +11,7 @@
 // entry must show no card at all, not an empty indigo box, and the flag must
 // not sit in storage being reconsidered on every popup open.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readText } from './helpers/read-source';
 import { createContext, runInContext } from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -19,8 +19,8 @@ import { createChromeMock, loadBackground, settle, type ChromeMock } from './hel
 
 const KEY = 'tb_whats_new';
 const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'tracebug-extension');
-const POPUP = readFileSync(join(extDir, 'popup.js'), 'utf8');
-const HTML = readFileSync(join(extDir, 'popup.html'), 'utf8');
+const POPUP = readText(join(extDir, 'popup.js'));
+const HTML = readText(join(extDir, 'popup.html'));
 
 describe('the worker records which version landed', () => {
   let mock: ChromeMock;
@@ -69,7 +69,7 @@ describe('the worker records which version landed', () => {
   it('holds no copy of its own', () => {
     // The worker's job is the version stamp. Copy in the worker would mean two
     // places to edit, and the worker cannot render it anyway.
-    const bg = readFileSync(join(extDir, 'background.js'), 'utf8');
+    const bg = readText(join(extDir, 'background.js'));
     expect(bg).not.toContain('New in 1.11');
     expect(bg).not.toMatch(/revoke and re-create/i);
   });
