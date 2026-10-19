@@ -62,9 +62,28 @@ Declare on the cautious side. TraceBug never sends data to its developer. But at
 - ✅ Tick all three certifications: not sold to third parties; not used for purposes unrelated to the single purpose; not used for creditworthiness or lending.
 - Privacy policy URL: the existing one on tracebug.dev. Check that it says "nothing goes to TraceBug" and describes the user-initiated sends.
 
-## 4. What's new in 1.11 (store description, top)
+## 4. What's new in 1.11.1 (store description, top)
+
+Capture fixes lead, because they are what a new user meets first: in 1.11.0 a report could come
+back with nothing in it. The 1.11.0 lines stay underneath — a listing is read by people installing
+for the first time, not only by upgraders.
+
+- Network requests are no longer listed twice, and a request method we can't determine now shows
+  "—" instead of a guessed GET.
+- Typing in rich editors — chat composers, comment boxes, document editors — is captured, under the
+  same redaction rules as any other field.
+- A capture no longer reappears after you leave a site. It ends when you go, the page you land on
+  tells you where it went, and what you captured is still there when you return.
+- The capture bar shows what it has: "Replay, not video · N events · M requests".
+- A warning when the page's content sits inside embedded frames, which aren't captured yet.
+- Video recording is still paused while we finish it. It's back in 1.11.2.
+
+Carried over from 1.11.0:
 
 - No more "read and change all your data" warning: site access is asked for only when you need it.
-- Video recording is paused while we finish it. It's back in 1.11.1.
 - Tokens and API keys moved into TraceBug's own settings, and every GitHub, Linear or Slack send asks you first.
 - If you set up GitHub, Linear, Slack or an AI key before 1.11, please revoke it and create a new one.
+
+**Screenshot check before submitting:** the capture bar changed in 1.11.1 ("Replay, not video" plus
+a live count), so any of the five store screenshots showing it is now out of date. The report and
+export screenshots are unaffected.
