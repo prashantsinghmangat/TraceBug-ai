@@ -32570,6 +32570,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(99,102,241,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    /* Only the FIRST trailing button absorbs the free space. Without this the
+       second one ("Download") takes a margin-left:auto of its own and the two
+       split the gap between them \u2014 "Add page shot" ends up stranded mid-row
+       instead of sitting next to Download at the right edge. */
+    #${MODAL_ID} .tb-qb-ss-add + .tb-qb-ss-add { margin-left:0; }
     #${MODAL_ID} .tb-qb-ss-add svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-ss-add:hover { filter:brightness(1.15); }
     #${MODAL_ID} .tb-qb-thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
