@@ -15,6 +15,10 @@ import type { RedactRules } from "../types";
 const REDACTED = "[REDACTED]";
 
 let _fieldRe: RegExp | null = null;
+// The raw field names, kept so other masking surfaces (the DOM replay's
+// selector — src/rrweb-recorder.ts) can be built from the SAME list instead
+// of declaring a second one that drifts.
+let _fields: string[] = [];
 // Per-text matchers derived from field names: JSON `"key": value` and
 // urlencoded/assignment `key=value` forms.
 let _fieldTextRes: { re: RegExp; replace: string }[] = [];
@@ -28,6 +32,7 @@ function escapeRe(s: string): string {
  *  patterns are skipped silently — a typo in one rule must not disable capture. */
 export function setRedactRules(rules: RedactRules | undefined): void {
   _fieldRe = null;
+  _fields = [];
   _fieldTextRes = [];
   _patterns = [];
   if (!rules) return;
@@ -38,6 +43,7 @@ export function setRedactRules(rules: RedactRules | undefined): void {
     // Substring + case-insensitive, matching the built-in /password|secret/i
     // convention — `email` also covers `customer_email` and `emailAddress`.
     _fieldRe = new RegExp(alts, "i");
+    _fields = fields.map(f => f.trim());
     for (const f of fields) {
       const k = escapeRe(f.trim());
       // "…email…": "value" | 123 | true — JSON bodies in response snippets
@@ -80,4 +86,16 @@ export function applyCustomRedaction(s: string): string {
   for (const { re, replace } of _fieldTextRes) out = out.replace(re, replace);
   for (const re of _patterns) out = out.replace(re, REDACTED);
   return out;
+}
+
+/** The user's declared sensitive field names, as given. Exported so the DOM
+ *  replay's mask selector is built from this list rather than a copy of it. */
+export function getCustomSensitiveFields(): string[] {
+  return _fields.slice();
+}
+
+/** True when any user rule is configured — fields or patterns. Lets callers
+ *  skip work entirely for the common case of no rules at all. */
+export function hasCustomRedaction(): boolean {
+  return _fieldTextRes.length > 0 || _patterns.length > 0;
 }

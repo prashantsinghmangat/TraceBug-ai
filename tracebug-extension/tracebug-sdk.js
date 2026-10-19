@@ -985,6 +985,7 @@ var TraceBugModule = (() => {
   }
   function setRedactRules(rules2) {
     _fieldRe = null;
+    _fields = [];
     _fieldTextRes = [];
     _patterns = [];
     if (!rules2) return;
@@ -992,6 +993,7 @@ var TraceBugModule = (() => {
     if (fields.length > 0) {
       const alts = fields.map((f2) => escapeRe(f2.trim())).join("|");
       _fieldRe = new RegExp(alts, "i");
+      _fields = fields.map((f2) => f2.trim());
       for (const f2 of fields) {
         const k = escapeRe(f2.trim());
         _fieldTextRes.push({
@@ -1026,12 +1028,19 @@ var TraceBugModule = (() => {
     for (const re of _patterns) out = out.replace(re, REDACTED);
     return out;
   }
-  var REDACTED, _fieldRe, _fieldTextRes, _patterns;
+  function getCustomSensitiveFields() {
+    return _fields.slice();
+  }
+  function hasCustomRedaction() {
+    return _fieldTextRes.length > 0 || _patterns.length > 0;
+  }
+  var REDACTED, _fieldRe, _fields, _fieldTextRes, _patterns;
   var init_custom_redaction = __esm({
     "src/sanitize/custom-redaction.ts"() {
       "use strict";
       REDACTED = "[REDACTED]";
       _fieldRe = null;
+      _fields = [];
       _fieldTextRes = [];
       _patterns = [];
     }
@@ -1439,14 +1448,13 @@ var TraceBugModule = (() => {
     return parts.join(" > ");
   }
   function isSensitiveField(name, inputType = "") {
-    return ["password", "credit-card", "ssn"].includes(inputType) || /password|secret|token|ssn|credit/i.test(name || "") || isCustomSensitiveKey(name);
+    return ["password", "credit-card", "ssn"].includes(inputType) || SENSITIVE_FIELD_RE.test(name || "") || isCustomSensitiveKey(name);
   }
   function contentEditableHost(t2) {
     if (!t2) return null;
-    try {
+    if (typeof t2.closest === "function") {
       const host2 = t2.closest(EDITABLE_SELECTOR);
       if (host2) return host2;
-    } catch (e2) {
     }
     return t2.isContentEditable ? t2 : null;
   }
@@ -1457,7 +1465,12 @@ var TraceBugModule = (() => {
   }
   function fieldLabel(el) {
     const named = el;
-    return named.name || el.id || el.getAttribute("aria-label") || el.getAttribute("data-placeholder") || el.getAttribute("placeholder") || el.getAttribute("data-testid") || "";
+    if (named.name) return named.name;
+    for (const attr of FIELD_LABEL_ATTRS) {
+      const v2 = attr === "id" ? el.id : el.getAttribute(attr);
+      if (v2) return v2;
+    }
+    return "";
   }
   function collectInputs(emit) {
     const timers = /* @__PURE__ */ new Map();
@@ -1951,7 +1964,7 @@ var TraceBugModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, SENSITIVE_FIELD_WORDS, SENSITIVE_FIELD_RE, FIELD_LABEL_ATTRS, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -1980,6 +1993,9 @@ var TraceBugModule = (() => {
         /\/@react-refresh/
       ];
       INPUT_VALUE_MAX = 200;
+      SENSITIVE_FIELD_WORDS = ["password", "secret", "token", "ssn", "credit"];
+      SENSITIVE_FIELD_RE = new RegExp(SENSITIVE_FIELD_WORDS.join("|"), "i");
+      FIELD_LABEL_ATTRS = ["name", "id", "aria-label", "data-placeholder", "placeholder", "data-testid"];
       EDITABLE_SELECTOR = '[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
       _perfSeen = /* @__PURE__ */ new Set();
       GET_ONLY_INITIATORS = /* @__PURE__ */ new Set([
@@ -2329,6 +2345,42 @@ var TraceBugModule = (() => {
       transcripts = [];
       onTranscriptUpdate = null;
       onStatusChange = null;
+    }
+  });
+
+  // src/replay-masking.ts
+  function maskChars(text) {
+    return text.replace(/\S/g, "*");
+  }
+  function cssAttrValue(v2) {
+    return v2.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  }
+  function sensitiveEditorSelector() {
+    if (hasCustomRedaction()) return "*";
+    const words = [...SENSITIVE_FIELD_WORDS, ...getCustomSensitiveFields()].filter(Boolean);
+    const parts = [];
+    for (const word of words) {
+      for (const attr of FIELD_LABEL_ATTRS) {
+        parts.push(`[contenteditable][${attr}*="${cssAttrValue(word)}" i]`);
+      }
+    }
+    return parts.join(",");
+  }
+  function maskReplayText(text, element) {
+    try {
+      if (!element) return maskChars(text);
+      const host2 = contentEditableHost(element);
+      if (host2 && isSensitiveField(fieldLabel(host2))) return maskChars(text);
+      return applyCustomRedaction(text);
+    } catch (e2) {
+      return maskChars(text);
+    }
+  }
+  var init_replay_masking = __esm({
+    "src/replay-masking.ts"() {
+      "use strict";
+      init_collectors();
+      init_custom_redaction();
     }
   });
 
@@ -19886,7 +19938,16 @@ var TraceBugModule = (() => {
         // matched here, so freehand pen/shape annotations still replay. With the
         // core Replayer, blocked nodes render as empty/transparent (no placeholder).
         blockSelector: "#tracebug-root, #tracebug-draw-canvas",
-        maskTextClass: "tb-mask"
+        maskTextClass: "tb-mask",
+        // maskAllInputs above covers <input>/<textarea>/<select> only. A
+        // contenteditable is plain text nodes, so a chat composer or document
+        // editor replayed in full — including text the event capture had
+        // redacted. The selector names the candidates (rrweb never calls the
+        // mask function without one); the function makes the real decision and
+        // can unmask a false positive. Built at record start from the same
+        // sensitive-name list the input rule uses — see src/replay-masking.ts.
+        maskTextSelector: sensitiveEditorSelector(),
+        maskTextFn: maskReplayText
       });
       _stopFn = typeof stop === "function" ? stop : null;
       _recording = true;
@@ -19930,6 +19991,7 @@ var TraceBugModule = (() => {
   var init_rrweb_recorder = __esm({
     "src/rrweb-recorder.ts"() {
       "use strict";
+      init_replay_masking();
       _loadPromise = null;
       _events = [];
       _stopFn = null;

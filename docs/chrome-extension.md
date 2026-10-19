@@ -55,7 +55,10 @@ What remains:
 A collapsible panel for app-specific PII the built-in token patterns can't know about:
 
 - **Sensitive field names** — comma/newline separated; matches form fields, storage keys, URL params, and JSON keys in captured data (`email` also covers `customer_email`).
-- **Mask patterns** — one regex per line, case-insensitive, masked anywhere in captured text.
+- **Mask patterns** — one regex per line, case-insensitive. Masked in console
+  output, network response bodies, error text and the DOM replay. **Not** applied
+  to URLs, storage values, or screenshots and video — URLs and storage keys are
+  matched by *field name* instead (the box above), and images are never scanned.
 
 Rules are validated on save, synced across your browsers via `chrome.storage.sync`, and applied **live** — even to a page that's already recording. Same engine as the SDK's [`redact` config](configuration.md#redact); the content script hands them to the page-world SDK via `<html data-tb-redact>`.
 

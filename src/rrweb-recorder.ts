@@ -15,9 +15,12 @@
 // `.tb-mask` are blocked or text-masked. Visual data (screenshots/video) is
 // still the tester's responsibility, but DOM text defaults to "don't leak."
 
+import { sensitiveEditorSelector, maskReplayText } from "./replay-masking";
+
 /** One rrweb event. Kept as a loose record so the public type surface (and the
  *  emitted .d.ts) never has to depend on rrweb's types. */
 export type RrwebEvent = Record<string, unknown>;
+
 
 type RecordFn = (options: Record<string, unknown>) => (() => void) | undefined;
 
@@ -134,6 +137,15 @@ export async function startDomRecording(): Promise<boolean> {
       // core Replayer, blocked nodes render as empty/transparent (no placeholder).
       blockSelector: "#tracebug-root, #tracebug-draw-canvas",
       maskTextClass: "tb-mask",
+      // maskAllInputs above covers <input>/<textarea>/<select> only. A
+      // contenteditable is plain text nodes, so a chat composer or document
+      // editor replayed in full — including text the event capture had
+      // redacted. The selector names the candidates (rrweb never calls the
+      // mask function without one); the function makes the real decision and
+      // can unmask a false positive. Built at record start from the same
+      // sensitive-name list the input rule uses — see src/replay-masking.ts.
+      maskTextSelector: sensitiveEditorSelector(),
+      maskTextFn: maskReplayText,
     });
     _stopFn = typeof stop === "function" ? stop : null;
     _recording = true;
