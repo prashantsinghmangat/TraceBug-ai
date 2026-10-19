@@ -23,6 +23,12 @@ let _fields: string[] = [];
 // urlencoded/assignment `key=value` forms.
 let _fieldTextRes: { re: RegExp; replace: string }[] = [];
 let _patterns: RegExp[] = [];
+// The patterns as ONE alternation. The replay runs this over every text node
+// of a page — on a large app that is thousands of nodes per snapshot, and N
+// separate `String.replace` passes meant N full walks of each string. One
+// combined regex is one walk. Null when no pattern compiled, or when a
+// pattern could not be merged (see setRedactRules).
+let _patternsCombined: RegExp | null = null;
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -35,6 +41,7 @@ export function setRedactRules(rules: RedactRules | undefined): void {
   _fields = [];
   _fieldTextRes = [];
   _patterns = [];
+  _patternsCombined = null;
   if (!rules) return;
 
   const fields = (rules.fields || []).filter(f => typeof f === "string" && f.trim().length > 0);
@@ -69,6 +76,24 @@ export function setRedactRules(rules: RedactRules | undefined): void {
       }
     } catch {}
   }
+
+  // Combine into a single alternation, each branch grouped so a top-level `|`
+  // inside one pattern cannot swallow the next. Built once, here, rather than
+  // per text node. If the merge is itself invalid (a pattern with a
+  // backreference, say, whose group numbers shift), fall back to the
+  // per-pattern loop — correctness over speed.
+  if (_patterns.length > 0) {
+    try {
+      const sources = _patterns.map(r => `(?:${r.source})`).join("|");
+      const combined = new RegExp(sources, "gi");
+      // Prove it runs before trusting it: a pattern that throws at match time
+      // would take a snapshot down with it.
+      "probe".replace(combined, "");
+      _patternsCombined = combined;
+    } catch {
+      _patternsCombined = null;
+    }
+  }
 }
 
 /** True when a form field name, storage key, or URL query param matches a
@@ -84,7 +109,8 @@ export function applyCustomRedaction(s: string): string {
   if (!s || (_fieldTextRes.length === 0 && _patterns.length === 0)) return s;
   let out = s;
   for (const { re, replace } of _fieldTextRes) out = out.replace(re, replace);
-  for (const re of _patterns) out = out.replace(re, REDACTED);
+  if (_patternsCombined) out = out.replace(_patternsCombined, REDACTED);
+  else for (const re of _patterns) out = out.replace(re, REDACTED);
   return out;
 }
 

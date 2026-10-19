@@ -44,7 +44,8 @@ export interface CaptureStatus {
 /** Nothing to ask: no extension, so no cross-origin capture to lose. */
 const NOT_APPLICABLE: CaptureStatus = { running: false, startedAt: null, ended: null };
 
-/** This document's origin — what the worker compares against. */
+/** This document's origin. Sent as a fallback for browsers that do not fill
+ *  in `sender.origin`/`sender.url`; the worker trusts those over this. */
 function currentOrigin(): string {
   try { return location.origin || ""; } catch { return ""; }
 }
@@ -72,10 +73,13 @@ export async function getCaptureStatus(): Promise<CaptureStatus> {
   }
 }
 
-/** Tell the worker a capture has started here, and on which origin. The
- *  worker cannot read the tab's URL itself — `tab.url` is undefined without
- *  `<all_urls>`, and a capture must not depend on a permission the user
- *  declined. Best-effort: a failure costs the cross-site notice, not the
+/** Tell the worker a capture has started here, and on which origin.
+ *
+ *  The origin travels as a FALLBACK only: the worker prefers `sender.origin` /
+ *  `sender.url`, which Chrome fills in itself — no host permission needed, and
+ *  a page cannot forge them. (`tab.url` is not an option: it is undefined
+ *  without `<all_urls>`, and a capture must not depend on a permission the
+ *  user declined.) Best-effort: a failure costs the cross-site notice, not the
  *  capture. */
 export async function announceCaptureStarted(startedAt: number): Promise<void> {
   if (!isExtensionContext()) return;
@@ -96,5 +100,9 @@ export async function announceCaptureStopped(): Promise<void> {
  *  left, because "your capture ended" without a reason reads as a crash. */
 export function captureEndedMessage(notice: CaptureEndedNotice): string {
   const host = notice.host ? notice.host : "the previous site";
-  return `Capture ended when you left ${host}. Everything captured there was kept — open TraceBug on ${host} to review it.`;
+  // "It was kept" without saying WHERE is a dead end: the session lives in
+  // that origin's storage, so this page cannot open it and nothing on this
+  // page ever will. The instruction is the whole point of the sentence.
+  return `Capture ended when you left ${host} — captures can't follow you across sites yet. `
+    + `What you captured there was kept: go back to ${host} to open its ticket.`;
 }
