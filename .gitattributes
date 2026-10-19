@@ -1,0 +1,13 @@
+# Keep JavaScript on LF in the repo AND in the worktree.
+#
+# Several tests slice extension sources between multi-line anchors; a CRLF
+# worktree (core.autocrlf=true on Windows) made those anchors miss and turned
+# three suites red for reasons that had nothing to do with the code — one as a
+# false assertion failure, two as a throw that took the whole file down.
+# Git already stored LF — this stops the checkout from converting it back.
+#
+# One line per extension: git's pathspec here is fnmatch, NOT a shell glob, so
+# a braced *.{js,mjs,cjs} would match nothing at all and fail silently.
+*.js  text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
