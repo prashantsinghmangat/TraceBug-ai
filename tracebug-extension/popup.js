@@ -408,7 +408,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const micPill = document.getElementById("micOptState");
   function applyMicUI() {
     // The row is not rendered in 1.11 - see popup.html. Everything below is
-    // kept, not deleted, so restoring the markup in 1.11.1 restores the
+    // kept, not deleted, so restoring the markup in 1.11.2 restores the
     // behaviour with it.
     if (!micBtn || !micPill) return;
     micBtn.classList.toggle("mic-opt-on", micOn);
@@ -865,6 +865,17 @@ function redactStateLabel(rules) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.11.1": {
+    label: "New in 1.11.1",
+    lines: [
+      "Network requests are no longer listed twice — and a method we can't know now shows “—” instead of a guessed GET",
+      "Typing in rich editors (chat composers, comment boxes, doc editors) is captured, under the same redaction rules as any field",
+      "A capture no longer comes back after you leave a site — and the page you land on tells you where it went",
+      "The capture bar shows what it has: “Replay, not video · N events · M requests”",
+      "A warning when the page's content sits in embedded frames, which aren't captured yet",
+    ],
+    warning: "Screen recording is still paused and now returns in 1.11.2 — your setting is kept.",
+  },
   "1.11.0": {
     label: "New in 1.11",
     lines: [

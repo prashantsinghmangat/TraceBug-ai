@@ -2,6 +2,30 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.11.1] - 2026-10-19
+
+> Capture fixes. A tester's ticket came back reading "1 screenshot attached · 0 events"; every cause was reproduced in a real browser and is written up in `docs/audit/capture-architecture.md`. Screen recording is still paused and now returns in 1.11.2 — these fixes matter to everyone, and holding them for video would delay them.
+
+### Fixed
+
+- **Network requests are no longer listed twice** (`src/network-dedupe.ts`) — every `fetch`/XHR was recorded once by TraceBug's wrappers and again by the browser's Resource Timing buffer. The duplicate also claimed `GET`, because Resource Timing does not expose the method, so a failing `POST` appeared alongside a request that never happened. A real export carried 112 rows for 75 distinct paths. The two sources are now paired on the resolved URL and the request start, and the wrapper's row wins; images, scripts and CSS are untouched.
+- **A method TraceBug could not determine is shown as "—"** instead of being guessed as `GET`. Only initiators where `GET` is a fact (images, scripts, CSS, fonts, media) are labelled.
+- **The page load before a capture is reported again** (`src/collectors.ts`) — the backfill ran once while no session was armed, marked every entry "seen", and the drain at capture start then skipped the whole page load. Pre-capture requests that **failed or took over a second** now appear, tagged as "before capture". Firefox has no `responseStatus`, so only the slow ones can be listed there (`docs/compatibility.md`).
+- **Typing in rich editors is captured** — ProseMirror, Lexical, Slate, Quill and TipTap are `contenteditable`, not `<input>`, so everything typed into a chat composer, comment box or document editor was dropped. It now runs the same redaction and the same length cap as a form field: an editor labelled like a password masks like one, and the true length is still reported.
+- **A capture no longer comes back after you leave a site** — capture state lived in each site's own storage, so moving to another site ended the capture in silence and returning resurrected it, timer still counting. The extension itself now decides whether a capture is running, survives a service-worker restart, and the page you land on says: *"Capture ended when you left `<host>` … go back to `<host>` to open its ticket."*
+- **"Add page shot" sits next to Download again** instead of stranded mid-row.
+
+### Privacy
+
+- **The DOM replay now masks sensitive rich-text editors** (`src/replay-masking.ts`). rrweb's `maskAllInputs` covers `<input>`/`<textarea>` only, so an editor's text was recorded in full — including text the event capture had already redacted.
+- **Mask patterns now apply to replay text.** They previously reached console output, network bodies and error text only, while the popup described them as "masked anywhere in captured text". The wording in the popup and `docs/chrome-extension.md` now names exactly where they do and do not run.
+
+### Changed
+
+- **The capture HUD says what it is**: "Replay, not video" beside the dot, and a live `N events · M requests` tally that counts what the ticket will contain. A page producing nothing shows zero in amber while it is still fixable.
+- **A warning when the page's content sits in embedded frames.** Clicks, typing, console and network inside a frame are not captured; that stays true in 1.11.x deliberately, because injecting into every frame would mean recording inside payment and identity frames. See `docs/adr/008-extension-owns-the-session.md` for how v2.0 fixes it properly.
+- **"Keep capturing across sites" now describes what it does**: TraceBug follows you to other sites so a capture is one click away there; a capture itself still ends when you leave the site it started on.
+
 ## [1.11.0] - 2026-10-13
 
 > Launch-readiness release. Phase 2: integration tokens and the AI key move out of the websites you test and into the extension's own storage (2a), and every send to GitHub, Linear, Slack or an AI provider now happens inside the extension, behind a confirmation you see first (2b).
