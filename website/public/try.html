@@ -62,6 +62,9 @@
   .steps { margin-top: 22px; font-size: 13px; color: #52525B; line-height: 1.75; }
   .steps b { color: #111113; }
   .steps .kbd { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #F4F4F5; border: 1px solid #E4E4E7; border-radius: 6px; padding: 1px 7px; }
+  .demo-row { margin-top: 18px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .demo-row .btn-ghost { font-size: 12.5px; padding: 8px 14px; }
+  .demo-row span { font-size: 12px; color: #82828C; }
 </style>
 </head>
 <body>
@@ -69,21 +72,24 @@
 <div class="top">
   <span class="mark">›_</span>
   <b>TraceBug — Live Sandbox</b>
-  <span>the real widget is running on this page</span>
+  <span>a checkout with real bugs, on purpose</span>
   <a href="/">← back to tracebug</a>
 </div>
 
 <div class="banner" id="banner">
-  <b>This page has real bugs, on purpose.</b> The actual TraceBug widget is live (bug button, bottom-right).
-  Trigger a bug below, then capture it and hit <b>Export .html</b> — you'll download a genuine
-  self-contained report you can open offline or hand to your AI agent.
+  <b>This page has real bugs, on purpose.</b> Two paths: <b>with the extension</b>, trigger a bug below,
+  then click the <b>TraceBug icon</b> → <b>Capture Bug</b>. <b>No extension?</b> Use the
+  <b>in-page demo</b> below.
 </div>
 <script>
-  // Welcome flow: the extension opens this page on first install. The copy
-  // must teach the EXTENSION flow (pin → icon → Capture Bug) — the on-page
-  // toolbar it used to mention only appears AFTER a popup action, and Chrome
-  // hides new extensions behind the puzzle icon.
-  if (new URLSearchParams(location.search).get("welcome") === "extension") {
+  // Welcome flow: the extension opens this page on first install
+  // (welcome.js), with ?utm_source=welcome — "welcome=extension" is kept as a
+  // fallback for any older link still pointing at that param. The copy must
+  // teach the EXTENSION flow (pin → icon → Capture Bug) — the on-page toolbar
+  // it used to mention only appears AFTER a popup action, and Chrome hides
+  // new extensions behind the puzzle icon.
+  var params = new URLSearchParams(location.search);
+  if (params.get("welcome") === "extension" || params.get("utm_source") === "welcome") {
     document.getElementById("banner").innerHTML =
       "<b>🎉 Extension installed.</b> " +
       "<b>1.</b> Pin TraceBug (puzzle icon 🧩 in your toolbar → 📌). " +
@@ -111,23 +117,68 @@
     <b>Reproduce the bugs:</b><br />
     1. Type <span class="kbd">SAVE20</span> and click <b>Apply coupon</b> → a <b>TypeError</b> is thrown (watch it land in the report's console tab).<br />
     2. Click <b>Place order</b> → <span class="kbd">POST /api/orders</span> fails (captured with the failing request).<br />
-    3. Open the <b>TraceBug button</b> (bottom-right) → review the captured session → <b>Export .html</b>.
+    3. <b>With the extension:</b> click the <b>TraceBug icon</b> in your toolbar → <b>Capture Bug</b> → <b>Export replay (.html)</b>.
+  </div>
+
+  <div class="demo-row">
+    <button class="btn-ghost" id="inPageDemoBtn">No extension? Try the in-page demo</button>
+    <span id="inPageDemoState"></span>
   </div>
 </div>
 
-<!-- html2canvas UMD: the SDK's screenshot capture picks it up from the window
-     global (the IIFE bundle ships without it — extensions use tab capture). -->
-<script src="/html2canvas.min.js"></script>
-<script src="/tracebug-sdk.js"></script>
 <script>
-  // The real SDK — same call as the README quick start, plus enabled:"all":
-  // the default "auto" turns the SDK off on production hostnames (correct for
-  // real apps, fatal for a sandbox whose whole job is running on the live site).
-  // Note: the option takes "off" | "all" | "development" | "staging" | "auto"
-  // | hostname[] — not a boolean.
-  if (window.TraceBug && window.TraceBug.init) {
-    window.TraceBug.init({ projectId: "tracebug-live-sandbox", enabled: "all" });
+  // This page must not load or start its own copy of the SDK on page load.
+  // The extension injects ITS OWN copy into every page's MAIN world
+  // (tracebug-init.js), and window.TraceBug.init() is a no-op past the first
+  // call ("Already initialized" — src/index.ts) — so a page-mode init here
+  // would silently win the race and lock the whole page into page mode,
+  // extension or not. See docs/audit/product-flow.md Finding 1.
+  //
+  // The in-page demo is opt-in instead: nothing loads until this button is
+  // clicked, and a page running WITH the extension never clicks it, so the
+  // extension's own injected SDK is always the only copy on the page.
+  var demoBtn = document.getElementById("inPageDemoBtn");
+  var demoState = document.getElementById("inPageDemoState");
+  var demoStarted = false;
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.body.appendChild(s);
+    });
   }
+
+  demoBtn.addEventListener("click", function () {
+    if (demoStarted) return;
+    demoStarted = true;
+    demoBtn.disabled = true;
+    demoBtn.textContent = "Starting demo…";
+    // html2canvas UMD: the SDK's screenshot capture picks it up from the
+    // window global (the IIFE bundle ships without it — extensions use tab
+    // capture instead, so they never need this file).
+    loadScript("/html2canvas.min.js")
+      .then(function () { return loadScript("/tracebug-sdk.js"); })
+      .then(function () {
+        // Page mode, deliberately: no transport means transport defaults to
+        // "page", and this only ever runs when there is no extension-injected
+        // SDK to collide with (clicking this button IS the user saying "I
+        // have no extension").
+        if (window.TraceBug && window.TraceBug.init) {
+          window.TraceBug.init({ projectId: "tracebug-live-sandbox", enabled: "all" });
+        }
+        demoBtn.textContent = "In-page demo running";
+        demoState.textContent = "— the TraceBug button (bottom-right) is now live";
+      })
+      .catch(function () {
+        demoStarted = false;
+        demoBtn.disabled = false;
+        demoBtn.textContent = "No extension? Try the in-page demo";
+        demoState.textContent = "— couldn't load the demo, try again";
+      });
+  });
 
   var toast = document.getElementById("toast");
   function showToast(msg) {
