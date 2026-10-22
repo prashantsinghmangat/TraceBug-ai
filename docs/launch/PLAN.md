@@ -9,7 +9,8 @@ needs a person, not a session: `STATE.md` § "Left before submission". The marke
 distribution and release calendar - and the status of all 32 items from the Oct 11 growth audit -
 live in `docs-internal/GROWTH-PLAN-30DAY.md`, which is gitignored and deliberately not in this
 repo. The phases below that are still open are **post-submission**: Phase 8's
-remainder, Phase 10 (1.11.2, video), Phase 11 (1.12, Site Audit) and Phase 12 (v2.0, ADR 008).
+remainder, Phase 10 (10a: 1.11.2 correctness, 10b: 1.11.3 video), Phase 11 (1.12, declutter + Site
+Audit) and Phase 12 (v2.0, ADR 008).
 
 ## How this is run
 
@@ -153,12 +154,49 @@ instructions. The listing copy that came out of it is in `store-submission-pack.
     match whatever the answers now say.
 - List any other contradictions found between the docs, the website and the code.
 
-## Phase 10 - 1.11.2: video back in the extension (after 1.11.1 ships)
+## Phase 10 - 1.11.2 (correctness) and 1.11.3 (video), after 1.11.1 ships
 
-**Renamed from 1.11.1 on 2026-10-19.** 1.11.1 is the capture fixes (the audit's Option A): they are
-done, verified, and they are what turns an empty ticket into a useful one for EVERY user, while
-video bug 1 still has no confirmed cause. Holding the capture fixes behind an unsolved video bug
-would delay them for everyone, so video moves here.
+**Renamed from 1.11.1 on 2026-10-19, split 2026-10-22 per the product review
+(`docs/audit/product-review.md`'s release mapping): 1.11.2 is correctness, ships first; 1.11.3 is
+video, renamed from what this phase used to call "1.11.2."** 1.11.1 is the capture fixes (the
+audit's Option A): done, verified, and what turns an empty ticket into a useful one for EVERY user.
+1.11.2's items below are small, independent of each other, and independent of video - video bug 1
+still has no confirmed cause, and there's no reason to hold correctness fixes behind it. 1.12
+(declutter) is everything else in `docs/audit/product-review.md` Part 4's change list and is not
+repeated here - read that document for T-04, T-07 through T-12, and T-11's product-owner decision.
+
+### 10a - 1.11.2: correctness
+
+- **Bug 0 (do this first): the injected SDK must never adopt a page-defined `window.TraceBug`.**
+  Found in the product-flow audit (`docs/audit/product-review.md` Part 3): any host page that
+  embeds its own copy of the SDK and calls `.init()` in page mode before the extension injects wins
+  the shared `window.TraceBug` global (both are the same IIFE bundle), silently dropping the
+  extension's `init({transport:"extension"})` call and locking the page into page mode for good -
+  breaking real tracker sends (falls back to clipboard copy) and the settings pointer. Confirmed
+  live on `website/public/try.html` (now fixed on the website side - `fix(try):` commit) but this
+  will recur on any real app using the npm SDK that a user later installs the extension on top of.
+  **Full brief and fix: `docs/launch/sdk-isolation-1.11.2.md`.** Short version: build the extension's
+  injected copy under its own global (e.g. `window.__TraceBugExtension`), point `tracebug-init.js`
+  and `background.js`'s `injectSDK` at it exclusively, and add `e2e/ext-sdk-isolation.e2e.mjs`
+  proving a page-defined `TraceBug` never gets adopted.
+- **T-01 and T-02: done.** The Summary-line noise filter (`src/report-builder.ts`,
+  `generateSmartSummary`) and the tracker-button label/action fix (`src/ui/quick-bug.ts`,
+  `_githubConfigured`/`_githubButtonLabel`/`_linearButtonLabel`/`_slackButtonLabel`) are shipped and
+  committed (`2109479`, `ebbfe05`), with passing unit coverage
+  (`tests/report-builder.test.ts`, `tests/github-button-state.test.ts`) and a real e2e
+  (`e2e/ext-github-send-confirm.e2e.mjs`). Nothing left to do here - listed for completeness against
+  the release mapping.
+- **T-05: replace the post-export MCP hand-off modal with a one-line "Open in your AI agent ->"
+  link.** Removes a forced dismissal on every export, with no new setting needed - see
+  `docs/audit/product-review.md` Part 4 "After export" for the full proposal, and its Reviewer note
+  on where first-time MCP setup instructions (the `claude mcp add tracebug ...` command, the
+  ready-to-paste prompt) need to live once the interrupting modal is gone.
+- **T-06: the error-triggered "Capture Bug" toast must not offer its own button while a capture is
+  already running.** Stop stays the only end action during an active capture; the toast keeps its
+  value for the no-capture-running case - don't remove it outright, only suppress or redirect it
+  while capturing. See `docs/audit/product-review.md` Part 4 "HUD".
+
+### 10b - 1.11.3: video back in the extension
 
 Screen recording is paused in 1.11 behind `VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`.
 **The full brief is `docs/launch/video-1.11.1.md` - read it, not this summary.** The order:
@@ -186,9 +224,9 @@ Screen recording is paused in 1.11 behind `VIDEO_ENABLED_IN_EXTENSION` in `src/v
   it, don't weaken it.** And extend `e2e/ext-shipping-path.e2e.mjs` to record for real: all four bugs survived
   817 unit tests because the fake `getDisplayMedia` accepts constraint pairs a browser rejects.
 
-## Phase 11 - 1.12: the Site Audit tab (post-submission, after 1.11.2)
+## Phase 11 - 1.12: the Site Audit tab (post-submission, after 1.11.3)
 
-Build it only once 1.11 is approved and 1.11.2 has brought video back. The pitch is "find the bug, then trace
+Build it only once 1.11 is approved and 1.11.3 has brought video back. The pitch is "find the bug, then trace
 it". Three things keep it from being a copy of Exploratory Tester: **every finding becomes a ticket** through
 the existing confirm window; **findings ride in the report**, so the `.html` a developer opens shows both; and
 **the MCP server exposes the audit**, so "fix the 6 accessibility errors on /checkout" works in Claude Code.
