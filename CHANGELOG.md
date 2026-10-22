@@ -2,6 +2,26 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.11.2] - 2026-10-22
+
+> Correctness. Everything here came out of a full product-flow audit (`docs/audit/product-review.md`): small fixes that make each control do what it says. Screen recording is still paused and now returns in 1.11.3 — the video work is independent and no longer holds these back.
+
+### Fixed
+
+- **The extension no longer gets stuck in page mode on sites that use the npm SDK** (`tracebug-extension/tracebug-sdk-ext.js`, `tracebug-init.js`, `background.js`) — a site that embedded its own copy of TraceBug and initialised it first won the shared `window.TraceBug` global, so the extension's own setup was silently dropped: tracker sends fell back to clipboard copy and the settings link went nowhere. The extension now injects a separate build under its own global and never adopts the page's. The package is also ~700 KB smaller, because the unused page-mode bundle is no longer shipped in it.
+- **One TraceBug interface per page** — on a site whose own TraceBug toolbar is already showing, the extension now steps aside instead of trying to mount a second one. The popup says *"This site runs its own TraceBug"*, and `Alt+B` shows the same sentence on the page.
+- **Tracker buttons say what they do** — "Send to GitHub" when a token is configured in the extension (a confirmation window opens, not a GitHub tab), "Open in GitHub" for the npm SDK's prefilled-issue link, "Copy GitHub Issue" otherwise. Linear and Slack follow the same rule.
+- **The ticket Summary skips noise requests** — a failed `/favicon.ico` (or similar) that fired before the real API failure no longer headlines the Summary while Possible Cause, one line below, names the real one.
+- **A configured GitHub button no longer reads "Copy GitHub Issue"** in the extension — and clicking it could send for real under that label.
+- **The error toast no longer offers "Capture Bug" during a capture** — the capture already running covers that error; Stop stays the one way to end it.
+- **Changing or removing a self-hosted Ollama address releases the old site access** instead of leaving the previous host's permission behind.
+
+### Changed
+
+- **No more hand-off dialog after every export.** The confirmation now carries a one-line *"Open in your AI agent →"* link; the MCP setup it used to force on every export opens only when you click it.
+- **"Keep capturing across sites" is gone from the popup.** It asked for access to every site but bought only one saved click — a capture ends when you leave its site either way. If you granted that access in an earlier version, TraceBug settings now shows it with a **Remove** button. Nothing in TraceBug asks for it any more.
+- **A new welcome page**: three steps (pin, capture, hand it to your AI agent), the `npx tracebug mcp` command with a Copy button, your real capture shortcut (`⌥` on a Mac), and Firefox-specific pinning instructions.
+
 ## [1.11.1] - 2026-10-19
 
 > Capture fixes. A tester's ticket came back reading "1 screenshot attached · 0 events"; every cause was reproduced in a real browser and is written up in `docs/audit/capture-architecture.md`. Screen recording is still paused and now returns in 1.11.2 — these fixes matter to everyone, and holding them for video would delay them.

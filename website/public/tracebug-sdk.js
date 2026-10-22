@@ -31233,9 +31233,13 @@ ${report.steps}` : userDesc : void 0,
           showFooter: showExportFooter()
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
-        showToast(`\u2713 Replay exported \xB7 ${sizeMb} MB`, root2);
+        showActionToast(
+          `\u2713 Replay exported \xB7 ${sizeMb} MB`,
+          "Open in your AI agent \u2192",
+          () => showMcpHandoffCard(result2.filename, result2.sizeBytes),
+          root2
+        );
         _maybeAskForReview(root2, (_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.sessionId) != null ? _c2 : null);
-        showMcpHandoffCard(result2.filename, result2.sizeBytes);
       } catch (err) {
         console.warn("[TraceBug] HTML replay export failed:", err);
         showToast("Couldn't export the replay \u2014 try again", root2);
@@ -70878,7 +70882,7 @@ First element: \`${exampleSnippet}\``,
       ` : `<div class="tb-lbc-loc tb-lbc-no-source">Stack trace unavailable</div>`}
       ${options.lastAction ? `<div class="tb-lbc-action">Last action: ${escapeHtml5(options.lastAction)}</div>` : ""}
       <div class="tb-lbc-buttons">
-        <button class="tb-lbc-btn tb-lbc-primary" data-action="capture">\u{1F4F8} Capture Bug</button>
+        ${options.onCapture ? `<button class="tb-lbc-btn tb-lbc-primary" data-action="capture">\u{1F4F8} Capture Bug</button>` : ""}
         ${options.enableEditorJump && parsed ? `<button class="tb-lbc-btn tb-lbc-editor" data-action="editor">Open in editor</button>` : ""}
         <button class="tb-lbc-btn tb-lbc-ghost" data-action="dismiss">Dismiss</button>
       </div>
@@ -70888,17 +70892,17 @@ First element: \`${exampleSnippet}\``,
     _currentRoot = overlay;
     overlay.querySelectorAll("[data-action]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        var _a2;
+        var _a2, _b;
         const action = btn.dataset.action;
         if (action === "capture") {
           try {
-            options.onCapture();
+            (_a2 = options.onCapture) == null ? void 0 : _a2.call(options);
           } finally {
             hideLiveBugCard();
           }
         } else if (action === "dismiss") {
           try {
-            (_a2 = options.onDismiss) == null ? void 0 : _a2.call(options);
+            (_b = options.onDismiss) == null ? void 0 : _b.call(options);
           } finally {
             hideLiveBugCard();
           }
@@ -72172,7 +72176,7 @@ First element: \`${exampleSnippet}\``,
       kind: "canvas",
       // Says what is missing, why, and the one thing that fixes it. No jargon:
       // "rrweb" and "DOM replay" mean nothing to a tester.
-      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording returns in 1.11.2.")
+      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording returns in 1.11.3.")
     };
   }
   function findHeavyFrame(doc = document) {
@@ -73964,7 +73968,7 @@ ${summary}`;
             Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports))
           ]).then(([cardMod, qbMod]) => {
             const armed = isRollingMode();
-            const onCapture = armed ? () => {
+            const onCapture = this.isRecording() ? void 0 : armed ? () => {
               this.captureRollingBuffer().catch(() => {
               });
             } : () => {

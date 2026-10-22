@@ -98,7 +98,7 @@ export function eventsCaptureFidelityWarning(doc: Document = document): Fidelity
       "it will show an empty space. Console, network and your clicks are still captured. " +
       (isVideoOffered()
         ? "For a visual record here, stop and turn on “Record video too”."
-        : "For a visual record here, take screenshots as you go — screen recording returns in 1.11.2."),
+        : "For a visual record here, take screenshots as you go — screen recording returns in 1.11.3."),
   };
 }
 

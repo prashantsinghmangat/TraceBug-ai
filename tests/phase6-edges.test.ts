@@ -111,10 +111,10 @@ describe('a canvas page is warned about before the capture is wasted', () => {
       canvas(1200, 700);
       const msg = eventsCaptureFidelityWarning(document)!.message;
       expect(msg).not.toMatch(/Record video too/);
-      // Names the release video actually returns in. It moved to 1.11.2 when
-      // the capture fixes shipped as 1.11.1 — the point of the assertion is
+      // Names the release video actually returns in. It moved to 1.11.3 when
+      // 1.11.2 became the correctness release — the point of the assertion is
       // that the user is told WHEN, not which number it happens to be.
-      expect(msg).toMatch(/1\.11\.2/);
+      expect(msg).toMatch(/1\.11\.3/);
       // The reassurance must survive the branch.
       expect(msg).toMatch(/console, network/i);
     } finally {
