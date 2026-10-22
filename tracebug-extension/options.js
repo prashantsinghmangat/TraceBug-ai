@@ -195,6 +195,29 @@ function applyProviderUI() {
 
 $("aiProvider").addEventListener("change", applyProviderUI);
 
+// Every origin a fixed integration or the default Ollama hosts ever requests —
+// never removed, even if a custom Ollama URL momentarily resolves to the same
+// pattern (it can't, since these are all declared on their own, but a stale
+// one-off origin computed for a DIFFERENT custom host must never take one of
+// these down with it).
+const PROTECTED_ORIGINS = new Set(Object.values(HOSTS).flat());
+
+/**
+ * Drop the host permission for a PREVIOUS custom Ollama/OpenAI-compatible
+ * base URL, now that it is no longer configured. Only a non-localhost custom
+ * host ever reaches here (see `aiHostPatterns`) — `<all_urls>` and every
+ * fixed/localhost origin are filtered out by PROTECTED_ORIGINS, so this can
+ * only ever remove the one-off grant this settings page itself requested.
+ */
+async function releaseStaleOrigin(patterns) {
+  if (!patterns || !patterns.length) return;
+  const stale = patterns.filter((p) => !PROTECTED_ORIGINS.has(p));
+  if (!stale.length) return;
+  try {
+    await new Promise((resolve) => chrome.permissions.remove({ origins: stale }, resolve));
+  } catch {}
+}
+
 async function saveAI(granted) {
   const provider = $("aiProvider").value;
   const key = $("aiKey").value.trim();
@@ -218,10 +241,21 @@ async function saveAI(granted) {
     return;
   }
 
+  // The origin a PREVIOUS save requested, if this save is changing or
+  // dropping a custom Ollama/OpenAI-compatible host — computed before the
+  // new config overwrites `existing`, so there is still something to compare.
+  const oldPatterns = existing && existing.provider === "ollama"
+    ? aiHostPatterns("ollama", existing.baseUrl)
+    : null;
+  const newPatterns = provider === "ollama" ? aiHostPatterns(provider, baseUrl) : null;
+
   try {
     await set({ [AI_KEY]: { provider, apiKey, model, baseUrl: baseUrl || undefined } });
     $("aiKey").value = "";
     await refreshPills();
+    if (oldPatterns && (!newPatterns || oldPatterns[0] !== newPatterns[0])) {
+      await releaseStaleOrigin(oldPatterns);
+    }
     // Name the host when Ollama points somewhere other than this machine —
     // "your local Ollama" would be wrong, and the decline note has to say
     // which site the user is being asked to allow.
@@ -243,12 +277,17 @@ $("aiSave").addEventListener("click", withHostAccess(
 ));
 
 $("aiClear").addEventListener("click", async () => {
+  const existing = (await get([AI_KEY]))[AI_KEY] || null;
+  const oldPatterns = existing && existing.provider === "ollama"
+    ? aiHostPatterns("ollama", existing.baseUrl)
+    : null;
   try {
     chrome.storage.local.remove(AI_KEY, async () => {
       void chrome.runtime.lastError;
       $("aiKey").value = "";
       $("aiModel").value = "";
       await refreshPills();
+      await releaseStaleOrigin(oldPatterns);
       say($("aiStatus"), "Removed.", "ok");
     });
   } catch {
@@ -384,6 +423,34 @@ async function renderLlmSites() {
     wrap.appendChild(row);
   });
 }
+
+// ── Access to all sites (T-13) ──────────────────────────────────────────────
+// The popup no longer offers to request <all_urls> (docs/audit/product-review.md):
+// it bought only a cosmetic toolbar-visibility convenience, not a capability
+// worth a broad permission prompt. This card only ever shows the way out, for
+// anyone who granted it in an earlier version — nothing here can grant it again.
+(function initAllUrlsCard() {
+  const card = $("allUrlsCard");
+  const removeBtn = $("allUrlsRemove");
+  const status = $("allUrlsStatus");
+  if (!card) return;
+
+  async function refresh() {
+    let granted = false;
+    try { granted = await chrome.permissions.contains({ origins: ["<all_urls>"] }); } catch {}
+    card.style.display = granted ? "block" : "none";
+  }
+
+  removeBtn.addEventListener("click", async () => {
+    try {
+      await new Promise((resolve) => chrome.permissions.remove({ origins: ["<all_urls>"] }, resolve));
+    } catch {}
+    say(status, "Removed.", "ok");
+    await refresh();
+  });
+
+  void refresh();
+})();
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 

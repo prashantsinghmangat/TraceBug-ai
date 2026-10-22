@@ -68,7 +68,8 @@ the same step.
 - **`chrome.storage.local`** (`tb_*`, extension-owned): `tb_record_opts` (Record options + `videoSetBy`) ·
   `tb_integrations_v1`, `tb_ai_config_v1` (**the secrets**) · `tb_llm_sites_v1`, `tb_llm_rates_v1` ·
   `tb_pending_sends_v1`, `tb_send*` (confirm-send) · `tb_rec_meta_v2`, `tb_rec_data_v2` ·
-  `tb_host_perm_declined` · `tb_migration_notices` · `tracebug_cloud_endpoint`.
+  `tb_migration_notices` · `tracebug_cloud_endpoint`.
+  (`tb_host_perm_declined` removed in 1.11.2, T-13 — the popup's cross-site opt-in row is gone.)
 - **`chrome.storage.session`**: `tb_sw_state_v1` only — worker state, awaited via `_hydrated`.
 - **`chrome.storage.sync`**: `tracebug_redact` only — redaction rules.
 - **Legacy, migrated and deleted on sight** (`secret-migration.js`): page `tracebug_integrations`,
