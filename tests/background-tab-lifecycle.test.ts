@@ -119,7 +119,10 @@ describe('orphaned tabs — ping, repair, or say so', () => {
 
   it('pings before dispatching, and dispatches when the tab answers', async () => {
     // First action on a fresh tab: full injection, then the action message.
-    mock.setTabLive(TAB, true, true);
+    // pageSdk MUST be false here — injectSDK() now pings and defers entirely
+    // (docs/launch/sdk-isolation-1.11.2.md) when it finds a host page's own
+    // TraceBug UI already up, which `true` would simulate.
+    mock.setTabLive(TAB, true, false);
     const res = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
     await settle(400);
 
@@ -131,7 +134,7 @@ describe('orphaned tabs — ping, repair, or say so', () => {
     // Set the tab up as injected-but-orphaned: the worker believes it is
     // loaded (first action succeeded), then the content script dies while the
     // page-world SDK keeps running — exactly what an extension update does.
-    mock.setTabLive(TAB, true, true);
+    mock.setTabLive(TAB, true, false);
     await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
     await settle(400);
 
@@ -151,7 +154,7 @@ describe('orphaned tabs — ping, repair, or say so', () => {
   });
 
   it('re-injects the page world too when the page has no SDK left', async () => {
-    mock.setTabLive(TAB, true, true);
+    mock.setTabLive(TAB, true, false);
     await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
     await settle(400);
 
@@ -162,11 +165,25 @@ describe('orphaned tabs — ping, repair, or say so', () => {
 
     const repair = mock.injections.slice(before);
     expect(repair.some((i) => i.files.includes('content-script.js'))).toBe(true);
-    expect(repair.some((i) => i.world === 'MAIN' && i.files.includes('tracebug-sdk.js'))).toBe(true);
+    expect(repair.some((i) => i.world === 'MAIN' && i.files.includes('tracebug-sdk-ext.js'))).toBe(true);
+  });
+
+  it('defers entirely on a tab that already has a host TraceBug UI (docs/launch/sdk-isolation-1.11.2.md)', async () => {
+    // A tab the worker has NEVER injected before, whose content script
+    // reports pageSdk: true — unlike the repair tests above, this can only
+    // mean a host page's own TraceBug, not a prior extension instance of ours.
+    // One interface per page: defer, don't mount a second toolbar.
+    mock.setTabLive(TAB, true, true);
+    const res = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
+    await settle(400);
+
+    expect(res?.error).toBe('tracebug-host-ui-present');
+    expect(mock.injections.some((i) => i.world === 'MAIN')).toBe(false);
+    expect(mock.sentOfType('TB_CAPTURE_NOW').length).toBe(0);
   });
 
   it('answers with an error the popup can map when the repair fails', async () => {
-    mock.setTabLive(TAB, true, true);
+    mock.setTabLive(TAB, true, false);
     await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
     await settle(400);
 
@@ -185,7 +202,7 @@ describe('orphaned tabs — ping, repair, or say so', () => {
     // one state where there is nothing left for the worker to try, and the
     // error it raises is the exact string page-support.js maps to
     // "Reload this tab to capture" with a Reload tab button.
-    mock.setTabLive(TAB, true, true);
+    mock.setTabLive(TAB, true, false);
     await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
     await settle(400);
 
@@ -352,7 +369,7 @@ describe('the keyboard command (Phase 3)', () => {
     const mock = createChromeMock({ commands: [{ name: 'tb-quick-capture', shortcut: 'Ctrl+Shift+B' }] });
     loadBackground(mock);
     await settle(20);
-    mock.setTabLive(7, true, true);
+    mock.setTabLive(7, true, false);
 
     mock.events.onCommand.emit('tb-quick-capture');
     await settle(500);
@@ -408,7 +425,7 @@ describe('the video opt-in reaches the page', () => {
     mock = createChromeMock();
     loadBackground(mock);
     await settle(20);
-    mock.setTabLive(TAB, true, true);
+    mock.setTabLive(TAB, true, false);
   });
 
   it('forwards video:false when the option is off', async () => {

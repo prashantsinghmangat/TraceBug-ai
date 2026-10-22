@@ -75,9 +75,22 @@ Dated in `docs-internal/GROWTH-PLAN-30DAY.md` week 1; submit **Fri Oct 16**.
 - **`tab.url` is normally `undefined`** now `<all_urls>` is optional — classify with `classifyPage`
   (`page-support.js`); read the shortcut from `chrome.commands` at runtime (`Alt+B`).
 - **The offscreen files follow `VIDEO_ENABLED_IN_EXTENSION`.** `build-ext.mjs` parses it out of
-  `src/video-recorder.ts` and ships `offscreen.{html,js}` only when true, so 1.11.2 flips one
-  constant and they return (28 files -> 30). It **throws** if the constant is renamed: a silent
-  "off" would ship a build with no recorder.
+  `src/video-recorder.ts` and ships `offscreen.{html,js}` only when true, so 1.11.3 (video,
+  `docs/launch/PLAN.md` Phase 10b — renamed from "1.11.2" when 1.11.2 became the correctness phase)
+  flips one constant and they return (28 files -> 30). It **throws** if the constant is renamed: a
+  silent "off" would ship a build with no recorder.
+- **Two TraceBug instances on one page isolate STATE but not DOM.** The extension's injected SDK
+  (`tracebug-sdk-ext.js`, `window.__TraceBugExtension`) and a host page's own npm-SDK integration
+  (`tracebug-sdk.js`, `window.TraceBug`) are separate globals since `docs/launch/sdk-isolation-1.11.2.md`
+  — but both still mount into the same shared DOM under the same hardcoded ids
+  (`src/dashboard.ts`), so state isolation alone doesn't stop a second toolbar from trying to appear.
+  **Deliberately not supported**: if a host page's own TraceBug toolbar is already up, the extension
+  defers entirely (no injection at all, not even under its own global) rather than mounting a second
+  one — `background.js`'s `injectSDK()` detects this via `page-support.js`'s
+  `detectHostTraceBugUI()` before injecting, same signal `content-script.js`'s `TB_PING` already used
+  for repair. The popup shows "This site runs its own TraceBug"; `Alt+B` shows the same sentence as
+  an on-page shadow-root notice. A host page whose own SDK integration passes
+  `enableDashboard: false` is unaffected.
 - **The DOM replay never records canvas**, so a canvas page replays as an empty box;
   `src/replay-fidelity.ts` warns above 25% of the viewport, branching its advice on `isVideoOffered()`.
 - **`diagnostics.js` `scrub()` is a privacy boundary.** Rules run in a fixed order (markup FIRST) and tests assert against real browser error text — add a rule there, with a case, not a call-site filter.

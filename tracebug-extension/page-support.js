@@ -132,11 +132,63 @@
     return { ok: true };
   }
 
+  // ── Host TraceBug UI detection ────────────────────────────────────────────
+  // Two SEPARATE TraceBug instances (a host page's own window.TraceBug, the
+  // extension's own window.__TraceBugExtension) are isolated at the JS-global
+  // level since docs/launch/sdk-isolation-1.11.2.md, but both still mount a
+  // toolbar into the SAME shared DOM, under the same hardcoded ids
+  // (src/dashboard.ts). Two toolbars on one page is the wrong outcome, so the
+  // product decision is ONE interface per page: if a host page's own UI is
+  // already there, the extension defers entirely rather than mounting a
+  // second one. This is also the existing signal a tab repair already used
+  // (content-script.js's TB_PING "pageSdk" field, previously an inline
+  // document.getElementById("tracebug-root") check) — unified here so both
+  // call sites agree and so it is unit-testable.
+  var HOST_UI_IDS = ["tracebug-root", "tracebug-compact-toolbar"];
+
+  /**
+   * Is a TraceBug UI already mounted in this document? Takes a document-LIKE
+   * object rather than touching `document` directly, so this file stays
+   * DOM-free (see the file header) and testable in node:vm with a fake.
+   *
+   * @param {{getElementById: function(string): unknown}} [doc]
+   * @returns {boolean}
+   */
+  function detectHostTraceBugUI(doc) {
+    if (!doc || typeof doc.getElementById !== "function") return false;
+    for (var i = 0; i < HOST_UI_IDS.length; i++) {
+      if (doc.getElementById(HOST_UI_IDS[i])) return true;
+    }
+    return false;
+  }
+
+  // The one message shown everywhere this state surfaces — the popup's
+  // "can't run" panel, the Alt+B shadow-root notice, and the badge tooltip
+  // fallback — so a future copy edit cannot drift between the three.
+  var HOST_UI_TITLE = "This site runs its own TraceBug";
+  var HOST_UI_DETAIL = "Use its bug button, or capture on another page.";
+  // Thrown by background.js's injectSDK() when detectHostTraceBugUI() finds a
+  // host UI before the page-world SDK would be injected. A distinct string
+  // (not reused from any browser-generated error) so explainInjectionError
+  // below can recognize it unambiguously.
+  var HOST_UI_ERROR = "tracebug-host-ui-present";
+
   // ── Failure → sentence + next action ──────────────────────────────────────
   // The left-hand patterns are the REAL strings Chrome and Firefox produce.
   // Order matters: the host-permission message also contains "permission", so
   // it has to be tested before the broader cannot-access pattern.
   var ERROR_MAP = [
+    {
+      // One interface per page (deliberately not supported — see
+      // docs/launch/sdk-isolation-1.11.2.md): a host page's own TraceBug UI
+      // was detected before the extension would have injected its own.
+      test: new RegExp(HOST_UI_ERROR, "i"),
+      reason: "host-ui",
+      title: HOST_UI_TITLE,
+      detail: HOST_UI_DETAIL,
+      action: "demo",
+      url: DEMO_URL,
+    },
     {
       // Orphaned tab: the content script belongs to a previous extension
       // instance (update, reload, disable→enable). Nothing can reach it.
@@ -280,6 +332,10 @@
     BLOCKED_SCHEMES: BLOCKED_SCHEMES,
     BLOCKED_HOSTS: BLOCKED_HOSTS,
     DEMO_URL: DEMO_URL,
+    HOST_UI_ERROR: HOST_UI_ERROR,
+    HOST_UI_TITLE: HOST_UI_TITLE,
+    HOST_UI_DETAIL: HOST_UI_DETAIL,
+    detectHostTraceBugUI: detectHostTraceBugUI,
     classifyPage: classifyPage,
     describePage: describePage,
     explainInjectionError: explainInjectionError,
