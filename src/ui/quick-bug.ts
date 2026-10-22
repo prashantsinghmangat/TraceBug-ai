@@ -19,7 +19,7 @@ import { summarizeRedactions, formatRedactionSummary } from "../redaction-summar
 import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
-import { showToast } from "./toast";
+import { showToast, showActionToast } from "./toast";
 import { escapeHtml, tbIsolationCss } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
@@ -36,7 +36,6 @@ import {
   type AIProvider, type AIConfig,
 } from "../ai/llm-client";
 // PHASE2-CLOUD: import { getBridge } from "../auth/iframe-bridge";
-// PHASE2-CLOUD: import { showScreenshotTrimModal } from "./screenshot-trim-modal";
 import { injectTheme, type ThemeMode } from "../theme";
 import { getElementAnnotations, getDrawRegions } from "../annotation-store";
 import { openLinearIssue } from "../linear-issue";
@@ -1334,14 +1333,20 @@ ${report.steps}` : userDesc)
         showFooter: showExportFooter(),
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
-      showToast(`\u2713 Replay exported \u00b7 ${sizeMb} MB`, root);
+      // Offer the agent hand-off as a one-line link under the export
+      // confirmation (T-05, docs/audit/product-review.md) \u2014 not the full card
+      // unasked. The card is exactly what showMcpHandoffCard always rendered;
+      // it only opens now if the user clicks through, instead of the export
+      // forcing a dismissal every time.
+      showActionToast(
+        `\u2713 Replay exported \u00b7 ${sizeMb} MB`,
+        "Open in your AI agent \u2192",
+        () => showMcpHandoffCard(result.filename, result.sizeBytes),
+        root,
+      );
       // Counted only here, after a file actually exists. A review prompt
       // "earned" by a failed export is worse than no prompt.
       _maybeAskForReview(root, data.currentSession?.sessionId ?? null);
-      // Offer the agent hand-off: the export is exactly what the MCP server
-      // reads, so the natural next step is pasting this prompt into Claude
-      // Code / Cursor next to the codebase that owns the bug.
-      showMcpHandoffCard(result.filename, result.sizeBytes);
     } catch (err) {
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Couldn't export the replay — try again", root);
