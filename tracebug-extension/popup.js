@@ -23,21 +23,11 @@ let currentTabId = null;
 // undefined — `<all_urls>` is optional, so most tabs have no visible URL.
 let currentTabUrl = null;
 let cloudEndpoint = DEFAULT_CLOUD_ENDPOINT;
-// Firefox host-permission state: once the user declines the "<all_urls>"
-// doorhanger, don't re-prompt on every click — that punishes a "no".
-// Persisted so the decision survives popup reopens.
-let hostPermDeclined = false;
 // The shortcut the BROWSER bound to TraceBug's capture command, or "" if the
 // user has none. Never hardcoded in copy: it is rebindable, and Ctrl+Shift+B
 // collides with Chrome's bookmarks bar and Firefox's bookmarks Library, so it
 // may well have failed to bind.
 let boundShortcut = "";
-try {
-  chrome.storage.local.get("tb_host_perm_declined", (r) => {
-    void chrome.runtime.lastError;
-    hostPermDeclined = !!(r && r.tb_host_perm_declined);
-  });
-} catch {}
 
 // ── Page support (page-support.js, loaded ahead of this file) ───────────────
 // build-ext.mjs refuses to produce a build without this file, so a miss means
@@ -358,7 +348,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   void initRedactionUI();
   void initWhatsNew();
   initDiagnosticsUI();
-  void initCrossSiteOptIn();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -641,10 +630,11 @@ async function runCombo(messageType, busyText, extra) {
   // a bait and switch, and it is the opposite of what 1.11 is for.
   //
   // `activeTab` already covers the action the user just clicked: the capture
-  // works on this page either way. Site access buys exactly one thing - the
-  // capture SURVIVING a navigation to another origin - so it is asked for
-  // where that is the subject, as an explicit opt-in row in the popup
-  // (`initCrossSiteOptIn`), with the reason stated before the browser asks.
+  // works on this page either way. There is no popup opt-in row requesting
+  // <all_urls> any more (T-13, docs/audit/product-review.md) - it bought
+  // only a cosmetic toolbar-visibility convenience, not a capability worth a
+  // broad permission prompt. A user who already granted it in an earlier
+  // version can still see and remove it from options.html.
   setBusy(true);
   showToast(busyText);
   try {
@@ -865,6 +855,16 @@ function redactStateLabel(rules) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.11.2": {
+    label: "New in 1.11.2",
+    lines: [
+      "Works properly on sites that run their own copy of TraceBug — and steps aside where that site's own toolbar is already up",
+      "Tracker buttons say what they do: “Send to GitHub” asks you first, “Copy” copies",
+      "No more hand-off dialog after every export — a one-line link to open it in your AI agent instead",
+      "“Keep capturing across sites” is gone — it asked for every site and saved one click. Granted it before? Remove it in TraceBug settings",
+    ],
+    warning: "Screen recording is still paused and now returns in 1.11.3 — your setting is kept.",
+  },
   "1.11.1": {
     label: "New in 1.11.1",
     lines: [
@@ -955,64 +955,15 @@ async function initWhatsNew() {
   card.style.display = "";
 }
 
-// ── Cross-site capture opt-in ───────────────────────────────────────────────
-// Site access does exactly one thing: it lets a capture keep running after the
-// user navigates to a DIFFERENT site. Everything else works from `activeTab`,
-// granted by their own click. So this is the only place that asks for it, and
-// it says what it is for before the browser's dialog appears.
-//
-// permissions.request must be the FIRST await inside a user-gesture handler -
-// Firefox rejects it otherwise - which is why this row is its own button
-// rather than a confirm step bolted onto a capture.
-async function initCrossSiteOptIn() {
-  const row = document.getElementById("crossSiteRow");
-  const state = document.getElementById("crossSiteState");
-  const help = document.getElementById("crossSiteHelp");
-  if (!row) return;
-
-  const render = (granted) => {
-    state.textContent = granted ? "On" : "Off";
-    state.style.color = granted ? "var(--success)" : "var(--text-3)";
-    // What this actually buys, as of 1.11.1: TraceBug stays loaded on the next
-    // site, so a capture there is one click away. It does NOT carry a running
-    // capture across — a capture's data lives in the page's own storage, which
-    // is per-origin, so leaving the site ends it (TraceBug now says so on the
-    // page you land on instead of going quiet). Carrying a capture across
-    // origins needs the session to move into the extension — ADR 008, v2.0.
-    help.textContent = granted
-      ? "TraceBug stays loaded as you move between sites, so a capture is one click away on any of them. A capture itself still ends when you leave the site it started on — you'll see a note saying so."
-      : "TraceBug only loads on the site you start it from. Turn this on and it follows you to other sites, ready to capture there too — your browser will ask to allow it.";
-    row.style.display = "block";
-  };
-
-  let granted = false;
-  try { granted = await chrome.permissions.contains({ origins: ["<all_urls>"] }); } catch {}
-  render(granted);
-
-  row.addEventListener("click", async () => {
-    let has = false;
-    try { has = await chrome.permissions.contains({ origins: ["<all_urls>"] }); } catch {}
-    if (has) {
-      // Giving it back has to be as easy as granting it.
-      try { await chrome.permissions.remove({ origins: ["<all_urls>"] }); } catch {}
-      render(false);
-      showToast("Site access removed — capture still works on the page you are on");
-      return;
-    }
-    try {
-      const ok = await chrome.permissions.request({ origins: ["<all_urls>"] });
-      render(!!ok);
-      if (!ok) {
-        try { chrome.storage.local.set({ tb_host_perm_declined: true }); } catch {}
-        showToast("No problem — capture works on this page either way");
-      } else {
-        try { chrome.storage.local.set({ tb_host_perm_declined: false }); } catch {}
-      }
-    } catch {
-      showToast("Couldn't ask for site access — try from your browser's extensions page", true);
-    }
-  });
-}
+// Cross-site opt-in row (initCrossSiteOptIn) removed, T-13
+// (docs/audit/product-review.md): granting <all_urls> bought only a
+// cosmetic toolbar-visibility convenience, not a capability worth a broad
+// permission prompt — the extension defers entirely from any tab with a
+// host page's own TraceBug UI regardless (sdk-isolation-1.11.2.md), and a
+// capture never survived cross-origin navigation either way, with or
+// without this permission. A user who already granted it in an earlier
+// version can still see and remove it from options.html. Revisit when ADR
+// 008 (v2.0) makes captures actually survive cross-origin navigation.
 
 // ── Diagnostics (Phase 7) ───────────────────────────────────────────────────
 // Both buttons produce the same scrubbed text. The popup's job is only to say

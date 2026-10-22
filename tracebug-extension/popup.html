@@ -141,7 +141,7 @@
                VIDEO_ENABLED_IN_EXTENSION switch in src/video-recorder.ts. A
                stored tb_record_opts.video is left in place and simply not acted
                on, so 1.11.2 can restore it without the user re-choosing. -->
-          <div class="redact-help">A capture records console, network, clicks and an interactive DOM replay, without asking your browser to share the screen. Screen recording is paused in this version — it is back in 1.11.2.</div>
+          <div class="redact-help">A capture records console, network, clicks and an interactive DOM replay, without asking your browser to share the screen. Screen recording is paused in this version — it is back in 1.11.3.</div>
           <!-- The "Capture: Current tab / Desktop" select used to live here.
                It is gone because in the EXTENSION it cannot do anything: the
                recorder runs in an offscreen document, and the browser hint for
@@ -208,16 +208,15 @@
         </div>
       </details>
 
-      <!-- Cross-site capture. The ONE thing site access buys, asked for where
-           that is the subject rather than ambushing the first capture click.
-           The row states the reason; the browser dialog comes after. -->
-      <button class="redact" id="crossSiteRow" style="display:none;width:100%;text-align:left;border:1px solid var(--border);background:var(--bg-2);padding:10px 12px;cursor:pointer;font-family:inherit">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-          <span style="font-size:12.5px;font-weight:600;color:var(--text)">Keep capturing across sites</span>
-          <span id="crossSiteState" style="font-size:11px;color:var(--text-3)"></span>
-        </div>
-        <div id="crossSiteHelp" style="font-size:11px;color:var(--text-2);line-height:1.45;margin-top:3px"></div>
-      </button>
+      <!-- Cross-site capture opt-IN row deliberately removed (T-13,
+           docs/audit/product-review.md): granting <all_urls> today buys only
+           a cosmetic toolbar-visibility convenience (the extension defers
+           entirely from a tab with a host page's own UI either way, since
+           docs/launch/sdk-isolation-1.11.2.md), not a capability worth asking
+           for a broad permission. Removed here, not hidden — until ADR 008
+           (v2.0) makes captures actually survive cross-origin navigation.
+           A user who already granted <all_urls> in an earlier version can
+           still see and remove it from options.html. -->
 
       <!-- Having trouble (Phase 7). TraceBug sends nothing anywhere, so the
            only route for a bug report is the user's own clipboard. Both

@@ -1,5 +1,16 @@
 # Manual test: an already-granted `<all_urls>` survives the 1.11 upgrade
 
+> **Updated for 1.11.2 (T-13).** The popup no longer has a row that requests or shows `<all_urls>` — it
+> bought only cosmetic toolbar-visibility on the next site, not a real capability, since a capture always
+> ends at the site it started on regardless (`docs/audit/product-review.md`). The manifest still declares
+> `<all_urls>` in `optional_host_permissions` (it is what lets settings request one custom Ollama host;
+> whether to narrow it is open — `docs/audit/product-review.md`, T-13), so a grant from an
+> earlier version is still real and still has to be proven to survive an update. What changed is only
+> **where** that state is surfaced and **how** it is removed: the options page now shows an "Access to all
+> sites" card with a **Remove** button when it is granted, and nothing in the popup ever requests it again.
+> Sections 1–8 below (grant survives the upgrade) are unaffected by T-13 and still run as written. The
+> **Fresh-install sanity check** at the end is rewritten for the new popup.
+
 **Why this test exists.** 1.11 moves `<all_urls>` from `host_permissions` (required, granted at install) to
 `optional_host_permissions` (granted on request). Chrome and Firefox are both documented to *keep* a grant when
 a pattern moves between those two keys, which would mean existing users notice nothing. But "documented" is not
@@ -72,6 +83,10 @@ reasoning, not this test.
    passes for the wrong reason. So: Ollama must **not** be configured in this profile, and the `origins` list
    above must contain **no `localhost` or `127.0.0.1` entry of its own**. If it does, either revoke it or
    switch to `example.com` → `example.org`.
+6a. **Options page shows the grant (1.11.2+ build only).** Open the extension's options page. **Pass:**
+   an "Access to all sites" card is visible, reading **Granted**, with a **Remove** button. (On the 1.10.1
+   build in step 4 there is no such card — the options page predates T-13 — so run this only after step 5's
+   upgrade.)
 7. **Prove cross-origin capture still works, with no re-prompt.** Repeat step 4 on the 1.11 build. The toolbar
    must survive the cross-origin navigation, and **no permission dialog may appear.**
 8. **Check the page-side signal agrees.** `data-tb-caps` is published by the content script, so it does not
@@ -109,8 +124,9 @@ Then run the same checks: the Permissions toggle stays on, no prompt, and cross-
 
 ## Fresh-install sanity check (second clean profile, 5 minutes)
 
-Install only the 1.11 build and confirm the opposite case. Keep Ollama unconfigured here too, or use
-`example.com` → `example.org`, for the same reason as step 6.
+Install only the 1.11.2 build and confirm the opposite case: nobody carried a grant in from an earlier
+version. Keep Ollama unconfigured here too, or use `example.com` → `example.org`, for the same reason as
+step 6.
 
 - The install dialog lists **no permission warning at all** (see the before/after table in
   `docs/launch/PROGRESS.md`).
@@ -123,12 +139,19 @@ Install only the 1.11 build and confirm the opposite case. Keep Ollama unconfigu
   (On `chrome://*` pages and the Web Store, "Can't run on this page" is the **correct** answer — Chrome never
   grants `activeTab` there.)
 - A capture on one page works immediately, from `activeTab` alone.
-- **Decline the access prompt, then navigate cross-site.** After the navigation the **toolbar and event
-  capture do not come back on the new site**, and the keyboard-shortcut path shows the "capturing this page
-  only" notice explaining why. Note what does *not* stop: a **video recording keeps running**, because it
+- **The options page shows no "Access to all sites" card.** Nothing was ever granted, so the card
+  (`#allUrlsCard`) must not render at all — not even empty. If it appears, `initAllUrlsCard`'s
+  `chrome.permissions.contains` check is wrong.
+- **Navigate cross-site mid-capture; nothing in the popup can grant `<all_urls>` any more (T-13).** Start a
+  capture, click something, then navigate to a **different site**. **Pass:** the capture bar is gone on the
+  new site, and a notice there reads *"Capture ended when you left `<host>` … go back to `<host>` to open
+  its ticket"* — this is unconditional as of 1.11.2, independent of any permission (row 10a in
+  `docs/RELEASE_CHECKLIST.md`). Note what does *not* stop: a **video recording keeps running**, because it
   lives in the offscreen document and never depended on page access. Do not mark this failed because the
   recording continued — that is correct behaviour.
-- **Run it again and accept.** Capture now continues across the cross-site navigation, and nothing asks again.
+- **The toolbar does not silently reappear on the new site**, since nothing ever requested `<all_urls>` for
+  this install. Click the extension icon (or press the capture shortcut) on the new site to bring the
+  toolbar back there — that one click is the entire difference `<all_urls>` used to cover.
 - **The capture shortcut** has its own script now, including the rows that were sketched here:
   `docs/testing/restricted-pages.md`, section 6. The short version of what changed: the default is **`Alt+B`**,
   not `Ctrl+Shift+B` — Chrome refuses to bind that (bookmarks bar) *and* refuses `Alt+Shift+B` (focus
