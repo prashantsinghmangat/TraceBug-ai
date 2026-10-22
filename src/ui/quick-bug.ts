@@ -54,6 +54,19 @@ import {
 let _githubRepo: string | null = null;
 export function setGithubRepo(repo: string | null): void { _githubRepo = repo; }
 
+/**
+ * Whether the primary GitHub action should present as "configured" (send
+ * directly) rather than "unconfigured" (copy markdown). `_githubRepo` is a
+ * page/SDK-mode-only prefill field — the extension never sets it, so in
+ * extension mode this must ask the real BYO-token integration status
+ * instead, or a configured extension user would see "Copy GitHub Issue"
+ * forever, regardless of what's actually set up in TraceBug's own settings.
+ * Exported for regression testing (tests/github-button-state.test.ts).
+ */
+export function _githubConfigured(): boolean {
+  return isExtensionMode() ? hasIntegration("github") : !!_githubRepo;
+}
+
 // Cloud endpoint for the Share link flow. Defaults to production; can be
 // overridden at init time via TraceBug.init({ cloudEndpoint: ... }).
 // PHASE2-CLOUD: the share-link handler that consumed this is disabled for the
@@ -708,9 +721,9 @@ function _openModal(
             ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`
             : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
+        <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
+          ${_githubConfigured() ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay — best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">· ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
@@ -1026,16 +1039,24 @@ function _openModal(
   // listeners pointing at the discarded overlay.
   (overlay as ModalOverlayElement).__tbEscKey = escHandler;
 
-  // Open in GitHub — prefilled URL, opens new tab (no API key needed)
+  // Open in GitHub — real send when configured (BYO-token, page/SDK
+  // localStorage or the extension's own settings), else the page/SDK-mode
+  // prefilled-URL flow (no token needed, requires `_githubRepo` from config).
   const openGhBtn = modal.querySelector('[data-action="open-github"]');
-  if (openGhBtn && _githubRepo) {
+  if (openGhBtn && _githubConfigured()) {
     openGhBtn.addEventListener("click", async () => {
       const { title, description } = getDraft();
       const report = _reportFromDraft(title, description);
       if (!report) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
       // Real API (BYO-token) when configured; otherwise the prefilled-URL flow.
       if (hasIntegration("github") && await _fileViaTracker("github", report, root, screenshots, close)) return;
-      const repo = _githubRepo!; // checked in outer if
+      if (!_githubRepo) {
+        // Extension mode: no prefilled-URL repo to fall back to, and the real
+        // send above either isn't configured or didn't complete.
+        showToast("Failed to send to GitHub — use Copy instead", root);
+        return;
+      }
+      const repo = _githubRepo;
       const ok = openGitHubIssue(repo, report);
       if (ok) {
         const tail = screenshots.length ? ` \u00b7 ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"} downloading` : "";
@@ -1050,8 +1071,10 @@ function _openModal(
     });
   }
 
-  // Copy actions
-  modal.querySelector('[data-action="github"]')!.addEventListener("click", async () => {
+  // Copy actions. Only present when the primary button isn't already bound to
+  // this data-action (unconfigured state), or via the more-menu's own
+  // `_githubRepo`-gated "Copy GitHub markdown" item (page/SDK mode only).
+  const copyGhBtnHandler = async () => {
     const { title, description } = getDraft();
     if (hasIntegration("github")) {
       const report = _reportFromDraft(title, description);
@@ -1066,7 +1089,9 @@ function _openModal(
     // Deliberately NOT closing, and NOT clearing the draft. Copying is not
     // filing: the user may paste it, decide it needs an edit, and copy again -
     // or copy AND export. Closing here destroyed an unsaved ticket.
-  });
+  };
+  const copyGhBtn = modal.querySelector('[data-action="github"]');
+  if (copyGhBtn) copyGhBtn.addEventListener("click", copyGhBtnHandler);
 
   // Jira formatting is local export output — never plan-gated (pricing
   // boundary: local free forever, cloud collaboration paid).
@@ -2882,6 +2907,11 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
 function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): void {
   document.getElementById("tb-int-config")?.remove();
   // Extension mode: see showAIConfigModal — no token fields in page DOM.
+  // NOTE: this is the ONLY "Configure integrations" entry point guarded below.
+  // The similarly-named buttons in src/dashboard.ts's Export tab ("Copy GitHub
+  // Issue" / "Copy Jira Ticket") are a separate, older, copy-to-clipboard-only
+  // surface with no token fields at all — if a token form is ever seen outside
+  // this modal, it is not this code path; look at dashboard.ts instead.
   if (isExtensionMode()) {
     showSettingsPointerModal(
       root,

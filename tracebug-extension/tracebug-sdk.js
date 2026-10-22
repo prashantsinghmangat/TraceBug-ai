@@ -22693,7 +22693,7 @@ var TraceBugModule = (() => {
     var _a2, _b, _c, _d;
     const page = ((_a2 = report.environment) == null ? void 0 : _a2.url) ? safePath(report.environment.url) : ((_d = (_c = (_b = report.session) == null ? void 0 : _b.events) == null ? void 0 : _c[0]) == null ? void 0 : _d.page) || "/";
     const click = report.clickedElement;
-    const firstNet = report.networkErrors[0];
+    const firstNet = report.networkErrors.find((n2) => !isNoiseRequest(n2.url));
     const firstErr = report.consoleErrors[0];
     const clickPhrase = click ? describeClickPhrase(click) : "";
     const pagePhrase = ` on ${page}`;
@@ -30259,6 +30259,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   // src/ui/quick-bug.ts
   var quick_bug_exports = {};
   __export(quick_bug_exports, {
+    _githubConfigured: () => _githubConfigured,
     getFocusableElements: () => getFocusableElements,
     isQuickBugOpen: () => isQuickBugOpen,
     refreshQuickBugCapture: () => refreshQuickBugCapture,
@@ -30269,6 +30270,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   });
   function setGithubRepo(repo) {
     _githubRepo = repo;
+  }
+  function _githubConfigured() {
+    return isExtensionMode() ? hasIntegration("github") : !!_githubRepo;
   }
   function setCloudEndpoint(_endpoint) {
   }
@@ -30726,9 +30730,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_s = data.currentSession) == null ? void 0 : _s.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
           ${((_t = data.currentSession) == null ? void 0 : _t.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        <button data-action="${_githubRepo ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : "Copy a ready-to-paste GitHub issue"}">
+        <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          ${_githubRepo ? "Open in GitHub" : "Copy GitHub Issue"}
+          ${_githubConfigured() ? "Open in GitHub" : "Copy GitHub Issue"}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
@@ -31003,7 +31007,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     document.addEventListener("keydown", escHandler);
     overlay.__tbEscKey = escHandler;
     const openGhBtn = modal.querySelector('[data-action="open-github"]');
-    if (openGhBtn && _githubRepo) {
+    if (openGhBtn && _githubConfigured()) {
       openGhBtn.addEventListener("click", async () => {
         const { title, description } = getDraft();
         const report = _reportFromDraft(title, description);
@@ -31012,6 +31016,10 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           return;
         }
         if (hasIntegration("github") && await _fileViaTracker("github", report, root2, screenshots2, close)) return;
+        if (!_githubRepo) {
+          showToast("Failed to send to GitHub \u2014 use Copy instead", root2);
+          return;
+        }
         const repo = _githubRepo;
         const ok = openGitHubIssue(repo, report);
         if (ok) {
@@ -31026,7 +31034,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         }
       });
     }
-    modal.querySelector('[data-action="github"]').addEventListener("click", async () => {
+    const copyGhBtnHandler = async () => {
       const { title, description } = getDraft();
       if (hasIntegration("github")) {
         const report = _reportFromDraft(title, description);
@@ -31038,7 +31046,9 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       showToast(ok ? `\u2713 Copied as GitHub Issue${tail}` : "Copy failed", root2);
       if (ok && screenshots2.length) _downloadAllScreenshots(screenshots2);
       if (ok) _downloadVideoIfPresent();
-    });
+    };
+    const copyGhBtn = modal.querySelector('[data-action="github"]');
+    if (copyGhBtn) copyGhBtn.addEventListener("click", copyGhBtnHandler);
     modal.querySelector('[data-action="jira"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
       const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
