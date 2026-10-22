@@ -10,11 +10,20 @@
     tracebug.dev/try.html?welcome=extension) so first run does not depend on
     the network — see docs/adr and docs/launch/PLAN.md Phase 4.
 
-    No remote assets of any kind: the palette duplicates styles.css rather than
-    linking it, because that file is written for a 340px popup and sets
+    Layout follows docs/launch/designs/tracebug_welcome_v2/. That export is
+    layout only: its Tailwind CDN, Google Fonts and googleusercontent.com logo
+    are deliberately absent, because no remote asset of any kind may reach this
+    page. Its mocked Cmd/Shift/B caps, its "Also works on Windows" line and its
+    "Quick capture active" bar are gone too — step 3 draws the binding the
+    browser actually reports. The export is light-only; this page is both.
+
+    No remote assets: the palette duplicates styles.css rather than linking it,
+    because that file is written for a 340px popup and sets
     `body { width: 340px }`. Inline <style> matches options.html and
     confirm-send.html; the CSP (script-src 'self') forbids inline SCRIPT only,
-    hence welcome.js alongside.
+    hence welcome.js alongside. The illustrations are inline markup and SVG for
+    the same reason — a screenshot would be a remote asset or a bundled binary,
+    and neither follows the theme.
   -->
   <style>
     :root {
@@ -26,6 +35,26 @@
       --radius-sm: 10px; --radius-md: 12px; --radius-lg: 16px;
       --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+      /* ── v2 layout. Every one of these has a dark value below. ────────── */
+      /* The page sits a shade below the cards, so a card reads as raised. */
+      --page-bg: #FAFBFC; --card-bg: #FFFFFF;
+      --dot: #E2E8F0;                            /* the background dot grid */
+      --art-bg: #F7F8FA; --art-border: #EDEFF3;  /* illustration panel */
+      --art-sunken: #F1F3F6;                     /* browser chrome inside it */
+      --card-shadow: 0 4px 20px -2px rgba(16, 24, 40, 0.05), 0 2px 6px -1px rgba(16, 24, 40, 0.02);
+      --pop-shadow: 0 10px 24px -6px rgba(16, 24, 40, 0.18);
+      --key-shadow: 0 3px 0 0 #CBD5E1, 0 4px 8px rgba(16, 24, 40, 0.06);
+      /* Emerald — the privacy chips and the mocked "Ready" badge. */
+      --ok-bg: #ECFDF5; --ok-border: #A7F3D0; --ok-text: #065F46; --ok-icon: #059669;
+      /* Rose — the mocked checkout failure. */
+      --err-bg: #FFF1F2; --err-border: #FECDD3; --err-text: #9F1239; --err-icon: #F43F5E;
+      /* The AI box is dark in both themes; in dark it needs its own value, or
+         it dissolves into the card behind it. */
+      --ai-bg: #0F172A; --ai-border: #1E293B;
+      --ai-title: #FFFFFF; --ai-text: #CBD5E1; --ai-accent: #818CF8;
+      --ai-code-bg: rgba(0, 0, 0, 0.38); --ai-code-border: #334155; --ai-code-text: #E2E8F0;
+      --ai-btn-bg: #1E293B; --ai-btn-bg-2: #334155; --ai-btn-text: #94A3B8;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
@@ -34,114 +63,280 @@
         --border: #26262E;
         --accent: #6366F1; --accent-2: #818CF8; --accent-soft: rgba(99, 102, 241, 0.14);
         --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+
+        --page-bg: #0B0B10; --card-bg: #16161D;
+        --dot: #1C1C26;
+        --art-bg: #101017; --art-border: #23232C;
+        --art-sunken: #1A1A22;
+        --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 2px 6px -1px rgba(0, 0, 0, 0.3);
+        --pop-shadow: 0 10px 24px -6px rgba(0, 0, 0, 0.6);
+        --key-shadow: 0 3px 0 0 #2B2B36, 0 4px 8px rgba(0, 0, 0, 0.35);
+        --ok-bg: rgba(16, 185, 129, 0.12); --ok-border: rgba(16, 185, 129, 0.32);
+        --ok-text: #6EE7B7; --ok-icon: #34D399;
+        --err-bg: rgba(244, 63, 94, 0.12); --err-border: rgba(244, 63, 94, 0.30);
+        --err-text: #FDA4AF; --err-icon: #FB7185;
+        /* Darker than the card it sits in, so the box still reads as a box. */
+        --ai-bg: #08080D; --ai-border: #2A2A36;
+        --ai-title: #FAFAFA; --ai-text: #A1A1AA; --ai-accent: #818CF8;
+        --ai-code-bg: rgba(0, 0, 0, 0.5); --ai-code-border: #2F2F3C; --ai-code-text: #E4E4E7;
+        --ai-btn-bg: #22222C; --ai-btn-bg-2: #2F2F3C; --ai-btn-text: #A1A1AA;
       }
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
-    body { font-size: 15px; line-height: 1.55; }
+    html, body { margin: 0; padding: 0; background: var(--page-bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+    body {
+      font-size: 15px; line-height: 1.55; min-height: 100vh;
+      /* A CSS gradient, not an image: there is nothing here to fetch. */
+      background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px);
+      background-size: 24px 24px;
+    }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    h2, h3 { margin: 0; font-weight: 700; }
 
-    .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 64px; }
+    /* Wide enough for the three-card row. The reading measure is capped
+       separately, so the prose never runs the full 1140px. */
+    .wrap { max-width: 1140px; margin: 0 auto; padding: 24px 20px 64px; }
 
     /* ── Top bar ───────────────────────────────────────── */
-    .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 48px; }
+    .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
     .top-logo { display: flex; align-items: center; gap: 9px; }
     .top-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
     .top-ver { font-size: 13px; color: var(--text-3); }
 
     /* ── Hero ──────────────────────────────────────────── */
-    h1 { font-size: 30px; line-height: 1.2; letter-spacing: -0.02em; font-weight: 700; margin: 0 0 10px; }
-    .hero-sub { color: var(--text-2); margin: 0 0 28px; font-size: 16px; }
+    .hero { text-align: center; margin: 0 auto 40px; }
+    h1 { font-size: 34px; line-height: 1.18; letter-spacing: -0.02em; font-weight: 700; margin: 0 0 10px; }
+    .hero-sub { color: var(--text-2); margin: 0 auto; font-size: 16.5px; max-width: 580px; }
 
     /* ── Step cards ────────────────────────────────────── */
-    .steps { display: flex; flex-direction: column; gap: 12px; }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
     .step {
-      display: flex; gap: 14px; align-items: flex-start;
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); padding: 18px 20px;
+      display: flex; flex-direction: column;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px;
+      box-shadow: var(--card-shadow);
+      /* No hover transform or shadow: this page is read, not clicked through. */
     }
+    /* Fixed height with its contents centred, so the three text blocks below
+       all start at the same y and the three headings line up. */
+    .step-art {
+      height: 230px; flex: 0 0 230px;
+      border-radius: var(--radius-md);
+      background: var(--art-bg); border: 1px solid var(--art-border);
+      overflow: hidden; position: relative;
+      display: flex; flex-direction: column; justify-content: center;
+      user-select: none;
+    }
+    .step-text { padding-top: 24px; display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
     .step-n {
-      flex: 0 0 26px; height: 26px; border-radius: 50%;
-      background: var(--accent-soft); color: var(--accent);
-      font-size: 13px; font-weight: 700;
+      width: 26px; height: 26px; border-radius: 8px;
+      background: var(--bg-2); border: 1px solid var(--border); color: var(--text-2);
+      font-size: 12.5px; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
-      margin-top: 1px;
+      margin-bottom: 12px;
     }
-    .step-body { flex: 1 1 auto; min-width: 0; }
-    .step-t { font-weight: 620; font-size: 15px; margin-bottom: 3px; }
+    .step-t { font-size: 17px; letter-spacing: -0.01em; margin-bottom: 6px; }
     .step-h { color: var(--text-2); font-size: 14px; margin: 0; }
-    .step-aside { flex: 0 0 auto; }
     .btn {
-      display: inline-block; margin-top: 12px;
-      background: var(--accent); color: #fff;
-      border: 0; border-radius: var(--radius-sm);
-      padding: 9px 16px; font-size: 14px; font-weight: 600;
-    }
-    .btn:hover { background: var(--accent-2); text-decoration: none; }
-    .btn-sec {
-      display: inline-block; margin-top: 12px;
-      background: var(--bg-2); color: var(--text);
+      display: inline-flex; align-items: center; gap: 7px; align-self: flex-start;
+      /* Bottom of the card, so card 2's heading still aligns with the others. */
+      margin-top: auto;
+      background: var(--accent-soft); color: var(--accent);
       border: 1px solid var(--border); border-radius: var(--radius-sm);
-      padding: 8px 14px; font-size: 14px; font-weight: 600;
+      padding: 9px 14px; font-size: 13.5px; font-weight: 650;
+    }
+    .btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); text-decoration: none; }
+    .btn-sec {
+      display: inline-block; margin-top: 10px;
+      background: var(--card-bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 7px 13px; font-size: 13.5px; font-weight: 600;
     }
     .btn-sec:hover { background: var(--bg-3); text-decoration: none; }
+    /* Air above the button when the copy above it is short. */
+    .step-2 .step-h { margin-bottom: 18px; }
 
-    /* Keyboard shortcut chips. */
-    .keys { display: flex; align-items: center; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+    /* ── Illustration primitives, shared by the three art panels ───────── */
+    .art-pad { padding: 14px; }
+    .art-bar {
+      height: 38px; flex: 0 0 38px; background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 11px;
+    }
+    .art-url {
+      height: 23px; width: 140px; background: var(--art-sunken); border-radius: 7px;
+      display: flex; align-items: center; gap: 5px; padding: 0 7px;
+      font-family: var(--mono); font-size: 9px; color: var(--text-3);
+    }
+    .art-icons { display: flex; align-items: center; gap: 7px; color: var(--text-3); }
+    .art-puzzle {
+      width: 23px; height: 23px; border-radius: 6px; background: var(--art-sunken);
+      display: flex; align-items: center; justify-content: center; color: var(--text-2);
+    }
+    .art-avatar {
+      width: 19px; height: 19px; border-radius: 50%; background: var(--bg-3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9.5px; color: var(--text-3); font-weight: 600;
+    }
+    .art-dots { display: flex; flex-direction: column; gap: 2px; }
+    .art-dots i { width: 3px; height: 3px; border-radius: 50%; background: var(--text-3); display: block; }
+    .art-pop {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius-md); box-shadow: var(--pop-shadow);
+    }
+    .art-cursor { position: absolute; color: var(--text); }
+
+    /* Card 1 — the extensions flyout. */
+    .ext-menu { width: 224px; margin: 0 auto; padding: 7px 8px; font-size: 11px; }
+    .ext-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em;
+      font-weight: 700; color: var(--text-3);
+      padding: 0 5px 6px; border-bottom: 1px solid var(--border);
+    }
+    .ext-manage { color: var(--accent); font-weight: 600; letter-spacing: 0.02em; }
+    .ext-row { display: flex; align-items: center; justify-content: space-between; padding: 6px; border-radius: 8px; }
+    .ext-row-on { margin-top: 6px; background: var(--accent-soft); border: 1px solid var(--border); position: relative; }
+    .ext-row-off { margin-top: 3px; color: var(--text-3); }
+    .ext-id { display: flex; align-items: center; gap: 8px; }
+    .ext-name { font-weight: 700; font-size: 11px; color: var(--text); line-height: 1.3; }
+    .ext-sub { display: block; font-size: 9px; color: var(--text-3); line-height: 1.3; }
+    .ext-off-name { font-size: 10px; }
+    .ext-blank { width: 15px; height: 15px; border-radius: 4px; background: var(--bg-3); }
+    .ext-pin {
+      width: 22px; height: 22px; border-radius: 7px; background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ext-cursor { right: -4px; bottom: -8px; }
+
+    /* Card 2 — the broken checkout and the popup over it. */
+    .co { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px; }
+    .co-head {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 7px;
+      font-size: 10px; font-weight: 700; color: var(--text-2);
+    }
+    .co-total { font-family: var(--mono); font-weight: 500; color: var(--text-3); }
+    .co-err {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--err-bg); border: 1px solid var(--err-border); color: var(--err-text);
+      border-radius: 6px; padding: 4px 7px;
+      font-family: var(--mono); font-size: 9px; font-weight: 500;
+      white-space: nowrap; overflow: hidden;
+    }
+    .co-err svg { color: var(--err-icon); flex: 0 0 auto; }
+    .co-err span { overflow: hidden; text-overflow: ellipsis; }
+    .tb-pop { margin-top: 11px; padding: 9px; position: relative; }
+    .tb-pop-head {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); padding-bottom: 7px; margin-bottom: 8px;
+    }
+    .tb-pop-id { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: -0.01em; }
+    .tb-ready {
+      font-family: var(--mono); font-size: 9px; font-weight: 600;
+      background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok-text);
+      border-radius: 5px; padding: 2px 6px;
+    }
+    .tb-capture {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      background: var(--accent); color: #fff; border-radius: 8px;
+      padding: 8px; font-size: 11.5px; font-weight: 700;
+    }
+    .tb-capture i { width: 7px; height: 7px; border-radius: 50%; background: var(--err-icon); display: block; }
+    .tb-cursor { right: 22px; bottom: -7px; }
+
+    /* Card 3 — the real binding, drawn by welcome.js. */
+    .keys { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 0 14px; }
     kbd {
-      font-family: var(--mono); font-size: 12.5px; font-weight: 600;
-      background: var(--bg-2); border: 1px solid var(--border);
-      border-bottom-width: 2px; border-radius: 6px;
-      padding: 3px 8px; color: var(--text);
+      font-family: var(--mono); font-size: 15px; font-weight: 650;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 10px; min-width: 46px;
+      padding: 11px 14px; color: var(--text); text-align: center;
+      box-shadow: var(--key-shadow);
     }
-    .keys-plus { color: var(--text-3); font-size: 13px; }
-    .keys-link { font-size: 13px; margin-left: 4px; }
+    .keys-plus { color: var(--text-3); font-size: 14px; font-weight: 700; }
+    /* Its own line under the caps, so it never squeezes them. */
+    .keys-link { flex: 0 0 100%; text-align: center; font-size: 13px; margin-top: 16px; }
     .keys-none { font-size: 14px; color: var(--text-2); }
+    #keysNone { text-align: center; padding: 0 14px; }
 
-    /* ── Privacy box ───────────────────────────────────── */
+    /* ── Privacy ───────────────────────────────────────── */
     .privacy {
-      margin-top: 24px; background: var(--bg-2);
+      margin-top: 48px; background: var(--card-bg);
       border: 1px solid var(--border); border-radius: var(--radius-lg);
-      padding: 18px 20px;
+      padding: 28px; box-shadow: var(--card-shadow);
     }
-    .privacy-h { display: flex; align-items: center; gap: 8px; font-weight: 620; margin-bottom: 10px; }
-    .privacy p { color: var(--text-2); font-size: 14px; margin: 0 0 10px; }
+    .privacy-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 32px; align-items: start; }
+    .privacy-h { display: flex; align-items: center; gap: 8px; font-size: 19px; letter-spacing: -0.01em; margin-bottom: 14px; }
+    .privacy p { color: var(--text-2); font-size: 14px; margin: 0 0 12px; max-width: 640px; }
     .privacy p:last-of-type { margin-bottom: 0; }
-    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; }
     .chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 999px; padding: 4px 11px;
-      font-size: 12.5px; font-weight: 600; color: var(--text-2);
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--ok-bg); border: 1px solid var(--ok-border);
+      border-radius: 999px; padding: 4px 12px;
+      font-size: 12.5px; font-weight: 600; color: var(--ok-text);
     }
-    .chip svg { color: var(--accent); flex: 0 0 auto; }
+    .chip svg { color: var(--ok-icon); flex: 0 0 auto; }
+
+    /* The AI box — dark in both themes, and no label above the heading. */
+    .ai {
+      background: var(--ai-bg); border: 1px solid var(--ai-border);
+      border-radius: var(--radius-md); padding: 18px;
+    }
+    .ai-t { font-size: 14.5px; font-weight: 650; color: var(--ai-title); margin-bottom: 5px; }
+    .ai-l { font-size: 13px; color: var(--ai-text); margin: 0 0 14px; line-height: 1.5; }
+    .ai-cmd {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--ai-code-bg); border: 1px solid var(--ai-code-border);
+      border-radius: 9px; padding: 8px 10px;
+      font-family: var(--mono); font-size: 12.5px; color: var(--ai-code-text);
+    }
+    .ai-cmd-l { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; }
+    .ai-dollar { color: var(--ai-accent); user-select: none; }
+    .ai-copy {
+      flex: 0 0 auto; cursor: pointer;
+      font-family: var(--font); font-size: 10.5px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      background: var(--ai-btn-bg); color: var(--ai-btn-text);
+      border: 0; border-radius: 6px; padding: 5px 9px;
+    }
+    .ai-copy:hover { background: var(--ai-btn-bg-2); color: var(--ai-title); }
+    /* Set by welcome.js for ~1.6s after a real copy. */
+    .ai-copy.copied, .ai-copy.copied:hover { color: var(--ok-icon); }
 
     /* ── Secondary cards ───────────────────────────────── */
-    .cards { display: flex; gap: 12px; margin-top: 12px; }
+    /* Empty until welcome.js adds the team card; see TEAM_GUIDE_URL. */
+    .cards { display: flex; gap: 24px; margin-top: 24px; }
+    .cards:empty { display: none; }
     .card {
       flex: 1 1 0; min-width: 0;
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: var(--radius-md); padding: 16px 18px;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 18px 20px;
+      box-shadow: var(--card-shadow);
     }
-    .card-t { font-weight: 620; font-size: 14px; margin-bottom: 3px; }
+    .card-t { font-weight: 650; font-size: 14.5px; margin-bottom: 4px; }
     .card-l { color: var(--text-2); font-size: 13.5px; margin: 0 0 10px; }
-    code.chip-code {
-      display: inline-block; font-family: var(--mono); font-size: 12.5px;
-      background: var(--bg-3); border: 1px solid var(--border);
-      border-radius: 6px; padding: 4px 9px; color: var(--text);
-    }
 
     /* ── Footer ────────────────────────────────────────── */
     footer { margin-top: 48px; text-align: center; font-size: 13px; color: var(--text-3); }
-    footer a { color: var(--text-3); }
+    footer a { color: var(--text-2); }
     .dot { margin: 0 8px; opacity: 0.5; }
 
-    @media (max-width: 620px) {
+    @media (max-width: 920px) {
+      .privacy-cols { grid-template-columns: 1fr; gap: 24px; }
+    }
+    @media (max-width: 760px) {
+      .steps { grid-template-columns: 1fr; gap: 16px; }
       .cards { flex-direction: column; }
-      .step { flex-wrap: wrap; }
-      .step-aside { display: none; }
+      h1 { font-size: 27px; }
+      .hero { text-align: left; margin-bottom: 32px; }
+      .hero-sub { margin-left: 0; }
+      .privacy { padding: 20px; }
+      .step { padding: 18px; }
     }
   </style>
 </head>
@@ -167,95 +362,167 @@
       <span class="top-ver" id="version"></span>
     </div>
 
-    <h1>You're set up. Let's catch your first bug.</h1>
-    <p class="hero-sub">Three steps, about a minute. Nothing is recorded until you start a capture.</p>
+    <header class="hero">
+      <h1>You're set up. Let's catch your first bug.</h1>
+      <p class="hero-sub">Three steps, about a minute. Nothing is recorded until you start a capture.</p>
+    </header>
 
-    <div class="steps">
+    <section class="steps">
 
       <!-- 1 ── Pin ───────────────────────────────────────── -->
-      <div class="step">
-        <div class="step-n">1</div>
-        <div class="step-body">
-          <div class="step-t">Pin TraceBug to your toolbar</div>
-          <p class="step-h">Click the puzzle-piece icon next to the address bar, then the pin next to TraceBug.</p>
+      <article class="step step-1">
+        <!-- The extensions menu, with the pin next to TraceBug. -->
+        <div class="step-art" aria-hidden="true">
+          <div class="art-bar">
+            <div class="art-url">
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              tracebug.dev
+            </div>
+            <div class="art-icons">
+              <span class="art-puzzle">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4a2 2 0 002-2 2 2 0 002 2h3a2 2 0 012 2v3a2 2 0 002 2 2 2 0 00-2 2v3a2 2 0 01-2 2h-3a2 2 0 00-2 2 2 2 0 00-2-2H7a2 2 0 01-2-2v-3a2 2 0 00-2-2 2 2 0 002-2V6a2 2 0 012-2h3z"/></svg>
+              </span>
+              <span class="art-avatar">U</span>
+              <span class="art-dots"><i></i><i></i><i></i></span>
+            </div>
+          </div>
+          <div class="art-pad">
+            <div class="art-pop ext-menu">
+              <div class="ext-head"><span>Extensions</span><span class="ext-manage">Manage</span></div>
+              <div class="ext-row ext-row-on">
+                <span class="ext-id">
+                  <!-- The real mark, inline. The export pulled a remote PNG. -->
+                  <svg width="19" height="19" viewBox="0 0 96 96" fill="none">
+                    <rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/>
+                    <path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+                    <rect x="52" y="41" width="14" height="14" rx="4" fill="#6366F1"/>
+                  </svg>
+                  <span>
+                    <span class="ext-name">TraceBug</span>
+                    <span class="ext-sub">Capture &amp; Replay</span>
+                  </span>
+                </span>
+                <span class="ext-pin">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z"/></svg>
+                </span>
+                <!-- The pointer, mid-click on the pin. -->
+                <svg class="art-cursor ext-cursor" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="var(--card-bg)" stroke-width="1.5" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+              </div>
+              <div class="ext-row ext-row-off">
+                <span class="ext-id"><span class="ext-blank"></span><span class="ext-off-name">Password Manager</span></span>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z"/></svg>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="step-aside" aria-hidden="true">
-          <!-- Puzzle piece → pin, line icons, 1.5px stroke. -->
-          <svg width="112" height="34" viewBox="0 0 112 34" fill="none" stroke="currentColor"
-               stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-3)">
-            <rect x="1" y="4" width="26" height="26" rx="7"/>
-            <path d="M11 12h3a2 2 0 1 1 4 0h3v3a2 2 0 1 0 0 4v3h-3a2 2 0 1 0-4 0h-3v-10z"/>
-            <path d="M34 17h14" /><path d="M45 14l3 3-3 3"/>
-            <rect x="54" y="4" width="26" height="26" rx="7" style="color: var(--accent)" stroke="currentColor"/>
-            <g style="color: var(--accent)" stroke="currentColor">
-              <path d="M67 11v7"/><path d="M63 18h8l-4 5-4-5z"/>
-            </g>
-            <rect x="86" y="7" width="20" height="20" rx="6" fill="#0B0B10" stroke="none"/>
-            <path d="M92 13l3.5 3.5L92 20" stroke="#EAECF3" stroke-width="1.8"/>
-            <rect x="97" y="16" width="4" height="4" rx="1.2" fill="#6366F1" stroke="none"/>
-          </svg>
+        <div class="step-text">
+          <div class="step-n">1</div>
+          <h2 class="step-t">Pin TraceBug to your toolbar</h2>
+          <!-- welcome.js rewrites this line on Firefox, which arranges the
+               same thing differently. See isFirefox(). -->
+          <p class="step-h" id="pinHow">Click the puzzle-piece icon next to the address bar, then the pin next to TraceBug.</p>
         </div>
-      </div>
+      </article>
 
       <!-- 2 ── Playground ────────────────────────────────── -->
-      <div class="step">
-        <div class="step-n">2</div>
-        <div class="step-body">
-          <div class="step-t">Try it on a page with real bugs</div>
+      <article class="step step-2">
+        <!-- The broken checkout, with the popup's Capture Bug over it. -->
+        <div class="step-art art-pad" aria-hidden="true">
+          <div class="co">
+            <div class="co-head"><span>Checkout Preview</span><span class="co-total">Total: $42.00</span></div>
+            <div class="co-err">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              <span>Checkout error: 500 Internal Server Error</span>
+            </div>
+          </div>
+          <div class="art-pop tb-pop">
+            <div class="tb-pop-head">
+              <span class="tb-pop-id">
+                <svg width="15" height="15" viewBox="0 0 96 96" fill="none">
+                  <rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/>
+                  <path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <rect x="52" y="41" width="14" height="14" rx="4" fill="#6366F1"/>
+                </svg>
+                TraceBug
+              </span>
+              <span class="tb-ready">Ready</span>
+            </div>
+            <div class="tb-capture"><i></i>Capture Bug</div>
+            <svg class="art-cursor tb-cursor" width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="var(--card-bg)" stroke-width="1.5" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+          </div>
+        </div>
+        <div class="step-text">
+          <div class="step-n">2</div>
+          <h2 class="step-t">Try it on a page with real bugs</h2>
           <p class="step-h">Our playground has a broken checkout on purpose. Click the TraceBug icon, then Capture Bug.</p>
           <!-- href set by welcome.js so the UTM tag lives in one place. -->
-          <a class="btn" id="playground" href="#" target="_blank" rel="noopener noreferrer">Open the bug playground</a>
+          <a class="btn" id="playground" href="#" target="_blank" rel="noopener noreferrer">
+            Open the bug playground
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
+          </a>
         </div>
-      </div>
+      </article>
 
       <!-- 3 ── Shortcut ──────────────────────────────────── -->
-      <div class="step">
-        <div class="step-n">3</div>
-        <div class="step-body">
-          <div class="step-t">Your capture shortcut</div>
-          <p class="step-h">Start a capture on any page without opening the popup.</p>
-          <!-- Both states live here; welcome.js shows one. Never hardcode a key:
-               Phase 3 made this a real browser command (default Alt+B) and the
-               user can rebind or clear it. -->
+      <article class="step step-3">
+        <!-- The key caps are the real binding, drawn by welcome.js into
+             whichever of these two states is true. Never hardcode a key:
+             Phase 3 made this a real browser command, and the user can rebind
+             or clear it. -->
+        <div class="step-art" aria-hidden="true">
           <div class="keys" id="keysBound" style="display:none"></div>
           <div id="keysNone" style="display:none">
             <div class="keys-none">No shortcut set</div>
             <a class="btn-sec" id="setShortcut" href="#">Set a shortcut</a>
           </div>
         </div>
-      </div>
+        <div class="step-text">
+          <div class="step-n">3</div>
+          <h2 class="step-t">Your capture shortcut</h2>
+          <p class="step-h">Start a capture on any page without opening the popup.</p>
+        </div>
+      </article>
 
-    </div>
+    </section>
 
     <!-- ── Privacy ─────────────────────────────────────────── -->
-    <div class="privacy">
-      <div class="privacy-h">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)" aria-hidden="true">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-        What TraceBug sees
-      </div>
-      <div class="chips">
-        <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No account</span>
-        <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No upload</span>
-        <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No telemetry</span>
-      </div>
-      <p>Only the tab you're capturing, only after you press Capture: clicks, console errors, network requests and a replay of the page. Passwords and tokens are masked as they're captured.</p>
-      <p>Nothing goes to TraceBug. Reports stay on your computer until you share them, and you choose what goes to GitHub, Linear, Slack or your AI provider.</p>
-    </div>
+    <section class="privacy">
+      <div class="privacy-cols">
 
-    <!-- ── Secondary cards ─────────────────────────────────── -->
-    <div class="cards">
-      <div class="card">
-        <div class="card-t">Using an AI coding agent?</div>
-        <p class="card-l">Let Claude Code or Cursor read your reports locally.</p>
-        <code class="chip-code">npx tracebug mcp</code>
+        <div>
+          <h3 class="privacy-h">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent)" aria-hidden="true">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            What TraceBug sees
+          </h3>
+          <div class="chips">
+            <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No account</span>
+            <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No upload</span>
+            <span class="chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>No telemetry</span>
+          </div>
+          <p>Only the tab you're capturing, only after you press Capture: clicks, console errors, network requests and a replay of the page. Passwords and tokens are masked as they're captured.</p>
+          <p>Nothing goes to TraceBug. Reports stay on your computer until you share them, and you choose what goes to GitHub, Linear, Slack or your AI provider.</p>
+        </div>
+
+        <div class="ai">
+          <div class="ai-t">Using an AI coding agent?</div>
+          <p class="ai-l">Let Claude Code or Cursor read your reports locally.</p>
+          <div class="ai-cmd">
+            <span class="ai-cmd-l"><span class="ai-dollar">$</span><span id="mcpCmd">npx tracebug mcp</span></span>
+            <!-- Wired by welcome.js; the CSP forbids an inline handler. -->
+            <button class="ai-copy" id="copyMcp" type="button" title="Copy to clipboard">Copy</button>
+          </div>
+        </div>
+
       </div>
-      <!-- The "Rolling this out to a team?" card from screens.md is deliberately
-           absent: tracebug.dev/teams does not exist yet and a welcome page must
-           not ship a 404. welcome.js adds it the moment TEAM_GUIDE_URL is set. -->
-    </div>
+    </section>
+
+    <!-- Empty by default. welcome.js adds the team card the moment
+         TEAM_GUIDE_URL is set: tracebug.dev/teams does not exist yet, and a
+         welcome page must not ship a 404. -->
+    <div class="cards"></div>
 
     <footer>
       Free and open source (MIT)
