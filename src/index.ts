@@ -2030,9 +2030,16 @@ class TraceBugSDK {
           // snapshots the in-progress video into a ticket \u2014 no extra clicks,
           // no second picker. Otherwise it opens the standard capture modal.
           const armed = _isRollingMode();
-          const onCapture = armed
-            ? () => { this.captureRollingBuffer().catch(() => {}); }
-            : () => { qbMod.showQuickBugCapture(root).catch(() => {}); };
+          // A capture already running already covers this error — the card
+          // still shows what happened, but offering its own Capture Bug
+          // would either duplicate the running capture or confusingly start
+          // a second one (T-06, docs/audit/product-review.md). Outside a
+          // capture, the button stays exactly as it was.
+          const onCapture = this.isRecording()
+            ? undefined
+            : armed
+              ? () => { this.captureRollingBuffer().catch(() => {}); }
+              : () => { qbMod.showQuickBugCapture(root).catch(() => {}); };
 
           cardMod.showLiveBugCard(root, {
             message: errorMessage,

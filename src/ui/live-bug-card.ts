@@ -24,8 +24,14 @@ export interface LiveBugCardOptions {
   stack?: string;
   /** Optional last user action description, e.g. 'clicked "Update" button'. */
   lastAction?: string;
-  /** Click handler for the primary "Capture" button. */
-  onCapture: () => void;
+  /**
+   * Click handler for the primary "Capture" button. Omit it while a capture
+   * is already running (T-06, docs/audit/product-review.md) — the button is
+   * dropped entirely rather than shown disabled, since the ongoing capture
+   * already covers this error and a second "start a capture" action would be
+   * either confusing or redundant.
+   */
+  onCapture?: () => void;
   /** Optional dismiss callback (separate from internal close). */
   onDismiss?: () => void;
   /**
@@ -73,7 +79,7 @@ export function showLiveBugCard(root: HTMLElement, options: LiveBugCardOptions):
       ` : `<div class="tb-lbc-loc tb-lbc-no-source">Stack trace unavailable</div>`}
       ${options.lastAction ? `<div class="tb-lbc-action">Last action: ${escapeHtml(options.lastAction)}</div>` : ""}
       <div class="tb-lbc-buttons">
-        <button class="tb-lbc-btn tb-lbc-primary" data-action="capture">📸 Capture Bug</button>
+        ${options.onCapture ? `<button class="tb-lbc-btn tb-lbc-primary" data-action="capture">📸 Capture Bug</button>` : ""}
         ${options.enableEditorJump && parsed ? `<button class="tb-lbc-btn tb-lbc-editor" data-action="editor">Open in editor</button>` : ""}
         <button class="tb-lbc-btn tb-lbc-ghost" data-action="dismiss">Dismiss</button>
       </div>
@@ -88,7 +94,7 @@ export function showLiveBugCard(root: HTMLElement, options: LiveBugCardOptions):
     btn.addEventListener("click", () => {
       const action = btn.dataset.action;
       if (action === "capture") {
-        try { options.onCapture(); } finally { hideLiveBugCard(); }
+        try { options.onCapture?.(); } finally { hideLiveBugCard(); }
       } else if (action === "dismiss") {
         try { options.onDismiss?.(); } finally { hideLiveBugCard(); }
       } else if (action === "editor" && parsed) {
