@@ -13,10 +13,14 @@ bug ticket without help or confusion, in as few clicks as possible.**
 
 ## One-page summary
 
-**The core loop works.** A first-time user gets from "click the extension icon" to a completed
-`.html` export in **8 clicks, 6 keystrokes, ~4 decisions**, with no dead ends. Two of the five
-problems below are already fixed and committed; the rest are scoped, sequenced, and none require a
-redesign.
+**The core loop works.** Counting only clicks on TraceBug's own UI (not the bug-repro steps a tester
+does on their own page — typing a coupon code, clicking "Apply," clicking "Place order"), a
+first-time user gets from the extension icon to a completed `.html` export in **4 clicks + 1 forced
+dismissal per export until T-05 (then 4)**: icon → Capture Bug → Stop → Export replay, then the
+unprompted MCP hand-off card every single time. **From Stop, filing a ticket is 1 click; sending it to
+a configured tracker is 2** (Send to GitHub → Send in the confirm window) — both already inside the
+≤3-click target this review was judged against. Two of the five problems below are already fixed and
+committed; the rest are scoped, sequenced, and none require a redesign.
 
 ### The 5 biggest problems found
 
@@ -39,22 +43,36 @@ redesign.
 4. **The ticket modal's More ▾ menu is a flat 11-12 item list** mixing live sends, copy-only exports,
    and settings with no grouping — a first-time user reads every row to find the one they want.
    **Open**, proposed fix below (declutter release).
-5. **A 2,430-line session-management panel (`dashboard.ts`) ships mounted on every page but has no
-   reachable entry point anywhere in the shipped UI** — confirmed by source (`_panelOpen` is a dead
-   constant) and now also confirmed harmless by a real e2e (Tabbing through an active capture never
-   reaches it or anything off-screen). **A product-owner decision, not a bug** — restore an entry
-   point, consolidate it into the existing ticket popover, or formally retire it.
+5. **A 2,430-line session-management panel (`dashboard.ts`) has no reachable entry point anywhere in
+   the shipped UI.** What's on every page by default is an empty, off-screen container for it
+   (`#tracebug-dashboard-panel`, `right: -480px`) — created as a side effect of mounting the real,
+   used compact-toolbar (the two aren't independently toggleable at that call site), with the
+   panel's actual content never built until something calls `renderPanel()`, which nothing shipped
+   does (`_panelOpen` is a dead constant). Confirmed keyboard-unreachable by a real e2e: Tabbing
+   through an active capture never lands on anything inside that container or positioned off-screen.
+   **A product-owner decision, not a bug** — restore an entry point, consolidate it into the existing
+   ticket popover, or formally retire it.
 
 ### The proposed flow, with its click count
 
-No structural change to the main flow — it was already efficient. Fixes 1-3 are correctness, not
-step removal: **Flow 1 stays 8 clicks** end to end. One real reduction is available once the
-MCP-handoff card's dismissal is remembered (T-05, below): **repeat exports drop to 7 clicks.** The
-other concrete improvement is Flow 4 (sending to a configured tracker) going from **effectively
-unreachable through the UI** (the mislabeled button + Bug 0 together meant a configured user could
-not complete a real send without bypassing the UI entirely) to **2 clicks** from an open ticket modal
-to a sent issue (Send to GitHub → Send in the confirm window) — the single largest real-world
-improvement in this review, achieved with zero added steps.
+No structural change to the main flow — it was already efficient, and already meets the target.
+TraceBug-only clicks, bug-repro steps excluded throughout:
+
+- **Icon to filed ticket: 4 clicks + 1 forced dismissal per export until T-05 (then 4)** (icon →
+  Capture Bug → Stop → Export replay — a direct footer button, `quick-bug.ts:757`, never routed
+  through More ▾ — then the unprompted MCP hand-off card every time). **Stop → file = 1 click**
+  (2 including the forced dismissal, until T-05).
+- **Icon to a sent issue: 5 clicks** (the same 4, with the last swapped for Send to GitHub → Send in
+  the confirm window; no export happens on this path, so no hand-off card). **Stop → sent = 2
+  clicks.**
+
+Both the file and send paths already meet the ≤3-clicks-from-Stop target this review was judged
+against, counting only TraceBug's own required clicks. Fixes 1-3 are correctness, not step removal,
+so neither count above moves for them — what changed is that Flow 4's 2-click send path went from
+**effectively unreachable through the UI** (the mislabeled button + Bug 0 together meant a configured
+user could not complete a real send without bypassing the UI entirely) to actually reachable. The MCP
+hand-off card is counted as a forced click above, not a free one: it fires unconditionally after
+every export with no way to turn it off today (T-05, below).
 
 ### Top 10 changes
 
@@ -84,10 +102,10 @@ status:
 
 | Flow | What it covers | Clicks | Status |
 |---|---|---|---|
-| 1 — main flow | Popup → Capture Bug → reproduce → Stop → ticket modal → More ▾ → export | 8 clicks, 6 keystrokes, ~4 decisions | Works; Summary-line defect (now fixed) was the only correctness issue found |
+| 1 — main flow | Popup → Capture Bug → reproduce → Stop → ticket modal → export | 4 TraceBug clicks (icon, Capture Bug, Stop, Export replay — a direct footer button, not via More ▾); bug-repro clicks not counted | Works; Summary-line defect (now fixed) was the only correctness issue found |
 | 2 — keyboard shortcut | `Alt+B` from anywhere | — | Works (bound correctly); only taught in one small popup footer line |
 | 3 — screenshot-only | Popup → Screenshot only | 1 click | Works; title says "Empty Session" (T-07) |
-| 4 — sending to a tracker | Configure → capture → send | Was effectively unreachable (Bug 0); now 2 clicks once configured | **Root cause was Bug 0, not the options page or the send pipeline** — both always worked correctly |
+| 4 — sending to a tracker | Configure (one-time) → capture → send | Was effectively unreachable through the UI (Bug 0); now Stop → sent = 2 TraceBug clicks once configured | **Root cause was Bug 0, not the options page or the send pipeline** — both always worked correctly |
 | 5 — reopen a saved ticket | Popup → View tickets → Open | 2 clicks, 0 keystrokes | The strongest flow in the product — full state restoration, no data loss |
 | 6 — edge states (a-f) | Restricted page, declined site access, cross-site capture end, canvas warning, What's New, milestone-ask | — | 6a (restricted page) is the best-executed state in the product; 6c/6d (cross-site, canvas) both correct and specific; 6b (declined access) unverified — needs a human clicking a real toolbar icon |
 | 7 — Firefox | Flow 1 in real Firefox | — | Unresolved tooling blocker (Playwright's Firefox automation hangs on `about:debugging`); needs a manual pass, `npm run ext:firefox` |
@@ -110,10 +128,15 @@ menu, MCP hand-off card, saved-ticket list/dashboard, welcome surface): `docs/au
 - The 👍/👎 "Enough info to reproduce?" links — traced exactly: plain `<a target="_blank">` links to
   `tracebug.dev/feedback?type=...&area=...&msg=...`, a static canned message only, no report/session
   data, no background fetch. Confirmed gated correctly by the export-footer toggle in the exported
-  `.html` (new test, `tests/review-ask.test.ts`). Separately verified the live
-  `tracebug.dev/feedback` page: returns 200, has a real Netlify form, and `msg` prefills correctly —
-  but **`type` and `area` are silently dropped by the live page** (no field for either), a website-side
-  gap outside this review's scope to fix.
+  `.html` (new test, `tests/review-ask.test.ts`). The live `tracebug.dev/feedback` page: returns 200,
+  has a real Netlify form, and all three params work correctly — `type`/`area` select pill buttons
+  (`website/app/feedback/FeedbackForm.tsx`) rather than native `<select>`/`<input>` elements, so an
+  earlier pass in this review that only queried `input,select,textarea` missed them and wrongly
+  reported them as dropped. Corrected this session: a real local submission
+  (`next dev`, intercepting the outgoing POST) confirms the exact body sent is
+  `form-name=feedback&bot-field=&message=...&email=&type=bug&area=extension&version=v1.11.1` — every
+  field present and correct, and `website/public/__forms.html` (the static Netlify form-detection
+  twin) already declares `type`/`area` as recognized field names. **No website change needed.**
 
 **What's confirmed broken and fixed:**
 - T-01 (Summary line), T-02 (tracker button labels/actions), T-03 (comment-only clarification) — all
@@ -150,6 +173,7 @@ Every item, current status, and where its full technical spec lives.
 | T-10 | Milestone-ask card can visually overlap the open ticket modal | Open | Defer display, or lower z-index |
 | T-11 | `dashboard.ts`'s panel has no reachable entry point | **Confirmed harmless as-is** (this session's e2e); decision still open | Product-owner call — restore, consolidate, or retire |
 | T-12 | Two different delete-confirmation idioms across the two ticket-list UIs | Open, depends on T-11 | Standardize once T-11 settles |
+| T-13 | The "Keep capturing across sites" toggle requests a broad `<all_urls>` permission for very little — it doesn't let a capture survive leaving its site (that's unconditional, by design) and doesn't gate Capture Bug or `Alt+B` on a new site (both grant `activeTab` fresh regardless); its only effect is skipping one click to restore the toolbar's visibility on a tab's next site | Open | Hide the row entirely (popup and Options) until ADR 008 (v2.0) makes captures actually survive cross-origin navigation |
 
 ---
 
@@ -157,90 +181,140 @@ Every item, current status, and where its full technical spec lives.
 
 ### Current vs. proposed flow (Flow 1 — main)
 
-**Current (8 clicks, 6 keystrokes, ~4 decisions):**
+Counting only clicks on TraceBug's own UI — not the bug-repro steps a tester performs on their own
+page, which are the same in every variant below and aren't TraceBug's to optimize.
+
+**Current (4 clicks + 1 forced dismissal per export until T-05, then 4 — ~2 decisions; already meets
+the target):**
 1. Click the extension icon → popup opens
 2. Click **Capture Bug**
-3. Reproduce the bug (type `SAVE20`, click Apply coupon, click Place order)
-4. Click **Stop** on the HUD → ticket modal opens, auto-filled
-5. Click **More ▾**
-6. Click **Export replay (.html)**
-7. (unprompted) MCP hand-off card appears — dismiss it
-8. *(implicit: review/edit the auto-filled title+description before exporting)*
+   *(tester reproduces the bug on their own page — not a TraceBug click)*
+3. Click **Stop** on the HUD → ticket modal opens, auto-filled, Summary line now always agrees with
+   Possible Cause (T-01, shipped)
+4. Click **Export replay (.html)** — a direct footer button (`quick-bug.ts:757`), never routed
+   through More ▾
+5. **Forced:** dismiss the unprompted MCP hand-off card — every export, no way to turn it off today
 
-**Proposed (same 8 clicks on first export; 7 on repeat exports once T-05 ships):**
-1. Click the extension icon → popup opens
-2. Click **Capture Bug**
-3. Reproduce the bug
-4. Click **Stop** → ticket modal opens, **Summary now always agrees with Possible Cause** (T-01,
-   shipped)
-5. Click **Export ▾** (regrouped, T-04) → **.html replay**
-6. MCP hand-off card appears **only if not previously dismissed** (T-05) — repeat exports skip
-   straight to the file
-7. *(same implicit review step)*
+**Stop → file = 1 click, or 2 counting the forced dismissal** (steps 4-5). The 1-click figure already
+meets the ≤3-clicks-from-Stop target this review was judged against, and did before any fix in this
+review — the flow was never the problem. The forced dismissal is real friction this review doesn't
+excuse by leaving it uncounted (T-05, Part 4's declutter proposal addresses this).
 
-Target from the original brief was 3 clicks or fewer from Stop to a filed ticket, and under 60
-seconds install-to-first-ticket. **Not realistic here without cutting a real step**, and this review
-doesn't recommend cutting one: the auto-filled title/description genuinely needs a glance before
-export (that's 1 of the 8 clicks' worth of time, not a wasted click), and More ▾ → a specific export
-format is inherent to offering 7 distinct output formats — collapsing it to fewer clicks would mean
-guessing which format the user wants, which is worse. The real win available is Flow 4's, below.
+**Proposed, once T-05 ships:** the same 4 clicks, with step 5 gone entirely — the hand-off card only
+appears on the first export per browser profile — repeat exports go straight to the file with no
+extra dismissal.
+
+The structural proposal for this flow (grouped menu, one primary button chosen by setup, the hand-off
+card replaced with a one-line link) is in the declutter section below, not here — this section is the
+click-count correction only.
 
 ### Current vs. proposed flow (Flow 4 — sending to a configured tracker)
 
-**Current, as the bug made it behave:** configure GitHub (3 clicks: Configure integrations… → fill
-token+repo → Save) → open a ticket → click the button labeled "Copy GitHub Issue" → **a real send
-attempt occurs, disguised by the label** (now understood to be because the SDK never reached
-extension mode at all on the buggy `try.html` — see Bug 0). **Effectively unreachable through the UI
-as intended** for a user who trusted the label.
+Setup is one-time and separate from the per-ticket count: Configure integrations… (1 click) → fill
+token + fill repo (2 fields, not clicks) → Save (1 click) = 2 TraceBug clicks, once, ever, per
+provider.
 
-**Proposed (now shipped, except Bug 0's extension-side half):** configure GitHub (same 3 clicks) →
-open a ticket → click **Send to GitHub** (label now correctly reflects what's about to happen) →
-confirm window opens, naming the real destination → click **Send**. **2 clicks from an open ticket
-modal to a sent issue**, with the confirm window as the one deliberate pause (it's supposed to be
-there — approving a real external API call). This works today on any page that doesn't trigger Bug 0;
-closing Bug 0 makes it work everywhere.
+**Current, as the bug made it behave:** ticket modal open → click the button labeled "Copy GitHub
+Issue" → **the real confirm-send window opens instead of a copy happening** — confusing (the label
+promised something else), but not silent: the window still names the destination and requires an
+explicit Send click, same as every send path in the product, before anything leaves the browser. This
+happened because the SDK never reached extension mode at all on the buggy `try.html` (see Bug 0).
+**Effectively unreachable through the UI as intended** for a user who trusted the label and expected a
+copy.
 
-### Rough wireframes (text, for discussion — not a design)
+**Proposed (now shipped, except Bug 0's extension-side half):** ticket modal open → click **Send to
+GitHub** (label now correctly reflects what's about to happen) → confirm window opens, naming the
+real destination → click **Send**. **Stop → sent = 2 clicks**, with the confirm window as the one
+deliberate pause (it's supposed to be there — approving a real external API call). Already meets the
+≤3-click target. This works today on any page that doesn't trigger Bug 0; closing Bug 0 makes it work
+everywhere.
 
-**Popup — unchanged.** Both audit passes recommend keeping the current hierarchy: Capture Bug stays
-the one visually dominant action, Screenshot-only and View tickets stay secondary. Collapsing
-Capture-Bug and Screenshot-only into one button with a sub-menu would cost the majority case (event
-capture) a click to reach through a menu, for no real gain.
+### The declutter proposal (recommendation for 1.12)
+
+This is the product owner's proposal, carried here as the recommendation — not this review's earlier,
+more conservative draft. Every item stays in TraceBug; nothing listed here is removed from the
+product, only relocated or collapsed. Where this review disagrees with a specific placement, that's
+marked as a **Reviewer note** beside the item — the proposal itself is unchanged by that note.
+
+#### Popup
+
+**Proposal:** one primary **Capture Bug** with "or press Alt+B" beneath it; Screenshot and View
+tickets secondary. Move Redaction rules and Having trouble? to the options page. Drop the theme
+toggle (follow the system). Inspect becomes secondary, grouped with Screenshot and View tickets.
 
 ```
 ┌─────────────────────────────┐
-│ TraceBug               [☾]  │
+│ TraceBug                    │   <- theme toggle dropped (follows system)
 ├─────────────────────────────┤
 │ localhost /try.html         │
 │                              │
 │ ┌─────────────────────────┐ │
 │ │ ⚡ Capture Bug            │ │  <- primary, unchanged
 │ │ Console, network & replay │ │
+│ │ or press Alt+B            │ │  <- NEW: shortcut now visible on the primary action itself
 │ └─────────────────────────┘ │
-│ ⚙ Record options        ▾   │
-│ [📷 Screenshot only][☰ View tickets] │
-│ [⊞ Inspect element]          │
-│ 🛡 Redaction rules        ▾  │
-│ ☐ Keep capturing across sites│
-│ 🩺 Having trouble?        ▾  │
+│ [📷 Screenshot][☰ Tickets][⊞ Inspect] │  <- three secondary actions, one row
 ├─────────────────────────────┤
-│ ● Tip: Alt+B captures a bug  │  <- same copy; ALSO echoed
-│   on this tab                │     in welcome/what's-new (T-04-adjacent, no change here)
+│ Options: Redaction rules · Having trouble?                │
 └─────────────────────────────┘
 ```
 
-**HUD — structurally unchanged; one behavior fix (T-06).**
+**Click/decision count:** 0 change to the main capture path — Capture Bug is still 1 click, same
+position. The shortcut hint moving onto the primary button (rather than a footer line the audit found
+easy to miss) is a pure discoverability gain, not a click change.
+
+**What this removes from the main path:** nothing — neither Redaction rules nor Having trouble? were
+ever on the capture path; they were optional, collapsed `<details>` rows already. What it costs:
+reaching either now takes popup → Options (a new tab) → the specific section, instead of expanding a
+row in place — acceptable for both, since they're rare, setup-time or trouble-time actions.
+
+**Recommendation — hide the cross-site toggle entirely until ADR 008 lands, don't move it to
+Options.** Checked exactly what granting `<all_urls>` buys today, since a capture already ends the
+moment you leave its site regardless (Flow 6c, working as designed): it does **not** let a capture
+survive the navigation — that's unconditional, by design, independent of this permission. What it
+actually does, traced through `background.js`'s `tabs.onUpdated` handler: if the user previously
+turned the in-page toolbar on for a tab (`activeTabs.has(tabId)`), granting `<all_urls>` lets the
+worker silently re-inject the toolbar on the next site that tab navigates to, instead of it
+disappearing until the user clicks the extension icon again. That's the entire benefit — and it's
+moot for the actual capture flow, since both a toolbar click and the `Alt+B` command already grant
+`activeTab` fresh on any site with no permission needed (confirmed in the same file's own comment:
+*"No new permission is involved. Invoking an extension command grants activeTab... the same way
+clicking the toolbar icon does"*). So the honest answer is **very little**: one fewer click to get a
+cosmetic toolbar back on a new site, in exchange for granting `<all_urls>` — a broad permission that
+triggers the browser's own "read and change all your data on all websites" warning — while the
+toggle's own label ("Keep capturing across sites") and copy ("ready to capture there too") imply a
+capability it doesn't have. **Recommendation: remove this row from the popup (and Options) entirely
+until ADR 008 (v2.0, the extension owning the session) actually makes captures survive cross-origin
+navigation — then it will be asking for something real, worth a broad permission grant, instead of a
+toolbar-visibility convenience dressed up as one.**
+
+#### HUD
+
+**Proposal:** Stop is the only end action; no error toast while capturing.
 
 ```
 [●] 00:12  Capturing   REPLAY, NOT VIDEO   4 events · 2 requests   [📷][⬚][🔴][🩻][🖌][✓][✕ Stop]
 ```
 
-The only change: an uncaught error during an active capture no longer offers a second, independent
-"Capture Bug" button. Either nothing shows (a capture is already running — there's nothing new to
-decide), or the toast points at the existing Stop control instead of starting a second capture path.
+Visually unchanged from today — the change is behavioral, not structural: while a capture is active,
+an uncaught error no longer spawns its own independent "Capture Bug" button alongside the HUD.
 
-**Ticket modal footer — the one structural change (T-04), with the now-accurate labels (T-02,
-shipped):**
+**Click/decision count:** removes one confusing option from the screen (2 things that could plausibly
+"end" the capture → 1), with no change to clicks on the path anyone actually uses — Stop was already
+the control every flow in this review observed being used.
+
+**What this removes from the main path:** nothing on the *main* path; it removes a second,
+independent "Capture Bug" trigger that only appears on an uncaught error. **Safety/value reason to
+keep part of it:** the error-triggered toast still has real value **when no capture is running** —
+that's its original purpose, a quick one-click capture offered right at the moment something broke.
+The proposal reads as "no error toast while capturing," which this review takes to mean suppressed or
+redirected specifically during an active capture, not removed outright as a feature — confirming that
+scope before implementation is worth a one-line check, not a disagreement.
+
+#### Ticket modal
+
+**Proposal:** one primary button chosen by setup — "Send to GitHub/Linear/Slack" if configured, else
+"Export report (.html)." Everything else moves into the grouped menu.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -251,24 +325,67 @@ shipped):**
 │              (T-01: Summary always agrees with Possible Cause)   │
 │ [Info] [Actions] [Console] [Network] [AI]                        │
 ├────────────────────────────────────────────────────────────────┤
-│ [💾 Save Ticket]                                                  │
-│                                                                    │
-│  Send to ▾                                                        │
-│    GitHub   Send to GitHub        (✓ configured)                  │
-│    Linear   Open in Linear        (not configured)                │
-│    Slack    Copy Slack Message    (not configured)                │
-│                                                                    │
-│  Export ▾                                                          │
-│    .html replay · .zip · .spec.ts (.md) · AI html · Screenshots    │
-│    Jira (copy only)                                                 │
-│                                                                      │
-│  Settings ▾                                                          │
-│    Configure integrations… · Export footer: on · Issue credit: on    │
-└────────────────────────────────────────────────────────────────────┘
+│  [ Send to GitHub ]                 <- the ONE primary button,  │
+│                                         chosen by setup state    │
+│  More ▾                                                           │
+│    Send to ▾   Linear (not configured) · Slack (not configured)   │
+│    Export ▾    .html replay · .zip · .spec.ts · .md · AI html ·   │
+│                 Screenshots · Jira (copy only)                     │
+│    Settings ▾  Configure integrations… · Export footer · Issue    │
+│                 signature · 💾 Save Ticket                         │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-Every current action stays; none are removed. Jira moves into Export and is explicitly labeled
-"copy only" so it stops looking equivalent to the three live-send providers above it.
+**Click/decision count — the happy paths are unchanged:** no integration configured → the one
+primary button is "Export report (.html)," **Stop → file = 1 click**, identical to today. A
+configured integration → the one primary button is "Send to GitHub," **Stop → sent = 2 clicks**,
+identical to today. The win isn't fewer clicks on either path (both already meet the target) — it's
+dropping from ~5 visible footer buttons to 1, so there's exactly one decision at a glance instead of
+five.
+
+**Checked, as asked — is Save Ticket redundant given the draft auto-saves on Stop?** No. They're
+different mechanisms doing different jobs. The draft auto-save (`tracebug_last_bug_draft`) is accident
+recovery: if the modal closes unexpectedly, the next time it opens it recovers the title and
+description — it does not add the session to the Saved Tickets list. Save Ticket is a separate,
+explicit action that marks the session as saved so it appears in that list at all (confirmed in
+source: *"Save Ticket — marks this session as explicitly saved so it appears in the Saved Tickets
+list. Without saving, the list stays empty"*). **Flow 5 — reopening an old ticket, this review's
+strongest flow in the product (2 clicks, full state restoration) — has nothing to reopen unless Save
+Ticket was clicked first.** They are not redundant; removing Save Ticket would break Flow 5 entirely,
+not just make it less convenient.
+
+**Reviewer note — Save Ticket's placement:** given it's confirmed not redundant and is load-bearing
+for the product's strongest flow, burying it inside the grouped menu adds a click (open menu → Save
+Ticket, vs. today's single click) for a QA persona who saves every ticket as routine (Flow 5). Worth
+keeping as a small, clearly-secondary control next to the one primary button — not promoted back to
+equal visual weight, just not buried a menu-level deep — rather than filing it under Settings with
+the toggles.
+
+#### After export
+
+**Proposal:** a one-line "Open in your AI agent →" link instead of the modal.
+
+```
+✓ Replay exported · 0.4 MB
+Open in your AI agent →
+```
+
+**Click/decision count: this is the biggest win in the whole proposal.** It doesn't shrink the forced
+dismissal — it deletes it. Today: **4 clicks + 1 forced dismissal per export, every time, with no way
+to turn it off.** Under this proposal: **4 clicks, 0 forced**, full stop — the link is there if wanted,
+ignorable if not, which is a cleaner result than this review's own earlier T-05 draft (a remembered
+localStorage dismissal + a new Settings toggle to turn it back on). This proposal needs no new
+setting at all, which also fits the original brief's own preference for defaults over added settings
+better than this review's first pass did. **Recommend adopting this version over the earlier T-05
+draft below**, not the other way around.
+
+**What this removes from the main path:** the forced interruption, entirely — that's the point.
+**Safety/value reason to keep something:** the current modal also carries the one-time MCP setup
+command (`claude mcp add tracebug …`) and a ready-to-paste prompt, which a user who has never
+connected the MCP server before needs *somewhere* discoverable, or "Open in your AI agent" does
+nothing useful for them the first time they click it. Not a reason to keep the modal — a reason the
+one-line link's destination (wherever it leads) needs to carry that setup information for a true
+first-time click, even though the interrupting modal itself is gone.
 
 ### Change list
 
@@ -281,15 +398,16 @@ design/product decision first).
 | T-01: Summary noise filter | fix | Misleads on every affected ticket (Flow 1) | S | Low | **1.11.2 — shipped** |
 | T-02: tracker button label/action | fix | Blocked the send flow, confusing label (Flow 4) | M | Low — shipped, tested | **1.11.2 — shipped** |
 | T-03: clarifying comment | docs | Prevents "fixing" correct code | S | None | **1.11.2 — shipped** |
-| T-04: regroup More ▾ menu | regroup | 11-12 flat items (Flow 1 step 7) | M | Low-medium — touches `quick-bug.ts`'s largest render block | **1.12** |
-| T-05: MCP card dismissal | new | Interrupts every export (Flow 1 step 8) | S | Low | **1.12** |
-| T-06: duplicate capture-bug trigger | merge | Two live controls during one capture (Flow 1 step 5) | S | Low | **1.12** |
+| T-04: ticket modal down to one primary button + grouped menu | regroup | ~5 footer buttons + flat 11-12 item More ▾ (Flow 1 step 7); supersedes this review's earlier "just regroup More ▾" draft with the product owner's fuller proposal | M | Low-medium — touches `quick-bug.ts`'s largest render block; keep Save Ticket one level shallower than the rest per the Reviewer note above | **1.12** |
+| T-05: replace the MCP hand-off modal with a one-line link | new (simpler than first drafted) | Removes a forced click on every export (Flow 1 step 8/9), not just a remembered dismissal | S | Low — no new setting needed, simpler than the original localStorage-flag draft | **1.12** |
+| T-06: duplicate capture-bug trigger | merge | Two live controls during one capture (Flow 1 step 5); proposal confirms this as "no error toast while capturing," toast itself stays for the no-capture-running case | S | Low | **1.12** |
 | T-07: "Empty Session" title | rename / new field | Misdescribes a deliberate screenshot (Flow 3) | S (stage 1) / M (stage 2) | Low | **1.12** |
 | T-08: dashboard focus trap | fix | Keyboard/SR users lose focus context | S | Low, moot pending T-11 | **1.12** |
 | T-09: close-button aria-label | fix | No accessible name | S | None | **1.12** |
 | T-10: milestone-ask z-index | reorder | Visual overlap with the ticket modal | S | None | **1.12** |
 | T-11: dashboard.ts panel fate | decision | 2,430 lines, no entry point | — | — | Whenever decided |
 | T-12: delete-confirmation consistency | standardize | Two idioms across two ticket-list UIs | S | None, depends on T-11 | **1.12**, after T-11 |
+| T-13: hide the cross-site toggle | remove (UI only) | Requests a broad permission for a cosmetic toolbar-visibility convenience; its label overclaims what it does | S | None — `optional_host_permissions` stays, only the UI row is hidden; re-add the row (not the permission) once ADR 008 ships | **1.12**, until ADR 008 (v2.0) |
 
 ### Release mapping
 
@@ -314,14 +432,17 @@ this document), **1.12 = declutter** (T-04 through T-10, T-12).
    either answer was found in any pass.
 3. **Jira's long-term presentation** — confirmed permanent copy-only (CORS-blocked). Market it any
    differently now that permanence is confirmed, beyond the T-04 menu move?
-4. **MCP hand-off card's re-enable path (T-05)** — a new Settings row, or fold into an existing
-   toggle area? Adding a new always-visible setting also sits in tension with "prefer defaults and
-   progressive disclosure over adding settings" — worth deciding deliberately, not by default.
-5. **`tracebug.dev/feedback`'s dropped `type`/`area` params** — the live page ignores two of the
-   three URL params the 👍/👎 links send (confirmed this session, page returns 200, `msg` works,
-   `type`/`area` have no corresponding field). Out of this review's scope to fix (website, not
-   extension/SDK) but worth someone's attention — right now every 👍/👎 click loses its
-   bug-vs-idea and extension-vs-SDK classification.
+4. ~~MCP hand-off card's re-enable path (T-05)~~ — **resolved** by the one-line-link proposal in
+   Part 4: no modal, no dismissal to remember, no new setting needed at all.
+5. ~~`tracebug.dev/feedback`'s dropped `type`/`area` params~~ — **false alarm, corrected this
+   session.** An earlier pass in this review tested the live page by querying
+   `input,select,textarea` and found no `type`/`area` field, concluding they were dropped. They
+   aren't: the page renders them as pill `<button>`s driving React state
+   (`FeedbackForm.tsx`), not native form elements, so that query missed them. A real local
+   submission, intercepting the outgoing POST, confirms both fields arrive correctly
+   (`type=bug&area=extension` in the body alongside `message`/`email`/`version`), and the static
+   Netlify form-detection twin (`__forms.html`) already declares both as recognized fields. No
+   website change needed.
 6. **Firefox verification (Flow 7)** remains an unresolved tooling blocker, unrelated to any finding
    here, still outstanding before a Firefox-inclusive launch claim.
 7. **PLAN.md's phase numbering vs. this review's release mapping** — `PLAN.md` Phase 10 is currently
