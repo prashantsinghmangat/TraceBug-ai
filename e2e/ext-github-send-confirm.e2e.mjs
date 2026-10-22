@@ -67,10 +67,10 @@ try {
   await sw.evaluate(async (glob) => {
     const [tab] = await chrome.tabs.query({ url: glob });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["secret-migration.js", "content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   }, GLOB);
-  await page.waitForFunction(() => !!window.TraceBugSDK, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!window.__TraceBugExtensionSDK, null, { timeout: 15000 });
   await sleep(500);
 
   // Reproduce the seeded bug so the ticket modal has real content.
@@ -79,7 +79,7 @@ try {
   await sleep(400);
   await page.click("#orderBtn");
   await sleep(700);
-  await page.evaluate(() => { try { window.TraceBug.startEventsCapture && window.TraceBug.startEventsCapture(); } catch (e) {} });
+  await page.evaluate(() => { try { window.__TraceBugExtension.startEventsCapture && window.__TraceBugExtension.startEventsCapture(); } catch (e) {} });
   await sleep(500);
   await page.fill("#coupon", "SAVE20");
   await page.click("#applyBtn");

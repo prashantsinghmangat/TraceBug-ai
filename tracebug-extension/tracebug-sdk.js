@@ -74132,7 +74132,7 @@ axe-core/axe.js:
    *)
 */
 
-        // Expose TraceBug on window for extension use (only once)
+        // Expose TraceBug on window for page-mode use (only once)
         if (typeof window !== 'undefined' && typeof TraceBugModule !== 'undefined' && !window.__TRACEBUG_LOADED__) {
           window.__TRACEBUG_LOADED__ = true;
           window.TraceBug = TraceBugModule.default || TraceBugModule;

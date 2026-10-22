@@ -1,6 +1,18 @@
 // ── TraceBug Extension — Page-Context Initializer ───────────────────────────
 // Runs in PAGE context. Initializes SDK and wires extension communication.
 // Guards against multiple injections with a global flag.
+//
+// Talks ONLY to window.__TraceBugExtension / window.__TraceBugExtensionSDK —
+// never window.TraceBug / window.TraceBugSDK. Those are the npm SDK's names,
+// and a host page that embeds its own copy (page mode, no transport) can
+// claim them before this script ever runs. window.TraceBug.init() is a no-op
+// past the first call, so if this file read/wrote that global, the extension's
+// init({transport:"extension"}) would be silently dropped and the page would
+// stay in page mode forever — no real tracker sends, wrong settings pointer.
+// See docs/launch/sdk-isolation-1.11.2.md. The extension's injected bundle
+// (tracebug-sdk-ext.js, a separate tsup output from the same src/index.ts)
+// publishes under this distinct global specifically so a page-defined
+// TraceBug is invisible to it and can never be adopted.
 // ─────────────────────────────────────────────────────────────────────────────
 
 (function () {
@@ -8,7 +20,7 @@
   if (window.__TRACEBUG_INITIALIZED__) return;
   window.__TRACEBUG_INITIALIZED__ = true;
 
-  if (typeof window.TraceBug === "undefined") {
+  if (typeof window.__TraceBugExtension === "undefined") {
     console.warn("[TraceBug Extension] SDK not found");
     window.__TRACEBUG_INITIALIZED__ = false;
     return;
@@ -42,27 +54,27 @@
 
   function syncIntegrationStatus() {
     var caps = readIntegrationStatus();
-    if (window.TraceBugSDK && window.TraceBugSDK.setIntegrationStatus) {
-      window.TraceBugSDK.setIntegrationStatus(caps);
+    if (window.__TraceBugExtensionSDK && window.__TraceBugExtensionSDK.setIntegrationStatus) {
+      window.__TraceBugExtensionSDK.setIntegrationStatus(caps);
     }
     // Same attribute also carries `hostAccess` — whether <all_urls> is granted,
     // which Phase 1 made optional. Absent means "unknown", and the SDK stays
     // quiet about it rather than claiming the capture is limited.
-    if (window.TraceBugSDK && window.TraceBugSDK.setHostAccess) {
-      window.TraceBugSDK.setHostAccess(caps ? caps.hostAccess : undefined);
+    if (window.__TraceBugExtensionSDK && window.__TraceBugExtensionSDK.setHostAccess) {
+      window.__TraceBugExtensionSDK.setHostAccess(caps ? caps.hostAccess : undefined);
     }
     // ...and the shortcut the browser bound to TraceBug's command. The SDK
     // shows it instead of a hardcoded key, and stands down from its own
     // Ctrl+Shift+B handler when the browser owns that combo — otherwise one
     // press would fire the command AND the page handler.
-    if (window.TraceBugSDK && window.TraceBugSDK.setBoundShortcut) {
-      window.TraceBugSDK.setBoundShortcut(caps ? caps.shortcut : undefined);
+    if (window.__TraceBugExtensionSDK && window.__TraceBugExtensionSDK.setBoundShortcut) {
+      window.__TraceBugExtensionSDK.setBoundShortcut(caps ? caps.shortcut : undefined);
     }
   }
 
   // Initialize the SDK. `transport: "extension"` is the explicit declaration
   // that secrets must not be kept in page storage — see src/ext-transport.ts.
-  window.TraceBug.init({
+  window.__TraceBugExtension.init({
     projectId: "tracebug-extension",
     enabled: "all",
     enableDashboard: true,
@@ -74,8 +86,8 @@
   // Rules edited in the popup mid-session reach the running SDK live: the
   // content script rewrites the attribute; we push it into the sanitizers.
   function syncRedactRules() {
-    if (window.TraceBugSDK && window.TraceBugSDK.setRedactRules) {
-      window.TraceBugSDK.setRedactRules(readRedactRules());
+    if (window.__TraceBugExtensionSDK && window.__TraceBugExtensionSDK.setRedactRules) {
+      window.__TraceBugExtensionSDK.setRedactRules(readRedactRules());
     }
   }
   try {
@@ -99,9 +111,9 @@
   // ── Extension action handlers (via CustomEvents from content script) ────
 
   window.addEventListener("tracebug-ext-screenshot", function (e) {
-    if (window.TraceBug && e.detail && e.detail.dataUrl) {
-      var screenshots = window.TraceBug.getScreenshots
-        ? window.TraceBug.getScreenshots()
+    if (window.__TraceBugExtension && e.detail && e.detail.dataUrl) {
+      var screenshots = window.__TraceBugExtension.getScreenshots
+        ? window.__TraceBugExtension.getScreenshots()
         : [];
       var count = screenshots.length + 1;
       var name = count.toString().padStart(2, "0") + "_screenshot.png";
@@ -116,8 +128,8 @@
   // extension popup still shows "On".
   function ensureActive() {
     try {
-      if (!document.getElementById("tracebug-root") && window.TraceBug && window.TraceBug.init) {
-        window.TraceBug.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true, transport: "extension", redact: readRedactRules() });
+      if (!document.getElementById("tracebug-root") && window.__TraceBugExtension && window.__TraceBugExtension.init) {
+        window.__TraceBugExtension.init({ projectId: "tracebug-extension", enabled: "all", enableDashboard: true, transport: "extension", redact: readRedactRules() });
         syncIntegrationStatus();
       }
     } catch (e) {}
@@ -125,20 +137,20 @@
 
   window.addEventListener("tracebug-ext-action", function (e) {
     var action = e.detail ? e.detail.action : null;
-    if (!window.TraceBug || !action) return;
+    if (!window.__TraceBugExtension || !action) return;
     ensureActive();
 
     switch (action) {
       case "report":
-        if (window.TraceBug.downloadPdf) {
-          window.TraceBug.downloadPdf();
+        if (window.__TraceBugExtension.downloadPdf) {
+          window.__TraceBugExtension.downloadPdf();
           showToast("Generating PDF report...");
         }
         break;
 
       case "github":
-        var gh = window.TraceBug.getGitHubIssue
-          ? window.TraceBug.getGitHubIssue()
+        var gh = window.__TraceBugExtension.getGitHubIssue
+          ? window.__TraceBugExtension.getGitHubIssue()
           : null;
         if (gh) {
           copyToClipboard(gh).then(function () {
@@ -150,8 +162,8 @@
         break;
 
       case "jira":
-        var jira = window.TraceBug.getJiraTicket
-          ? window.TraceBug.getJiraTicket()
+        var jira = window.__TraceBugExtension.getJiraTicket
+          ? window.__TraceBugExtension.getJiraTicket()
           : null;
         if (jira) {
           var text = jira.summary + "\n\n" + jira.description;
@@ -164,45 +176,45 @@
         break;
 
       case "annotate":
-        if (window.TraceBug.isAnnotateModeActive && window.TraceBug.isAnnotateModeActive()) {
-          window.TraceBug.deactivateAnnotateMode();
+        if (window.__TraceBugExtension.isAnnotateModeActive && window.__TraceBugExtension.isAnnotateModeActive()) {
+          window.__TraceBugExtension.deactivateAnnotateMode();
           showToast("Annotate mode deactivated");
         } else {
-          if (window.TraceBug.isDrawModeActive && window.TraceBug.isDrawModeActive()) {
-            window.TraceBug.deactivateDrawMode();
+          if (window.__TraceBugExtension.isDrawModeActive && window.__TraceBugExtension.isDrawModeActive()) {
+            window.__TraceBugExtension.deactivateDrawMode();
           }
-          window.TraceBug.activateAnnotateMode();
+          window.__TraceBugExtension.activateAnnotateMode();
           showToast("Annotate mode: Click elements to annotate. Shift+click for multi-select.");
         }
         break;
 
       case "draw":
-        if (window.TraceBug.isDrawModeActive && window.TraceBug.isDrawModeActive()) {
-          window.TraceBug.deactivateDrawMode();
+        if (window.__TraceBugExtension.isDrawModeActive && window.__TraceBugExtension.isDrawModeActive()) {
+          window.__TraceBugExtension.deactivateDrawMode();
           showToast("Draw mode deactivated");
         } else {
-          if (window.TraceBug.isAnnotateModeActive && window.TraceBug.isAnnotateModeActive()) {
-            window.TraceBug.deactivateAnnotateMode();
+          if (window.__TraceBugExtension.isAnnotateModeActive && window.__TraceBugExtension.isAnnotateModeActive()) {
+            window.__TraceBugExtension.deactivateAnnotateMode();
           }
-          window.TraceBug.activateDrawMode();
+          window.__TraceBugExtension.activateDrawMode();
           showToast("Draw mode: Drag to draw rectangles or ellipses on the page.");
         }
         break;
 
       case "inspect":
-        if (window.TraceBug.isInspectModeActive && window.TraceBug.isInspectModeActive()) {
-          window.TraceBug.deactivateInspectMode();
+        if (window.__TraceBugExtension.isInspectModeActive && window.__TraceBugExtension.isInspectModeActive()) {
+          window.__TraceBugExtension.deactivateInspectMode();
           showToast("Inspect mode deactivated");
-        } else if (window.TraceBug.activateInspectMode) {
-          window.TraceBug.activateInspectMode();
+        } else if (window.__TraceBugExtension.activateInspectMode) {
+          window.__TraceBugExtension.activateInspectMode();
         } else {
           showToast("Inspect requires the latest extension build");
         }
         break;
 
       case "export_annotations":
-        if (window.TraceBug.exportAnnotationsMarkdown) {
-          var md = window.TraceBug.exportAnnotationsMarkdown();
+        if (window.__TraceBugExtension.exportAnnotationsMarkdown) {
+          var md = window.__TraceBugExtension.exportAnnotationsMarkdown();
           if (md) {
             copyToClipboard(md).then(function () {
               showToast("Annotations copied to clipboard as Markdown!");
@@ -224,15 +236,15 @@
         //   1. getAllSessions() is non-empty → Export .html / GitHub / Jira work
         //   2. clearScreenshots() fires NOW (clean slate), not inside
         //      quickCapture() after the screenshot was already stored.
-        if (window.TraceBug.startRecording) {
-          try { window.TraceBug.startRecording(); } catch (e) {}
+        if (window.__TraceBugExtension.startRecording) {
+          try { window.__TraceBugExtension.startRecording(); } catch (e) {}
         }
         var openModal = function () {
-          if (window.TraceBug.quickCapture) window.TraceBug.quickCapture();
+          if (window.__TraceBugExtension.quickCapture) window.__TraceBugExtension.quickCapture();
         };
-        if (window.TraceBug.takeScreenshot) {
+        if (window.__TraceBugExtension.takeScreenshot) {
           Promise.resolve()
-            .then(function () { return window.TraceBug.takeScreenshot(); })
+            .then(function () { return window.__TraceBugExtension.takeScreenshot(); })
             .catch(function () { /* capture failed — still open the modal */ })
             .then(openModal);
         } else {
@@ -248,19 +260,19 @@
       // calls getUserMedia({audio: true}) when withMic is truthy.
       case "record":
         var wantsVideo = !!(e.detail && e.detail.video);
-        if (window.TraceBug.prepareRecording) {
+        if (window.__TraceBugExtension.prepareRecording) {
           // Pre-capture flow: optional blur-first pass + countdown, then go.
-          window.TraceBug.prepareRecording({
+          window.__TraceBugExtension.prepareRecording({
             video: wantsVideo,
             withMicrophone: !!(e.detail && e.detail.withMic),
             blurFirst: !!(e.detail && e.detail.blurFirst),
             delaySec: (e.detail && e.detail.delaySec) || 0,
             surfaceMode: (e.detail && e.detail.surfaceMode) || undefined,
           });
-        } else if (!wantsVideo && window.TraceBug.startEventsCapture) {
-          window.TraceBug.startEventsCapture();
-        } else if (window.TraceBug.startVideoRecording) {
-          window.TraceBug.startVideoRecording({ withMicrophone: !!(e.detail && e.detail.withMic) });
+        } else if (!wantsVideo && window.__TraceBugExtension.startEventsCapture) {
+          window.__TraceBugExtension.startEventsCapture();
+        } else if (window.__TraceBugExtension.startVideoRecording) {
+          window.__TraceBugExtension.startVideoRecording({ withMicrophone: !!(e.detail && e.detail.withMic) });
         } else {
           showToast("Capture requires the latest extension build");
         }

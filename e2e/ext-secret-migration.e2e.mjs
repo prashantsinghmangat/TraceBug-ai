@@ -90,15 +90,23 @@ async function launch(extDir) {
   return { ctx, sw };
 }
 
-/** Inject exactly the pipeline background.js uses (file list from background.js:118-131). */
-async function activate(sw, urlGlob, { migration }) {
-  await sw.evaluate(async ({ urlGlob, migration }) => {
+/**
+ * Inject exactly the pipeline background.js uses (file list from background.js:118-131).
+ *
+ * `sdkFile` defaults to the current build's isolated bundle (tracebug-sdk-ext.js,
+ * window.__TraceBugExtension — see docs/launch/sdk-isolation-1.11.2.md). The
+ * OLD 1.10.1 build this script also loads predates that split and genuinely
+ * only has tracebug-sdk.js under window.TraceBug/TraceBugSDK, so its one call
+ * site below passes that filename explicitly rather than this picking wrong.
+ */
+async function activate(sw, urlGlob, { migration, sdkFile = "tracebug-sdk-ext.js" }) {
+  await sw.evaluate(async ({ urlGlob, migration, sdkFile }) => {
     const [tab] = await chrome.tabs.query({ url: urlGlob });
     const cs = migration ? ["secret-migration.js", "content-script.js"] : ["content-script.js"];
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: cs });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [sdkFile], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
-  }, { urlGlob, migration });
+  }, { urlGlob, migration, sdkFile });
 }
 
 const pageKeys = (page) => page.evaluate(() => ({
@@ -121,7 +129,7 @@ try {
       const page = await ctx.newPage();
       await page.goto(url, { waitUntil: "load" });
       await page.waitForTimeout(400);
-      await activate(sw, glob, { migration: false });
+      await activate(sw, glob, { migration: false, sdkFile: "tracebug-sdk.js" });
       await page.waitForFunction(() => !!window.TraceBugSDK, null, { timeout: 15000 });
 
       // The OLD code path does the writing — not this script.
