@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { recordExport, getExportCount, _resetReviewAsk } from '../src/ui/review-ask';
 import { storeUrl, reviewUrl, firefoxStoreUrl } from '../src/links';
+import { buildReplayHtml, type BundlePayload } from '../src/exporters/html-template';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CARD = readFileSync(join(root, 'src', 'ui', 'review-ask.ts'), 'utf8');
@@ -205,5 +206,42 @@ describe('the export footer can be turned off', () => {
     }
     expect((QUICKBUG.match(/showFooter: showExportFooter\(\)/g) ?? []).length)
       .toBeGreaterThanOrEqual(paths.length);
+  });
+});
+
+describe('the exported .html report verdict links (👍/👎)', () => {
+  // These aren't a static-source check like the block above — they render the
+  // real template, because the thing that must hold is an OUTPUT property:
+  // turning the export footer off must remove every tracebug.dev link from
+  // the file, not just the visible store-CTA text. The 👍/👎 pair lives
+  // inside the same conditional footerBar block in html-template.ts, so this
+  // guards against a future edit that moves them out of it by accident.
+  const minimalPayload = (showFooter?: boolean): BundlePayload => ({
+    meta: {
+      title: 'Bug', severity: 'low', summary: 'x', rootCause: 'x', page: '/',
+      generatedAt: 1751790000000, sessionId: 'sess_fb_test', environment: 'Test', durationMs: 1000,
+    },
+    description: 'x',
+    events: [],
+    screenshots: [],
+    showFooter,
+  });
+
+  it('includes the tracebug.dev feedback links when the footer is on (default)', () => {
+    const html = buildReplayHtml(minimalPayload(true));
+    expect(html).toContain('tracebug.dev/feedback');
+    expect(html).toContain('👍');
+    expect(html).toContain('👎');
+  });
+
+  it('includes the feedback links when showFooter is simply absent (older payload)', () => {
+    const html = buildReplayHtml(minimalPayload(undefined));
+    expect(html).toContain('tracebug.dev/feedback');
+  });
+
+  it('removes the feedback links entirely when the footer is turned off', () => {
+    const html = buildReplayHtml(minimalPayload(false));
+    expect(html).not.toContain('tracebug.dev/feedback');
+    expect(html).not.toContain('tracebug.dev');
   });
 });
