@@ -672,11 +672,19 @@ if (isExtAlive()) {
       // void. `pageSdk` is what stops that repair from mounting a SECOND
       // toolbar: the page-world SDK is ordinary page JS and keeps running
       // when the extension reloads, so only the bridge needs replacing.
-      // #tracebug-root is the dashboard's mount point (src/dashboard.ts).
+      //
+      // The SAME signal, on a tab never injected before, means something else
+      // entirely: a host page's own TraceBug integration already has a UI up.
+      // background.js's injectSDK() (first-ever injection, as opposed to
+      // ensureAlive()'s repair path) reads it that way and defers instead of
+      // mounting a second toolbar — see docs/launch/sdk-isolation-1.11.2.md.
+      // One detector, shared via page-support.js, so both call sites agree.
       case "TB_PING":
         sendResponse({
           alive: true,
-          pageSdk: !!document.getElementById("tracebug-root"),
+          pageSdk: globalThis.TraceBugPageSupport
+            ? globalThis.TraceBugPageSupport.detectHostTraceBugUI(document)
+            : !!document.getElementById("tracebug-root"),
         });
         break;
     }
