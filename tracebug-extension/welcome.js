@@ -86,8 +86,33 @@ function showShortcutSteps(el) {
   el.style.display = "";
 }
 
-/** Render "Alt+B" as separate key caps. Splits on the browser's own "+". */
-function renderKeys(container, shortcut) {
+/**
+ * Is this macOS? From the browser, not a user-agent string — same rule as
+ * shortcutsPageUrl, which branches on the extension URL scheme. Used for one
+ * thing only: what the key caps are labelled.
+ */
+function loadIsMac() {
+  return new Promise((resolve) => {
+    try {
+      if (!chrome.runtime || !chrome.runtime.getPlatformInfo) return resolve(false);
+      const done = (info) => {
+        void chrome.runtime.lastError;
+        resolve(!!info && info.os === "mac");
+      };
+      const maybe = chrome.runtime.getPlatformInfo(done);
+      if (maybe && typeof maybe.then === "function") maybe.then(done, () => resolve(false));
+    } catch { resolve(false); }
+  });
+}
+
+/**
+ * Render "Alt+B" as separate key caps. Splits on the browser's own "+".
+ *
+ * `mac` relabels the Alt cap with the symbol actually printed on a Mac
+ * keyboard. Display only — the binding itself is whatever the browser
+ * reported, and is never rewritten here.
+ */
+function renderKeys(container, shortcut, mac) {
   container.textContent = "";
   const parts = shortcut.split("+").map((p) => p.trim()).filter(Boolean);
   parts.forEach((part, i) => {
@@ -98,7 +123,7 @@ function renderKeys(container, shortcut) {
       container.appendChild(plus);
     }
     const kbd = document.createElement("kbd");
-    kbd.textContent = part;
+    kbd.textContent = mac && part === "Alt" ? "⌥" : part;
     container.appendChild(kbd);
   });
   const link = document.createElement("a");
@@ -107,6 +132,59 @@ function renderKeys(container, shortcut) {
   link.textContent = "Change shortcut";
   container.appendChild(link);
   return link;
+}
+
+/** Select the command, for when the clipboard is refused. */
+function selectCommand(el) {
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch {}
+}
+
+/**
+ * Copy `npx tracebug mcp`. The clipboard needs a user gesture, which the click
+ * is — but an extension page can still be refused it. When that happens the
+ * text is selected instead, rather than the button claiming a copy that never
+ * happened.
+ */
+function wireCopy() {
+  const btn = document.getElementById("copyMcp");
+  const cmd = document.getElementById("mcpCmd");
+  if (!btn || !cmd) return;
+
+  let timer = 0;
+  const flash = (label, copied) => {
+    btn.textContent = label;
+    btn.classList.toggle("copied", copied);
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      btn.textContent = "Copy";
+      btn.classList.remove("copied");
+    }, 1600);
+  };
+
+  btn.addEventListener("click", () => {
+    const text = cmd.textContent || "";
+    let write = null;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        write = navigator.clipboard.writeText(text);
+      }
+    } catch {}
+    if (write && typeof write.then === "function") {
+      write.then(
+        () => flash("Copied", true),
+        () => { selectCommand(cmd); flash("Select and copy", false); },
+      );
+    } else {
+      selectCommand(cmd);
+      flash("Select and copy", false);
+    }
+  });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -120,6 +198,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("playground").href = PLAYGROUND_URL;
   document.getElementById("github").href = GITHUB_URL;
   document.getElementById("feedback").href = FEEDBACK_URL;
+
+  wireCopy();
+
+  // Step 1 — Firefox arranges the same three clicks differently, so the
+  // Chrome wording ("then the pin next to TraceBug") does not describe what
+  // the user is looking at.
+  if (isFirefox()) {
+    const how = document.getElementById("pinHow");
+    if (how) how.textContent = "Click the puzzle-piece icon, open TraceBug's menu, then Pin to Toolbar.";
+  }
 
   // The team card, if there is anywhere real to send people. See TEAM_GUIDE_URL.
   if (TEAM_GUIDE_URL) {
@@ -144,7 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Step 3: whichever state is true. A hardcoded key would be wrong for
   // anyone who rebound it, and wrong for everyone on a browser that refused
   // the default binding.
-  const bound = await loadBoundShortcut();
+  const [bound, mac] = await Promise.all([loadBoundShortcut(), loadIsMac()]);
   const keysBound = document.getElementById("keysBound");
   const keysNone = document.getElementById("keysNone");
   const steps = document.createElement("div");
@@ -154,7 +242,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (bound) {
     keysBound.style.display = "";
-    const link = renderKeys(keysBound, bound);
+    const link = renderKeys(keysBound, bound, mac);
     keysBound.parentElement.appendChild(steps);
     link.addEventListener("click", (e) => { e.preventDefault(); openShortcutsPage(steps); });
   } else {

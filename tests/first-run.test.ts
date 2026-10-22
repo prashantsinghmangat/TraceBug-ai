@@ -55,12 +55,68 @@ describe('welcome.html ships nothing remote', () => {
     // ADR 002 in spirit: a page bundled for first run must render with the
     // network off. Inline <style> is fine (options.html and confirm-send.html
     // do the same); a <link>, external <img> or CDN <script> is not.
-    expect(HTML).not.toMatch(/<link[^>]+href=["']https?:/i);
-    expect(HTML).not.toMatch(/<script[^>]+src=["']https?:/i);
-    expect(HTML).not.toMatch(/<img[^>]+src=["']https?:/i);
-    expect(HTML).not.toMatch(/url\(\s*["']?https?:/i);
-    // The only script is the local one.
+    //
+    // Checked per attribute rather than per element, because the v2 layout came
+    // from a Stitch export that shipped a Tailwind CDN <script>, two Google
+    // Fonts <link>s and a googleusercontent.com <img>. A regex naming only the
+    // tags we happened to think of is how one of those comes back.
+    const srcs = [...HTML.matchAll(/\bsrc\s*=\s*["']([^"']*)["']/gi)].map((m) => m[1]);
+    expect(srcs).toContain('welcome.js'); // the one script, and it is local
+    for (const src of srcs) expect(src).not.toMatch(/^https?:/i);
+
+    for (const [, href] of HTML.matchAll(/\bhref\s*=\s*["']([^"']*)["']/gi)) {
+      expect(href).not.toMatch(/^https?:/i);
+    }
+    // Nothing may be linked or warmed up ahead of time either — preconnect and
+    // preload are how the export fetched its fonts.
+    expect(HTML).not.toMatch(/<link\b[^>]*\brel\s*=\s*["']?(stylesheet|preconnect|preload|dns-prefetch)/i);
+    expect(HTML).not.toMatch(/@import/i);
+
+    // url() is allowed — but only for the inline SVG gradient, never a fetch.
+    for (const [, url] of HTML.matchAll(/url\(\s*["']?([^)"']*)/gi)) {
+      expect(url).not.toMatch(/^(https?:)?\/\//i);
+    }
+
     expect(HTML).toContain('<script src="welcome.js"></script>');
+  });
+
+  it('wires the copy button, and copies what the page shows', () => {
+    // A button the CSP silently leaves inert looks exactly like a working one.
+    expect(HTML).toContain('id="copyMcp"');
+    expect(HTML).toContain('id="mcpCmd"');
+    expect(VISIBLE).toContain('npx tracebug mcp');
+
+    const wire = CODE.slice(CODE.indexOf('function wireCopy'), CODE.indexOf('DOMContentLoaded'));
+    expect(wire).toContain('copyMcp');
+    expect(wire).toContain('mcpCmd');
+    expect(wire).toMatch(/addEventListener\(\s*["']click["']/);
+    expect(wire).toContain('writeText');
+    expect(wire).toContain('Copied');
+    // Read from the DOM, not retyped here, so the button and the line of text
+    // above it cannot drift apart.
+    expect(wire).not.toMatch(/npx\s+tracebug/);
+    // And actually called on load.
+    expect(CODE).toMatch(/^\s*wireCopy\(\);/m);
+  });
+
+  it('keeps the design export out of what the page claims', () => {
+    // The v2 export mocked a shortcut it had no way to know. Step 3 renders
+    // the real binding, so none of that may survive into the markup.
+    expect(VISIBLE).not.toMatch(/Quick capture active/i);
+    expect(VISIBLE).not.toMatch(/Also works on Windows/i);
+    expect(VISIBLE).not.toMatch(/\bCmd\b|⌘/);
+    // The Mac cap label is a welcome.js decision, made from the platform the
+    // browser reports — not from a user-agent string, and not from the markup.
+    expect(CODE).toContain('getPlatformInfo');
+    expect(CODE).toMatch(/os === ["']mac["']/);
+  });
+
+  it('describes pinning the way the running browser actually does it', () => {
+    // Firefox arranges the same three clicks differently; the Chrome wording
+    // would be describing a menu that is not on screen.
+    expect(HTML).toContain('id="pinHow"');
+    expect(CODE).toMatch(/isFirefox\(\)/);
+    expect(CODE).toContain('Pin to Toolbar');
   });
 
   it('has no inline script, which the extension CSP forbids', () => {
