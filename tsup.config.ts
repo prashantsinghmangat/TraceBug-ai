@@ -118,7 +118,7 @@ export default defineConfig([
     outDir: "tracebug-extension",
     outExtension: () => ({ js: ".js" }),
   },
-  // ── IIFE build for Chrome Extension ───────────────────────────────────
+  // ── IIFE build, page mode (window.TraceBug) ───────────────────────────
   // IIFE can't split chunks, so esbuild inlines every dynamic import. We stub
   // html2canvas (unused in the extension — see stubHtml2Canvas above) to drop
   // ~600KB. axe-core stays: it powers the a11y auto-scanner, an actual feature.
@@ -129,6 +129,14 @@ export default defineConfig([
   // bundle (~0.5 MB); a future optimization can lazy-load it from a packaged
   // web-accessible resource instead of inlining. (stubRrweb / stubRrwebRuntime
   // remain defined above so this is a one-line revert if needed.)
+  //
+  // Despite living in tracebug-extension/, this file is NOT what the extension
+  // injects into a page (see the tracebug-sdk-ext entry below) — it's the
+  // npm/page-mode build, published under window.TraceBug. `npm run build:ext`
+  // also copies it to website/public/tracebug-sdk.js for the website's own
+  // opt-in in-page demo. Kept unchanged by Bug 0's fix on purpose: any real
+  // app embedding this as a plain <script> tag keeps working exactly as
+  // before. See docs/launch/sdk-isolation-1.11.2.md.
   {
     entry: { "tracebug-sdk": "src/index.ts" },
     format: ["iife"],
@@ -142,11 +150,43 @@ export default defineConfig([
     outExtension: () => ({ js: ".js" }),
     footer: {
       js: `
-        // Expose TraceBug on window for extension use (only once)
+        // Expose TraceBug on window for page-mode use (only once)
         if (typeof window !== 'undefined' && typeof TraceBugModule !== 'undefined' && !window.__TRACEBUG_LOADED__) {
           window.__TRACEBUG_LOADED__ = true;
           window.TraceBug = TraceBugModule.default || TraceBugModule;
           window.TraceBugSDK = TraceBugModule;
+        }
+      `,
+    },
+  },
+  // ── IIFE build, extension mode (window.__TraceBugExtension) ───────────
+  // The SAME source (src/index.ts), built again under its own global so the
+  // extension's injected copy can never collide with a host page's own
+  // window.TraceBug (Bug 0 — docs/launch/sdk-isolation-1.11.2.md). Whichever
+  // copy's footer runs first used to win window.TraceBug for the rest of the
+  // page's life, silently dropping the extension's init({transport:
+  // "extension"}) call when a page embedded its own SDK first. This build is
+  // what background.js's injectPageWorld() actually injects — the entry
+  // above is never used for that. tracebug-init.js talks ONLY to this global.
+  {
+    entry: { "tracebug-sdk-ext": "src/index.ts" },
+    format: ["iife"],
+    globalName: "TraceBugExtensionModule",
+    dts: false,
+    clean: false,
+    splitting: false,
+    sourcemap: false,
+    esbuildPlugins: [stubHtml2Canvas],
+    outDir: "tracebug-extension",
+    outExtension: () => ({ js: ".js" }),
+    footer: {
+      js: `
+        // Expose under a name no page script could collide with by accident —
+        // entirely independent of window.__TRACEBUG_LOADED__ above.
+        if (typeof window !== 'undefined' && typeof TraceBugExtensionModule !== 'undefined' && !window.__TRACEBUG_EXT_LOADED__) {
+          window.__TRACEBUG_EXT_LOADED__ = true;
+          window.__TraceBugExtension = TraceBugExtensionModule.default || TraceBugExtensionModule;
+          window.__TraceBugExtensionSDK = TraceBugExtensionModule;
         }
       `,
     },

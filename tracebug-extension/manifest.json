@@ -54,7 +54,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "tracebug-sdk.js",
+        "tracebug-sdk-ext.js",
         "tracebug-init.js",
         "player.html",
         "player.js"

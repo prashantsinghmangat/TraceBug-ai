@@ -206,13 +206,13 @@ try {
   await sw.evaluate(async (glob) => {
     const [tab] = await chrome.tabs.query({ url: glob });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["secret-migration.js", "content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   }, GLOB);
-  await page.waitForFunction(() => !!window.TraceBugSDK, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!window.__TraceBugExtensionSDK, null, { timeout: 15000 });
   await sleep(500);
 
-  check("the SDK is running in the page's main world", await page.evaluate(() => !!window.TraceBugSDK),
+  check("the SDK is running in the page's main world", await page.evaluate(() => !!window.__TraceBugExtensionSDK),
     "if it were not, this test would prove nothing");
 
   // The page is told WHETHER each integration is configured — a boolean — and
@@ -233,7 +233,7 @@ try {
   await sleep(300);
   const opened = await page.evaluate(async () => {
     try {
-      await window.TraceBugSDK.quickCapture();
+      await window.__TraceBugExtensionSDK.quickCapture();
       return !!document.querySelector('[id*="quick-bug"], .tb-qb-modal, #tracebug-quick-bug-modal');
     } catch (e) { return false; }
   });

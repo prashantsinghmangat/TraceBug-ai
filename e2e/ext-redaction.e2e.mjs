@@ -73,7 +73,7 @@ try {
   await sw.evaluate(async () => {
     const [tab] = await chrome.tabs.query({ url: "http://localhost:4174/*" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   });
   await page.waitForTimeout(1500);
@@ -83,12 +83,12 @@ try {
   check("content script publishes data-tb-redact", !!attr && attr.includes("coupon"), attr ?? "missing");
 
   // 4. Record + type into the matching field.
-  await page.evaluate(() => window.TraceBug.startRecording());
+  await page.evaluate(() => window.__TraceBugExtension.startRecording());
   await page.waitForTimeout(400);
   await page.fill("#coupon", "SAVE20");
   await page.waitForTimeout(2000); // input capture debounce
 
-  const session = await page.evaluate(() => JSON.parse(window.TraceBug.exportSessionJSON()));
+  const session = await page.evaluate(() => JSON.parse(window.__TraceBugExtension.exportSessionJSON()));
   const inputEv = (session.events || []).find(
     (e) => e.type === "input" && (e.data?.element?.name === "coupon")
   );

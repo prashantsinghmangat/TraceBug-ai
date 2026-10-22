@@ -123,10 +123,10 @@ try {
   await sw.evaluate(async (glob) => {
     const [tab] = await chrome.tabs.query({ url: glob });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["secret-migration.js", "content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   }, GLOB);
-  await page.waitForFunction(() => !!window.TraceBugSDK, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!window.__TraceBugExtensionSDK, null, { timeout: 15000 });
   await sleep(600);
 
   /**
@@ -414,10 +414,10 @@ try {
     const tabs = await chrome.tabs.query({ url: glob });
     const tab = tabs[tabs.length - 1];
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["secret-migration.js", "content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   }, GLOB);
-  await page2.waitForFunction(() => !!window.TraceBugSDK, null, { timeout: 15000 });
+  await page2.waitForFunction(() => !!window.__TraceBugExtensionSDK, null, { timeout: 15000 });
   await page2.evaluate(() => {
     const id = "e2e_reaper";
     window.dispatchEvent(new CustomEvent("tracebug-provider-request", {

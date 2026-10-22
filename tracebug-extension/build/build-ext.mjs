@@ -88,7 +88,15 @@ const SHARED_FILES = [
   "player.html",
   "styles.css",
   "tracebug-init.js",
-  "tracebug-sdk.js",
+  // tracebug-sdk.js is NOT packaged here — the extension never loads it
+  // (background.js's injectPageWorld injects tracebug-sdk-ext.js exclusively,
+  // under its own window.__TraceBugExtension global; see
+  // docs/launch/sdk-isolation-1.11.2.md). tsup still builds tracebug-sdk.js
+  // into this same directory for the npm package and the website's sync step
+  // (`npm run build:ext`'s own copyFileSync to website/public) — it just
+  // isn't copied into dist/chrome or dist/firefox, and isn't declared in
+  // either manifest's web_accessible_resources, below.
+  "tracebug-sdk-ext.js",
 ];
 const SHARED_DIRS = ["icons"];
 

@@ -109,10 +109,10 @@ try {
   await sw.evaluate(async (glob) => {
     const [tab] = await chrome.tabs.query({ url: glob });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   }, GLOB);
-  await page.waitForFunction(() => !!window.TraceBugSDK, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!window.__TraceBugExtensionSDK, null, { timeout: 15000 });
   await sleep(500);
 
   // Dispatch the popup's own event, carrying the STORED video:true. This is
@@ -132,7 +132,7 @@ try {
 
   // ── It must be an EVENTS capture, not a recording ────────────────────────
   const state = await page.evaluate(() => ({
-    isVideoRecording: !!window.TraceBugSDK.isVideoRecording?.(),
+    isVideoRecording: !!window.__TraceBugExtensionSDK.isVideoRecording?.(),
     hud: !!document.querySelector('[data-tb-hud="stop"]'),
     label: document.querySelector('[data-tb-hud="label"]')?.textContent?.trim() || "",
     micBtn: !!document.querySelector('[data-tb-hud="mic"]'),
@@ -169,10 +169,10 @@ try {
   const report = await page.evaluate(() => {
     // NOT generateReport(): it needs an active session and correctly returns
     // null after a stop. This is the pair of calls the ticket modal makes.
-    const sessions = window.TraceBugSDK.getAllSessions();
+    const sessions = window.__TraceBugExtensionSDK.getAllSessions();
     const session = sessions[sessions.length - 1];
     if (!session) return null;
-    const r = window.TraceBugSDK.buildReport(session);
+    const r = window.__TraceBugExtensionSDK.buildReport(session);
     if (!r) return null;
     return {
       consoleErrors: (r.consoleErrors || []).map((e) => String(e.message).slice(0, 60)),

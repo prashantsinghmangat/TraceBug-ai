@@ -371,19 +371,27 @@ async function updateBadge(tabId /* , hostname */) {
 // an orphaned tab therefore means replacing the BRIDGE ONLY, or a second
 // toolbar mounts on top of the first. See ensureAlive().
 
-/** Isolated world: the message bridge. secret-migration.js first — content-script.js calls its planner. */
+/** Isolated world: the message bridge. secret-migration.js first — content-script.js
+ *  calls its planner. page-support.js before content-script.js — content-script.js's
+ *  TB_PING handler reads TraceBugPageSupport.detectHostTraceBugUI(). */
 async function injectBridge(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["secret-migration.js", "content-script.js"],
+    files: ["secret-migration.js", "page-support.js", "content-script.js"],
   });
 }
 
-/** MAIN world: the SDK bundle and its initializer. */
+/** MAIN world: the SDK bundle and its initializer.
+ *
+ *  tracebug-sdk-ext.js, NOT tracebug-sdk.js — a separate build of the same
+ *  src/index.ts that publishes under window.__TraceBugExtension instead of
+ *  window.TraceBug, so a host page that embeds its own copy of the npm SDK
+ *  (tracebug-sdk.js, page mode) never collides with the extension's.
+ *  See docs/launch/sdk-isolation-1.11.2.md. */
 async function injectPageWorld(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
-    files: ["tracebug-sdk.js"],
+    files: ["tracebug-sdk-ext.js"],
     world: "MAIN",
   });
   await chrome.scripting.executeScript({
@@ -474,6 +482,20 @@ async function injectSDK(tabId) {
 
   try {
     await injectBridge(tabId);
+
+    // One interface per page (deliberately not supported — see
+    // docs/launch/sdk-isolation-1.11.2.md): if this tab already has a host
+    // page's own TraceBug UI, defer entirely rather than mounting a second
+    // toolbar. Unlike ensureAlive()'s repair path, a `pageSdk: true` answer
+    // HERE can only mean a host page's own instance — this function only
+    // ever runs on a tab injectedTabs never saw before, so there is no prior
+    // extension instance of ours it could be detecting instead.
+    const pong = await pingTab(tabId);
+    if (pong?.pageSdk) {
+      const S = globalThis.TraceBugPageSupport;
+      throw new Error(S ? S.HOST_UI_ERROR : "tracebug-host-ui-present");
+    }
+
     await injectPageWorld(tabId);
 
     // Reflect "loaded" state in the toolbar badge for this tab.
@@ -683,6 +705,51 @@ async function flashActionError(tabId, err) {
   }, ACTION_ERROR_MS);
 }
 
+/**
+ * Alt+B has no popup to explain itself in, and the badge tooltip
+ * (flashActionError) is easy to miss — it only shows on hover. For the host-UI
+ * case specifically, show the same sentence directly on the page instead: a
+ * small notice in its OWN shadow root (`mode: "open"` — nothing secret in it,
+ * and "open" keeps it inspectable for debugging), with `all: initial` on the
+ * host element so the page's own CSS cannot reach in and the notice's own
+ * inline styles cannot leak out. Auto-removes itself; no cleanup needed from
+ * this side if the page navigates first.
+ */
+async function showHostUiNotice(tabId, sentence) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (text) => {
+        var existing = document.getElementById("tracebug-host-ui-notice");
+        if (existing) existing.remove();
+        var host = document.createElement("div");
+        host.id = "tracebug-host-ui-notice";
+        host.style.all = "initial";
+        host.style.position = "fixed";
+        host.style.zIndex = "2147483647";
+        host.style.bottom = "20px";
+        host.style.right = "20px";
+        var shadow = host.attachShadow({ mode: "open" });
+        var style = document.createElement("style");
+        style.textContent =
+          ":host{all:initial}" +
+          ".tb-notice{all:initial;display:block;font-family:-apple-system,BlinkMacSystemFont,sans-serif;" +
+          "font-size:13px;line-height:1.4;color:#fff;background:#111113;border:1px solid rgba(255,255,255,0.15);" +
+          "border-radius:10px;padding:12px 16px;max-width:320px;box-shadow:0 8px 24px rgba(0,0,0,0.35)}";
+        var notice = document.createElement("div");
+        notice.className = "tb-notice";
+        notice.textContent = text;
+        shadow.appendChild(style);
+        shadow.appendChild(notice);
+        document.documentElement.appendChild(host);
+        setTimeout(function () { try { host.remove(); } catch (e) {} }, 6000);
+      },
+      args: [sentence],
+      world: "ISOLATED",
+    });
+  } catch {}
+}
+
 if (chrome.commands && chrome.commands.onCommand) {
   chrome.commands.onCommand.addListener(async (command) => {
     if (command !== QUICK_CAPTURE_COMMAND) return;
@@ -707,7 +774,13 @@ if (chrome.commands && chrome.commands.onCommand) {
       // (tracebug-init.js, case "capture-now").
       await handleComboAction({ type: "TB_CAPTURE_NOW", tabId }, null);
     } catch (err) {
-      if (tabId != null) await flashActionError(tabId, err);
+      if (tabId == null) return;
+      const S = globalThis.TraceBugPageSupport;
+      if (S && err?.message === S.HOST_UI_ERROR) {
+        await showHostUiNotice(tabId, S.HOST_UI_TITLE + ". " + S.HOST_UI_DETAIL);
+        return;
+      }
+      await flashActionError(tabId, err);
     }
   });
 }

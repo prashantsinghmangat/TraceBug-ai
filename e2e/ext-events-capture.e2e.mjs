@@ -134,7 +134,7 @@ try {
   const started = await sw.evaluate(async (port) => {
     const [tab] = await chrome.tabs.query({ url: `http://localhost:${port}/*` });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
     await new Promise((r) => setTimeout(r, 400));
     return chrome.tabs.sendMessage(tab.id, {
@@ -157,7 +157,7 @@ try {
   );
   check(
     "the SDK does not think it is recording video",
-    (await page.evaluate(() => !!window.TraceBugSDK && window.TraceBugSDK.isVideoRecording() === false)),
+    (await page.evaluate(() => !!window.__TraceBugExtensionSDK && window.__TraceBugExtensionSDK.isVideoRecording() === false)),
   );
   // The "your browser will ask what to share" line belongs to the video path
   // only. If it shows up here it is telling the user about a dialog that is
@@ -201,7 +201,7 @@ try {
   await sw.evaluate(async (port) => {
     const [tab] = await chrome.tabs.query({ url: `http://localhost:${port}/*` });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content-script.js"] });
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   }, PORT);
   await page.waitForTimeout(2500);
@@ -247,10 +247,10 @@ try {
   // which needs an ACTIVE session and correctly returns null after a stop —
   // this is the same pair of calls the ticket modal makes.
   const report = await page.evaluate(() => {
-    const sessions = window.TraceBugSDK.getAllSessions();
+    const sessions = window.__TraceBugExtensionSDK.getAllSessions();
     const session = sessions[sessions.length - 1];
     if (!session) return null;
-    const r = window.TraceBugSDK.buildReport(session);
+    const r = window.__TraceBugExtensionSDK.buildReport(session);
     if (!r) return null;
     return {
       consoleErrors: (r.consoleErrors || []).map((e) => e.message || ""),

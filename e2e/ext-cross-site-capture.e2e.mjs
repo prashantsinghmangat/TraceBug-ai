@@ -58,7 +58,7 @@ const total = () => `${passes}/${passes + failures} checks passed`;
 const inject = (sw, urlGlob) => sw.evaluate(async (u) => {
   const [tab] = await chrome.tabs.query({ url: u });
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content-script.js"] });
-  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk.js"], world: "MAIN" });
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-sdk-ext.js"], world: "MAIN" });
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["tracebug-init.js"], world: "MAIN" });
   return tab.id;
 }, urlGlob);
