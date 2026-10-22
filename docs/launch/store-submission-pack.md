@@ -43,12 +43,12 @@ each file's convention or the diff becomes a whole-file re-encode.
 | `storage` | Saves the user's settings, redaction rules and saved bug tickets on their own device. |
 | `unlimitedStorage` | A report with an interactive DOM replay can exceed the default storage limit. It is stored only on the user's device. |
 | `alarms` | Cancels an unanswered send-confirmation window after two minutes. |
-| Optional host permissions | Requested only when the user wants a capture to continue across sites, or saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration, so TraceBug can send the report the user approves to that service. |
+| Optional host permissions | Requested when the user saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration (one fixed address each, or `localhost`/`127.0.0.1` for Ollama), so TraceBug can send the report to that service. Declared optional so TraceBug can request access to one specific address you enter for a self-hosted AI provider, only at the moment you save it, and never for all sites. |
 | Remote code | No. All code ships in the package. |
 
 `offscreen` is **not** requested in 1.11. It existed only to host screen
 recording, which is paused in this release - so the permission is gone rather
-than requested and unused. It returns with the feature in 1.11.1.
+than requested and unused. It returns with the feature in 1.11.3.
 
 **Single purpose:** Capture a browser bug (replay, console errors, network requests) into a report the user can export or send to their own issue tracker.
 
@@ -62,11 +62,21 @@ Declare on the cautious side. TraceBug never sends data to its developer. But at
 - ✅ Tick all three certifications: not sold to third parties; not used for purposes unrelated to the single purpose; not used for creditworthiness or lending.
 - Privacy policy URL: the existing one on tracebug.dev. Check that it says "nothing goes to TraceBug" and describes the user-initiated sends.
 
-## 4. What's new in 1.11.1 (store description, top)
+## 4. What's new in 1.11.2 (store description, top)
 
-Capture fixes lead, because they are what a new user meets first: in 1.11.0 a report could come
-back with nothing in it. The 1.11.0 lines stay underneath — a listing is read by people installing
-for the first time, not only by upgraders.
+1.11.2 is small correctness fixes; the 1.11.1 capture fixes stay underneath because they are still
+what a new user meets first. A listing is read by people installing for the first time, not only by
+upgraders.
+
+- Works properly on sites that use the TraceBug npm SDK, and steps aside where that site's own
+  TraceBug toolbar is already showing.
+- Tracker buttons say what they do: "Send to GitHub" asks you first; "Copy" copies.
+- No more dialog after every export — a one-line link opens the report in your AI agent.
+- The "Keep capturing across sites" option is gone: TraceBug no longer asks for access to all sites.
+- A new welcome page with the three steps and the `npx tracebug mcp` command.
+- Video recording is still paused while we finish it. It's back in 1.11.3.
+
+From 1.11.1:
 
 - Network requests are no longer listed twice, and a request method we can't determine now shows
   "—" instead of a guessed GET.
@@ -76,7 +86,6 @@ for the first time, not only by upgraders.
   tells you where it went, and what you captured is still there when you return.
 - The capture bar shows what it has: "Replay, not video · N events · M requests".
 - A warning when the page's content sits inside embedded frames, which aren't captured yet.
-- Video recording is still paused while we finish it. It's back in 1.11.2.
 
 Carried over from 1.11.0:
 

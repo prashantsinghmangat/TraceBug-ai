@@ -150,18 +150,22 @@ capture the notice must not appear at all, however long the capture.
 **Canvas warning — RUN THIS.** Start a capture on a page whose content is a large canvas - a
 charting page, Google Maps, any WebGL demo. **Pass:** a toast appears naming the canvas, saying
 console/network/clicks are still captured, and - because video is paused - pointing at
-**screenshots** and naming 1.11.2, **not** "Record video too". It offers **Stop** and disappears on
+**screenshots** and naming 1.11.3, **not** "Record video too". It offers **Stop** and disappears on
 its own after about 12 seconds. It must NOT appear on an ordinary page, nor on a dashboard of small
-sparkline charts. (In 1.11.2 the advice reverts to **Record video too** on its own: the copy
+sparkline charts. (In 1.11.3 the advice reverts to **Record video too** on its own: the copy
 branches on `isVideoOffered()`.)
 
 ### 10a. A capture ends when you leave the site, and does not come back (1.11.1)
 
-Turn **Keep capturing across sites** ON in the popup first. Start a capture on one site, click
-something, then navigate to a **different site** (a different host, not another page). **Pass:** the
-capture bar is gone, and a notice on the new site reads *"Capture ended when you left `<host>` …
-go back to `<host>` to open its ticket"* - naming the host you actually left. Nothing is capturing
-here: open TraceBug and there is no Stop control.
+> **1.11.2 (T-13):** the popup's **Keep capturing across sites** row is gone — granting `<all_urls>`
+> bought only cosmetic toolbar-visibility, not a capability worth a broad permission prompt, since a
+> capture ends on cross-origin navigation either way. Run this row with `<all_urls>` **ungranted**
+> (the only state a 1.11.2 install can be in without carrying it over from an earlier version).
+
+Start a capture on one site, click something, then navigate to a **different site** (a different
+host, not another page). **Pass:** the capture bar is gone, and a notice on the new site reads
+*"Capture ended when you left `<host>` … go back to `<host>` to open its ticket"* - naming the host
+you actually left. Nothing is capturing here: open TraceBug and there is no Stop control.
 
 Now go **back** to the first site. **Pass:** no capture bar reappears, no timer is counting, and
 TraceBug's saved tickets still contain what you captured there. A bar that returns with a running
@@ -206,6 +210,41 @@ sensitive text is legible anywhere in the exported file - search the `.html` for
 
 If you have **Mask patterns** configured in the popup, repeat with text matching one of them in an
 ordinary paragraph: it must be masked in the replay too.
+
+### 10e. An `<all_urls>` grant from before 1.11.2 can still be removed (1.11.2, T-13)
+
+Load a profile with `<all_urls>` already granted (`chrome.permissions.contains({origins:["<all_urls>"]})`
+→ `true` in the service-worker console — see `docs/testing/upgrade-host-permission.md` for how to get
+one). Open the options page. **Pass:** an "Access to all sites" card is visible, reading **Granted**,
+with a **Remove** button. Click it. **Pass:** the card disappears, and
+`chrome.permissions.contains({origins:["<all_urls>"]})` now returns `false`. On a profile where
+`<all_urls>` was never granted, the card must not appear at all — and the popup has no
+"Keep capturing across sites" row on either profile.
+
+### 10f. The welcome page (1.11.2)
+
+Install the packaged build into a clean profile. **Pass:** the welcome tab opens on its own, shows the
+real version, three steps, your actual capture shortcut as key caps (`⌥` instead of `Alt` on a Mac),
+and **Copy** next to `npx tracebug mcp` puts that text on the clipboard (or selects it and says so).
+In Firefox, step 1's pinning sentence is the Firefox one (puzzle piece → TraceBug's menu → Pin to
+Toolbar). Check both light and dark mode, and a narrow window (cards stack below ~760px).
+`node e2e/welcome-screenshots.mjs` shoots all four for you.
+
+### 10g. After export, and errors during a capture (1.11.2, T-05/T-06)
+
+Export a replay. **Pass:** no hand-off dialog opens on its own; the toast reads "✓ Replay exported ·
+N MB" with an **Open in your AI agent →** link, and clicking it opens the MCP card. Then, during a
+capture, trigger a page error (`setTimeout(() => { throw new Error("x") })` in the console). **Pass:**
+the error card shows, with **no** Capture Bug button — only Dismiss (and Open in editor where it
+applies). Outside a capture, the same error card still offers Capture Bug.
+
+### 10h. A site that runs its own TraceBug (1.11.2, Bug 0)
+
+Serve a local page that loads `website/public/tracebug-sdk.js` and calls
+`TraceBug.init({ projectId: "x", enabled: "all" })` (its toolbar shows — the same page as
+`FIXTURE_WITH_UI` in `e2e/ext-sdk-isolation.e2e.mjs`). Click the extension icon. **Pass:** the popup says *"This site runs its own TraceBug"* and does not start a
+capture; `Alt+B` shows the same sentence on the page. Exactly one TraceBug toolbar is ever visible.
+`e2e/ext-sdk-isolation.e2e.mjs` covers the logic; this row is the rendered sentence.
 
 ### 10. Diagnostics
 

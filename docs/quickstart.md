@@ -26,7 +26,7 @@ matches you.
 > Pasting into an AI chat instead? Use **More ▾ → Export for AI (.html)** — a tiny
 > text-only report that fits in a chat context.
 
-> **Screen recording is paused in 1.11** and returns in 1.11.1. Everything else
+> **Screen recording is paused in 1.11** and returns in 1.11.3. Everything else
 > — console, network, clicks and the replay — is captured as described above.
 > The npm SDK records video today.
 

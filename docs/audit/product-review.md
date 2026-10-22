@@ -160,20 +160,20 @@ Every item, current status, and where its full technical spec lives.
 
 | ID | Problem | Status | Spec |
 |---|---|---|---|
-| Bug 0 | Extension's injected SDK can adopt a page-defined `window.TraceBug`, staying in page mode forever | **Open** — website symptom fixed, extension isolation not built | `sdk-isolation-1.11.2.md` |
+| Bug 0 | Extension's injected SDK can adopt a page-defined `window.TraceBug`, staying in page mode forever | **Shipped (1.11.2)** — own global (`window.__TraceBugExtension`) plus defer-to-host-toolbar; `e2e/ext-sdk-isolation.e2e.mjs` | `sdk-isolation-1.11.2.md`, commits `422361e`, `28f4414` |
 | T-01 | Summary line can headline noise (e.g. `/favicon.ico`) instead of the real failure | **Shipped** | `report-builder.ts` (`generateSmartSummary`), commit `2109479` |
 | T-02 | Tracker button label/action driven by a page-mode-only field instead of real integration status | **Shipped** | `quick-bug.ts` (`_githubConfigured`/`_githubButtonLabel`/`_linearButtonLabel`/`_slackButtonLabel`), commits `2109479`, `ebbfe05` |
 | T-03 | Risk of "fixing" the already-correct `showIntegrationsConfigModal` extension-mode guard | **Shipped** (comment only) | `quick-bug.ts` near `showIntegrationsConfigModal` |
 | T-04 | Flat 11-12 item More ▾ menu, no grouping | Open | Regroup into Send to / Export / Settings |
-| T-05 | Post-export MCP hand-off card has no suppression mechanism, fires every time | Open | New `localStorage` dismissal flag + Settings re-enable |
-| T-06 | Two independent "Capture Bug" triggers visible during one active capture (HUD + error toast) | Open | Suppress/redirect the toast's button while capturing |
+| T-05 | Post-export MCP hand-off card has no suppression mechanism, fires every time | **Shipped (1.11.2)** | Replaced by a one-line "Open in your AI agent →" link on the export toast (`quick-bug.ts`, `showActionToast`); no flag needed |
+| T-06 | Two independent "Capture Bug" triggers visible during one active capture (HUD + error toast) | **Shipped (1.11.2)** | The live-bug card drops its Capture button while `isRecording()` (`index.ts`, `live-bug-card.ts`; `tests/live-bug-card.test.ts`) |
 | T-07 | "Empty Session — No User Interactions" misdescribes a deliberate screenshot-only ticket | Open | Stage 1: special-case the title. Stage 2: add `document.title` to `EnvironmentInfo` |
 | T-08 | `dashboard.ts` overlay has no focus trap/restore | Open, moot pending T-11 | Port `quick-bug.ts`'s existing pattern |
 | T-09 | Ticket-popover "×" has no accessible name | Open | One-line `aria-label` fix |
 | T-10 | Milestone-ask card can visually overlap the open ticket modal | Open | Defer display, or lower z-index |
 | T-11 | `dashboard.ts`'s panel has no reachable entry point | **Confirmed harmless as-is** (this session's e2e); decision still open | Product-owner call — restore, consolidate, or retire |
 | T-12 | Two different delete-confirmation idioms across the two ticket-list UIs | Open, depends on T-11 | Standardize once T-11 settles |
-| T-13 | The "Keep capturing across sites" toggle requests a broad `<all_urls>` permission for very little — it doesn't let a capture survive leaving its site (that's unconditional, by design) and doesn't gate Capture Bug or `Alt+B` on a new site (both grant `activeTab` fresh regardless); its only effect is skipping one click to restore the toolbar's visibility on a tab's next site | Open | Hide the row entirely (popup and Options) until ADR 008 (v2.0) makes captures actually survive cross-origin navigation |
+| T-13 | The "Keep capturing across sites" toggle requests a broad `<all_urls>` permission for very little — it doesn't let a capture survive leaving its site (that's unconditional, by design) and doesn't gate Capture Bug or `Alt+B` on a new site (both grant `activeTab` fresh regardless); its only effect is skipping one click to restore the toolbar's visibility on a tab's next site | **Shipped (1.11.2)** — popup row removed; options shows an existing grant with Remove. Manifest still declares `<all_urls>` optional (needed for custom Ollama hosts) | Hide the row entirely (popup and Options) until ADR 008 (v2.0) makes captures actually survive cross-origin navigation |
 
 ---
 

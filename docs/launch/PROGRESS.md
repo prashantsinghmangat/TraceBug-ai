@@ -106,3 +106,17 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Released as 1.11.1:** eight surfaces bumped, CHANGELOG + "What's new" card, four new
   RELEASE_CHECKLIST rows (10a-10d), Phase 10 renamed to 1.11.2. `check.mjs --full` 904 passing / 54
   files; zips 28 files, `PK`, no `offscreen`; cross-site 13/13, events 22/22, shipping 16/16.
+
+## 1.11.2 release prep — correctness (2026-10-22)
+
+- **What:** Bug 0 (own global + defer to a host toolbar), T-01, T-02 (committed earlier) plus T-05
+  (export link, not modal), T-06 (no Capture button on the error card mid-capture), T-13 (popup
+  cross-site row removed; options shows an old `<all_urls>` grant with Remove), stale Ollama origin
+  released, welcome page v2. Eight surfaces on 1.11.2, CHANGELOG + "What's new", store copy,
+  RELEASE_CHECKLIST rows 10e-10h (10a was split by a misplaced row; fixed). User-facing "video
+  returns in 1.11.2" corrected to 1.11.3 (popup, canvas toast, README, docs).
+- **Verified:** `check.mjs --full` 928 passing / 57 files, ext:lint 0 errors / 69 warnings.
+  e2e: sdk-isolation 17/17, cross-site 13/13, shipping-path 16/16, events 22/22, redaction 4/4,
+  no-secrets 13/13, github-send-confirm 9/9, secret-migration 25/25. `website` `next build` OK.
+  Zips: 28 files each, `PK`, no `offscreen`, ~835 KB. Deleted the unused
+  `src/ui/{upgrade,screenshot-trim}-modal.ts` (knip). Open: `package-lock.json` root version not bumped here.
