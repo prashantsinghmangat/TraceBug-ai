@@ -169,13 +169,15 @@ The modal:
 | **Export .html** | Self-contained interactive DOM replay (rrweb), with a live size estimate. Best for a developer or an MCP-connected agent. |
 | **Export HAR** | Network capture as a standard `.har` (DevTools / Charles / Postman). |
 | **Fix with AI** | Builds the structured AI prompt and opens Claude / ChatGPT (or runs BYO-key analysis in the AI tab). |
-| **Open in GitHub** | Prefilled GitHub issue (shown when `githubRepo` is set), or files a real issue if a token is configured. |
+| **Open in GitHub** _(npm SDK, when `githubRepo` is set but no token is configured)_ | Prefilled GitHub issue page opens in a new tab. |
+| **Send to GitHub** _(when a BYO-token GitHub integration is configured)_ | Same button; files the issue directly instead — through a confirm window in the extension, or a direct API call in the SDK. |
 | **Download .zip (attach to GitHub)** *(More)* | The replay `.html` wrapped in a `.zip` — GitHub issues accept `.zip` attachments but reject bare `.html`. |
 | **Download failing test (.spec.ts)** *(More)* | Runnable Playwright spec that replays the session and asserts the failure is gone — red until fixed. |
 | **Export for AI (.html)** *(More)* | Tiny (~5 KB) text-only HTML report — paste/upload into a chat, no MCP needed. |
 | **Download report (.md)** *(More)* | Compact markdown report. |
 | **Download screenshots** *(More)* | Raw PNG(s) to attach alongside the `.md`. |
-| **GitHub / Linear / Slack / Jira** *(More)* | File a real issue/message with a configured token ([integrations.md](integrations.md)). |
+| **Send to GitHub / Linear / Slack** *(More, when that provider's BYO token is configured)* | Files a real issue/message with the configured token ([integrations.md](integrations.md)). Unconfigured, these read "Open in …" (Linear) or "Copy … Issue/Message" (GitHub/Slack) instead. |
+| **Copy for Jira** *(More)* | Always copy-only — Jira's API is CORS-blocked for browser calls. |
 
 > A cloud **Share link** button exists in the code but is gated off by default (`PHASE2-CLOUD`).
 

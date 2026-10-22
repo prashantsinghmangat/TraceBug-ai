@@ -30274,6 +30274,16 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
   function _githubConfigured() {
     return isExtensionMode() ? hasIntegration("github") : !!_githubRepo;
   }
+  function _githubButtonLabel() {
+    if (isExtensionMode()) return hasIntegration("github") ? "Send to GitHub" : "Copy GitHub Issue";
+    return _githubRepo ? "Open in GitHub" : "Copy GitHub Issue";
+  }
+  function _linearButtonLabel() {
+    return hasIntegration("linear") ? "Send to Linear" : "Open in Linear";
+  }
+  function _slackButtonLabel() {
+    return hasIntegration("slack") ? "Send to Slack" : "Copy Slack Message";
+  }
   function setCloudEndpoint(_endpoint) {
   }
   function quickCaptureTipHtml() {
@@ -30732,7 +30742,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         </button>
         <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          ${_githubConfigured() ? "Open in GitHub" : "Copy GitHub Issue"}
+          ${_githubButtonLabel()}
         </button>
         <button data-action="ai-prompt" class="tb-qb-btn tb-qb-btn-ai" title="Turn this bug into a structured AI prompt and open it in Claude / ChatGPT to get a fix">${_ic("sparkles")} Fix with AI</button>
         <button data-action="export-replay" class="tb-qb-btn" title="Bundle the whole session into one offline .html you can share (full interactive replay \u2014 best for handing to a developer or an MCP-connected coding agent, not for pasting into a chat)">${_ic("fileCode")} Export replay (.html)<span style="opacity:.55;font-weight:400;margin-left:5px">\xB7 ${_formatBytes(_estimateHtmlExportBytes(data.report))}</span></button>
@@ -30750,8 +30760,8 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
             <button data-action="export-ai-html" class="tb-qb-more-item" role="menuitem" title="Save a tiny text-only .html bug report \u2014 small enough to upload straight into a chat (Claude / ChatGPT), no MCP needed">${_ic("sparkles")} AI report (.html) \u2014 for chat</button>
             ${screenshots2.length ? `<button data-action="download-screenshots" class="tb-qb-more-item" role="menuitem" title="Download the screenshot${screenshots2.length === 1 ? "" : "s"} as image file${screenshots2.length === 1 ? "" : "s"} to attach next to the report">${_ic("image")} Download screenshot${screenshots2.length === 1 ? "" : "s"}</button>` : ""}
             ${_githubRepo ? `<button data-action="github" class="tb-qb-more-item" role="menuitem">${_ic("copy")} Copy GitHub markdown</button>` : ""}
-            <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} Linear</button>
-            <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} Slack</button>
+            <button data-action="linear" class="tb-qb-more-item" role="menuitem">${_ic("triangle")} ${_linearButtonLabel()}</button>
+            <button data-action="slack" class="tb-qb-more-item" role="menuitem">${_ic("message")} ${_slackButtonLabel()}</button>
             <button data-action="jira" class="tb-qb-more-item" role="menuitem" title="Copies the report as Jira markup for you to paste \u2014 TraceBug cannot file into Jira (its API is CORS-blocked for browsers)">${_ic("ticket")} Copy for Jira</button>
             <button data-action="integrations-configure" class="tb-qb-more-item" role="menuitem">${_ic("settings")} Configure integrations\u2026</button>
             <!-- The one promotional thing in an export, and therefore the one
