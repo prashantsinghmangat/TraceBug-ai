@@ -163,6 +163,33 @@ describe('generateSmartSummary (priority order)', () => {
     const s = generateSmartSummary(r({}));
     expect(s.length).toBeGreaterThan(0);
   });
+
+  // Regression: a noise request (e.g. a favicon or analytics asset) earlier in
+  // the session must never outrank a real API failure in the headline summary —
+  // generateRootCauseHint already filters this; the summary must agree with it.
+  const CAMO_URL =
+    'https://camo.githubusercontent.com/7201bf24b202a60bfb5d8e83c47b2fe353cc8a693cfc106b0b02a0d9763042f0/68747470733a2f2f696d672e736869656c64732e696f2f';
+
+  it('a real API failure outranks earlier asset/analytics noise', () => {
+    const s = generateSmartSummary(r({
+      networkErrors: [
+        { method: 'GET', url: CAMO_URL, status: 404, duration: 0, timestamp: 0 },
+        { method: 'POST', url: '/api/orders', status: 500, duration: 0, timestamp: 1 },
+      ],
+    }));
+    expect(s).toContain('/api/orders');
+    expect(s).toContain('500');
+    expect(s).not.toContain('camo');
+  });
+
+  it('falls through to the error signal when only noise requests are present', () => {
+    const s = generateSmartSummary(r({
+      networkErrors: [{ method: 'GET', url: CAMO_URL, status: 404, duration: 0, timestamp: 0 }],
+      consoleErrors: [{ message: 'TypeError: boom', timestamp: 0 }],
+    }));
+    expect(s).toContain('TypeError');
+    expect(s).not.toContain('camo');
+  });
 });
 
 describe('generateRootCauseHint (confidence tiers)', () => {

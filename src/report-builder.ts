@@ -346,7 +346,9 @@ export function generateSmartSummary(report: BugReport): string {
     ? safePath(report.environment.url)
     : (report.session?.events?.[0]?.page || "/");
   const click = report.clickedElement;
-  const firstNet = report.networkErrors[0];
+  // Same noise filter as generateRootCauseHint below — the two are always shown
+  // together, and must never disagree about which request actually failed.
+  const firstNet = report.networkErrors.find((n) => !isNoiseRequest(n.url));
   const firstErr = report.consoleErrors[0];
 
   const clickPhrase = click ? describeClickPhrase(click) : "";
