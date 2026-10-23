@@ -43,10 +43,9 @@ The extension popup has four actions:
 
 ### ⚙ Record options
 
-A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`. The capture-surface and microphone rows are not shown in 1.11: they only describe a screen recording, and screen recording is paused (see above).
+A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`.
 
-What remains:
-
+- **Record video too** — off by default, so the first capture never opens a screen-share picker. Turn it on to also ask your browser to share a tab, window or screen; a microphone row appears alongside it to include audio. The "Capture: Current tab" shortcut is not offered — it needs the `tabCapture` permission, dropped in 1.10.1 to lose the browsing-history install warning. Pick a tab manually in the browser's own share picker instead.
 - **Start delay** — none, **3 s**, or **5 s**, with an on-page 3-2-1 countdown overlay before recording rolls.
 - **Blur before recording** — arms the element-level blur tool *before* capture starts: click elements to blur/unblur, then a floating **"● Start recording / Cancel"** bar (with **Undo** for the last blur) begins the recording with the redaction applied from the very first frame. Cancel clears the blurs.
 
@@ -73,20 +72,17 @@ The capture follows you across pages. If it spans more than one, the DOM replay 
 
 #### Adding a screen recording
 
-> **Screen recording is paused in 1.11.** The extension captures the console,
-> the network, your clicks and an interactive DOM replay — everything except the
-> pixels. Video returns in 1.11.3; the npm SDK records it today. If you had the
-> option on, your setting is kept and comes back with the feature.
+Every capture always records the console, the network, your clicks and an interactive DOM replay. Turn on **Record video too** in Record options to also capture the pixels. Screen recording was paused for 1.11/1.11.1 and is back as of 1.11.2 — if you had the option on from before, your setting was kept and came back on its own.
 
-**macOS, for when it returns (and for the npm SDK today):** screen recording needs your browser ticked under **System Settings → Privacy & Security → Screen Recording**, and the browser has to be quit and reopened afterwards. If it isn't, TraceBug says so and offers to capture without video instead — your browser reports an OS refusal the same way it reports you closing the dialog, so TraceBug reads the error text to tell them apart.
+**macOS:** screen recording needs your browser ticked under **System Settings → Privacy & Security → Screen Recording**, and the browser has to be quit and reopened afterwards. If it isn't, TraceBug says so and offers to capture without video instead — your browser reports an OS refusal the same way it reports you closing the dialog, so TraceBug reads the error text to tell them apart.
 
 ### Per-tab indicator
 
-The toolbar icon shows a green **ON** badge while TraceBug is injected in the current tab. The badge clears automatically when you reload the page.
+The toolbar icon shows a green **ON** badge while TraceBug is injected in the current tab, and switches to a red **REC** badge while a capture is actively running on that tab — so the icon alone tells you something is being recorded, even if the on-page HUD is scrolled out of view. Both clear automatically when you reload the page or stop the capture.
 
 ## How It Works
 
-Manifest V3 architecture with three extension contexts in 1.11:
+Manifest V3 architecture with four extension contexts as of 1.11.2 (three while screen recording was paused, in 1.11/1.11.1):
 
 ```
 Popup ──sendMessage──▶ Background (service worker)
@@ -102,9 +98,9 @@ Popup ──sendMessage──▶ Background (service worker)
 is readable by the site under test. Tokens live in `chrome.storage.local` and never reach the page:
 the worker makes the call and shows you what it is about to send first.
 
-**A fourth context returns in 1.11.3.** Screen recording runs in an **offscreen document**, because
+**A fourth context, restored in 1.11.2:** screen recording runs in an **offscreen document**, because
 service workers can't hold a `MediaStream` and get killed when idle; the offscreen document keeps a
-recording alive across page reloads, navigation and tab switches. It is not created in 1.11 — see
+recording alive across page reloads, navigation and tab switches. It was paused for 1.11/1.11.1 — see
 `docs/launch/video-1.11.1.md`.
 
 **Why proxy storage through the background?** `chrome.runtime.sendMessage` silently truncates responses larger than ~10 MB. A 30-second recording's base64 dataUrl is several MB, so we keep it out of IPC entirely: the recorder writes to storage, content-script reads from storage, page receives the bytes via a CustomEvent (in-process, no size limit).
@@ -121,9 +117,10 @@ Required:
 |-----------|-----|
 | `activeTab` | Act on the tab you are looking at, from your own click on the popup or the shortcut |
 | `storage` | Remember your options, your redaction rules and your saved tickets |
-| `unlimitedStorage` | A report with a DOM replay can exceed the default storage quota. It is stored only on your device |
+| `unlimitedStorage` | A report with a replay or a video can exceed the default storage quota. It is stored only on your device |
 | `scripting` | Inject the TraceBug SDK into the page when you start a capture |
 | `alarms` | Cancel an unanswered send-confirmation window after two minutes |
+| `offscreen` | Host the optional screen recording ("Record video too") so it survives moving between pages |
 
 Optional host permissions — **not requested at install**, asked for only at the moment they are
 needed, and the extension degrades gracefully if you decline:
@@ -138,8 +135,8 @@ needed, and the extension degrades gracefully if you decline:
 | `http://localhost/*`, `http://127.0.0.1/*` | You point the AI debugger at a local model (Ollama) |
 
 Not present, and deliberately so: **`tabs`** (removed in 1.10.1 — it caused the "Read your browsing
-history" warning), **`tabCapture`** (removed with it), and **`offscreen`** (removed in 1.11 with the
-screen-recording pause; it returns in 1.11.3 with the feature).
+history" warning) and **`tabCapture`** (removed with it — restoring it so "This tab" can be offered
+in the share picker is a separate product decision, not part of the 1.11.2 video restore).
 
 Capture data stays in `chrome.storage.local` and the page's `localStorage`. **Nothing goes to TraceBug.** You choose what's sent to GitHub, Linear, Slack or your AI provider, and every send asks you first. See the [privacy policy](https://tracebug.dev/privacy).
 
@@ -160,11 +157,9 @@ tracebug-extension/
 ├── options.html / .js  # TraceBug settings — tokens and API keys live here
 ├── welcome.html / .js  # Bundled first-run page (no remote assets)
 ├── player.html / .js   # CSP-proof replay iframe
+├── offscreen.html / .js # Hosts the MediaRecorder for screen recording (restored in 1.11.2)
 ├── styles.css          # Popup styles
 └── icons/              # 16 / 48 / 128 px extension icons
-
-`offscreen.html` / `offscreen.js` are not in 1.11 — they host the `MediaRecorder` and come back
-with screen recording in 1.11.3.
 ```
 
 `tracebug-sdk.js` is auto-generated by `npm run build`. Do not edit it manually.

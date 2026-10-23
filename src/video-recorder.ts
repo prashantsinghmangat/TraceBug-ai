@@ -260,7 +260,7 @@ export function resumeVideoRecording(): void {
  * The stored preference (`tb_record_opts.video`) is deliberately NOT cleared,
  * so a user who had video on gets it back in 1.11.2 without re-choosing.
  */
-export const VIDEO_ENABLED_IN_EXTENSION = false;
+export const VIDEO_ENABLED_IN_EXTENSION = true;
 
 /** Can this transport start a screen recording at all? */
 export function isVideoOffered(): boolean {

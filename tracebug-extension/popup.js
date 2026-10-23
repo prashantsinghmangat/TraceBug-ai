@@ -858,12 +858,12 @@ const WHATS_NEW = {
   "1.11.2": {
     label: "New in 1.11.2",
     lines: [
+      "Screen recording is back — turn on “Record video too” in Record options",
       "Works properly on sites that run their own copy of TraceBug — and steps aside where that site's own toolbar is already up",
       "Tracker buttons say what they do: “Send to GitHub” asks you first, “Copy” copies",
       "No more hand-off dialog after every export — a one-line link to open it in your AI agent instead",
       "“Keep capturing across sites” is gone — it asked for every site and saved one click. Granted it before? Remove it in TraceBug settings",
     ],
-    warning: "Screen recording is still paused and now returns in 1.11.3 — your setting is kept.",
   },
   "1.11.1": {
     label: "New in 1.11.1",

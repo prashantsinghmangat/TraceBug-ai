@@ -9,30 +9,25 @@ machine or a second OS says so.
 
 ## Upgrade: the video setting survives, and the default splits by reason
 
-> **Rewritten for 1.11, where screen recording is paused.** The **Record video too** checkbox is
-> not in the popup (`VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`), so these rows can no
-> longer be read off the UI. What they verify instead is the thing 1.11.1 depends on: the stored
-> preference is **kept and not acted on**. A capture must stay events-only *whatever* the blob says,
-> and the blob must still be there when the feature comes back.
->
-> **Restore the original UI-based steps in 1.11.1** — tick the checkbox, confirm it is still ticked
-> after the upgrade — together with the popup's `optVideo` row. The pre-1.11 wording is in
-> `git log -p docs/RELEASE_CHECKLIST.md`.
+> **Restored for 1.11.2**, where screen recording is back in the extension
+> (`VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`) and the popup's `optVideo` / `micOpt`
+> rows are back with it. These rows read straight off the UI again. 1.11/1.11.1's UI-less rewrite
+> of these rows (stored-preference-only, for when the checkbox did not exist) is in
+> `git log -p docs/RELEASE_CHECKLIST.md` if a future pause needs it again.
 
-**Why these exist.** 1.11 moves the Record-options blob from the popup's own `localStorage` to
-`chrome.storage.local` (`tb_record_opts`), and `runtime.onInstalled` seeds the video default
-differently per reason: **off** on install, **on** on update. `tests/record-opts.test.ts` covers the
-worker's seed against the real `background.js`, and slices the real `loadRecordOpts` /
-`saveRecordOpts` out of `popup.js` to cover the precedence rules — but `popup.js` is one
-`DOMContentLoaded` closure over the whole popup DOM, so **nothing here tests the popup actually
-opening**. These rows are that gap. Both failure modes are silent: the user just finds their
-setting changed — or, in 1.11, finds it gone when 1.11.1 arrives.
+**Why these exist.** The Record-options blob lives in `chrome.storage.local` (`tb_record_opts`), not
+the popup's own `localStorage`, and `runtime.onInstalled` seeds the video default differently per
+reason: **off** on install, **on** on update. `tests/record-opts.test.ts` covers the worker's seed
+against the real `background.js`, and slices the real `loadRecordOpts` / `saveRecordOpts` out of
+`popup.js` to cover the precedence rules — but `popup.js` is one `DOMContentLoaded` closure over the
+whole popup DOM, so **nothing here tests the popup actually opening**. These rows are that gap. The
+failure mode is silent: the user just finds their setting changed.
 
 Read `tb_record_opts` from the **extension's** devtools console (the service worker, or the popup
 with it open), not the page's:
 `chrome.storage.local.get("tb_record_opts").then(console.log)`.
 
-### 1. An explicit "video on" survives the upgrade, and is ignored
+### 1. An explicit "video on" survives the upgrade
 
 1. Install the **previous** released build (1.10.x) unpacked.
 2. Open the popup → **Record options** → tick **Record video too**. Close the popup.
@@ -40,20 +35,13 @@ with it open), not the page's:
    `localStorage.getItem("tracebug_record_opts")` → includes `"video":true`.
 4. Load this build over it (Reload on the unpacked extension, or install the new `.zip` over the
    same profile — *not* a fresh profile, which would be an install, not an update).
-5. Open the popup, then click **Capture Bug** on any ordinary page.
+5. Open the popup → **Record options**.
 
-**Pass:** two things at once.
-- `chrome.storage.local.get("tb_record_opts")` → `{ video: true, videoSetBy: "user" }`, and
-  `localStorage.getItem("tracebug_record_opts")` → `null` (migrated and cleaned up). The choice is
-  preserved for 1.11.1.
-- **No screen-share dialog opens**, and the capture is events-only: the HUD has no Mic button and
-  the finished ticket has no video. The popup shows no **Record video too** row at all.
+**Pass:** **Record video too** is still ticked. In the console,
+`chrome.storage.local.get("tb_record_opts")` → `{ video: true, videoSetBy: "user" }`, and
+`localStorage.getItem("tracebug_record_opts")` → `null` (migrated and cleaned up).
 
-**Fail (blob lost or `video` gone)** means the migration dropped the choice — this user has to
-re-choose in 1.11.1, which is exactly what leaving the key in place was meant to avoid.
-
-**Fail (a picker opens)** means something still reads the preference as permission to record. That
-is the transport guarantee breaking, not a copy bug — stop and check `isVideoOffered()`.
+**Fail** means the migration lost the choice — the seed won where the user should have.
 
 ### 2. A pre-option profile gets `video: true` seeded, not false
 
@@ -62,29 +50,27 @@ is the transport guarantee breaking, not a copy bug — stop and check `isVideoO
 2. Optionally set a surface or a delay in Record options, so the legacy blob exists but carries no
    `video` field. Verify: `localStorage.getItem("tracebug_record_opts")` has no `"video"` key.
 3. Load this build over the same profile.
-4. Open the popup, then read `tb_record_opts`.
+4. Open the popup → **Record options**.
 
-**Pass:** `{ video: true, videoSetBy: "default" }`, with any surface/delay preserved — and the
-capture is still events-only. This user recorded video on every capture before 1.11, so when the
-feature returns it must come back on for them without their having to find the setting.
+**Pass:** **Record video too** is **ticked**, and `chrome.storage.local.get("tb_record_opts")` →
+`{ video: true, videoSetBy: "default" }`, with any surface/delay preserved. This user recorded video
+on every capture before, so the upgrade must not take it away.
 
-**Fail (`videoSetBy: "user"`)** means something stamped a choice the user never made — a future
-default change would then never reach them.
+**Fail (ticked but `videoSetBy: "user"`)** means something stamped a choice the user never made —
+a future default change would then never reach them.
 
-**Fail (`video: false` or absent)** means either the update seed did not run or the popup's
-migration overwrote it with a literal `false`. Both have regressed before.
+**Fail (cleared)** means either the update seed did not run or the popup's migration overwrote it
+with a literal `false`. Both have regressed before.
 
-### 3. A fresh install gets `video: false`, and stays false
+### 3. A fresh install still gets video OFF, and stays off
 
 1. Install this build on a **clean** profile.
-2. Open the popup and read `tb_record_opts`.
+2. Open the popup → **Record options**.
 3. Reload the unpacked extension once (this fires `onInstalled` with reason `update`).
-4. Open the popup and read it again.
+4. Open the popup → **Record options** again.
 
-**Pass:** `video: false` both times, and no screen-share dialog on a capture either time. Step 3 is
-the guard: the update default must not re-apply to someone this build already defaulted, or every
-new installer would get video switched on by their first update — in 1.11.1, the release where that
-would suddenly become visible.
+**Pass:** unticked both times. Step 3 is the guard: the update default must not re-apply to someone
+this build already defaulted, or every new installer gets video switched on by their first update.
 
 ## Phase 4 first-run and uninstall surfaces (never rendered in CI)
 
@@ -134,26 +120,20 @@ again, and confirm the bar is gone from the new file and the old one still has i
 
 ### 9. The oversize-export notice and the canvas warning
 
-**Oversize export — SKIPPED IN 1.11, VIDEO PAUSED.** The notice only fires on the branch where a
-video is embedded and there is no DOM replay, which the extension cannot produce while screen
-recording is off. There is nothing to drive it with, and `_oversizeExportNotice` is unchanged.
-**Restore this row in 1.12 (video moved there — see PLAN Phase 10)**, in full: capture with **Record video too** on, record past the
-20 MB estimate on the **Export replay (.html)** button (roughly 2-3 minutes of tab video), then open
-the ticket modal. Pass: an amber notice above the export row names the size and GitHub's 25 MB cap,
-offering **Export without video** and **Download .webm separately**; the first produces a far
-smaller file that still has the console, network, actions and screenshots. With a DOM-replay
-capture the notice must not appear at all, however long the capture.
-
-*(The npm SDK still records video, so this path can be exercised there if you want coverage before
-1.11.2 — but it is the SDK's exporter you would be testing, not the extension's.)*
+**Oversize export — RUN THIS AGAIN IN 1.11.2.** Video is back, so the notice has something to drive
+it with. Capture with **Record video too** on, record past the 20 MB estimate on the
+**Export replay (.html)** button (roughly 2-3 minutes of tab video), then open the ticket modal.
+Pass: an amber notice above the export row names the size and GitHub's 25 MB cap, offering
+**Export without video** and **Download .webm separately**; the first produces a far smaller file
+that still has the console, network, actions and screenshots. With a DOM-replay capture the notice
+must not appear at all, however long the capture.
 
 **Canvas warning — RUN THIS.** Start a capture on a page whose content is a large canvas - a
 charting page, Google Maps, any WebGL demo. **Pass:** a toast appears naming the canvas, saying
-console/network/clicks are still captured, and - because video is paused - pointing at
-**screenshots** and naming 1.11.3, **not** "Record video too". It offers **Stop** and disappears on
-its own after about 12 seconds. It must NOT appear on an ordinary page, nor on a dashboard of small
-sparkline charts. (In 1.11.3 the advice reverts to **Record video too** on its own: the copy
-branches on `isVideoOffered()`.)
+console/network/clicks are still captured, and points at **"Record video too"** (video is back in
+1.11.2 — the copy branches on `isVideoOffered()`). It offers **Stop** and disappears on its own
+after about 12 seconds. It must NOT appear on an ordinary page, nor on a dashboard of small
+sparkline charts.
 
 ### 10a. A capture ends when you leave the site, and does not come back (1.11.1)
 
