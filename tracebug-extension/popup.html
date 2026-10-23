@@ -134,14 +134,14 @@
           <!-- Video is OPT-IN (Phase 4). Off by default, so the very first
                capture after install never opens a screen-share picker. The
                choice is remembered. Everything that only describes a video
-               (surface, microphone) is disabled while this is off. -->
-          <!-- "Record video too" is not offered in 1.11. The extension's
-               recorder runs in an offscreen document and four bugs in that seam
-               are unfixed - see docs/launch/video-1.11.1.md and the
-               VIDEO_ENABLED_IN_EXTENSION switch in src/video-recorder.ts. A
-               stored tb_record_opts.video is left in place and simply not acted
-               on, so 1.11.2 can restore it without the user re-choosing. -->
-          <div class="redact-help">A capture records console, network, clicks and an interactive DOM replay, without asking your browser to share the screen. Screen recording is paused in this version — it is back in 1.11.3.</div>
+               (surface, microphone) is disabled while this is off. Restored
+               in 1.11.2 — see docs/launch/video-1.11.1.md and the
+               VIDEO_ENABLED_IN_EXTENSION switch in src/video-recorder.ts. -->
+          <label class="redact-label" style="display:flex;align-items:center;gap:7px;cursor:pointer">
+            <input type="checkbox" id="optVideo" style="accent-color:#6366F1" />
+            Record video too
+          </label>
+          <div class="redact-help">A capture always records console, network, clicks and an interactive DOM replay. Turn this on to also ask your browser to share a tab, window or screen for a video.</div>
           <!-- The "Capture: Current tab / Desktop" select used to live here.
                It is gone because in the EXTENSION it cannot do anything: the
                recorder runs in an offscreen document, and the browser hint for
@@ -164,14 +164,21 @@
         </div>
       </details>
 
-      <!-- The microphone row lived here. It only ever described a screen
-           recording, which 1.11 does not offer; and the grant could not be
-           made from a popup anyway (the prompt dismisses it). Both come back
-           in 1.11.2 - see docs/launch/video-1.11.1.md. -->
-            <!-- Mic problems are reported HERE, directly under the control they are
-           about. The shared toast sits at the foot of the popup, far enough
-           below the fold that a user has to scroll to find out why their click
-           did nothing. -->
+      <!-- Microphone toggle, restored in 1.11.2 — see docs/launch/video-1.11.1.md.
+           Describes a screen recording only; disabled (greyed, not hidden) by
+           applyVideoUI() while "Record video too" is off. Mic problems are
+           reported HERE, directly under the control they are about — the
+           shared toast sits at the foot of the popup, far enough below the
+           fold that a user has to scroll to find out why their click did
+           nothing. -->
+      <button type="button" class="mic-opt" id="micOpt" aria-pressed="false" title="Turn on “Record video too” first — there is no audio track without a recording">
+        <span class="mic-opt-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </span>
+        <span class="mic-opt-text">Include microphone</span>
+        <span class="mic-opt-pill" id="micOptState">Off</span>
+      </button>
+      <div class="mic-notice" id="micNotice" style="display:none"></div>
 
       <!-- Secondary row -->
       <div class="cta-row">

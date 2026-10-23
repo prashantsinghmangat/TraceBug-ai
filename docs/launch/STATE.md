@@ -1,19 +1,30 @@
 # Launch state — read this, not the archives
 
-Engineering state only, verified against code. Last updated 2026-10-22. Calendar, channels and the
-32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored).
-History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`. Open phases: `PLAN.md` 8, 10b, 11, 12.
+Engineering state only, verified against code. Last updated 2026-10-23. Calendar, channels and the
+32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored, and now
+stale on the video-pause dates below — not corrected, it is a scheduling doc, not a spec).
+History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`. Open phases: `PLAN.md` 8, 10b, 11, 12 (10b's
+"flip the switch" step is now DONE — see below; re-read Phase 10b before touching it again).
 
-**1.11.2 is release-ready** (PLAN Phase 10a, correctness). 1.11.1 is tagged (`v1.11.1`, `42becbb`)
-and pushed. Branch `develop`, **1.11.2** on the eight surfaces `check:versions` guards.
-`check.mjs --full`: **928 passing / 57 files**, `ext:lint` 0 errors / 69 warnings. The npm packages
-(`tracebug-sdk`, `tracebug`) are still **1.10.1 on npm** — 1.11.x has never been published there.
+**1.11.2 is release-ready** (PLAN Phase 10a, correctness — plus screen recording, see below). 1.11.1
+is tagged (`v1.11.1`, `42becbb`) and pushed. Branch `develop`, **1.11.2** on the eight surfaces
+`check:versions` guards. `check.mjs --full`: **925 passing / 57 files**, `ext:lint` 0 errors /
+69 warnings. The npm packages (`tracebug-sdk`, `tracebug`) are still **1.10.1 on npm** — 1.11.x has
+never been published there.
 
-**Screen recording is PAUSED in the extension — it returns in 1.11.3** (PLAN Phase 10b).
-`VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`, enforced at the transport; a stored
-`tb_record_opts.video: true` is read and ignored, never erased, and the `offscreen` permission is out
-of both manifests with it. Four bugs and the restore checklist: `video-1.11.1.md` (the FILE name is
-historical). The npm SDK is untouched and records video as before.
+**Screen recording is RESTORED in the extension as of 1.11.2** (PLAN Phase 10b, done — this moved up
+from 1.11.3). `VIDEO_ENABLED_IN_EXTENSION = true` in `src/video-recorder.ts`; a stored
+`tb_record_opts.video: true` is honoured again, the `offscreen` permission is back in both manifests
+(`tracebug-extension/manifest.json`, and `build-ext.mjs`'s `chromeManifest()` gates it on the same
+flag it already parses), and the popup's `optVideo`/`micOpt` markup is back. Of the four bugs in
+`docs/launch/video-1.11.1.md` (the FILE name is historical): **Bug 1** (recording lost on stop) was
+re-verified in a real browser two ways (plain stop, mid-recording reload) and did **not**
+reproduce — the `quick-bug.ts` stash-then-refresh rework (`dda5ac8`) looks to have already fixed it;
+see `e2e/ext-video-recording.e2e.mjs`. **Bug 4** (HUD mic-mute wired to a stream the extension never
+owns) is still real, left unfixed on purpose: `hasMicrophoneTrack()` is permanently false for the
+extension transport, so the button already renders disabled with an honest tooltip instead of a dead
+click. **Bug 2** (no fullscreen in the player) is still open, polish only, not a blocker. The npm SDK
+was never affected and records video as before.
 
 ## What 1.11.2 contains
 
@@ -58,10 +69,11 @@ historical). The npm SDK is untouched and records video as before.
 - **`tab.url` is normally `undefined`** now `<all_urls>` is optional — classify with `classifyPage`
   (`page-support.js`); read the shortcut from `chrome.commands` at runtime (`Alt+B`).
 - **The offscreen files follow `VIDEO_ENABLED_IN_EXTENSION`.** `build-ext.mjs` parses it out of
-  `src/video-recorder.ts` and ships `offscreen.{html,js}` only when true, so 1.11.3 (video,
-  `docs/launch/PLAN.md` Phase 10b — renamed from "1.11.2" when 1.11.2 became the correctness phase)
-  flips one constant and they return (28 files -> 30). It **throws** if the constant is renamed: a
-  silent "off" would ship a build with no recorder.
+  `src/video-recorder.ts` and ships `offscreen.{html,js}` — plus the `offscreen` manifest permission,
+  gated the same way — only when true. 1.11.2 flipped it (30 files in each zip now, was 28 with video
+  off). It **throws** if the constant is renamed: a silent "off" would ship a build with no recorder.
+  A future pause would need the reverse: flip it back to `false` and re-run `zip:ext` to confirm the
+  count drops to 28 and the permission is gone.
 - **Two TraceBug instances on one page isolate STATE but not DOM.** The extension's injected SDK
   (`tracebug-sdk-ext.js`, `window.__TraceBugExtension`) and a host page's own npm-SDK integration
   (`tracebug-sdk.js`, `window.TraceBug`) are separate globals since `docs/launch/sdk-isolation-1.11.2.md`

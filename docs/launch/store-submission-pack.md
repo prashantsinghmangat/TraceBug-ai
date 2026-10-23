@@ -41,14 +41,11 @@ each file's convention or the diff becomes a whole-file re-encode.
 | `activeTab` | Captures the bug on the tab where the user clicks TraceBug or presses the capture shortcut. |
 | `scripting` | Injects the capture script into the current tab, only after the user starts a capture. |
 | `storage` | Saves the user's settings, redaction rules and saved bug tickets on their own device. |
-| `unlimitedStorage` | A report with an interactive DOM replay can exceed the default storage limit. It is stored only on the user's device. |
+| `unlimitedStorage` | A report with a replay or a video can exceed the default storage limit. It is stored only on the user's device. |
 | `alarms` | Cancels an unanswered send-confirmation window after two minutes. |
+| `offscreen` | Hosts the optional screen recording ("Record video too") while the user moves between pages, so the recording keeps running on tab or window navigation. |
 | Optional host permissions | Requested when the user saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration (one fixed address each, or `localhost`/`127.0.0.1` for Ollama), so TraceBug can send the report to that service. Declared optional so TraceBug can request access to one specific address you enter for a self-hosted AI provider, only at the moment you save it, and never for all sites. |
 | Remote code | No. All code ships in the package. |
-
-`offscreen` is **not** requested in 1.11. It existed only to host screen
-recording, which is paused in this release - so the permission is gone rather
-than requested and unused. It returns with the feature in 1.11.3.
 
 **Single purpose:** Capture a browser bug (replay, console errors, network requests) into a report the user can export or send to their own issue tracker.
 
@@ -74,7 +71,7 @@ upgraders.
 - No more dialog after every export — a one-line link opens the report in your AI agent.
 - The "Keep capturing across sites" option is gone: TraceBug no longer asks for access to all sites.
 - A new welcome page with the three steps and the `npx tracebug mcp` command.
-- Video recording is still paused while we finish it. It's back in 1.11.3.
+- Screen recording is back — turn on "Record video too" in Record options.
 
 From 1.11.1:
 

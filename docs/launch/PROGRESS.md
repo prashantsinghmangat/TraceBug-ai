@@ -120,3 +120,33 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   no-secrets 13/13, github-send-confirm 9/9, secret-migration 25/25. `website` `next build` OK.
   Zips: 28 files each, `PK`, no `offscreen`, ~835 KB. Deleted the unused
   `src/ui/{upgrade,screenshot-trim}-modal.ts` (knip). Open: `package-lock.json` root version not bumped here.
+
+## REC badge + screen recording restored (2026-10-23)
+
+- **REC badge:** the toolbar badge only ever showed green "ON" for "SDK loaded," identical whether a
+  capture was running or not. `background.js`'s `updateBadge()` now checks the existing `captureTabs`
+  map and shows a red "REC" the instant `TB_START_RECORDING`/`tb:capture:started` fires, reverting on
+  `tb:capture:stopped` or `endCapture()`.
+- **Screen recording restored (`VIDEO_ENABLED_IN_EXTENSION = true`):** re-verified Bug 1 ("recording
+  lost on stop", `docs/launch/video-1.11.1.md`) in a real browser two ways — plain stop, and a
+  mid-recording reload — and it did **not** reproduce; the `quick-bug.ts` stash-then-refresh rework
+  (commit `dda5ac8`) looks to have already fixed the race the doc's hypothesis described. Bug 4 (HUD
+  mic-mute wired to a stream the extension never owns) is still real but was left as-is on purpose:
+  `hasMicrophoneTrack()` is permanently false for the extension transport, so the button already
+  renders disabled with an honest tooltip rather than a dead click. Bug 2 (fullscreen) stays open,
+  polish only. Restored: `offscreen` permission (manifest.json + `build-ext.mjs`'s `chromeManifest()`,
+  gated on the same flag build-ext already parses), popup's `optVideo`/`micOpt` markup, WHATS_NEW
+  1.11.2 card, RELEASE_CHECKLIST rows 1-3/9 UI-based steps, permission-justification docs
+  (`store-submission-pack.md` §7b, `docs-internal/CHROME-WEB-STORE-LISTING.md` §7b,
+  `docs/chrome-extension.md`, `website/app/privacy/page.tsx`), README/quickstart video sentences.
+  Replaced `tests/video-paused-1-11.test.ts` → `tests/video-enabled-1-11-2.test.ts` (pins the
+  restored behaviour, not just removes the old pin) and `tests/phase6-edges.test.ts`'s inverted
+  canvas-toast assertion.
+- **Verified:** `check.mjs --full` 925 passing / 57 files (one file renamed, not net-new), ext:lint 0
+  errors / 69 warnings, `check:versions` all surfaces on 1.11.2. New e2e:
+  `ext-video-recording.e2e.mjs` (8/8, the two Bug-1 repro scenarios with fake-media flags),
+  `ext-shipping-path.e2e.mjs` rewritten for "stored video:true is now honoured" (14/14, was asserting
+  the opposite). `ext-events-capture.e2e.mjs` re-run clean (22/22) — events-only path unaffected.
+  Open: Bug 2 (fullscreen) and Bug 4 (mic-mute) stay in `video-1.11.1.md` as known, non-blocking gaps;
+  `docs-internal/GROWTH-PLAN-30DAY.md`'s dated video-pause references were left untouched (internal
+  scheduling doc, not store/user-facing).

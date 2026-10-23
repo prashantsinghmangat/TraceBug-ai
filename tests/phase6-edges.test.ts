@@ -100,21 +100,18 @@ describe('a canvas page is warned about before the capture is wasted', () => {
     expect(msg).not.toMatch(/rrweb|DOM replay/i);
   });
 
-  it('does not point an extension user at a checkbox 1.11 removed', () => {
-    // isExtensionContext() reads window.__TRACEBUG_INITIALIZED__, and in the
-    // extension "Record video too" is not in the popup at all (video is paused
-    // behind VIDEO_ENABLED_IN_EXTENSION). Advice to tick it would send the user
-    // hunting for a control that does not exist.
+  it('points an extension user at the checkbox now video is back', () => {
+    // isExtensionContext() reads window.__TRACEBUG_INITIALIZED__. Video
+    // returned to the extension in 1.11.2 (VIDEO_ENABLED_IN_EXTENSION), so
+    // the branch in replay-fidelity.ts that used to defer to 1.11.3 now
+    // points at the real "Record video too" checkbox instead.
     const w = window as Window & { __TRACEBUG_INITIALIZED__?: boolean };
     w.__TRACEBUG_INITIALIZED__ = true;
     try {
       canvas(1200, 700);
       const msg = eventsCaptureFidelityWarning(document)!.message;
-      expect(msg).not.toMatch(/Record video too/);
-      // Names the release video actually returns in. It moved to 1.11.3 when
-      // 1.11.2 became the correctness release — the point of the assertion is
-      // that the user is told WHEN, not which number it happens to be.
-      expect(msg).toMatch(/1\.11\.3/);
+      expect(msg).toMatch(/Record video too/);
+      expect(msg).not.toMatch(/1\.11\.3/);
       // The reassurance must survive the branch.
       expect(msg).toMatch(/console, network/i);
     } finally {

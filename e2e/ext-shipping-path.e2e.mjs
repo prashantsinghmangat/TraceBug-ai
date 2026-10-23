@@ -1,23 +1,25 @@
 // Run: node e2e/ext-shipping-path.e2e.mjs   (--headful to watch)
 //
-// THE 1.11 SHIPPING PATH, IN A REAL BROWSER, FOR THE WORST-CASE USER.
+// THE 1.11.2 SHIPPING PATH, IN A REAL BROWSER, FOR THE "UPDATED FROM 1.10"
+// USER WHOSE STORED `tb_record_opts.video` IS TRUE.
 //
-// e2e/ext-events-capture.e2e.mjs already walks the happy path on a clean
-// profile. This one does it as the user 1.11 is most likely to break:
-// somebody who UPDATED from 1.10, whose `tb_record_opts.video` was seeded
-// `true` by background.js, and who therefore has a stored preference that
-// 1.11 must read and ignore.
+// e2e/ext-events-capture.e2e.mjs already walks the events-only happy path on
+// a clean profile. This one does it for the user whose stored preference asks
+// for video, and 1.11.2 restores screen recording in the extension
+// (VIDEO_ENABLED_IN_EXTENSION in src/video-recorder.ts) — so unlike 1.11/1.11.1,
+// that stored true must now actually produce a recording, not be silently
+// ignored. See docs/launch/video-1.11.1.md ("Flipping the switch") and
+// tests/video-enabled-1-11-2.test.ts for the unit-level pins.
 //
-// That is the guarantee the unit tests cannot make. They assert source text
-// and a mocked transport; only a real browser can say whether a stored
-// `video: true` still produces an events capture, whether any video or mic
-// control renders, and whether an offscreen document gets created now that
-// the permission is gone from the manifest.
+// That is the guarantee unit tests cannot make. They assert source text and a
+// mocked transport; only a real browser can say whether getDisplayMedia is
+// actually called, whether the offscreen document hands back a real video, and
+// whether the ticket the user opens actually has it.
 import { chromium } from "playwright";
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join, extname } from "node:path";
+import { join } from "node:path";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
 import { EXT_SRC_DIR, extensionLaunchOptions } from "./paths.mjs";
 
@@ -56,7 +58,14 @@ await new Promise((r) => server.listen(PORT, r));
 const userDir = mkdtempSync(join(tmpdir(), "tb-shipping-e2e-"));
 const ctx = await chromium.launchPersistentContext(
   userDir,
-  extensionLaunchOptions([`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`]),
+  extensionLaunchOptions([
+    `--disable-extensions-except=${EXT}`,
+    `--load-extension=${EXT}`,
+    // Lets getDisplayMedia/getUserMedia resolve with a synthetic source
+    // instead of blocking on an OS picker/consent dialog no harness can click.
+    "--use-fake-ui-for-media-stream",
+    "--use-fake-device-for-media-stream",
+  ]),
 );
 
 const VERBOSE = process.argv.includes("--verbose");
@@ -89,7 +98,7 @@ try {
   await sleep(1200);
   const seeded = await sw.evaluate(async () => {
     await chrome.storage.local.set({
-      tb_record_opts: { video: true, videoSetBy: "default", surfaceMode: "tab", delaySec: 0 },
+      tb_record_opts: { video: true, videoSetBy: "default", surfaceMode: "desktop", delaySec: 0 },
     });
     return chrome.storage.local.get("tb_record_opts");
   });
@@ -97,8 +106,8 @@ try {
     "a false pass here would make every check below meaningless");
 
   const manifest = await sw.evaluate(() => chrome.runtime.getManifest());
-  check("the manifest does not request `offscreen`",
-    !(manifest.permissions || []).includes("offscreen"),
+  check("the manifest requests `offscreen` — video is restored in 1.11.2",
+    (manifest.permissions || []).includes("offscreen"),
     (manifest.permissions || []).join(", "));
 
   const page = await ctx.newPage();
@@ -122,15 +131,15 @@ try {
     return chrome.tabs.sendMessage(tab.id, {
       type: "TB_START_RECORDING",
       video: true,          // what an updater's stored preference would send
-      withMic: true,
+      withMic: false,
       blurFirst: false,
       delaySec: 0,
-      surfaceMode: "tab",
+      surfaceMode: "desktop",
     });
   }, GLOB);
-  await sleep(1200);
+  await sleep(1500);
 
-  // ── It must be an EVENTS capture, not a recording ────────────────────────
+  // ── It must be an actual video recording — 1.11.2 honours the stored pref ──
   const state = await page.evaluate(() => ({
     isVideoRecording: !!window.__TraceBugExtensionSDK.isVideoRecording?.(),
     hud: !!document.querySelector('[data-tb-hud="stop"]'),
@@ -139,11 +148,15 @@ try {
     pauseBtn: !!document.querySelector('[data-tb-hud="pause"]'),
   }));
   check("a capture started", state.hud, JSON.stringify(state));
-  check("it is NOT a video recording, despite video:true being stored",
-    state.isVideoRecording === false, `isVideoRecording=${state.isVideoRecording}`);
-  check("the HUD is the events-only one", state.label === "Capturing", state.label);
-  check("no microphone button in the HUD", !state.micBtn);
-  check("no pause button either — there is nothing to pause", !state.pauseBtn);
+  check("it IS a video recording — the stored preference is honoured",
+    state.isVideoRecording === true, `isVideoRecording=${state.isVideoRecording}`);
+  check("a pause button is present — there is a stream to pause", state.pauseBtn);
+  // The mic button renders for a video recording, but stays disabled: Bug 4
+  // (docs/launch/video-1.11.1.md) — hasMicrophoneTrack() reads page-side
+  // `_stream`, which the extension transport never sets. withMic was false
+  // here anyway, so "no track" is doubly true; the button existing at all is
+  // what this line is checking.
+  check("a mic button renders in the HUD for a video recording", state.micBtn);
 
   const offscreenCount = await sw.evaluate(async () => {
     try {
@@ -151,17 +164,17 @@ try {
       return c.length;
     } catch { return -1; }
   });
-  check("no offscreen document was created", offscreenCount === 0, String(offscreenCount));
+  check("an offscreen document was created to host the recorder", offscreenCount === 1, String(offscreenCount));
 
   // ── Produce the three signals ────────────────────────────────────────────
   await page.click("#pay");
-  await sleep(900);
+  await sleep(1500);
 
   // ── Stop, and check the ticket ───────────────────────────────────────────
   await page.evaluate(() => {
     document.querySelector('[data-tb-hud="stop"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
-  await sleep(2200);
+  await sleep(2500);
 
   const modal = await page.evaluate(() => !!document.getElementById("tracebug-quick-bug-modal"));
   check("stopping opens the ticket", modal);
@@ -178,26 +191,29 @@ try {
       consoleErrors: (r.consoleErrors || []).map((e) => String(e.message).slice(0, 60)),
       networkStatuses: (r.networkRequests || []).map((n) => n.status),
       actions: (r.sessionSteps || []).length,
-      rrwebCount: r.video?.rrwebEvents?.length || 0,
       videoBytes: r.video?.sizeBytes || 0,
-      videoDataUrl: (r.video?.dataUrl || "").slice(0, 12),
+      videoDataUrlPrefix: (r.video?.dataUrl || "").slice(0, 15),
     };
   });
   check("a report was built", !!report, JSON.stringify(report));
-  check("the replay is non-empty", (report?.rrwebCount || 0) > 0, `${report?.rrwebCount} rrweb events`);
   check("the console error is there",
     (report?.consoleErrors || []).some((m) => /Cannot read properties of undefined/.test(m)),
     JSON.stringify(report?.consoleErrors));
   check("the failed request is there",
     (report?.networkStatuses || []).includes(500), JSON.stringify(report?.networkStatuses));
   check("the click is there", (report?.actions || 0) > 0, String(report?.actions));
-  check("and no video rode along", !report?.videoBytes && !report?.videoDataUrl,
-    `bytes=${report?.videoBytes} dataUrl="${report?.videoDataUrl}"`);
+  // This is the regression Bug 1 (docs/launch/video-1.11.1.md) describes: a
+  // ticket that opens with "Video started…stopped" in the timeline but no
+  // actual video bytes. Re-verified in a real browser before this file was
+  // rewritten — see e2e/ext-video-recording.e2e.mjs for the dedicated,
+  // narrower repro (plain start/stop and a mid-recording reload).
+  check("the video actually rode along — Bug 1 does not reproduce here",
+    (report?.videoBytes || 0) > 0 && (report?.videoDataUrlPrefix || "").startsWith("data:video"),
+    `bytes=${report?.videoBytes} dataUrl="${report?.videoDataUrlPrefix}"`);
 
-  // ── The preference survives for 1.11.1 ───────────────────────────────────
+  // ── The preference is honoured, not just preserved ───────────────────────
   const after = await sw.evaluate(() => chrome.storage.local.get("tb_record_opts"));
-  check("the stored video:true was NOT erased", after?.tb_record_opts?.video === true,
-    "1.11.1 restores video by flipping one constant; the user must not have to re-choose");
+  check("the stored video:true is still there", after?.tb_record_opts?.video === true);
 } catch (err) {
   console.error("E2E error:", err);
   failures++;

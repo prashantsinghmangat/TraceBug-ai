@@ -2,9 +2,14 @@
 
 All notable changes to TraceBug are documented here.
 
-## [1.11.2] - 2026-10-22
+## [1.11.2] - 2026-10-23
 
-> Correctness. Everything here came out of a full product-flow audit (`docs/audit/product-review.md`): small fixes that make each control do what it says. Screen recording is still paused and now returns in 1.11.3 — the video work is independent and no longer holds these back.
+> Correctness, plus screen recording is back. Most of this came out of a full product-flow audit (`docs/audit/product-review.md`): small fixes that make each control do what it says. Video was paused for 1.11/1.11.1 while four bugs in the extension's offscreen-recorder seam got fixed — see `docs/launch/video-1.11.1.md`.
+
+### Added
+
+- **Screen recording is restored in the extension.** Turn on "Record video too" in Record options to also capture a tab, window or screen alongside the console, network and replay that every capture already records. If you had it on before 1.11, your setting was kept and comes back on its own.
+- **The toolbar icon shows a red "REC" badge while a capture is running** on that tab, distinct from the green "ON" badge that only meant the SDK was loaded — so the icon alone confirms something is being recorded, even if the on-page HUD is out of view.
 
 ### Fixed
 

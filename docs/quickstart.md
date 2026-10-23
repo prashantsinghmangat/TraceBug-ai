@@ -26,9 +26,9 @@ matches you.
 > Pasting into an AI chat instead? Use **More ▾ → Export for AI (.html)** — a tiny
 > text-only report that fits in a chat context.
 
-> **Screen recording is paused in 1.11** and returns in 1.11.3. Everything else
-> — console, network, clicks and the replay — is captured as described above.
-> The npm SDK records video today.
+> **Screen recording is back in the extension as of 1.11.2** — turn on **Record
+> video too** in Record options. Console, network, clicks and the replay are
+> always captured, with or without video.
 
 ---
 

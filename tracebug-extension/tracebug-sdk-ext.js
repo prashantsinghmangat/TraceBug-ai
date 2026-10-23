@@ -21170,7 +21170,7 @@ var TraceBugExtensionModule = (() => {
       _paused = false;
       _pausedAt = 0;
       _pausedMs = 0;
-      VIDEO_ENABLED_IN_EXTENSION = false;
+      VIDEO_ENABLED_IN_EXTENSION = true;
       _startInFlight = null;
       _autoStopWired = false;
       _onStarted = null;
@@ -72176,7 +72176,7 @@ First element: \`${exampleSnippet}\``,
       kind: "canvas",
       // Says what is missing, why, and the one thing that fixes it. No jargon:
       // "rrweb" and "DOM replay" mean nothing to a tester.
-      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording returns in 1.11.3.")
+      message: "Most of this page is drawn in a canvas, which the replay can't record \u2014 it will show an empty space. Console, network and your clicks are still captured. " + (isVideoOffered() ? "For a visual record here, stop and turn on \u201CRecord video too\u201D." : "For a visual record here, take screenshots as you go \u2014 screen recording is paused in this version.")
     };
   }
   function findHeavyFrame(doc = document) {

@@ -209,7 +209,7 @@ Every export carries a runnable Playwright spec that **replays the captured sess
 
 ### 🎬 Pre-Recording Options + Element-Level Blur (v1.9)
 
-The extension popup's **⚙ Record options** panel offers an optional 3s/5s countdown and **Blur before recording** — redact sensitive areas *before* the first frame is captured. (The capture-surface and microphone rows describe a screen recording, which is paused in the 1.11 extension and returns in 1.11.3.) The full set is a public SDK API, where video works today: `TraceBug.prepareRecording({ blurFirst, delaySec, surfaceMode, withMicrophone })`.
+The extension popup's **⚙ Record options** panel offers **Record video too** (off by default — a capture is always console/network/replay, and screen recording is opt-in), an optional 3s/5s countdown, and **Blur before recording** — redact sensitive areas *before* the first frame is captured. The full set is also a public SDK API: `TraceBug.prepareRecording({ blurFirst, delaySec, surfaceMode, withMicrophone })`.
 
 Blur itself is element-level, click-to-blur: hover highlights, click applies `filter: blur(12px)` **to the element itself**, click again unblurs. Because the blur is part of the element's own rendering, it physically cannot lag behind scrolling. Blurred elements also get `tb-mask`, so the DOM replay masks their text, not just the video pixels.
 
