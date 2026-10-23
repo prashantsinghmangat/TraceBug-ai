@@ -208,6 +208,7 @@ function endCapture(tabId, reason) {
   captureTabs.delete(tabId);
   captureEndedNotices.set(tabId, { reason, host: originHost(live.origin), at: Date.now() });
   persistState();
+  updateBadge(tabId);
   return true;
 }
 
@@ -351,15 +352,20 @@ function currentVersion() {
 
 async function updateBadge(tabId /* , hostname */) {
   const loaded = injectedTabs.has(tabId);
+  // A capture in progress outranks "loaded": the user needs to see at a
+  // glance that something is actively being recorded, not just that the SDK
+  // is present on the tab — "ON" looked identical whether or not a capture
+  // was running, which is the bug this badge state fixes.
+  const capturing = captureTabs.has(tabId);
   // Await both calls — without await the returned promises reject outside the
   // try/catch ("Uncaught (in promise) Error: No tab with id: …") whenever the
   // tab closed between the event firing and the badge update (prerendered
   // tabs, rapid tab churn).
   try {
-    await chrome.action.setBadgeText({ tabId, text: loaded ? "ON" : "" });
+    await chrome.action.setBadgeText({ tabId, text: capturing ? "REC" : loaded ? "ON" : "" });
     await chrome.action.setBadgeBackgroundColor({
       tabId,
-      color: loaded ? "#22c55e" : "#6b7280",
+      color: capturing ? "#ef4444" : loaded ? "#22c55e" : "#6b7280",
     });
   } catch {}
 }
@@ -561,6 +567,7 @@ async function handleComboAction(message, sender) {
     captureEndedNotices.delete(tabId);
     captureTabs.set(tabId, { origin: "", startedAt: Date.now() });
     persistState();
+    updateBadge(tabId);
   }
   try {
     await chrome.tabs.sendMessage(tabId, actionMessage);
@@ -838,6 +845,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       captureEndedNotices.delete(tabId);
       captureTabs.set(tabId, { origin, startedAt });
       persistState();
+      updateBadge(tabId);
       sendResponse({ ok: true });
     })();
     return true;
@@ -854,6 +862,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       captureTabs.delete(tabId);
       captureEndedNotices.delete(tabId);
       persistState();
+      updateBadge(tabId);
       sendResponse({ ok: true });
     })();
     return true;
