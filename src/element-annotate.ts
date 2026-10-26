@@ -6,7 +6,7 @@ import { ElementAnnotation, AnnotationIntent } from "./types";
 import { addElementAnnotation, getElementAnnotations } from "./annotation-store";
 import { captureStyleEvidence } from "./style-evidence";
 import { isTraceBugUiElement } from "./dom-helpers";
-import { escapeHtml, setInnerHTML } from "./ui/helpers";
+import { escapeHtml, setInnerHTML, createStyleTag } from "./ui/helpers";
 
 let _active = false;
 let _cleanup: (() => void) | null = null;
@@ -71,8 +71,7 @@ export function activateElementAnnotateMode(
     </div>
   `);
   // Add keyframe animations
-  const styleTag = document.createElement("style");
-  styleTag.id = "tracebug-annotate-styles";
+  const styleTag = createStyleTag("tracebug-annotate-styles");
   styleTag.dataset.tracebug = "annotate-styles";
   styleTag.textContent = `
     @keyframes tracebug-slide-down { from { transform: translateY(-100%); } to { transform: translateY(0); } }

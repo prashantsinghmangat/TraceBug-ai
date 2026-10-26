@@ -21,7 +21,7 @@ export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setN
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
-import { matchesShortcut, setInnerHTML } from "./ui/helpers";
+import { matchesShortcut, setInnerHTML, createStyleTag } from "./ui/helpers";
 import { isExtensionContext } from "./video-recorder";
 
 // sessionStorage key the extension build's content-script.js (TB_PING) and
@@ -82,8 +82,7 @@ export function mountDashboard(
   if (document.getElementById("tracebug-compact-toolbar")) return () => {};
 
   // ── Inject !important CSS to guarantee we stay on top ───────────────
-  const style = document.createElement("style");
-  style.id = "tracebug-styles";
+  const style = createStyleTag("tracebug-styles");
   style.textContent = `
     #tracebug-root {
       position: fixed !important;
@@ -1939,8 +1938,7 @@ function showToast(message: string, root: HTMLElement): void {
 
   // Add toast animation if not present
   if (!document.getElementById("tracebug-toast-anim")) {
-    const style = document.createElement("style");
-    style.id = "tracebug-toast-anim";
+    const style = createStyleTag("tracebug-toast-anim");
     style.textContent = `
       @keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
     `;

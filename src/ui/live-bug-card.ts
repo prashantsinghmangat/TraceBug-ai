@@ -12,7 +12,7 @@
 //
 // All fetches are same-origin only. No external network calls. CSP-friendly.
 
-import { setInnerHTML } from "./helpers";
+import { setInnerHTML, createStyleTag } from "./helpers";
 
 const CARD_ID = "tracebug-live-bug-card";
 const STYLE_ID = "tracebug-live-bug-card-styles";
@@ -245,8 +245,7 @@ async function fetchSourceWindow(fileUrl: string, line: number, _column: number)
 
 function _injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
+  const style = createStyleTag(STYLE_ID);
   style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
