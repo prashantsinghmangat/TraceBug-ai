@@ -101,7 +101,9 @@
 
     /* ── Top bar ───────────────────────────────────────── */
     .top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
-    .top-logo { display: flex; align-items: center; gap: 9px; }
+    .top-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; color: inherit; cursor: pointer; border-radius: 8px; }
+    .top-logo:hover { opacity: 0.85; }
+    .top-logo:focus-visible { outline: 2px solid var(--accent, #6366F1); outline-offset: 2px; }
     .top-name { font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
     .top-ver { font-size: 13px; color: var(--text-3); }
 
@@ -344,7 +346,7 @@
   <div class="wrap">
 
     <div class="top">
-      <div class="top-logo">
+      <a class="top-logo" id="homeLogo" href="#" target="_blank" rel="noopener" title="Open tracebug.dev" aria-label="TraceBug — open tracebug.dev">
         <svg width="24" height="24" viewBox="0 0 96 96" fill="none" aria-hidden="true">
           <defs>
             <linearGradient id="w-grad" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
@@ -357,7 +359,7 @@
           <rect x="52" y="41" width="14" height="14" rx="4" fill="url(#w-grad)"/>
         </svg>
         <span class="top-name">TraceBug</span>
-      </div>
+      </a>
       <!-- Filled from chrome.runtime.getManifest() — never hardcoded. -->
       <span class="top-ver" id="version"></span>
     </div>

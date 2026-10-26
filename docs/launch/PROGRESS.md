@@ -67,3 +67,18 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   resulting test. Re-run clean: `ext-trusted-types-page` 9/9, `ext-shipping-path` 16/16,
   `ext-video-recording` 8/8, `ext-sdk-isolation` 17/17, `ext-events-capture` 22/22,
   `ext-reload-reinject` 8/8, `ext-worker-restart-reinject` 4/4, `ext-badge-host-ui-defer` 4/4.
+
+## The TraceBug logo now links home wherever it appears in a header (2026-10-26)
+
+- **What:** the logo+wordmark in the popup header, `welcome.html`'s top bar, and the in-page dashboard
+  panel header was a static, non-interactive mark in all three places — user-requested click-through.
+- **Fix:** each wrapped in an `<a target="_blank" rel="noopener">` to `tracebug.dev`, with
+  hover/focus-visible styles added. `welcome.html` sets the href via `welcome.js` at runtime
+  (`id="homeLogo"`, same pattern as its other outbound links) rather than hardcoding it in the markup —
+  `tests/first-run.test.ts` asserts the bundled first-run page ships zero literal `https:` hrefs, so it
+  can render fully offline. `popup.html`'s footer already links `tracebug.dev` directly with no such
+  constraint, so its logo link is a plain hardcoded href. Checked other candidate headers
+  (`options.html`, the ticket modal, the compact toolbar, `confirm-send.html`, `player.html`) — none
+  have a logo mark to begin with, so there was nothing to change there.
+- **Verified:** `check.mjs --full` all green (939/58, unchanged baseline) after fixing the
+  `first-run.test.ts` regression the first pass caused by hardcoding the welcome-page href.
