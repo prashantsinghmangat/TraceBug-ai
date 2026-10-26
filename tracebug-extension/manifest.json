@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TraceBug: Bug Report Recorder & Replay",
   "short_name": "TraceBug",
-  "version": "1.11.2",
+  "version": "1.11.3",
   "description": "Record a bug once: replay, console errors and network in one offline file. For QA and devs. Free, no account, no upload.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
@@ -15,6 +15,9 @@
     "offscreen"
   ],
   "minimum_chrome_version": "116",
+  "optional_permissions": [
+    "tabCapture"
+  ],
   "commands": {
     "tb-quick-capture": {
       "suggested_key": {

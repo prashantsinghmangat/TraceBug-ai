@@ -7,6 +7,7 @@
 // Deliberately not a site-explorer (palette/assets/responsive) — that's
 // VisBug's job. This exists so design-QA bugs ship with the receipts.
 
+import { setInnerHTML } from "./ui/helpers";
 import { captureStyleEvidence, formatStyleSummary } from "./style-evidence";
 import { addElementAnnotation } from "./annotation-store";
 import { computeElementSelector } from "./element-annotate";
@@ -33,13 +34,13 @@ export function activateInspectMode(onChange?: () => void): void {
   const layer = document.createElement("div");
   layer.id = LAYER_ID;
   layer.setAttribute("style", "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
-  layer.innerHTML = `
+  setInnerHTML(layer, `
     <div data-tb-i="margin" style="position:fixed;background:rgba(246,178,107,0.25);pointer-events:none;display:none"></div>
     <div data-tb-i="padding" style="position:fixed;background:rgba(147,196,125,0.30);pointer-events:none;display:none"></div>
     <div data-tb-i="content" style="position:fixed;background:rgba(111,168,220,0.30);outline:1.5px solid #6366F1;pointer-events:none;display:none"></div>
     <div data-tb-i="tip" style="position:fixed;display:none;max-width:340px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:8px;padding:8px 10px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none;white-space:pre-wrap;word-break:break-word"></div>
     <div data-tb-i="hint" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:7px 16px;font:12px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none">🎯 Inspect — click an element to attach its style evidence · Esc to exit</div>
-  `;
+  `);
   document.body.appendChild(layer);
   _root = layer;
   document.body.style.cursor = "crosshair";

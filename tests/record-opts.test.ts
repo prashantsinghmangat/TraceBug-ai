@@ -270,7 +270,7 @@ describe('popup.js only calls the video setting "chosen" when it was', () => {
       OPTS_KEY: KEY,
       videoSetBy,
       videoCb: { checked },
-      surfaceSel: { value: 'tab' },
+      surfaceMode: 'tab',
       delaySel: { value: '0' },
       blurCb: { checked: false },
       updateOptsState: () => {},
@@ -308,12 +308,15 @@ describe('popup.js only calls the video setting "chosen" when it was', () => {
     // and that the other three controls share the plain handler — adding
     // markVideoChosen to any of them would silently re-freeze users.
     expect(SOURCE).toContain('videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });');
-    // .filter(Boolean) because the Capture select was removed from the markup
-    // - it could not work in the extension. The point of this assertion is
-    // unchanged: these three share the PLAIN handler, and none of them promotes
-    // videoSetBy to "user".
-    expect(SOURCE).toContain('[surfaceSel, delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));');
-    // The declaration plus exactly one call.
+    // delaySel/blurCb share the plain handler and never promote videoSetBy.
+    expect(SOURCE).toContain('[delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));');
+    // The Tab | Desktop switch (1.11.3) is two buttons, not a <select> — each
+    // has its own click handler (Tab's also requests the optional tabCapture
+    // permission first), but neither promotes videoSetBy either.
+    expect(SOURCE).toContain('surfaceDesktopBtn.addEventListener("click", () => {');
+    expect(SOURCE).toContain('surfaceTabBtn.addEventListener("click", () => {');
+    // The declaration plus exactly one call — proves nothing else in the file,
+    // including the two new surface-switch handlers, promotes videoSetBy.
     expect(SOURCE.match(/markVideoChosen\(\)/g) ?? []).toHaveLength(2);
   });
 

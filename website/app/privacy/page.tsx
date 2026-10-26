@@ -241,6 +241,16 @@ export default function PrivacyPage() {
               </div>
               <div>
                 <strong className="text-text-primary">
+                  tabCapture (optional)
+                </strong>{" "}
+                — <strong className="text-text-primary">Not requested at
+                install.</strong> Asked for only if you turn on screen recording
+                and pick "Tab" instead of "Desktop", so the current tab can be
+                recorded without a share-picker dialog. Declining falls back to
+                the normal picker.
+              </div>
+              <div>
+                <strong className="text-text-primary">
                   Optional host permissions
                 </strong>{" "}
                 — <strong className="text-text-primary">Not requested at

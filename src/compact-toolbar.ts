@@ -17,7 +17,7 @@ import type { StoredSession } from "./types";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
-import { matchesShortcut } from "./ui/helpers";
+import { matchesShortcut, setInnerHTML } from "./ui/helpers";
 import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, getCaptureCount, isVideoOffered } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 
@@ -138,7 +138,7 @@ export function mountCompactToolbar(
     "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;opacity:0.55;color:var(--tb-btn-text,#aaa);transition:opacity 0.12s;";
   dragHandle.addEventListener("mouseenter", () => { dragHandle.style.opacity = "1"; });
   dragHandle.addEventListener("mouseleave", () => { dragHandle.style.opacity = "0.55"; });
-  dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
+  setInnerHTML(dragHandle, `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`);
   toolbar.appendChild(dragHandle);
 
   // Screenshot button — each click starts a fresh ticket.
@@ -235,7 +235,7 @@ export function mountCompactToolbar(
   try {
     if (!_isTracking && getActiveSessionId() && getActiveCaptureMode() === "events") {
       _isTracking = true;
-      trackBtn.innerHTML = _trackIconSvg(true);
+      setInnerHTML(trackBtn, _trackIconSvg(true));
       trackBtn.classList.add("tb-active");
       trackBtn.style.color = "var(--tb-success, #22c55e)";
       trackBtn.title = "Stop tracking & file ticket";
@@ -417,7 +417,7 @@ function _createToolbarBtn(
   btn.dataset.tracebug = "toolbar-btn";
   btn.title = title;
   btn.setAttribute("aria-label", title);
-  btn.innerHTML = iconHtml;
+  setInnerHTML(btn, iconHtml);
   btn.style.cssText = `
     width: 34px; height: 34px; border-radius: var(--tb-radius-md, 8px); border: none;
     background: transparent; color: var(--tb-btn-text, #aaa); cursor: pointer;
@@ -466,7 +466,7 @@ function _resetTrackingState(): void {
   if (!_isTracking) return;
   _isTracking = false;
   if (_trackBtn) {
-    _trackBtn.innerHTML = _trackIconSvg(false);
+    setInnerHTML(_trackBtn, _trackIconSvg(false));
     _trackBtn.classList.remove("tb-active");
     _trackBtn.style.color = "var(--tb-btn-text, #aaa)";
     _trackBtn.title = "Track session (events only, no video)";
@@ -483,7 +483,7 @@ async function _toggleSessionTracking(
     // ticket is valid with events alone; screenshots can be added from the
     // modal ("Add page shot") if wanted.
     _isTracking = false;
-    btn.innerHTML = _trackIconSvg(false);
+    setInnerHTML(btn, _trackIconSvg(false));
     btn.classList.remove("tb-active");
     btn.style.color = "var(--tb-btn-text, #aaa)";
     btn.title = "Track session (events only, no video)";
@@ -503,7 +503,7 @@ async function _toggleSessionTracking(
 
   _isTracking = true;
   try { _onSessionStart?.(); } catch (err) { console.warn("[TraceBug] Session start hook failed:", err); }
-  btn.innerHTML = _trackIconSvg(true);
+  setInnerHTML(btn, _trackIconSvg(true));
   btn.classList.add("tb-active");
   btn.style.color = "var(--tb-success, #22c55e)";
   btn.title = "Stop tracking & file ticket";
@@ -531,7 +531,7 @@ async function _finishRecording(
   showToast("Stopping recording...", root);
   await stopVideoRecording();
   hideRecordingHUD();
-  btn.innerHTML = iconFn(false);
+  setInnerHTML(btn, iconFn(false));
   btn.classList.remove("tb-active");
   btn.style.color = "var(--tb-btn-text, #aaa)";
   try { _onSessionEnd?.(); } catch (err) { console.warn("[TraceBug] Session end hook failed:", err); }
@@ -626,7 +626,7 @@ async function _toggleRecording(
     return;
   }
 
-  btn.innerHTML = _recordIconSvg(true);
+  setInnerHTML(btn, _recordIconSvg(true));
   btn.classList.add("tb-active");
   btn.style.color = "var(--tb-error, #ef4444)";
   showRecordingHUD(root, {
@@ -686,7 +686,7 @@ function _showRecordPreflight(
     // changes nothing, which is what the popup's copy of it was removed for.
     // See the note in tracebug-extension/offscreen.js.
     const showSurfaceChoice = !isExtensionMode();
-    pop.innerHTML = `
+    setInnerHTML(pop, `
       <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
       ${showSurfaceChoice ? `
       <div style="display:flex;gap:7px;margin-bottom:10px">
@@ -713,7 +713,7 @@ function _showRecordPreflight(
         <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
         <button data-tb-pre="start" style="flex:1.6;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">● Start recording</button>
       </div>
-    `;
+    `);
 
     root.appendChild(pop);
 
@@ -859,7 +859,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
   if (sessions.length === 0) {
     const empty = document.createElement("div");
     empty.style.cssText = "text-align:center;padding:16px 0;color:var(--tb-text-muted,#666);font-size:11px;line-height:1.6";
-    empty.innerHTML = "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.";
+    setInnerHTML(empty, "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.");
     pop.appendChild(empty);
   } else {
     // Scrollable card list — the popover stays a fixed height no matter how

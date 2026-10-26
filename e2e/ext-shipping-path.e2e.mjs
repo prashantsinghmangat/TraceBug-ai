@@ -166,6 +166,13 @@ try {
   });
   check("an offscreen document was created to host the recorder", offscreenCount === 1, String(offscreenCount));
 
+  const badgeWhileRecording = await sw.evaluate(async (glob) => {
+    const [tab] = await chrome.tabs.query({ url: glob });
+    return chrome.action.getBadgeText({ tabId: tab.id });
+  }, GLOB);
+  check("the toolbar badge shows REC while the video capture is running",
+    badgeWhileRecording === "REC", badgeWhileRecording);
+
   // ── Produce the three signals ────────────────────────────────────────────
   await page.click("#pay");
   await sleep(1500);
@@ -178,6 +185,16 @@ try {
 
   const modal = await page.evaluate(() => !!document.getElementById("tracebug-quick-bug-modal"));
   check("stopping opens the ticket", modal);
+
+  // Regression check: a video stop never used to tell the worker it was no
+  // longer capturing (only an events capture announced its own stop), so the
+  // REC badge stayed stuck forever after a completely normal Stop click.
+  const badgeAfterStop = await sw.evaluate(async (glob) => {
+    const [tab] = await chrome.tabs.query({ url: glob });
+    return chrome.action.getBadgeText({ tabId: tab.id });
+  }, GLOB);
+  check("the REC badge clears after stopping the video capture",
+    badgeAfterStop !== "REC", badgeAfterStop);
 
   const report = await page.evaluate(() => {
     // NOT generateReport(): it needs an active session and correctly returns

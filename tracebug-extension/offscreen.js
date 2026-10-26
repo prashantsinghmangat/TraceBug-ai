@@ -4,11 +4,15 @@
 // kill the recording. Driven by chrome.runtime messages from background.js.
 //
 // Message contract (all in form `{ type: "tb:rec:*", data?: {...} }`):
-//   tb:rec:start    { mode, withMicrophone } → { ok, error? }
+//   tb:rec:start    { mode, withMicrophone, surfaceMode?, tabCaptureStreamId? } → { ok, error? }
+//     surfaceMode "tab" + tabCaptureStreamId (resolved by background.js, which
+//     alone has a real tab to target) skips getDisplayMedia's picker via
+//     chrome.tabCapture.getMediaStreamId. Anything else uses getDisplayMedia.
 //   tb:rec:stop     {}                       → VideoRecording | null
 //   tb:rec:capture  {}                       → VideoRecording | null
 //   tb:rec:comment  { text }                 → { offsetMs?, ok }
-//   tb:rec:status   {}                       → { active, mode, capturesTaken, elapsedMs, comments, mimeType, startedAt }
+//   tb:rec:status   {}                       → { active, mode, capturesTaken, elapsedMs, comments, mimeType, startedAt, micIncluded, micMuted }
+//   tb:rec:mic-mute { muted }                → { ok, micIncluded, micMuted }
 //
 // VideoRecording shape (see src/video-recorder.ts):
 //   { dataUrl, mimeType, durationMs, sizeBytes, comments, startedAt }
@@ -106,6 +110,17 @@ let _autoStopBroadcast = false;
 // doesn't exist yet — we're still awaiting getDisplayMedia), and we end
 // up showing the share-picker twice.
 let _startInFlight = null;
+// chrome.tabCapture mutes a tab's own audio output once an audio track is
+// captured from it, so Tab mode re-routes the captured audio back to the
+// user's speakers via this AudioContext. Null outside Tab mode.
+let _tabAudioCtx = null;
+// The microphone track(s) mixed into _stream, kept separately from the
+// tab/screen audio tracks so tb:rec:mic-mute can mute narration without
+// touching the recorded page's own sound. Bug 4 (video-1.11.1.md): the page
+// side's hasMicrophoneTrack()/setMicrophoneMuted() read a `_stream` that is
+// always null in the extension, because the real stream lives here — this is
+// the RPC side of forwarding those calls from src/video-recorder.ts.
+let _micTracks = [];
 // Keep the LAST finalized recording so the page can re-request it after
 // page reloads or modal re-opens. Without this, if the page-side
 // _lastRecording is lost (e.g., navigation between stop and export), the
@@ -263,6 +278,11 @@ function teardown() {
   if (_stream) {
     _stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
   }
+  if (_tabAudioCtx) {
+    try { _tabAudioCtx.close(); } catch {}
+    _tabAudioCtx = null;
+  }
+  _micTracks = [];
   _recorder = null;
   _stream = null;
   _chunks = [];
@@ -328,65 +348,100 @@ async function _startRecordingImpl(options) {
     const proceed = await waitForShareGesture();
     if (!proceed) return { ok: false, error: "cancelled" };
   }
+  const wantsTabMode = options?.surfaceMode === "tab" && !!options?.tabCaptureStreamId;
   let displayStream;
-  try {
-    const constraints = {
-      video: { frameRate: { ideal: 30, max: 60 } },
-      audio: true,
-      surfaceSwitching: "include",
-      // Keep TraceBug's own extension surfaces out of the picker when the user
-      // is choosing one. Overridden below for the current-tab case.
-      selfBrowserSurface: "exclude",
-    };
-    // Mirrors src/video-recorder.ts's in-page path, so both transports behave
-    // the same way for the same choice.
-    // NOTE: no preferCurrentTab here, deliberately.
-    //
-    // It cannot work from this document. `preferCurrentTab` hints the browser
-    // to offer "the current tab" - the tab of the CALLING document. This is an
-    // offscreen document: a hidden page with no tab at all, so there is no
-    // current tab to prefer, and the hint is meaningless at best. Phase 4
-    // Step B added it here believing it mirrored the in-page SDK path, where
-    // the caller really is the user's tab and it really does work.
-    //
-    // It also made things actively worse twice: paired with the
-    // `selfBrowserSurface: "exclude"` above, Chrome rejected the whole call as
-    // self-contradictory ("Recording cancelled", no recording); and once that
-    // was fixed, the capture it negotiated was not the user's page.
-    //
-    // Capturing a SPECIFIC tab from an offscreen document is a different API -
-    // chrome.tabCapture.getMediaStreamId - which needs the `tabCapture`
-    // permission this extension deliberately dropped in 1.10.1 to lose the
-    // browsing-history install warning. Adding it back is a manifest change and
-    // a product decision, not a bug fix.
-    //
-    // So the extension shows the normal picker with the current tab in it, the
-    // way it did before Step B.
-    displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
-  } catch (err) {
-    setHostPanel("idle");
-    // A macOS Screen-Recording denial arrives as NotAllowedError — the same
-    // name as "the user closed the picker". Collapsing both into "cancelled"
-    // is how a blocked browser came to look like a change of mind, with no
-    // hint that the fix is in System Settings. Chrome distinguishes them in
-    // the MESSAGE ("Permission denied by system"), so branch on that. Not on
-    // the platform or the user agent: the error is the signal, and macOS is
-    // the only OS that gates screen capture this way.
-    if (isSystemPermissionDenial(err)) {
-      return { ok: false, error: "system-permission" };
+  if (wantsTabMode) {
+    // Tab mode: background.js already resolved chrome.tabCapture.getMediaStreamId
+    // into a stream id before forwarding this message — only background has a
+    // real tab to target (an offscreen document has none). The id is consumed
+    // via getUserMedia's legacy `chromeMediaSource` constraint; there is no
+    // modern MediaDevices equivalent for this Chrome-only API. No picker opens.
+    try {
+      displayStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          mandatory: {
+            chromeMediaSource: "tab",
+            chromeMediaSourceId: options.tabCaptureStreamId,
+          },
+        },
+        video: {
+          mandatory: {
+            chromeMediaSource: "tab",
+            chromeMediaSourceId: options.tabCaptureStreamId,
+            maxFrameRate: 60,
+          },
+        },
+      });
+    } catch (err) {
+      setHostPanel("idle");
+      return { ok: false, error: (err && err.message) || "Could not start tab capture." };
     }
-    if (err && (err.name === "NotAllowedError" || err.name === "AbortError")) {
-      return { ok: false, error: "cancelled" };
+    // chrome.tabCapture mutes the tab's own audio output once an audio track
+    // is captured from it (so the user doesn't hear it twice if the caller
+    // pipes it elsewhere) — re-route it back to the speakers or the user's
+    // tab goes silent for the whole recording.
+    try {
+      _tabAudioCtx = new AudioContext();
+      _tabAudioCtx.createMediaStreamSource(displayStream).connect(_tabAudioCtx.destination);
+    } catch (err) {
+      console.warn("[TraceBug offscreen] could not replay tab audio to the user:", (err && err.name) || err);
     }
-    return { ok: false, error: (err && err.message) || "Could not start screen capture." };
+  } else {
+    try {
+      const constraints = {
+        video: { frameRate: { ideal: 30, max: 60 } },
+        audio: true,
+        surfaceSwitching: "include",
+        // Keep TraceBug's own extension surfaces out of the picker when the user
+        // is choosing one. Overridden below for the current-tab case.
+        selfBrowserSurface: "exclude",
+      };
+      // Mirrors src/video-recorder.ts's in-page path, so both transports behave
+      // the same way for the same choice.
+      // NOTE: no preferCurrentTab here, deliberately.
+      //
+      // It cannot work from this document. `preferCurrentTab` hints the browser
+      // to offer "the current tab" - the tab of the CALLING document. This is an
+      // offscreen document: a hidden page with no tab at all, so there is no
+      // current tab to prefer, and the hint is meaningless at best. Phase 4
+      // Step B added it here believing it mirrored the in-page SDK path, where
+      // the caller really is the user's tab and it really does work.
+      //
+      // It also made things actively worse twice: paired with the
+      // `selfBrowserSurface: "exclude"` above, Chrome rejected the whole call as
+      // self-contradictory ("Recording cancelled", no recording); and once that
+      // was fixed, the capture it negotiated was not the user's page.
+      //
+      // "This tab" with no picker is now Tab mode above (`chrome.tabCapture`,
+      // optional `tabCapture` permission, see docs/audit/capture-flow-1.11.3.md).
+      // This branch is Desktop mode: the normal picker, current tab included.
+      displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+    } catch (err) {
+      setHostPanel("idle");
+      // A macOS Screen-Recording denial arrives as NotAllowedError — the same
+      // name as "the user closed the picker". Collapsing both into "cancelled"
+      // is how a blocked browser came to look like a change of mind, with no
+      // hint that the fix is in System Settings. Chrome distinguishes them in
+      // the MESSAGE ("Permission denied by system"), so branch on that. Not on
+      // the platform or the user agent: the error is the signal, and macOS is
+      // the only OS that gates screen capture this way.
+      if (isSystemPermissionDenial(err)) {
+        return { ok: false, error: "system-permission" };
+      }
+      if (err && (err.name === "NotAllowedError" || err.name === "AbortError")) {
+        return { ok: false, error: "cancelled" };
+      }
+      return { ok: false, error: (err && err.message) || "Could not start screen capture." };
+    }
   }
 
   let micIncluded = false;
   if (options?.withMicrophone) {
     try {
       const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      mic.getAudioTracks().forEach(t => displayStream.addTrack(t));
-      micIncluded = mic.getAudioTracks().length > 0;
+      _micTracks = mic.getAudioTracks();
+      _micTracks.forEach(t => displayStream.addTrack(t));
+      micIncluded = _micTracks.length > 0;
     } catch (err) {
       // Mic permission not granted to the extension. Neither this document nor
       // the popup can prompt for it: an offscreen document has no UI, and a
@@ -607,7 +662,16 @@ function getStatus() {
     comments: _comments.slice(),
     mimeType: _mimeType,
     startedAt: _startedAt,
+    micIncluded: _micTracks.length > 0,
+    micMuted: _micTracks.length > 0 && _micTracks.every(t => !t.enabled),
   };
+}
+
+/** tb:rec:mic-mute — mute/unmute the microphone track(s) only, leaving the
+ *  recorded tab/screen's own audio untouched. No-op if no mic was included. */
+function setMicMuted(muted) {
+  _micTracks.forEach(t => { t.enabled = !muted; });
+  return { ok: true, micIncluded: _micTracks.length > 0, micMuted: !!muted };
 }
 
 // ── Broadcast (offscreen → background → all tabs) ───────────────────────
@@ -660,6 +724,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { offsetMs: addComment(message.data?.text), ok: true };
       case "tb:rec:status":
         return getStatus();
+      case "tb:rec:mic-mute":
+        return setMicMuted(!!message.data?.muted);
       case "tb:rec:last-recording":
         // Returns the most-recent finalized recording metadata. The dataUrl
         // is fetched separately via chrome.storage.local so IPC limits

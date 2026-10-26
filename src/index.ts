@@ -1312,6 +1312,15 @@ class TraceBugSDK {
     if (!ok) {
       // User cancelled the screen picker — discard the empty session
       try { this._endActiveSession(); } catch {}
+      // The extension already marked this tab as capturing the moment the
+      // popup's click dispatched TB_START_RECORDING (background.js's
+      // handleComboAction, optimistic — it has to set the REC badge before
+      // knowing whether the picker will succeed). Nothing on this failure
+      // path told it the picker was cancelled, so without this the REC badge
+      // stayed on and the popup kept reporting "already capturing" forever,
+      // pointing at an on-page HUD that was never mounted — there was nothing
+      // left to stop it with short of reloading the tab.
+      void announceCaptureStopped();
       // Only report it ourselves if the caller isn't already doing so.
       if (blockedMessage && !options?.onStatus) this._reportCaptureBlocked(blockedMessage);
       return false;
@@ -1341,6 +1350,11 @@ class TraceBugSDK {
     try { recording = await _stopVideoRecording(); } catch (err) {
       console.warn("[TraceBug] stop RPC failed, opening ticket modal anyway:", err);
     }
+    // Tell the worker this tab is no longer capturing — see the matching
+    // comment in _handleRecordingStarted(). Without this a video capture's
+    // REC badge stayed stuck forever: only an events capture ever announced
+    // its own stop.
+    void announceCaptureStopped();
     hideRecordingHUD();
     // End the event session if one is active so events stop flowing.
     try { this._endActiveSession(); } catch {}
@@ -1926,6 +1940,14 @@ class TraceBugSDK {
    * against double mounts.
    */
   private _handleRecordingStarted(): void {
+    // The single choke point for "a video recording genuinely began" —
+    // fires for every trigger (popup, toolbar, keyboard) and every transport.
+    // Without this, a recording started from the on-page toolbar's own
+    // Record button (which calls startVideoRecording() directly, bypassing
+    // the popup's TB_START_RECORDING combo action entirely) never told the
+    // worker it owns a capture: no REC badge, and none of the cross-site
+    // protection Phase 1.11.1 added. No-ops outside the extension.
+    void announceCaptureStarted(Date.now());
     if (!this.config?.enableDashboard) return;
     this._remountRecordingHud();
     this._attachConsoleCollectors();
@@ -1952,6 +1974,9 @@ class TraceBugSDK {
    * the HUD and open the ticket modal with the captured video.
    */
   private async _handleAutoStop(recording: VideoRecording | null): Promise<void> {
+    // The browser's native "Stop sharing" button ends the capture just as
+    // much as the HUD's own Stop — see the comment in stopVideoRecording().
+    void announceCaptureStopped();
     hideRecordingHUD();
     const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
     if (recordBtn) {
@@ -2105,6 +2130,7 @@ class TraceBugSDK {
     clearScreenshots();
     clearVoiceTranscripts();
     abortVideoRecording(); // also stops the rrweb observers
+    void announceCaptureStopped(); // same reason as stopVideoRecording()'s call
     clearVideoRecording();
     this._eventsCaptureStartedAt = null;
     clearStashedDomReplay();

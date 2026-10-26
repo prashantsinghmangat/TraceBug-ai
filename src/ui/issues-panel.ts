@@ -8,7 +8,7 @@
 
 import { Issue } from "../types";
 import { dismissIssue, getIssues, scan } from "../scanner";
-import { escapeHtml } from "./helpers";
+import { escapeHtml, setInnerHTML } from "./helpers";
 
 const PANEL_ID = "tracebug-issues-panel";
 const STYLE_ID = "tracebug-issues-panel-styles";
@@ -174,7 +174,7 @@ function _open(root: HTMLElement, state: { issues: Issue[]; loading: boolean }):
   panel.id = PANEL_ID;
   panel.dataset.tracebug = "issues-panel";
 
-  panel.innerHTML = _shellHtml(state);
+  setInnerHTML(panel, _shellHtml(state));
 
   overlay.appendChild(panel);
   root.appendChild(overlay);
@@ -223,7 +223,7 @@ function _wireShellHandlers(overlay: HTMLElement, panel: HTMLElement): void {
 
   panel.querySelector('[data-tb-issues="rescan"]')!.addEventListener("click", async () => {
     const body = panel.querySelector('[data-tb-issues="body"]') as HTMLElement;
-    body.innerHTML = _loadingHtml();
+    setInnerHTML(body, _loadingHtml());
     const sub = panel.querySelector('[data-tb-issues="subtitle"]') as HTMLElement;
     sub.textContent = "Scanning…";
     await scan();
@@ -242,13 +242,13 @@ function _renderBody(issues: Issue[]): void {
 
   if (issues.length === 0) {
     subtitle.textContent = "No issues found";
-    body.innerHTML = `
+    setInnerHTML(body, `
       <div style="padding:48px 20px;text-align:center;color:var(--tb-text-muted, #888);font-size:13px">
         <div style="font-size:32px;margin-bottom:8px">✓</div>
         Clean scan — no issues detected on this page.
         <div style="font-size:11px;margin-top:6px;opacity:0.7">Includes a11y · broken images · mixed content · JS errors · failed/slow API calls</div>
       </div>
-    `;
+    `);
     return;
   }
 
@@ -261,7 +261,7 @@ function _renderBody(issues: Issue[]): void {
     .join(" · ");
   subtitle.textContent = `${issues.length} issue${issues.length === 1 ? "" : "s"} · ${summary}`;
 
-  body.innerHTML = issues.map(issue => _issueRowHtml(issue)).join("");
+  setInnerHTML(body, issues.map(issue => _issueRowHtml(issue)).join(""));
 
   // Wire row actions
   body.querySelectorAll<HTMLElement>("[data-tb-issue-id]").forEach(row => {

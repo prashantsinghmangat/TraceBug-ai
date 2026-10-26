@@ -20,7 +20,7 @@ import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast, showActionToast } from "./toast";
-import { escapeHtml, tbIsolationCss } from "./helpers";
+import { escapeHtml, tbIsolationCss, setInnerHTML } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
@@ -585,7 +585,7 @@ function _openModal(
   // otherwise, and "is this file safe to share?" is the #1 question at export.
   const redactionLine = data.report ? formatRedactionSummary(summarizeRedactions(data.report)) : null;
 
-  modal.innerHTML = `
+  setInnerHTML(modal, `
     <!-- Header -->
     <div class="tb-qb-header">
       <span class="tb-qb-logo">\u26A1</span>
@@ -808,7 +808,7 @@ function _openModal(
         <button class="tb-qb-help-close" data-action="help-close">Close</button>
       </div>
     </div>
-  `;
+  `);
 
   overlay.appendChild(modal);
   root.appendChild(overlay);
@@ -958,7 +958,7 @@ function _openModal(
   modal.querySelector('[data-action="theme-toggle"]')?.addEventListener("click", () => {
     _cycleTheme();
     const btn = modal.querySelector<HTMLButtonElement>('[data-action="theme-toggle"]');
-    if (btn) btn.innerHTML = _themeIcon();
+    if (btn) setInnerHTML(btn, _themeIcon());
   });
 
   // ── Priority selector — persist the tester's triage call + refresh Info ──
@@ -968,7 +968,7 @@ function _openModal(
     if (sid) setSessionPriority(sid, val);
     if (data.report) data.report.priority = val;
     const infoPanel = modal.querySelector('[data-panel="info"]');
-    if (infoPanel) infoPanel.innerHTML = _buildInfoTab(data.report, data.currentSession ?? null);
+    if (infoPanel) setInnerHTML(infoPanel, _buildInfoTab(data.report, data.currentSession ?? null));
   });
 
   // ── Help overlay + global keyboard shortcuts ─────────────────────────
@@ -1009,7 +1009,7 @@ function _openModal(
       e.preventDefault();
       _cycleTheme();
       const btn = modal.querySelector<HTMLButtonElement>('[data-action="theme-toggle"]');
-      if (btn) btn.innerHTML = _themeIcon();
+      if (btn) setInnerHTML(btn, _themeIcon());
       return;
     }
     const n = parseInt(e.key, 10);
@@ -1201,7 +1201,7 @@ function _openModal(
       // The ticket is persisted \u2014 the draft's job is done. Clearing it here is
       // what stops a saved bug's text from silently pre-filling the next one.
       _clearDraft();
-      saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
+      setInnerHTML(saveTicketBtn, `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`);
       saveTicketBtn.classList.add("tb-qb-btn-saved");
       saveTicketBtn.disabled = true;
       showToast(withoutShots
@@ -1309,7 +1309,7 @@ ${report.steps}` : userDesc)
     const exportBtn = modal.querySelector<HTMLButtonElement>('[data-action="export-replay"]');
     if (exportBtn?.disabled) return;
     const prevLabel = exportBtn?.innerHTML ?? "";
-    if (exportBtn) { exportBtn.disabled = true; exportBtn.innerHTML = `${_ic("fileCode")} Bundling\u2026`; }
+    if (exportBtn) { exportBtn.disabled = true; setInnerHTML(exportBtn, `${_ic("fileCode")} Bundling\u2026`); }
     showToast("Bundling replay\u2026", root);
     try {
       // Pull the latest recording from the offscreen one more time right
@@ -1351,7 +1351,7 @@ ${report.steps}` : userDesc)
       console.warn("[TraceBug] HTML replay export failed:", err);
       showToast("Couldn't export the replay — try again", root);
     } finally {
-      if (exportBtn && exportBtn.isConnected) { exportBtn.disabled = false; exportBtn.innerHTML = prevLabel; }
+      if (exportBtn && exportBtn.isConnected) { exportBtn.disabled = false; setInnerHTML(exportBtn, prevLabel); }
     }
   });
 
@@ -1414,7 +1414,7 @@ ${report.steps}` : userDesc)
       console.warn("[TraceBug] ZIP export failed:", err);
       showToast("Couldn't build the .zip — try again", root);
     } finally {
-      if (zipBtn && zipBtn.isConnected) { zipBtn.disabled = false; zipBtn.innerHTML = zipPrevLabel; }
+      if (zipBtn && zipBtn.isConnected) { zipBtn.disabled = false; setInnerHTML(zipBtn, zipPrevLabel); }
     }
   });
 
@@ -1515,16 +1515,15 @@ ${report.steps}` : userDesc)
       shareBtn.dataset.busy = "1";
       shareBtn.disabled = true;
       shareBtn.style.opacity = "0.85";
-      shareBtn.innerHTML =
-        '<span class="tb-qb-spin" style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:tb-qb-spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px"></span>' +
-        label;
+      setInnerHTML(shareBtn, '<span class="tb-qb-spin" style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:tb-qb-spin 0.7s linear infinite;margin-right:6px;vertical-align:-2px"></span>' +
+        label);
     };
     const resetBtn = () => {
       if (!shareBtn) return;
       shareBtn.dataset.busy = "";
       shareBtn.disabled = false;
       shareBtn.style.opacity = "";
-      shareBtn.innerHTML = originalHtml;
+      setInnerHTML(shareBtn, originalHtml);
     };
     if (!document.getElementById("tb-qb-spin-style")) {
       const s = document.createElement("style");
@@ -1984,7 +1983,7 @@ ${report.steps}` : userDesc)
             }).catch(() => null)
           : Promise.resolve(null);
       host.style.background = "#0B0B10";
-      host.innerHTML = "";
+      setInnerHTML(host, "");
       const iframe = document.createElement("iframe");
       iframe.src = playerUrl;
       iframe.title = "TraceBug recording";
@@ -2025,13 +2024,13 @@ ${report.steps}` : userDesc)
       _blockedShown = true;
       if (mountIframePlayer(preview)) return;
       preview.style.background = "var(--tb-bg-secondary)";
-      preview.innerHTML = `
+      setInnerHTML(preview, `
         <div style="padding:26px 18px;text-align:center;color:var(--tb-text-secondary,#9aa0aa);font-size:12px;line-height:1.65">
           <div style="font-size:24px;margin-bottom:8px">🎬</div>
           <div style="color:var(--tb-text-primary,#e0e0e0);font-weight:600;margin-bottom:6px">Inline preview blocked by this page</div>
           This site's security policy (CSP) blocks embedded video. Your ${_formatVideoTime(video.durationMs)} recording is fine —
           use <strong>Download .webm</strong> below or <strong>Export replay (.html)</strong> to watch it.
-        </div>`;
+        </div>`);
     };
     videoEl.addEventListener("error", showBlockedNotice);
     setTimeout(() => {
@@ -2721,7 +2720,7 @@ type _AITabData = { report: import("../types").BugReport | null };
 
 function _rerenderAITab(modal: HTMLElement, data: _AITabData): void {
   const panel = modal.querySelector('[data-panel="ai"]');
-  if (panel) panel.innerHTML = _buildAITab(data.report);
+  if (panel) setInnerHTML(panel, _buildAITab(data.report));
 }
 
 async function _runAIAnalysis(root: HTMLElement, modal: HTMLElement, data: _AITabData): Promise<void> {
@@ -2733,19 +2732,19 @@ async function _runAIAnalysis(root: HTMLElement, modal: HTMLElement, data: _AITa
   if (!out) return;
 
   if (genBtn) { genBtn.disabled = true; genBtn.textContent = "Analyzing…"; }
-  out.innerHTML = `<div class="tb-qb-ai-loading">${_ic("sparkles")} Running analysis on your key… this stays between your browser and the provider.</div>`;
+  setInnerHTML(out, `<div class="tb-qb-ai-loading">${_ic("sparkles")} Running analysis on your key… this stays between your browser and the provider.</div>`);
 
   try {
     const result = await runLLMAnalysis(report);
     const meta = result.usage?.outputTokens
       ? `<div class="tb-qb-ai-meta">${escapeHtml(result.model)} · ${result.usage.inputTokens ?? "?"}→${result.usage.outputTokens} tokens</div>`
       : `<div class="tb-qb-ai-meta">${escapeHtml(result.model)}</div>`;
-    out.innerHTML = `<div class="tb-qb-ai-md">${_renderMarkdownLite(result.text)}</div>${meta}`;
+    setInnerHTML(out, `<div class="tb-qb-ai-md">${_renderMarkdownLite(result.text)}</div>${meta}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Analysis failed.";
-    out.innerHTML = `<div class="tb-qb-ai-error">${_ic("alert")} ${escapeHtml(msg)}</div>`;
+    setInnerHTML(out, `<div class="tb-qb-ai-error">${_ic("alert")} ${escapeHtml(msg)}</div>`);
   } finally {
-    if (genBtn) { genBtn.disabled = false; genBtn.innerHTML = `${_ic("sparkles")} Regenerate`; }
+    if (genBtn) { genBtn.disabled = false; setInnerHTML(genBtn, `${_ic("sparkles")} Regenerate`); }
   }
 }
 
@@ -2811,7 +2810,7 @@ function showSettingsPointerModal(root: HTMLElement, title: string, body: string
     "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
     "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
 
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml(title)}</div>
@@ -2821,7 +2820,7 @@ function showSettingsPointerModal(root: HTMLElement, title: string, body: string
         <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
         <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
-    </div>`;
+    </div>`);
 
   const host = document.getElementById(MODAL_ID) || document.body;
   host.appendChild(overlay);
@@ -2864,7 +2863,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
     "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
     "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
 
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger — bring your own key</div>
@@ -2889,7 +2888,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
         <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
         <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
-    </div>`;
+    </div>`);
 
   const host = document.getElementById(MODAL_ID) || document.body;
   host.appendChild(overlay);
@@ -2964,7 +2963,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
   const lbl = "font-size:12px;color:#A1A1AA";
 
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations — bring your own token</div>
@@ -2998,7 +2997,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
         <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
         <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
-    </div>`;
+    </div>`);
 
   const host = document.getElementById(MODAL_ID) || document.body;
   host.appendChild(overlay);
@@ -3571,7 +3570,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     color: #FAFAFA;
     overflow: hidden;
   `;
-  card.innerHTML = `
+  setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
@@ -3621,7 +3620,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
         background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif;
       ">✕</button>
     </div>
-  `;
+  `);
   overlay.appendChild(card);
   // Append INSIDE the open ticket modal so it shares the same stacking context
   // and paints on top. Appending to document.body left it behind the modal —
@@ -3648,7 +3647,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓ Copied";
-        setTimeout(() => { btn.innerHTML = `${_ic("copy")} Copy again`; }, 1100);
+        setTimeout(() => { setInnerHTML(btn, `${_ic("copy")} Copy again`); }, 1100);
       }
     }
     else if (action === "close" || target === overlay) close();
@@ -3681,7 +3680,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
     if (ok) return;
     const state = document.querySelector<HTMLElement>("#tb-mcp-handoff [data-copy-state]");
     if (state) {
-      state.innerHTML = `Your browser blocked the auto-copy — click <strong>Copy prompt again</strong> below, then paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.`;
+      setInnerHTML(state, `Your browser blocked the auto-copy — click <strong>Copy prompt again</strong> below, then paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.`);
     }
   });
 
@@ -3738,7 +3737,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
     color: #FAFAFA;
     overflow: hidden;
   `;
-  card.innerHTML = `
+  setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
@@ -3801,7 +3800,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif;
       ">✕</button>
     </div>
-  `;
+  `);
   overlay.appendChild(card);
   const host = document.getElementById(MODAL_ID) || document.body;
   host.appendChild(overlay);
@@ -3824,14 +3823,14 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓ Copied";
-        setTimeout(() => { btn.innerHTML = `${_ic("copy")} Copy prompt again`; }, 1100);
+        setTimeout(() => { setInnerHTML(btn, `${_ic("copy")} Copy prompt again`); }, 1100);
       }
     } else if (action === "copy-setup") {
       void _copyToClipboard(MCP_SETUP[mcpTool].cmd);
       const btn = target.closest("button");
       if (btn) {
         btn.textContent = "✓";
-        setTimeout(() => { btn.innerHTML = _ic("copy"); }, 1100);
+        setTimeout(() => { setInnerHTML(btn, _ic("copy")); }, 1100);
       }
     } else if (action === "close" || target === overlay) close();
   });
@@ -3900,7 +3899,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
       box-shadow: 0 24px 72px rgba(0,0,0,0.6);
       padding: 22px 24px;
     `;
-    card.innerHTML = `
+    setInnerHTML(card, `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span style="font-size:18px;line-height:1">☁️</span>
         <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em">Before you share</div>
@@ -3931,7 +3930,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
           background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
         ">I understand — continue</button>
       </div>
-    `;
+    `);
     overlay.appendChild(card);
     _mountAboveModal(overlay);
 

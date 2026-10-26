@@ -20252,6 +20252,82 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/ui/helpers.ts
+  function tbIsolationCss(root2) {
+    return `
+    ${root2} {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px; font-weight: 400; line-height: 1.5; font-style: normal;
+      letter-spacing: normal; text-transform: none; text-align: left;
+      text-indent: 0; white-space: normal; word-spacing: normal; text-shadow: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    ${root2} *, ${root2} *::before, ${root2} *::after { box-sizing: border-box; }
+    ${root2} button, ${root2} input, ${root2} select, ${root2} textarea {
+      font-family: inherit; font-size: inherit; letter-spacing: normal;
+      text-transform: none; margin: 0;
+    }
+    ${root2} svg { max-width: none; max-height: none; vertical-align: middle; }
+    ${root2} img { max-width: none; }
+    ${root2} a { text-decoration: none; }
+  `;
+  }
+  function parseShortcut(shortcut) {
+    const parts = (shortcut || "").toLowerCase().split("+").map((s2) => s2.trim());
+    return {
+      mod: parts.includes("ctrl") || parts.includes("control") || parts.includes("cmd") || parts.includes("meta"),
+      shift: parts.includes("shift"),
+      alt: parts.includes("alt") || parts.includes("option"),
+      key: parts[parts.length - 1] || ""
+    };
+  }
+  function matchesShortcut(e2, shortcut) {
+    if (!shortcut) return false;
+    const s2 = parseShortcut(shortcut);
+    const mod = e2.ctrlKey || e2.metaKey;
+    const key = (e2.key || "").toLowerCase();
+    return mod === s2.mod && e2.shiftKey === s2.shift && e2.altKey === s2.alt && key === s2.key;
+  }
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function getTrustedTypesPolicy() {
+    if (_ttPolicy !== void 0) return _ttPolicy;
+    try {
+      const tt = window.trustedTypes;
+      _ttPolicy = tt ? tt.createPolicy("tracebug-html", { createHTML: (s2) => s2 }) : null;
+    } catch (e2) {
+      _ttPolicy = null;
+    }
+    return _ttPolicy;
+  }
+  function setInnerHTML(el, html) {
+    try {
+      el.innerHTML = html;
+      return;
+    } catch (e2) {
+    }
+    const policy = getTrustedTypesPolicy();
+    if (policy) {
+      try {
+        el.innerHTML = policy.createHTML(html);
+        return;
+      } catch (e2) {
+      }
+    }
+    try {
+      el.replaceChildren();
+    } catch (e2) {
+    }
+  }
+  var _ttPolicy;
+  var init_helpers = __esm({
+    "src/ui/helpers.ts"() {
+      "use strict";
+    }
+  });
+
   // src/ui/pre-record.ts
   function showPickerHint(surfaceMode) {
     try {
@@ -20345,12 +20421,12 @@ var TraceBugModule = (() => {
       "style",
       "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
     );
-    bar.innerHTML = `
+    setInnerHTML(bar, `
     <span>\u{1FAE5} Click elements to blur/unblur \u2014 the blur is captured into the recording</span>
     <button data-tb-arm="undo" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Undo</button>
     <button data-tb-arm="start" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:7px 16px;font:600 13px inherit;cursor:pointer">\u25CF Start recording</button>
     <button data-tb-arm="cancel" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Cancel</button>
-  `;
+  `);
     document.body.appendChild(bar);
     bar.querySelector('[data-tb-arm="undo"]').addEventListener("click", () => {
       undoLastBlur();
@@ -20379,6 +20455,7 @@ var TraceBugModule = (() => {
     "src/ui/pre-record.ts"() {
       "use strict";
       init_blur_tool();
+      init_helpers();
       COUNTDOWN_ID = "tracebug-record-countdown";
       ARM_BAR_ID = "tracebug-record-armbar";
       PICKER_HINT_ID = "tracebug-picker-hint";
@@ -20445,11 +20522,11 @@ var TraceBugModule = (() => {
       style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
       document.head.appendChild(style);
     }
-    toast.innerHTML = `
+    setInnerHTML(toast, `
     <span style="flex:1">${message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
     <button data-tb-action="capture" style="background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</button>
     <button data-tb-action="dismiss" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px">\u2715</button>
-  `;
+  `);
     root2.appendChild(toast);
     const liveRegion = document.getElementById("tracebug-live");
     if (liveRegion) liveRegion.textContent = message;
@@ -20531,6 +20608,7 @@ var TraceBugModule = (() => {
   var init_toast = __esm({
     "src/ui/toast.ts"() {
       "use strict";
+      init_helpers();
     }
   });
 
@@ -20624,17 +20702,30 @@ var TraceBugModule = (() => {
   function isVideoOffered() {
     return !isExtensionContext2() || VIDEO_ENABLED_IN_EXTENSION;
   }
+  function _setExtMicState(included, muted) {
+    _extMicIncluded = included;
+    _extMicMuted = muted;
+  }
   function hasMicrophoneTrack() {
+    if (isExtensionContext2()) return _extMicIncluded;
     if (!_stream) return false;
     return _stream.getAudioTracks().length > 0;
   }
   function isMicrophoneMuted() {
+    if (isExtensionContext2()) return _extMicIncluded && _extMicMuted;
     if (!_stream) return false;
     const tracks = _stream.getAudioTracks();
     if (tracks.length === 0) return false;
     return tracks.some((t2) => !t2.enabled);
   }
   function setMicrophoneMuted(muted) {
+    if (isExtensionContext2()) {
+      if (!_extMicIncluded) return;
+      _extMicMuted = muted;
+      rpcCall("tb:rec:mic-mute", { muted }).catch(() => {
+      });
+      return;
+    }
     if (!_stream) return;
     _stream.getAudioTracks().forEach((t2) => {
       t2.enabled = !muted;
@@ -20773,6 +20864,7 @@ var TraceBugModule = (() => {
     _comments = Array.isArray(status.comments) ? status.comments.slice() : [];
     _mimeType = status.mimeType || "video/webm";
     _startedAt = status.startedAt || Date.now() - (status.elapsedMs || 0);
+    _setExtMicState(!!status.micIncluded, !!status.micMuted);
     return true;
   }
   async function restoreLastRecordingFromOffscreen() {
@@ -20833,6 +20925,7 @@ var TraceBugModule = (() => {
         scheduleDurationCap();
         _onStatus == null ? void 0 : _onStatus("recording");
       }
+      _setExtMicState(!!d.micIncluded, false);
       if (d.micRequested && d.micIncluded === false) {
         const root2 = document.getElementById("tracebug-root");
         if (root2) {
@@ -21140,7 +21233,7 @@ var TraceBugModule = (() => {
       return new Blob([], { type: mime });
     }
   }
-  var _active2, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, VIDEO_ENABLED_IN_EXTENSION, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
+  var _active2, _startedAt, _mimeType, _mode, _comments, _capturesTaken, _lastRecording, _onStatus, MAX_CLOUD_RECORDING_S, WARN_AT_S, FINAL_WARN_AT_S, _warnTimer, _finalWarnTimer, _autoStopTimer, _recorder, _stream, _chunks, _stopping, _onAutoStop, _paused, _pausedAt, _pausedMs, VIDEO_ENABLED_IN_EXTENSION, _extMicIncluded, _extMicMuted, _startInFlight, _autoStopWired, _onStarted, _startedWired, _reloadGuardsInstalled;
   var init_video_recorder = __esm({
     "src/video-recorder.ts"() {
       "use strict";
@@ -21171,6 +21264,8 @@ var TraceBugModule = (() => {
       _pausedAt = 0;
       _pausedMs = 0;
       VIDEO_ENABLED_IN_EXTENSION = true;
+      _extMicIncluded = false;
+      _extMicMuted = false;
       _startInFlight = null;
       _autoStopWired = false;
       _onStarted = null;
@@ -23644,7 +23739,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     const session = report.session;
     let html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
-<title>TraceBug Report \u2014 ${escapeHtml(report.title)}</title>
+<title>TraceBug Report \u2014 ${escapeHtml2(report.title)}</title>
 <style>
   @page { margin: 20mm 15mm; size: A4; }
   @media print {
@@ -23695,17 +23790,17 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
     html += `<h1>TraceBug Bug Report</h1>
 `;
-    html += `<div class="meta">${escapeHtml(report.title)} \xB7 ${new Date(report.generatedAt).toLocaleString()}</div>
+    html += `<div class="meta">${escapeHtml2(report.title)} \xB7 ${new Date(report.generatedAt).toLocaleString()}</div>
 `;
     const rcLine = formatRootCauseLine(report.rootCause);
     if (rcLine) {
       const conf = ((_a2 = report.rootCause) == null ? void 0 : _a2.confidence) || "low";
       const palette = conf === "high" ? { bg: "#fef2f2", border: "#ef4444", text: "#7f1d1d" } : conf === "medium" ? { bg: "#fff7ed", border: "#f97316", text: "#7c2d12" } : { bg: "#f3f4f6", border: "#9ca3af", text: "#374151" };
-      html += `<div style="background:${palette.bg};border-left:4px solid ${palette.border};padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:${palette.text}"><strong>\u{1F50D} Possible Cause</strong> <span style="opacity:0.7">(${conf} confidence)</span>: ${escapeHtml(report.rootCause.hint)}</div>
+      html += `<div style="background:${palette.bg};border-left:4px solid ${palette.border};padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:${palette.text}"><strong>\u{1F50D} Possible Cause</strong> <span style="opacity:0.7">(${conf} confidence)</span>: ${escapeHtml2(report.rootCause.hint)}</div>
 `;
     }
     if (report.summary) {
-      html += `<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml(report.summary)}</div>
+      html += `<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml2(report.summary)}</div>
 `;
     }
     if (report.sessionSteps && report.sessionSteps.length > 0) {
@@ -23713,7 +23808,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 <ol style="margin:6px 0 12px 22px;font-size:12px;line-height:1.7">
 `;
       for (const step of report.sessionSteps) {
-        html += `<li>${escapeHtml(step)}</li>
+        html += `<li>${escapeHtml2(step)}</li>
 `;
       }
       html += `</ol>
@@ -23722,18 +23817,18 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     html += `<h2>Environment</h2>
 `;
     html += `<div class="env-grid">
-    <div class="env-item"><div class="env-label">Browser</div><div class="env-value">${escapeHtml(env.browser)} ${escapeHtml(env.browserVersion)}</div></div>
-    <div class="env-item"><div class="env-label">OS</div><div class="env-value">${escapeHtml(env.os)}</div></div>
-    <div class="env-item"><div class="env-label">Viewport</div><div class="env-value">${escapeHtml(env.viewport)}</div></div>
+    <div class="env-item"><div class="env-label">Browser</div><div class="env-value">${escapeHtml2(env.browser)} ${escapeHtml2(env.browserVersion)}</div></div>
+    <div class="env-item"><div class="env-label">OS</div><div class="env-value">${escapeHtml2(env.os)}</div></div>
+    <div class="env-item"><div class="env-label">Viewport</div><div class="env-value">${escapeHtml2(env.viewport)}</div></div>
     <div class="env-item"><div class="env-label">Device</div><div class="env-value">${env.deviceType}</div></div>
-    <div class="env-item"><div class="env-label">Connection</div><div class="env-value">${escapeHtml(env.connectionType)}</div></div>
-    <div class="env-item"><div class="env-label">URL</div><div class="env-value" style="word-break:break-all;font-size:10px">${escapeHtml(env.url)}</div></div>
+    <div class="env-item"><div class="env-label">Connection</div><div class="env-value">${escapeHtml2(env.connectionType)}</div></div>
+    <div class="env-item"><div class="env-label">URL</div><div class="env-value" style="word-break:break-all;font-size:10px">${escapeHtml2(env.url)}</div></div>
   </div>
 `;
     html += `<h2>Steps to Reproduce</h2>
 `;
     if (report.steps) {
-      html += `<div class="steps"><pre>${escapeHtml(report.steps)}</pre></div>
+      html += `<div class="steps"><pre>${escapeHtml2(report.steps)}</pre></div>
 `;
     } else {
       html += `<p style="color:#888">No steps recorded</p>
@@ -23746,9 +23841,9 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         const severityColor = note.severity === "critical" ? "#dc2626" : note.severity === "major" ? "#d97706" : note.severity === "minor" ? "#2563eb" : "#666";
         html += `<div class="annotation">
         <span class="annotation-severity" style="color:${severityColor}">${note.severity}</span>
-        <div style="margin-top:4px">${escapeHtml(note.text)}</div>
-        ${note.expected ? `<div style="margin-top:4px"><strong>Expected:</strong> ${escapeHtml(note.expected)}</div>` : ""}
-        ${note.actual ? `<div style="margin-top:2px"><strong>Actual:</strong> ${escapeHtml(note.actual)}</div>` : ""}
+        <div style="margin-top:4px">${escapeHtml2(note.text)}</div>
+        ${note.expected ? `<div style="margin-top:4px"><strong>Expected:</strong> ${escapeHtml2(note.expected)}</div>` : ""}
+        ${note.actual ? `<div style="margin-top:2px"><strong>Actual:</strong> ${escapeHtml2(note.actual)}</div>` : ""}
       </div>
 `;
       }
@@ -23758,7 +23853,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
       for (const vt of report.voiceTranscripts) {
         html += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:14px;margin:8px 0;font-style:italic;color:#92400e">
-        <span style="font-size:16px;margin-right:6px">\u{1F3A4}</span> ${escapeHtml(vt.text)}
+        <span style="font-size:16px;margin-right:6px">\u{1F3A4}</span> ${escapeHtml2(vt.text)}
       </div>
 `;
       }
@@ -23768,8 +23863,8 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
       for (const err of report.consoleErrors) {
         html += `<div class="error-box">
-        <div class="error-msg">${escapeHtml(err.message)}</div>
-        ${err.stack ? `<div class="stack">${escapeHtml(err.stack)}</div>` : ""}
+        <div class="error-msg">${escapeHtml2(err.message)}</div>
+        ${err.stack ? `<div class="stack">${escapeHtml2(err.stack)}</div>` : ""}
       </div>
 `;
       }
@@ -23783,7 +23878,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
       for (const req of report.networkErrors) {
         const status = req.status === 0 ? "Network Error" : String(req.status);
-        html += `<tr class="error"><td>${req.method}</td><td style="word-break:break-all">${escapeHtml(req.url.slice(0, 80))}</td><td>${status}</td><td>${req.duration}ms</td></tr>
+        html += `<tr class="error"><td>${req.method}</td><td style="word-break:break-all">${escapeHtml2(req.url.slice(0, 80))}</td><td>${status}</td><td>${req.duration}ms</td></tr>
 `;
       }
       html += `</tbody></table>
@@ -23794,7 +23889,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
         for (const req of withBody) {
           const status = req.status === 0 ? "Network Error" : String(req.status);
-          html += `<div style="margin:6px 0;font-family:monospace;font-size:10px"><div style="color:#666;margin-bottom:2px">${escapeHtml(req.method)} ${escapeHtml(req.url.slice(0, 80))} \u2192 ${status}</div><div class="stack" style="background:#fff5f5">${escapeHtml(req.response || "")}</div></div>
+          html += `<div style="margin:6px 0;font-family:monospace;font-size:10px"><div style="color:#666;margin-bottom:2px">${escapeHtml2(req.method)} ${escapeHtml2(req.url.slice(0, 80))} \u2192 ${status}</div><div class="stack" style="background:#fff5f5">${escapeHtml2(req.response || "")}</div></div>
 `;
         }
       }
@@ -23810,7 +23905,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       html += `<h2>Screen Recording</h2>
 `;
       html += `<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:14px;margin:8px 0">
-      <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px">\u{1F4F9} ${escapeHtml(filename)}</div>
+      <div style="font-size:13px;color:#1e40af;font-weight:600;margin-bottom:4px">\u{1F4F9} ${escapeHtml2(filename)}</div>
       <div style="font-size:11px;color:#475569">Duration ${dur} \xB7 ${sizeMb} MB \xB7 attached as separate file</div>
     </div>
 `;
@@ -23823,7 +23918,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
           const off = `${Math.floor(cs / 60).toString().padStart(2, "0")}:${(cs % 60).toString().padStart(2, "0")}`;
           html += `<div class="timeline-item">
           <span class="timeline-time">${off}</span>
-          <span class="timeline-desc">${escapeHtml(c2.text)}</span>
+          <span class="timeline-desc">${escapeHtml2(c2.text)}</span>
         </div>
 `;
         }
@@ -23837,8 +23932,8 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
       for (const ss of report.screenshots) {
         html += `<div class="screenshot-item">
-        <div class="screenshot-label">${escapeHtml(ss.filename)} \u2014 ${escapeHtml(ss.eventContext)}</div>
-        <img src="${ss.dataUrl}" alt="${escapeHtml(ss.filename)}" />
+        <div class="screenshot-label">${escapeHtml2(ss.filename)} \u2014 ${escapeHtml2(ss.eventContext)}</div>
+        <img src="${ss.dataUrl}" alt="${escapeHtml2(ss.filename)}" />
       </div>
 `;
       }
@@ -23852,9 +23947,9 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       for (const entry of report.timeline) {
         const errClass = entry.isError ? " error" : "";
         html += `<div class="timeline-item${errClass}">
-        <span class="timeline-time">${escapeHtml(entry.elapsed)}</span>
-        <span class="timeline-type">${escapeHtml(entry.type)}</span>
-        <span class="timeline-desc">${escapeHtml(entry.description)}</span>
+        <span class="timeline-time">${escapeHtml2(entry.elapsed)}</span>
+        <span class="timeline-type">${escapeHtml2(entry.type)}</span>
+        <span class="timeline-desc">${escapeHtml2(entry.description)}</span>
       </div>
 `;
       }
@@ -23877,59 +23972,13 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     document.body.removeChild(a2);
     URL.revokeObjectURL(url);
   }
-  function escapeHtml(str) {
+  function escapeHtml2(str) {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   var init_pdf_generator = __esm({
     "src/pdf-generator.ts"() {
       "use strict";
       init_report_builder();
-    }
-  });
-
-  // src/ui/helpers.ts
-  function tbIsolationCss(root2) {
-    return `
-    ${root2} {
-      box-sizing: border-box;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 14px; font-weight: 400; line-height: 1.5; font-style: normal;
-      letter-spacing: normal; text-transform: none; text-align: left;
-      text-indent: 0; white-space: normal; word-spacing: normal; text-shadow: none;
-      -webkit-font-smoothing: antialiased;
-    }
-    ${root2} *, ${root2} *::before, ${root2} *::after { box-sizing: border-box; }
-    ${root2} button, ${root2} input, ${root2} select, ${root2} textarea {
-      font-family: inherit; font-size: inherit; letter-spacing: normal;
-      text-transform: none; margin: 0;
-    }
-    ${root2} svg { max-width: none; max-height: none; vertical-align: middle; }
-    ${root2} img { max-width: none; }
-    ${root2} a { text-decoration: none; }
-  `;
-  }
-  function parseShortcut(shortcut) {
-    const parts = (shortcut || "").toLowerCase().split("+").map((s2) => s2.trim());
-    return {
-      mod: parts.includes("ctrl") || parts.includes("control") || parts.includes("cmd") || parts.includes("meta"),
-      shift: parts.includes("shift"),
-      alt: parts.includes("alt") || parts.includes("option"),
-      key: parts[parts.length - 1] || ""
-    };
-  }
-  function matchesShortcut(e2, shortcut) {
-    if (!shortcut) return false;
-    const s2 = parseShortcut(shortcut);
-    const mod = e2.ctrlKey || e2.metaKey;
-    const key = (e2.key || "").toLowerCase();
-    return mod === s2.mod && e2.shiftKey === s2.shift && e2.altKey === s2.alt && key === s2.key;
-  }
-  function escapeHtml2(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  var init_helpers = __esm({
-    "src/ui/helpers.ts"() {
-      "use strict";
     }
   });
 
@@ -23956,7 +24005,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
     animation: tracebug-slide-down 0.2s ease;
   `;
-    _modeBanner.innerHTML = `
+    setInnerHTML(_modeBanner, `
     <div style="display:flex;align-items:center;gap:10px">
       <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
       <span style="font-weight:600">Annotate Mode</span>
@@ -23970,7 +24019,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         font-size: 12px; font-family: inherit; font-weight: 500;
       ">Exit</button>
     </div>
-  `;
+  `);
     const styleTag = document.createElement("style");
     styleTag.id = "tracebug-annotate-styles";
     styleTag.dataset.tracebug = "annotate-styles";
@@ -24333,13 +24382,13 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     const previewText = (targetEl.innerText || "").slice(0, 40);
     const selectedCount = _selectedElements.size;
     const selectorText = _computeSelector(targetEl);
-    popover.innerHTML = `
+    setInnerHTML(popover, `
     <div style="margin-bottom:14px">
       <div style="font-size:13px;font-weight:600;color:var(--tb-text-primary, #FAFAFA);margin-bottom:4px">
         ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
       </div>
-      <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml2(selectorText)}">
-        &lt;${escapeHtml2(tagText)}&gt;${previewText ? ` "${escapeHtml2(previewText)}"` : ""}
+      <div style="font-size:11px;color:var(--tb-text-muted, #666);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(selectorText)}">
+        &lt;${escapeHtml(tagText)}&gt;${previewText ? ` "${escapeHtml(previewText)}"` : ""}
       </div>
     </div>
 
@@ -24376,7 +24425,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
       <button id="tracebug-ann-save" style="background:#6366F1;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(99,102,241,0.3)">Save Annotation</button>
     </div>
-  `;
+  `);
     root2.appendChild(popover);
     _popover = popover;
     const commentEl = popover.querySelector("#tracebug-ann-comment");
@@ -24985,7 +25034,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       btn.dataset.shape = s2.shape;
       btn.title = s2.label;
       btn.setAttribute("aria-label", s2.label);
-      btn.innerHTML = s2.icon;
+      setInnerHTML(btn, s2.icon);
       btn.style.cssText = _toolBtnStyle(s2.shape === _currentShape);
       btn.addEventListener("click", (e2) => {
         e2.stopPropagation();
@@ -25024,7 +25073,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     doneBtn.dataset.tracebug = "draw-done-btn";
     doneBtn.title = "Exit draw mode (Esc)";
     doneBtn.setAttribute("aria-label", "Exit draw mode");
-    doneBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`;
+    setInnerHTML(doneBtn, `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`);
     doneBtn.style.cssText = `
     width: 24px; height: 24px; padding: 0;
     background: transparent; border: 1px solid var(--tb-border, #2a2a3e);
@@ -25252,6 +25301,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     "src/draw-mode.ts"() {
       "use strict";
       init_annotation_store();
+      init_helpers();
       _active4 = false;
       _cleanup2 = null;
       _currentShape = "rect";
@@ -27824,7 +27874,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       "color:var(--tb-text-primary,#e0e0e0)",
       "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
     ].join(";");
-    card.innerHTML = `
+    setInnerHTML(card, `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
       <div style="font-size:13px;font-weight:700">\u{1F389} That's your ${MILESTONE}th saved ticket</div>
       <button data-act="close" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0">\u2715</button>
@@ -27844,7 +27894,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     <p style="margin:8px 0 0;font-size:10.5px;color:var(--tb-text-muted,#888);line-height:1.4">
       Optional \u2014 TraceBug works fully without this, forever.
     </p>
-  `;
+  `);
     const close = () => {
       document.removeEventListener("keydown", onKey2, true);
       card.remove();
@@ -27874,11 +27924,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         body: JSON.stringify({ email, source: "milestone-5" })
       }).then((res) => {
         if (!res.ok) throw new Error(String(res.status));
-        card.innerHTML = `<div style="font-size:12.5px;line-height:1.5">\u2713 You're on the list \u2014 thanks for using TraceBug this much.</div>`;
+        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">\u2713 You're on the list \u2014 thanks for using TraceBug this much.</div>`);
         setTimeout(close, 2500);
       }).catch(() => {
-        card.innerHTML = `<div style="font-size:12px;line-height:1.5">This page blocked the request \u2014 you can sign up at
-          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`;
+        setInnerHTML(card, `<div style="font-size:12px;line-height:1.5">This page blocked the request \u2014 you can sign up at
+          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`);
         setTimeout(close, 6e3);
       });
     });
@@ -27890,6 +27940,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       "use strict";
       init_storage();
       init_cloud_endpoint();
+      init_helpers();
       DONE_KEY = "tracebug_milestone_ask_done";
       CARD_ID = "tracebug-milestone-ask";
       MILESTONE = 5;
@@ -28087,13 +28138,13 @@ ${issueSignatureSlack()}`;
   function mountReplayScrubber(container2, options) {
     var _a2, _b, _c;
     _injectStyles();
-    container2.innerHTML = "";
+    setInnerHTML(container2, "");
     const timeline = options.timeline.slice().sort((a2, b) => a2.timestamp - b.timestamp);
     if (timeline.length === 0) {
-      container2.innerHTML = `<div class="tb-rs-empty">No events recorded yet.</div>`;
+      setInnerHTML(container2, `<div class="tb-rs-empty">No events recorded yet.</div>`);
       return { seek: () => {
       }, destroy: () => {
-        container2.innerHTML = "";
+        setInnerHTML(container2, "");
       } };
     }
     const screenshots2 = (options.screenshots || []).slice().sort((a2, b) => a2.timestamp - b.timestamp);
@@ -28306,7 +28357,7 @@ ${issueSignatureSlack()}`;
         chip.style.setProperty("background", meta.color, "important");
         chip.dataset.ts = String(c2.ts);
         chip.title = `${formatElapsed2(c2.ts - startedAt)} \xB7 ${c2.label}`;
-        chip.innerHTML = meta.icon;
+        setInnerHTML(chip, meta.icon);
         chip.addEventListener("click", () => seek(c2.ts, { snap: false }));
         chipLayer.appendChild(chip);
       }
@@ -28427,7 +28478,7 @@ ${issueSignatureSlack()}`;
     if (screenshots2.length > 0) {
       hoverEl = document.createElement("div");
       hoverEl.className = "tb-rs-hover-thumb";
-      hoverEl.innerHTML = `<img alt="" /><div class="tb-rs-hover-time"></div>`;
+      setInnerHTML(hoverEl, `<img alt="" /><div class="tb-rs-hover-time"></div>`);
       hoverEl.style.display = "none";
       root2.appendChild(hoverEl);
     }
@@ -28511,7 +28562,7 @@ ${issueSignatureSlack()}`;
         track.removeEventListener("pointermove", onPointerMove);
         track.removeEventListener("pointerup", onPointerUp);
         root2.removeEventListener("keydown", onKey2);
-        container2.innerHTML = "";
+        setInnerHTML(container2, "");
       }
     };
     function pct(ts, start, range) {
@@ -28555,7 +28606,7 @@ ${issueSignatureSlack()}`;
     }
     const overlay = document.createElement("div");
     overlay.className = "tb-rs-help-overlay";
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div class="tb-rs-help-card">
       <div class="tb-rs-help-title">Keyboard shortcuts</div>
       <table class="tb-rs-help-table">
@@ -28568,7 +28619,7 @@ ${issueSignatureSlack()}`;
       </table>
       <button type="button" class="tb-rs-help-close" aria-label="Close">\xD7</button>
     </div>
-  `;
+  `);
     root2.appendChild(overlay);
     (_a2 = overlay.querySelector(".tb-rs-help-close")) == null ? void 0 : _a2.addEventListener("click", () => overlay.remove());
     overlay.addEventListener("click", (e2) => {
@@ -28805,6 +28856,7 @@ ${issueSignatureSlack()}`;
   var init_replay_scrubber = __esm({
     "src/ui/replay-scrubber.ts"() {
       "use strict";
+      init_helpers();
       STYLE_ID = "tracebug-replay-scrubber-styles";
       MARKER_COLORS = {
         click: "#6366F1",
@@ -30290,7 +30342,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     if (isExtensionMode()) {
       const key = getBoundShortcut();
       if (!key) return "";
-      return `Tip: <kbd>${escapeHtml2(key)}</kbd> to quick-capture anytime`;
+      return `Tip: <kbd>${escapeHtml(key)}</kbd> to quick-capture anytime`;
     }
     return `Tip: <kbd>Ctrl+Shift+B</kbd> to quick-capture anytime`;
   }
@@ -30578,7 +30630,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     const actionsCount = (_n = (_m = (_l = data.report) == null ? void 0 : _l.sessionSteps) == null ? void 0 : _m.length) != null ? _n : 0;
     const annotationsCount = ((_q = (_p = (_o = data.currentSession) == null ? void 0 : _o.annotations) == null ? void 0 : _p.length) != null ? _q : 0) + _getElementAnnotationCount();
     const redactionLine = data.report ? formatRedactionSummary(summarizeRedactions(data.report)) : null;
-    modal.innerHTML = `
+    setInnerHTML(modal, `
     <!-- Header -->
     <div class="tb-qb-header">
       <span class="tb-qb-logo">\u26A1</span>
@@ -30608,7 +30660,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
                would fire Discard. -->
           <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft \xB7 Discard</button>` : ""}
         </div>
-        <input id="tb-qb-title" type="text" value="${escapeHtml2(data.title)}" class="tb-qb-input" />
+        <input id="tb-qb-title" type="text" value="${escapeHtml(data.title)}" class="tb-qb-input" />
 
         ${video ? `
           <div class="tb-qb-preview">
@@ -30630,12 +30682,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         ${!video && primary ? `
           <div class="tb-qb-preview">
             <img id="tb-qb-primary-img" src="${primary.dataUrl}" alt="Bug screenshot" class="tb-qb-img" />
-            <button data-action="annotate-primary" data-ss-id="${escapeHtml2(primary.id)}" class="tb-qb-primary-edit" title="Annotate this screenshot" aria-label="Annotate screenshot">
+            <button data-action="annotate-primary" data-ss-id="${escapeHtml(primary.id)}" class="tb-qb-primary-edit" title="Annotate this screenshot" aria-label="Annotate screenshot">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
               <span>Annotate</span>
             </button>
           </div>
-          <div id="tb-qb-primary-meta" class="tb-qb-imgmeta">${escapeHtml2(primary.filename)} \xB7 ${primary.width}x${primary.height}</div>
+          <div id="tb-qb-primary-meta" class="tb-qb-imgmeta">${escapeHtml(primary.filename)} \xB7 ${primary.width}x${primary.height}</div>
         ` : !video && !primary ? `
           <div class="tb-qb-preview tb-qb-preview-empty">
             <span>No screenshots \u2014 add one only if you want to</span>
@@ -30680,12 +30732,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <div class="tb-qb-thumbs">
             ${screenshots2.map((ss, i2) => `
               <div class="tb-qb-thumb-wrap">
-                <button data-thumb-index="${i2}" title="${escapeHtml2(ss.filename)} \u2014 click to annotate" class="tb-qb-thumb">
+                <button data-thumb-index="${i2}" title="${escapeHtml(ss.filename)} \u2014 click to annotate" class="tb-qb-thumb">
                   <img src="${ss.dataUrl}" alt="Step ${i2 + 1}" />
                   <span class="tb-qb-thumb-num">${i2 + 1}</span>
                   <span class="tb-qb-thumb-edit">\u270E</span>
                 </button>
-                <button data-delete-screenshot="${escapeHtml2(ss.id)}" class="tb-qb-thumb-del" title="Delete screenshot ${i2 + 1}" aria-label="Delete screenshot ${i2 + 1}">\u2715</button>
+                <button data-delete-screenshot="${escapeHtml(ss.id)}" class="tb-qb-thumb-del" title="Delete screenshot ${i2 + 1}" aria-label="Delete screenshot ${i2 + 1}">\u2715</button>
               </div>
             `).join("")}
           </div>
@@ -30697,7 +30749,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       const seconds = Math.floor(c2.offsetMs / 1e3);
       return `<button data-video-seek="${seconds}" class="tb-qb-comment">
                 <span class="tb-qb-comment-ts">${_formatVideoTime(c2.offsetMs)}</span>
-                <span class="tb-qb-comment-tx">${escapeHtml2(c2.text)}</span>
+                <span class="tb-qb-comment-tx">${escapeHtml(c2.text)}</span>
               </button>`;
     }).join("")}
           </div>
@@ -30705,7 +30757,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
 
         <details class="tb-qb-desc-wrap" open>
           <summary class="tb-qb-desc-summary">Description \u2014 editable, included in exports</summary>
-          <textarea id="tb-qb-desc" class="tb-qb-textarea">${escapeHtml2(data.description)}</textarea>
+          <textarea id="tb-qb-desc" class="tb-qb-textarea">${escapeHtml(data.description)}</textarea>
         </details>
       </div>
 
@@ -30740,7 +30792,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button data-action="save-ticket" class="tb-qb-btn tb-qb-btn-save${((_s = data.currentSession) == null ? void 0 : _s.saved) ? " tb-qb-btn-saved" : ""}" title="Save this ticket to your Saved Tickets list">
           ${((_t = data.currentSession) == null ? void 0 : _t.saved) ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Ticket`}
         </button>
-        <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml2(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
+        <button data-action="${_githubConfigured() ? "open-github" : "github"}" class="tb-qb-btn tb-qb-btn-primary" title="${_githubRepo ? `Open a prefilled GitHub issue (${escapeHtml(_githubRepo)})` : _githubConfigured() ? "Send a GitHub issue using your configured GitHub integration" : "Copy a ready-to-paste GitHub issue"}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           ${_githubButtonLabel()}
         </button>
@@ -30774,7 +30826,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         </div>
       </div>
       <div class="tb-qb-tip">
-        <span>${redactionLine ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture \u2014 they never enter the report. See docs \u2192 Privacy for the full pattern list.">\u{1F6E1} ${escapeHtml2(redactionLine)}</span>` : quickCaptureTipHtml()}</span>
+        <span>${redactionLine ? `<span class="tb-qb-privacy" title="Tokens, passwords, and secret-looking values are masked automatically at capture \u2014 they never enter the report. See docs \u2192 Privacy for the full pattern list.">\u{1F6E1} ${escapeHtml(redactionLine)}</span>` : quickCaptureTipHtml()}</span>
         <span class="tb-qb-tip-right">
           <span class="tb-qb-fb">Enough info to reproduce?
             <a href="${_feedbackUrl("other", "Capture quality \u{1F44D} \u2014 the ticket had enough to reproduce the bug.")}" target="_blank" rel="noopener" title="Yes \u2014 send a quick thumbs up">\u{1F44D}</a>
@@ -30798,7 +30850,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         <button class="tb-qb-help-close" data-action="help-close">Close</button>
       </div>
     </div>
-  `;
+  `);
     overlay.appendChild(modal);
     root2.appendChild(overlay);
     _injectStyles2();
@@ -30924,7 +30976,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     (_v = modal.querySelector('[data-action="theme-toggle"]')) == null ? void 0 : _v.addEventListener("click", () => {
       _cycleTheme();
       const btn = modal.querySelector('[data-action="theme-toggle"]');
-      if (btn) btn.innerHTML = _themeIcon();
+      if (btn) setInnerHTML(btn, _themeIcon());
     });
     (_w = modal.querySelector('[data-action="set-priority"]')) == null ? void 0 : _w.addEventListener("change", (e2) => {
       var _a3, _b2;
@@ -30933,7 +30985,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       if (sid) setSessionPriority(sid, val);
       if (data.report) data.report.priority = val;
       const infoPanel = modal.querySelector('[data-panel="info"]');
-      if (infoPanel) infoPanel.innerHTML = _buildInfoTab(data.report, (_b2 = data.currentSession) != null ? _b2 : null);
+      if (infoPanel) setInnerHTML(infoPanel, _buildInfoTab(data.report, (_b2 = data.currentSession) != null ? _b2 : null));
     });
     const helpEl = modal.querySelector("#tb-qb-help");
     const toggleHelp = (force) => {
@@ -30975,7 +31027,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
         e2.preventDefault();
         _cycleTheme();
         const btn = modal.querySelector('[data-action="theme-toggle"]');
-        if (btn) btn.innerHTML = _themeIcon();
+        if (btn) setInnerHTML(btn, _themeIcon());
         return;
       }
       const n2 = parseInt(e2.key, 10);
@@ -31124,7 +31176,7 @@ ${description}`;
           return;
         }
         _clearDraft();
-        saveTicketBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`;
+        setInnerHTML(saveTicketBtn, `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Saved`);
         saveTicketBtn.classList.add("tb-qb-btn-saved");
         saveTicketBtn.disabled = true;
         showToast(withoutShots ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it under Saved tickets on the toolbar" : "\u2713 Ticket saved \u2014 find it under Saved tickets on the toolbar", root2);
@@ -31212,7 +31264,7 @@ ${report.steps}` : userDesc : void 0,
       const prevLabel = (_a3 = exportBtn == null ? void 0 : exportBtn.innerHTML) != null ? _a3 : "";
       if (exportBtn) {
         exportBtn.disabled = true;
-        exportBtn.innerHTML = `${_ic("fileCode")} Bundling\u2026`;
+        setInnerHTML(exportBtn, `${_ic("fileCode")} Bundling\u2026`);
       }
       showToast("Bundling replay\u2026", root2);
       try {
@@ -31246,7 +31298,7 @@ ${report.steps}` : userDesc : void 0,
       } finally {
         if (exportBtn && exportBtn.isConnected) {
           exportBtn.disabled = false;
-          exportBtn.innerHTML = prevLabel;
+          setInnerHTML(exportBtn, prevLabel);
         }
       }
     });
@@ -31313,7 +31365,7 @@ ${report.steps}` : userDesc : void 0,
       } finally {
         if (zipBtn && zipBtn.isConnected) {
           zipBtn.disabled = false;
-          zipBtn.innerHTML = zipPrevLabel;
+          setInnerHTML(zipBtn, zipPrevLabel);
         }
       }
     });
@@ -31735,7 +31787,7 @@ ${report.steps}` : userDesc : void 0,
           return bytes.buffer;
         }).catch(() => null) : Promise.resolve(null);
         host2.style.background = "#0B0B10";
-        host2.innerHTML = "";
+        setInnerHTML(host2, "");
         const iframe = document.createElement("iframe");
         iframe.src = playerUrl;
         iframe.title = "TraceBug recording";
@@ -31780,13 +31832,13 @@ ${report.steps}` : userDesc : void 0,
         _blockedShown = true;
         if (mountIframePlayer(preview)) return;
         preview.style.background = "var(--tb-bg-secondary)";
-        preview.innerHTML = `
+        setInnerHTML(preview, `
         <div style="padding:26px 18px;text-align:center;color:var(--tb-text-secondary,#9aa0aa);font-size:12px;line-height:1.65">
           <div style="font-size:24px;margin-bottom:8px">\u{1F3AC}</div>
           <div style="color:var(--tb-text-primary,#e0e0e0);font-weight:600;margin-bottom:6px">Inline preview blocked by this page</div>
           This site's security policy (CSP) blocks embedded video. Your ${_formatVideoTime(video.durationMs)} recording is fine \u2014
           use <strong>Download .webm</strong> below or <strong>Export replay (.html)</strong> to watch it.
-        </div>`;
+        </div>`);
       };
       videoEl.addEventListener("error", showBlockedNotice);
       setTimeout(() => {
@@ -31948,7 +32000,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function _kvRow(label, value, icon) {
     if (!value || !value.trim()) return "";
     const iconHtml = icon ? `<span class="tb-qb-kv-icon">${icon}</span>` : "";
-    return `<div class="tb-qb-kv"><span class="tb-qb-kv-k">${escapeHtml2(label)}</span><span class="tb-qb-kv-v">${iconHtml}${escapeHtml2(value)}</span></div>`;
+    return `<div class="tb-qb-kv"><span class="tb-qb-kv-k">${escapeHtml(label)}</span><span class="tb-qb-kv-v">${iconHtml}${escapeHtml(value)}</span></div>`;
   }
   function _ic(name) {
     const paths = _LU[name] || _LU.globe;
@@ -32165,12 +32217,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const rows = feed.map((e2) => {
       const hay = `${e2.message} ${e2.detail || ""} ${e2.stack || ""}`.toLowerCase();
       const isErr = e2.cat === "network-error" || e2.level === "error";
-      const stackHtml = e2.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml2(e2.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
-      return `<div class="tb-qb-feed-row tb-qb-feed-${e2.cat}${isErr ? " tb-qb-feed-err" : ""}${e2.level ? " tb-qb-feed-lvl-" + e2.level : ""}" data-cat="${e2.cat}" data-level="${e2.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e2.timestamp}" data-search="${escapeHtml2(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
+      const stackHtml = e2.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml(e2.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
+      return `<div class="tb-qb-feed-row tb-qb-feed-${e2.cat}${isErr ? " tb-qb-feed-err" : ""}${e2.level ? " tb-qb-feed-lvl-" + e2.level : ""}" data-cat="${e2.cat}" data-level="${e2.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e2.timestamp}" data-search="${escapeHtml(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
       <span class="tb-qb-feed-time">${_formatFeedElapsed(e2.elapsedMs)}</span>
       <span class="tb-qb-feed-icon" aria-hidden="true">${e2.icon}</span>
       <span class="tb-qb-feed-body">
-        <span class="tb-qb-feed-msg">${escapeHtml2(e2.message)}</span>
+        <span class="tb-qb-feed-msg">${escapeHtml(e2.message)}</span>
         ${stackHtml}
       </span>
     </div>`;
@@ -32249,20 +32301,20 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const leftPct = (n2.timestamp - minTs) / span * 100;
       const widthPct = Math.max(0.5, (n2.duration || 0) / span * 100);
       const haystack = `${n2.method} ${n2.url} ${status} ${n2._dom}`.toLowerCase();
-      const snippet = n2.response ? `<div class="tb-qb-net-snippet"><pre>${escapeHtml2(n2.response.slice(0, 240))}</pre></div>` : "";
-      return `<details class="tb-qb-net-row" data-type="${n2._t}" data-err="${isErr ? "1" : "0"}" data-search="${escapeHtml2(haystack)}">
+      const snippet = n2.response ? `<div class="tb-qb-net-snippet"><pre>${escapeHtml(n2.response.slice(0, 240))}</pre></div>` : "";
+      return `<details class="tb-qb-net-row" data-type="${n2._t}" data-err="${isErr ? "1" : "0"}" data-search="${escapeHtml(haystack)}">
       <summary class="tb-qb-net-summary">
         <span class="tb-qb-net-c-n">${i2 + 1}</span>
-        <span class="tb-qb-net-c-name" title="${escapeHtml2(n2.url)}">${escapeHtml2(n2._name)}</span>
-        <span class="tb-qb-net-c-meth">${escapeHtml2(n2.method || "\u2014")}</span>
+        <span class="tb-qb-net-c-name" title="${escapeHtml(n2.url)}">${escapeHtml(n2._name)}</span>
+        <span class="tb-qb-net-c-meth">${escapeHtml(n2.method || "\u2014")}</span>
         <span class="tb-qb-net-c-stat ${statusClass}">${status}</span>
-        <span class="tb-qb-net-c-dom" title="${escapeHtml2(n2._dom)}">${escapeHtml2(n2._dom)}</span>
+        <span class="tb-qb-net-c-dom" title="${escapeHtml(n2._dom)}">${escapeHtml(n2._dom)}</span>
         <span class="tb-qb-net-c-type">${n2._t}</span>
         <span class="tb-qb-net-c-time">${n2.duration || 0} ms</span>
         <span class="tb-qb-net-c-wf"><span class="tb-qb-net-wf-bar ${statusClass}" style="left:${leftPct.toFixed(1)}%;width:${widthPct.toFixed(1)}%"></span></span>
       </summary>
       <div class="tb-qb-net-detail">
-        <div class="tb-qb-net-detail-url">${escapeHtml2(n2.url)}</div>
+        <div class="tb-qb-net-detail-url">${escapeHtml(n2.url)}</div>
         ${snippet}
       </div>
     </details>`;
@@ -32305,29 +32357,29 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (steps.length === 0) {
         return `<div class="tb-qb-empty">No actions recorded yet \u2014 click around the app to populate this</div>`;
       }
-      return `<ol class="tb-qb-steps">${steps.map((s2) => `<li>${escapeHtml2(s2)}</li>`).join("")}</ol>`;
+      return `<ol class="tb-qb-steps">${steps.map((s2) => `<li>${escapeHtml(s2)}</li>`).join("")}</ol>`;
     }
     return `<div class="tb-qb-chips">${chips.map(_renderActionChip).join("")}</div>`;
   }
   function _renderActionChip(chip) {
     const elPreview = chip.element ? _renderElementPreview(chip.element) : "";
-    const detail = chip.detail ? `<span class="tb-qb-chip-detail${chip.isError ? " tb-qb-chip-detail-err" : ""}">${escapeHtml2(chip.detail)}</span>` : "";
-    const target = chip.target ? `<span class="tb-qb-chip-target"><span class="tb-qb-chip-target-name">${escapeHtml2(`\u201C${chip.target}\u201D`)}</span>${chip.nounLabel ? ` <span class="tb-qb-chip-target-noun">${escapeHtml2(chip.nounLabel)}</span>` : ""}</span>` : "";
+    const detail = chip.detail ? `<span class="tb-qb-chip-detail${chip.isError ? " tb-qb-chip-detail-err" : ""}">${escapeHtml(chip.detail)}</span>` : "";
+    const target = chip.target ? `<span class="tb-qb-chip-target"><span class="tb-qb-chip-target-name">${escapeHtml(`\u201C${chip.target}\u201D`)}</span>${chip.nounLabel ? ` <span class="tb-qb-chip-target-noun">${escapeHtml(chip.nounLabel)}</span>` : ""}</span>` : "";
     const frust = chip.frustration ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click \u2014 multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click \u2014 no visible response within 1.5s" : "Form abandoned \u2014 filled but never submitted"}">${chip.frustration === "rage" ? "\u26A1" : chip.frustration === "dead" ? "\u2715" : "\u21A9"}</span>` : "";
     const errClass = chip.isError || chip.frustration ? "tb-qb-chip-err" : "";
     return `<div class="tb-qb-chip ${errClass}">
     ${frust}
-    <span class="tb-qb-chip-verb tb-qb-chip-verb-${chip.kind}">${escapeHtml2(chip.verb)}</span>
+    <span class="tb-qb-chip-verb tb-qb-chip-verb-${chip.kind}">${escapeHtml(chip.verb)}</span>
     <span class="tb-qb-chip-body">${target}${elPreview}${detail}</span>
   </div>`;
   }
   function _renderElementPreview(el) {
     const attrsHtml = el.attrs.map((a2) => {
-      if (a2.value === "") return `<span class="tb-qb-el-attr-name">${escapeHtml2(a2.name)}</span>`;
-      return `<span class="tb-qb-el-attr-name">${escapeHtml2(a2.name)}</span>=<span class="tb-qb-el-attr-val">"${escapeHtml2(a2.value)}"</span>`;
+      if (a2.value === "") return `<span class="tb-qb-el-attr-name">${escapeHtml(a2.name)}</span>`;
+      return `<span class="tb-qb-el-attr-name">${escapeHtml(a2.name)}</span>=<span class="tb-qb-el-attr-val">"${escapeHtml(a2.value)}"</span>`;
     }).join(" ");
     const more = el.moreCount > 0 ? ` <span class="tb-qb-el-more">+${el.moreCount} more</span>` : "";
-    return `<span class="tb-qb-el">&lt;<span class="tb-qb-el-tag">${escapeHtml2(el.tag)}</span>${attrsHtml ? " " : ""}${attrsHtml}${more}&gt;</span>`;
+    return `<span class="tb-qb-el">&lt;<span class="tb-qb-el-tag">${escapeHtml(el.tag)}</span>${attrsHtml ? " " : ""}${attrsHtml}${more}&gt;</span>`;
   }
   function _buildAITab(report) {
     const rootCause = report == null ? void 0 : report.rootCause;
@@ -32336,14 +32388,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const deterministic = rootCause ? `
     <div class="tb-qb-ai-card">
       <div class="tb-qb-ai-card-head">Pattern-based hint <span class="tb-qb-ai-conf tb-qb-ai-conf-${rootCause.confidence}">${rootCause.confidence}</span></div>
-      <div class="tb-qb-ai-card-body">${escapeHtml2(rootCause.hint)}</div>
+      <div class="tb-qb-ai-card-body">${escapeHtml(rootCause.hint)}</div>
     </div>
   ` : "";
-    const providerLine = hasKey ? `${escapeHtml2(PROVIDER_LABELS[aiConfig.provider])} \xB7 ${escapeHtml2(aiConfig.model)}` : "";
+    const providerLine = hasKey ? `${escapeHtml(PROVIDER_LABELS[aiConfig.provider])} \xB7 ${escapeHtml(aiConfig.model)}` : "";
     const llmBlock = hasKey ? `
     <div class="tb-qb-ai-card" data-ai-llm-card>
       <div class="tb-qb-ai-card-head">AI Debugger <span class="tb-qb-ai-provider">${providerLine}</span></div>
-      <div class="tb-qb-ai-card-body" data-ai-output><em>Runs on your own key \u2014 the report is scrubbed of secret shapes, then sent directly to ${escapeHtml2(PROVIDER_LABELS[aiConfig.provider])}. TraceBug never sees it.</em></div>
+      <div class="tb-qb-ai-card-body" data-ai-output><em>Runs on your own key \u2014 the report is scrubbed of secret shapes, then sent directly to ${escapeHtml(PROVIDER_LABELS[aiConfig.provider])}. TraceBug never sees it.</em></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
         <button class="tb-qb-btn tb-qb-btn-accent" data-action="ai-generate">\u2728 Generate AI analysis</button>
         <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Change key</button>
@@ -32362,7 +32414,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   }
   function _rerenderAITab(modal, data) {
     const panel = modal.querySelector('[data-panel="ai"]');
-    if (panel) panel.innerHTML = _buildAITab(data.report);
+    if (panel) setInnerHTML(panel, _buildAITab(data.report));
   }
   async function _runAIAnalysis(root2, modal, data) {
     var _a2, _b;
@@ -32379,23 +32431,23 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       genBtn.disabled = true;
       genBtn.textContent = "Analyzing\u2026";
     }
-    out.innerHTML = `<div class="tb-qb-ai-loading">${_ic("sparkles")} Running analysis on your key\u2026 this stays between your browser and the provider.</div>`;
+    setInnerHTML(out, `<div class="tb-qb-ai-loading">${_ic("sparkles")} Running analysis on your key\u2026 this stays between your browser and the provider.</div>`);
     try {
       const result2 = await runLLMAnalysis(report);
-      const meta = ((_a2 = result2.usage) == null ? void 0 : _a2.outputTokens) ? `<div class="tb-qb-ai-meta">${escapeHtml2(result2.model)} \xB7 ${(_b = result2.usage.inputTokens) != null ? _b : "?"}\u2192${result2.usage.outputTokens} tokens</div>` : `<div class="tb-qb-ai-meta">${escapeHtml2(result2.model)}</div>`;
-      out.innerHTML = `<div class="tb-qb-ai-md">${_renderMarkdownLite(result2.text)}</div>${meta}`;
+      const meta = ((_a2 = result2.usage) == null ? void 0 : _a2.outputTokens) ? `<div class="tb-qb-ai-meta">${escapeHtml(result2.model)} \xB7 ${(_b = result2.usage.inputTokens) != null ? _b : "?"}\u2192${result2.usage.outputTokens} tokens</div>` : `<div class="tb-qb-ai-meta">${escapeHtml(result2.model)}</div>`;
+      setInnerHTML(out, `<div class="tb-qb-ai-md">${_renderMarkdownLite(result2.text)}</div>${meta}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Analysis failed.";
-      out.innerHTML = `<div class="tb-qb-ai-error">${_ic("alert")} ${escapeHtml2(msg)}</div>`;
+      setInnerHTML(out, `<div class="tb-qb-ai-error">${_ic("alert")} ${escapeHtml(msg)}</div>`);
     } finally {
       if (genBtn) {
         genBtn.disabled = false;
-        genBtn.innerHTML = `${_ic("sparkles")} Regenerate`;
+        setInnerHTML(genBtn, `${_ic("sparkles")} Regenerate`);
       }
     }
   }
   function _renderMarkdownLite(md) {
-    const esc = (s2) => escapeHtml2(s2);
+    const esc = (s2) => escapeHtml(s2);
     const lines = md.replace(/\r\n/g, "\n").split("\n");
     const html = [];
     let inList = false, inCode = false;
@@ -32450,24 +32502,24 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     return html.join("");
   }
   function _inlineMd(s2) {
-    return escapeHtml2(s2).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    return escapeHtml(s2).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   }
   function showSettingsPointerModal(root2, title, body) {
     var _a2, _b;
     const overlay = document.createElement("div");
     overlay.id = "tb-ext-settings-pointer";
     overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
-        <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml2(title)}</div>
-        <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml2(body)}</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml(title)}</div>
+        <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml(body)}</div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.06)">
         <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
         <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
       </div>
-    </div>`;
+    </div>`);
     const host2 = document.getElementById(MODAL_ID) || document.body;
     host2.appendChild(overlay);
     const close = () => overlay.remove();
@@ -32501,7 +32553,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const overlay = document.createElement("div");
     overlay.id = "tb-ai-config";
     overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger \u2014 bring your own key</div>
@@ -32510,14 +32562,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <div style="padding:16px 18px;display:flex;flex-direction:column;gap:12px">
         <label style="font-size:12px;color:#A1A1AA">Provider
           <select data-ai-provider style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px">
-            ${Object.keys(PROVIDER_LABELS).map((p) => `<option value="${p}" ${p === provider ? "selected" : ""}>${escapeHtml2(PROVIDER_LABELS[p])}</option>`).join("")}
+            ${Object.keys(PROVIDER_LABELS).map((p) => `<option value="${p}" ${p === provider ? "selected" : ""}>${escapeHtml(PROVIDER_LABELS[p])}</option>`).join("")}
           </select>
         </label>
         <label data-ai-key-wrap style="font-size:12px;color:#A1A1AA">API key
-          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-\u2026" value="${escapeHtml2((existing == null ? void 0 : existing.apiKey) || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px" />
+          <input data-ai-key type="password" autocomplete="off" spellcheck="false" placeholder="sk-\u2026" value="${escapeHtml((existing == null ? void 0 : existing.apiKey) || "")}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px" />
         </label>
         <label style="font-size:12px;color:#A1A1AA">Model
-          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml2((existing == null ? void 0 : existing.model) || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
+          <input data-ai-model type="text" spellcheck="false" value="${escapeHtml((existing == null ? void 0 : existing.model) || DEFAULT_MODELS[provider])}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px;font-family:ui-monospace,monospace" />
           <span data-ai-model-hint style="display:block;margin-top:5px;font-size:11px;color:#64748B"></span>
         </label>
       </div>
@@ -32526,7 +32578,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
         <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
       </div>
-    </div>`;
+    </div>`);
     const host2 = document.getElementById(MODAL_ID) || document.body;
     host2.appendChild(overlay);
     const providerEl = overlay.querySelector("[data-ai-provider]");
@@ -32592,7 +32644,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
     const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
     const lbl = "font-size:12px;color:#A1A1AA";
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations \u2014 bring your own token</div>
@@ -32602,23 +32654,23 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         <div>
           <div style="font-size:12px;font-weight:600;color:#FAFAFA;margin-bottom:6px">GitHub</div>
           <label style="${lbl}">Personal access token (repo scope)
-            <input data-int-gh-token type="password" autocomplete="off" spellcheck="false" placeholder="ghp_\u2026" value="${escapeHtml2(((_b = cfg.github) == null ? void 0 : _b.token) || "")}" style="${fld}" /></label>
+            <input data-int-gh-token type="password" autocomplete="off" spellcheck="false" placeholder="ghp_\u2026" value="${escapeHtml(((_b = cfg.github) == null ? void 0 : _b.token) || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Repository (owner/repo)
-            <input data-int-gh-repo type="text" spellcheck="false" placeholder="acme/app" value="${escapeHtml2(((_c = cfg.github) == null ? void 0 : _c.repo) || "")}" style="${fld}" /></label>
+            <input data-int-gh-repo type="text" spellcheck="false" placeholder="acme/app" value="${escapeHtml(((_c = cfg.github) == null ? void 0 : _c.repo) || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Labels (comma-separated, optional)
-            <input data-int-gh-labels type="text" spellcheck="false" placeholder="bug, tracebug" value="${escapeHtml2((((_d = cfg.github) == null ? void 0 : _d.labels) || []).join(", "))}" style="${fld}" /></label>
+            <input data-int-gh-labels type="text" spellcheck="false" placeholder="bug, tracebug" value="${escapeHtml((((_d = cfg.github) == null ? void 0 : _d.labels) || []).join(", "))}" style="${fld}" /></label>
         </div>
         <div>
           <div style="font-size:12px;font-weight:600;color:#FAFAFA;margin-bottom:6px">Linear</div>
           <label style="${lbl}">Personal API key
-            <input data-int-ln-key type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_\u2026" value="${escapeHtml2(((_e = cfg.linear) == null ? void 0 : _e.apiKey) || "")}" style="${fld}" /></label>
+            <input data-int-ln-key type="password" autocomplete="off" spellcheck="false" placeholder="lin_api_\u2026" value="${escapeHtml(((_e = cfg.linear) == null ? void 0 : _e.apiKey) || "")}" style="${fld}" /></label>
           <label style="${lbl};display:block;margin-top:8px">Team ID
-            <input data-int-ln-team type="text" spellcheck="false" placeholder="team UUID" value="${escapeHtml2(((_f = cfg.linear) == null ? void 0 : _f.teamId) || "")}" style="${fld}" /></label>
+            <input data-int-ln-team type="text" spellcheck="false" placeholder="team UUID" value="${escapeHtml(((_f = cfg.linear) == null ? void 0 : _f.teamId) || "")}" style="${fld}" /></label>
         </div>
         <div>
           <div style="font-size:12px;font-weight:600;color:#FAFAFA;margin-bottom:6px">Slack</div>
           <label style="${lbl}">Incoming webhook URL
-            <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/\u2026" value="${escapeHtml2(((_g = cfg.slack) == null ? void 0 : _g.webhookUrl) || "")}" style="${fld}" /></label>
+            <input data-int-sl-hook type="password" autocomplete="off" spellcheck="false" placeholder="https://hooks.slack.com/services/\u2026" value="${escapeHtml(((_g = cfg.slack) == null ? void 0 : _g.webhookUrl) || "")}" style="${fld}" /></label>
         </div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
@@ -32626,7 +32678,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
         <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
       </div>
-    </div>`;
+    </div>`);
     const host2 = document.getElementById(MODAL_ID) || document.body;
     host2.appendChild(overlay);
     const val = (sel) => {
@@ -32704,10 +32756,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div class="tb-qb-sec-head">Comments (${sessAnn.length})</div>
     ${sessAnn.map((a2) => `
       <div class="tb-qb-note tb-qb-note-${a2.severity}">
-        <div class="tb-qb-note-sev">${escapeHtml2(a2.severity)}</div>
-        <div class="tb-qb-note-text">${escapeHtml2(a2.text || "")}</div>
-        ${a2.expected ? `<div class="tb-qb-note-line"><strong>Expected:</strong> ${escapeHtml2(a2.expected)}</div>` : ""}
-        ${a2.actual ? `<div class="tb-qb-note-line"><strong>Actual:</strong> ${escapeHtml2(a2.actual)}</div>` : ""}
+        <div class="tb-qb-note-sev">${escapeHtml(a2.severity)}</div>
+        <div class="tb-qb-note-text">${escapeHtml(a2.text || "")}</div>
+        ${a2.expected ? `<div class="tb-qb-note-line"><strong>Expected:</strong> ${escapeHtml(a2.expected)}</div>` : ""}
+        ${a2.actual ? `<div class="tb-qb-note-line"><strong>Actual:</strong> ${escapeHtml(a2.actual)}</div>` : ""}
       </div>
     `).join("")}
   ` : "";
@@ -32715,13 +32767,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div class="tb-qb-sec-head">Element markup (${els.length})</div>
     ${els.map((e2) => `
       <div class="tb-qb-note tb-qb-note-${e2.severity}">
-        <div class="tb-qb-note-sev">${escapeHtml2(e2.intent)} \xB7 ${escapeHtml2(e2.severity)}</div>
-        <div class="tb-qb-note-text">${escapeHtml2(e2.comment || "")}</div>
-        <div class="tb-qb-note-line"><code>${escapeHtml2(e2.selector)}</code> \u2014 ${escapeHtml2((e2.innerText || "").slice(0, 60))}</div>
+        <div class="tb-qb-note-sev">${escapeHtml(e2.intent)} \xB7 ${escapeHtml(e2.severity)}</div>
+        <div class="tb-qb-note-text">${escapeHtml(e2.comment || "")}</div>
+        <div class="tb-qb-note-line"><code>${escapeHtml(e2.selector)}</code> \u2014 ${escapeHtml((e2.innerText || "").slice(0, 60))}</div>
         ${e2.styles ? `
         <details class="tb-qb-note-styles">
-          <summary>${escapeHtml2(_styleSummaryLine(e2.styles))}</summary>
-          <pre class="tb-qb-note-styles-pre">${escapeHtml2(_styleDetails(e2.styles))}</pre>
+          <summary>${escapeHtml(_styleSummaryLine(e2.styles))}</summary>
+          <pre class="tb-qb-note-styles-pre">${escapeHtml(_styleDetails(e2.styles))}</pre>
         </details>` : ""}
       </div>
     `).join("")}
@@ -32730,8 +32782,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div class="tb-qb-sec-head">Draw regions (${regions.length})</div>
     ${regions.map((r2) => `
       <div class="tb-qb-note">
-        <div class="tb-qb-note-sev">${escapeHtml2(r2.shape)}</div>
-        <div class="tb-qb-note-text">${escapeHtml2(r2.comment || "")}</div>
+        <div class="tb-qb-note-sev">${escapeHtml(r2.shape)}</div>
+        <div class="tb-qb-note-text">${escapeHtml(r2.comment || "")}</div>
       </div>
     `).join("")}
   ` : "";
@@ -33176,7 +33228,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     color: #FAFAFA;
     overflow: hidden;
   `;
-    card.innerHTML = `
+    setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
@@ -33226,7 +33278,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif;
       ">\u2715</button>
     </div>
-  `;
+  `);
     overlay.appendChild(card);
     const host2 = document.getElementById(MODAL_ID) || document.body;
     host2.appendChild(overlay);
@@ -33256,7 +33308,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (btn) {
           btn.textContent = "\u2713 Copied";
           setTimeout(() => {
-            btn.innerHTML = `${_ic("copy")} Copy again`;
+            setInnerHTML(btn, `${_ic("copy")} Copy again`);
           }, 1100);
         }
       } else if (action === "close" || target === overlay) close();
@@ -33278,7 +33330,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (ok) return;
       const state = document.querySelector("#tb-mcp-handoff [data-copy-state]");
       if (state) {
-        state.innerHTML = `Your browser blocked the auto-copy \u2014 click <strong>Copy prompt again</strong> below, then paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.`;
+        setInnerHTML(state, `Your browser blocked the auto-copy \u2014 click <strong>Copy prompt again</strong> below, then paste it into <strong>Claude Code</strong> or <strong>Cursor</strong> opened in the codebase that owns the bug.`);
       }
     });
     const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
@@ -33325,7 +33377,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     color: #FAFAFA;
     overflow: hidden;
   `;
-    card.innerHTML = `
+    setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <span style="display:inline-flex;line-height:1">${_ic("sparkles")}</span>
@@ -33384,7 +33436,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif;
       ">\u2715</button>
     </div>
-  `;
+  `);
     overlay.appendChild(card);
     const host2 = document.getElementById(MODAL_ID) || document.body;
     host2.appendChild(overlay);
@@ -33408,7 +33460,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (btn) {
           btn.textContent = "\u2713 Copied";
           setTimeout(() => {
-            btn.innerHTML = `${_ic("copy")} Copy prompt again`;
+            setInnerHTML(btn, `${_ic("copy")} Copy prompt again`);
           }, 1100);
         }
       } else if (action === "copy-setup") {
@@ -33417,7 +33469,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (btn) {
           btn.textContent = "\u2713";
           setTimeout(() => {
-            btn.innerHTML = _ic("copy");
+            setInnerHTML(btn, _ic("copy"));
           }, 1100);
         }
       } else if (action === "close" || target === overlay) close();
@@ -33611,7 +33663,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       document.head.appendChild(style);
     }
     const micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
-    hud.innerHTML = `
+    setInnerHTML(hud, `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
       <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
     </span>
@@ -33645,7 +33697,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <button class="tb-hud-btn" data-tb-hud="blur" title="Blur sensitive elements \u2014 click to blur, click again to unblur (${eventsOnly ? "the element's text is masked in the DOM replay" : "captured in the recording"})" aria-label="Blur sensitive elements">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>
     </button>
-  `;
+  `);
     root2.appendChild(hud);
     _hud = hud;
     const timerEl = hud.querySelector('[data-tb-hud="timer"]');
@@ -33723,12 +33775,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         resumeVideoRecording();
         pauseBtn.dataset.active = "";
         pauseBtn.title = "Pause";
-        pauseBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
+        setInnerHTML(pauseBtn, `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`);
       } else {
         pauseVideoRecording();
         pauseBtn.dataset.active = "1";
         pauseBtn.title = "Resume";
-        pauseBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 4 7 20 19 12 7 4"/></svg>`;
+        setInnerHTML(pauseBtn, `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="7 4 7 20 19 12 7 4"/></svg>`);
       }
     });
     micBtn == null ? void 0 : micBtn.addEventListener("click", () => {
@@ -33737,7 +33789,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       setMicrophoneMuted(nextMuted);
       micBtn.dataset.muted = nextMuted ? "1" : "";
       micBtn.title = nextMuted ? "Microphone muted \u2014 click to unmute" : "Mute microphone";
-      micBtn.innerHTML = nextMuted ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+      setInnerHTML(micBtn, nextMuted ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`);
     });
     annotateBtn == null ? void 0 : annotateBtn.addEventListener("click", () => {
       const drawRoot = _root;
@@ -33834,6 +33886,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_video_recorder();
       init_draw_mode();
       init_blur_tool();
+      init_helpers();
       init_screenshot();
       HUD_ID = "tracebug-recording-hud";
       _root = null;
@@ -33887,7 +33940,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     dragHandle.addEventListener("mouseleave", () => {
       dragHandle.style.opacity = "0.55";
     });
-    dragHandle.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`;
+    setInnerHTML(dragHandle, `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>`);
     toolbar.appendChild(dragHandle);
     toolbar.appendChild(_createToolbarBtn(
       "Screenshot (Ctrl+Shift+S) \u2014 new ticket",
@@ -33973,7 +34026,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     try {
       if (!_isTracking && getActiveSessionId() && getActiveCaptureMode() === "events") {
         _isTracking = true;
-        trackBtn.innerHTML = _trackIconSvg(true);
+        setInnerHTML(trackBtn, _trackIconSvg(true));
         trackBtn.classList.add("tb-active");
         trackBtn.style.color = "var(--tb-success, #22c55e)";
         trackBtn.title = "Stop tracking & file ticket";
@@ -34121,7 +34174,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     btn.dataset.tracebug = "toolbar-btn";
     btn.title = title;
     btn.setAttribute("aria-label", title);
-    btn.innerHTML = iconHtml;
+    setInnerHTML(btn, iconHtml);
     btn.style.cssText = `
     width: 34px; height: 34px; border-radius: var(--tb-radius-md, 8px); border: none;
     background: transparent; color: var(--tb-btn-text, #aaa); cursor: pointer;
@@ -34159,7 +34212,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (!_isTracking) return;
     _isTracking = false;
     if (_trackBtn) {
-      _trackBtn.innerHTML = _trackIconSvg(false);
+      setInnerHTML(_trackBtn, _trackIconSvg(false));
       _trackBtn.classList.remove("tb-active");
       _trackBtn.style.color = "var(--tb-btn-text, #aaa)";
       _trackBtn.title = "Track session (events only, no video)";
@@ -34168,7 +34221,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   async function _toggleSessionTracking(root2, btn, showToast3) {
     if (_isTracking) {
       _isTracking = false;
-      btn.innerHTML = _trackIconSvg(false);
+      setInnerHTML(btn, _trackIconSvg(false));
       btn.classList.remove("tb-active");
       btn.style.color = "var(--tb-btn-text, #aaa)";
       btn.title = "Track session (events only, no video)";
@@ -34194,7 +34247,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     } catch (err) {
       console.warn("[TraceBug] Session start hook failed:", err);
     }
-    btn.innerHTML = _trackIconSvg(true);
+    setInnerHTML(btn, _trackIconSvg(true));
     btn.classList.add("tb-active");
     btn.style.color = "var(--tb-success, #22c55e)";
     btn.title = "Stop tracking & file ticket";
@@ -34211,7 +34264,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     showToast3("Stopping recording...", root2);
     await stopVideoRecording();
     hideRecordingHUD();
-    btn.innerHTML = iconFn(false);
+    setInnerHTML(btn, iconFn(false));
     btn.classList.remove("tb-active");
     btn.style.color = "var(--tb-btn-text, #aaa)";
     try {
@@ -34274,7 +34327,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       showToast3("Recording cancelled", root2);
       return;
     }
-    btn.innerHTML = _recordIconSvg(true);
+    setInnerHTML(btn, _recordIconSvg(true));
     btn.classList.add("tb-active");
     btn.style.color = "var(--tb-error, #ef4444)";
     showRecordingHUD(root2, {
@@ -34317,7 +34370,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
       const segBase = "flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 6px;border-radius:9px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all 0.12s;border:1px solid var(--tb-border, #2a2a3e);background:rgba(127,127,140,0.14);color:var(--tb-text-secondary, #9aa0aa)";
       const showSurfaceChoice = !isExtensionMode();
-      pop.innerHTML = `
+      setInnerHTML(pop, `
       <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
       ${showSurfaceChoice ? `
       <div style="display:flex;gap:7px;margin-bottom:10px">
@@ -34344,7 +34397,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         <button data-tb-pre="cancel" style="flex:1;background:transparent;color:var(--tb-text-muted, #888);border:1px solid var(--tb-border, #2a2a3e);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-family:inherit">Cancel</button>
         <button data-tb-pre="start" style="flex:1.6;background:var(--tb-error, #ef4444);color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit">\u25CF Start recording</button>
       </div>
-    `;
+    `);
       root2.appendChild(pop);
       let surface = showSurfaceChoice ? "tab" : "desktop";
       const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]');
@@ -34471,7 +34524,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (sessions.length === 0) {
       const empty = document.createElement("div");
       empty.style.cssText = "text-align:center;padding:16px 0;color:var(--tb-text-muted,#666);font-size:11px;line-height:1.6";
-      empty.innerHTML = "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.";
+      setInnerHTML(empty, "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.");
       pop.appendChild(empty);
     } else {
       const list = document.createElement("div");
@@ -34975,6 +35028,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     root2.id = "tracebug-root";
     root2.setAttribute("role", "complementary");
     root2.setAttribute("aria-label", "TraceBug QA tools");
+    if (isExtensionContext2()) {
+      try {
+        window.sessionStorage.setItem(EXTENSION_OWNER_KEY, "1");
+      } catch (e2) {
+      }
+    }
     const panel = document.createElement("div");
     panel.id = PANEL_ID2;
     panel.style.right = "-480px";
@@ -35030,13 +35089,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       clearAnnotationBadges();
       cleanupOnboarding();
       document.removeEventListener("keydown", keyHandler);
+      if (isExtensionContext2()) {
+        try {
+          window.sessionStorage.removeItem(EXTENSION_OWNER_KEY);
+        } catch (e2) {
+        }
+      }
     };
   }
   function renderPanel(panel) {
     const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
     const errorSessions = sessions.filter((s2) => s2.errorMessage);
     const allSessions = sessions;
-    panel.innerHTML = `
+    setInnerHTML(panel, `
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -35053,7 +35118,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     </div>
     <style>@keyframes bt-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }</style>
     <div id="bt-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
-  `;
+  `);
     const content = panel.querySelector("#bt-content");
     panel.querySelector("#bt-refresh").addEventListener("click", () => renderPanel(panel));
     panel.querySelector("#bt-clear").addEventListener("click", () => {
@@ -35089,19 +35154,19 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (_onToggleRecording) _onToggleRecording();
     });
     if (allSessions.length === 0) {
-      content.innerHTML = `
+      setInnerHTML(content, `
       <div style="text-align:center;padding:60px 20px;color:var(--tb-text-muted, #555)">
         <div style="font-size:36px;margin-bottom:12px">\u{1F50D}</div>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif)">No sessions recorded yet.</div>
         <div style="font-size:11px;margin-top:8px;color:var(--tb-text-muted, #444)">Interact with the app to start capturing events.</div>
       </div>
-    `;
+    `);
       return;
     }
     const filterBar = document.createElement("div");
     filterBar.dataset.tracebug = "filter-bar";
     filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
-    filterBar.innerHTML = `
+    setInnerHTML(filterBar, `
     <input id="bt-search" type="text" placeholder="Search sessions..." style="
       flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
       border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 10px;
@@ -35116,14 +35181,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <option value="errors">Has errors</option>
       <option value="healthy">Healthy</option>
     </select>
-  `;
-    content.innerHTML = "";
+  `);
+    setInnerHTML(content, "");
     content.appendChild(filterBar);
     const sessionsContainer = document.createElement("div");
     sessionsContainer.id = "bt-sessions-list";
     content.appendChild(sessionsContainer);
     function renderFilteredSessions(filter, search) {
-      sessionsContainer.innerHTML = "";
+      setInnerHTML(sessionsContainer, "");
       let filtered = allSessions;
       if (filter === "errors") filtered = filtered.filter((s2) => s2.errorMessage);
       if (filter === "healthy") filtered = filtered.filter((s2) => !s2.errorMessage);
@@ -35147,7 +35212,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         });
       }
       if (filtered.length === 0) {
-        sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
+        setInnerHTML(sessionsContainer, `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`);
         return;
       }
       for (const session of filtered) {
@@ -35184,7 +35249,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     const pages = [...new Set(session.events.map((e2) => e2.page))];
     const sessionName = pages.length > 0 ? _pageName(pages[0]) + " Session" : "Session";
-    card.innerHTML = `
+    setInnerHTML(card, `
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center">
         ${dot}
@@ -35199,7 +35264,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <button data-tracebug="view-ticket" style="${smallBtnStyle("#6366F1")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
       <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
     </div>
-  `;
+  `);
     (_a2 = card.querySelector('[data-tracebug="view-ticket"]')) == null ? void 0 : _a2.addEventListener("click", (ev) => {
       ev.stopPropagation();
       const root2 = document.getElementById("tracebug-root");
@@ -35639,7 +35704,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <button id="bt-delete" style="${smallBtnStyle("#ef4444")}font-size:11px;width:100%;padding:10px">\u{1F5D1} Delete This Session</button>
   </div>`;
     html += `</div>`;
-    content.innerHTML = html;
+    setInnerHTML(content, html);
     const tabs = content.querySelectorAll(".bt-tab");
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -35806,7 +35871,7 @@ ${ticket.description}`;
   function showNoteDialog(sessionId, panel, _session) {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
       <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:12px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4DD} Add Tester Note</div>
       <div style="margin-bottom:10px">
@@ -35835,7 +35900,7 @@ ${ticket.description}`;
         <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save Note</button>
       </div>
     </div>
-  `;
+  `);
     const panelEl = panel.querySelector("#bt-content") || panel;
     panelEl.appendChild(overlay);
     overlay.querySelector("#bt-note-cancel").addEventListener("click", () => overlay.remove());
@@ -35864,7 +35929,7 @@ ${ticket.description}`;
     overlay.id = "bt-voice-overlay";
     overlay.dataset.tracebug = "voice-dialog";
     overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
       <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F3A4} Voice Bug Description</div>
       <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
@@ -35883,7 +35948,7 @@ ${ticket.description}`;
         <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save as Note</button>
       </div>
     </div>
-  `;
+  `);
     const panelEl = panel.querySelector("#bt-content") || panel;
     panelEl.appendChild(overlay);
     const transcriptEl = overlay.querySelector("#bt-voice-transcript");
@@ -36349,7 +36414,7 @@ ${"-".repeat(40)}
     const drawRegions = getDrawRegions();
     const screenshotsList = getScreenshots();
     const total = elAnnotations.length + drawRegions.length + screenshotsList.length;
-    panel.innerHTML = `
+    setInnerHTML(panel, `
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
@@ -36365,7 +36430,7 @@ ${"-".repeat(40)}
       </div>
     </div>
     <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
-  `;
+  `);
     const content = panel.querySelector("#bt-ann-list-content");
     if (total > 0) {
       (_a2 = panel.querySelector("#bt-ann-screenshot")) == null ? void 0 : _a2.addEventListener("click", async () => {
@@ -36425,7 +36490,7 @@ ${"-".repeat(40)}
       });
     }
     if (total === 0) {
-      content.innerHTML = `
+      setInnerHTML(content, `
       <div style="text-align:center;padding:48px 24px;color:var(--tb-text-muted, #666)">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
           <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
@@ -36440,7 +36505,7 @@ ${"-".repeat(40)}
           <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace;margin-left:4px">Ctrl+Shift+D</span>
         </div>
       </div>
-    `;
+    `);
       return;
     }
     let html = "";
@@ -36498,7 +36563,7 @@ ${"-".repeat(40)}
       </div>`;
       }
     }
-    content.innerHTML = html;
+    setInnerHTML(content, html);
     content.querySelectorAll(".bt-ss-download").forEach((btn) => {
       btn.addEventListener("click", (e2) => {
         e2.stopPropagation();
@@ -36679,7 +36744,7 @@ ${"-".repeat(40)}
       </button>
     </div>
   `;
-    overlay.innerHTML = `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`;
+    setInnerHTML(overlay, `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`);
     root2.appendChild(overlay);
     const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap");
     const img = new Image();
@@ -36964,7 +37029,7 @@ ${"-".repeat(40)}
   function annActionBtnStyle() {
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
-  var PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
+  var EXTENSION_OWNER_KEY, PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
   var init_dashboard = __esm({
     "src/dashboard.ts"() {
       "use strict";
@@ -36985,6 +37050,8 @@ ${"-".repeat(40)}
       init_onboarding();
       init_quick_bug();
       init_helpers();
+      init_video_recorder();
+      EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
       PANEL_ID2 = "tracebug-dashboard-panel";
       _isRecording = true;
       _onToggleRecording = null;
@@ -70867,7 +70934,7 @@ First element: \`${exampleSnippet}\``,
     const errorTitle = options.message || "Unknown error";
     const truncatedTitle = errorTitle.length > 120 ? errorTitle.slice(0, 117) + "\u2026" : errorTitle;
     const sourceBlockId = `tb-lbc-src-${Date.now()}`;
-    overlay.innerHTML = `
+    setInnerHTML(overlay, `
     <div class="tb-lbc-card">
       <div class="tb-lbc-head">
         <span class="tb-lbc-icon">\u{1F4A5}</span>
@@ -70887,7 +70954,7 @@ First element: \`${exampleSnippet}\``,
         <button class="tb-lbc-btn tb-lbc-ghost" data-action="dismiss">Dismiss</button>
       </div>
     </div>
-  `;
+  `);
     root2.appendChild(overlay);
     _currentRoot = overlay;
     overlay.querySelectorAll("[data-action]").forEach((btn) => {
@@ -70932,10 +70999,10 @@ First element: \`${exampleSnippet}\``,
       fetchSourceWindow(parsed.fileUrl, parsed.line, parsed.column).then((html) => {
         if (_currentRoot !== overlay) return;
         const block = overlay.querySelector(`#${sourceBlockId}`);
-        if (block) block.innerHTML = html;
+        if (block) setInnerHTML(block, html);
       }).catch(() => {
         const block = overlay.querySelector(`#${sourceBlockId}`);
-        if (block) block.innerHTML = `<span class="tb-lbc-no-source">Source not available (cross-origin or 404)</span>`;
+        if (block) setInnerHTML(block, `<span class="tb-lbc-no-source">Source not available (cross-origin or 404)</span>`);
       });
     }
   }
@@ -71136,6 +71203,7 @@ First element: \`${exampleSnippet}\``,
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
+      init_helpers();
       CARD_ID3 = "tracebug-live-bug-card";
       STYLE_ID3 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
@@ -71274,7 +71342,7 @@ First element: \`${exampleSnippet}\``,
     const panel = document.createElement("div");
     panel.id = PANEL_ID3;
     panel.dataset.tracebug = "issues-panel";
-    panel.innerHTML = _shellHtml(state);
+    setInnerHTML(panel, _shellHtml(state));
     overlay.appendChild(panel);
     root2.appendChild(overlay);
     _wireShellHandlers(overlay, panel);
@@ -71319,7 +71387,7 @@ First element: \`${exampleSnippet}\``,
     });
     panel.querySelector('[data-tb-issues="rescan"]').addEventListener("click", async () => {
       const body = panel.querySelector('[data-tb-issues="body"]');
-      body.innerHTML = _loadingHtml();
+      setInnerHTML(body, _loadingHtml());
       const sub = panel.querySelector('[data-tb-issues="subtitle"]');
       sub.textContent = "Scanning\u2026";
       await scan();
@@ -71337,20 +71405,20 @@ First element: \`${exampleSnippet}\``,
     const subtitle = panel.querySelector('[data-tb-issues="subtitle"]');
     if (issues.length === 0) {
       subtitle.textContent = "No issues found";
-      body.innerHTML = `
+      setInnerHTML(body, `
       <div style="padding:48px 20px;text-align:center;color:var(--tb-text-muted, #888);font-size:13px">
         <div style="font-size:32px;margin-bottom:8px">\u2713</div>
         Clean scan \u2014 no issues detected on this page.
         <div style="font-size:11px;margin-top:6px;opacity:0.7">Includes a11y \xB7 broken images \xB7 mixed content \xB7 JS errors \xB7 failed/slow API calls</div>
       </div>
-    `;
+    `);
       return;
     }
     const counts = {};
     for (const i2 of issues) counts[i2.severity] = (counts[i2.severity] || 0) + 1;
     const summary = ["critical", "serious", "moderate", "minor"].filter((s2) => counts[s2]).map((s2) => `${counts[s2]} ${s2}`).join(" \xB7 ");
     subtitle.textContent = `${issues.length} issue${issues.length === 1 ? "" : "s"} \xB7 ${summary}`;
-    body.innerHTML = issues.map((issue) => _issueRowHtml(issue)).join("");
+    setInnerHTML(body, issues.map((issue) => _issueRowHtml(issue)).join(""));
     body.querySelectorAll("[data-tb-issue-id]").forEach((row) => {
       var _a2, _b, _c;
       const id = row.dataset.tbIssueId;
@@ -71375,7 +71443,7 @@ First element: \`${exampleSnippet}\``,
          </summary>
          <ol style="margin:6px 0 0 20px;padding:0;color:var(--tb-text-secondary, #aaa);line-height:1.5">
            ${issue.contextSamples.map((s2) => `
-             <li>${new Date(s2.timestamp).toLocaleTimeString()}${s2.precedingAction ? ` \xB7 ${escapeHtml2(s2.precedingAction)}` : ""}</li>
+             <li>${new Date(s2.timestamp).toLocaleTimeString()}${s2.precedingAction ? ` \xB7 ${escapeHtml(s2.precedingAction)}` : ""}</li>
            `).join("")}
          </ol>
        </details>` : "";
@@ -71385,9 +71453,9 @@ First element: \`${exampleSnippet}\``,
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
           <span class="tb-detector-tag">${detectorLabel}</span>
-          <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml2(issue.title)}</span>
+          <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml(issue.title)}</span>
         </div>
-        <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml2(desc)}</div>
+        <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml(desc)}</div>
         ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #6366F1);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
         ${samplesHtml}
       </div>
@@ -72234,6 +72302,7 @@ First element: \`${exampleSnippet}\``,
   init_draw_mode();
 
   // src/inspect-mode.ts
+  init_helpers();
   init_style_evidence();
   init_annotation_store();
   init_element_annotate();
@@ -72253,13 +72322,13 @@ First element: \`${exampleSnippet}\``,
     const layer = document.createElement("div");
     layer.id = LAYER_ID;
     layer.setAttribute("style", "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
-    layer.innerHTML = `
+    setInnerHTML(layer, `
     <div data-tb-i="margin" style="position:fixed;background:rgba(246,178,107,0.25);pointer-events:none;display:none"></div>
     <div data-tb-i="padding" style="position:fixed;background:rgba(147,196,125,0.30);pointer-events:none;display:none"></div>
     <div data-tb-i="content" style="position:fixed;background:rgba(111,168,220,0.30);outline:1.5px solid #6366F1;pointer-events:none;display:none"></div>
     <div data-tb-i="tip" style="position:fixed;display:none;max-width:340px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:8px;padding:8px 10px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none;white-space:pre-wrap;word-break:break-word"></div>
     <div data-tb-i="hint" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:7px 16px;font:12px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none">\u{1F3AF} Inspect \u2014 click an element to attach its style evidence \xB7 Esc to exit</div>
-  `;
+  `);
     document.body.appendChild(layer);
     _root2 = layer;
     document.body.style.cursor = "crosshair";
@@ -73346,6 +73415,7 @@ ${summary}`;
           this._endActiveSession();
         } catch (e2) {
         }
+        void announceCaptureStopped();
         if (blockedMessage && !(options == null ? void 0 : options.onStatus)) this._reportCaptureBlocked(blockedMessage);
         return false;
       }
@@ -73378,6 +73448,7 @@ ${summary}`;
       } catch (err) {
         console.warn("[TraceBug] stop RPC failed, opening ticket modal anyway:", err);
       }
+      void announceCaptureStopped();
       hideRecordingHUD();
       try {
         this._endActiveSession();
@@ -73883,6 +73954,7 @@ ${summary}`;
      */
     _handleRecordingStarted() {
       var _a2;
+      void announceCaptureStarted(Date.now());
       if (!((_a2 = this.config) == null ? void 0 : _a2.enableDashboard)) return;
       this._remountRecordingHud();
       this._attachConsoleCollectors();
@@ -73909,6 +73981,7 @@ ${summary}`;
      */
     async _handleAutoStop(recording2) {
       var _a2;
+      void announceCaptureStopped();
       hideRecordingHUD();
       const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
       if (recordBtn) {
@@ -74029,6 +74102,7 @@ ${summary}`;
       clearScreenshots();
       clearVoiceTranscripts();
       abortVideoRecording();
+      void announceCaptureStopped();
       clearVideoRecording();
       this._eventsCaptureStartedAt = null;
       clearStashedDomReplay();

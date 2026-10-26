@@ -182,6 +182,52 @@ describe('orphaned tabs — ping, repair, or say so', () => {
     expect(mock.sentOfType('TB_CAPTURE_NOW').length).toBe(0);
   });
 
+  it('ends a tracked capture — and clears the REC badge — when a navigation lands on a host-UI site', async () => {
+    // Found by hand-testing: start a capture, then navigate the same tab to a
+    // site that runs its own TraceBug. injectSDK() correctly defers, but
+    // nothing on a deferred page ever pings tb:capture:status — the only
+    // other way a capture ends — so the capture (and its REC badge) used to
+    // stay stuck on that tab forever. injectSDK()'s catch path must end it.
+    mock.setTabLive(TAB, true, false);
+    await ask(mock, { type: 'TB_START_RECORDING', tabId: TAB });
+    await settle(400);
+
+    const captureTabsOf = () =>
+      (mock.sessionStore[SESSION_KEY] as { captureTabs?: Array<[number, unknown]> } | undefined)
+        ?.captureTabs ?? [];
+    const lastBadgeFor = (tabId: number) =>
+      [...mock.badge].reverse().find((b) => b.tabId === tabId)?.text;
+
+    expect(captureTabsOf().some(([t]) => t === TAB)).toBe(true);
+    expect(lastBadgeFor(TAB)).toBe('REC');
+
+    // The navigation itself: a REAL cross-origin navigation always kills the
+    // previous content script first (alive: false) — onUpdated's own ping
+    // guard (added for the double-fire bug below) depends on that to tell a
+    // genuine navigation apart from a spurious repeat "complete" event on the
+    // same document. Once re-bridged, the NEW page reports a host TraceBug UI.
+    mock.setTabLive(TAB, false, true);
+    await navigate(mock, TAB);
+    await settle(400);
+
+    expect(captureTabsOf().some(([t]) => t === TAB)).toBe(false);
+    expect(lastBadgeFor(TAB)).not.toBe('REC');
+  });
+
+  it('GET_STATE reports capturing:true only while a capture is tracked on that tab', async () => {
+    // The popup reads this to avoid silently clobbering a running capture —
+    // starting a new one tears down the active session first with no
+    // confirmation, and the popup otherwise looks identical either way.
+    mock.setTabLive(TAB, true, false);
+    const before = await ask(mock, { type: 'GET_STATE', tabId: TAB });
+    expect(before?.capturing).toBe(false);
+
+    await ask(mock, { type: 'TB_START_RECORDING', tabId: TAB });
+    await settle(400);
+    const during = await ask(mock, { type: 'GET_STATE', tabId: TAB });
+    expect(during?.capturing).toBe(true);
+  });
+
   it('answers with an error the popup can map when the repair fails', async () => {
     mock.setTabLive(TAB, true, false);
     await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
@@ -215,6 +261,111 @@ describe('orphaned tabs — ping, repair, or say so', () => {
     expect(String(res?.error)).toMatch(/Receiving end does not exist|Could not establish connection/i);
     // And it did attempt the repair rather than giving up on the ping alone.
     expect(mock.injections.some((i) => i.files.includes('content-script.js'))).toBe(true);
+  });
+});
+
+describe('a worker restart does not mistake our own surviving injection for a host TraceBug', () => {
+  // injectedTabs is in-memory only and does NOT survive a service-worker
+  // restart (MV3's ~30s idle timeout, an update) — even though the tab's
+  // content script and page-world SDK do, since they are tied to the page,
+  // not the worker. Found by hand-testing: open the popup, wait, click
+  // Capture Bug — "This site runs its own TraceBug" on an ordinary page that
+  // had been working a moment before. handleComboAction used to trust
+  // injectedTabs.has(tabId) alone, so a worker restart made it treat every
+  // already-injected tab as brand new, and injectSDK()'s host-UI check
+  // (correct for an ACTUALLY fresh tab) misread our own leftover
+  // #tracebug-root as a host page's.
+  it('pings before deciding, and repairs rather than refusing', async () => {
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [TAB] } },
+    });
+    loadBackground(mock);
+    await settle(20);
+
+    // The tab's content script AND page-world SDK both survived; only the
+    // worker's memory of having injected it did not.
+    mock.setTabLive(TAB, true, true);
+    const res = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
+    await settle(400);
+
+    expect(res).toEqual({ ok: true });
+    expect(res?.error).toBeUndefined();
+    // Must not re-inject the page world over a live one — that is how a
+    // second toolbar mounts on top of the first.
+    expect(mock.injections.some((i) => i.world === 'MAIN')).toBe(false);
+    expect(mock.sentOfType('TB_CAPTURE_NOW').length).toBe(1);
+  });
+
+  it('does not misdiagnose a host UI when the capture click itself wakes the worker', async () => {
+    // The sharper version of the bug above, and the one that kept
+    // reproducing after the activeTabs fix: deliberately NO settle() between
+    // loadBackground and the action. A real MV3 worker can be woken BY the
+    // very message that triggers handleComboAction, in which case
+    // _hydrated's own chrome.storage.session read is still in flight —
+    // reading activeTabs one tick too early is exactly as wrong as never
+    // reading it, and handleComboAction used to do exactly that.
+    const mock = createChromeMock({
+      session: { [SESSION_KEY]: { activeTabs: [TAB] } },
+    });
+    loadBackground(mock);
+    // No `await settle(...)` here — see above.
+    mock.setTabLive(TAB, true, true);
+    const res = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
+    await settle(400);
+
+    expect(res).toEqual({ ok: true });
+    expect(res?.error).toBeUndefined();
+  });
+
+  it('a repeated onUpdated "complete" on the SAME document does not re-run the fresh-injection host-UI check', async () => {
+    // Found by hand-testing, on real sites (stitch.withgoogle.com, a Keka HR
+    // portal) that are heavy SPAs: Chrome can fire tabs.onUpdated "complete"
+    // more than once for the SAME document — a client-side route change, a
+    // slow lazy-loaded resource — with no real reload in between. The old
+    // handler treated every "complete" as a genuine navigation: unconditional
+    // `injectedTabs.delete(tabId)`, then injectSDK()'s FRESH-injection path,
+    // whose host-UI check assumes any TraceBug DOM it finds belongs to a host
+    // page. On the second, spurious "complete" that assumption is wrong — the
+    // #tracebug-root it finds is OUR OWN surviving mount from the first,
+    // genuine load. Because injectSDK()'s failure path also clears
+    // activeTabs, this poisoned the tab for every later click, too, not just
+    // the one firing the duplicate event — matching the user's report that it
+    // kept failing on completely unrelated sites afterward.
+    const mock = createChromeMock();
+    loadBackground(mock);
+    await settle(20);
+
+    mock.setTabLive(TAB, true, false);
+    const first = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
+    await settle(400);
+    expect(first).toEqual({ ok: true });
+
+    // A second "complete" for the SAME document: the content script is
+    // untouched (a real navigation would have destroyed it), so Chrome did
+    // not actually reload anything here.
+    await navigate(mock, TAB);
+    await settle(400);
+
+    const second = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
+    await settle(400);
+
+    expect(second?.error).not.toBe('tracebug-host-ui-present');
+    expect(second).toEqual({ ok: true });
+  });
+
+  it('still defers for real when the tab genuinely has never been touched', async () => {
+    // The control case: activeTabs empty (never seen this tab at all), tab
+    // reports pageSdk:true — this really can only be a host page's own
+    // TraceBug, and must still be refused.
+    const mock = createChromeMock({ session: { [SESSION_KEY]: { activeTabs: [] } } });
+    loadBackground(mock);
+    await settle(20);
+
+    mock.setTabLive(TAB, true, true);
+    const res = await ask(mock, { type: 'TB_CAPTURE_NOW', tabId: TAB });
+    await settle(400);
+
+    expect(res?.error).toBe('tracebug-host-ui-present');
   });
 });
 

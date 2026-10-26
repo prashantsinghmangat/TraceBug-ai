@@ -8,13 +8,11 @@
 // e2e/ext-video-recording.e2e.mjs — and did not reproduce; the quick-bug.ts
 // stash-then-refresh rework (commit dda5ac8) looks to have already fixed the
 // race the doc's hypothesis described. Bug 4 (HUD mic-mute wired to a stream
-// the extension page doesn't own) is still real and deliberately NOT fixed
-// here — the HUD already disables that one button via
-// `isVideoOffered() && hasMicrophoneTrack()`, and `hasMicrophoneTrack()` is
-// permanently false for the extension's offscreen transport (no page-side
-// `_stream`), so the button renders disabled with an honest tooltip instead
-// of a silent dead click. See tests/phase6-edges.test.ts and the "no mic
-// control" describe block below for the parts of that gating still pinned.
+// the extension page doesn't own) was fixed properly in 1.11.3 via an
+// offscreen RPC (`tb:rec:mic-mute` + `micIncluded`/`micMuted` on
+// `tb:rec:status`/`tb:rec:started`) rather than left disabled — see the "no
+// mic control" describe block below for what's still pinned there, and
+// docs/audit/capture-flow-1.11.3.md for the fix.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -134,17 +132,24 @@ describe('video and mic controls render in extension mode again', () => {
     expect(tb.slice(i, i + 700)).toContain('tracebug-toolbar-record-btn');
   });
 
-  it('the HUD mic-mute button stays disabled in extension mode — Bug 4 is not fixed, only hidden safely', () => {
-    // hasMicrophoneTrack() reads page-side `_stream`, which the extension
-    // transport never sets (the stream lives in the offscreen document, not
-    // the page). So this condition is permanently false for the extension,
-    // and the button renders disabled with an honest tooltip rather than a
-    // dead click. See src/ui/recording-hud.ts's micAvailable computation.
+  it('the HUD mic-mute button works in extension mode — Bug 4 is fixed via RPC (1.11.3)', () => {
+    // hasMicrophoneTrack()/isMicrophoneMuted()/setMicrophoneMuted() used to
+    // read page-side `_stream` unconditionally, which the extension transport
+    // never sets (the stream lives in the offscreen document, not the page) —
+    // permanently false, a dead button. They now branch on isExtensionContext()
+    // first and mirror state forwarded from offscreen.js over tb:rec:started /
+    // tb:rec:status, and setMicrophoneMuted forwards the mute to offscreen.js
+    // over a new tb:rec:mic-mute RPC. See src/ui/recording-hud.ts's
+    // micAvailable computation, which is unchanged and now reflects real state.
     const hud = src('ui/recording-hud.ts');
     expect(hud).toContain('isVideoOffered() && hasMicrophoneTrack()');
     const vr = src('video-recorder.ts');
     const i = vr.indexOf('export function hasMicrophoneTrack()');
+    expect(vr.slice(i, i + 200)).toContain('if (isExtensionContext()) return _extMicIncluded;');
     expect(vr.slice(i, i + 200)).toContain('if (!_stream) return false;');
+    expect(vr).toContain('rpcCall("tb:rec:mic-mute", { muted })');
+    const off = ext('offscreen.js');
+    expect(off).toContain('case "tb:rec:mic-mute":');
   });
 
   it('the preflight surface choice stays gated — current-tab still needs tabCapture', () => {

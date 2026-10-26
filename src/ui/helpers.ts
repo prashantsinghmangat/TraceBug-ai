@@ -178,6 +178,76 @@ export function tabBtnStyle(active: boolean): string {
     : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
 }
 
+// ── Trusted Types ─────────────────────────────────────────────────────────
+// A host page can enforce `require-trusted-types-for 'script'` CSP (several
+// Google properties do, confirmed on stitch.withgoogle.com's own response
+// headers — no backend here, just a live check). That gates EVERY HTML-
+// producing sink: innerHTML/outerHTML/insertAdjacentHTML, but also
+// DOMParser.parseFromString and Range.createContextualFragment — there is no
+// string-to-DOM API Trusted Types leaves open. The only way through is to
+// become a source of TrustedHTML ourselves, via our own policy.
+//
+// Cached: the real browser API only allows creating a given policy name once
+// per page (a second createPolicy() call with the same name throws), and
+// nothing here ever needs a second one.
+let _ttPolicy: TrustedTypePolicy | null | undefined;
+
+function getTrustedTypesPolicy(): TrustedTypePolicy | null {
+  if (_ttPolicy !== undefined) return _ttPolicy;
+  try {
+    const tt = (window as Window & { trustedTypes?: { createPolicy: (name: string, rules: { createHTML: (s: string) => string }) => TrustedTypePolicy } }).trustedTypes;
+    _ttPolicy = tt ? tt.createPolicy("tracebug-html", { createHTML: (s: string) => s }) : null;
+  } catch {
+    // The site's CSP also restricts WHICH policy names are allowed (a
+    // `trusted-types <allow-list>` directive not naming ours) — confirmed
+    // this throws rather than silently failing. Nothing left to try.
+    _ttPolicy = null;
+  }
+  return _ttPolicy;
+}
+
+interface TrustedTypePolicy {
+  createHTML(input: string): string;
+}
+
+/**
+ * Assign HTML the way `el.innerHTML = html` does, but survive a host page
+ * that enforces Trusted Types CSP — there, a raw innerHTML assignment throws
+ * synchronously ("This document requires 'TrustedHTML' assignment"), partway
+ * through mounting the dashboard, leaving it half-built or entirely absent.
+ *
+ * Three tiers, each tried only if the one before it isn't available:
+ *   1. The direct assignment — works on the overwhelming majority of pages.
+ *   2. Our own Trusted Types policy, turning `html` into a value the CSP
+ *      accepts. Works on any page enforcing Trusted Types without also
+ *      restricting which policy names may be created (the common case).
+ *   3. Give up on THIS element's markup rather than let the exception
+ *      propagate and abort every statement after it in the caller — a page
+ *      that both enforces Trusted Types AND locks the policy name allow-list
+ *      has closed every string-to-HTML path there is; rendering nothing here
+ *      is the least-bad outcome short of rewriting that surface in plain DOM
+ *      APIs.
+ */
+export function setInnerHTML(el: Element, html: string): void {
+  try {
+    el.innerHTML = html;
+    return;
+  } catch { /* fall through */ }
+
+  const policy = getTrustedTypesPolicy();
+  if (policy) {
+    try {
+      // TrustedHTML satisfies the innerHTML setter at runtime; TypeScript's
+      // lib.dom typings don't know that without the trusted-types package,
+      // so the cast is a trust boundary we own, not a type-safety gap.
+      el.innerHTML = policy.createHTML(html) as unknown as string;
+      return;
+    } catch { /* fall through to the last resort */ }
+  }
+
+  try { el.replaceChildren(); } catch { /* nothing left to try */ }
+}
+
 export function downloadFile(filename: string, content: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);

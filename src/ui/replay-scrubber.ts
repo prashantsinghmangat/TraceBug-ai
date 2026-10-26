@@ -15,6 +15,7 @@
 //   purple diamond   → mark (developer breadcrumb — Phase II A.3, future)
 
 import { TimelineEntry } from "../types";
+import { setInnerHTML } from "./helpers";
 
 export interface ScrubberMarker {
   /** Absolute event timestamp (ms). */
@@ -82,12 +83,12 @@ export function mountReplayScrubber(
   _injectStyles();
 
   // Tear down any prior mount inside the container.
-  container.innerHTML = "";
+  setInnerHTML(container, "");
 
   const timeline = options.timeline.slice().sort((a, b) => a.timestamp - b.timestamp);
   if (timeline.length === 0) {
-    container.innerHTML = `<div class="tb-rs-empty">No events recorded yet.</div>`;
-    return { seek: () => {}, destroy: () => { container.innerHTML = ""; } };
+    setInnerHTML(container, `<div class="tb-rs-empty">No events recorded yet.</div>`);
+    return { seek: () => {}, destroy: () => { setInnerHTML(container, ""); } };
   }
 
   const screenshots = (options.screenshots || [])
@@ -340,7 +341,7 @@ export function mountReplayScrubber(
       chip.style.setProperty("background", meta.color, "important");
       chip.dataset.ts = String(c.ts);
       chip.title = `${formatElapsed(c.ts - startedAt)} · ${c.label}`;
-      chip.innerHTML = meta.icon;
+      setInnerHTML(chip, meta.icon);
       chip.addEventListener("click", () => seek(c.ts, { snap: false }));
       chipLayer.appendChild(chip);
     }
@@ -463,7 +464,7 @@ export function mountReplayScrubber(
   if (screenshots.length > 0) {
     hoverEl = document.createElement("div");
     hoverEl.className = "tb-rs-hover-thumb";
-    hoverEl.innerHTML = `<img alt="" /><div class="tb-rs-hover-time"></div>`;
+    setInnerHTML(hoverEl, `<img alt="" /><div class="tb-rs-hover-time"></div>`);
     hoverEl.style.display = "none";
     root.appendChild(hoverEl);
   }
@@ -554,7 +555,7 @@ export function mountReplayScrubber(
       track.removeEventListener("pointermove", onPointerMove);
       track.removeEventListener("pointerup", onPointerUp);
       root.removeEventListener("keydown", onKey);
-      container.innerHTML = "";
+      setInnerHTML(container, "");
     },
   };
 
@@ -606,7 +607,7 @@ function _toggleHelpOverlay(root: HTMLElement): void {
   if (existing) { existing.remove(); return; }
   const overlay = document.createElement("div");
   overlay.className = "tb-rs-help-overlay";
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div class="tb-rs-help-card">
       <div class="tb-rs-help-title">Keyboard shortcuts</div>
       <table class="tb-rs-help-table">
@@ -619,7 +620,7 @@ function _toggleHelpOverlay(root: HTMLElement): void {
       </table>
       <button type="button" class="tb-rs-help-close" aria-label="Close">×</button>
     </div>
-  `;
+  `);
   root.appendChild(overlay);
   overlay.querySelector(".tb-rs-help-close")?.addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });

@@ -12,6 +12,8 @@
 //
 // All fetches are same-origin only. No external network calls. CSP-friendly.
 
+import { setInnerHTML } from "./helpers";
+
 const CARD_ID = "tracebug-live-bug-card";
 const STYLE_ID = "tracebug-live-bug-card-styles";
 const _sourceCache = new Map<string, string[]>(); // file URL → split lines
@@ -64,7 +66,7 @@ export function showLiveBugCard(root: HTMLElement, options: LiveBugCardOptions):
 
   // Initial render — source preview placeholder; fills async.
   const sourceBlockId = `tb-lbc-src-${Date.now()}`;
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div class="tb-lbc-card">
       <div class="tb-lbc-head">
         <span class="tb-lbc-icon">💥</span>
@@ -84,7 +86,7 @@ export function showLiveBugCard(root: HTMLElement, options: LiveBugCardOptions):
         <button class="tb-lbc-btn tb-lbc-ghost" data-action="dismiss">Dismiss</button>
       </div>
     </div>
-  `;
+  `);
 
   root.appendChild(overlay);
   _currentRoot = overlay;
@@ -123,11 +125,11 @@ export function showLiveBugCard(root: HTMLElement, options: LiveBugCardOptions):
       .then(html => {
         if (_currentRoot !== overlay) return; // card already replaced/dismissed
         const block = overlay.querySelector(`#${sourceBlockId}`);
-        if (block) block.innerHTML = html;
+        if (block) setInnerHTML(block, html);
       })
       .catch(() => {
         const block = overlay.querySelector(`#${sourceBlockId}`);
-        if (block) block.innerHTML = `<span class="tb-lbc-no-source">Source not available (cross-origin or 404)</span>`;
+        if (block) setInnerHTML(block, `<span class="tb-lbc-no-source">Source not available (cross-origin or 404)</span>`);
       });
   }
 }

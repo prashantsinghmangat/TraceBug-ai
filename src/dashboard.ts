@@ -21,7 +21,19 @@ export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setN
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
-import { matchesShortcut } from "./ui/helpers";
+import { matchesShortcut, setInnerHTML } from "./ui/helpers";
+import { isExtensionContext } from "./video-recorder";
+
+// sessionStorage key the extension build's content-script.js (TB_PING) and
+// background.js (injectSDK's host-UI check) read to tell "our own surviving
+// mount" apart from a genuine host-page TraceBug UI after a service-worker
+// restart or extension reload wipes their in-memory bookkeeping — see
+// tracebug-extension/page-support.js's EXTENSION_OWNER_KEY comment. Page
+// storage, not extension storage, is the point: it survives exactly what the
+// worker's state doesn't. Duplicated as a literal (not imported) because this
+// file ships to both the npm SDK and the extension bundle, and the npm SDK
+// build must stay free of extension-only files.
+const EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
 
 export interface ShortcutsConfig {
   screenshot?: string;
@@ -135,6 +147,13 @@ export function mountDashboard(
   root.setAttribute("role", "complementary");
   root.setAttribute("aria-label", "TraceBug QA tools");
 
+  // See EXTENSION_OWNER_KEY above: mark this mount as ours the moment it
+  // exists, so a later TB_PING on this same tab (after the worker forgets it)
+  // doesn't mistake it for a host page's own TraceBug UI.
+  if (isExtensionContext()) {
+    try { window.sessionStorage.setItem(EXTENSION_OWNER_KEY, "1"); } catch {}
+  }
+
   // ── Panel container ─────────────────────────────────────────────────
   const panel = document.createElement("div");
   panel.id = PANEL_ID;
@@ -240,6 +259,9 @@ export function mountDashboard(
     clearAnnotationBadges();
     cleanupOnboarding();
     document.removeEventListener("keydown", keyHandler);
+    if (isExtensionContext()) {
+      try { window.sessionStorage.removeItem(EXTENSION_OWNER_KEY); } catch {}
+    }
   };
 }
 
@@ -250,7 +272,7 @@ function renderPanel(panel: HTMLElement): void {
   const errorSessions = sessions.filter((s) => s.errorMessage);
   const allSessions = sessions;
 
-  panel.innerHTML = `
+  setInnerHTML(panel, `
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -267,7 +289,7 @@ function renderPanel(panel: HTMLElement): void {
     </div>
     <style>@keyframes bt-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }</style>
     <div id="bt-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
-  `;
+  `);
 
   const content = panel.querySelector("#bt-content") as HTMLElement;
   panel.querySelector("#bt-refresh")!.addEventListener("click", () => renderPanel(panel));
@@ -288,13 +310,13 @@ function renderPanel(panel: HTMLElement): void {
   });
 
   if (allSessions.length === 0) {
-    content.innerHTML = `
+    setInnerHTML(content, `
       <div style="text-align:center;padding:60px 20px;color:var(--tb-text-muted, #555)">
         <div style="font-size:36px;margin-bottom:12px">\uD83D\uDD0D</div>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif)">No sessions recorded yet.</div>
         <div style="font-size:11px;margin-top:8px;color:var(--tb-text-muted, #444)">Interact with the app to start capturing events.</div>
       </div>
-    `;
+    `);
     return;
   }
 
@@ -302,7 +324,7 @@ function renderPanel(panel: HTMLElement): void {
   const filterBar = document.createElement("div");
   filterBar.dataset.tracebug = "filter-bar";
   filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
-  filterBar.innerHTML = `
+  setInnerHTML(filterBar, `
     <input id="bt-search" type="text" placeholder="Search sessions..." style="
       flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
       border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 10px;
@@ -317,8 +339,8 @@ function renderPanel(panel: HTMLElement): void {
       <option value="errors">Has errors</option>
       <option value="healthy">Healthy</option>
     </select>
-  `;
-  content.innerHTML = "";
+  `);
+  setInnerHTML(content, "");
   content.appendChild(filterBar);
 
   const sessionsContainer = document.createElement("div");
@@ -326,7 +348,7 @@ function renderPanel(panel: HTMLElement): void {
   content.appendChild(sessionsContainer);
 
   function renderFilteredSessions(filter: string, search: string) {
-    sessionsContainer.innerHTML = "";
+    setInnerHTML(sessionsContainer, "");
     let filtered = allSessions;
     if (filter === "errors") filtered = filtered.filter(s => s.errorMessage);
     if (filter === "healthy") filtered = filtered.filter(s => !s.errorMessage);
@@ -350,7 +372,7 @@ function renderPanel(panel: HTMLElement): void {
       });
     }
     if (filtered.length === 0) {
-      sessionsContainer.innerHTML = `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`;
+      setInnerHTML(sessionsContainer, `<div style="text-align:center;padding:30px;color:var(--tb-text-muted, #555);font-size:12px">No matching sessions</div>`);
       return;
     }
     for (const session of filtered) {
@@ -401,7 +423,7 @@ function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLEle
   const pages = [...new Set(session.events.map(e => e.page))];
   const sessionName = pages.length > 0 ? _pageName(pages[0]) + " Session" : "Session";
 
-  card.innerHTML = `
+  setInnerHTML(card, `
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div style="display:flex;align-items:center">
         ${dot}
@@ -416,7 +438,7 @@ function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLEle
       <button data-tracebug="view-ticket" style="${smallBtnStyle("#6366F1")}font-size:10px;flex:1">📋 View Ticket</button>
       <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
     </div>
-  `;
+  `);
 
   // "View Ticket" reopens the quick-bug modal for THIS session — the most
   // requested missing affordance. Without it, once the user closed the popup
@@ -921,7 +943,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   // Close the Export tab
   html += `</div>`;
 
-  content.innerHTML = html;
+  setInnerHTML(content, html);
 
   // ── Wire tab switching ──
   const tabs = content.querySelectorAll(".bt-tab");
@@ -1102,7 +1124,7 @@ function showNoteDialog(sessionId: string, panel: HTMLElement, _session: StoredS
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
 
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
       <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:12px;font-family:var(--tb-font-family, system-ui,sans-serif)">📝 Add Tester Note</div>
       <div style="margin-bottom:10px">
@@ -1131,7 +1153,7 @@ function showNoteDialog(sessionId: string, panel: HTMLElement, _session: StoredS
         <button id="bt-note-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save Note</button>
       </div>
     </div>
-  `;
+  `);
 
   const panelEl = panel.querySelector("#bt-content") || panel;
   panelEl.appendChild(overlay);
@@ -1171,7 +1193,7 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, _session: Stored
   overlay.dataset.tracebug = "voice-dialog";
   overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
 
-  overlay.innerHTML = `
+  setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
       <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">🎤 Voice Bug Description</div>
       <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-bottom:14px">Speak to describe the bug. Your words appear below in real-time.</div>
@@ -1190,7 +1212,7 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, _session: Stored
         <button id="bt-voice-save" style="background:#3b82f6;color:white;border:none;border-radius:var(--tb-radius-md, 6px);padding:8px 16px;cursor:pointer;font-size:12px;font-family:var(--tb-font-family, inherit)">Save as Note</button>
       </div>
     </div>
-  `;
+  `);
 
   const panelEl = panel.querySelector("#bt-content") || panel;
   panelEl.appendChild(overlay);
@@ -1684,7 +1706,7 @@ function renderAnnotationList(panel: HTMLElement): void {
   const screenshotsList = getScreenshots();
   const total = elAnnotations.length + drawRegions.length + screenshotsList.length;
 
-  panel.innerHTML = `
+  setInnerHTML(panel, `
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:system-ui,-apple-system,sans-serif">Page Annotations</div>
@@ -1700,7 +1722,7 @@ function renderAnnotationList(panel: HTMLElement): void {
       </div>
     </div>
     <div id="bt-ann-list-content" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
-  `;
+  `);
 
   const content = panel.querySelector("#bt-ann-list-content") as HTMLElement;
 
@@ -1760,7 +1782,7 @@ function renderAnnotationList(panel: HTMLElement): void {
   }
 
   if (total === 0) {
-    content.innerHTML = `
+    setInnerHTML(content, `
       <div style="text-align:center;padding:48px 24px;color:var(--tb-text-muted, #666)">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="1.5" style="margin-bottom:16px;opacity:0.5">
           <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-linecap="round"/>
@@ -1775,7 +1797,7 @@ function renderAnnotationList(panel: HTMLElement): void {
           <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace;margin-left:4px">Ctrl+Shift+D</span>
         </div>
       </div>
-    `;
+    `);
     return;
   }
 
@@ -1841,7 +1863,7 @@ function renderAnnotationList(panel: HTMLElement): void {
     }
   }
 
-  content.innerHTML = html;
+  setInnerHTML(content, html);
 
   // Wire screenshot download buttons
   content.querySelectorAll(".bt-ss-download").forEach(btn => {
@@ -2061,7 +2083,7 @@ function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement
     </div>
   `;
 
-  overlay.innerHTML = `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`;
+  setInnerHTML(overlay, `${toolbarHtml}<div id="bt-ann-canvas-wrap" style="position:relative;cursor:crosshair"></div>${actionsHtml}`);
   root.appendChild(overlay);
 
   // Set up canvas

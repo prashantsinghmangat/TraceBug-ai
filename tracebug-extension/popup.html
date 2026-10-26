@@ -117,7 +117,7 @@
           <svg id="ctaIconVideo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
         </span>
         <span class="cta-body">
-          <span class="cta-title">Capture Bug</span>
+          <span class="cta-title" id="ctaTitle">Capture Bug</span>
           <span class="cta-sub" id="ctaSub">Console, network &amp; replay · stop when done</span>
         </span>
         <svg class="cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
@@ -142,14 +142,21 @@
             Record video too
           </label>
           <div class="redact-help">A capture always records console, network, clicks and an interactive DOM replay. Turn this on to also ask your browser to share a tab, window or screen for a video.</div>
-          <!-- The "Capture: Current tab / Desktop" select used to live here.
-               It is gone because in the EXTENSION it cannot do anything: the
-               recorder runs in an offscreen document, and the browser hint for
-               "record the current tab" means the tab of the calling page, which
-               an offscreen document does not have. Shipping it as a control
-               that silently does nothing is the exact dead-setting bug Phase 0
-               found. The npm SDK keeps the option, where it genuinely works.
-               See the note in offscreen.js before putting it back. -->
+          <!-- Tab | Desktop (1.11.3). Tab asks once for the optional
+               `tabCapture` permission so the current tab records with no
+               browser share picker (chrome.tabCapture.getMediaStreamId,
+               resolved in background.js — an offscreen document has no tab
+               of its own to target). Declining, or Firefox (no tabCapture
+               API), falls back to Desktop's getDisplayMedia picker — see
+               docs/audit/capture-flow-1.11.3.md. -->
+          <div class="redact-label" id="surfaceModeRow" style="display:flex;align-items:center;gap:7px">
+            <span>Record</span>
+            <div class="surface-switch" role="group" aria-label="Recording surface">
+              <button type="button" class="surface-opt" id="surfaceTab" data-mode="tab" aria-pressed="false">Tab</button>
+              <button type="button" class="surface-opt" id="surfaceDesktop" data-mode="desktop" aria-pressed="true">Desktop</button>
+            </div>
+          </div>
+          <div class="redact-help" id="surfaceModeHelp">Tab records the current tab with no share picker. Desktop asks your browser to share a tab, window or screen.</div>
           <label class="redact-label" for="optDelay">Start delay</label>
           <select id="optDelay" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
             <option value="0" selected>No delay</option>

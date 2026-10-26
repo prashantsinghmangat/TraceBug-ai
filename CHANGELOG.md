@@ -2,6 +2,26 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.11.3] - 2026-10-23
+
+> Jam-style "record this tab" with no browser share picker, plus a real fix for the HUD mic-mute button that 1.11.2 left disabled on purpose. See `docs/audit/capture-flow-1.11.3.md`.
+
+### Added
+
+- **A Tab | Desktop switch in Record options.** Tab asks once for the optional `tabCapture` permission (Chrome shows "Read and change all your data on all websites" — the same wording as the existing all-sites permission) and then records the current tab directly, with no "Choose what to share" dialog. Desktop keeps today's picker. Decline the Tab prompt, or use Firefox (no equivalent API there), and it falls back to Desktop automatically, with a one-line notice. Settings shows the grant with a Remove button, the same as the all-sites permission.
+- **The HUD's mic-mute button now actually works during a tab/desktop recording in the extension.** It was wired to a stream the page never owned since 1.11.2 restored video (Bug 4, `docs/launch/video-1.11.1.md`) and rendered disabled rather than dead; it now forwards mute/unmute to the offscreen recorder over a new `tb:rec:mic-mute` message.
+
+### Fixed
+
+- **TraceBug works on sites that enforce Trusted Types** (`require-trusted-types-for 'script'`, e.g. stitch.withgoogle.com). Every toolbar, HUD and ticket-modal render threw there, so the dashboard failed to mount and the ticket never opened after a capture. All in-page HTML now goes through one helper (`src/ui/helpers.ts`, `setInnerHTML`) that uses TraceBug's own Trusted Types policy when the page requires one, and degrades instead of crashing where even that is blocked.
+- **"This site runs its own TraceBug" no longer appears on ordinary sites.** After the extension's background worker restarted (idle timeout, or an extension reload), the next click could mistake TraceBug's own surviving toolbar for a site's built-in one and refuse to start. The worker now restores what it knew about the tab before deciding, and — closing the gap the first fix left — a page-side marker also survives an extension reload or update itself, which clears the worker's memory entirely while the tab stays open.
+- **The REC badge no longer gets stuck.** It stayed on after stopping a video recording, after navigating into a site that runs its own TraceBug, and — now also fixed — after canceling the screen-share picker or declining macOS's Screen Recording permission. Canceling now correctly tells the worker nothing started, instead of leaving the badge lit and the popup reporting "Capturing…" with no way to stop it short of reloading the tab.
+- **The popup knows a capture is already running.** Reopening it mid-capture showed the idle Capture Bug button, and clicking it silently ended the running capture. It now reads "Capturing…" and points to Stop in the on-page bar.
+
+### Changed
+
+- A tab recording made in Tab mode keeps going through a same-origin navigation in that tab (the stream is bound to the tab, not the page); it still ends on a cross-origin navigation, same as before.
+
 ## [1.11.2] - 2026-10-23
 
 > Correctness, plus screen recording is back. Most of this came out of a full product-flow audit (`docs/audit/product-review.md`): small fixes that make each control do what it says. Video was paused for 1.11/1.11.1 while four bugs in the extension's offscreen-recorder seam got fixed — see `docs/launch/video-1.11.1.md`.
