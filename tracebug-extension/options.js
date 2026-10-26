@@ -520,3 +520,55 @@ renderLlmSites();
     document.getElementById("micCard")?.scrollIntoView({ block: "center" });
   }
 })();
+
+// ── Record current tab (no picker) — tabCapture optional permission ────────
+// Mirrors the popup's own request (popup.js, surfaceTabBtn): both call
+// chrome.permissions.request({ permissions: ["tabCapture"] }) directly in a
+// click handler. This card exists for anyone who declined in the popup and
+// wants a second chance without starting a recording, and for Remove —
+// symmetric with the Access-to-all-sites card below. Not shown at all on
+// Firefox, which has no chrome.tabCapture (see docs/audit/capture-flow-1.11.3.md).
+(function initTabCaptureCard() {
+  const card = document.getElementById("tabCaptureCard");
+  const grant = document.getElementById("tabCaptureGrant");
+  const remove = document.getElementById("tabCaptureRemove");
+  const pill = document.getElementById("tabCapturePill");
+  const status = document.getElementById("tabCaptureStatus");
+  if (!card) return;
+  if (!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId)) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "block";
+
+  async function refresh() {
+    let granted = false;
+    try { granted = await new Promise((r) => chrome.permissions.contains({ permissions: ["tabCapture"] }, r)); } catch {}
+    if (pill) {
+      pill.textContent = granted ? "Granted" : "Not granted";
+      pill.className = "pill" + (granted ? " ok" : "");
+    }
+    if (grant) grant.style.display = granted ? "none" : "";
+    if (remove) remove.style.display = granted ? "" : "none";
+  }
+
+  grant.addEventListener("click", () => {
+    // First statement in the handler, synchronous — same constraint as the
+    // popup's request call.
+    chrome.permissions.request({ permissions: ["tabCapture"] }, (granted) => {
+      void chrome.runtime.lastError;
+      if (status) status.textContent = granted ? "Granted." : "Declined.";
+      void refresh();
+    });
+  });
+
+  remove.addEventListener("click", async () => {
+    try {
+      await new Promise((resolve) => chrome.permissions.remove({ permissions: ["tabCapture"] }, resolve));
+    } catch {}
+    if (status) status.textContent = "Removed. “Tab” will ask again next time, or fall back to the share picker.";
+    await refresh();
+  });
+
+  void refresh();
+})();

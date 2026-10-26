@@ -45,7 +45,7 @@ The extension popup has four actions:
 
 A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`.
 
-- **Record video too** — off by default, so the first capture never opens a screen-share picker. Turn it on to also ask your browser to share a tab, window or screen; a microphone row appears alongside it to include audio. The "Capture: Current tab" shortcut is not offered — it needs the `tabCapture` permission, dropped in 1.10.1 to lose the browsing-history install warning. Pick a tab manually in the browser's own share picker instead.
+- **Record video too** — off by default, so the first capture never opens a screen-share picker. Turn it on to also ask your browser to share a tab, window or screen; a microphone row appears alongside it to include audio. A **Tab | Desktop** switch picks the mode: Tab asks once for the optional `tabCapture` permission (Chrome shows "Read and change all your data on all websites" when you grant it, not an install-time warning — it's requested on demand) and records the current tab with no share picker; Desktop uses the browser's own share picker as before. Decline the Tab prompt and TraceBug falls back to the picker.
 - **Start delay** — none, **3 s**, or **5 s**, with an on-page 3-2-1 countdown overlay before recording rolls.
 - **Blur before recording** — arms the element-level blur tool *before* capture starts: click elements to blur/unblur, then a floating **"● Start recording / Cancel"** bar (with **Undo** for the last blur) begins the recording with the redaction applied from the very first frame. Cancel clears the blurs.
 
@@ -134,9 +134,15 @@ needed, and the extension degrades gracefully if you decline:
 | `https://api.openai.com/*`, `https://api.anthropic.com/*` | You save an AI key for that provider |
 | `http://localhost/*`, `http://127.0.0.1/*` | You point the AI debugger at a local model (Ollama) |
 
+Also optional, not a host permission: **`tabCapture`** — asked once, the first time you pick
+**Tab** mode in the record switch, so TraceBug can record the current tab with no browser share
+picker (`chrome.tabCapture.getMediaStreamId`). Chrome's grant prompt reads "Read and change all
+your data on all websites" — the same wording as `<all_urls>`, since both let a script capture
+anything on the page. Decline it and TraceBug falls back to the Desktop picker instead. Settings
+shows the grant with a Remove button once you've accepted it, same as `<all_urls>`.
+
 Not present, and deliberately so: **`tabs`** (removed in 1.10.1 — it caused the "Read your browsing
-history" warning) and **`tabCapture`** (removed with it — restoring it so "This tab" can be offered
-in the share picker is a separate product decision, not part of the 1.11.2 video restore).
+history" warning). `tabCapture` does not need `tabs` and does not cause that warning.
 
 Capture data stays in `chrome.storage.local` and the page's `localStorage`. **Nothing goes to TraceBug.** You choose what's sent to GitHub, Linear, Slack or your AI provider, and every send asks you first. See the [privacy policy](https://tracebug.dev/privacy).
 

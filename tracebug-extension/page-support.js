@@ -146,6 +146,17 @@
   // call sites agree and so it is unit-testable.
   var HOST_UI_IDS = ["tracebug-root", "tracebug-compact-toolbar"];
 
+  // sessionStorage key the extension's OWN page-world mount sets the moment it
+  // creates #tracebug-root (src/dashboard.ts), and clears on teardown. Page
+  // storage is origin-scoped, not tied to the extension's JS realm, so it
+  // survives exactly what activeTabs/injectedTabs (background.js, in-memory +
+  // chrome.storage.session) do NOT survive: a service-worker restart, or the
+  // extension being reloaded/updated while the tab stays open. Without this,
+  // detectHostTraceBugUI() alone can't tell "our own surviving mount" from a
+  // genuine host integration — see the TB_PING handler in content-script.js
+  // and injectSDK()'s host-UI check in background.js, both of which read it.
+  var EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
+
   /**
    * Is a TraceBug UI already mounted in this document? Takes a document-LIKE
    * object rather than touching `document` directly, so this file stays
@@ -335,6 +346,7 @@
     HOST_UI_ERROR: HOST_UI_ERROR,
     HOST_UI_TITLE: HOST_UI_TITLE,
     HOST_UI_DETAIL: HOST_UI_DETAIL,
+    EXTENSION_OWNER_KEY: EXTENSION_OWNER_KEY,
     detectHostTraceBugUI: detectHostTraceBugUI,
     classifyPage: classifyPage,
     describePage: describePage,

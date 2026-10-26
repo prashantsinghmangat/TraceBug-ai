@@ -679,14 +679,29 @@ if (isExtAlive()) {
       // ensureAlive()'s repair path) reads it that way and defers instead of
       // mounting a second toolbar — see docs/launch/sdk-isolation-1.11.2.md.
       // One detector, shared via page-support.js, so both call sites agree.
-      case "TB_PING":
-        sendResponse({
-          alive: true,
-          pageSdk: globalThis.TraceBugPageSupport
-            ? globalThis.TraceBugPageSupport.detectHostTraceBugUI(document)
-            : !!document.getElementById("tracebug-root"),
-        });
+      //
+      // `extensionOwned` breaks the remaining ambiguity: a DOM match alone
+      // can't tell OUR surviving mount from a real host UI once the worker's
+      // own bookkeeping (activeTabs/injectedTabs) is gone — a service-worker
+      // restart or an extension reload/update clears that, but the page's
+      // sessionStorage marker (set by src/dashboard.ts's mountDashboard when
+      // it is running as the extension, cleared on teardown) is page-scoped
+      // and survives it. injectSDK() only throws the host-UI error when a
+      // TraceBug UI exists AND we did not put it there ourselves.
+      case "TB_PING": {
+        var hostUiPresent = globalThis.TraceBugPageSupport
+          ? globalThis.TraceBugPageSupport.detectHostTraceBugUI(document)
+          : !!document.getElementById("tracebug-root");
+        var extensionOwned = false;
+        try {
+          var key = globalThis.TraceBugPageSupport
+            ? globalThis.TraceBugPageSupport.EXTENSION_OWNER_KEY
+            : "tracebug_ext_owns_ui";
+          extensionOwned = window.sessionStorage.getItem(key) === "1";
+        } catch (e) {}
+        sendResponse({ alive: true, pageSdk: hostUiPresent, extensionOwned: extensionOwned });
         break;
+      }
     }
   }));
  } catch (e) {}

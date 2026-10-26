@@ -1,6 +1,8 @@
 // ── Toast Notification ────────────────────────────────────────────────────
 // Lightweight toast system inside #tracebug-root.
 
+import { setInnerHTML } from "./helpers";
+
 /**
  * Interactive toast with an action button. Used for error-detected prompts.
  * Auto-dismisses after 8s if no action taken, unless `autoDismissMs` says
@@ -41,11 +43,11 @@ export function showActionToast(
     document.head.appendChild(style);
   }
 
-  toast.innerHTML = `
+  setInnerHTML(toast, `
     <span style="flex:1">${message.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>
     <button data-tb-action="capture" style="background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</button>
     <button data-tb-action="dismiss" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px">\u2715</button>
-  `;
+  `);
 
   root.appendChild(toast);
 

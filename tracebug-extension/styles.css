@@ -138,6 +138,21 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .mic-opt-on { background: var(--success-bg); border-color: var(--success); }
 .mic-opt-on .mic-opt-pill { background: var(--success); color: #fff; }
 
+/* ── Tab | Desktop surface switch (1.11.3) ─────────────────────────── */
+.surface-switch {
+  display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.surface-opt {
+  padding: 3px 10px;
+  background: var(--bg-2); color: var(--text-2);
+  border: none; border-right: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.surface-opt:last-child { border-right: none; }
+.surface-opt[aria-pressed="true"] { background: var(--accent, #6366F1); color: #fff; }
+.surface-opt:disabled { cursor: not-allowed; opacity: 0.5; }
+
 /* ── Secondary row ──────────────────────────────────── */
 .cta-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 #btnInspect { grid-column: 1 / -1; }

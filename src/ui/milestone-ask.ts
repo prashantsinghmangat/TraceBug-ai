@@ -12,6 +12,7 @@
 
 import { getAllSessions } from "../storage";
 import { resolveCloudEndpoint } from "../cloud-endpoint";
+import { setInnerHTML } from "./helpers";
 
 const DONE_KEY = "tracebug_milestone_ask_done";
 const CARD_ID = "tracebug-milestone-ask";
@@ -46,7 +47,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
     "box-shadow:0 12px 40px rgba(0,0,0,0.5)",
   ].join(";");
 
-  card.innerHTML = `
+  setInnerHTML(card, `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
       <div style="font-size:13px;font-weight:700">🎉 That's your ${MILESTONE}th saved ticket</div>
       <button data-act="close" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0">✕</button>
@@ -66,7 +67,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
     <p style="margin:8px 0 0;font-size:10.5px;color:var(--tb-text-muted,#888);line-height:1.4">
       Optional — TraceBug works fully without this, forever.
     </p>
-  `;
+  `);
 
   const close = () => {
     document.removeEventListener("keydown", onKey, true);
@@ -94,14 +95,14 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
     })
       .then((res) => {
         if (!res.ok) throw new Error(String(res.status));
-        card.innerHTML = `<div style="font-size:12.5px;line-height:1.5">✓ You're on the list — thanks for using TraceBug this much.</div>`;
+        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">✓ You're on the list — thanks for using TraceBug this much.</div>`);
         setTimeout(close, 2500);
       })
       .catch(() => {
         // Host-page CSP or offline can block the request — degrade honestly
         // to a link instead of a dead button.
-        card.innerHTML = `<div style="font-size:12px;line-height:1.5">This page blocked the request — you can sign up at
-          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`;
+        setInnerHTML(card, `<div style="font-size:12px;line-height:1.5">This page blocked the request — you can sign up at
+          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`);
         setTimeout(close, 6000);
       });
   });

@@ -4,149 +4,121 @@ Add <=5 lines per phase: what changed, files touched, how it was verified, open 
 Newest entry at the bottom. Keep the last two entries here; move older ones to
 `PROGRESS-archive.md` when this file passes ~150 lines. Current state lives in `STATE.md`, not here.
 
-## Doc and copy pass for the video pause (2026-10-14)
+## A fourth capture-flow bug: worker restarts mislabeled real sites as "runs its own TraceBug" (2026-10-23)
 
-- **Two user-visible strings still told people to use a control 1.11 removed.** The canvas toast
-  said "stop and turn on Record video too"; the `WHATS_NEW` 1.11.0 card said "turn it off to try"
-  capture-without-sharing. Both are fixed. The toast branches on the existing `isVideoOffered()`, so
-  the npm SDK keeps the correct advice and 1.11.1 reverts it with no edit; the card now says video is
-  paused, when it returns, and that the setting is kept. **Both were pinned by tests asserting the
-  stale copy** - `tests/{whats-new,phase6-edges}.test.ts` now pin the new intent, and phase6 gained
-  an extension-branch case (jsdom defaults to the SDK path, so the old test would have passed over
-  the bug). Also `docs/launch/screens.md` screen 4, the design source for that card.
-- `docs/chrome-extension.md`: Capture Bug is events-only, the mic line and the capture-surface option
-  are gone, "Nothing leaves the browser" is now the privacy page's wording, the file tree matches the
-  shipped files, and the architecture block no longer presents the offscreen document as live.
-  **The permissions table was rebuilt from `manifest.base.json` - it was wrong in five ways** (listed
-  `tabs`, `offscreen`, `tabCapture` and a required `<all_urls>`; omitted `alarms`), which made the
-  extension read as far more invasive than it is. Optional host permissions are now a table of their
-  own with what triggers each. Same sweep removed the three stale "Current tab / macOS" lines from
-  `quickstart.md`, scoped the macOS paragraph, and fixed `README.md`'s Record-options sentence.
-  `docs/api-reference.md`'s `surfaceMode` stays - it is the SDK's, and it works.
-- `RELEASE_CHECKLIST.md` rows 1-3 rewritten: the checkbox they read off is gone, so they now verify
-  `tb_record_opts` keeps `video: true` across the upgrade **while the capture stays events-only** -
-  the pair 1.11.1 depends on. Row 9's oversize half marked skipped (its branch cannot be produced
-  without video); the canvas half stays and now expects the new copy. Both carry restore notes, as
-  does `video-1.11.1.md` step 5b.
-- The growth plan: Oct 14 is a Wednesday - week 1 redated (submission stays **Fri Oct 16**, Showoff
-  Saturday is **Sat Oct 17**). Show HN is no longer a fixed Oct 27 but the first Tuesday after 1.11.1
-  is *approved*; if review slips it slips to Nov 3. `store-submission-pack.md`: `unlimitedStorage`
-  justified without mentioning video, intro line and §5 removed.
-- Verified: `node scripts/check.mjs --full` green - **818 passing / 48 files**, ext:lint 0 errors /
-  69 warnings, versions 1.11.0. That one number now appears in STATE, the growth plan and
-  video-1.11.1.md,
-  which disagreed (796/47 and "817 unit tests"). Fixed STATE's `zip:ext` path, which had been
-  corrupted to a literal tab: it is `C:\Windows\System32\tar.exe`.
-- Trimmed: STATE.md 127 -> 60 lines, PROGRESS.md 285 -> 2 entries (9 moved to the archive), PLAN.md
-  291 -> 215 with Phases 4-7 as one line each and their full text in `PLAN-archive.md`.
-- **The growth plan stays out of the repo.** The reconciled plan went into
-  `docs-internal/GROWTH-PLAN-30DAY.md`, replacing the Oct 11 copy, and the tracked
-  `docs/launch/GROWTH.md` was deleted (it was never staged, so there was nothing to `git rm`).
-  `docs-internal/` is still ignored via `.gitignore:34` and holds no tracked files. Four sections of
-  the original were preserved rather than dropped - the Verdict and its scenario table, Store
-  listing and conversion, the no-telemetry feedback signals, and Sources - and its stale
-  "tokens are readable by the host page" premise is annotated, not silently deleted. Its test plan
-  now points at `docs/RELEASE_CHECKLIST.md` and its Site Audit roadmap at `PLAN.md` § Phase 11.
-- **The privacy page no longer justifies `offscreen`**, which 1.11 does not request
-  (`website/app/privacy/page.tsx`); `unlimitedStorage` there and in the submission pack is justified
-  by the replay alone. Restoring all of it is step 5b / the `offscreen` block in `video-1.11.1.md`.
-- Open: the AMO slug contradiction (`docs/compatibility.md` publishes a URL `src/links.ts` refuses
-  to hold) - left alone deliberately, pending confirmation of the real slug. **CLOSED 2026-10-15:
-  the published URL was a 404; the real slug is `tracebug-bug-reports-for-ai`.**
-## Offscreen files, the AMO slug, and a git rule (2026-10-15)
+- **What:** the user hit the exact same host-UI error on an ordinary site (chatgpt.com) that had been
+  working a moment before — this time with video mode on. Root cause: `injectedTabs` (`background.js`)
+  is in-memory only and does not survive an MV3 service-worker restart (the ~30s idle timeout, or an
+  extension reload — which the user had just done to pick up this round's fixes), even though the
+  tab's content script and page-world SDK do, since they're tied to the page, not the worker.
+  `handleComboAction` trusted `injectedTabs.has(tabId)` alone to choose between the repair path
+  (`ensureAlive`, safe) and the fresh-injection path (`injectSDK`, whose host-UI check assumes any
+  TraceBug DOM it finds belongs to a host page — correct for a truly fresh tab, wrong for our own
+  surviving instance). A restarted worker always guessed "fresh," so the very next click on ANY
+  already-working tab risked this exact misdiagnosis.
+- **Fix:** `handleComboAction` now also trusts `activeTabs` (which IS persisted across a restart,
+  unlike `injectedTabs`) plus a live ping before falling through to `injectSDK()`'s host-UI check. A
+  ping alone can't disambiguate — "alive + a TraceBug element exists" looks identical whether it's
+  ours or a genuine host UI — `activeTabs` is what tells the two apart: it's only ever set after we
+  ourselves successfully injected this tab, so if it's there, a later ping finding the same markers
+  can only mean our own instance survived.
+- **Verified:** two new unit tests in `tests/background-tab-lifecycle.test.ts` (the restart-repair
+  case AND the control case — a genuinely untouched tab with a real host UI must still be refused),
+  plus a new real-browser e2e, `ext-worker-restart-reinject.e2e.mjs`, that kills the service worker for
+  real via CDP (`ServiceWorker.stopAllWorkers`, confirmed with a sentinel the same way
+  `ext-cross-site-capture.e2e.mjs` does) without touching the original tab's DOM, then clicks Capture
+  Bug again on it — 4/4. `check.mjs --full` 929 passing / 57 files; `ext-events-capture`,
+  `ext-cross-site-capture`, `ext-badge-host-ui-defer`, `ext-shipping-path`, `ext-video-recording` all
+  re-run clean.
 
-- **`offscreen.{html,js}` no longer ship while video is paused.** They were inert - no permission,
-  and no `tb:rec:*` is sent when `isVideoOffered()` is false - but a document the manifest cannot
-  open is an oddity in a reviewed package. `build-ext.mjs` parses `VIDEO_ENABLED_IN_EXTENSION` out
-  of `src/video-recorder.ts` rather than carrying a second flag, and throws if it is renamed.
-  Archives 30 -> 28 files, both targets, `PK` confirmed; `ext-shipping-path` 16/16 with them absent.
-- **The AMO link we published was a 404.** `/addon/tracebug/` does not exist. Resolved by GUID, not
-  by name: AMO's API for `tracebug@prashantsinghmangat` returns slug `tracebug-bug-reports-for-ai`,
-  public, 1.10.1. Now in `src/links.ts`; the guard test was INVERTED (it asserted no Firefox link
-  could be declared - the risk is now declaring the wrong one) and cross-checks `compatibility.md`.
-- **Privacy page stopped justifying `offscreen`**, which 1.11 does not request; restore notes for
-  all four permission surfaces are in `video-1.11.1.md`.
-- **Git: `--only <paths>` is now a rule** (`CLAUDE.md`), plus `Bash(git push:*)` in the settings
-  deny list. A bare `git add` had swept 19 files into a commit meant for 7.
-- Verified: `check.mjs --full` green - **819 passing / 48 files**, ext:lint 0 errors / 69 warnings.
-  Five commits on `develop`. Open: nothing blocking; the remaining items need a person.
+## Phase A audit for "1.11.3" — capture-flow map, read-only (2026-10-23)
 
-## 1.11.1 capture fixes — the audit's Option A (2026-10-19)
+- **Headline finding: the "1.11.3" brief was stale.** Screen recording is already live as of 1.11.2
+  (`VIDEO_ENABLED_IN_EXTENSION = true`, `getDisplayMedia` with the browser's own picker). The real gap
+  vs. the brief is a Jam-style no-picker "record current tab" mode via
+  `chrome.tabCapture.getMediaStreamId`, which needs the `tabCapture` permission dropped in 1.10.1 to
+  avoid Chrome's browsing-history install warning — a product/permissions decision, not unfinished
+  engineering. See `docs/audit/capture-flow-1.11.3.md` for the full entry-point trace, state-duplication
+  audit, and permissions analysis.
+- **Verified, no code changes:** `e2e/ext-video-recording.e2e.mjs` (8/8) and `e2e/ext-shipping-path.e2e.mjs`
+  (16/16) re-run clean, both corroborating Bug 1 (video-1.11.1.md) still not reproducing.
+- **Open:** whether to add `tabCapture` for a no-picker tab mode is a decision for the user, not yet
+  made — no manifest change made. Several scenarios (cross-origin nav mid-recording, worker restart
+  mid-recording, two tabs recording at once) have no existing e2e coverage and need new test
+  infrastructure before Phase B, not just manual clicking.
 
-- **Why:** a tester's ticket read "1 screenshot attached · 0 events". `docs/audit/capture-architecture.md`
-  reproduced every cause in a real browser; this is its Option A, in the agreed order.
-- **Shipped:** network dedupe (wrapper row wins, paired on resolved URL + start within 50ms) ·
-  page-load backfill rebuilt (failed-or-slow only, `phase: "page-load"`, no invented `GET`) ·
-  contenteditable typing captured under the input redaction rules and cap · the DOM replay now masks
-  sensitive editors and applies the user's Mask patterns · the **zombie capture is gone** (the worker
-  owns "is a capture running", `tb:capture:status`) with "Capture ended when you left <host>" on the
-  next page · honest HUD ("Replay, not video" + a live tally that matches the ticket) · an iframe
-  warning on the canvas pattern, **no `allFrames`** (ADR 008 / Phase 12 instead).
-- **Files:** `src/{collectors,network-dedupe,replay-masking,capture-ownership,replay-fidelity,
-  rrweb-recorder,report-builder,index}.ts`, `tracebug-extension/{background,content-script,popup}.js`,
-  `popup.html`, `docs/{compatibility,chrome-extension}.md`, `docs/adr/008-*`, PLAN Phase 12.
-- **Verified:** `check.mjs --full` 894 passing / 53 files; new e2e `ext-cross-site-capture` 10/10;
-  `ext-{events-capture,redaction,shipping-path}` 22/4/16. Live fixtures for every claim above.
-- **Open:** replay masking with user patterns runs a regex pass per text node — unbenchmarked on a
-  2.6 MB snapshot. Video (Phase 10) is still untouched and comes next.
+## 1.11.3: the "Tab" no-picker record mode, user-approved as an optional permission (2026-10-24)
 
-## 1.11.1 release prep, and three checks before it (2026-10-19)
+- **What:** per the user's explicit decision on the Phase A audit, added `tabCapture` to
+  `optional_permissions` only (never required, never at install). `background.js`'s new
+  `resolveTabCaptureStreamId()` calls `chrome.tabCapture.getMediaStreamId({targetTabId})` (only
+  background has a real tab to target) and hands the id to `offscreen.js`, which consumes it via
+  `getUserMedia`'s `chromeMediaSource` constraint and re-routes captured tab audio back to the
+  speakers (chrome.tabCapture mutes it otherwise). Popup gained a **Tab | Desktop** switch
+  (two buttons, not the old dead `#optSurface` select) that requests the permission synchronously on
+  click and falls back to Desktop on decline or on Firefox (feature-detected, not UA-sniffed — Firefox
+  manifest strips `optional_permissions` entirely in `build-ext.mjs`). Options gained a matching
+  grant/remove card. Also properly fixed **Bug 4** (`video-1.11.1.md`) rather than leaving it disabled:
+  a new `tb:rec:mic-mute` offscreen RPC, with `micIncluded`/`micMuted` now real fields on
+  `tb:rec:started`/`tb:rec:status`, and `src/video-recorder.ts`'s mic functions branch on
+  `isExtensionContext()` to use that state instead of the always-null page-side `_stream`.
+- **Also fixed two doc inaccuracies the audit's own draft had repeated:** `tabCapture`'s Chrome warning
+  is "Read and change all your data on all websites" (same as `<all_urls>`), not the browsing-history
+  warning (that's `tabs`, dropped separately in 1.10.1) — corrected in `docs/chrome-extension.md` and
+  `docs/audit/capture-flow-1.11.3.md`. Optional permissions also do not trigger Chrome's
+  disable-and-reapprove flow on update (that's only for required `permissions`/`host_permissions`) —
+  corrected there too.
+- **Files:** `tracebug-extension/{background,offscreen,popup,options}.js`,
+  `tracebug-extension/{popup,options}.html`, `styles.css`, `manifest.json`,
+  `build/{manifest.base.json,build-ext.mjs}`, `src/video-recorder.ts`, `e2e/ext-host-access.mjs` (new
+  `withGrantedTabCapture` fixture), new `e2e/ext-video-recording-tab.e2e.mjs`,
+  `tests/{record-opts,video-enabled-1-11-2}.test.ts` updated for the new reality (no stale "Bug 4 not
+  fixed" pin left behind), `docs/{chrome-extension,RELEASE_CHECKLIST,launch/store-submission-pack}.md`,
+  `docs-internal/CHROME-WEB-STORE-LISTING.md`, `website/app/privacy/page.tsx`, eight version surfaces,
+  `CHANGELOG.md`, `WHATS_NEW` card, `scripts/check-baseline.json` (22→26, user-approved).
+- **Verified:** `check.mjs --full` all green — 939 passing / 58 files, `ext:lint` 0 errors / 26
+  warnings (4 new `UNSUPPORTED_API` from `chrome.tabCapture` referenced in shared Chrome+Firefox
+  files, baseline raised with the user's sign-off), all 8 surfaces on 1.11.3. New e2e
+  `ext-video-recording-tab.e2e.mjs` 8/8 (no-picker start, same-origin nav survival, no Desktop
+  fallback). Re-run clean: `ext-video-recording` 8/8, `ext-shipping-path` 16/16,
+  `ext-badge-host-ui-defer` 4/4, `ext-worker-restart-reinject` 4/4, `ext-trusted-types-page` 9/9,
+  `ext-sdk-isolation` 17/17, `ext-cross-site-capture` 13/13, `ext-events-capture` 22/22.
+- **Not verified here (RELEASE_CHECKLIST rows 11-15):** the real Chrome permission-prompt UI and
+  click-through, the decline → fallback UI in a live browser, that an existing 1.11.2 user isn't
+  disabled on update, macOS Screen Recording interaction with Tab mode (if any), and a real Firefox
+  run (`npm run ext:firefox` blocks until a human closes the browser — can't be driven here).
 
-- **Worker restart:** `captureTabs` is in `tb_sw_state_v1` and `tb:capture:status` awaits `_hydrated`
-  — now proven, not inspected. `tests/capture-ownership-worker.test.ts` loads background.js against a
-  seeded `storage.session` (exactly a restarted worker); the e2e stops the real worker over CDP and
-  asserts a sentinel global is gone first, so the case cannot pass vacuously. 13/13.
-- **Origin now comes from Chrome** (`sender.origin` → `sender.url` → the page's claim, in that order),
-  so a page cannot name its own origin to keep or kill its capture.
-- **Benchmarked the mask pass** on 20,000 text nodes / 1.8 MB of text, 5 patterns, 30s of typing
-  (~9,000 keystrokes): snapshot 743/820/824 ms without rules vs 687/785/802 ms with — the delta is
-  below run-to-run noise and far under the 50 ms budget; typing p95 gap 5.0 ms both ways, **zero long
-  tasks**. Patterns are now compiled into one alternation. The tester's real 2.6 MB snapshot is 118
-  text nodes / 931 chars — its weight is inlined images, not text.
-- **Released as 1.11.1:** eight surfaces bumped, CHANGELOG + "What's new" card, four new
-  RELEASE_CHECKLIST rows (10a-10d), Phase 10 renamed to 1.11.2. `check.mjs --full` 904 passing / 54
-  files; zips 28 files, `PK`, no `offscreen`; cross-site 13/13, events 22/22, shipping 16/16.
+## Release-readiness sweep for 1.11.3 (2026-10-26)
 
-## 1.11.2 release prep — correctness (2026-10-22)
+- Gates green (939 / 58 files, ext:lint 0 errors / 26 warnings), knip: no unused files. Zips 30 files, `PK`, `tabCapture` optional only.
+- Release notes caught up with the code: CHANGELOG 1.11.3 gained the Trusted Types, worker-restart misdiagnosis, stuck-REC and popup "Capturing…" fixes; the 1.11.3 "What's new" card and store §4 now cover 1.11.2 too, since 1.11.2 never reached the stores.
 
-- **What:** Bug 0 (own global + defer to a host toolbar), T-01, T-02 (committed earlier) plus T-05
-  (export link, not modal), T-06 (no Capture button on the error card mid-capture), T-13 (popup
-  cross-site row removed; options shows an old `<all_urls>` grant with Remove), stale Ollama origin
-  released, welcome page v2. Eight surfaces on 1.11.2, CHANGELOG + "What's new", store copy,
-  RELEASE_CHECKLIST rows 10e-10h (10a was split by a misplaced row; fixed). User-facing "video
-  returns in 1.11.2" corrected to 1.11.3 (popup, canvas toast, README, docs).
-- **Verified:** `check.mjs --full` 928 passing / 57 files, ext:lint 0 errors / 69 warnings.
-  e2e: sdk-isolation 17/17, cross-site 13/13, shipping-path 16/16, events 22/22, redaction 4/4,
-  no-secrets 13/13, github-send-confirm 9/9, secret-migration 25/25. `website` `next build` OK.
-  Zips: 28 files each, `PK`, no `offscreen`, ~835 KB. Deleted the unused
-  `src/ui/{upgrade,screenshot-trim}-modal.ts` (knip). Open: `package-lock.json` root version not bumped here.
+## The host-UI misdiagnosis, closed for real: survives an extension reload, not just a worker restart (2026-10-26)
 
-## REC badge + screen recording restored (2026-10-23)
-
-- **REC badge:** the toolbar badge only ever showed green "ON" for "SDK loaded," identical whether a
-  capture was running or not. `background.js`'s `updateBadge()` now checks the existing `captureTabs`
-  map and shows a red "REC" the instant `TB_START_RECORDING`/`tb:capture:started` fires, reverting on
-  `tb:capture:stopped` or `endCapture()`.
-- **Screen recording restored (`VIDEO_ENABLED_IN_EXTENSION = true`):** re-verified Bug 1 ("recording
-  lost on stop", `docs/launch/video-1.11.1.md`) in a real browser two ways — plain stop, and a
-  mid-recording reload — and it did **not** reproduce; the `quick-bug.ts` stash-then-refresh rework
-  (commit `dda5ac8`) looks to have already fixed the race the doc's hypothesis described. Bug 4 (HUD
-  mic-mute wired to a stream the extension never owns) is still real but was left as-is on purpose:
-  `hasMicrophoneTrack()` is permanently false for the extension transport, so the button already
-  renders disabled with an honest tooltip rather than a dead click. Bug 2 (fullscreen) stays open,
-  polish only. Restored: `offscreen` permission (manifest.json + `build-ext.mjs`'s `chromeManifest()`,
-  gated on the same flag build-ext already parses), popup's `optVideo`/`micOpt` markup, WHATS_NEW
-  1.11.2 card, RELEASE_CHECKLIST rows 1-3/9 UI-based steps, permission-justification docs
-  (`store-submission-pack.md` §7b, `docs-internal/CHROME-WEB-STORE-LISTING.md` §7b,
-  `docs/chrome-extension.md`, `website/app/privacy/page.tsx`), README/quickstart video sentences.
-  Replaced `tests/video-paused-1-11.test.ts` → `tests/video-enabled-1-11-2.test.ts` (pins the
-  restored behaviour, not just removes the old pin) and `tests/phase6-edges.test.ts`'s inverted
-  canvas-toast assertion.
-- **Verified:** `check.mjs --full` 925 passing / 57 files (one file renamed, not net-new), ext:lint 0
-  errors / 69 warnings, `check:versions` all surfaces on 1.11.2. New e2e:
-  `ext-video-recording.e2e.mjs` (8/8, the two Bug-1 repro scenarios with fake-media flags),
-  `ext-shipping-path.e2e.mjs` rewritten for "stored video:true is now honoured" (14/14, was asserting
-  the opposite). `ext-events-capture.e2e.mjs` re-run clean (22/22) — events-only path unaffected.
-  Open: Bug 2 (fullscreen) and Bug 4 (mic-mute) stay in `video-1.11.1.md` as known, non-blocking gaps;
-  `docs-internal/GROWTH-PLAN-30DAY.md`'s dated video-pause references were left untouched (internal
-  scheduling doc, not store/user-facing).
+- **What:** the user hit "This site runs its own TraceBug" starting a video capture on an ordinary tab
+  (claude.ai) that had worked moments before. The 2026-10-23 fix made `activeTabs`
+  (`chrome.storage.session`) the tiebreaker for `injectSDK()`'s host-UI check, which covers a bare MV3
+  worker-idle restart — but `chrome.storage.session` itself does not survive the extension being
+  reloaded or updated while the tab stays open, which is exactly what happened here. With that gone too,
+  the worker had nothing left to tell "our own surviving `#tracebug-root`" from a real host UI, and
+  guessed wrong again.
+- **Fix:** a durable signal that lives in the PAGE, not the extension — `src/dashboard.ts`'s
+  `mountDashboard()` sets a `tracebug_ext_owns_ui` sessionStorage marker the moment it mounts (extension
+  context only, cleared on teardown); `content-script.js`'s `TB_PING` reports it as `extensionOwned`;
+  `background.js`'s `injectSDK()` only throws `HOST_UI_ERROR` when a TraceBug UI exists AND the page
+  didn't set that marker itself. Page storage is origin-scoped, not extension-scoped, so it survives
+  exactly what `activeTabs` doesn't. Shared key name in `tracebug-extension/page-support.js`
+  (`EXTENSION_OWNER_KEY`), duplicated as a literal in `src/dashboard.ts` since that file ships to both
+  the npm SDK and the extension bundle.
+- **Verified:** new `e2e/ext-reload-reinject.e2e.mjs` (8/8) — forces exactly this gap by clearing
+  `chrome.storage.session` before killing the service worker via CDP, confirms the marker survives where
+  `activeTabs` doesn't, and that a second Capture Bug click on the same tab succeeds instead of
+  misdiagnosing. `check.mjs --full` all green (939/58, `ext:lint` 0/26, unchanged baseline); re-run clean:
+  `ext-badge-host-ui-defer` 4/4, `ext-worker-restart-reinject` 4/4, `ext-video-recording-tab` 8/8,
+  `ext-shipping-path` 16/16, `ext-sdk-isolation` 17/17 (genuine host-UI defer still correctly refuses).
+- **Also removed:** a stale comment in `popup.js`'s `saveRecordOpts()` claiming video is "always false in
+  1.11" — 1.11.2 restored the checkbox and the line below it already stores the real value.
+- **Open:** the popup's single "Capture Bug" button + a collapsed "Record options" accordion (video
+  on/off lives behind a checkbox there) reads as unclear next to Jam's explicit separate
+  screenshot/record entries — flagged by the user as confusing, not yet redesigned. Needs a scoped UX
+  proposal before touching `popup.html`/`popup.js` further.

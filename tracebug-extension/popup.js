@@ -445,9 +445,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   // is the pre-1.11 localStorage blob, migrated once on first open.
   const OPTS_KEY = "tb_record_opts";
   const LEGACY_OPTS_KEY = "tracebug_record_opts";
-  // The Capture select is gone from the markup - see popup.html for why.
-  // Null-safe below so nothing here has to know that.
-  const surfaceSel = document.getElementById("optSurface");
+  // Tab | Desktop switch (1.11.3) — two buttons, not a <select>, because
+  // choosing "Tab" is the moment the optional tabCapture permission is
+  // requested, and that request must be the first statement in a synchronous
+  // click handler or the click's user-gesture activation doesn't carry
+  // through (Chrome silently resolves false with no prompt otherwise).
+  const surfaceTabBtn = document.getElementById("surfaceTab");
+  const surfaceDesktopBtn = document.getElementById("surfaceDesktop");
+  const surfaceModeHelp = document.getElementById("surfaceModeHelp");
+  const TAB_CAPTURE_AVAILABLE = !!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId);
+  let surfaceMode = "desktop";
+  function renderSurfaceButtons() {
+    if (surfaceTabBtn) surfaceTabBtn.setAttribute("aria-pressed", String(surfaceMode === "tab"));
+    if (surfaceDesktopBtn) surfaceDesktopBtn.setAttribute("aria-pressed", String(surfaceMode === "desktop"));
+  }
   const delaySel = document.getElementById("optDelay");
   const blurCb = document.getElementById("optBlurFirst");
   const videoCb = document.getElementById("optVideo");
@@ -509,11 +520,8 @@ document.addEventListener("DOMContentLoaded", async () => {
    */
   function saveRecordOpts() {
     const o = {
-      // Always false in 1.11: the control is gone and the capture is
-      // events-only. The STORED value is left untouched - see
-      // VIDEO_ENABLED_IN_EXTENSION - so this never writes over it.
       video: videoCb ? !!videoCb.checked : false,
-      surfaceMode: surfaceSel ? surfaceSel.value : "desktop",
+      surfaceMode,
       delaySec: Number(delaySel.value) || 0,
       blurFirst: !!blurCb.checked,
       videoSetBy,
@@ -539,10 +547,14 @@ document.addEventListener("DOMContentLoaded", async () => {
    * user in a hurry reads, and it must not promise a recording it won't make.
    */
   function applyVideoUI(on) {
-    if (surfaceSel) {
-      surfaceSel.disabled = !on;
-      surfaceSel.style.opacity = on ? "" : "0.45";
-    }
+    const surfaceRow = document.getElementById("surfaceModeRow");
+    if (surfaceRow) surfaceRow.style.opacity = on ? "" : "0.45";
+    [surfaceTabBtn, surfaceDesktopBtn].filter(Boolean).forEach((btn) => {
+      // A disabled Tab button must still say WHY if it's disabled for lack of
+      // the API (Firefox), not just because video is off — don't clobber that
+      // title with the generic "video is off" one.
+      btn.disabled = !on || (btn === surfaceTabBtn && !TAB_CAPTURE_AVAILABLE);
+    });
     const micRow = document.getElementById("micOpt");
     if (micRow) {
       micRow.disabled = !on;
@@ -572,12 +584,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     // came back empty must land on off, not on whatever coerces.
     if (videoCb) videoCb.checked = o.video === true;
     if (o.videoSetBy === "user") videoSetBy = "user";
-    if (o.surfaceMode && surfaceSel) surfaceSel.value = o.surfaceMode;
+    // A stored "tab" choice is only honored if the permission is STILL
+    // granted — the user may have revoked it from Options (the grant card's
+    // Remove button) since choosing it, or this may be a sync'd profile on a
+    // browser with no tabCapture at all.
+    if (o.surfaceMode === "tab" && TAB_CAPTURE_AVAILABLE) {
+      let stillGranted = false;
+      try { stillGranted = await new Promise((r) => chrome.permissions.contains({ permissions: ["tabCapture"] }, r)); } catch {}
+      surfaceMode = stillGranted ? "tab" : "desktop";
+    } else {
+      surfaceMode = "desktop";
+    }
+    renderSurfaceButtons();
     if (o.delaySec) delaySel.value = String(o.delaySec);
     blurCb.checked = !!o.blurFirst;
     updateOptsState({
       video: videoCb ? videoCb.checked : false,
-      surfaceMode: surfaceSel ? surfaceSel.value : "desktop",
+      surfaceMode,
       delaySec: Number(delaySel.value) || 0,
       blurFirst: blurCb.checked,
     });
@@ -585,8 +608,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     // The checkbox gets its own handler: toggling it is the one action that
     // means "I have decided about video".
     if (videoCb) videoCb.addEventListener("change", () => { markVideoChosen(); saveRecordOpts(); });
-    [surfaceSel, delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));
+    [delaySel, blurCb].filter(Boolean).forEach((el) => el.addEventListener("change", saveRecordOpts));
+    if (surfaceDesktopBtn) {
+      surfaceDesktopBtn.addEventListener("click", () => {
+        surfaceMode = "desktop";
+        if (surfaceModeHelp) surfaceModeHelp.textContent = "Desktop asks your browser to share a tab, window or screen.";
+        renderSurfaceButtons();
+        saveRecordOpts();
+      });
+    }
+    if (surfaceTabBtn) {
+      surfaceTabBtn.addEventListener("click", () => {
+        // chrome.permissions.request must be called synchronously as the
+        // first thing in this handler — see the comment where these
+        // elements are declared. Already-granted resolves true immediately
+        // with no prompt, so re-clicking Tab after granting it once is free.
+        chrome.permissions.request({ permissions: ["tabCapture"] }, (granted) => {
+          void chrome.runtime.lastError;
+          surfaceMode = granted ? "tab" : "desktop";
+          if (surfaceModeHelp) {
+            surfaceModeHelp.textContent = granted
+              ? "Tab records the current tab with no share picker."
+              : "Permission declined — falling back to Desktop's share picker.";
+          }
+          renderSurfaceButtons();
+          saveRecordOpts();
+        });
+      });
+    }
   }
+  // Applied last, deliberately: applyVideoUI() above also writes ctaSub, and
+  // a capture already running on this tab must win that race, not lose it.
+  if (stateResponse?.capturing) applyCapturingUI();
 
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {
     const o = saveRecordOpts();
@@ -643,10 +696,16 @@ async function runCombo(messageType, busyText, extra) {
       reportFailure(res.error);
       return;
     }
+    // Tab mode fell back to the picker server-side (no tabCapture API, or the
+    // permission check raced a revoke) — say so rather than silently landing
+    // on Desktop with no explanation for why a picker just appeared.
+    if (res?.tabModeFallback) {
+      showToast("Tab recording wasn't available — showing the share picker instead.");
+    }
     // Success — close popup so focus returns to the page, where the modal /
     // HUD / panel is about to appear. If site access was just declined, leave
     // the honest limitation on screen a beat longer before closing.
-    setTimeout(() => window.close(), 350);
+    setTimeout(() => window.close(), res?.tabModeFallback ? 900 : 350);
   } catch (err) {
     reportFailure(err);
   }
@@ -670,6 +729,21 @@ function setBusy(busy) {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
+}
+
+/** A capture is already running on this tab (GET_STATE's `capturing`). The
+ *  hero button looks identical to the idle state otherwise, and clicking it
+ *  would silently discard the running session instead of doing nothing -
+ *  the toolbar's red REC badge is the only other hint, and it's not visible
+ *  from inside the popup. Disabling here, not hiding: the button vanishing
+ *  would read as a bug. */
+function applyCapturingUI() {
+  const btn = document.getElementById("btnCaptureBug");
+  const title = document.getElementById("ctaTitle");
+  const sub = document.getElementById("ctaSub");
+  if (btn) btn.disabled = true;
+  if (title) title.textContent = "Capturing…";
+  if (sub) sub.textContent = "Already running on this tab — use Stop in the on-page bar";
 }
 
 function updateHint(isLoaded) {
@@ -855,6 +929,15 @@ function redactStateLabel(rules) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.11.3": {
+    label: "New in 1.11.3",
+    lines: [
+      "Screen recording is back — turn on “Record video too” in Record options",
+      "A “Tab” record mode — captures the current tab with no browser share picker (asks once for permission)",
+      "The capture bar's mic mute works, and the toolbar icon shows a red REC while recording",
+      "Works on sites with strict security policies, and on sites that run their own copy of TraceBug",
+    ],
+  },
   "1.11.2": {
     label: "New in 1.11.2",
     lines: [

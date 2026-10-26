@@ -57,3 +57,26 @@ export function withGrantedHostAccess(extDir, label = "ext") {
 
   return dest;
 }
+
+/**
+ * Same idea as withGrantedHostAccess, for the `tabCapture` optional
+ * permission (1.11.3's no-picker Tab record mode). The real grant flow is
+ * `chrome.permissions.request()` from a popup click — a native dialog
+ * Playwright cannot click, same limitation as `<all_urls>` above. Also
+ * grants `<all_urls>` host access, since Tab-mode e2e needs the same
+ * content-script injection access the video suite already relies on.
+ *
+ * @param {string} extDir
+ * @param {string} [label]
+ * @returns {string} path to the copy — pass this to --load-extension
+ */
+export function withGrantedTabCapture(extDir, label = "ext") {
+  const dest = withGrantedHostAccess(extDir, label);
+  const manifestPath = join(dest, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const optional = Array.isArray(manifest.optional_permissions) ? manifest.optional_permissions : [];
+  manifest.optional_permissions = optional.filter((p) => p !== "tabCapture");
+  manifest.permissions = [...new Set([...(manifest.permissions || []), "tabCapture"])];
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf8");
+  return dest;
+}

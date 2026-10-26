@@ -44,6 +44,7 @@ each file's convention or the diff becomes a whole-file re-encode.
 | `unlimitedStorage` | A report with a replay or a video can exceed the default storage limit. It is stored only on the user's device. |
 | `alarms` | Cancels an unanswered send-confirmation window after two minutes. |
 | `offscreen` | Hosts the optional screen recording ("Record video too") while the user moves between pages, so the recording keeps running on tab or window navigation. |
+| `tabCapture` (optional) | Requested only when the user turns on "Record video too" and picks the **Tab** record mode, so the current tab can be recorded without Chrome's "Choose what to share" dialog appearing first. Never requested at install; declined, it falls back to the normal share picker. |
 | Optional host permissions | Requested when the user saves a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama integration (one fixed address each, or `localhost`/`127.0.0.1` for Ollama), so TraceBug can send the report to that service. Declared optional so TraceBug can request access to one specific address you enter for a self-hosted AI provider, only at the moment you save it, and never for all sites. |
 | Remote code | No. All code ships in the package. |
 
@@ -59,19 +60,22 @@ Declare on the cautious side. TraceBug never sends data to its developer. But at
 - ✅ Tick all three certifications: not sold to third parties; not used for purposes unrelated to the single purpose; not used for creditworthiness or lending.
 - Privacy policy URL: the existing one on tracebug.dev. Check that it says "nothing goes to TraceBug" and describes the user-initiated sends.
 
-## 4. What's new in 1.11.2 (store description, top)
+## 4. What's new in 1.11.3 (store description, top)
 
-1.11.2 is small correctness fixes; the 1.11.1 capture fixes stay underneath because they are still
-what a new user meets first. A listing is read by people installing for the first time, not only by
-upgraders.
+1.11.2 never reached the stores, so this listing covers both. The 1.11.1 capture fixes stay
+underneath because they are still what a new user meets first. A listing is read by people
+installing for the first time, not only by upgraders.
 
+- Screen recording is back, with a new **Tab** mode: record the current tab with no "Choose what to
+  share" dialog (Chrome asks once). **Desktop** mode records a window or screen through the usual picker.
+- Mic mute works during a recording, and the toolbar icon shows a red REC while one is running.
+- Works on sites with strict security policies (Trusted Types) that used to block TraceBug's toolbar.
 - Works properly on sites that use the TraceBug npm SDK, and steps aside where that site's own
   TraceBug toolbar is already showing.
 - Tracker buttons say what they do: "Send to GitHub" asks you first; "Copy" copies.
 - No more dialog after every export — a one-line link opens the report in your AI agent.
 - The "Keep capturing across sites" option is gone: TraceBug no longer asks for access to all sites.
 - A new welcome page with the three steps and the `npx tracebug mcp` command.
-- Screen recording is back — turn on "Record video too" in Record options.
 
 From 1.11.1:
 

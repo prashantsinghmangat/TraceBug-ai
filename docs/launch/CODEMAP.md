@@ -31,7 +31,7 @@ the same step.
   file's 1,855 lines**. The viewer's own scrubber/console/network code lives inside `REPLAY_RUNTIME` —
   grep within it, don't read it.
 
-## tracebug-extension/background.js (~1,650) — the service worker
+## tracebug-extension/background.js (~2,030) — the service worker
 
 - `seedRecordOptsDefault` ~L66 and the `onInstalled` listener ~L89 (record-options default; see STATE.md).
 - MV3 durability: `persistState` ~L155 · `maybeApplyUpdate` ~L181 · `SESSION_STATE_KEY` ~L151.
@@ -43,7 +43,7 @@ the same step.
 ## The rest over 800 lines
 
 - **compact-toolbar.ts (~1,230)** — `mountCompactToolbar` ~L82 · `_toggleSessionTracking` ~L464 · `_toggleRecording` ~L536 · `_showRecordPreflight` ~L631 · `_openOrRefreshTicket` ~L744 · `_initDrag` ~L1067 · `_convertToFab` ~L1183. **Only** consumer of the capture `onStatus` callback.
-- **video-recorder.ts (~940)** — `isExtensionContext` ~L158 picks the transport · wire formats ~L54 · sync getters ~L164–256 · `scheduleDurationCap` ~L115.
+- **video-recorder.ts (~1,010)** — `isExtensionContext` ~L163 picks the transport · wire formats ~L54 · sync getters ~L169–261 · `scheduleDurationCap` ~L115 · mic functions (`hasMicrophoneTrack`/`isMicrophoneMuted`/`setMicrophoneMuted`, forward to offscreen via `tb:rec:mic-mute` in extension mode) ~L288–318.
 - **draw-mode.ts (~885)** — `activateDrawMode` ~L55 · `_drawShape` ~L644 · `_redrawAllRegions` ~L705 · `_showCommentInput` ~L774.
 
 ## Message verbs — where each one is handled

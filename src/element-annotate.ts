@@ -6,7 +6,7 @@ import { ElementAnnotation, AnnotationIntent } from "./types";
 import { addElementAnnotation, getElementAnnotations } from "./annotation-store";
 import { captureStyleEvidence } from "./style-evidence";
 import { isTraceBugUiElement } from "./dom-helpers";
-import { escapeHtml } from "./ui/helpers";
+import { escapeHtml, setInnerHTML } from "./ui/helpers";
 
 let _active = false;
 let _cleanup: (() => void) | null = null;
@@ -55,7 +55,7 @@ export function activateElementAnnotateMode(
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
     animation: tracebug-slide-down 0.2s ease;
   `;
-  _modeBanner.innerHTML = `
+  setInnerHTML(_modeBanner, `
     <div style="display:flex;align-items:center;gap:10px">
       <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
       <span style="font-weight:600">Annotate Mode</span>
@@ -69,7 +69,7 @@ export function activateElementAnnotateMode(
         font-size: 12px; font-family: inherit; font-weight: 500;
       ">Exit</button>
     </div>
-  `;
+  `);
   // Add keyframe animations
   const styleTag = document.createElement("style");
   styleTag.id = "tracebug-annotate-styles";
@@ -516,7 +516,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
   const selectedCount = _selectedElements.size;
   const selectorText = _computeSelector(targetEl);
 
-  popover.innerHTML = `
+  setInnerHTML(popover, `
     <div style="margin-bottom:14px">
       <div style="font-size:13px;font-weight:600;color:var(--tb-text-primary, #FAFAFA);margin-bottom:4px">
         ${selectedCount > 1 ? `${selectedCount} elements selected` : "Annotate Element"}
@@ -559,7 +559,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
       <button id="tracebug-ann-save" style="background:#6366F1;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(99,102,241,0.3)">Save Annotation</button>
     </div>
-  `;
+  `);
 
   root.appendChild(popover);
   _popover = popover;

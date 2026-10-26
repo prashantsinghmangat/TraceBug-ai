@@ -8,6 +8,7 @@
 
 import { DrawRegion } from "./types";
 import { addDrawRegion, getDrawRegions } from "./annotation-store";
+import { setInnerHTML } from "./ui/helpers";
 
 type DrawShape = "rect" | "ellipse" | "pen" | "redact";
 
@@ -568,7 +569,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
     btn.dataset.shape = s.shape;
     btn.title = s.label;
     btn.setAttribute("aria-label", s.label);
-    btn.innerHTML = s.icon;
+    setInnerHTML(btn, s.icon);
     btn.style.cssText = _toolBtnStyle(s.shape === _currentShape);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -613,7 +614,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
   doneBtn.dataset.tracebug = "draw-done-btn";
   doneBtn.title = "Exit draw mode (Esc)";
   doneBtn.setAttribute("aria-label", "Exit draw mode");
-  doneBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`;
+  setInnerHTML(doneBtn, `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`);
   doneBtn.style.cssText = `
     width: 24px; height: 24px; padding: 0;
     background: transparent; border: 1px solid var(--tb-border, #2a2a3e);

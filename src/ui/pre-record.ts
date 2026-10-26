@@ -5,6 +5,7 @@
 // recording captures) into a pick-first flow, plus a 3-2-1 countdown.
 
 import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBoxes, undoLastBlur } from "./blur-tool";
+import { setInnerHTML } from "./helpers";
 
 const COUNTDOWN_ID = "tracebug-record-countdown";
 const ARM_BAR_ID = "tracebug-record-armbar";
@@ -143,12 +144,12 @@ export function startBlurThenRecord(opts: { onStart: () => void; onCancel?: () =
       "background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;" +
       "font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
   );
-  bar.innerHTML = `
+  setInnerHTML(bar, `
     <span>🫥 Click elements to blur/unblur — the blur is captured into the recording</span>
     <button data-tb-arm="undo" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Undo</button>
     <button data-tb-arm="start" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:7px 16px;font:600 13px inherit;cursor:pointer">● Start recording</button>
     <button data-tb-arm="cancel" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Cancel</button>
-  `;
+  `);
   document.body.appendChild(bar);
   bar.querySelector('[data-tb-arm="undo"]')!.addEventListener("click", () => { undoLastBlur(); });
 

@@ -492,17 +492,23 @@ async function injectSDK(tabId) {
     // One interface per page (deliberately not supported — see
     // docs/launch/sdk-isolation-1.11.2.md): if this tab already has a host
     // page's own TraceBug UI, defer entirely rather than mounting a second
-    // toolbar. Unlike ensureAlive()'s repair path, a `pageSdk: true` answer
-    // HERE can only mean a host page's own instance — this function only
-    // ever runs on a tab injectedTabs never saw before, so there is no prior
-    // extension instance of ours it could be detecting instead.
+    // toolbar. A `pageSdk: true` answer here does NOT always mean a host
+    // page's own instance, though injectedTabs having never seen this tab
+    // before once made that assumption — injectedTabs/activeTabs are
+    // in-memory (chrome.storage.session) and do NOT survive a service-worker
+    // restart or the extension itself being reloaded/updated while the tab
+    // stays open, so a tab we genuinely injected earlier can look "never
+    // seen" here even though our own #tracebug-root is still mounted.
+    // `extensionOwned` (content-script.js's TB_PING, backed by a sessionStorage
+    // marker page-support.js names — page-scoped, so it survives exactly
+    // what the worker's bookkeeping doesn't) is what tells the two apart.
     const pong = await pingTab(tabId);
-    if (pong?.pageSdk) {
+    if (pong?.pageSdk && !pong.extensionOwned) {
       const S = globalThis.TraceBugPageSupport;
       throw new Error(S ? S.HOST_UI_ERROR : "tracebug-host-ui-present");
     }
 
-    await injectPageWorld(tabId);
+    if (!pong?.pageSdk) await injectPageWorld(tabId);
 
     // Reflect "loaded" state in the toolbar badge for this tab.
     updateBadge(tabId);
@@ -511,6 +517,14 @@ async function injectSDK(tabId) {
     // Injection never happened — don't keep the tab marked active, or every
     // future navigation retries and silently fails again.
     activeTabs.delete(tabId);
+    // A capture tracked against this tab cannot possibly continue if the SDK
+    // never mounted — most commonly because the destination page runs its own
+    // TraceBug and we defer entirely (HOST_UI_ERROR). Nothing on a page like
+    // that ever pings tb:capture:status, so without this the REC badge (and
+    // captureTabs) would stay stuck forever: the only other way a capture
+    // ends is the NEW page proactively reporting its origin, which a deferred
+    // page can never do.
+    endCapture(tabId, "inject-failed");
     persistState();
     console.warn("[TraceBug] Injection failed:", err.message);
     // Rethrow so the popup shows the real error instead of a false success.
@@ -529,13 +543,40 @@ async function handleComboAction(message, sender) {
   const tabId = message.tabId || sender?.tab?.id;
   if (!tabId) throw new Error("No active tab");
 
+  // MUST come before the activeTabs check below. The worker can be woken BY
+  // this very message (MV3 idle timeout), in which case _hydrated's own
+  // chrome.storage.session read is still in flight and activeTabs is still
+  // the empty Set it starts as — reading it one tick too early is exactly as
+  // wrong as never reading it at all, and was still reproducible after the
+  // activeTabs fix below for precisely that reason.
+  try { await _hydrated; } catch {}
+
   // No persistent site state — every action injects the SDK fresh. Tracking
   // only starts when the user explicitly takes an action. Reloading the tab
   // unloads everything (the onUpdated listener clears injectedTabs).
   // A tab we believe is injected may be orphaned (extension updated while it
   // was open), so verify rather than trust the bookkeeping. Both paths throw
   // on failure, and the popup turns that into a sentence with a button.
-  const wasAlreadyInjected = injectedTabs.has(tabId);
+  let wasAlreadyInjected = injectedTabs.has(tabId);
+  // The inverse can also be wrong: injectedTabs is in-memory only and does
+  // NOT survive a service-worker restart (MV3's idle timeout, an update), even
+  // though the tab's content script and page-world SDK do — they are tied to
+  // the page, not the worker. Trusting a false "never injected" here sent a
+  // perfectly fine tab through injectSDK()'s host-UI check, which (correctly,
+  // for a genuinely fresh tab) treats any TraceBug DOM it finds as a host
+  // page's own instance — misdiagnosing our own surviving #tracebug-root as
+  // "this site runs its own TraceBug" and refusing to capture on it at all.
+  //
+  // activeTabs DOES survive a restart (persisted), and is only ever set
+  // after a successful injection of THIS tab — so if it has this tab, any
+  // TraceBug DOM a ping finds now can only be our own surviving instance,
+  // never a host's first-ever appearance. A ping alone can't make that call:
+  // "alive + a TraceBug element exists" looks identical whether it's ours or
+  // a real host UI, which is exactly the ambiguity activeTabs resolves.
+  if (!wasAlreadyInjected && activeTabs.has(tabId) && (await pingTab(tabId))?.alive) {
+    wasAlreadyInjected = true;
+    injectedTabs.add(tabId);
+  }
   if (wasAlreadyInjected) await ensureAlive(tabId);
   else await injectSDK(tabId);
 
@@ -595,6 +636,25 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   // Ensure persisted state (activeTabs / _recordingTabId) is rehydrated before
   // we decide whether to re-inject — a cold worker wake could otherwise miss it.
   await _hydrated;
+
+  // Chrome can fire "complete" more than once for the SAME document — SPA
+  // route changes, lazy-loaded resources, slow subresources — with no real
+  // reload in between. Treating every one as a genuine navigation used to
+  // unconditionally wipe injectedTabs and run injectSDK()'s FRESH-injection
+  // path again, whose host-UI check assumes any TraceBug DOM it finds
+  // belongs to a host page. On a spurious repeat that assumption is wrong:
+  // it is OUR OWN surviving mount, now misread as "this site runs its own
+  // TraceBug" — and because injectSDK()'s failure path also clears
+  // activeTabs, the tab stays broken on every later click until a real
+  // reload. A ping settles it for real: only an actual navigation kills the
+  // content script.
+  if (injectedTabs.has(tabId)) {
+    const pong = await pingTab(tabId).catch(() => null);
+    if (pong?.alive) {
+      try { updateBadge(tabId); } catch {}
+      return;
+    }
+  }
 
   // A reload wipes the SDK from the page, so the injection-tracking set
   // must also forget the tab. The badge update right after will show the
@@ -800,7 +860,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // The popup uses this to show a "loaded / not loaded" indicator.
   if (message.type === "GET_STATE") {
     const tabId = message.tabId || sender?.tab?.id;
-    sendResponse({ loaded: tabId ? injectedTabs.has(tabId) : false });
+    sendResponse({
+      loaded: tabId ? injectedTabs.has(tabId) : false,
+      // The popup uses this to avoid silently clobbering a capture already
+      // running on this tab — starting a new one ends the active session.
+      capturing: tabId ? captureTabs.has(tabId) : false,
+    });
     return false;
   }
 
@@ -1244,13 +1309,29 @@ async function handleRecordingMessage(message, sender) {
   // Hydrate before reading _recorderWindowId (Firefox host-absent gate) or
   // mutating _recordingTabId below — either can be the wake event.
   try { await _hydrated; } catch {}
-  // No more silent tabCapture path. We always route to getDisplayMedia so
-  // the user gets Chrome's native "Choose what to share" picker — they can
-  // pick the current tab, a different tab, a window, or the whole screen.
-  // The picker is more reliable than chrome.tabCapture (which fails in
-  // dozens of edge cases — popups, file://, chrome://, sandboxed iframes)
-  // and produces a recording that always plays back correctly.
+  // Desktop mode (the default) always routes to getDisplayMedia so the user
+  // gets the browser's native "Choose what to share" picker. Tab mode
+  // (surfaceMode: "tab", optional `tabCapture` permission) is resolved below —
+  // only background.js has a real tab to target chrome.tabCapture.getMediaStreamId
+  // at; an offscreen document has none. See docs/audit/capture-flow-1.11.3.md.
   const extraData = {};
+  if (
+    message.type === "tb:rec:start" &&
+    message.data?.surfaceMode === "tab" &&
+    sender?.tab?.id != null
+  ) {
+    const streamId = await resolveTabCaptureStreamId(sender.tab.id);
+    if (streamId) {
+      extraData.tabCaptureStreamId = streamId;
+    } else {
+      // No tabCapture API (Firefox) or permission not granted (declined, or
+      // never requested) — fall back to the picker rather than failing the
+      // capture outright. The popup tells the user this happened via
+      // `tabModeFallback` on the response.
+      message = { ...message, data: { ...message.data, surfaceMode: "desktop" } };
+      extraData.tabModeFallback = true;
+    }
+  }
 
   // Never spin up the recorder host just to answer a passive probe.
   // Firefox: the host is a VISIBLE popup that used to flash at the user on
@@ -1320,6 +1401,9 @@ async function handleRecordingMessage(message, sender) {
     };
     attempt(20); // ~3s worst case
   });
+  if (extraData.tabModeFallback && result && typeof result === "object") {
+    result.tabModeFallback = true;
+  }
 
   // Track the recording tab so we can re-attach the on-page HUD after a
   // navigation/reload. We pin the tab id on a successful start, clear it on
@@ -1806,6 +1890,35 @@ function hasHostAccess(pattern) {
         resolve(!!granted);
       });
     } catch { resolve(false); }
+  });
+}
+
+/**
+ * Resolve a stream id for Tab mode's no-picker recording, or null if it
+ * can't be done — Firefox has no `chrome.tabCapture` at all, and even on
+ * Chrome the `tabCapture` permission may not be granted (declined, or never
+ * requested because popup.js only calls `chrome.permissions.request` on the
+ * first Tab-mode use). Both are ordinary fallback cases, not errors — the
+ * caller falls back to the getDisplayMedia picker.
+ */
+async function resolveTabCaptureStreamId(tabId) {
+  if (typeof chrome === "undefined" || !chrome.tabCapture?.getMediaStreamId) return null;
+  const granted = await new Promise((resolve) => {
+    try {
+      chrome.permissions.contains({ permissions: ["tabCapture"] }, (g) => {
+        void chrome.runtime.lastError;
+        resolve(!!g);
+      });
+    } catch { resolve(false); }
+  });
+  if (!granted) return null;
+  return new Promise((resolve) => {
+    try {
+      chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (streamId) => {
+        void chrome.runtime.lastError;
+        resolve(streamId || null);
+      });
+    } catch { resolve(null); }
   });
 }
 

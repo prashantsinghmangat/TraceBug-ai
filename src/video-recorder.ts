@@ -74,6 +74,8 @@ interface OffscreenStatus {
   mimeType?: string;
   startedAt?: number;
   elapsedMs?: number;
+  micIncluded?: boolean;
+  micMuted?: boolean;
 }
 
 // ── Shadow state (read by sync getters in both transports) ───────────────
@@ -267,7 +269,24 @@ export function isVideoOffered(): boolean {
   return !isExtensionContext() || VIDEO_ENABLED_IN_EXTENSION;
 }
 
+// Extension-mode mic state, mirrored from the offscreen document (which owns
+// the real stream — see _extMicIncluded's write sites below). Bug 4
+// (video-1.11.1.md): the three functions below used to read `_stream`
+// unconditionally, which is always null in the extension since the stream
+// lives in offscreen.js, so the HUD mic button was permanently dead there.
+let _extMicIncluded = false;
+let _extMicMuted = false;
+
+/** Called from wireStartedListener (tb:rec:started) and
+ *  restoreFromOffscreenIfActive (tb:rec:status) once the offscreen document
+ *  reports whether a mic track actually made it into the recording. */
+export function _setExtMicState(included: boolean, muted: boolean): void {
+  _extMicIncluded = included;
+  _extMicMuted = muted;
+}
+
 export function hasMicrophoneTrack(): boolean {
+  if (isExtensionContext()) return _extMicIncluded;
   if (!_stream) return false;
   // Audio tracks from getDisplayMedia's `audio: true` are system/tab audio,
   // not the mic. The mic track is the one we added via getUserMedia in
@@ -277,6 +296,7 @@ export function hasMicrophoneTrack(): boolean {
 }
 
 export function isMicrophoneMuted(): boolean {
+  if (isExtensionContext()) return _extMicIncluded && _extMicMuted;
   if (!_stream) return false;
   const tracks = _stream.getAudioTracks();
   if (tracks.length === 0) return false;
@@ -284,6 +304,12 @@ export function isMicrophoneMuted(): boolean {
 }
 
 export function setMicrophoneMuted(muted: boolean): void {
+  if (isExtensionContext()) {
+    if (!_extMicIncluded) return;
+    _extMicMuted = muted; // optimistic — the HUD updates immediately
+    rpcCall("tb:rec:mic-mute", { muted }).catch(() => {});
+    return;
+  }
   if (!_stream) return;
   _stream.getAudioTracks().forEach(t => { t.enabled = !muted; });
 }
@@ -488,6 +514,7 @@ export async function restoreFromOffscreenIfActive(): Promise<boolean> {
   _comments = Array.isArray(status.comments) ? status.comments.slice() : [];
   _mimeType = status.mimeType || "video/webm";
   _startedAt = status.startedAt || (Date.now() - (status.elapsedMs || 0));
+  _setExtMicState(!!status.micIncluded, !!status.micMuted);
   return true;
 }
 
@@ -581,6 +608,7 @@ export function wireStartedListener(): void {
       scheduleDurationCap();
       _onStatus?.("recording");
     }
+    _setExtMicState(!!d.micIncluded, false);
     // Mic was requested but the extension lacks microphone permission (an
     // offscreen document can't prompt). Tell the user where to grant it.
     if (d.micRequested && d.micIncluded === false) {

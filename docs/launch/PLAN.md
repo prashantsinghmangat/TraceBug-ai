@@ -196,10 +196,14 @@ repeated here - read that document for T-04, T-07 through T-12, and T-11's produ
   value for the no-capture-running case - don't remove it outright, only suppress or redirect it
   while capturing. See `docs/audit/product-review.md` Part 4 "HUD".
 
-### 10b - 1.11.3: video back in the extension
+### 10b - video back in the extension (DONE, moved up from 1.11.3 into 1.11.2 — 2026-10-23)
 
-Screen recording is paused in 1.11 behind `VIDEO_ENABLED_IN_EXTENSION` in `src/video-recorder.ts`.
-**The full brief is `docs/launch/video-1.11.1.md` - read it, not this summary.** The order:
+**The full brief and outcome are `docs/launch/video-1.11.1.md` and `docs/launch/STATE.md` - read
+those, not this summary.** `VIDEO_ENABLED_IN_EXTENSION = true`. Bug 1 did not reproduce in a real
+browser (two scenarios, `e2e/ext-video-recording.e2e.mjs`) and is believed already fixed by the
+`quick-bug.ts` rework in `dda5ac8`. Bug 4 is left deliberately unfixed — the mic-mute button already
+renders disabled rather than dead. Bug 2 (fullscreen) is still open, polish only. Everything below is
+historical context for how it was diagnosed and restored:
 
 - **Bug 1 (worst): a recording is lost on stop.** The capture runs, the ticket opens empty. The hand-off
   offscreen -> `chrome.storage.local` -> page is where it fails. The stated cause is a **hypothesis, and two

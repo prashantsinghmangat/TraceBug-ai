@@ -217,6 +217,21 @@
       <div class="status" id="micStatus"></div>
     </section>
 
+    <section class="card" id="tabCaptureCard" style="display:none">
+      <h2>Record current tab (no picker) <span class="pill" id="tabCapturePill">Not granted</span></h2>
+      <p class="hint">
+        Lets the popup's "Tab" record mode capture the current tab directly, with no browser
+        share-picker. Chrome shows this as "Read and change all your data on all websites" when you
+        grant it — the same wording as the all-sites permission below, since both let a script read
+        tab content. Not available in Firefox; "Tab" falls back to the share picker there.
+      </p>
+      <div class="row">
+        <button id="tabCaptureGrant" type="button">Allow</button>
+        <button class="ghost" id="tabCaptureRemove" type="button">Remove</button>
+      </div>
+      <div class="status" id="tabCaptureStatus"></div>
+    </section>
+
     <section class="card" id="allUrlsCard" style="display:none">
       <h2>Access to all sites <span class="pill on">Granted</span></h2>
       <p class="hint">

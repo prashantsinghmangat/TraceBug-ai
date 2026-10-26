@@ -226,6 +226,70 @@ Serve a local page that loads `website/public/tracebug-sdk.js` and calls
 capture; `Alt+B` shows the same sentence on the page. Exactly one TraceBug toolbar is ever visible.
 `e2e/ext-sdk-isolation.e2e.mjs` covers the logic; this row is the rendered sentence.
 
+### 11. Tab mode's permission prompt (1.11.3)
+
+`chrome.permissions.request({ permissions: ["tabCapture"] })` has to be the first synchronous
+statement in a click handler or Chrome silently resolves `false` with no dialog at all — this is the
+kind of thing a real click can falsify that no RPC-driven e2e can. Load this build unpacked, fresh
+profile.
+
+1. Open the popup → **Record options** → turn on **Record video too** → click **Tab**.
+
+**Pass:** Chrome's permission bubble appears near the toolbar icon (not a full-page dialog), reading
+*"Read and change all your data on all websites"* — **not** a browsing-history warning; if the wording
+differs from the copy in `docs/chrome-extension.md`, that doc is now wrong and needs the real wording
+pasted in, since it was paraphrased from Chrome's documented permission list rather than seen live.
+Accept it. **Pass:** the **Tab** button shows pressed/selected state, the popup closes normally on
+**Capture Bug**, and no "Choose what to share" picker opens before the HUD appears.
+
+### 12. Declining the Tab-mode prompt falls back to Desktop (1.11.3)
+
+Fresh profile (tabCapture not yet granted).
+
+1. Popup → Record options → **Record video too** → **Tab** → in Chrome's permission bubble, click
+   **Block**/deny (or dismiss it).
+
+**Pass:** the help text under the switch says the permission was declined and it's falling back to
+Desktop; clicking **Capture Bug** opens the normal "Choose what to share" picker, and the recording
+still completes and lands in the ticket. The popup does **not** silently stay on "Tab" as if nothing
+happened.
+
+### 13. Existing 1.11.2 users are not disabled by the 1.11.3 update (1.11.3)
+
+`tabCapture` was added to `optional_permissions`, not `permissions` — Chrome's "this extension has new
+permissions and has been disabled" re-approval flow applies only to the required
+`permissions`/`host_permissions` arrays, so an optional addition should update silently. This needs a
+real update, not a fresh install, to actually exercise that code path.
+
+1. Install the **previous** released build (1.11.2) unpacked, confirm it works (toolbar icon active,
+   not greyed).
+2. Load this build over the same profile (Reload on the unpacked extension — not a new profile).
+
+**Pass:** the extension is **not** disabled and shows no "review these changes" interstitial;
+`chrome://extensions` still shows it enabled immediately after the reload, with no click required to
+re-enable it.
+
+### 14. macOS: Tab mode and the system Screen Recording permission
+
+Tab mode captures tab content via `chrome.tabCapture`, not the OS screen-capture APIs that Desktop
+mode's `getDisplayMedia` goes through — macOS's System Settings → Privacy & Security → Screen Recording
+gate is specifically a `getDisplayMedia`/OS-level concern (`isSystemPermissionDenial()` in
+`offscreen.js`). **Pass if confirmed on a real Mac:** Tab mode does **not** prompt for or require the
+macOS Screen Recording permission at all (only Desktop mode does) — if it turns out Tab mode also
+needs it, `offscreen.js`'s `isSystemPermissionDenial()` error branch needs a Tab-mode path, since today
+it is only reachable from the `getDisplayMedia` catch block.
+
+### 15. Firefox: "Tab" falls back to the picker, with no user-agent branching (1.11.3)
+
+`npm run ext:firefox` (not a gate — stays running until you close the browser).
+
+1. Popup → Record options → **Record video too**.
+
+**Pass:** the **Tab** button is disabled (greyed, with a tooltip explaining Firefox has no equivalent
+API) rather than silently doing nothing or erroring — `chrome.tabCapture` feature-detection, not a
+browser-name check. **Desktop** still works exactly as it did before 1.11.3 (Firefox's window-host
+recorder, `offscreen.js`'s `IS_WINDOW_HOST` branch).
+
 ### 10. Diagnostics
 
 Open the popup, expand **Having trouble?**. **Pass:** the summary says "no errors" on a clean session.

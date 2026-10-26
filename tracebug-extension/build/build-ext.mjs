@@ -114,6 +114,10 @@ function chromeManifest() {
     ...base,
     version,
     permissions: [...base.permissions, ...(VIDEO_ON ? ["offscreen"] : [])],
+    // tabCapture (optional, never at install) powers the no-picker "Tab"
+    // record mode — see docs/audit/capture-flow-1.11.3.md. Gated on VIDEO_ON
+    // for the same reason offscreen is: it is useless without the recorder.
+    optional_permissions: VIDEO_ON ? base.optional_permissions : [],
     background: { service_worker: "background.js" },
     // Hard API floors: offscreen (109), storage.session (102),
     // runtime.getContexts (116). Without this, Chrome ≤108 installs the
@@ -122,10 +126,19 @@ function chromeManifest() {
   };
 }
 
-/** Firefox MV3: event-page background (has DOM); no offscreen API; gecko id. */
+/**
+ * Firefox MV3: event-page background (has DOM); no offscreen API; gecko id.
+ *
+ * `chrome.tabCapture` has no Firefox equivalent that captures a live stream
+ * (`browser.tabs.captureTab()` is a single still frame) — see
+ * docs/audit/capture-flow-1.11.3.md §6. `optional_permissions` is stripped
+ * entirely rather than shipped unused; Tab mode feature-detects
+ * `chrome.tabCapture` at runtime and falls back to the Desktop picker.
+ */
 function firefoxManifest() {
+  const { optional_permissions: _dropped, ...rest } = base;
   return {
-    ...base,
+    ...rest,
     version,
     // Firefox event pages have no importScripts, so the worker-side scripts
     // are listed ahead of background.js and run in the same global.
