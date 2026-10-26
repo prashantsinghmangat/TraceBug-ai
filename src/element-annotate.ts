@@ -6,7 +6,7 @@ import { ElementAnnotation, AnnotationIntent } from "./types";
 import { addElementAnnotation, getElementAnnotations } from "./annotation-store";
 import { captureStyleEvidence } from "./style-evidence";
 import { isTraceBugUiElement } from "./dom-helpers";
-import { escapeHtml, setInnerHTML, createStyleTag } from "./ui/helpers";
+import { escapeHtml, setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 
 let _active = false;
 let _cleanup: (() => void) | null = null;
@@ -47,14 +47,14 @@ export function activateElementAnnotateMode(
   _modeBanner = document.createElement("div");
   _modeBanner.id = "tracebug-annotate-banner";
   _modeBanner.dataset.tracebug = "annotate-banner";
-  _modeBanner.style.cssText = `
+  setInlineStyle(_modeBanner, `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
     background: linear-gradient(90deg, var(--tb-gradient-start, #6366F1), var(--tb-gradient-end, #4F46E5)); color: #fff;
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
     animation: tracebug-slide-down 0.2s ease;
-  `;
+  `);
   setInnerHTML(_modeBanner, `
     <div style="display:flex;align-items:center;gap:10px">
       <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
@@ -90,11 +90,11 @@ export function activateElementAnnotateMode(
   _highlightOverlay = document.createElement("div");
   _highlightOverlay.id = "tracebug-element-highlight";
   _highlightOverlay.dataset.tracebug = "element-highlight";
-  _highlightOverlay.style.cssText = `
+  setInlineStyle(_highlightOverlay, `
     position: fixed; pointer-events: none; z-index: 2147483646;
     border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(99, 102, 241, 0.08);
     border-radius: 3px; transition: all 0.08s ease; display: none;
-  `;
+  `);
   root.appendChild(_highlightOverlay);
 
   // ── Freeze scroll ──────────────────────────────────────────────────
@@ -261,13 +261,13 @@ function _refreshPersistentBadges(root: HTMLElement): void {
     // Outline around the annotated element
     const outline = document.createElement("div");
     outline.dataset.tracebug = "annotation-outline";
-    outline.style.cssText = `
+    setInlineStyle(outline, `
       position: fixed; z-index: 2147483644; pointer-events: none;
       left: ${rect.left - 2}px; top: ${rect.top - 2}px;
       width: ${rect.width + 4}px; height: ${rect.height + 4}px;
       border: 2px dashed ${_intentColor(a.intent)}80;
       border-radius: 3px;
-    `;
+    `);
     root.appendChild(outline);
     _persistentBadges.push(outline);
 
@@ -275,7 +275,7 @@ function _refreshPersistentBadges(root: HTMLElement): void {
     const badge = document.createElement("div");
     badge.dataset.tracebug = "annotation-badge";
     badge.title = `Click to view: ${a.intent.toUpperCase()} — ${a.comment.slice(0, 60)}`;
-    badge.style.cssText = `
+    setInlineStyle(badge, `
       position: fixed; z-index: 2147483645; pointer-events: auto; cursor: pointer;
       left: ${rect.right - 10}px; top: ${rect.top - 10}px;
       width: 20px; height: 20px; border-radius: 50%;
@@ -284,7 +284,7 @@ function _refreshPersistentBadges(root: HTMLElement): void {
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 1px 6px rgba(0,0,0,0.4);
       transition: transform 0.15s;
-    `;
+    `);
     badge.textContent = String(i + 1);
     badge.addEventListener("mouseenter", () => { badge.style.transform = "scale(1.2)"; });
     badge.addEventListener("mouseleave", () => { badge.style.transform = "scale(1)"; });
@@ -327,7 +327,7 @@ function _showBadgePopover(a: ElementAnnotation, badge: HTMLElement, root: HTMLE
   const posAbove = badgeRect.top - 8;
   const fitsBelow = posBelow + 180 < window.innerHeight;
 
-  popover.style.cssText = `
+  setInlineStyle(popover, `
     position: fixed; z-index: 2147483647; pointer-events: auto;
     left: ${Math.max(8, Math.min(badgeRect.left - 120, window.innerWidth - 280))}px;
     ${fitsBelow ? `top: ${posBelow}px` : `bottom: ${window.innerHeight - posAbove}px`};
@@ -341,7 +341,7 @@ function _showBadgePopover(a: ElementAnnotation, badge: HTMLElement, root: HTMLE
     color: var(--tb-text-primary, #e0e0e0);
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     animation: tracebug-tooltip-in 0.15s ease;
-  `;
+  `);
 
   // Build safe text content using DOM APIs instead of innerHTML for user data
   const intentLabel = a.intent.charAt(0).toUpperCase() + a.intent.slice(1);
@@ -349,19 +349,19 @@ function _showBadgePopover(a: ElementAnnotation, badge: HTMLElement, root: HTMLE
 
   // Header row
   const header = document.createElement("div");
-  header.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:10px";
+  setInlineStyle(header, "display:flex;align-items:center;gap:6px;margin-bottom:10px");
 
   const intentBadge = document.createElement("span");
-  intentBadge.style.cssText = `font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase`;
+  setInlineStyle(intentBadge, `font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase`);
   intentBadge.textContent = intentLabel;
 
   const sevBadge = document.createElement("span");
-  sevBadge.style.cssText = `font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500`;
+  setInlineStyle(sevBadge, `font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500`);
   sevBadge.textContent = sevLabel;
 
   const closeBtn = document.createElement("button");
   closeBtn.dataset.action = "close";
-  closeBtn.style.cssText = "margin-left:auto;background:none;border:none;color:var(--tb-text-muted, #666);cursor:pointer;font-size:14px;padding:0 4px";
+  setInlineStyle(closeBtn, "margin-left:auto;background:none;border:none;color:var(--tb-text-muted, #666);cursor:pointer;font-size:14px;padding:0 4px");
   closeBtn.textContent = "\u2715";
   closeBtn.title = "Close";
 
@@ -369,7 +369,7 @@ function _showBadgePopover(a: ElementAnnotation, badge: HTMLElement, root: HTMLE
 
   // Comment
   const commentEl = document.createElement("div");
-  commentEl.style.cssText = "font-size:13px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5;word-break:break-word";
+  setInlineStyle(commentEl, "font-size:13px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5;word-break:break-word");
   commentEl.textContent = a.comment;
 
   popover.append(header, commentEl);
@@ -456,25 +456,25 @@ function _renderSelectionOverlay(el: Element, index: number, root: HTMLElement):
 
   const box = document.createElement("div");
   box.dataset.tracebug = "selection-overlay";
-  box.style.cssText = `
+  setInlineStyle(box, `
     position: fixed; z-index: 2147483645; pointer-events: none;
     left: ${rect.left - 2}px; top: ${rect.top - 2}px;
     width: ${rect.width + 4}px; height: ${rect.height + 4}px;
     border: 2px solid ${SELECTION_COLOR}; border-radius: 3px;
     background: rgba(0, 229, 255, 0.06);
     animation: tracebug-slide-down 0.15s ease;
-  `;
+  `);
 
   const badge = document.createElement("div");
   badge.dataset.tracebug = "selection-badge";
-  badge.style.cssText = `
+  setInlineStyle(badge, `
     position: absolute; top: -10px; right: -10px;
     width: 22px; height: 22px; border-radius: 50%;
     background: ${SELECTION_COLOR}; color: #000;
     font-size: 11px; font-weight: 700; font-family: system-ui, sans-serif;
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  `;
+  `);
   badge.textContent = String(index);
   box.appendChild(badge);
 
@@ -501,14 +501,14 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
   }
   if (top < 50) top = 50; // Don't overlap banner
 
-  popover.style.cssText = `
+  setInlineStyle(popover, `
     position: fixed; z-index: 2147483647;
     left: ${left}px; top: ${top}px; width: 310px;
     background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
     padding: 18px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif); font-size: 13px;
     color: var(--tb-text-primary, #FAFAFA); box-shadow: var(--tb-shadow-lg, 0 12px 40px rgba(0,0,0,0.5));
     animation: tracebug-slide-down 0.15s ease;
-  `;
+  `);
 
   const tagText = targetEl.tagName.toLowerCase();
   const previewText = (targetEl.innerText || "").slice(0, 40);
@@ -586,7 +586,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
       selectedIntent = (btn as HTMLElement).dataset.intent as AnnotationIntent;
       intentBtns.forEach(b => {
         const intent = (b as HTMLElement).dataset.intent as AnnotationIntent;
-        (b as HTMLElement).style.cssText = _intentBtnStyle(intent, intent === selectedIntent);
+        setInlineStyle((b as HTMLElement), _intentBtnStyle(intent, intent === selectedIntent));
       });
     });
   });

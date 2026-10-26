@@ -3,6 +3,7 @@
 // Handles persistence, export (JSON/Markdown), and clipboard.
 
 import { ElementAnnotation, DrawRegion, UIAnnotationReport } from "./types";
+import { setInlineStyle } from "./ui/helpers";
 
 let _elementAnnotations: ElementAnnotation[] = [];
 let _drawRegions: DrawRegion[] = [];
@@ -102,7 +103,7 @@ export async function copyToClipboard(format: "json" | "markdown"): Promise<bool
     // Fallback for contexts where clipboard API fails
     const ta = document.createElement("textarea");
     ta.value = text;
-    ta.style.cssText = "position:fixed;left:-9999px";
+    setInlineStyle(ta, "position:fixed;left:-9999px");
     document.body.appendChild(ta);
     ta.select();
     try {

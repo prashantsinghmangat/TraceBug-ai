@@ -936,3 +936,21 @@ on the day. Read it only to answer "why was it done that way", and say so when y
   on/off lives behind a checkbox there) reads as unclear next to Jam's explicit separate
   screenshot/record entries — flagged by the user as confusing, not yet redesigned. Needs a scoped UX
   proposal before touching `popup.html`/`popup.js` further.
+
+## Two more stuck-REC-badge gaps in the same bail-out class (2026-10-26)
+
+- **What:** the user hit "Capturing…" with no actual recording a third and fourth way. (1) Capture Bug
+  with video + "blur first": `src/ui/pre-record.ts`'s `startBlurThenRecord()` arm bar has a Cancel
+  button, but `src/index.ts`'s `prepareRecording()` never passed an `onCancel` callback — clicking it
+  removed the blur boxes and did nothing else. (2) The same gap existed for Esc during the start-delay
+  countdown (`runRecordCountdown` resolving `false`). In both cases `background.js` had already marked
+  the tab "capturing" the instant the popup's click dispatched `TB_START_RECORDING` (the same optimistic
+  badge-set behind the 2026-10-26 video-cancel fix above), but `startVideoRecording()` — the one place
+  that already knew to call `announceCaptureStopped()` on failure — was never reached, because the bail
+  happens one step earlier, before `begin()` ever runs.
+- **Fix:** `prepareRecording()` now passes `onCancel: () => void announceCaptureStopped()` to
+  `startBlurThenRecord()`, and calls the same thing when the countdown resolves `false`. Both are
+  no-ops outside the extension (`announceCaptureStopped()` already checks `isExtensionContext()`).
+- **Verified:** `check.mjs --full` all green (939/58, unchanged baseline). No new automated test — same
+  reasoning as the video-cancel fix: the real repro needs a human to click Cancel/press Esc mid-flow in
+  a live popup, not something the existing fake-media-stream e2e harness drives.

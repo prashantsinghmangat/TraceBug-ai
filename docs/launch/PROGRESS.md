@@ -4,24 +4,6 @@ Add <=5 lines per phase: what changed, files touched, how it was verified, open 
 Newest entry at the bottom. Keep the last two entries here; move older ones to
 `PROGRESS-archive.md` when this file passes ~150 lines. Current state lives in `STATE.md`, not here.
 
-## Two more stuck-REC-badge gaps in the same bail-out class (2026-10-26)
-
-- **What:** the user hit "Capturing…" with no actual recording a third and fourth way. (1) Capture Bug
-  with video + "blur first": `src/ui/pre-record.ts`'s `startBlurThenRecord()` arm bar has a Cancel
-  button, but `src/index.ts`'s `prepareRecording()` never passed an `onCancel` callback — clicking it
-  removed the blur boxes and did nothing else. (2) The same gap existed for Esc during the start-delay
-  countdown (`runRecordCountdown` resolving `false`). In both cases `background.js` had already marked
-  the tab "capturing" the instant the popup's click dispatched `TB_START_RECORDING` (the same optimistic
-  badge-set behind the 2026-10-26 video-cancel fix above), but `startVideoRecording()` — the one place
-  that already knew to call `announceCaptureStopped()` on failure — was never reached, because the bail
-  happens one step earlier, before `begin()` ever runs.
-- **Fix:** `prepareRecording()` now passes `onCancel: () => void announceCaptureStopped()` to
-  `startBlurThenRecord()`, and calls the same thing when the countdown resolves `false`. Both are
-  no-ops outside the extension (`announceCaptureStopped()` already checks `isExtensionContext()`).
-- **Verified:** `check.mjs --full` all green (939/58, unchanged baseline). No new automated test — same
-  reasoning as the video-cancel fix: the real repro needs a human to click Cancel/press Esc mid-flow in
-  a live popup, not something the existing fake-media-stream e2e harness drives.
-
 ## CSP style-src nonces: TraceBug's own `<style>` tags were silently dropped (2026-10-26)
 
 - **What:** on a claude.ai artifact page (`style-src 'nonce-...'`, no `unsafe-inline`), every `<style>`
@@ -35,15 +17,53 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   deliberately expose it to trusted script even though `getAttribute`/`outerHTML` hide it, to stop a
   nonce leaking out through injected markup). All 17 `document.createElement("style")` call sites
   across `src/` now go through it — same chokepoint pattern as `setInnerHTML` for Trusted Types.
-- **Scope, stated plainly:** this fixes `style-src-elem` violations only. It does NOT fix
-  `style-src-attr` violations — the many `el.setAttribute("style", "...")` calls throughout the
-  HUD/toolbar/overlays, which a nonce cannot cover at all (Chrome has no nonce/hash path for the style
-  attribute without `unsafe-hashes`) and which need per-call-site conversion to the CSSOM
-  (`el.style.prop = ...`, which bypasses this CSP gate entirely) — a separate pass comparable in size
-  to the original 89-site Trusted Types sweep. Not attempted here.
-- **Verified:** new `e2e/ext-style-nonce-page.e2e.mjs` (5/5) — a real nonce-gated CSP fixture, confirms
-  the fixture genuinely enforces it, zero style-ELEMENT violations during mount, the tag carries the
-  right nonce, and the CSS actually took effect (`#tracebug-root` computes to `position: fixed`, not
-  just "the attribute is present"). Logs the leftover style-ATTRIBUTE violation count as known/out of
-  scope rather than hiding it. `check.mjs --full` all green (939/58); re-run clean: `ext-trusted-types-page`
-  9/9, `ext-shipping-path` 16/16, `ext-video-recording` 8/8, `ext-sdk-isolation` 17/17.
+- **Scope, stated at the time:** this fixed `style-src-elem` violations only, not `style-src-attr`
+  (inline `style="..."` attributes) — see the next entry, which closed that gap the same day once the
+  user reported the dashboard was still completely invisible on claude.ai.
+- **Verified:** new `e2e/ext-style-nonce-page.e2e.mjs` — a real nonce-gated CSP fixture. `check.mjs
+  --full` all green (939/58); re-run clean: `ext-trusted-types-page` 9/9, `ext-shipping-path` 16/16,
+  `ext-video-recording` 8/8, `ext-sdk-isolation` 17/17.
+
+## The style-src-attr gap closed for real: inline style="" attributes survive the same CSP (2026-10-26)
+
+- **What:** the user reported TraceBug worked on temp-mail.org but "nothing appears at all" on the same
+  claude.ai artifact page the nonce fix above targeted. Root cause: nearly all of TraceBug's actual
+  layout comes from inline `style="..."` HTML ATTRIBUTES — baked into the markup passed to
+  `setInnerHTML()` across the toolbar/HUD/modal, plus ~108 direct `el.setAttribute("style", ...)`/
+  `el.style.cssText = ...` call sites. A nonce cannot cover attributes at all (Chrome has no nonce/hash
+  path for `style=""` without `unsafe-hashes`), so every one of those was silently dropped — the
+  dashboard mounted into the DOM with zero positioning, invisible rather than broken-looking.
+- **Key finding, confirmed experimentally** (a throwaway Playwright probe against a real nonce-CSP
+  page, not assumed): when this CSP blocks an inline style attribute, `el.getAttribute("style")` still
+  returns the original string — the attribute itself survives. What's blocked is folding that string
+  into the element's live `CSSStyleDeclaration` (`el.style.cssText` reads back empty, nothing renders).
+  Setting individual LONGHAND properties through the CSSOM (`el.style.setProperty(prop, value)`) is a
+  direct mutation of that object, not a reparse of the attribute — it does not go through the CSP gate
+  at all, and took effect immediately in the probe.
+- **Fix, two parts:** (1) `setInnerHTML()` (`src/ui/helpers.ts`) now calls a new
+  `reviveInlineStylesForCsp()` after every assignment, which walks the inserted subtree and replays
+  each element's `style` attribute through the CSSOM via a new `setInlineStyle()` (a small
+  paren-depth-aware declaration-list parser, needed so a value like
+  `url(data:image/png;base64,AAAA==)` doesn't get sliced apart by its embedded `;`/`:`). This covers
+  the bulk of the problem — nearly every styled element in every HTML template — with ONE chokepoint
+  change, not hundreds of call-site edits. (2) The ~108 direct `setAttribute("style", ...)`/
+  `style.cssText = ...` sites across 11 files (`compact-toolbar.ts`, `dashboard.ts`, `draw-mode.ts`,
+  `element-annotate.ts`, `inspect-mode.ts`, `quick-bug.ts`, `pre-record.ts`, `review-ask.ts`,
+  `milestone-ask.ts`, `toast.ts`, `annotation-store.ts`) were mechanically converted to
+  `setInlineStyle()` via a one-off codemod script (deleted after use) — written with a dry-run-first,
+  diff-reviewed-before-trusting workflow after its first pass corrupted `milestone-ask.ts` by mistaking
+  an apostrophe inside a `//` comment ("the modal's overlay") for a string delimiter; fixed by making
+  the scanner skip `//` and `/* */` comments, then re-verified clean via `tsc --noEmit` + a full diff
+  review of all 11 files before trusting it.
+- **Collateral fix:** `tests/picker-hint.test.ts` asserted on the exact serialized `getAttribute('style')`
+  string (`"position:fixed!important"`, no spaces) — which legitimately changes format now that the
+  value is built via individual `setProperty()` calls rather than one raw attribute string. Rewritten to
+  assert against the live CSSOM (`el.style.position`, `el.style.getPropertyPriority(...)`) instead,
+  which is a strictly stronger check of actual behavior, immune to incidental serialization differences.
+- **Verified:** `e2e/ext-style-nonce-page.e2e.mjs` extended to 7/7 — now asserts the real toolbar (built
+  via `setInnerHTML` with inline `style=""` attributes, not a synthetic probe) actually renders with
+  non-zero size and has a genuinely clickable button under the nonce CSP, not just that a `<style>` tag
+  carries a nonce. `check.mjs --full` all green (939/58, unchanged baseline) after fixing the one
+  resulting test. Re-run clean: `ext-trusted-types-page` 9/9, `ext-shipping-path` 16/16,
+  `ext-video-recording` 8/8, `ext-sdk-isolation` 17/17, `ext-events-capture` 22/22,
+  `ext-reload-reinject` 8/8, `ext-worker-restart-reinject` 4/4, `ext-badge-host-ui-defer` 4/4.

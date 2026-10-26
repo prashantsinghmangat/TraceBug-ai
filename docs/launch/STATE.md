@@ -68,15 +68,24 @@ are allowed, confirmed stitch.withgoogle.com does not), then a safe empty-rather
 resort. `ext:lint` warnings dropped 69 → 22 as a direct, confirming side effect. See
 `e2e/ext-trusted-types-page.e2e.mjs` and `PROGRESS.md` 2026-10-23.
 
-**A separate, sibling gap: CSP `style-src` nonces** — confirmed live on a claude.ai artifact page
-(`style-src 'nonce-...'`, no `unsafe-inline`). Unlike Trusted Types this doesn't throw, so every
-`<style>` element TraceBug creates (theme vars, the dashboard reset, every keyframe animation) was
-just silently dropped with no exception to catch. Fixed the same way, for `<style>` elements only:
-`src/ui/helpers.ts`'s `createStyleTag()` borrows the host page's own nonce (via `.nonce`, not
-`getAttribute`) when it has one. **Not fixed**: inline `style="..."` HTML attributes elsewhere in the
-HUD/toolbar/overlays (`setAttribute("style", ...)`), which a nonce cannot cover at all without
-`unsafe-hashes` — a separate, CSSOM-conversion pass comparable in size to the 89-site Trusted Types
-sweep above. See `e2e/ext-style-nonce-page.e2e.mjs` and `PROGRESS.md` 2026-10-26.
+**A separate, sibling gap: CSP `style-src` — both elements AND attributes, now fully closed** —
+confirmed live on a claude.ai artifact page (`style-src 'nonce-...'`, no `unsafe-inline`). Unlike
+Trusted Types this doesn't throw, so TraceBug's `<style>` elements (theme vars, the dashboard reset,
+every keyframe animation) were just silently dropped — and, worse, so was nearly every inline
+`style="..."` HTML attribute, which is how the bulk of the toolbar/HUD/modal is actually positioned.
+With both gone the dashboard mounted into the DOM with zero layout — invisible, reported as "nothing
+appears at all" on claude.ai while the same build worked fine elsewhere. Two fixes: (1) `<style>`
+elements — `src/ui/helpers.ts`'s `createStyleTag()` borrows the host page's own nonce (via `.nonce`,
+not `getAttribute`) when it has one. (2) inline `style=""` attributes — confirmed experimentally that
+CSP blocks folding the attribute into the live `CSSStyleDeclaration` (rendering stays empty) but does
+NOT remove the attribute itself (`getAttribute("style")` still returns it), so `setInnerHTML()` now
+walks the inserted subtree afterward and replays every `style` attribute through the CSSOM
+(`el.style.setProperty(...)`, which bypasses the gate entirely since it never reparses the attribute)
+via a new `reviveInlineStylesForCsp()`; the ~108 direct `el.setAttribute("style", ...)`/
+`el.style.cssText = ...` call sites across the codebase were converted to the same CSSOM-based
+`setInlineStyle()` helper. See `e2e/ext-style-nonce-page.e2e.mjs` (7/7, asserts the toolbar actually
+renders with real size and a clickable button, not just that a nonce exists) and `PROGRESS.md`
+2026-10-26.
 
 ## What 1.11.2 contains
 

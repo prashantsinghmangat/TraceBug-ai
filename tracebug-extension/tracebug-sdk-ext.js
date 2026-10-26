@@ -20305,6 +20305,7 @@ var TraceBugExtensionModule = (() => {
   function setInnerHTML(el, html) {
     try {
       el.innerHTML = html;
+      reviveInlineStylesForCsp(el);
       return;
     } catch (e2) {
     }
@@ -20312,12 +20313,62 @@ var TraceBugExtensionModule = (() => {
     if (policy) {
       try {
         el.innerHTML = policy.createHTML(html);
+        reviveInlineStylesForCsp(el);
         return;
       } catch (e2) {
       }
     }
     try {
       el.replaceChildren();
+    } catch (e2) {
+    }
+  }
+  function splitStyleDeclarations(cssText) {
+    let depth = 0;
+    let current = "";
+    const decls = [];
+    for (const ch of cssText) {
+      if (ch === "(") depth++;
+      else if (ch === ")") depth = Math.max(0, depth - 1);
+      if (ch === ";" && depth === 0) {
+        decls.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim()) decls.push(current);
+    return decls;
+  }
+  function setInlineStyle(el, cssText) {
+    for (const decl of splitStyleDeclarations(cssText)) {
+      const idx = decl.indexOf(":");
+      if (idx < 0) continue;
+      const prop = decl.slice(0, idx).trim();
+      let value = decl.slice(idx + 1).trim();
+      if (!prop || !value) continue;
+      let priority = "";
+      if (/!\s*important\s*$/i.test(value)) {
+        priority = "important";
+        value = value.replace(/!\s*important\s*$/i, "").trim();
+      }
+      try {
+        el.style.setProperty(prop, value, priority);
+      } catch (e2) {
+      }
+    }
+  }
+  function reviveInlineStylesForCsp(root2) {
+    try {
+      if (root2 instanceof HTMLElement) {
+        const own = root2.getAttribute("style");
+        if (own) setInlineStyle(root2, own);
+      }
+      const styled = root2.querySelectorAll("[style]");
+      for (let i2 = 0; i2 < styled.length; i2++) {
+        const attr = styled[i2].getAttribute("style");
+        if (attr) setInlineStyle(styled[i2], attr);
+      }
     } catch (e2) {
     }
   }
@@ -20353,8 +20404,8 @@ var TraceBugExtensionModule = (() => {
       el.id = PICKER_HINT_ID;
       el.setAttribute("role", "status");
       el.setAttribute("aria-live", "polite");
-      el.setAttribute(
-        "style",
+      setInlineStyle(
+        el,
         "position:fixed!important;top:18px!important;left:50%!important;transform:translateX(-50%)!important;z-index:2147483647!important;max-width:min(560px,calc(100vw - 32px))!important;background:#1b1d24!important;color:#e9eaee!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:12px!important;padding:11px 16px!important;box-sizing:border-box!important;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif!important;font-size:13px!important;font-weight:500!important;line-height:1.45!important;text-align:center!important;box-shadow:0 12px 40px rgba(0,0,0,0.55)!important;pointer-events:none!important;"
       );
       el.textContent = surfaceMode === "tab" ? "Your browser will ask what to share. It's already set to this tab \u2014 choose Share." : "Your browser will ask what to share. Pick this tab, unless you need a window or the whole screen.";
@@ -20376,18 +20427,18 @@ var TraceBugExtensionModule = (() => {
       (_a2 = document.getElementById(COUNTDOWN_ID)) == null ? void 0 : _a2.remove();
       const overlay = document.createElement("div");
       overlay.id = COUNTDOWN_ID;
-      overlay.setAttribute(
-        "style",
+      setInlineStyle(
+        overlay,
         "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
       );
       const num = document.createElement("div");
-      num.setAttribute(
-        "style",
+      setInlineStyle(
+        num,
         "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);transition:transform 0.25s ease, opacity 0.25s ease;"
       );
       const hint = document.createElement("div");
       hint.textContent = "Press Esc to cancel";
-      hint.setAttribute("style", "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
+      setInlineStyle(hint, "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
       overlay.appendChild(num);
       overlay.appendChild(hint);
       document.body.appendChild(overlay);
@@ -20434,8 +20485,8 @@ var TraceBugExtensionModule = (() => {
     activateBlurMode(root2);
     const bar = document.createElement("div");
     bar.id = ARM_BAR_ID;
-    bar.setAttribute(
-      "style",
+    setInlineStyle(
+      bar,
       "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
     );
     setInnerHTML(bar, `
@@ -20522,7 +20573,7 @@ var TraceBugExtensionModule = (() => {
     toast.className = "bt-toast bt-toast-action";
     toast.dataset.tracebug = "toast";
     toast.setAttribute("role", "alert");
-    toast.style.cssText = `
+    setInlineStyle(toast, `
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
     background:var(--tb-bg-secondary, #1a1a2e);color:var(--tb-text-primary, #e0e0e0);
     border:1px solid var(--tb-error, #ef4444);border-left:4px solid var(--tb-error, #ef4444);
@@ -20532,7 +20583,7 @@ var TraceBugExtensionModule = (() => {
     max-width:480px;line-height:1.4;
     display:flex;align-items:center;gap:12px;
     animation:tracebug-toast-in 0.2s ease;
-  `;
+  `);
     if (!document.getElementById("tracebug-toast-anim")) {
       const style = createStyleTag("tracebug-toast-anim");
       style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
@@ -20581,7 +20632,7 @@ var TraceBugExtensionModule = (() => {
     const toast = document.createElement("div");
     toast.className = "bt-toast";
     toast.dataset.tracebug = "toast";
-    toast.style.cssText = `
+    setInlineStyle(toast, `
     position:fixed !important;
     bottom:32px !important;
     left:50% !important;
@@ -20602,7 +20653,7 @@ var TraceBugExtensionModule = (() => {
     text-align:center !important;
     line-height:1.4 !important;
     animation:tracebug-toast-in 0.2s ease !important;
-  `;
+  `);
     if (!document.getElementById("tracebug-toast-anim")) {
       const style = createStyleTag("tracebug-toast-anim");
       style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
@@ -22585,7 +22636,7 @@ var TraceBugExtensionModule = (() => {
     } catch (e2) {
       const ta = document.createElement("textarea");
       ta.value = text;
-      ta.style.cssText = "position:fixed;left:-9999px";
+      setInlineStyle(ta, "position:fixed;left:-9999px");
       document.body.appendChild(ta);
       ta.select();
       try {
@@ -22602,6 +22653,7 @@ var TraceBugExtensionModule = (() => {
   var init_annotation_store = __esm({
     "src/annotation-store.ts"() {
       "use strict";
+      init_helpers();
       _elementAnnotations = [];
       _drawRegions = [];
     }
@@ -24012,14 +24064,14 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     _modeBanner = document.createElement("div");
     _modeBanner.id = "tracebug-annotate-banner";
     _modeBanner.dataset.tracebug = "annotate-banner";
-    _modeBanner.style.cssText = `
+    setInlineStyle(_modeBanner, `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
     background: linear-gradient(90deg, var(--tb-gradient-start, #6366F1), var(--tb-gradient-end, #4F46E5)); color: #fff;
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
     box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
     animation: tracebug-slide-down 0.2s ease;
-  `;
+  `);
     setInnerHTML(_modeBanner, `
     <div style="display:flex;align-items:center;gap:10px">
       <div style="width:8px;height:8px;border-radius:50%;background:#fff;animation:tracebug-pulse 1.5s infinite"></div>
@@ -24050,11 +24102,11 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     _highlightOverlay = document.createElement("div");
     _highlightOverlay.id = "tracebug-element-highlight";
     _highlightOverlay.dataset.tracebug = "element-highlight";
-    _highlightOverlay.style.cssText = `
+    setInlineStyle(_highlightOverlay, `
     position: fixed; pointer-events: none; z-index: 2147483646;
     border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(99, 102, 241, 0.08);
     border-radius: 3px; transition: all 0.08s ease; display: none;
-  `;
+  `);
     root2.appendChild(_highlightOverlay);
     const savedOverflowHtml = document.documentElement.style.overflow;
     const savedOverflowBody = document.body.style.overflow;
@@ -24188,19 +24240,19 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       const rect = el.getBoundingClientRect();
       const outline = document.createElement("div");
       outline.dataset.tracebug = "annotation-outline";
-      outline.style.cssText = `
+      setInlineStyle(outline, `
       position: fixed; z-index: 2147483644; pointer-events: none;
       left: ${rect.left - 2}px; top: ${rect.top - 2}px;
       width: ${rect.width + 4}px; height: ${rect.height + 4}px;
       border: 2px dashed ${_intentColor(a2.intent)}80;
       border-radius: 3px;
-    `;
+    `);
       root2.appendChild(outline);
       _persistentBadges.push(outline);
       const badge = document.createElement("div");
       badge.dataset.tracebug = "annotation-badge";
       badge.title = `Click to view: ${a2.intent.toUpperCase()} \u2014 ${a2.comment.slice(0, 60)}`;
-      badge.style.cssText = `
+      setInlineStyle(badge, `
       position: fixed; z-index: 2147483645; pointer-events: auto; cursor: pointer;
       left: ${rect.right - 10}px; top: ${rect.top - 10}px;
       width: 20px; height: 20px; border-radius: 50%;
@@ -24209,7 +24261,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 1px 6px rgba(0,0,0,0.4);
       transition: transform 0.15s;
-    `;
+    `);
       badge.textContent = String(i2 + 1);
       badge.addEventListener("mouseenter", () => {
         badge.style.transform = "scale(1.2)";
@@ -24245,7 +24297,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     const posBelow = badgeRect.bottom + 8;
     const posAbove = badgeRect.top - 8;
     const fitsBelow = posBelow + 180 < window.innerHeight;
-    popover.style.cssText = `
+    setInlineStyle(popover, `
     position: fixed; z-index: 2147483647; pointer-events: auto;
     left: ${Math.max(8, Math.min(badgeRect.left - 120, window.innerWidth - 280))}px;
     ${fitsBelow ? `top: ${posBelow}px` : `bottom: ${window.innerHeight - posAbove}px`};
@@ -24259,25 +24311,25 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     color: var(--tb-text-primary, #e0e0e0);
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     animation: tracebug-tooltip-in 0.15s ease;
-  `;
+  `);
     const intentLabel = a2.intent.charAt(0).toUpperCase() + a2.intent.slice(1);
     const sevLabel = a2.severity.charAt(0).toUpperCase() + a2.severity.slice(1);
     const header = document.createElement("div");
-    header.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:10px";
+    setInlineStyle(header, "display:flex;align-items:center;gap:6px;margin-bottom:10px");
     const intentBadge = document.createElement("span");
-    intentBadge.style.cssText = `font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase`;
+    setInlineStyle(intentBadge, `font-size:10px;padding:2px 8px;border-radius:4px;background:${intentColor}22;color:${intentColor};border:1px solid ${intentColor}44;font-weight:600;text-transform:uppercase`);
     intentBadge.textContent = intentLabel;
     const sevBadge = document.createElement("span");
-    sevBadge.style.cssText = `font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500`;
+    setInlineStyle(sevBadge, `font-size:10px;padding:2px 8px;border-radius:4px;background:${sevColor}15;color:${sevColor};font-weight:500`);
     sevBadge.textContent = sevLabel;
     const closeBtn = document.createElement("button");
     closeBtn.dataset.action = "close";
-    closeBtn.style.cssText = "margin-left:auto;background:none;border:none;color:var(--tb-text-muted, #666);cursor:pointer;font-size:14px;padding:0 4px";
+    setInlineStyle(closeBtn, "margin-left:auto;background:none;border:none;color:var(--tb-text-muted, #666);cursor:pointer;font-size:14px;padding:0 4px");
     closeBtn.textContent = "\u2715";
     closeBtn.title = "Close";
     header.append(intentBadge, sevBadge, closeBtn);
     const commentEl = document.createElement("div");
-    commentEl.style.cssText = "font-size:13px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5;word-break:break-word";
+    setInlineStyle(commentEl, "font-size:13px;color:var(--tb-text-primary, #e0e0e0);line-height:1.5;word-break:break-word");
     commentEl.textContent = a2.comment;
     popover.append(header, commentEl);
     root2.appendChild(popover);
@@ -24346,24 +24398,24 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     const rect = el.getBoundingClientRect();
     const box2 = document.createElement("div");
     box2.dataset.tracebug = "selection-overlay";
-    box2.style.cssText = `
+    setInlineStyle(box2, `
     position: fixed; z-index: 2147483645; pointer-events: none;
     left: ${rect.left - 2}px; top: ${rect.top - 2}px;
     width: ${rect.width + 4}px; height: ${rect.height + 4}px;
     border: 2px solid ${SELECTION_COLOR}; border-radius: 3px;
     background: rgba(0, 229, 255, 0.06);
     animation: tracebug-slide-down 0.15s ease;
-  `;
+  `);
     const badge = document.createElement("div");
     badge.dataset.tracebug = "selection-badge";
-    badge.style.cssText = `
+    setInlineStyle(badge, `
     position: absolute; top: -10px; right: -10px;
     width: 22px; height: 22px; border-radius: 50%;
     background: ${SELECTION_COLOR}; color: #000;
     font-size: 11px; font-weight: 700; font-family: system-ui, sans-serif;
     display: flex; align-items: center; justify-content: center;
     box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  `;
+  `);
     badge.textContent = String(index2);
     box2.appendChild(badge);
     root2.appendChild(box2);
@@ -24384,14 +24436,14 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       top = Math.max(50, rect.top - 370);
     }
     if (top < 50) top = 50;
-    popover.style.cssText = `
+    setInlineStyle(popover, `
     position: fixed; z-index: 2147483647;
     left: ${left}px; top: ${top}px; width: 310px;
     background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
     padding: 18px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif); font-size: 13px;
     color: var(--tb-text-primary, #FAFAFA); box-shadow: var(--tb-shadow-lg, 0 12px 40px rgba(0,0,0,0.5));
     animation: tracebug-slide-down 0.15s ease;
-  `;
+  `);
     const tagText = targetEl.tagName.toLowerCase();
     const previewText = (targetEl.innerText || "").slice(0, 40);
     const selectedCount = _selectedElements.size;
@@ -24461,7 +24513,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         selectedIntent = btn.dataset.intent;
         intentBtns.forEach((b) => {
           const intent = b.dataset.intent;
-          b.style.cssText = _intentBtnStyle(intent, intent === selectedIntent);
+          setInlineStyle(b, _intentBtnStyle(intent, intent === selectedIntent));
         });
       });
     });
@@ -24644,14 +24696,14 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     canvas.dataset.tracebug = "draw-canvas";
     canvas.width = docW;
     canvas.height = docH;
-    canvas.style.cssText = `
+    setInlineStyle(canvas, `
     position: absolute !important; top: 0 !important; left: 0 !important;
     z-index: 2147483645 !important;
     width: ${docW}px !important; height: ${docH}px !important;
     cursor: crosshair !important; pointer-events: auto !important;
     margin: 0 !important; padding: 0 !important;
     touch-action: none !important;
-  `;
+  `);
     document.body.appendChild(canvas);
     const SVG_NS = "http://www.w3.org/2000/svg";
     const svgOverlay = document.createElementNS(SVG_NS, "svg");
@@ -24659,13 +24711,13 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     svgOverlay.setAttribute("width", String(docW));
     svgOverlay.setAttribute("height", String(docH));
     svgOverlay.setAttribute("viewBox", `0 0 ${docW} ${docH}`);
-    svgOverlay.style.cssText = `
+    setInlineStyle(svgOverlay, `
     position: absolute !important; top: 0 !important; left: 0 !important;
     z-index: 2147483644 !important;
     width: ${docW}px !important; height: ${docH}px !important;
     pointer-events: none !important; margin: 0 !important; padding: 0 !important;
     overflow: visible !important;
-  `;
+  `);
     document.body.appendChild(svgOverlay);
     const mirrorToSvg = (shape, color, geom, lifeMs) => {
       let el;
@@ -25017,7 +25069,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     bar.id = "tracebug-draw-toolbar";
     bar.dataset.tracebug = "draw-toolbar";
     const topPx = document.getElementById("tracebug-recording-hud") ? 64 : 12;
-    bar.style.cssText = `
+    setInlineStyle(bar, `
     position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
@@ -25027,7 +25079,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     animation: tracebug-draw-slide 0.2s ease;
     color: var(--tb-text-primary, #e0e0e0);
-  `;
+  `);
     const styleTag = createStyleTag("tracebug-draw-styles");
     styleTag.dataset.tracebug = "draw-styles";
     styleTag.textContent = `
@@ -25048,12 +25100,12 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       btn.title = s2.label;
       btn.setAttribute("aria-label", s2.label);
       setInnerHTML(btn, s2.icon);
-      btn.style.cssText = _toolBtnStyle(s2.shape === _currentShape);
+      setInlineStyle(btn, _toolBtnStyle(s2.shape === _currentShape));
       btn.addEventListener("click", (e2) => {
         e2.stopPropagation();
         _currentShape = s2.shape;
         bar.querySelectorAll("[data-tracebug='draw-tool-btn']").forEach((b) => {
-          b.style.cssText = _toolBtnStyle(b.dataset.shape === _currentShape);
+          setInlineStyle(b, _toolBtnStyle(b.dataset.shape === _currentShape));
         });
       });
       bar.appendChild(btn);
@@ -25064,12 +25116,12 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       btn.dataset.tracebug = "draw-color-btn";
       btn.dataset.color = c2.value;
       btn.title = c2.label;
-      btn.style.cssText = `
+      setInlineStyle(btn, `
       width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
       background: ${c2.value}; padding: 0; margin: 0; transition: all 0.15s;
       border: 2px solid ${c2.value === _currentColor ? "#fff" : "transparent"};
       box-shadow: ${c2.value === _currentColor ? "0 0 0 2px rgba(255,255,255,0.3)" : "none"};
-    `;
+    `);
       btn.addEventListener("click", (e2) => {
         e2.stopPropagation();
         _currentColor = c2.value;
@@ -25087,13 +25139,13 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     doneBtn.title = "Exit draw mode (Esc)";
     doneBtn.setAttribute("aria-label", "Exit draw mode");
     setInnerHTML(doneBtn, `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`);
-    doneBtn.style.cssText = `
+    setInlineStyle(doneBtn, `
     width: 24px; height: 24px; padding: 0;
     background: transparent; border: 1px solid var(--tb-border, #2a2a3e);
     color: var(--tb-text-muted, #888); border-radius: 999px; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     font-family: inherit; transition: all 0.15s;
-  `;
+  `);
     doneBtn.addEventListener("mouseenter", () => {
       doneBtn.style.color = "var(--tb-text-primary, #e0e0e0)";
       doneBtn.style.borderColor = "var(--tb-border-hover, #3a3a5e)";
@@ -25112,7 +25164,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
   function _sep() {
     const d = document.createElement("div");
     d.dataset.tracebug = "draw-sep";
-    d.style.cssText = "width:1px;height:18px;background:var(--tb-border, #2a2a3e);margin:0 4px;flex-shrink:0";
+    setInlineStyle(d, "width:1px;height:18px;background:var(--tb-border, #2a2a3e);margin:0 4px;flex-shrink:0");
     return d;
   }
   function _drawShape(ctx, shape, color, x, y, w, h, fillOpacity) {
@@ -25224,7 +25276,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     }
     const input2 = document.createElement("div");
     input2.dataset.tracebug = "draw-comment-input";
-    input2.style.cssText = `
+    setInlineStyle(input2, `
     position: absolute; z-index: 2147483647;
     left: ${inputLeft}px; top: ${inputTop}px;
     background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
@@ -25232,32 +25284,32 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     box-shadow: var(--tb-shadow-lg, 0 8px 24px rgba(0,0,0,0.5));
     display: flex; gap: 8px; align-items: center;
     animation: tracebug-draw-slide 0.15s ease;
-  `;
+  `);
     const textInput = document.createElement("input");
     textInput.type = "text";
     textInput.placeholder = "Describe this region (optional)";
-    textInput.style.cssText = `
+    setInlineStyle(textInput, `
     background: var(--tb-bg-primary, #0B0B10); border: 1px solid var(--tb-border-hover, #2A2A35); color: var(--tb-text-primary, #FAFAFA);
     padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); font-size: 13px;
     font-family: inherit; width: 240px; outline: none;
-  `;
+  `);
     const saveBtn = document.createElement("button");
     saveBtn.textContent = "Save";
     saveBtn.dataset.tracebug = "draw-save-btn";
-    saveBtn.style.cssText = `
+    setInlineStyle(saveBtn, `
     background: #6366F1; border: none; color: #fff; padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
     font-family: inherit; box-shadow: 0 2px 6px rgba(99,102,241,0.3);
     transition: all 0.15s; white-space: nowrap;
-  `;
+  `);
     const skipBtn = document.createElement("button");
     skipBtn.textContent = "No comment";
     skipBtn.dataset.tracebug = "draw-cancel-btn";
-    skipBtn.style.cssText = `
+    setInlineStyle(skipBtn, `
     background: none; border: 1px solid var(--tb-border-hover, #2A2A35); color: var(--tb-text-secondary, #A1A1AA);
     padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); cursor: pointer; font-size: 12px;
     font-family: inherit; transition: all 0.15s; white-space: nowrap;
-  `;
+  `);
     input2.appendChild(textInput);
     input2.appendChild(saveBtn);
     input2.appendChild(skipBtn);
@@ -27870,7 +27922,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     card.id = CARD_ID;
     card.setAttribute("role", "dialog");
     card.setAttribute("aria-label", "TraceBug update emails \u2014 optional");
-    card.style.cssText = [
+    setInlineStyle(card, [
       "position:fixed",
       "right:16px",
       "bottom:16px",
@@ -27886,7 +27938,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       "font-family:var(--tb-font-family,system-ui,sans-serif)",
       "color:var(--tb-text-primary,#e0e0e0)",
       "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
-    ].join(";");
+    ].join(";"));
     setInnerHTML(card, `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
       <div style="font-size:13px;font-weight:700">\u{1F389} That's your ${MILESTONE}th saved ticket</div>
@@ -28004,7 +28056,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     card.id = CARD_ID2;
     card.setAttribute("role", "dialog");
     card.setAttribute("aria-label", "Review TraceBug \u2014 optional");
-    card.style.cssText = [
+    setInlineStyle(card, [
       "position:fixed",
       "right:16px",
       "bottom:16px",
@@ -28019,29 +28071,29 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       "font-family:var(--tb-font-family,system-ui,sans-serif)",
       "color:var(--tb-text-primary,#e0e0e0)",
       "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
-    ].join(";");
+    ].join(";"));
     const head = document.createElement("div");
-    head.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;gap:8px";
+    setInlineStyle(head, "display:flex;justify-content:space-between;align-items:flex-start;gap:8px");
     const title = document.createElement("div");
-    title.style.cssText = "font-size:15px;font-weight:600;line-height:1.3";
+    setInlineStyle(title, "font-size:15px;font-weight:600;line-height:1.3");
     title.textContent = "Did TraceBug save you time?";
     const close = document.createElement("button");
     close.setAttribute("data-act", "close");
     close.setAttribute("aria-label", "Dismiss");
-    close.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0;font-family:inherit";
+    setInlineStyle(close, "background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0;font-family:inherit");
     close.textContent = "\u2715";
     head.append(title, close);
     const line = document.createElement("p");
-    line.style.cssText = "margin:6px 0 12px;font-size:13px;line-height:1.5;color:var(--tb-text-secondary,#aaa)";
+    setInlineStyle(line, "margin:6px 0 12px;font-size:13px;line-height:1.5;color:var(--tb-text-secondary,#aaa)");
     line.textContent = "A short review helps other testers find it.";
     const row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:12px";
+    setInlineStyle(row, "display:flex;align-items:center;gap:12px");
     const rate = document.createElement("a");
     rate.href = reviewUrl("review");
     rate.target = "_blank";
     rate.rel = "noopener noreferrer";
     rate.setAttribute("data-act", "rate");
-    rate.style.cssText = "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none";
+    setInlineStyle(rate, "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none");
     const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     star.setAttribute("width", "13");
     star.setAttribute("height", "13");
@@ -28060,7 +28112,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     rate.append(star, rateText);
     const notNow = document.createElement("button");
     notNow.setAttribute("data-act", "not-now");
-    notNow.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#888);font-size:12.5px;cursor:pointer;padding:0;font-family:inherit";
+    setInlineStyle(notNow, "background:none;border:none;color:var(--tb-text-muted,#888);font-size:12.5px;cursor:pointer;padding:0;font-family:inherit");
     notNow.textContent = "Not now";
     row.append(rate, notNow);
     card.append(head, line, row);
@@ -28088,6 +28140,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     "src/ui/review-ask.ts"() {
       "use strict";
       init_links();
+      init_helpers();
       COUNT_KEY = "tracebug_export_count";
       STATE_KEY = "tracebug_review_ask";
       FIRST_SESSION_KEY = "tracebug_review_first_session";
@@ -30612,16 +30665,16 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "Quick bug capture");
-    overlay.style.cssText = `
+    setInlineStyle(overlay, `
     position: fixed; inset: 0; z-index: 2147483647;
     background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
     display: flex; align-items: center; justify-content: center;
     padding: 20px; pointer-events: auto;
     animation: tracebug-qb-fade-in 0.15s ease;
-  `;
+  `);
     const modal = document.createElement("div");
     modal.dataset.tracebug = "quick-bug-inner";
-    modal.style.cssText = `
+    setInlineStyle(modal, `
     background: var(--tb-bg-secondary, #11151A);
     border: 1px solid var(--tb-border, #1F2630);
     border-radius: var(--tb-radius-lg, 16px);
@@ -30632,7 +30685,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
     animation: tracebug-qb-slide-up 0.2s ease;
     overflow: hidden;
-  `;
+  `);
     const ssCount = screenshots2.length;
     const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
     const video = !data.suppressVideo ? getSessionVideo(data.currentSession) : null;
@@ -31803,7 +31856,7 @@ ${report.steps}` : userDesc : void 0,
         const iframe = document.createElement("iframe");
         iframe.src = playerUrl;
         iframe.title = "TraceBug recording";
-        iframe.style.cssText = "display:block;width:100%;aspect-ratio:16/9;border:0;background:#0B0B10";
+        setInlineStyle(iframe, "display:block;width:100%;aspect-ratio:16/9;border:0;background:#0B0B10");
         host2.appendChild(iframe);
         const onMsg = (e2) => {
           if (!iframe.isConnected) {
@@ -31967,7 +32020,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     try {
       const ta = document.createElement("textarea");
       ta.value = text;
-      ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      setInlineStyle(ta, "position:fixed;left:-9999px;top:0");
       document.body.appendChild(ta);
       ta.select();
       const ok = document.execCommand("copy");
@@ -32520,7 +32573,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     var _a2, _b;
     const overlay = document.createElement("div");
     overlay.id = "tb-ext-settings-pointer";
-    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
     setInnerHTML(overlay, `
     <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
@@ -32564,7 +32617,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const provider = (existing == null ? void 0 : existing.provider) || "anthropic";
     const overlay = document.createElement("div");
     overlay.id = "tb-ai-config";
-    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
     setInnerHTML(overlay, `
     <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
@@ -32653,7 +32706,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const cfg = getIntegrationsConfig();
     const overlay = document.createElement("div");
     overlay.id = "tb-int-config";
-    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif";
+    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
     const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
     const lbl = "font-size:12px;color:#A1A1AA";
     setInnerHTML(overlay, `
@@ -33210,7 +33263,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     (_a2 = document.getElementById("tb-ai-popover")) == null ? void 0 : _a2.remove();
     const overlay = document.createElement("div");
     overlay.id = "tb-ai-popover";
-    overlay.style.cssText = `
+    setInlineStyle(overlay, `
     position: fixed; inset: 0; z-index: 2147483647;
     background: rgba(5, 7, 12, 0.65);
     backdrop-filter: blur(4px);
@@ -33218,7 +33271,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     padding: 20px;
     font-family: system-ui, -apple-system, sans-serif;
     animation: tb-ai-pop-in 0.16s ease;
-  `;
+  `);
     if (!document.getElementById("tb-ai-pop-anim")) {
       const s2 = createStyleTag("tb-ai-pop-anim");
       s2.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
@@ -33228,7 +33281,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const approxTokens = Math.round(prompt.length / 4);
     const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const card = document.createElement("div");
-    card.style.cssText = `
+    setInlineStyle(card, `
     width: 100%; max-width: 560px; max-height: 80vh;
     background: #11151A;
     border: 1px solid rgba(99,102,241,0.28);
@@ -33237,7 +33290,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     display: flex; flex-direction: column;
     color: #FAFAFA;
     overflow: hidden;
-  `;
+  `);
     setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -33368,16 +33421,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const overlay = document.createElement("div");
     overlay.id = "tb-mcp-handoff";
-    overlay.style.cssText = `
+    setInlineStyle(overlay, `
     position: fixed; inset: 0; z-index: 2147483647;
     background: rgba(5, 7, 12, 0.65);
     backdrop-filter: blur(4px);
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
     font-family: system-ui, -apple-system, sans-serif;
-  `;
+  `);
     const card = document.createElement("div");
-    card.style.cssText = `
+    setInlineStyle(card, `
     width: 100%; max-width: 560px; max-height: 80vh;
     background: #11151A;
     border: 1px solid rgba(99,102,241,0.28);
@@ -33386,7 +33439,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     display: flex; flex-direction: column;
     color: #FAFAFA;
     overflow: hidden;
-  `;
+  `);
     setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -33459,7 +33512,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
         if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
         card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
-          b.style.cssText = toolBtnCss(b.getAttribute("data-mcp-tool") === tool);
+          setInlineStyle(b, toolBtnCss(b.getAttribute("data-mcp-tool") === tool));
         });
         return;
       }
@@ -33942,7 +33995,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     dragHandle.dataset.tracebug = "toolbar-handle";
     dragHandle.title = "Drag to move TraceBug";
     dragHandle.setAttribute("aria-label", "Drag to move TraceBug");
-    dragHandle.style.cssText = "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;opacity:0.55;color:var(--tb-btn-text,#aaa);transition:opacity 0.12s;";
+    setInlineStyle(dragHandle, "display:flex;align-items:center;justify-content:center;cursor:grab;padding:2px 0 4px;opacity:0.55;color:var(--tb-btn-text,#aaa);transition:opacity 0.12s;");
     dragHandle.addEventListener("mouseenter", () => {
       dragHandle.style.opacity = "1";
     });
@@ -34064,7 +34117,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         badge = document.createElement("span");
         badge.className = "tb-tickets-badge";
         badge.setAttribute("aria-hidden", "true");
-        badge.style.cssText = "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none";
+        setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
         ticketsBtn.style.position = "relative";
         ticketsBtn.appendChild(badge);
       }
@@ -34184,12 +34237,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     btn.title = title;
     btn.setAttribute("aria-label", title);
     setInnerHTML(btn, iconHtml);
-    btn.style.cssText = `
+    setInlineStyle(btn, `
     width: 34px; height: 34px; border-radius: var(--tb-radius-md, 8px); border: none;
     background: transparent; color: var(--tb-btn-text, #aaa); cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     padding: 0; transition: all 0.15s;
-  `;
+  `);
     btn.addEventListener("mouseenter", () => {
       if (!btn.classList.contains("tb-active")) {
         btn.style.background = "var(--tb-btn-hover, #ffffff15)";
@@ -34208,7 +34261,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function _divider() {
     const d = document.createElement("div");
     d.dataset.tracebug = "toolbar-divider";
-    d.style.cssText = "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0";
+    setInlineStyle(d, "width:20px;height:1px;background:var(--tb-border, #2a2a3e);margin:2px 0");
     return d;
   }
   function _trackIconSvg(active) {
@@ -34355,7 +34408,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const pop = document.createElement("div");
       pop.dataset.tracebug = "record-preflight";
       pop.setAttribute("role", "dialog");
-      pop.style.cssText = `
+      setInlineStyle(pop, `
       position:fixed;
       top:${Math.round(rect.bottom + 8)}px;
       left:${Math.round(Math.min(rect.left, window.innerWidth - 290))}px;
@@ -34370,7 +34423,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       color:var(--tb-text-primary, #e0e0e0);
       font-size:12px;
       animation:tracebug-preflight-in 0.15s ease;
-    `;
+    `);
       if (!document.getElementById("tracebug-preflight-anim")) {
         const st = createStyleTag("tracebug-preflight-anim");
         st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
@@ -34416,8 +34469,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (tabBtn && deskBtn) {
         const paintSurface = () => {
           const on2 = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
-          tabBtn.style.cssText = segBase + (surface === "tab" ? on2 : "");
-          deskBtn.style.cssText = segBase + (surface === "desktop" ? on2 : "");
+          setInlineStyle(tabBtn, segBase + (surface === "tab" ? on2 : ""));
+          setInlineStyle(deskBtn, segBase + (surface === "desktop" ? on2 : ""));
         };
         paintSurface();
         tabBtn.addEventListener("click", () => {
@@ -34480,7 +34533,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const sessions = getAllSessions().filter((s2) => s2.saved).sort((a2, b) => (b.updatedAt || 0) - (a2.updatedAt || 0));
     const pop = document.createElement("div");
     pop.dataset.tracebug = "offline-tickets-pop";
-    pop.style.cssText = [
+    setInlineStyle(pop, [
       "position:fixed",
       "right:16px",
       "top:80px",
@@ -34494,7 +34547,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       "font-size:12px",
       "color:var(--tb-text-primary,#e0e0e0)",
       "box-shadow:0 12px 40px rgba(0,0,0,0.5)"
-    ].join(";");
+    ].join(";"));
     const closeOnOutside = (e2) => {
       var _a2;
       if (!pop.contains(e2.target) && ((_a2 = e2.target) == null ? void 0 : _a2.id) !== "tracebug-toolbar-tickets-btn") {
@@ -34519,35 +34572,35 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     };
     const _fmtSize = (bytes) => bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
     const hdr = document.createElement("div");
-    hdr.style.cssText = "font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center";
+    setInlineStyle(hdr, "font-weight:600;font-size:13px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center");
     const hdrTitle = document.createElement("span");
     hdrTitle.textContent = `Saved Tickets (${sessions.length})`;
     const closeX = document.createElement("button");
     closeX.textContent = "\xD7";
-    closeX.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0";
+    setInlineStyle(closeX, "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0");
     closeX.addEventListener("click", closePop);
     hdr.appendChild(hdrTitle);
     hdr.appendChild(closeX);
     pop.appendChild(hdr);
     if (sessions.length === 0) {
       const empty = document.createElement("div");
-      empty.style.cssText = "text-align:center;padding:16px 0;color:var(--tb-text-muted,#666);font-size:11px;line-height:1.6";
+      setInlineStyle(empty, "text-align:center;padding:16px 0;color:var(--tb-text-muted,#666);font-size:11px;line-height:1.6");
       setInnerHTML(empty, "No saved tickets yet.<br>Open a ticket and click <strong>Save Ticket</strong> to add it here.");
       pop.appendChild(empty);
     } else {
       const list = document.createElement("div");
-      list.style.cssText = "max-height:320px;overflow-y:auto;overscroll-behavior:contain;margin-right:-6px;padding-right:6px";
+      setInlineStyle(list, "max-height:320px;overflow-y:auto;overscroll-behavior:contain;margin-right:-6px;padding-right:6px");
       sessions.forEach((s2) => {
         const evCount = (s2.events || []).length;
         const ssArr = s2.screenshots || [];
         const card = document.createElement("div");
-        card.style.cssText = "display:flex;gap:8px;padding:8px;border-radius:8px;border:1px solid var(--tb-border,#2a2a3e);margin-bottom:8px;background:var(--tb-bg-primary,#12121f);align-items:center";
+        setInlineStyle(card, "display:flex;gap:8px;padding:8px;border-radius:8px;border:1px solid var(--tb-border,#2a2a3e);margin-bottom:8px;background:var(--tb-bg-primary,#12121f);align-items:center");
         const thumb = document.createElement("div");
-        thumb.style.cssText = "width:54px;height:38px;border-radius:4px;overflow:hidden;flex-shrink:0;border:1px solid var(--tb-border,#2a2a3e);background:var(--tb-bg-primary,#0d0d1a);display:flex;align-items:center;justify-content:center";
+        setInlineStyle(thumb, "width:54px;height:38px;border-radius:4px;overflow:hidden;flex-shrink:0;border:1px solid var(--tb-border,#2a2a3e);background:var(--tb-bg-primary,#0d0d1a);display:flex;align-items:center;justify-content:center");
         if (ssArr.length > 0 && ssArr[0].dataUrl) {
           const img = document.createElement("img");
           img.src = ssArr[0].dataUrl;
-          img.style.cssText = "width:100%;height:100%;object-fit:cover";
+          setInlineStyle(img, "width:100%;height:100%;object-fit:cover");
           thumb.appendChild(img);
         } else {
           thumb.style.fontSize = "20px";
@@ -34555,9 +34608,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
         card.appendChild(thumb);
         const info = document.createElement("div");
-        info.style.cssText = "flex:1;min-width:0";
+        setInlineStyle(info, "flex:1;min-width:0");
         const cardTitle = document.createElement("div");
-        cardTitle.style.cssText = "font-size:11px;font-weight:600;color:var(--tb-text-primary,#e0e0e0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px";
+        setInlineStyle(cardTitle, "font-size:11px;font-weight:600;color:var(--tb-text-primary,#e0e0e0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px");
         let titleText = s2.title || s2.errorSummary || "";
         if (!titleText) {
           try {
@@ -34569,10 +34622,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         cardTitle.title = titleText;
         info.appendChild(cardTitle);
         const timeEl = document.createElement("div");
-        timeEl.style.cssText = "font-size:10px;color:var(--tb-text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+        setInlineStyle(timeEl, "font-size:10px;color:var(--tb-text-secondary,#aaa);white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
         timeEl.textContent = _fmtTime(s2.updatedAt || s2.createdAt || 0);
         const statsEl = document.createElement("div");
-        statsEl.style.cssText = "font-size:11px;margin-top:3px;color:var(--tb-text-primary,#e0e0e0)";
+        setInlineStyle(statsEl, "font-size:11px;margin-top:3px;color:var(--tb-text-primary,#e0e0e0)");
         const parts = [];
         if (evCount > 0) parts.push(`${evCount} event${evCount !== 1 ? "s" : ""}`);
         if (ssArr.length > 0) parts.push(`${ssArr.length} shot${ssArr.length !== 1 ? "s" : ""}`);
@@ -34583,17 +34636,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         info.appendChild(statsEl);
         if (s2.screenshotsDropped) {
           const dropWarn = document.createElement("div");
-          dropWarn.style.cssText = "font-size:10px;margin-top:2px;color:#f59e0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+          setInlineStyle(dropWarn, "font-size:10px;margin-top:2px;color:#f59e0b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
           dropWarn.textContent = "\u26A0 Saved without screenshots (storage was full)";
           dropWarn.title = "Browser storage was full when this ticket was saved, so its screenshots were dropped to preserve the rest of the ticket.";
           info.appendChild(dropWarn);
         }
         card.appendChild(info);
         const actions = document.createElement("div");
-        actions.style.cssText = "display:flex;flex-direction:column;gap:4px;flex-shrink:0";
+        setInlineStyle(actions, "display:flex;flex-direction:column;gap:4px;flex-shrink:0");
         const openBtn = document.createElement("button");
         openBtn.textContent = "Open";
-        openBtn.style.cssText = "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap";
+        setInlineStyle(openBtn, "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
         openBtn.addEventListener("click", () => {
           closePop();
           const tbModal = document.getElementById("tracebug-quick-bug-modal");
@@ -34606,7 +34659,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         });
         const exportBtn = document.createElement("button");
         exportBtn.textContent = "Export";
-        exportBtn.style.cssText = "background:transparent;color:var(--tb-text-secondary,#aaa);border:1px solid var(--tb-border-hover,#3a3a5e);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
+        setInlineStyle(exportBtn, "background:transparent;color:var(--tb-text-secondary,#aaa);border:1px solid var(--tb-border-hover,#3a3a5e);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap");
         exportBtn.addEventListener("click", async () => {
           exportBtn.disabled = true;
           exportBtn.textContent = "\u2026";
@@ -34623,7 +34676,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         });
         const delBtn = document.createElement("button");
         delBtn.textContent = "Delete";
-        delBtn.style.cssText = "background:transparent;color:var(--tb-error,#ef4444);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap";
+        setInlineStyle(delBtn, "background:transparent;color:var(--tb-error,#ef4444);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:3px 6px;cursor:pointer;font-size:10px;font-family:inherit;white-space:nowrap");
         delBtn.addEventListener("click", () => {
           if (delBtn.dataset.armed !== "true") {
             delBtn.dataset.armed = "true";
@@ -34656,12 +34709,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const pct = Math.min(100, Math.round(usedBytes / QUOTA_ESTIMATE_BYTES * 100));
       const freeBytes = Math.max(0, QUOTA_ESTIMATE_BYTES - usedBytes);
       const meter = document.createElement("div");
-      meter.style.cssText = "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)";
+      setInlineStyle(meter, "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)");
       const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
       const bar = document.createElement("div");
-      bar.style.cssText = "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px";
+      setInlineStyle(bar, "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px");
       const fill = document.createElement("div");
-      fill.style.cssText = `height:100%;width:${pct}%;border-radius:2px;background:${barColor}`;
+      setInlineStyle(fill, `height:100%;width:${pct}%;border-radius:2px;background:${barColor}`);
       bar.appendChild(fill);
       let roomHint = "";
       const sizes = sessions.map(_sizeOf).filter((n2) => n2 > 0).sort((a2, b) => a2 - b);
@@ -34671,14 +34724,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         roomHint = ` \xB7 room for \u2248${more} more ticket${more === 1 ? "" : "s"}`;
       }
       const label = document.createElement("div");
-      label.style.cssText = "font-size:10px;color:var(--tb-text-muted,#666)";
+      setInlineStyle(label, "font-size:10px;color:var(--tb-text-muted,#666)");
       label.textContent = `~${(usedBytes / (1024 * 1024)).toFixed(1)} MB used \xB7 ~${(freeBytes / (1024 * 1024)).toFixed(1)} MB free${roomHint}`;
       meter.appendChild(bar);
       meter.appendChild(label);
       pop.appendChild(meter);
     }
     const note = document.createElement("div");
-    note.style.cssText = `font-size:10px;color:var(--tb-text-muted,#666);opacity:0.8;${sessions.length === 0 ? "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)" : "margin-top:4px"}`;
+    setInlineStyle(note, `font-size:10px;color:var(--tb-text-muted,#666);opacity:0.8;${sessions.length === 0 ? "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)" : "margin-top:4px"}`);
     note.textContent = "Saved in this browser only \u2014 tickets stay until you delete them. Clearing site data removes them.";
     pop.appendChild(note);
     root2.appendChild(pop);
@@ -34700,32 +34753,32 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const isBottom = position === "bottom-right" || position === "bottom-left";
     const isLeft = position === "left" || position === "bottom-left";
     if (savedPos) {
-      toolbar.style.cssText = `
+      setInlineStyle(toolbar, `
       position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
       z-index: 2147483647; display: flex; flex-direction: column;
       align-items: center; gap: 3px; padding: 8px 6px;
       background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
       border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
       transition: none; cursor: grab;
-    `;
+    `);
     } else if (isBottom) {
-      toolbar.style.cssText = `
+      setInlineStyle(toolbar, `
       position: fixed; ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
       z-index: 2147483647; display: flex; flex-direction: row;
       align-items: center; gap: 3px; padding: 6px 8px;
       background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
       border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
       transition: all 0.3s ease;
-    `;
+    `);
     } else {
-      toolbar.style.cssText = `
+      setInlineStyle(toolbar, `
       position: fixed; ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
       z-index: 2147483647; display: flex; flex-direction: column;
       align-items: center; gap: 3px; padding: 8px 6px;
       background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
       border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
       transition: ${isLeft ? "left" : "right"} 0.3s ease;
-    `;
+    `);
     }
   }
   function _initDrag(toolbar) {
@@ -34837,7 +34890,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         el.style.display = _fabExpanded ? "" : "none";
       }
     });
-    toolbar.style.cssText = `
+    setInlineStyle(toolbar, `
     position: fixed; right: 12px; bottom: 12px;
     z-index: 2147483647; display: flex; flex-direction: column;
     align-items: center; gap: 3px; padding: ${_fabExpanded ? "8px 6px" : "6px"};
@@ -34846,7 +34899,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
     min-width: 44px; min-height: 44px;
     transition: all 0.2s ease;
-  `;
+  `);
     panel.style.width = "100vw";
     panel.style.height = "80vh";
     panel.style.bottom = _panelOpen ? "0" : "-85vh";
@@ -35051,7 +35104,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     liveRegion.id = "tracebug-live";
     liveRegion.setAttribute("aria-live", "polite");
     liveRegion.setAttribute("aria-atomic", "true");
-    liveRegion.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+    setInlineStyle(liveRegion, "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)");
     root2.appendChild(liveRegion);
     root2.appendChild(panel);
     document.documentElement.appendChild(root2);
@@ -35172,7 +35225,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     const filterBar = document.createElement("div");
     filterBar.dataset.tracebug = "filter-bar";
-    filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
+    setInlineStyle(filterBar, "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap");
     setInnerHTML(filterBar, `
     <input id="bt-search" type="text" placeholder="Search sessions..." style="
       flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
@@ -35241,7 +35294,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function _createSessionCard(session, panel) {
     var _a2, _b;
     const card = document.createElement("div");
-    card.style.cssText = "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
+    setInlineStyle(card, "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s");
     card.onmouseenter = () => card.style.borderColor = "var(--tb-border-hover, #4a4a6e)";
     card.onmouseleave = () => card.style.borderColor = "var(--tb-border, #2a2a3e)";
     const hasError = !!session.errorMessage;
@@ -35716,10 +35769,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     tabs.forEach((tab) => {
       tab.addEventListener("click", () => {
         tabs.forEach((t2) => {
-          t2.style.cssText = _tabBtnStyle(false);
+          setInlineStyle(t2, _tabBtnStyle(false));
           t2.classList.remove("bt-tab-active");
         });
-        tab.style.cssText = _tabBtnStyle(true);
+        setInlineStyle(tab, _tabBtnStyle(true));
         tab.classList.add("bt-tab-active");
         content.querySelectorAll(".bt-tab-content").forEach((c2) => c2.style.display = "none");
         const target = content.querySelector(`#bt-tab-${tab.dataset.tab}`);
@@ -35877,7 +35930,7 @@ ${ticket.description}`;
   }
   function showNoteDialog(sessionId, panel, _session) {
     const overlay = document.createElement("div");
-    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+    setInlineStyle(overlay, "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px");
     setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
       <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:12px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F4DD} Add Tester Note</div>
@@ -35935,7 +35988,7 @@ ${ticket.description}`;
     const overlay = document.createElement("div");
     overlay.id = "bt-voice-overlay";
     overlay.dataset.tracebug = "voice-dialog";
-    overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+    setInlineStyle(overlay, "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px");
     setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
       <div style="font-size:14px;font-weight:700;color:var(--tb-text-primary, #fff);margin-bottom:4px;font-family:var(--tb-font-family, system-ui,sans-serif)">\u{1F3A4} Voice Bug Description</div>
@@ -36469,7 +36522,7 @@ ${"-".repeat(40)}
         }
         setTimeout(() => {
           btn.textContent = "Copy MD";
-          btn.style.cssText = `${smallBtnStyle("#a78bfa")}font-size:10px`;
+          setInlineStyle(btn, `${smallBtnStyle("#a78bfa")}font-size:10px`);
         }, 2e3);
       });
       (_c = panel.querySelector("#bt-ann-export-json")) == null ? void 0 : _c.addEventListener("click", async () => {
@@ -36485,7 +36538,7 @@ ${"-".repeat(40)}
         }
         setTimeout(() => {
           btn.textContent = "Copy JSON";
-          btn.style.cssText = `${smallBtnStyle("#22d3ee")}font-size:10px`;
+          setInlineStyle(btn, `${smallBtnStyle("#22d3ee")}font-size:10px`);
         }, 2e3);
       });
       (_d = panel.querySelector("#bt-ann-clear-all")) == null ? void 0 : _d.addEventListener("click", () => {
@@ -36620,7 +36673,7 @@ ${"-".repeat(40)}
     const toast = document.createElement("div");
     toast.className = "bt-toast";
     toast.dataset.tracebug = "toast";
-    toast.style.cssText = `
+    setInlineStyle(toast, `
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
     background:var(--tb-bg-secondary, #1a1a2e)ee;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border-hover, #3a3a5e);
     border-radius:10px;padding:10px 20px;font-size:13px;
@@ -36628,7 +36681,7 @@ ${"-".repeat(40)}
     box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
     max-width:420px;text-align:center;line-height:1.4;
     animation:tracebug-toast-in 0.2s ease;
-  `;
+  `);
     if (!document.getElementById("tracebug-toast-anim")) {
       const style = createStyleTag("tracebug-toast-anim");
       style.textContent = `
@@ -36655,13 +36708,13 @@ ${"-".repeat(40)}
   function _showAnnotationEditorImpl(screenshot, root2) {
     const overlay = document.createElement("div");
     overlay.id = "bt-annotation-overlay";
-    overlay.style.cssText = `
+    setInlineStyle(overlay, `
     position:fixed;top:0;left:0;right:0;bottom:0;
     background:rgba(0,0,0,0.85);z-index:2147483647;
     display:flex;flex-direction:column;align-items:center;
     justify-content:center;pointer-events:auto;
     font-family:var(--tb-font-family, system-ui,sans-serif);
-  `;
+  `);
     const maxW = window.innerWidth * 0.85;
     const maxH = window.innerHeight * 0.78;
     const imgRatio = screenshot.width / screenshot.height;
@@ -36755,13 +36808,13 @@ ${"-".repeat(40)}
     const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap");
     const img = new Image();
     img.onload = () => {
-      img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`;
+      setInlineStyle(img, `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`);
       canvasWrap.appendChild(img);
       const canvas = document.createElement("canvas");
       canvas.width = displayW;
       canvas.height = displayH;
       canvas.dataset.tracebug = "annotation-canvas";
-      canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`;
+      setInlineStyle(canvas, `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`);
       canvasWrap.appendChild(canvas);
       initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root2);
     };
@@ -36858,15 +36911,15 @@ ${"-".repeat(40)}
           currentColor = colorMap[tool] || "#ef4444";
           overlay.querySelectorAll("[data-tool^='color-']").forEach((cb) => {
             const key = cb.dataset.tool || "";
-            cb.style.cssText = annColorBtnStyle(colorMap[key] || "#ef4444", key === tool);
+            setInlineStyle(cb, annColorBtnStyle(colorMap[key] || "#ef4444", key === tool));
           });
           return;
         }
         currentTool = tool;
         overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach((tb) => {
-          tb.style.cssText = annToolBtnStyle(false);
+          setInlineStyle(tb, annToolBtnStyle(false));
         });
-        btn.style.cssText = annToolBtnStyle(true);
+        setInlineStyle(btn, annToolBtnStyle(true));
       });
     });
     function spawnTextInput(x, y) {
@@ -36875,13 +36928,13 @@ ${"-".repeat(40)}
       const input2 = document.createElement("input");
       input2.type = "text";
       input2.placeholder = "Type and press Enter";
-      input2.style.cssText = `
+      setInlineStyle(input2, `
       position:absolute;left:${x}px;top:${Math.max(0, y - 20)}px;
       background:rgba(0,0,0,0.85);color:${currentColor};
       border:1px solid ${currentColor};border-radius:4px;
       padding:2px 6px;font:bold 14px system-ui,sans-serif;
       outline:none;min-width:140px;z-index:2;
-    `;
+    `);
       activeTextInput = input2;
       const commit = () => {
         if (activeTextInput !== input2) return;
@@ -72325,7 +72378,7 @@ First element: \`${exampleSnippet}\``,
     _onChange = onChange != null ? onChange : null;
     const layer = document.createElement("div");
     layer.id = LAYER_ID;
-    layer.setAttribute("style", "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
+    setInlineStyle(layer, "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
     setInnerHTML(layer, `
     <div data-tb-i="margin" style="position:fixed;background:rgba(246,178,107,0.25);pointer-events:none;display:none"></div>
     <div data-tb-i="padding" style="position:fixed;background:rgba(147,196,125,0.30);pointer-events:none;display:none"></div>

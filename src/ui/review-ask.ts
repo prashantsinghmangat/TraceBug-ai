@@ -17,6 +17,7 @@
 // choice as milestone-ask.ts, for the same reason.
 
 import { reviewUrl } from "../links";
+import { setInlineStyle } from "./helpers";
 
 const COUNT_KEY = "tracebug_export_count";
 const STATE_KEY = "tracebug_review_ask";
@@ -95,7 +96,7 @@ export function showReviewAsk(root: HTMLElement): void {
   card.id = CARD_ID;
   card.setAttribute("role", "dialog");
   card.setAttribute("aria-label", "Review TraceBug — optional");
-  card.style.cssText = [
+  setInlineStyle(card, [
     "position:fixed", "right:16px", "bottom:16px", "width:320px",
     "background:var(--tb-bg-secondary,#1a1a2e)",
     "border:1px solid var(--tb-border-hover,#3a3a5e)",
@@ -106,34 +107,34 @@ export function showReviewAsk(root: HTMLElement): void {
     "font-family:var(--tb-font-family,system-ui,sans-serif)",
     "color:var(--tb-text-primary,#e0e0e0)",
     "box-shadow:0 12px 40px rgba(0,0,0,0.5)",
-  ].join(";");
+  ].join(";"));
 
   // Built as nodes rather than innerHTML: this file is bundled into the page's
   // main world, and web-ext flags innerHTML assignment besides.
   const head = document.createElement("div");
-  head.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;gap:8px";
+  setInlineStyle(head, "display:flex;justify-content:space-between;align-items:flex-start;gap:8px");
   const title = document.createElement("div");
-  title.style.cssText = "font-size:15px;font-weight:600;line-height:1.3";
+  setInlineStyle(title, "font-size:15px;font-weight:600;line-height:1.3");
   title.textContent = "Did TraceBug save you time?";
   const close = document.createElement("button");
   close.setAttribute("data-act", "close");
   close.setAttribute("aria-label", "Dismiss");
-  close.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0;font-family:inherit";
+  setInlineStyle(close, "background:none;border:none;color:var(--tb-text-muted,#888);cursor:pointer;font-size:15px;line-height:1;padding:0;font-family:inherit");
   close.textContent = "✕";
   head.append(title, close);
 
   const line = document.createElement("p");
-  line.style.cssText = "margin:6px 0 12px;font-size:13px;line-height:1.5;color:var(--tb-text-secondary,#aaa)";
+  setInlineStyle(line, "margin:6px 0 12px;font-size:13px;line-height:1.5;color:var(--tb-text-secondary,#aaa)");
   line.textContent = "A short review helps other testers find it.";
 
   const row = document.createElement("div");
-  row.style.cssText = "display:flex;align-items:center;gap:12px";
+  setInlineStyle(row, "display:flex;align-items:center;gap:12px");
   const rate = document.createElement("a");
   rate.href = reviewUrl("review");
   rate.target = "_blank";
   rate.rel = "noopener noreferrer";
   rate.setAttribute("data-act", "rate");
-  rate.style.cssText = "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none";
+  setInlineStyle(rate, "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none");
   const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   star.setAttribute("width", "13");
   star.setAttribute("height", "13");
@@ -155,7 +156,7 @@ export function showReviewAsk(root: HTMLElement): void {
 
   const notNow = document.createElement("button");
   notNow.setAttribute("data-act", "not-now");
-  notNow.style.cssText = "background:none;border:none;color:var(--tb-text-muted,#888);font-size:12.5px;cursor:pointer;padding:0;font-family:inherit";
+  setInlineStyle(notNow, "background:none;border:none;color:var(--tb-text-muted,#888);font-size:12.5px;cursor:pointer;padding:0;font-family:inherit");
   notNow.textContent = "Not now";
   row.append(rate, notNow);
 

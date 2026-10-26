@@ -12,7 +12,7 @@
 
 import { getAllSessions } from "../storage";
 import { resolveCloudEndpoint } from "../cloud-endpoint";
-import { setInnerHTML } from "./helpers";
+import { setInnerHTML, setInlineStyle } from "./helpers";
 
 const DONE_KEY = "tracebug_milestone_ask_done";
 const CARD_ID = "tracebug-milestone-ask";
@@ -34,7 +34,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
   card.id = CARD_ID;
   card.setAttribute("role", "dialog");
   card.setAttribute("aria-label", "TraceBug update emails — optional");
-  card.style.cssText = [
+  setInlineStyle(card, [
     "position:fixed", "right:16px", "bottom:16px", "width:320px",
     "background:var(--tb-bg-secondary,#1a1a2e)",
     "border:1px solid var(--tb-border-hover,#3a3a5e)",
@@ -45,7 +45,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
     "font-family:var(--tb-font-family,system-ui,sans-serif)",
     "color:var(--tb-text-primary,#e0e0e0)",
     "box-shadow:0 12px 40px rgba(0,0,0,0.5)",
-  ].join(";");
+  ].join(";"));
 
   setInnerHTML(card, `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
