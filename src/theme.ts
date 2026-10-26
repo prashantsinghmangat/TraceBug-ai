@@ -2,6 +2,8 @@
 // CSS custom property design tokens with light/dark theme support.
 // All TraceBug UI components read from these variables.
 
+import { createStyleTag } from "./ui/helpers";
+
 export type ThemeMode = "light" | "dark" | "auto";
 
 export interface ThemeTokens {
@@ -237,8 +239,7 @@ function _applyThemeVars(): void {
   let existing = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null;
 
   if (!existing) {
-    existing = document.createElement("style");
-    existing.id = THEME_STYLE_ID;
+    existing = createStyleTag(THEME_STYLE_ID);
     document.head.appendChild(existing);
   }
 

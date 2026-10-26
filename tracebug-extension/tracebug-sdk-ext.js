@@ -20321,7 +20321,24 @@ var TraceBugExtensionModule = (() => {
     } catch (e2) {
     }
   }
-  var _ttPolicy;
+  function pageStyleNonce() {
+    if (_cspNonce !== void 0) return _cspNonce;
+    try {
+      const carrier = document.querySelector("script[nonce], style[nonce], link[nonce]");
+      _cspNonce = carrier && carrier.nonce || null;
+    } catch (e2) {
+      _cspNonce = null;
+    }
+    return _cspNonce;
+  }
+  function createStyleTag(id) {
+    const style = document.createElement("style");
+    if (id) style.id = id;
+    const nonce = pageStyleNonce();
+    if (nonce) style.nonce = nonce;
+    return style;
+  }
+  var _ttPolicy, _cspNonce;
   var init_helpers = __esm({
     "src/ui/helpers.ts"() {
       "use strict";
@@ -20517,8 +20534,7 @@ var TraceBugExtensionModule = (() => {
     animation:tracebug-toast-in 0.2s ease;
   `;
     if (!document.getElementById("tracebug-toast-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-toast-anim";
+      const style = createStyleTag("tracebug-toast-anim");
       style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
       document.head.appendChild(style);
     }
@@ -20588,8 +20604,7 @@ var TraceBugExtensionModule = (() => {
     animation:tracebug-toast-in 0.2s ease !important;
   `;
     if (!document.getElementById("tracebug-toast-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-toast-anim";
+      const style = createStyleTag("tracebug-toast-anim");
       style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
       document.head.appendChild(style);
     }
@@ -24020,8 +24035,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       ">Exit</button>
     </div>
   `);
-    const styleTag = document.createElement("style");
-    styleTag.id = "tracebug-annotate-styles";
+    const styleTag = createStyleTag("tracebug-annotate-styles");
     styleTag.dataset.tracebug = "annotate-styles";
     styleTag.textContent = `
     @keyframes tracebug-slide-down { from { transform: translateY(-100%); } to { transform: translateY(0); } }
@@ -25014,8 +25028,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     animation: tracebug-draw-slide 0.2s ease;
     color: var(--tb-text-primary, #e0e0e0);
   `;
-    const styleTag = document.createElement("style");
-    styleTag.id = "tracebug-draw-styles";
+    const styleTag = createStyleTag("tracebug-draw-styles");
     styleTag.dataset.tracebug = "draw-styles";
     styleTag.textContent = `
     @keyframes tracebug-draw-slide { from { opacity:0; transform: translate(-50%, -8px); } to { opacity:1; transform: translate(-50%, 0); } }
@@ -28628,8 +28641,7 @@ ${issueSignatureSlack()}`;
   }
   function _injectStyles() {
     if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
+    const style = createStyleTag(STYLE_ID);
     style.textContent = `
     .tb-rs-root {
       box-sizing: border-box !important;
@@ -29876,8 +29888,7 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     const tokens = getThemeTokens();
     let existing = document.getElementById(THEME_STYLE_ID);
     if (!existing) {
-      existing = document.createElement("style");
-      existing.id = THEME_STYLE_ID;
+      existing = createStyleTag(THEME_STYLE_ID);
       document.head.appendChild(existing);
     }
     const vars = Object.entries(tokens).map(([k, v2]) => `  ${k}: ${v2};`).join("\n");
@@ -29891,6 +29902,7 @@ ${vars}
   var init_theme = __esm({
     "src/theme.ts"() {
       "use strict";
+      init_helpers();
       DARK_THEME = {
         "--tb-bg-primary": "#0B0B10",
         "--tb-bg-secondary": "#16161D",
@@ -32791,8 +32803,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   }
   function _injectStyles2() {
     if (document.getElementById("tracebug-qb-styles")) return;
-    const style = document.createElement("style");
-    style.id = "tracebug-qb-styles";
+    const style = createStyleTag("tracebug-qb-styles");
     style.textContent = `
     ${tbIsolationCss(`#${MODAL_ID}`)}
     @keyframes tracebug-qb-fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -33209,8 +33220,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     animation: tb-ai-pop-in 0.16s ease;
   `;
     if (!document.getElementById("tb-ai-pop-anim")) {
-      const s2 = document.createElement("style");
-      s2.id = "tb-ai-pop-anim";
+      const s2 = createStyleTag("tb-ai-pop-anim");
       s2.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
       document.head.appendChild(s2);
     }
@@ -33591,8 +33601,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     hud.setAttribute("role", "status");
     hud.setAttribute("aria-live", "polite");
     if (!document.getElementById("tracebug-hud-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-hud-anim";
+      const style = createStyleTag("tracebug-hud-anim");
       style.textContent = `
       @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, -8px); } to { opacity:1; transform:translate(-50%, 0); } }
       /* Docked top-center: Chrome pins its un-movable "\u2026 is sharing your screen /
@@ -34363,8 +34372,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       animation:tracebug-preflight-in 0.15s ease;
     `;
       if (!document.getElementById("tracebug-preflight-anim")) {
-        const st = document.createElement("style");
-        st.id = "tracebug-preflight-anim";
+        const st = createStyleTag("tracebug-preflight-anim");
         st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
         document.head.appendChild(st);
       }
@@ -34904,8 +34912,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   }
   function ensurePulseStyles() {
     if (document.getElementById(STYLE_ID2)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID2;
+    const style = createStyleTag(STYLE_ID2);
     style.textContent = `
     @keyframes tracebug-onboard-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
@@ -34936,6 +34943,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
+      init_helpers();
       STORAGE_KEY3 = "tracebug_onboarding_complete";
       STYLE_ID2 = "tracebug-onboarding-styles";
     }
@@ -34966,8 +34974,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   function mountDashboard(toolbarPosition, shortcuts) {
     if (document.getElementById("tracebug-compact-toolbar")) return () => {
     };
-    const style = document.createElement("style");
-    style.id = "tracebug-styles";
+    const style = createStyleTag("tracebug-styles");
     style.textContent = `
     #tracebug-root {
       position: fixed !important;
@@ -36623,8 +36630,7 @@ ${"-".repeat(40)}
     animation:tracebug-toast-in 0.2s ease;
   `;
     if (!document.getElementById("tracebug-toast-anim")) {
-      const style = document.createElement("style");
-      style.id = "tracebug-toast-anim";
+      const style = createStyleTag("tracebug-toast-anim");
       style.textContent = `
       @keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
     `;
@@ -71085,8 +71091,7 @@ First element: \`${exampleSnippet}\``,
   }
   function _injectStyles3() {
     if (document.getElementById(STYLE_ID3)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID3;
+    const style = createStyleTag(STYLE_ID3);
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -71238,8 +71243,7 @@ First element: \`${exampleSnippet}\``,
   }
   function _injectStyles4() {
     if (document.getElementById(STYLE_ID4)) return;
-    const style = document.createElement("style");
-    style.id = STYLE_ID4;
+    const style = createStyleTag(STYLE_ID4);
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }
@@ -73163,11 +73167,15 @@ ${summary}`;
         const d = Number(opts.delaySec) || 0;
         if (d > 0) void runRecordCountdown(d).then((completed) => {
           if (completed) go();
+          else void announceCaptureStopped();
         });
         else go();
       };
-      if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
-      else begin();
+      if (opts.blurFirst) {
+        startBlurThenRecord({ onStart: begin, onCancel: () => void announceCaptureStopped() });
+      } else {
+        begin();
+      }
     }
     /** What this capture has recorded so far, for the HUD's live tally. Read
      *  from the cached session array, not localStorage — this is polled twice a

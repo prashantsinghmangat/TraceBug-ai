@@ -1055,11 +1055,23 @@ class TraceBugSDK {
       };
       const d = Number(opts.delaySec) || 0;
       // Esc during the countdown cancels the whole flow — no recording starts.
-      if (d > 0) void runRecordCountdown(d).then((completed) => { if (completed) go(); });
+      // The extension already marked this tab as capturing the moment the
+      // popup's click dispatched TB_START_RECORDING (background.js's
+      // handleComboAction, optimistic — same reason as startVideoRecording()'s
+      // own cancel path above). Nothing else ever runs on this branch, so
+      // without this the REC badge and the popup's "Capturing…" state were
+      // stuck forever with no HUD to stop them from.
+      if (d > 0) void runRecordCountdown(d).then((completed) => { if (completed) go(); else void announceCaptureStopped(); });
       else go();
     };
-    if (opts.blurFirst) startBlurThenRecord({ onStart: begin });
-    else begin();
+    if (opts.blurFirst) {
+      // Same reasoning as the countdown's Esc above: clicking Cancel in the
+      // blur arm bar used to leave the worker's optimistic "capturing" state
+      // (and the REC badge) stuck with nothing on the page left to stop it.
+      startBlurThenRecord({ onStart: begin, onCancel: () => void announceCaptureStopped() });
+    } else {
+      begin();
+    }
   }
 
   /** What this capture has recorded so far, for the HUD's live tally. Read

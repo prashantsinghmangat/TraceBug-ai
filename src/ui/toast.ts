@@ -1,7 +1,7 @@
 // ── Toast Notification ────────────────────────────────────────────────────
 // Lightweight toast system inside #tracebug-root.
 
-import { setInnerHTML } from "./helpers";
+import { setInnerHTML, createStyleTag } from "./helpers";
 
 /**
  * Interactive toast with an action button. Used for error-detected prompts.
@@ -37,8 +37,7 @@ export function showActionToast(
   `;
 
   if (!document.getElementById("tracebug-toast-anim")) {
-    const style = document.createElement("style");
-    style.id = "tracebug-toast-anim";
+    const style = createStyleTag("tracebug-toast-anim");
     style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
     document.head.appendChild(style);
   }
@@ -141,8 +140,7 @@ export function showToast(message: string, root: HTMLElement): void {
   `;
 
   if (!document.getElementById("tracebug-toast-anim")) {
-    const style = document.createElement("style");
-    style.id = "tracebug-toast-anim";
+    const style = createStyleTag("tracebug-toast-anim");
     style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
     document.head.appendChild(style);
   }

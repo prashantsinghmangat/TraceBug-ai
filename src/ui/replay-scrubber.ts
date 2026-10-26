@@ -15,7 +15,7 @@
 //   purple diamond   → mark (developer breadcrumb — Phase II A.3, future)
 
 import { TimelineEntry } from "../types";
-import { setInnerHTML } from "./helpers";
+import { setInnerHTML, createStyleTag } from "./helpers";
 
 export interface ScrubberMarker {
   /** Absolute event timestamp (ms). */
@@ -629,8 +629,7 @@ function _toggleHelpOverlay(root: HTMLElement): void {
 /** Stylesheet — !important everywhere to defeat host-page resets. */
 function _injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
+  const style = createStyleTag(STYLE_ID);
   style.textContent = `
     .tb-rs-root {
       box-sizing: border-box !important;

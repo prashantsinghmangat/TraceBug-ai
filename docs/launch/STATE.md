@@ -68,6 +68,16 @@ are allowed, confirmed stitch.withgoogle.com does not), then a safe empty-rather
 resort. `ext:lint` warnings dropped 69 → 22 as a direct, confirming side effect. See
 `e2e/ext-trusted-types-page.e2e.mjs` and `PROGRESS.md` 2026-10-23.
 
+**A separate, sibling gap: CSP `style-src` nonces** — confirmed live on a claude.ai artifact page
+(`style-src 'nonce-...'`, no `unsafe-inline`). Unlike Trusted Types this doesn't throw, so every
+`<style>` element TraceBug creates (theme vars, the dashboard reset, every keyframe animation) was
+just silently dropped with no exception to catch. Fixed the same way, for `<style>` elements only:
+`src/ui/helpers.ts`'s `createStyleTag()` borrows the host page's own nonce (via `.nonce`, not
+`getAttribute`) when it has one. **Not fixed**: inline `style="..."` HTML attributes elsewhere in the
+HUD/toolbar/overlays (`setAttribute("style", ...)`), which a nonce cannot cover at all without
+`unsafe-hashes` — a separate, CSSOM-conversion pass comparable in size to the 89-site Trusted Types
+sweep above. See `e2e/ext-style-nonce-page.e2e.mjs` and `PROGRESS.md` 2026-10-26.
+
 ## What 1.11.2 contains
 
 - **Bug 0 — SDK isolation** (`docs/launch/sdk-isolation-1.11.2.md`): the extension injects

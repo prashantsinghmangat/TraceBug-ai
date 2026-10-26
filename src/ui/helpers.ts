@@ -248,6 +248,51 @@ export function setInnerHTML(el: Element, html: string): void {
   try { el.replaceChildren(); } catch { /* nothing left to try */ }
 }
 
+// ── CSP style-src nonces ─────────────────────────────────────────────────────
+// A host page's CSP can require every <style> element to carry a nonce
+// (`style-src 'nonce-...'`, no `unsafe-inline`) — confirmed live on a
+// claude.ai artifact page, where TraceBug's own <style> elements (theme
+// variables, the dashboard's CSS reset) were silently dropped: unlike Trusted
+// Types above, the browser doesn't throw here, it just never applies the
+// rules, so there is nothing to catch and no console error to react to —
+// only an unstyled, broken-looking dashboard.
+//
+// The fix borrows the SAME nonce the host page already used on one of its own
+// inline <script>/<style>/<link> tags. A CSP nonce is a per-request value the
+// response header carries, but once a page actually uses it on a real
+// element the browser hands it back through that element's `.nonce` IDL
+// property — deliberately hidden from `getAttribute`/`outerHTML` so it can't
+// leak out through injected markup, but readable here because this script is
+// already trusted enough to be running at all. Cached per page load: the
+// nonce does not change without a full navigation.
+let _cspNonce: string | null | undefined;
+
+function pageStyleNonce(): string | null {
+  if (_cspNonce !== undefined) return _cspNonce;
+  try {
+    const carrier = document.querySelector("script[nonce], style[nonce], link[nonce]") as
+      | (Element & { nonce?: string })
+      | null;
+    _cspNonce = (carrier && carrier.nonce) || null;
+  } catch {
+    _cspNonce = null;
+  }
+  return _cspNonce;
+}
+
+/**
+ * Create a `<style>` element the way `document.createElement("style")` does,
+ * but carry the host page's own CSP nonce when it uses one. Safe everywhere
+ * else: a page with no nonce-based `style-src` ignores the extra attribute.
+ */
+export function createStyleTag(id?: string): HTMLStyleElement {
+  const style = document.createElement("style");
+  if (id) style.id = id;
+  const nonce = pageStyleNonce();
+  if (nonce) style.nonce = nonce;
+  return style;
+}
+
 export function downloadFile(filename: string, content: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);

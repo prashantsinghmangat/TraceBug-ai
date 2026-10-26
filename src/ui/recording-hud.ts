@@ -30,7 +30,7 @@ import {
 } from "../video-recorder";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "../draw-mode";
 import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBoxes } from "./blur-tool";
-import { setInnerHTML } from "./helpers";
+import { setInnerHTML, createStyleTag } from "./helpers";
 import { captureScreenshot } from "../screenshot";
 
 const HUD_ID = "tracebug-recording-hud";
@@ -84,8 +84,7 @@ export function showRecordingHUD(
   hud.setAttribute("aria-live", "polite");
 
   if (!document.getElementById("tracebug-hud-anim")) {
-    const style = document.createElement("style");
-    style.id = "tracebug-hud-anim";
+    const style = createStyleTag("tracebug-hud-anim");
     style.textContent = `
       @keyframes tracebug-hud-in { from { opacity:0; transform:translate(-50%, -8px); } to { opacity:1; transform:translate(-50%, 0); } }
       /* Docked top-center: Chrome pins its un-movable "… is sharing your screen /

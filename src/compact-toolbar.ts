@@ -17,7 +17,7 @@ import type { StoredSession } from "./types";
 import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./ui/quick-bug";
 // issues-panel imports were removed when the Scan button left the floating bar.
 // Scan stays reachable via TraceBug.scanPage() API for plugins / shortcuts.
-import { matchesShortcut, setInnerHTML } from "./ui/helpers";
+import { matchesShortcut, setInnerHTML, createStyleTag } from "./ui/helpers";
 import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, getCaptureCount, isVideoOffered } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 
@@ -669,8 +669,7 @@ function _showRecordPreflight(
       animation:tracebug-preflight-in 0.15s ease;
     `;
     if (!document.getElementById("tracebug-preflight-anim")) {
-      const st = document.createElement("style");
-      st.id = "tracebug-preflight-anim";
+      const st = createStyleTag("tracebug-preflight-anim");
       st.textContent = `@keyframes tracebug-preflight-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}`;
       document.head.appendChild(st);
     }

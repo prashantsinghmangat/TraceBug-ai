@@ -3,6 +3,8 @@
 // users notice the widget. The original 4-step tooltip tour was cut from v1
 // (see compact-toolbar.ts) — this module keeps only what the product uses.
 
+import { createStyleTag } from "./ui/helpers";
+
 const STORAGE_KEY = "tracebug_onboarding_complete";
 const STYLE_ID = "tracebug-onboarding-styles";
 
@@ -18,8 +20,7 @@ function isComplete(): boolean {
 /** Inject the pulse keyframe once (self-contained — no separate init call) */
 function ensurePulseStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
+  const style = createStyleTag(STYLE_ID);
   style.textContent = `
     @keyframes tracebug-onboard-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }

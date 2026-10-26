@@ -20,7 +20,7 @@ import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast, showActionToast } from "./toast";
-import { escapeHtml, tbIsolationCss, setInnerHTML } from "./helpers";
+import { escapeHtml, tbIsolationCss, setInnerHTML, createStyleTag } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
@@ -1526,8 +1526,7 @@ ${report.steps}` : userDesc)
       setInnerHTML(shareBtn, originalHtml);
     };
     if (!document.getElementById("tb-qb-spin-style")) {
-      const s = document.createElement("style");
-      s.id = "tb-qb-spin-style";
+      const s = createStyleTag("tb-qb-spin-style");
       s.textContent = "@keyframes tb-qb-spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(s);
     }
@@ -3100,8 +3099,7 @@ function _buildAnnotationsTab(session: StoredSession | null): string {
 
 function _injectStyles(): void {
   if (document.getElementById("tracebug-qb-styles")) return;
-  const style = document.createElement("style");
-  style.id = "tracebug-qb-styles";
+  const style = createStyleTag("tracebug-qb-styles");
   style.textContent = `
     ${tbIsolationCss(`#${MODAL_ID}`)}
     @keyframes tracebug-qb-fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -3543,8 +3541,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
   `;
 
   if (!document.getElementById("tb-ai-pop-anim")) {
-    const s = document.createElement("style");
-    s.id = "tb-ai-pop-anim";
+    const s = createStyleTag("tb-ai-pop-anim");
     s.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
     document.head.appendChild(s);
   }
@@ -3884,8 +3881,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
     `;
 
     if (!document.getElementById("tb-share-consent-anim")) {
-      const s = document.createElement("style");
-      s.id = "tb-share-consent-anim";
+      const s = createStyleTag("tb-share-consent-anim");
       s.textContent = "@keyframes tb-share-consent-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }";
       document.head.appendChild(s);
     }

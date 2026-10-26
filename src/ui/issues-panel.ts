@@ -8,7 +8,7 @@
 
 import { Issue } from "../types";
 import { dismissIssue, getIssues, scan } from "../scanner";
-import { escapeHtml, setInnerHTML } from "./helpers";
+import { escapeHtml, setInnerHTML, createStyleTag } from "./helpers";
 
 const PANEL_ID = "tracebug-issues-panel";
 const STYLE_ID = "tracebug-issues-panel-styles";
@@ -66,8 +66,7 @@ export async function showIssuesPanel(
 
 function _injectStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
+  const style = createStyleTag(STYLE_ID);
   style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }

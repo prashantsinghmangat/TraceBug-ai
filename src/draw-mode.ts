@@ -8,7 +8,7 @@
 
 import { DrawRegion } from "./types";
 import { addDrawRegion, getDrawRegions } from "./annotation-store";
-import { setInnerHTML } from "./ui/helpers";
+import { setInnerHTML, createStyleTag } from "./ui/helpers";
 
 type DrawShape = "rect" | "ellipse" | "pen" | "redact";
 
@@ -545,8 +545,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
   `;
 
   // Add animation
-  const styleTag = document.createElement("style");
-  styleTag.id = "tracebug-draw-styles";
+  const styleTag = createStyleTag("tracebug-draw-styles");
   styleTag.dataset.tracebug = "draw-styles";
   styleTag.textContent = `
     @keyframes tracebug-draw-slide { from { opacity:0; transform: translate(-50%, -8px); } to { opacity:1; transform: translate(-50%, 0); } }
