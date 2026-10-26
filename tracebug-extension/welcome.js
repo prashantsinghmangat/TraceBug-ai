@@ -14,6 +14,7 @@ const UTM = "utm_source=welcome";
 const PLAYGROUND_URL = `https://tracebug.dev/try.html?${UTM}`;
 const FEEDBACK_URL = `https://tracebug.dev/feedback?${UTM}&area=extension&type=other`;
 const GITHUB_URL = `https://github.com/prashantsinghmangat/TraceBug-ai?${UTM}`;
+const HOME_URL = `https://tracebug.dev?${UTM}`;
 // Empty until tracebug.dev/teams exists. A welcome page must never ship a 404,
 // so the card is simply absent rather than pointing somewhere unhelpful. Set
 // this and the card appears — no other change needed.
@@ -198,6 +199,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("playground").href = PLAYGROUND_URL;
   document.getElementById("github").href = GITHUB_URL;
   document.getElementById("feedback").href = FEEDBACK_URL;
+  document.getElementById("homeLogo").href = HOME_URL;
 
   wireCopy();
 
