@@ -231,6 +231,7 @@ interface TrustedTypePolicy {
 export function setInnerHTML(el: Element, html: string): void {
   try {
     el.innerHTML = html;
+    reviveInlineStylesForCsp(el);
     return;
   } catch { /* fall through */ }
 
@@ -241,11 +242,102 @@ export function setInnerHTML(el: Element, html: string): void {
       // lib.dom typings don't know that without the trusted-types package,
       // so the cast is a trust boundary we own, not a type-safety gap.
       el.innerHTML = policy.createHTML(html) as unknown as string;
+      reviveInlineStylesForCsp(el);
       return;
     } catch { /* fall through to the last resort */ }
   }
 
   try { el.replaceChildren(); } catch { /* nothing left to try */ }
+}
+
+// ── CSP style-src-attr: reviving inline style="" attributes ────────────────
+// A host page's CSP can restrict inline `style="..."` ATTRIBUTES specifically
+// (`style-src` with no `unsafe-inline` gates these too, and unlike `<style>`
+// elements below, Chrome has NO nonce or hash escape hatch for them without
+// the separate `unsafe-hashes` keyword) — confirmed live on a claude.ai
+// artifact page. Almost all of TraceBug's UI is positioned via inline
+// `style=""` attributes baked straight into the HTML strings passed to
+// `setInnerHTML()` above, so on such a page the entire toolbar/HUD/modal
+// renders with no layout at all: present in the DOM, invisible.
+//
+// The escape hatch, confirmed experimentally against a real nonce-CSP page:
+// when the browser blocks an inline style attribute, it does NOT remove the
+// attribute or refuse to parse the markup — `el.getAttribute("style")` still
+// returns the original string. What's blocked is folding that string into
+// the element's live `CSSStyleDeclaration` (`el.style.cssText` reads back
+// empty, nothing renders). Setting individual LONGHAND properties through the
+// CSSOM instead (`el.style.setProperty(prop, value)`) is a direct mutation of
+// that declaration object, not a reparse of the `style` content attribute —
+// it does not go through the same CSP gate at all, and takes effect
+// immediately. So after any markup is inserted, every element that carries a
+// `style` attribute gets that attribute's value re-applied property-by-
+// property through the CSSOM. Harmless when nothing was blocked (reapplying
+// the same values is a no-op); the fix exactly when something was.
+//
+// The parser below only needs to split a flat declaration LIST (no selectors,
+// no nested rules) — but must not split inside parentheses, or a value like
+// `url(data:image/png;base64,AAAA==)` (a semicolon and colons inside a data
+// URI) would be sliced into garbage declarations.
+function splitStyleDeclarations(cssText: string): string[] {
+  let depth = 0;
+  let current = "";
+  const decls: string[] = [];
+  for (const ch of cssText) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === ";" && depth === 0) {
+      decls.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) decls.push(current);
+  return decls;
+}
+
+/**
+ * Apply an inline style string via the CSSOM instead of the `style`
+ * attribute/`cssText` setter — see the section comment above for why. Safe to
+ * call on any page: a page with no CSP restriction on style attributes ends
+ * up with the exact same computed style either way.
+ */
+export function setInlineStyle(el: ElementCSSInlineStyle, cssText: string): void {
+  for (const decl of splitStyleDeclarations(cssText)) {
+    const idx = decl.indexOf(":");
+    if (idx < 0) continue;
+    const prop = decl.slice(0, idx).trim();
+    let value = decl.slice(idx + 1).trim();
+    if (!prop || !value) continue;
+    let priority = "";
+    if (/!\s*important\s*$/i.test(value)) {
+      priority = "important";
+      value = value.replace(/!\s*important\s*$/i, "").trim();
+    }
+    try { el.style.setProperty(prop, value, priority); } catch { /* an individual bad declaration shouldn't drop the rest */ }
+  }
+}
+
+/**
+ * Walk a just-inserted subtree and re-apply every element's `style` attribute
+ * through the CSSOM, so a CSP that silently dropped it (see above) doesn't
+ * leave the markup `setInnerHTML()` just built invisible. Called
+ * automatically by `setInnerHTML()` — exported only so a caller using
+ * `insertAdjacentHTML`/direct DOM construction instead of `setInnerHTML` can
+ * opt in the same way.
+ */
+export function reviveInlineStylesForCsp(root: Element): void {
+  try {
+    if (root instanceof HTMLElement) {
+      const own = root.getAttribute("style");
+      if (own) setInlineStyle(root, own);
+    }
+    const styled = root.querySelectorAll<HTMLElement>("[style]");
+    for (let i = 0; i < styled.length; i++) {
+      const attr = styled[i].getAttribute("style");
+      if (attr) setInlineStyle(styled[i], attr);
+    }
+  } catch { /* best-effort robustness pass, never worth throwing over */ }
 }
 
 // ── CSP style-src nonces ─────────────────────────────────────────────────────

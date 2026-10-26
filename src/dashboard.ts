@@ -21,7 +21,7 @@ export { setToolbarSessionLifecycleHandlers as setSessionLifecycleHandlers, setN
 import { showAnnotationBadges, clearAnnotationBadges } from "./element-annotate";
 import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
-import { matchesShortcut, setInnerHTML, createStyleTag } from "./ui/helpers";
+import { matchesShortcut, setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 import { isExtensionContext } from "./video-recorder";
 
 // sessionStorage key the extension build's content-script.js (TB_PING) and
@@ -166,7 +166,7 @@ export function mountDashboard(
   liveRegion.id = "tracebug-live";
   liveRegion.setAttribute("aria-live", "polite");
   liveRegion.setAttribute("aria-atomic", "true");
-  liveRegion.style.cssText = "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)";
+  setInlineStyle(liveRegion, "position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)");
   root.appendChild(liveRegion);
 
   root.appendChild(panel);
@@ -322,7 +322,7 @@ function renderPanel(panel: HTMLElement): void {
   // ── Search/filter bar ──
   const filterBar = document.createElement("div");
   filterBar.dataset.tracebug = "filter-bar";
-  filterBar.style.cssText = "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap";
+  setInlineStyle(filterBar, "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap");
   setInnerHTML(filterBar, `
     <input id="bt-search" type="text" placeholder="Search sessions..." style="
       flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
@@ -395,8 +395,7 @@ function renderPanel(panel: HTMLElement): void {
 
 function _createSessionCard(session: StoredSession, panel: HTMLElement): HTMLElement {
   const card = document.createElement("div");
-  card.style.cssText =
-    "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s";
+  setInlineStyle(card, "border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-md, 8px);padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color 0.2s");
   card.onmouseenter = () => (card.style.borderColor = "var(--tb-border-hover, #4a4a6e)");
   card.onmouseleave = () => (card.style.borderColor = "var(--tb-border, #2a2a3e)");
 
@@ -949,10 +948,10 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       tabs.forEach(t => {
-        (t as HTMLElement).style.cssText = _tabBtnStyle(false);
+        setInlineStyle((t as HTMLElement), _tabBtnStyle(false));
         t.classList.remove("bt-tab-active");
       });
-      (tab as HTMLElement).style.cssText = _tabBtnStyle(true);
+      setInlineStyle((tab as HTMLElement), _tabBtnStyle(true));
       tab.classList.add("bt-tab-active");
       content.querySelectorAll(".bt-tab-content").forEach(c => (c as HTMLElement).style.display = "none");
       const target = content.querySelector(`#bt-tab-${(tab as HTMLElement).dataset.tab}`) as HTMLElement;
@@ -1121,7 +1120,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
 
 function showNoteDialog(sessionId: string, panel: HTMLElement, _session: StoredSession): void {
   const overlay = document.createElement("div");
-  overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+  setInlineStyle(overlay, "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px");
 
   setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
@@ -1190,7 +1189,7 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, _session: Stored
   const overlay = document.createElement("div");
   overlay.id = "bt-voice-overlay";
   overlay.dataset.tracebug = "voice-dialog";
-  overlay.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px";
+  setInlineStyle(overlay, "position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10;display:flex;align-items:center;justify-content:center;padding:20px");
 
   setInnerHTML(overlay, `
     <div style="background:var(--tb-bg-primary, #12121f);border:1px solid var(--tb-border, #2a2a3e);border-radius:var(--tb-radius-lg, 12px);padding:20px;width:100%;max-width:420px">
@@ -1754,7 +1753,7 @@ function renderAnnotationList(panel: HTMLElement): void {
       } else {
         btn.textContent = "Failed";
       }
-      setTimeout(() => { btn.textContent = "Copy MD"; btn.style.cssText = `${smallBtnStyle("#a78bfa")}font-size:10px`; }, 2000);
+      setTimeout(() => { btn.textContent = "Copy MD"; setInlineStyle(btn, `${smallBtnStyle("#a78bfa")}font-size:10px`); }, 2000);
     });
 
     panel.querySelector("#bt-ann-export-json")?.addEventListener("click", async () => {
@@ -1768,7 +1767,7 @@ function renderAnnotationList(panel: HTMLElement): void {
       } else {
         btn.textContent = "Failed";
       }
-      setTimeout(() => { btn.textContent = "Copy JSON"; btn.style.cssText = `${smallBtnStyle("#22d3ee")}font-size:10px`; }, 2000);
+      setTimeout(() => { btn.textContent = "Copy JSON"; setInlineStyle(btn, `${smallBtnStyle("#22d3ee")}font-size:10px`); }, 2000);
     });
 
     panel.querySelector("#bt-ann-clear-all")?.addEventListener("click", () => {
@@ -1926,7 +1925,7 @@ function showToast(message: string, root: HTMLElement): void {
   const toast = document.createElement("div");
   toast.className = "bt-toast";
   toast.dataset.tracebug = "toast";
-  toast.style.cssText = `
+  setInlineStyle(toast, `
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
     background:var(--tb-bg-secondary, #1a1a2e)ee;color:var(--tb-text-primary, #e0e0e0);border:1px solid var(--tb-border-hover, #3a3a5e);
     border-radius:10px;padding:10px 20px;font-size:13px;
@@ -1934,7 +1933,7 @@ function showToast(message: string, root: HTMLElement): void {
     box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
     max-width:420px;text-align:center;line-height:1.4;
     animation:tracebug-toast-in 0.2s ease;
-  `;
+  `);
 
   // Add toast animation if not present
   if (!document.getElementById("tracebug-toast-anim")) {
@@ -1985,13 +1984,13 @@ export function showAnnotationEditor(
 function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement): void {
   const overlay = document.createElement("div");
   overlay.id = "bt-annotation-overlay";
-  overlay.style.cssText = `
+  setInlineStyle(overlay, `
     position:fixed;top:0;left:0;right:0;bottom:0;
     background:rgba(0,0,0,0.85);z-index:2147483647;
     display:flex;flex-direction:column;align-items:center;
     justify-content:center;pointer-events:auto;
     font-family:var(--tb-font-family, system-ui,sans-serif);
-  `;
+  `);
 
   // Calculate image dimensions to fit screen
   const maxW = window.innerWidth * 0.85;
@@ -2088,14 +2087,14 @@ function _showAnnotationEditorImpl(screenshot: ScreenshotData, root: HTMLElement
   const canvasWrap = overlay.querySelector("#bt-ann-canvas-wrap") as HTMLElement;
   const img = new Image();
   img.onload = () => {
-    img.style.cssText = `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`;
+    setInlineStyle(img, `width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);display:block;user-select:none;pointer-events:none`);
     canvasWrap.appendChild(img);
 
     const canvas = document.createElement("canvas");
     canvas.width = displayW;
     canvas.height = displayH;
     canvas.dataset.tracebug = "annotation-canvas";
-    canvas.style.cssText = `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`;
+    setInlineStyle(canvas, `position:absolute;top:0;left:0;width:${displayW}px;height:${displayH}px;border-radius:var(--tb-radius-md, 6px);`);
     canvasWrap.appendChild(canvas);
 
     initAnnotationCanvas(canvas, displayW, displayH, overlay, screenshot, root);
@@ -2224,15 +2223,15 @@ function initAnnotationCanvas(
         currentColor = colorMap[tool] || "#ef4444";
         overlay.querySelectorAll("[data-tool^='color-']").forEach(cb => {
           const key = (cb as HTMLElement).dataset.tool || "";
-          (cb as HTMLElement).style.cssText = annColorBtnStyle(colorMap[key] || "#ef4444", key === tool);
+          setInlineStyle((cb as HTMLElement), annColorBtnStyle(colorMap[key] || "#ef4444", key === tool));
         });
         return;
       }
       currentTool = tool as "rect" | "arrow" | "text" | "pen";
       overlay.querySelectorAll(".bt-ann-tool:not([data-tool^='color-'])").forEach(tb => {
-        (tb as HTMLElement).style.cssText = annToolBtnStyle(false);
+        setInlineStyle((tb as HTMLElement), annToolBtnStyle(false));
       });
-      (btn as HTMLElement).style.cssText = annToolBtnStyle(true);
+      setInlineStyle((btn as HTMLElement), annToolBtnStyle(true));
     });
   });
 
@@ -2247,13 +2246,13 @@ function initAnnotationCanvas(
     const input = document.createElement("input");
     input.type = "text";
     input.placeholder = "Type and press Enter";
-    input.style.cssText = `
+    setInlineStyle(input, `
       position:absolute;left:${x}px;top:${Math.max(0, y - 20)}px;
       background:rgba(0,0,0,0.85);color:${currentColor};
       border:1px solid ${currentColor};border-radius:4px;
       padding:2px 6px;font:bold 14px system-ui,sans-serif;
       outline:none;min-width:140px;z-index:2;
-    `;
+    `);
     activeTextInput = input;
 
     const commit = () => {

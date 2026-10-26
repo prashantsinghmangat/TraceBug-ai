@@ -5,7 +5,7 @@
 // recording captures) into a pick-first flow, plus a 3-2-1 countdown.
 
 import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBoxes, undoLastBlur } from "./blur-tool";
-import { setInnerHTML } from "./helpers";
+import { setInnerHTML, setInlineStyle } from "./helpers";
 
 const COUNTDOWN_ID = "tracebug-record-countdown";
 const ARM_BAR_ID = "tracebug-record-armbar";
@@ -36,9 +36,7 @@ export function showPickerHint(surfaceMode?: "tab" | "desktop"): void {
     el.id = PICKER_HINT_ID;
     el.setAttribute("role", "status");
     el.setAttribute("aria-live", "polite");
-    el.setAttribute(
-      "style",
-      "position:fixed!important;top:18px!important;left:50%!important;transform:translateX(-50%)!important;" +
+    setInlineStyle(el, "position:fixed!important;top:18px!important;left:50%!important;transform:translateX(-50%)!important;" +
         "z-index:2147483647!important;max-width:min(560px,calc(100vw - 32px))!important;" +
         "background:#1b1d24!important;color:#e9eaee!important;border:1px solid rgba(255,255,255,0.08)!important;" +
         "border-radius:12px!important;padding:11px 16px!important;box-sizing:border-box!important;" +
@@ -71,20 +69,16 @@ export function runRecordCountdown(seconds: number): Promise<boolean> {
     document.getElementById(COUNTDOWN_ID)?.remove();
     const overlay = document.createElement("div");
     overlay.id = COUNTDOWN_ID;
-    overlay.setAttribute(
-      "style",
-      "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;" +
+    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;" +
         "background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
     );
     const num = document.createElement("div");
-    num.setAttribute(
-      "style",
-      "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);" +
+    setInlineStyle(num, "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);" +
         "transition:transform 0.25s ease, opacity 0.25s ease;"
     );
     const hint = document.createElement("div");
     hint.textContent = "Press Esc to cancel";
-    hint.setAttribute("style", "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
+    setInlineStyle(hint, "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
     overlay.appendChild(num);
     overlay.appendChild(hint);
     document.body.appendChild(overlay);
@@ -138,9 +132,7 @@ export function startBlurThenRecord(opts: { onStart: () => void; onCancel?: () =
 
   const bar = document.createElement("div");
   bar.id = ARM_BAR_ID;
-  bar.setAttribute(
-    "style",
-    "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;" +
+  setInlineStyle(bar, "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;" +
       "background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;" +
       "font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
   );

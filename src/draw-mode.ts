@@ -8,7 +8,7 @@
 
 import { DrawRegion } from "./types";
 import { addDrawRegion, getDrawRegions } from "./annotation-store";
-import { setInnerHTML, createStyleTag } from "./ui/helpers";
+import { setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 
 type DrawShape = "rect" | "ellipse" | "pen" | "redact";
 
@@ -84,14 +84,14 @@ export function activateDrawMode(
   canvas.dataset.tracebug = "draw-canvas";
   canvas.width = docW;
   canvas.height = docH;
-  canvas.style.cssText = `
+  setInlineStyle(canvas, `
     position: absolute !important; top: 0 !important; left: 0 !important;
     z-index: 2147483645 !important;
     width: ${docW}px !important; height: ${docH}px !important;
     cursor: crosshair !important; pointer-events: auto !important;
     margin: 0 !important; padding: 0 !important;
     touch-action: none !important;
-  `;
+  `);
   document.body.appendChild(canvas);
 
   // ── SVG mirror overlay (so drawings survive into the DOM replay) ────
@@ -108,13 +108,13 @@ export function activateDrawMode(
   svgOverlay.setAttribute("width", String(docW));
   svgOverlay.setAttribute("height", String(docH));
   svgOverlay.setAttribute("viewBox", `0 0 ${docW} ${docH}`);
-  svgOverlay.style.cssText = `
+  setInlineStyle(svgOverlay, `
     position: absolute !important; top: 0 !important; left: 0 !important;
     z-index: 2147483644 !important;
     width: ${docW}px !important; height: ${docH}px !important;
     pointer-events: none !important; margin: 0 !important; padding: 0 !important;
     overflow: visible !important;
-  `;
+  `);
   document.body.appendChild(svgOverlay);
 
   // Append a committed ephemeral shape to the SVG mirror and fade+remove it on
@@ -532,7 +532,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
   // When the recording HUD is showing (also top-center), drop below it so the
   // two pills don't overlap and both stay usable.
   const topPx = document.getElementById("tracebug-recording-hud") ? 64 : 12;
-  bar.style.cssText = `
+  setInlineStyle(bar, `
     position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
@@ -542,7 +542,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     animation: tracebug-draw-slide 0.2s ease;
     color: var(--tb-text-primary, #e0e0e0);
-  `;
+  `);
 
   // Add animation
   const styleTag = createStyleTag("tracebug-draw-styles");
@@ -569,12 +569,12 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
     btn.title = s.label;
     btn.setAttribute("aria-label", s.label);
     setInnerHTML(btn, s.icon);
-    btn.style.cssText = _toolBtnStyle(s.shape === _currentShape);
+    setInlineStyle(btn, _toolBtnStyle(s.shape === _currentShape));
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       _currentShape = s.shape;
       bar.querySelectorAll("[data-tracebug='draw-tool-btn']").forEach(b => {
-        (b as HTMLElement).style.cssText = _toolBtnStyle((b as HTMLElement).dataset.shape === _currentShape);
+        setInlineStyle((b as HTMLElement), _toolBtnStyle((b as HTMLElement).dataset.shape === _currentShape));
       });
     });
     bar.appendChild(btn);
@@ -588,12 +588,12 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
     btn.dataset.tracebug = "draw-color-btn";
     btn.dataset.color = c.value;
     btn.title = c.label;
-    btn.style.cssText = `
+    setInlineStyle(btn, `
       width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
       background: ${c.value}; padding: 0; margin: 0; transition: all 0.15s;
       border: 2px solid ${c.value === _currentColor ? "#fff" : "transparent"};
       box-shadow: ${c.value === _currentColor ? "0 0 0 2px rgba(255,255,255,0.3)" : "none"};
-    `;
+    `);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       _currentColor = c.value;
@@ -614,13 +614,13 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
   doneBtn.title = "Exit draw mode (Esc)";
   doneBtn.setAttribute("aria-label", "Exit draw mode");
   setInnerHTML(doneBtn, `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M6 18L18 6"/></svg>`);
-  doneBtn.style.cssText = `
+  setInlineStyle(doneBtn, `
     width: 24px; height: 24px; padding: 0;
     background: transparent; border: 1px solid var(--tb-border, #2a2a3e);
     color: var(--tb-text-muted, #888); border-radius: 999px; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
     font-family: inherit; transition: all 0.15s;
-  `;
+  `);
   doneBtn.addEventListener("mouseenter", () => { doneBtn.style.color = "var(--tb-text-primary, #e0e0e0)"; doneBtn.style.borderColor = "var(--tb-border-hover, #3a3a5e)"; });
   doneBtn.addEventListener("mouseleave", () => { doneBtn.style.color = "var(--tb-text-muted, #888)"; doneBtn.style.borderColor = "var(--tb-border, #2a2a3e)"; });
   doneBtn.addEventListener("click", (e) => {
@@ -635,7 +635,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
 function _sep(): HTMLElement {
   const d = document.createElement("div");
   d.dataset.tracebug = "draw-sep";
-  d.style.cssText = "width:1px;height:18px;background:var(--tb-border, #2a2a3e);margin:0 4px;flex-shrink:0";
+  setInlineStyle(d, "width:1px;height:18px;background:var(--tb-border, #2a2a3e);margin:0 4px;flex-shrink:0");
   return d;
 }
 
@@ -790,7 +790,7 @@ function _showCommentInput(
 
   const input = document.createElement("div");
   input.dataset.tracebug = "draw-comment-input";
-  input.style.cssText = `
+  setInlineStyle(input, `
     position: absolute; z-index: 2147483647;
     left: ${inputLeft}px; top: ${inputTop}px;
     background: var(--tb-bg-secondary, #11151A); border: 1px solid var(--tb-border, #1F2630); border-radius: var(--tb-radius-md, 12px);
@@ -798,35 +798,35 @@ function _showCommentInput(
     box-shadow: var(--tb-shadow-lg, 0 8px 24px rgba(0,0,0,0.5));
     display: flex; gap: 8px; align-items: center;
     animation: tracebug-draw-slide 0.15s ease;
-  `;
+  `);
 
   const textInput = document.createElement("input");
   textInput.type = "text";
   textInput.placeholder = "Describe this region (optional)";
-  textInput.style.cssText = `
+  setInlineStyle(textInput, `
     background: var(--tb-bg-primary, #0B0B10); border: 1px solid var(--tb-border-hover, #2A2A35); color: var(--tb-text-primary, #FAFAFA);
     padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); font-size: 13px;
     font-family: inherit; width: 240px; outline: none;
-  `;
+  `);
 
   const saveBtn = document.createElement("button");
   saveBtn.textContent = "Save";
   saveBtn.dataset.tracebug = "draw-save-btn";
-  saveBtn.style.cssText = `
+  setInlineStyle(saveBtn, `
     background: #6366F1; border: none; color: #fff; padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
     font-family: inherit; box-shadow: 0 2px 6px rgba(99,102,241,0.3);
     transition: all 0.15s; white-space: nowrap;
-  `;
+  `);
 
   const skipBtn = document.createElement("button");
   skipBtn.textContent = "No comment";
   skipBtn.dataset.tracebug = "draw-cancel-btn";
-  skipBtn.style.cssText = `
+  setInlineStyle(skipBtn, `
     background: none; border: 1px solid var(--tb-border-hover, #2A2A35); color: var(--tb-text-secondary, #A1A1AA);
     padding: 8px 12px; border-radius: var(--tb-radius-sm, 8px); cursor: pointer; font-size: 12px;
     font-family: inherit; transition: all 0.15s; white-space: nowrap;
-  `;
+  `);
 
   input.appendChild(textInput);
   input.appendChild(saveBtn);

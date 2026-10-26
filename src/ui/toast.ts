@@ -1,7 +1,7 @@
 // ── Toast Notification ────────────────────────────────────────────────────
 // Lightweight toast system inside #tracebug-root.
 
-import { setInnerHTML, createStyleTag } from "./helpers";
+import { setInnerHTML, createStyleTag, setInlineStyle } from "./helpers";
 
 /**
  * Interactive toast with an action button. Used for error-detected prompts.
@@ -24,7 +24,7 @@ export function showActionToast(
   toast.className = "bt-toast bt-toast-action";
   toast.dataset.tracebug = "toast";
   toast.setAttribute("role", "alert");
-  toast.style.cssText = `
+  setInlineStyle(toast, `
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
     background:var(--tb-bg-secondary, #1a1a2e);color:var(--tb-text-primary, #e0e0e0);
     border:1px solid var(--tb-error, #ef4444);border-left:4px solid var(--tb-error, #ef4444);
@@ -34,7 +34,7 @@ export function showActionToast(
     max-width:480px;line-height:1.4;
     display:flex;align-items:center;gap:12px;
     animation:tracebug-toast-in 0.2s ease;
-  `;
+  `);
 
   if (!document.getElementById("tracebug-toast-anim")) {
     const style = createStyleTag("tracebug-toast-anim");
@@ -116,7 +116,7 @@ export function showToast(message: string, root: HTMLElement): void {
   // High-contrast against ANY host theme. Pure white text on a solid dark
   // base with a violet accent border. !important on the readable bits so
   // host-page CSS resets can't mute them.
-  toast.style.cssText = `
+  setInlineStyle(toast, `
     position:fixed !important;
     bottom:32px !important;
     left:50% !important;
@@ -137,7 +137,7 @@ export function showToast(message: string, root: HTMLElement): void {
     text-align:center !important;
     line-height:1.4 !important;
     animation:tracebug-toast-in 0.2s ease !important;
-  `;
+  `);
 
   if (!document.getElementById("tracebug-toast-anim")) {
     const style = createStyleTag("tracebug-toast-anim");

@@ -58,17 +58,26 @@ describe('showPickerHint', () => {
   it('cannot be hidden or restyled by the host page', () => {
     // It mounts into a page whose CSS we do not control, so the positioning and
     // visibility have to be !important or a hostile/greedy stylesheet wins.
+    // Asserted via the live CSSOM (not the serialized `style` attribute
+    // string) because setInlineStyle() applies these through
+    // style.setProperty(), which is what actually governs rendering and
+    // survives a CSP that silently drops the attribute/cssText form —
+    // see src/ui/helpers.ts.
     showPickerHint('tab');
-    const style = hint()!.getAttribute('style')!;
-    expect(style).toMatch(/position:fixed!important/);
-    expect(style).toMatch(/z-index:2147483647!important/);
+    const el = hint()! as HTMLElement;
+    expect(el.style.position).toBe('fixed');
+    expect(el.style.getPropertyPriority('position')).toBe('important');
+    expect(el.style.zIndex).toBe('2147483647');
+    expect(el.style.getPropertyPriority('z-index')).toBe('important');
   });
 
   it('does not take clicks away from the page', () => {
     // It sits top-centre over the page for a second or two while the dialog
     // opens; it must not eat a click meant for the app underneath.
     showPickerHint('tab');
-    expect(hint()!.getAttribute('style')).toMatch(/pointer-events:none!important/);
+    const el = hint()! as HTMLElement;
+    expect(el.style.pointerEvents).toBe('none');
+    expect(el.style.getPropertyPriority('pointer-events')).toBe('important');
   });
 
   it('is announced to screen readers', () => {

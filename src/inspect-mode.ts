@@ -7,7 +7,7 @@
 // Deliberately not a site-explorer (palette/assets/responsive) — that's
 // VisBug's job. This exists so design-QA bugs ship with the receipts.
 
-import { setInnerHTML } from "./ui/helpers";
+import { setInnerHTML, setInlineStyle } from "./ui/helpers";
 import { captureStyleEvidence, formatStyleSummary } from "./style-evidence";
 import { addElementAnnotation } from "./annotation-store";
 import { computeElementSelector } from "./element-annotate";
@@ -33,7 +33,7 @@ export function activateInspectMode(onChange?: () => void): void {
 
   const layer = document.createElement("div");
   layer.id = LAYER_ID;
-  layer.setAttribute("style", "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
+  setInlineStyle(layer, "position:fixed;inset:0;pointer-events:none;z-index:2147483600;");
   setInnerHTML(layer, `
     <div data-tb-i="margin" style="position:fixed;background:rgba(246,178,107,0.25);pointer-events:none;display:none"></div>
     <div data-tb-i="padding" style="position:fixed;background:rgba(147,196,125,0.30);pointer-events:none;display:none"></div>
