@@ -205,6 +205,15 @@
           </button>
         </div>
         <div class="mic-notice" id="micNotice" style="display:none"></div>
+        <!-- Device labels only come back non-blank once mic permission is
+             actually granted, so this stays hidden until popup.js's
+             refreshMicDeviceRow() has something real to show. Same storage
+             keys as options.html's device picker — whichever surface changes
+             it, the other reflects it next time it opens. -->
+        <div class="opt-row" id="micDeviceOptRow" style="display:none">
+          <div class="opt-row-text"><div class="opt-row-sub">Use this microphone</div></div>
+          <select class="mini-select" id="micDeviceSelect"></select>
+        </div>
 
         <div class="opt-row">
           <div class="opt-row-text">
@@ -233,6 +242,34 @@
           <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
           <span class="dock-label">Inspect</span>
         </button>
+      </div>
+
+      <!-- Screenshot options — Crop (the existing drag-to-select region tool)
+           vs Visible (today's instant viewport shot), plus a start delay.
+           Collapsed by default so the dock row above stays compact; clicking
+           the Screenshot button itself still captures instantly using
+           whatever is set here, same as before — this only adds a way to SEE
+           and change those settings without a trip to Options. -->
+      <button type="button" class="screenshot-opts-toggle" id="screenshotOptsToggle" aria-expanded="false" aria-controls="screenshotOptsBody">
+        <span id="screenshotOptsSummary">Screenshot: Visible · Now</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="opt-body" id="screenshotOptsBody" style="display:none">
+        <div class="opt-row">
+          <div class="opt-row-text"><div class="opt-row-title">Capture</div></div>
+          <div class="seg" id="shotModeSeg" role="group" aria-label="Screenshot mode">
+            <button type="button" class="seg-opt" data-mode="crop" aria-pressed="false">Crop</button>
+            <button type="button" class="seg-opt" data-mode="visible" aria-pressed="true">Visible</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <div class="opt-row-text"><div class="opt-row-title">Delay</div></div>
+          <div class="seg" id="shotDelaySeg" role="group" aria-label="Screenshot delay">
+            <button type="button" class="seg-opt" data-delay="0" aria-pressed="true">Now</button>
+            <button type="button" class="seg-opt" data-delay="3" aria-pressed="false">3s</button>
+            <button type="button" class="seg-opt" data-delay="5" aria-pressed="false">5s</button>
+          </div>
+        </div>
       </div>
 
       <!-- Redaction rules moved to options.html (2026-10-27) — freed up popup

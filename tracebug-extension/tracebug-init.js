@@ -236,13 +236,24 @@
         //   1. getAllSessions() is non-empty → Export .html / GitHub / Jira work
         //   2. clearScreenshots() fires NOW (clean slate), not inside
         //      quickCapture() after the screenshot was already stored.
+        // Also required by prepareScreenshot's crop path specifically:
+        // takeRegionScreenshot() refuses with no sessionId set yet, unlike
+        // takeScreenshot()'s looser fallback. startRecording() sets it
+        // synchronously, so it's in place before either runs below.
         if (window.__TraceBugExtension.startRecording) {
           try { window.__TraceBugExtension.startRecording(); } catch (e) {}
         }
         var openModal = function () {
           if (window.__TraceBugExtension.quickCapture) window.__TraceBugExtension.quickCapture();
         };
-        if (window.__TraceBugExtension.takeScreenshot) {
+        var wantsCropShot = !!(e.detail && e.detail.crop);
+        var shotDelaySec = (e.detail && e.detail.delaySec) || 0;
+        if (window.__TraceBugExtension.prepareScreenshot) {
+          Promise.resolve()
+            .then(function () { return window.__TraceBugExtension.prepareScreenshot({ crop: wantsCropShot, delaySec: shotDelaySec }); })
+            .catch(function () { /* capture failed — still open the modal */ })
+            .then(openModal);
+        } else if (window.__TraceBugExtension.takeScreenshot) {
           Promise.resolve()
             .then(function () { return window.__TraceBugExtension.takeScreenshot(); })
             .catch(function () { /* capture failed — still open the modal */ })
