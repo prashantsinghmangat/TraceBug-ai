@@ -170,6 +170,8 @@ Your coding agent (Claude Code, Cursor, Windsurf, VS Code) reads TraceBug bug re
 claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
 ```
 
+`-y` skips npx's install prompt but does **not** pin a version — it resolves whatever's newest on the npm registry at the time it runs. For a known, audited build instead, pin explicitly: `npx tracebug@1.10.1 mcp --dir ./bug-reports` (bump the version when you deliberately upgrade).
+
 The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets nine tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, `get_screenshot` (real image content), `get_playwright_test`, `resolve_stack`, and `get_fix_context`. `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
 
 The last three close the fix loop (v1.9): `get_playwright_test` returns the generated **failing Playwright spec** that replays the session and asserts the captured failure is gone — red until the bug is fixed, green after — so the agent can run it, patch, and re-run until green. `resolve_stack` maps the report's minified stack frames to original source files/lines using `.map` files found in the repo the server runs from. `get_fix_context` is a one-call fix starter: the failing request with response snippet, the user action that triggered it, the source-map-resolved top stack frames, and whether a failing test is available.
