@@ -623,6 +623,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vchip-frust-rage { background: rgba(239,68,68,0.18); color: #ef4444; }
 .tb-vchip-frust-dead { background: rgba(245,158,11,0.18); color: #f59e0b; }
 .tb-vchip-frust-abandon { background: rgba(59,130,246,0.18); color: #3b82f6; }
+/* Simple timeline rows interleaved with chips — recording start/stop. */
+.tb-vstep-row { display: flex; align-items: center; gap: 10px; padding: 6px 12px; color: var(--tb-text-3); font-size: 11px; }
+.tb-vstep-time { font-variant-numeric: tabular-nums; min-width: 32px; }
+.tb-vstep-icon { display: inline-flex; opacity: 0.7; }
+.tb-vstep-msg { font-weight: 600; letter-spacing: 0.2px; }
 
 /* Events list */
 .tb-vevents { font-size: 12px; line-height: 1.6; padding-left: 24px; margin: 0; max-height: 380px; overflow: auto; color: var(--tb-text); }
@@ -843,14 +848,14 @@ const REPLAY_RUNTIME = `(function(){
       }).join("");
   document.getElementById("panel-info").innerHTML = infoHtml;
 
-  // Console tab — unified event feed (Jam-style): console logs + page
-  // navigations + network errors + user activity + video markers, all
-  // chronologically ordered with category-filter pills.
+  // Console tab — console output ONLY. Used to be a unified feed (console
+  // logs + page navigations + network errors + user activity + video
+  // markers, all mixed with category pills) — navigation and video markers
+  // moved to the Actions tab below, network errors stay in the Network tab;
+  // mixing them all into Console made it hard to scan for an actual error.
   var feedConsole = (data.consoleLogs && data.consoleLogs.length) ? data.consoleLogs :
     (data.consoleErrors || []).map(function(e){ return { level: "error", message: e.message, stack: e.stack, timestamp: e.timestamp }; });
-  var feedEvents = data.events || [];
-  var feedVideo = data.video || null;
-  var feedStartTs = (feedEvents[0] && feedEvents[0].timestamp) || (feedConsole[0] && feedConsole[0].timestamp) || 0;
+  var feedStartTs = (data.events && data.events[0] && data.events[0].timestamp) || (feedConsole[0] && feedConsole[0].timestamp) || 0;
 
   var FEED_ICONS = {
     videoStart: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
@@ -866,53 +871,24 @@ const REPLAY_RUNTIME = `(function(){
   }
 
   var feed = [];
-  for (var i = 0; i < feedEvents.length; i++) {
-    var t = feedEvents[i];
-    var elapsedMs = t.timestamp - feedStartTs;
-    if (t.type === "route_change") {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "navigation", lvl: "", icon: FEED_ICONS.nav,
-        msg: "Navigated to " + (String(t.description).split("→").pop() || t.description).trim() });
-    } else if (t.type === "api_request" && t.isError) {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "network-error", lvl: "", icon: FEED_ICONS.netErr, msg: t.description });
-    } else if (t.type === "click") {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "user-activity", lvl: "", icon: FEED_ICONS.click,
-        msg: String(t.description).replace(/^click /, "Clicked ") });
-    } else if (t.type === "input" || t.type === "select_change" || t.type === "form_submit") {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "user-activity", lvl: "", icon: FEED_ICONS.click, msg: t.description });
-    }
-  }
   for (var j = 0; j < feedConsole.length; j++) {
     var l = feedConsole[j];
     feed.push({ ts: l.timestamp, el: l.timestamp - feedStartTs, cat: "console", lvl: l.level || "log",
       icon: FEED_ICONS.console, msg: l.message || "", stack: l.stack });
   }
-  if (feedVideo) {
-    var vs = feedVideo.startedAt;
-    feed.push({ ts: vs, el: vs - feedStartTs, cat: "video", lvl: "", icon: FEED_ICONS.videoStart, msg: "Video started" });
-    var ve = vs + (feedVideo.durationMs || 0);
-    feed.push({ ts: ve, el: ve - feedStartTs, cat: "video", lvl: "", icon: FEED_ICONS.videoStop, msg: "Video stopped" });
-  }
   feed.sort(function(a, b){ return a.ts - b.ts; });
   setBadge("badge-console", feed.length);
 
   if (feed.length === 0) {
-    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No events recorded</div>';
+    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No console output recorded this session</div>';
   } else {
-    var counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
-    for (var k = 0; k < feed.length; k++) counts[feed[k].cat] = (counts[feed[k].cat] || 0) + 1;
-    function feedPill(key, label){
-      var c = counts[key] || 0;
-      if (key !== "all" && c === 0) return "";
-      return '<button class="tb-vfeed-pill' + (key === "all" ? " tb-vfeed-pill-active" : "") + '" data-cat="' + key + '">' +
-        label + (c > 0 ? '<span class="tb-vfeed-pill-n">' + c + '</span>' : '') + '</button>';
-    }
     var feedRows = feed.map(function(e){
       var hay = ((e.msg || "") + " " + (e.stack || "")).toLowerCase();
-      var isErr = e.cat === "network-error" || e.lvl === "error";
+      var isErr = e.lvl === "error";
       var stackStr = e.stack ? String(e.stack).split("\\n").slice(0, 5).join("\\n") : "";
       var stackHtml = stackStr ? '<pre class="tb-vfeed-stack">' + esc(stackStr) + '</pre>' : '';
       return '<div class="tb-vfeed-row tb-vfeed-' + e.cat + (isErr ? ' tb-vfeed-err' : '') + (e.lvl ? ' tb-vfeed-lvl-' + e.lvl : '') +
-        '" data-cat="' + e.cat + '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-ts="' + e.ts + '" data-search="' + esc(hay) + '" tabindex="0" role="button" title="Click to seek video to this moment">' +
+        '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-ts="' + e.ts + '" data-search="' + esc(hay) + '" tabindex="0" role="button" title="Click to seek video to this moment">' +
         '<span class="tb-vfeed-time">' + fmtFeedTime(e.el) + '</span>' +
         '<span class="tb-vfeed-icon">' + e.icon + '</span>' +
         '<span class="tb-vfeed-body"><span class="tb-vfeed-msg">' + esc(e.msg) + '</span>' + stackHtml + '</span>' +
@@ -923,40 +899,24 @@ const REPLAY_RUNTIME = `(function(){
         '<input id="vcon-search" type="search" placeholder="Filter" class="tb-vnet-search" />' +
         '<label class="tb-vnet-err-toggle"><input id="vcon-errors-only" type="checkbox" /> Errors only</label>' +
       '</div>' +
-      '<div class="tb-vfeed-pills">' +
-        feedPill("all", "All") + feedPill("console", "Console") +
-        feedPill("navigation", "Page navigations") + feedPill("network-error", "Network errors") +
-        feedPill("user-activity", "User activity") + feedPill("video", "Video") +
-      '</div>' +
       '<div class="tb-vfeed-list">' + feedRows + '</div>';
     (function(){
       var panel = document.getElementById("panel-console");
       var searchEl = panel.querySelector("#vcon-search");
       var errOnly = panel.querySelector("#vcon-errors-only");
-      var pills = panel.querySelectorAll(".tb-vfeed-pill");
-      var activeCat = "all";
       function apply(){
         var q = (searchEl.value || "").trim().toLowerCase();
         var eo = errOnly.checked;
         panel.querySelectorAll(".tb-vfeed-row").forEach(function(row){
-          var cat = row.getAttribute("data-cat") || "";
           var hay = row.getAttribute("data-search") || "";
           var isErr = row.getAttribute("data-err") === "1";
-          var catMatch = activeCat === "all" || cat === activeCat;
           var qMatch = q.length === 0 || hay.indexOf(q) !== -1;
           var errMatch = !eo || isErr;
-          row.style.display = (catMatch && qMatch && errMatch) ? "" : "none";
+          row.style.display = (qMatch && errMatch) ? "" : "none";
         });
       }
       searchEl.addEventListener("input", apply);
       errOnly.addEventListener("change", apply);
-      pills.forEach(function(p){
-        p.addEventListener("click", function(){
-          activeCat = p.getAttribute("data-cat") || "all";
-          pills.forEach(function(q){ q.classList.toggle("tb-vfeed-pill-active", q === p); });
-          apply();
-        });
-      });
       // Click a Console row to seek the video / scrubber to that moment.
       panel.addEventListener("click", function(e){
         var row = e.target.closest ? e.target.closest(".tb-vfeed-row") : null;
@@ -1106,13 +1066,24 @@ const REPLAY_RUNTIME = `(function(){
     })();
   }
 
-  // Actions tab — prefer action chips, fall back to plain text steps
+  // Actions tab — the user's step-by-step story: action chips (click/input/
+  // select/submit/navigate) plus recording start/stop markers, interleaved by
+  // time. Console errors and network requests are NOT here — see the Console
+  // tab's comment above for why they used to be and no longer are. Falls back
+  // to plain text steps for older reports with no chips at all.
   var chips = data.actionChips || [];
   var actions = data.actions || [];
-  setBadge("badge-actions", chips.length || actions.length);
+  var stepMarkers = [];
+  if (data.video) {
+    var mvs = data.video.startedAt;
+    stepMarkers.push({ ts: mvs, html: '<div class="tb-vstep-row"><span class="tb-vstep-time">' + fmtFeedTime(mvs - feedStartTs) + '</span><span class="tb-vstep-icon">' + FEED_ICONS.videoStart + '</span><span class="tb-vstep-msg">Recording started</span></div>' });
+    var mve = mvs + (data.video.durationMs || 0);
+    stepMarkers.push({ ts: mve, html: '<div class="tb-vstep-row"><span class="tb-vstep-time">' + fmtFeedTime(mve - feedStartTs) + '</span><span class="tb-vstep-icon">' + FEED_ICONS.videoStop + '</span><span class="tb-vstep-msg">Recording stopped</span></div>' });
+  }
+  setBadge("badge-actions", chips.length + stepMarkers.length || actions.length);
   var actionsHtml;
-  if (chips.length > 0) {
-    actionsHtml = '<div class="tb-vchips">' + chips.map(function(c){
+  if (chips.length > 0 || stepMarkers.length > 0) {
+    var chipItems = chips.map(function(c){
       var elHtml = "";
       if (c.element) {
         var attrsHtml = (c.element.attrs || []).map(function(a){
@@ -1139,13 +1110,15 @@ const REPLAY_RUNTIME = `(function(){
       }
       var det = c.detail ? '<span class="tb-vchip-det' + (c.isError ? ' tb-vchip-det-err' : '') + '">' + esc(c.detail) + '</span>' : "";
       var errCls = (c.isError || c.frustration) ? ' tb-vchip-err' : '';
-      return '<div class="tb-vchip' + errCls + '">' +
-        frust +
-        '<span class="tb-vchip-verb tb-vchip-verb-' + esc(c.kind || 'click') + '">' + esc(c.verb || '') + '</span>' +
-        '<span class="tb-vchip-body">' + tgt + elHtml + det + '</span>' +
-      '</div>';
-    }).join("");
-    actionsHtml += '</div>';
+      return { ts: c.timestamp || 0, html:
+        '<div class="tb-vchip' + errCls + '">' +
+          frust +
+          '<span class="tb-vchip-verb tb-vchip-verb-' + esc(c.kind || 'click') + '">' + esc(c.verb || '') + '</span>' +
+          '<span class="tb-vchip-body">' + tgt + elHtml + det + '</span>' +
+        '</div>' };
+    });
+    var allActionItems = chipItems.concat(stepMarkers).sort(function(a, b){ return a.ts - b.ts; });
+    actionsHtml = '<div class="tb-vchips">' + allActionItems.map(function(i){ return i.html; }).join("") + '</div>';
   } else if (actions.length === 0) {
     actionsHtml = '<div class="tb-vempty-tab">No actions recorded</div>';
   } else {

@@ -150,12 +150,18 @@ try {
   check("a capture started", state.hud, JSON.stringify(state));
   check("it IS a video recording — the stored preference is honoured",
     state.isVideoRecording === true, `isVideoRecording=${state.isVideoRecording}`);
-  check("a pause button is present — there is a stream to pause", state.pauseBtn);
-  // The mic button renders for a video recording, but stays disabled: Bug 4
-  // (docs/launch/video-1.11.1.md) — hasMicrophoneTrack() reads page-side
-  // `_stream`, which the extension transport never sets. withMic was false
-  // here anyway, so "no track" is doubly true; the button existing at all is
-  // what this line is checking.
+  // Pause is deliberately ABSENT in extension mode, not just present-but-dead:
+  // the real MediaRecorder lives in the offscreen document, out of the page's
+  // reach, so pauseVideoRecording()/isVideoPaused() can never actually affect
+  // it — before this was fixed the button still rendered and visibly flipped
+  // to "paused" on click while the timer kept counting and the recording kept
+  // running (found by e2e/ext-feature-matrix.e2e.mjs). See recording-hud.ts's
+  // `pauseAvailable`.
+  check("no pause button — extension mode can't actually pause the offscreen recorder", !state.pauseBtn);
+  // The mic button renders for a video recording. It stays disabled here only
+  // because withMic was false in this call — `hasMicrophoneTrack()` now
+  // mirrors the offscreen document's real micIncluded state (1.11.3, Bug 4 in
+  // docs/launch/video-1.11.1.md), not a hardcoded page-side `_stream` check.
   check("a mic button renders in the HUD for a video recording", state.micBtn);
 
   const offscreenCount = await sw.evaluate(async () => {

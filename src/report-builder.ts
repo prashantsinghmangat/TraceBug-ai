@@ -92,6 +92,33 @@ function getSessionDomReplay(session: StoredSession | null | undefined) {
   };
 }
 
+/**
+ * The message to show for a console-feed entry (error/warning/log/info, plus
+ * window errors and unhandled rejections).
+ *
+ * Every collector emits the text NESTED, as `data.error.message` — window
+ * errors, unhandled rejections and console.error/warn/info/log alike (see
+ * `wrapConsoleLevel` and `collectErrors` in src/collectors.ts). Reading
+ * `data.message` directly, or `data.error?.message || ""` with no further
+ * fallback, therefore misses real content: a bare `new TypeError()` has an
+ * empty message but a useful NAME, and a non-Error `data.error` shape (a
+ * plain string, or an object with no `.message`) must never be stringified
+ * outright — that's how an error row used to print the literal text
+ * "[object Object]" and a `console.warn()` with no arguments vanished from
+ * the feed entirely (the old `.filter(e => !!e.message)` dropped it).
+ */
+export function extractConsoleMessage(data: TraceBugEvent["data"] | undefined, fallback: string): string {
+  const d = (data || {}) as Record<string, unknown>;
+  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+  const err: unknown = d.error;
+  if (err && typeof err === "object" && !Array.isArray(err)) {
+    const e = err as { message?: unknown; name?: unknown };
+    return str(e.message) || str(e.name) || str(d.message) || fallback;
+  }
+  return str(err) || str(d.message) || fallback;
+}
+
 export function buildReport(
   session: StoredSession,
   extraScreenshots?: ScreenshotData[]
@@ -127,7 +154,7 @@ export function buildReport(
   const consoleErrors = events
     .filter(e => ["error", "unhandled_rejection", "console_error"].includes(e.type))
     .map(e => ({
-      message: e.data.error?.message || "",
+      message: extractConsoleMessage(e.data, "Runtime error"),
       stack: e.data.error?.stack,
       timestamp: e.timestamp,
     }))
@@ -139,7 +166,9 @@ export function buildReport(
 
   // Full console capture across all levels — used by the modal + HTML
   // export Console tab so devs see warnings and logs alongside errors,
-  // matching what's in DevTools.
+  // matching what's in DevTools. This is now the ONLY place these entries
+  // render (the Actions tab dropped error/warning chips — see action-chips.ts
+  // — so console output isn't duplicated across both tabs).
   const levelMap: Record<string, "error" | "warn" | "log" | "info"> = {
     "error": "error",
     "unhandled_rejection": "error",
@@ -148,15 +177,20 @@ export function buildReport(
     "console_info": "info",
     "console_log": "log",
   };
+  const levelFallback: Record<"error" | "warn" | "log" | "info", string> = {
+    error: "Runtime error", warn: "Warning", log: "Log", info: "Info",
+  };
   const consoleLogs = events
     .filter(e => e.type in levelMap)
-    .map(e => ({
-      level: levelMap[e.type],
-      message: e.data.error?.message || "",
-      stack: e.data.error?.stack,
-      timestamp: e.timestamp,
-    }))
-    .filter(e => !!e.message);
+    .map(e => {
+      const level = levelMap[e.type];
+      return {
+        level,
+        message: extractConsoleMessage(e.data, levelFallback[level]),
+        stack: e.data.error?.stack,
+        timestamp: e.timestamp,
+      };
+    });
 
   // Collect ALL captured requests (success + failure) for the Network tab.
   // URLs are already sanitized in collectors.ts (sensitive query params replaced).
