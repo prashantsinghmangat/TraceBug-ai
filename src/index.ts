@@ -890,6 +890,23 @@ class TraceBugSDK {
     return screenshot;
   }
 
+  /**
+   * Pre-capture flow for the popup's Screenshot action: an optional
+   * countdown (same overlay `prepareRecording` uses, just with no mic
+   * toggle — there's no microphone concept for a still image), then either
+   * the instant viewport shot or the crop/region picker. Resolves to the
+   * captured screenshot, or null if the countdown was cancelled (Esc) or the
+   * region picker was cancelled/too small.
+   */
+  async prepareScreenshot(opts: { crop?: boolean; delaySec?: number } = {}): Promise<ScreenshotData | null> {
+    const d = Number(opts.delaySec) || 0;
+    if (d > 0) {
+      const completed = await runRecordCountdown(d);
+      if (!completed) return null;
+    }
+    return opts.crop ? this.takeRegionScreenshot() : this.takeScreenshot();
+  }
+
   /** Get all screenshots from current session */
   getScreenshots(): ScreenshotData[] {
     return getScreenshots();

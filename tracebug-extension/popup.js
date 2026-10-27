@@ -16,6 +16,7 @@ const MIC_KEY = "tracebug_mic_enabled";
 // extension:// origin as options.html and offscreen.html, so localStorage is
 // shared across all three — no chrome.storage plumbing needed for this.
 const MIC_DEVICE_LABEL_KEY = "tracebug_mic_device_label";
+const MIC_DEVICE_ID_KEY = "tracebug_mic_device_id";
 const CLOUD_ENDPOINT_KEY = "tracebug_cloud_endpoint";
 // Production default; override for local dev via:
 //   chrome.storage.local.set({ tracebug_cloud_endpoint: "http://localhost:3001" })
@@ -395,25 +396,47 @@ document.addEventListener("DOMContentLoaded", async () => {
   // to the recording. The pref persists across popup opens.
   let micOn = false;
   try { micOn = localStorage.getItem(MIC_KEY) === "1"; } catch {}
-  let micDeviceLabel = "";
-  try { micDeviceLabel = localStorage.getItem(MIC_DEVICE_LABEL_KEY) || ""; } catch {}
   const micBtn = document.getElementById("micOpt");
   const micPill = document.getElementById("micOptState");
   const micSub = document.getElementById("micOptSub");
+
+  // ── Inline device picker ──────────────────────────────────────────────
+  // Same chrome-extension:// origin as options.html and offscreen.html, so
+  // localStorage here is shared with both — whichever surface changes the
+  // chosen device, the other reflects it next time it opens. Lets a user see
+  // and change which microphone is in use right here, the way BetterBugs
+  // shows it in its own popup, instead of only in Options. Declared before
+  // applyMicUI() (which reads micDevicesReady/calls updateMicDeviceVisibility)
+  // since that function is called immediately below — a `let`/`const` isn't
+  // initialized until its own statement runs, so this would otherwise throw
+  // on that first call.
+  const micDeviceRow = document.getElementById("micDeviceOptRow");
+  const micDeviceSelect = document.getElementById("micDeviceSelect");
+  // Two independent gates: real, named devices must actually be enumerable
+  // (only true once permission is granted), AND the mic must be toggled ON —
+  // picking a device for a mic that isn't going to be used is just more UI
+  // to look at, not a real choice to make.
+  let micDevicesReady = false;
+  function updateMicDeviceVisibility() {
+    if (micDeviceRow) micDeviceRow.style.display = (micDevicesReady && micOn) ? "flex" : "none";
+  }
+
   function applyMicUI() {
     if (!micBtn || !micPill) return;
     micBtn.classList.toggle("mic-opt-on", micOn);
     micBtn.setAttribute("aria-pressed", micOn ? "true" : "false");
     micPill.textContent = micOn ? "On" : "Off";
+    updateMicDeviceVisibility();
   }
   applyMicUI();
 
   // Renders the one-line state under "Microphone" — the point of this pass:
-  // a user should see "Blocked", "Not granted yet", or "On · <device>" at a
-  // glance, never discover the real state only after a click does nothing.
-  // `permState` is the result of the navigator.permissions query below, or
-  // null when that API isn't available at all (notably older Firefox), in
-  // which case this falls back to the stored on/off alone.
+  // a user should see "Blocked" or "Not granted yet" at a glance, never
+  // discover the real state only after a click does nothing. `permState` is
+  // the result of the navigator.permissions query below, or null when that
+  // API isn't available at all (notably older Firefox), in which case this
+  // falls back to the stored on/off alone. Device identity isn't repeated
+  // here once granted — the device row below shows it directly.
   function renderMicSub(permState) {
     if (!micSub) return;
     let text; let warn = false;
@@ -422,12 +445,66 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (!micOn) {
       text = permState === "prompt" ? "Off · not granted yet" : "Off";
     } else {
-      text = micDeviceLabel ? `On · ${micDeviceLabel}` : "On";
+      text = "On";
     }
     micSub.textContent = text;
     micSub.classList.toggle("warn", warn);
   }
   renderMicSub(null);
+
+  // Device labels only come back non-blank once mic permission is actually
+  // granted (a page can see device COUNT without permission, but not names).
+  async function refreshMicDeviceRow() {
+    if (!micDeviceSelect || !navigator.mediaDevices?.enumerateDevices) {
+      micDevicesReady = false;
+      updateMicDeviceVisibility();
+      return;
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((d) => d.kind === "audioinput");
+      if (!inputs.length || !inputs[0].label) {
+        micDevicesReady = false;
+        updateMicDeviceVisibility();
+        return;
+      }
+      let storedId = "";
+      try { storedId = localStorage.getItem(MIC_DEVICE_ID_KEY) || ""; } catch {}
+      micDeviceSelect.textContent = "";
+      const defaultOpt = document.createElement("option");
+      defaultOpt.value = "";
+      defaultOpt.textContent = "System default";
+      micDeviceSelect.appendChild(defaultOpt);
+      inputs.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label;
+        micDeviceSelect.appendChild(opt);
+      });
+      micDeviceSelect.value = inputs.some((d) => d.deviceId === storedId) ? storedId : "";
+      micDevicesReady = true;
+      updateMicDeviceVisibility();
+    } catch {
+      micDevicesReady = false;
+      updateMicDeviceVisibility();
+    }
+  }
+
+  micDeviceSelect?.addEventListener("change", () => {
+    const id = micDeviceSelect.value;
+    const label = id ? (micDeviceSelect.selectedOptions[0]?.textContent || "") : "";
+    try {
+      if (id) {
+        localStorage.setItem(MIC_DEVICE_ID_KEY, id);
+        localStorage.setItem(MIC_DEVICE_LABEL_KEY, label);
+      } else {
+        localStorage.removeItem(MIC_DEVICE_ID_KEY);
+        localStorage.removeItem(MIC_DEVICE_LABEL_KEY);
+      }
+    } catch {}
+  });
+
+  try { navigator.mediaDevices?.addEventListener?.("devicechange", refreshMicDeviceRow); } catch {}
 
   // The toggle's ON state is a stored preference, not a live permission check
   // — found by hand-testing: if the actual browser permission was never
@@ -449,11 +526,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         applyMicUI();
       }
       renderMicSub(st.state);
+      if (st.state === "granted") void refreshMicDeviceRow();
     }).catch(() => {
       // navigator.permissions doesn't cover "microphone" in every browser
       // (notably older Firefox) — leave the stored preference and the
       // on/off-only label alone rather than claim a state we can't confirm.
+      // Still worth a device-row check: labels are simply blank if there's
+      // really no grant, so this degrades to a no-op rather than a lie.
+      void refreshMicDeviceRow();
     });
+  } else {
+    void refreshMicDeviceRow();
   }
 
   micBtn?.addEventListener("click", async () => {
@@ -490,6 +573,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // to call directly: no prompt shows, so the popup survives.
         const test = await navigator.mediaDevices.getUserMedia({ audio: true });
         test.getTracks().forEach((t) => t.stop());
+        void refreshMicDeviceRow();
       } catch (err) {
         micOn = false;
         try { localStorage.setItem(MIC_KEY, "0"); } catch {}
@@ -783,9 +867,61 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  // ── Screenshot options — Crop (existing drag-select tool) vs Visible
+  // (today's instant viewport shot), plus a start delay. Persisted the same
+  // way the video delay/surface prefs are: plain localStorage, since this is
+  // a per-browser UI preference, not report data.
+  const SHOT_MODE_KEY = "tracebug_screenshot_mode";
+  const SHOT_DELAY_KEY = "tracebug_screenshot_delay";
+  let shotMode = "visible";
+  try { shotMode = localStorage.getItem(SHOT_MODE_KEY) || "visible"; } catch {}
+  let shotDelaySec = 0;
+  try { shotDelaySec = Number(localStorage.getItem(SHOT_DELAY_KEY)) || 0; } catch {}
+
+  const shotToggle = document.getElementById("screenshotOptsToggle");
+  const shotSummary = document.getElementById("screenshotOptsSummary");
+  const shotBody = document.getElementById("screenshotOptsBody");
+  const shotModeBtns = Array.from(document.querySelectorAll("#shotModeSeg .seg-opt"));
+  const shotDelayBtns = Array.from(document.querySelectorAll("#shotDelaySeg .seg-opt"));
+
+  function renderShotSummary() {
+    const modeLabel = shotMode === "crop" ? "Crop" : "Visible";
+    const delayLabel = shotDelaySec > 0 ? `${shotDelaySec}s` : "Now";
+    if (shotSummary) shotSummary.textContent = `Screenshot: ${modeLabel} · ${delayLabel}`;
+  }
+  function renderShotButtons() {
+    shotModeBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === shotMode)));
+    shotDelayBtns.forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.delay) === shotDelaySec)));
+    renderShotSummary();
+  }
+  renderShotButtons();
+
+  shotToggle?.addEventListener("click", () => {
+    const expanded = shotToggle.getAttribute("aria-expanded") === "true";
+    shotToggle.setAttribute("aria-expanded", String(!expanded));
+    if (shotBody) shotBody.style.display = expanded ? "none" : "flex";
+  });
+  shotModeBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      shotMode = btn.dataset.mode;
+      try { localStorage.setItem(SHOT_MODE_KEY, shotMode); } catch {}
+      renderShotButtons();
+    });
+  });
+  shotDelayBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      shotDelaySec = Number(btn.dataset.delay) || 0;
+      try { localStorage.setItem(SHOT_DELAY_KEY, String(shotDelaySec)); } catch {}
+      renderShotButtons();
+    });
+  });
+
   // ── Secondary: Screenshot only — old one-shot Capture flow ──────────
   document.getElementById("btnScreenshot").addEventListener("click", async () => {
-    await runCombo("TB_CAPTURE_NOW", "Capturing screenshot…");
+    await runCombo("TB_CAPTURE_NOW", shotMode === "crop" ? "Drag to select an area…" : "Capturing screenshot…", {
+      crop: shotMode === "crop",
+      delaySec: shotDelaySec,
+    });
   });
 
   // ── Secondary: View tickets ──────────────────────────────────────────
@@ -1007,13 +1143,22 @@ function showToastAction(msg, actionLabel, onAction, steps) {
 // both the mic toggle (when permission is still unasked) and the notice below
 // (when it is blocked) so there's one route out, not two slightly different
 // ones.
+//
+// MUST use chrome.tabs.create with the #mic hash, not chrome.runtime.
+// openOptionsPage() — that API opens options.html with no way to pass a
+// hash, so options.js's `if (location.hash === "#mic")` deep link (scroll to
+// the mic card + ask immediately) never ran, and a click landed on the plain
+// settings page instead — found by hand-testing: the user had to notice the
+// Microphone card themselves, scroll to it past AI Debugger/GitHub/Linear/
+// Slack, and click "Allow microphone" manually. That's the whole extra
+// friction this flow exists to remove.
 function openMicSettings() {
   try {
-    chrome.runtime.openOptionsPage();
-    window.close();
+    chrome.tabs.create({ url: chrome.runtime.getURL("options.html#mic") });
   } catch {
-    try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#mic") }); window.close(); } catch {}
+    try { chrome.runtime.openOptionsPage(); } catch {}
   }
+  window.close();
 }
 
 function showMicNotice(err) {

@@ -644,7 +644,14 @@ if (isExtAlive()) {
 
       // ── New popup flow ───────────────────────────────────────────────────
       case "TB_CAPTURE_NOW":
-        dispatchToPage("tracebug-ext-action", { action: "capture-now" });
+        dispatchToPage("tracebug-ext-action", {
+          action: "capture-now",
+          // Default false: a plain click keeps today's instant viewport
+          // shot. true only when the popup's Screenshot card explicitly
+          // picked Crop.
+          crop: !!message.crop,
+          delaySec: message.delaySec || 0,
+        });
         sendResponse({ ok: true });
         break;
 

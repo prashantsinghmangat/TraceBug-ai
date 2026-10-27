@@ -605,6 +605,10 @@ async function handleComboAction(message, sender) {
     blurFirst: !!message.blurFirst,
     delaySec: message.delaySec || 0,
     surfaceMode: message.surfaceMode || undefined,
+    // Screenshot-only flows: crop (region-select) vs the default instant
+    // viewport shot. Meaningless for other action types, same as the fields
+    // above already are for theirs.
+    crop: !!message.crop,
   };
   if (!wasAlreadyInjected) {
     await new Promise((r) => setTimeout(r, 250));

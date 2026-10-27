@@ -157,6 +157,22 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .opt-row-sub { font-size: 10.5px; color: var(--text-3); margin-top: 1px; line-height: 1.4; }
 .opt-row-sub.warn { color: var(--error); }
 
+/* Inline device picker (mic now, camera later) — shown once permission is
+   granted and real device labels are readable. Deliberately small: this row
+   only exists to let a user see/change which device is in use without a
+   trip to Options, not to be a primary control. */
+.mini-select {
+  max-width: 150px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+.mini-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* ── Segmented controls — Tab|Desktop and start delay ────────────────
    Shared look: .seg is the pill wrapper, .seg-opt each option inside it. */
 .seg {
@@ -214,6 +230,20 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dock-ic { display: inline-flex; color: var(--accent); }
 .dock-ic svg { width: 16px; height: 16px; }
 .dock-label { letter-spacing: -0.005em; }
+
+/* ── Screenshot options toggle — collapsed summary + chevron ──────────
+   Deliberately a plain text row, not another card: the dock above already
+   carries the visual weight for this area, so this stays a quiet disclosure
+   rather than a second thing competing for attention. */
+.screenshot-opts-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; margin-top: 8px; padding: 6px 2px;
+  background: none; border: none; color: var(--text-3);
+  font: inherit; font-size: 11px; font-weight: 500; cursor: pointer;
+}
+.screenshot-opts-toggle:hover { color: var(--text-2); }
+.screenshot-opts-toggle .chev { width: 13px; height: 13px; transition: transform 0.15s; flex-shrink: 0; }
+.screenshot-opts-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
 /* Screen-reader-only text: present for assistive tech, invisible otherwise.
    Used where a visual label would repeat what the row/title already says. */
