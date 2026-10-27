@@ -1192,8 +1192,17 @@ function _openModal(
         : "\u2713 Ticket saved \u2014 find it under Saved tickets on the toolbar", root);
       // One-time OPTIONAL email ask at the 5th saved ticket \u2014 an ask, never a
       // wall (see milestone-ask.ts guardrails). Delayed so the toast lands
-      // first; the card sits bottom-right, away from the toast.
-      setTimeout(() => { try { maybeShowMilestoneAsk(root); } catch {} }, 1600);
+      // first; the card sits bottom-right, away from the toast. Both the card
+      // and this modal use the max z-index (see milestone-ask.ts), so showing
+      // it while the modal is still open visually overlaps the modal's
+      // bottom-right corner (T-10) \u2014 wait for the modal to close first,
+      // capped so the ask still fires if the user leaves the modal open.
+      let milestoneTries = 0;
+      const tryMilestoneAsk = () => {
+        if (_isOpen && milestoneTries++ < 8) { setTimeout(tryMilestoneAsk, 1600); return; }
+        try { maybeShowMilestoneAsk(root); } catch {}
+      };
+      setTimeout(tryMilestoneAsk, 1600);
     });
   }
 

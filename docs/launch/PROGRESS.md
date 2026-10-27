@@ -68,6 +68,18 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   `ext-video-recording` 8/8, `ext-sdk-isolation` 17/17, `ext-events-capture` 22/22,
   `ext-reload-reinject` 8/8, `ext-worker-restart-reinject` 4/4, `ext-badge-host-ui-defer` 4/4.
 
+## External fresh-eyes review (Brutally.ai), no code changes (2026-10-27)
+
+- **What:** an outside AI tool scored TraceBug 6.8/10, flagging adoption friction and monetization as
+  the main risks. Logged as input to the recurring fresh-eyes/buyer audit, not as new engineering work.
+- **Mostly stale/already done:** its "build one-click GitHub/Linear export" fix already exists
+  (`src/github-issue.ts`, `src/linear-issue.ts`, tracker "Send to…" buttons). Its other three asks
+  (aggressive integration push, open-core/enterprise tier) are speculative features with no user
+  evidence — out of scope per the engineering allowlist.
+- **One open question worth checking, not building:** can a non-technical QA/PM trigger a capture and
+  export in under two clicks without the terminal, using the *current* popup flow? No code changed here
+  to answer that — needs an actual walkthrough, not a feature.
+
 ## The TraceBug logo now links home wherever it appears in a header (2026-10-26)
 
 - **What:** the logo+wordmark in the popup header, `welcome.html`'s top bar, and the in-page dashboard
