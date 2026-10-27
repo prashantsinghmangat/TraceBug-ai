@@ -20442,6 +20442,19 @@ var TraceBugModule = (() => {
     }
     #${COUNTDOWN_ID} .tb-countdown-num.tb-countdown-pulse { transform: scale(1.25); opacity: 1; }
     #${COUNTDOWN_ID} .tb-countdown-hint { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.75); text-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+    #${COUNTDOWN_ID} .tb-countdown-mic {
+      pointer-events: auto;
+      display: flex; align-items: center; gap: 8px;
+      background: #1b1d24; color: #e9eaee; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 999px; padding: 8px 16px 8px 10px; font-size: 13px; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+    #${COUNTDOWN_ID} .tb-countdown-mic button {
+      width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.12); color: #e9eaee; flex-shrink: 0;
+    }
+    #${COUNTDOWN_ID} .tb-countdown-mic[data-tb-mic="off"] button { background: rgba(239,68,68,0.22); color: #f87171; }
     #${ARM_BAR_ID} {
       position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 2147483647;
       display: flex; align-items: center; gap: 10px;
@@ -20477,8 +20490,13 @@ var TraceBugModule = (() => {
     } catch (e2) {
     }
   }
-  function runRecordCountdown(seconds) {
+  function getCountdownMicChoice() {
+    return _countdownMicChoice;
+  }
+  function runRecordCountdown(seconds, opts) {
     const total = Math.max(1, Math.min(10, Math.round(seconds)));
+    const hasMicToggle = (opts == null ? void 0 : opts.withMicrophone) !== void 0;
+    _countdownMicChoice = hasMicToggle ? !!opts.withMicrophone : null;
     return new Promise((resolve) => {
       var _a2;
       _ensureStyles();
@@ -20491,6 +20509,23 @@ var TraceBugModule = (() => {
       hint.className = "tb-countdown-hint";
       hint.textContent = "Press Esc to cancel";
       overlay.appendChild(num);
+      if (hasMicToggle) {
+        const mic = document.createElement("div");
+        mic.className = "tb-countdown-mic";
+        const renderMic = () => {
+          mic.dataset.tbMic = _countdownMicChoice ? "on" : "off";
+          setInnerHTML(mic, `
+          <button type="button" aria-label="${_countdownMicChoice ? "Turn microphone off" : "Turn microphone on"}">${_countdownMicChoice ? MIC_ON_ICON : MIC_OFF_ICON}</button>
+          <span>Mic is ${_countdownMicChoice ? "on" : "off"}</span>
+        `);
+          mic.querySelector("button").addEventListener("click", () => {
+            _countdownMicChoice = !_countdownMicChoice;
+            renderMic();
+          });
+        };
+        renderMic();
+        overlay.appendChild(mic);
+      }
       overlay.appendChild(hint);
       document.body.appendChild(overlay);
       let cancelled = false;
@@ -20564,7 +20599,7 @@ var TraceBugModule = (() => {
       if (opts.onCancel) opts.onCancel();
     });
   }
-  var COUNTDOWN_ID, ARM_BAR_ID, PICKER_HINT_ID, STYLE_ID;
+  var COUNTDOWN_ID, ARM_BAR_ID, PICKER_HINT_ID, STYLE_ID, MIC_ON_ICON, MIC_OFF_ICON, _countdownMicChoice;
   var init_pre_record = __esm({
     "src/ui/pre-record.ts"() {
       "use strict";
@@ -20574,6 +20609,9 @@ var TraceBugModule = (() => {
       ARM_BAR_ID = "tracebug-record-armbar";
       PICKER_HINT_ID = "tracebug-picker-hint";
       STYLE_ID = "tracebug-pre-record-styles";
+      MIC_ON_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+      MIC_OFF_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`;
+      _countdownMicChoice = null;
     }
   });
 
@@ -21926,7 +21964,7 @@ var TraceBugModule = (() => {
       (e2) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e2.type)
     );
     if (errorEvents.length === 0) {
-      return generateFlowTitle(userActions, events);
+      return generateFlowTitle(userActions, events, session.screenshots);
     }
     const errorMsg = ((_a2 = errorEvents[0].data.error) == null ? void 0 : _a2.message) || session.errorMessage || "Unknown error";
     const errorType = classifyError(errorMsg);
@@ -21956,7 +21994,7 @@ var TraceBugModule = (() => {
     }
     return parts.join(" \u2192 ");
   }
-  function generateFlowTitle(userActions, allEvents) {
+  function generateFlowTitle(userActions, allEvents, screenshots2) {
     const failedApis = allEvents.filter(
       (e2) => {
         var _a2, _b, _c;
@@ -21969,7 +22007,9 @@ var TraceBugModule = (() => {
       const context2 = getActionContext(lastAction);
       return context2 ? `${context2} \u2014 API ${api == null ? void 0 : api.method} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}` : `API Failure: ${api == null ? void 0 : api.method} ${shortenUrl2(api == null ? void 0 : api.url)} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}`;
     }
-    if (userActions.length === 0) return "Empty Session \u2014 No User Interactions";
+    if (userActions.length === 0) {
+      return screenshots2 && screenshots2.length > 0 ? "Screenshot Capture \u2014 No User Interactions" : "Empty Session \u2014 No User Interactions";
+    }
     const lastActions = userActions.slice(-3);
     const parts = lastActions.map((a2) => describeAction(a2));
     return `Session: ${parts.join(" \u2192 ")}`;
@@ -22430,18 +22470,8 @@ var TraceBugModule = (() => {
     }
     return map;
   }
-  function errorText(data, fallback) {
-    const d = data || {};
-    const str = (v2) => typeof v2 === "string" ? v2.trim() : "";
-    const err = d.error;
-    if (err && typeof err === "object" && !Array.isArray(err)) {
-      const e2 = err;
-      return str(e2.message) || str(e2.name) || str(d.message) || fallback;
-    }
-    return str(err) || str(d.message) || fallback;
-  }
   function buildActionChips(events) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h;
+    var _a2, _b, _c, _d, _e, _f, _g;
     if (!events || events.length === 0) return [];
     const frustration = detectFrustration(events);
     const offset = events.length > MAX_CHIPS ? events.length - MAX_CHIPS : 0;
@@ -22541,45 +22571,14 @@ var TraceBugModule = (() => {
           });
           break;
         }
-        case "api_request": {
-          const r2 = ((_g = e2.data) == null ? void 0 : _g.request) || {};
-          const status = Number(r2.statusCode || 0);
-          const isError = status === 0 || status >= 400;
-          const url = String(r2.url || "");
-          if (isNoiseRequest(url)) break;
-          if (!isError && isStaticResource(url)) break;
-          chips.push({
-            verb: isError ? "Request failed" : "Request",
-            kind: "api",
-            detail: `${String(r2.method || "GET").toUpperCase()} ${truncate2(url, MAX_DETAIL_LEN)} \u2192 ${status === 0 ? "ERR" : status}`,
-            timestamp: e2.timestamp,
-            isError
-          });
-          break;
-        }
-        case "error":
-        case "console_error":
-        case "unhandled_rejection": {
-          chips.push({
-            verb: "Error",
-            kind: "error",
-            detail: truncate2(errorText(e2.data, "Runtime error"), MAX_DETAIL_LEN),
-            timestamp: e2.timestamp,
-            isError: true
-          });
-          break;
-        }
-        case "console_warn": {
-          chips.push({
-            verb: "Warning",
-            kind: "error",
-            detail: truncate2(errorText(e2.data, "Warning"), MAX_DETAIL_LEN),
-            timestamp: e2.timestamp
-          });
-          break;
-        }
+        // api_request / error / console_error / unhandled_rejection / console_warn
+        // are deliberately NOT chips here — they duplicate the Network and
+        // Console tabs, which is exactly the "not clean" overlap this tab used
+        // to have. The Actions tab is now ONLY the user's step-by-step story:
+        // what they clicked, typed, selected, submitted, and where they
+        // navigated. Errors live in Console; requests live in Network.
         case "mark": {
-          const label = String(((_h = e2.data) == null ? void 0 : _h.label) || "Mark");
+          const label = String(((_g = e2.data) == null ? void 0 : _g.label) || "Mark");
           chips.push({
             verb: "Mark",
             kind: "mark",
@@ -22600,7 +22599,6 @@ var TraceBugModule = (() => {
   var init_action_chips = __esm({
     "src/action-chips.ts"() {
       "use strict";
-      init_url_hygiene();
       MAX_CHIPS = 60;
       MAX_INLINE_ATTRS = 4;
       MAX_VALUE_LEN2 = 60;
@@ -22753,6 +22751,16 @@ var TraceBugModule = (() => {
       rrwebEvents: stash.events
     };
   }
+  function extractConsoleMessage(data, fallback) {
+    const d = data || {};
+    const str = (v2) => typeof v2 === "string" ? v2.trim() : "";
+    const err = d.error;
+    if (err && typeof err === "object" && !Array.isArray(err)) {
+      const e2 = err;
+      return str(e2.message) || str(e2.name) || str(d.message) || fallback;
+    }
+    return str(err) || str(d.message) || fallback;
+  }
   function buildReport(session, extraScreenshots) {
     var _a2, _b, _c, _d, _e;
     const environment = session.environment || captureEnvironment();
@@ -22772,10 +22780,10 @@ var TraceBugModule = (() => {
     }
     const seenErrors = /* @__PURE__ */ new Set();
     const consoleErrors = events.filter((e2) => ["error", "unhandled_rejection", "console_error"].includes(e2.type)).map((e2) => {
-      var _a3, _b2;
+      var _a3;
       return {
-        message: ((_a3 = e2.data.error) == null ? void 0 : _a3.message) || "",
-        stack: (_b2 = e2.data.error) == null ? void 0 : _b2.stack,
+        message: extractConsoleMessage(e2.data, "Runtime error"),
+        stack: (_a3 = e2.data.error) == null ? void 0 : _a3.stack,
         timestamp: e2.timestamp
       };
     }).filter((e2) => {
@@ -22791,15 +22799,22 @@ var TraceBugModule = (() => {
       "console_info": "info",
       "console_log": "log"
     };
+    const levelFallback = {
+      error: "Runtime error",
+      warn: "Warning",
+      log: "Log",
+      info: "Info"
+    };
     const consoleLogs = events.filter((e2) => e2.type in levelMap).map((e2) => {
-      var _a3, _b2;
+      var _a3;
+      const level = levelMap[e2.type];
       return {
-        level: levelMap[e2.type],
-        message: ((_a3 = e2.data.error) == null ? void 0 : _a3.message) || "",
-        stack: (_b2 = e2.data.error) == null ? void 0 : _b2.stack,
+        level,
+        message: extractConsoleMessage(e2.data, levelFallback[level]),
+        stack: (_a3 = e2.data.error) == null ? void 0 : _a3.stack,
         timestamp: e2.timestamp
       };
-    }).filter((e2) => !!e2.message);
+    });
     const networkRows = events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
       var _a3, _b2, _c2, _d2, _e2, _f, _g, _h;
       return {
@@ -26114,6 +26129,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vchip-frust-rage { background: rgba(239,68,68,0.18); color: #ef4444; }
 .tb-vchip-frust-dead { background: rgba(245,158,11,0.18); color: #f59e0b; }
 .tb-vchip-frust-abandon { background: rgba(59,130,246,0.18); color: #3b82f6; }
+/* Simple timeline rows interleaved with chips \u2014 recording start/stop. */
+.tb-vstep-row { display: flex; align-items: center; gap: 10px; padding: 6px 12px; color: var(--tb-text-3); font-size: 11px; }
+.tb-vstep-time { font-variant-numeric: tabular-nums; min-width: 32px; }
+.tb-vstep-icon { display: inline-flex; opacity: 0.7; }
+.tb-vstep-msg { font-weight: 600; letter-spacing: 0.2px; }
 
 /* Events list */
 .tb-vevents { font-size: 12px; line-height: 1.6; padding-left: 24px; margin: 0; max-height: 380px; overflow: auto; color: var(--tb-text); }
@@ -26329,14 +26349,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       }).join("");
   document.getElementById("panel-info").innerHTML = infoHtml;
 
-  // Console tab \u2014 unified event feed (Jam-style): console logs + page
-  // navigations + network errors + user activity + video markers, all
-  // chronologically ordered with category-filter pills.
+  // Console tab \u2014 console output ONLY. Used to be a unified feed (console
+  // logs + page navigations + network errors + user activity + video
+  // markers, all mixed with category pills) \u2014 navigation and video markers
+  // moved to the Actions tab below, network errors stay in the Network tab;
+  // mixing them all into Console made it hard to scan for an actual error.
   var feedConsole = (data.consoleLogs && data.consoleLogs.length) ? data.consoleLogs :
     (data.consoleErrors || []).map(function(e){ return { level: "error", message: e.message, stack: e.stack, timestamp: e.timestamp }; });
-  var feedEvents = data.events || [];
-  var feedVideo = data.video || null;
-  var feedStartTs = (feedEvents[0] && feedEvents[0].timestamp) || (feedConsole[0] && feedConsole[0].timestamp) || 0;
+  var feedStartTs = (data.events && data.events[0] && data.events[0].timestamp) || (feedConsole[0] && feedConsole[0].timestamp) || 0;
 
   var FEED_ICONS = {
     videoStart: '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
@@ -26352,53 +26372,24 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   }
 
   var feed = [];
-  for (var i = 0; i < feedEvents.length; i++) {
-    var t = feedEvents[i];
-    var elapsedMs = t.timestamp - feedStartTs;
-    if (t.type === "route_change") {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "navigation", lvl: "", icon: FEED_ICONS.nav,
-        msg: "Navigated to " + (String(t.description).split("\u2192").pop() || t.description).trim() });
-    } else if (t.type === "api_request" && t.isError) {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "network-error", lvl: "", icon: FEED_ICONS.netErr, msg: t.description });
-    } else if (t.type === "click") {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "user-activity", lvl: "", icon: FEED_ICONS.click,
-        msg: String(t.description).replace(/^click /, "Clicked ") });
-    } else if (t.type === "input" || t.type === "select_change" || t.type === "form_submit") {
-      feed.push({ ts: t.timestamp, el: elapsedMs, cat: "user-activity", lvl: "", icon: FEED_ICONS.click, msg: t.description });
-    }
-  }
   for (var j = 0; j < feedConsole.length; j++) {
     var l = feedConsole[j];
     feed.push({ ts: l.timestamp, el: l.timestamp - feedStartTs, cat: "console", lvl: l.level || "log",
       icon: FEED_ICONS.console, msg: l.message || "", stack: l.stack });
   }
-  if (feedVideo) {
-    var vs = feedVideo.startedAt;
-    feed.push({ ts: vs, el: vs - feedStartTs, cat: "video", lvl: "", icon: FEED_ICONS.videoStart, msg: "Video started" });
-    var ve = vs + (feedVideo.durationMs || 0);
-    feed.push({ ts: ve, el: ve - feedStartTs, cat: "video", lvl: "", icon: FEED_ICONS.videoStop, msg: "Video stopped" });
-  }
   feed.sort(function(a, b){ return a.ts - b.ts; });
   setBadge("badge-console", feed.length);
 
   if (feed.length === 0) {
-    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No events recorded</div>';
+    document.getElementById("panel-console").innerHTML = '<div class="tb-vempty-tab">No console output recorded this session</div>';
   } else {
-    var counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
-    for (var k = 0; k < feed.length; k++) counts[feed[k].cat] = (counts[feed[k].cat] || 0) + 1;
-    function feedPill(key, label){
-      var c = counts[key] || 0;
-      if (key !== "all" && c === 0) return "";
-      return '<button class="tb-vfeed-pill' + (key === "all" ? " tb-vfeed-pill-active" : "") + '" data-cat="' + key + '">' +
-        label + (c > 0 ? '<span class="tb-vfeed-pill-n">' + c + '</span>' : '') + '</button>';
-    }
     var feedRows = feed.map(function(e){
       var hay = ((e.msg || "") + " " + (e.stack || "")).toLowerCase();
-      var isErr = e.cat === "network-error" || e.lvl === "error";
+      var isErr = e.lvl === "error";
       var stackStr = e.stack ? String(e.stack).split("\\n").slice(0, 5).join("\\n") : "";
       var stackHtml = stackStr ? '<pre class="tb-vfeed-stack">' + esc(stackStr) + '</pre>' : '';
       return '<div class="tb-vfeed-row tb-vfeed-' + e.cat + (isErr ? ' tb-vfeed-err' : '') + (e.lvl ? ' tb-vfeed-lvl-' + e.lvl : '') +
-        '" data-cat="' + e.cat + '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-ts="' + e.ts + '" data-search="' + esc(hay) + '" tabindex="0" role="button" title="Click to seek video to this moment">' +
+        '" data-lvl="' + (e.lvl || "") + '" data-err="' + (isErr ? "1" : "0") + '" data-ts="' + e.ts + '" data-search="' + esc(hay) + '" tabindex="0" role="button" title="Click to seek video to this moment">' +
         '<span class="tb-vfeed-time">' + fmtFeedTime(e.el) + '</span>' +
         '<span class="tb-vfeed-icon">' + e.icon + '</span>' +
         '<span class="tb-vfeed-body"><span class="tb-vfeed-msg">' + esc(e.msg) + '</span>' + stackHtml + '</span>' +
@@ -26409,40 +26400,24 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         '<input id="vcon-search" type="search" placeholder="Filter" class="tb-vnet-search" />' +
         '<label class="tb-vnet-err-toggle"><input id="vcon-errors-only" type="checkbox" /> Errors only</label>' +
       '</div>' +
-      '<div class="tb-vfeed-pills">' +
-        feedPill("all", "All") + feedPill("console", "Console") +
-        feedPill("navigation", "Page navigations") + feedPill("network-error", "Network errors") +
-        feedPill("user-activity", "User activity") + feedPill("video", "Video") +
-      '</div>' +
       '<div class="tb-vfeed-list">' + feedRows + '</div>';
     (function(){
       var panel = document.getElementById("panel-console");
       var searchEl = panel.querySelector("#vcon-search");
       var errOnly = panel.querySelector("#vcon-errors-only");
-      var pills = panel.querySelectorAll(".tb-vfeed-pill");
-      var activeCat = "all";
       function apply(){
         var q = (searchEl.value || "").trim().toLowerCase();
         var eo = errOnly.checked;
         panel.querySelectorAll(".tb-vfeed-row").forEach(function(row){
-          var cat = row.getAttribute("data-cat") || "";
           var hay = row.getAttribute("data-search") || "";
           var isErr = row.getAttribute("data-err") === "1";
-          var catMatch = activeCat === "all" || cat === activeCat;
           var qMatch = q.length === 0 || hay.indexOf(q) !== -1;
           var errMatch = !eo || isErr;
-          row.style.display = (catMatch && qMatch && errMatch) ? "" : "none";
+          row.style.display = (qMatch && errMatch) ? "" : "none";
         });
       }
       searchEl.addEventListener("input", apply);
       errOnly.addEventListener("change", apply);
-      pills.forEach(function(p){
-        p.addEventListener("click", function(){
-          activeCat = p.getAttribute("data-cat") || "all";
-          pills.forEach(function(q){ q.classList.toggle("tb-vfeed-pill-active", q === p); });
-          apply();
-        });
-      });
       // Click a Console row to seek the video / scrubber to that moment.
       panel.addEventListener("click", function(e){
         var row = e.target.closest ? e.target.closest(".tb-vfeed-row") : null;
@@ -26592,13 +26567,24 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     })();
   }
 
-  // Actions tab \u2014 prefer action chips, fall back to plain text steps
+  // Actions tab \u2014 the user's step-by-step story: action chips (click/input/
+  // select/submit/navigate) plus recording start/stop markers, interleaved by
+  // time. Console errors and network requests are NOT here \u2014 see the Console
+  // tab's comment above for why they used to be and no longer are. Falls back
+  // to plain text steps for older reports with no chips at all.
   var chips = data.actionChips || [];
   var actions = data.actions || [];
-  setBadge("badge-actions", chips.length || actions.length);
+  var stepMarkers = [];
+  if (data.video) {
+    var mvs = data.video.startedAt;
+    stepMarkers.push({ ts: mvs, html: '<div class="tb-vstep-row"><span class="tb-vstep-time">' + fmtFeedTime(mvs - feedStartTs) + '</span><span class="tb-vstep-icon">' + FEED_ICONS.videoStart + '</span><span class="tb-vstep-msg">Recording started</span></div>' });
+    var mve = mvs + (data.video.durationMs || 0);
+    stepMarkers.push({ ts: mve, html: '<div class="tb-vstep-row"><span class="tb-vstep-time">' + fmtFeedTime(mve - feedStartTs) + '</span><span class="tb-vstep-icon">' + FEED_ICONS.videoStop + '</span><span class="tb-vstep-msg">Recording stopped</span></div>' });
+  }
+  setBadge("badge-actions", chips.length + stepMarkers.length || actions.length);
   var actionsHtml;
-  if (chips.length > 0) {
-    actionsHtml = '<div class="tb-vchips">' + chips.map(function(c){
+  if (chips.length > 0 || stepMarkers.length > 0) {
+    var chipItems = chips.map(function(c){
       var elHtml = "";
       if (c.element) {
         var attrsHtml = (c.element.attrs || []).map(function(a){
@@ -26625,13 +26611,15 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       }
       var det = c.detail ? '<span class="tb-vchip-det' + (c.isError ? ' tb-vchip-det-err' : '') + '">' + esc(c.detail) + '</span>' : "";
       var errCls = (c.isError || c.frustration) ? ' tb-vchip-err' : '';
-      return '<div class="tb-vchip' + errCls + '">' +
-        frust +
-        '<span class="tb-vchip-verb tb-vchip-verb-' + esc(c.kind || 'click') + '">' + esc(c.verb || '') + '</span>' +
-        '<span class="tb-vchip-body">' + tgt + elHtml + det + '</span>' +
-      '</div>';
-    }).join("");
-    actionsHtml += '</div>';
+      return { ts: c.timestamp || 0, html:
+        '<div class="tb-vchip' + errCls + '">' +
+          frust +
+          '<span class="tb-vchip-verb tb-vchip-verb-' + esc(c.kind || 'click') + '">' + esc(c.verb || '') + '</span>' +
+          '<span class="tb-vchip-body">' + tgt + elHtml + det + '</span>' +
+        '</div>' };
+    });
+    var allActionItems = chipItems.concat(stepMarkers).sort(function(a, b){ return a.ts - b.ts; });
+    actionsHtml = '<div class="tb-vchips">' + allActionItems.map(function(i){ return i.html; }).join("") + '</div>';
   } else if (actions.length === 0) {
     actionsHtml = '<div class="tb-vempty-tab">No actions recorded</div>';
   } else {
@@ -31296,12 +31284,18 @@ ${description}`;
         saveTicketBtn.classList.add("tb-qb-btn-saved");
         saveTicketBtn.disabled = true;
         showToast(withoutShots ? "\u2713 Ticket saved without screenshots (storage full) \u2014 find it under Saved tickets on the toolbar" : "\u2713 Ticket saved \u2014 find it under Saved tickets on the toolbar", root2);
-        setTimeout(() => {
+        let milestoneTries = 0;
+        const tryMilestoneAsk = () => {
+          if (_isOpen && milestoneTries++ < 8) {
+            setTimeout(tryMilestoneAsk, 1600);
+            return;
+          }
           try {
             maybeShowMilestoneAsk(root2);
           } catch (e2) {
           }
-        }, 1600);
+        };
+        setTimeout(tryMilestoneAsk, 1600);
       });
     }
     const moreBtn = modal.querySelector('[data-action="more-toggle"]');
@@ -31623,30 +31617,19 @@ ${report.steps}` : userDesc : void 0,
     if (conPanel) {
       const conSearch = conPanel.querySelector("#tb-qb-con-search");
       const conErrOnly = conPanel.querySelector("#tb-qb-con-errors-only");
-      const pills = conPanel.querySelectorAll(".tb-qb-feed-pill");
-      let activeCat = "all";
       const applyFeedFilter = () => {
         const q2 = ((conSearch == null ? void 0 : conSearch.value) || "").trim().toLowerCase();
         const errOnly = !!(conErrOnly == null ? void 0 : conErrOnly.checked);
         conPanel.querySelectorAll(".tb-qb-feed-row").forEach((row) => {
-          const cat = row.dataset.cat || "";
           const hay = row.dataset.search || "";
           const isErr = row.dataset.err === "1";
-          const catMatch = activeCat === "all" || cat === activeCat;
           const searchMatch = q2.length === 0 || hay.indexOf(q2) !== -1;
           const errMatch = !errOnly || isErr;
-          row.style.display = catMatch && searchMatch && errMatch ? "" : "none";
+          row.style.display = searchMatch && errMatch ? "" : "none";
         });
       };
       conSearch == null ? void 0 : conSearch.addEventListener("input", applyFeedFilter);
       conErrOnly == null ? void 0 : conErrOnly.addEventListener("change", applyFeedFilter);
-      pills.forEach((p) => {
-        p.addEventListener("click", () => {
-          activeCat = p.dataset.cat || "all";
-          pills.forEach((q2) => q2.classList.toggle("tb-qb-feed-pill-active", q2 === p));
-          applyFeedFilter();
-        });
-      });
     }
     modal.querySelector('[data-action="linear"]').addEventListener("click", async () => {
       const { title, description } = getDraft();
@@ -32226,52 +32209,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   }
   function _buildConsoleFeed(report) {
-    var _a2, _b, _c, _d, _e, _f;
+    var _a2, _b, _c, _d, _e, _f, _g;
     if (!report) return [];
-    const session = report.session;
-    const events = (session == null ? void 0 : session.events) || [];
-    const startTs = ((_a2 = events[0]) == null ? void 0 : _a2.timestamp) || ((_c = (_b = report.consoleLogs) == null ? void 0 : _b[0]) == null ? void 0 : _c.timestamp) || Date.now();
+    const startTs = ((_c = (_b = (_a2 = report.session) == null ? void 0 : _a2.events) == null ? void 0 : _b[0]) == null ? void 0 : _c.timestamp) || ((_e = (_d = report.consoleLogs) == null ? void 0 : _d[0]) == null ? void 0 : _e.timestamp) || Date.now();
     const feed = [];
-    for (const t2 of report.timeline || []) {
-      const elapsedMs = t2.timestamp - startTs;
-      if (t2.type === "route_change") {
-        feed.push({
-          timestamp: t2.timestamp,
-          elapsedMs,
-          cat: "navigation",
-          level: "",
-          icon: CON_ICONS.nav,
-          message: `Navigated to ${((_d = t2.description.split("\u2192").pop()) == null ? void 0 : _d.trim()) || t2.description}`
-        });
-      } else if (t2.type === "api_request" && t2.isError) {
-        feed.push({
-          timestamp: t2.timestamp,
-          elapsedMs,
-          cat: "network-error",
-          level: "",
-          icon: CON_ICONS.netErr,
-          message: t2.description
-        });
-      } else if (t2.type === "click") {
-        feed.push({
-          timestamp: t2.timestamp,
-          elapsedMs,
-          cat: "user-activity",
-          level: "",
-          icon: CON_ICONS.click,
-          message: t2.description.replace(/^click /, "Clicked ")
-        });
-      } else if (t2.type === "input" || t2.type === "select_change" || t2.type === "form_submit") {
-        feed.push({
-          timestamp: t2.timestamp,
-          elapsedMs,
-          cat: "user-activity",
-          level: "",
-          icon: CON_ICONS.click,
-          message: t2.description
-        });
-      }
-    }
     for (const l2 of report.consoleLogs || []) {
       feed.push({
         timestamp: l2.timestamp,
@@ -32283,7 +32224,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         stack: l2.stack
       });
     }
-    if (!((_e = report.consoleLogs) == null ? void 0 : _e.length) && ((_f = report.consoleErrors) == null ? void 0 : _f.length)) {
+    if (!((_f = report.consoleLogs) == null ? void 0 : _f.length) && ((_g = report.consoleErrors) == null ? void 0 : _g.length)) {
       for (const e2 of report.consoleErrors) {
         feed.push({
           timestamp: e2.timestamp,
@@ -32296,26 +32237,6 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         });
       }
     }
-    if (report.video) {
-      const vs = report.video.startedAt;
-      feed.push({
-        timestamp: vs,
-        elapsedMs: vs - startTs,
-        cat: "video",
-        level: "",
-        icon: CON_ICONS.videoStart,
-        message: "Video started"
-      });
-      const ve = vs + report.video.durationMs;
-      feed.push({
-        timestamp: ve,
-        elapsedMs: ve - startTs,
-        cat: "video",
-        level: "",
-        icon: CON_ICONS.videoStop,
-        message: "Video stopped"
-      });
-    }
     feed.sort((a2, b) => a2.timestamp - b.timestamp);
     return feed;
   }
@@ -32324,16 +32245,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (feed.length === 0) {
       return `<div class="tb-qb-empty">No console output recorded this session</div>`;
     }
-    const counts = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
-    for (const e2 of feed) counts[e2.cat] = (counts[e2.cat] || 0) + 1;
-    const pill = (key, label) => {
-      const c2 = counts[key] || 0;
-      if (key !== "all" && c2 === 0) return "";
-      return `<button class="tb-qb-feed-pill${key === "all" ? " tb-qb-feed-pill-active" : ""}" data-cat="${key}">${label}${c2 > 0 ? `<span class="tb-qb-feed-pill-n">${c2}</span>` : ""}</button>`;
-    };
     const rows = feed.map((e2) => {
       const hay = `${e2.message} ${e2.detail || ""} ${e2.stack || ""}`.toLowerCase();
-      const isErr = e2.cat === "network-error" || e2.level === "error";
+      const isErr = e2.level === "error";
       const stackHtml = e2.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml(e2.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
       return `<div class="tb-qb-feed-row tb-qb-feed-${e2.cat}${isErr ? " tb-qb-feed-err" : ""}${e2.level ? " tb-qb-feed-lvl-" + e2.level : ""}" data-cat="${e2.cat}" data-level="${e2.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e2.timestamp}" data-search="${escapeHtml(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
       <span class="tb-qb-feed-time">${_formatFeedElapsed(e2.elapsedMs)}</span>
@@ -32348,14 +32262,6 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div class="tb-qb-feed-toolbar">
       <input id="tb-qb-con-search" type="search" placeholder="Filter" aria-label="Filter console feed" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-con-errors-only" type="checkbox" /> Errors only</label>
-    </div>
-    <div class="tb-qb-feed-pills">
-      ${pill("all", "All")}
-      ${pill("console", "Console")}
-      ${pill("navigation", "Page navigations")}
-      ${pill("network-error", "Network errors")}
-      ${pill("user-activity", "User activity")}
-      ${pill("video", "Video")}
     </div>
     <div class="tb-qb-feed-list">${rows}</div>
   `;
@@ -32467,16 +32373,39 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     </div>
   `;
   }
+  function _renderStepRow(elapsedMs, icon, message) {
+    return `<div class="tb-qb-step-row">
+    <span class="tb-qb-step-time">${_formatFeedElapsed(elapsedMs)}</span>
+    <span class="tb-qb-step-icon" aria-hidden="true">${icon}</span>
+    <span class="tb-qb-step-msg">${escapeHtml(message)}</span>
+  </div>`;
+  }
   function _buildActionsTab(report) {
+    var _a2, _b, _c, _d, _e, _f;
     const chips = (report == null ? void 0 : report.actionChips) || [];
-    if (chips.length === 0) {
+    const startTs = (_f = (_e = (_c = (_b = (_a2 = report == null ? void 0 : report.session) == null ? void 0 : _a2.events) == null ? void 0 : _b[0]) == null ? void 0 : _c.timestamp) != null ? _e : (_d = report == null ? void 0 : report.video) == null ? void 0 : _d.startedAt) != null ? _f : 0;
+    const markers = [];
+    if (report == null ? void 0 : report.video) {
+      const vs = report.video.startedAt;
+      markers.push({ timestamp: vs, html: _renderStepRow(vs - startTs, CON_ICONS.videoStart, "Recording started") });
+      const ve = vs + report.video.durationMs;
+      markers.push({ timestamp: ve, html: _renderStepRow(ve - startTs, CON_ICONS.videoStop, "Recording stopped") });
+    }
+    if (chips.length === 0 && markers.length === 0) {
       const steps = (report == null ? void 0 : report.sessionSteps) || [];
       if (steps.length === 0) {
         return `<div class="tb-qb-empty">No actions recorded yet \u2014 click around the app to populate this</div>`;
       }
       return `<ol class="tb-qb-steps">${steps.map((s2) => `<li>${escapeHtml(s2)}</li>`).join("")}</ol>`;
     }
-    return `<div class="tb-qb-chips">${chips.map(_renderActionChip).join("")}</div>`;
+    const items = [
+      ...chips.map((c2) => {
+        var _a3;
+        return { timestamp: (_a3 = c2.timestamp) != null ? _a3 : 0, html: _renderActionChip(c2) };
+      }),
+      ...markers
+    ].sort((a2, b) => a2.timestamp - b.timestamp);
+    return `<div class="tb-qb-chips">${items.map((i2) => i2.html).join("")}</div>`;
   }
   function _renderActionChip(chip) {
     const elPreview = chip.element ? _renderElementPreview(chip.element) : "";
@@ -33244,6 +33173,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-chip-frust-rage { background:rgba(239,68,68,0.18); color:#ef4444; }
     #${MODAL_ID} .tb-qb-chip-frust-dead { background:rgba(245,158,11,0.18); color:#f59e0b; }
     #${MODAL_ID} .tb-qb-chip-frust-abandon { background:rgba(59,130,246,0.18); color:#3b82f6; }
+    /* Simple timeline rows interleaved with chips \u2014 recording start/stop today.
+       Deliberately plainer than a chip: nothing to click into, just a marker. */
+    #${MODAL_ID} .tb-qb-step-row { display:flex; align-items:center; gap:10px; padding:6px 12px; color:var(--tb-text-muted); font-size:11px; }
+    #${MODAL_ID} .tb-qb-step-time { font-variant-numeric:tabular-nums; min-width:32px; }
+    #${MODAL_ID} .tb-qb-step-icon { display:inline-flex; opacity:0.7; }
+    #${MODAL_ID} .tb-qb-step-msg { font-weight:600; letter-spacing:0.2px; }
 
     /* Notes tab */
     #${MODAL_ID} .tb-qb-note { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border-subtle); border-left:3px solid var(--tb-border); }
@@ -33835,7 +33770,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     `;
       document.head.appendChild(style);
     }
-    const micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
+    let micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
+    const pauseAvailable = !eventsOnly && !isExtensionContext2();
     setInnerHTML(hud, `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
       <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
@@ -33843,10 +33779,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <button class="tb-hud-stop" data-tb-hud="stop" title="${eventsOnly ? "Stop capturing & file a ticket" : "Stop recording"}" aria-label="${eventsOnly ? "Stop capturing" : "Stop recording"}">
       <span style="width:10px;height:10px;background:#fff;border-radius:2px;display:inline-block"></span>
     </button>
-    ${eventsOnly ? "" : `
+    ${pauseAvailable ? `
     <button class="tb-hud-btn" data-tb-hud="pause" title="Pause" aria-label="Pause recording">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-    </button>`}
+    </button>` : ""}
     <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
     ${eventsOnly ? `
     <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording \u2014 nothing is being shared with your browser's screen-share.">Capturing</span>
@@ -33906,6 +33842,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
       if (!isVideoRecording()) return;
       if (!isVideoPaused()) timerEl.textContent = _formatElapsed(getVideoElapsedMs());
+      if (micBtn && micBtn.disabled && micAvailable !== hasMicrophoneTrack()) {
+        micAvailable = hasMicrophoneTrack();
+        micBtn.disabled = !micAvailable;
+        micBtn.title = micAvailable ? "Mute / unmute microphone" : "No microphone in this recording";
+        micBtn.style.opacity = micAvailable ? "" : "0.35";
+        micBtn.style.cursor = micAvailable ? "" : "not-allowed";
+      }
     }, 500);
     if (gripEl) {
       let startX = 0, startY = 0, hudX = 0, hudY = 0, dragging = false;
@@ -34688,6 +34631,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     hdrTitle.textContent = `Saved Tickets (${sessions.length})`;
     const closeX = document.createElement("button");
     closeX.textContent = "\xD7";
+    closeX.setAttribute("aria-label", "Close");
     setInlineStyle(closeX, "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0");
     closeX.addEventListener("click", closePop);
     hdr.appendChild(hdrTitle);
@@ -71779,6 +71723,7 @@ First element: \`${exampleSnippet}\``,
     getAllSessions: () => getAllSessions,
     getBoundShortcut: () => getBoundShortcut,
     getCaptureCount: () => getCaptureCount,
+    getCountdownMicChoice: () => getCountdownMicChoice,
     getHostAccess: () => getHostAccess,
     getIntegrationStatus: () => getIntegrationStatus,
     getIntegrationsConfig: () => getIntegrationsConfig,
@@ -73319,6 +73264,7 @@ ${summary}`;
      * has turned video on, so a first capture needs no OS dialog at all.
      */
     prepareRecording(opts = {}) {
+      let withMicrophone = !!opts.withMicrophone;
       const begin = () => {
         const go = () => {
           if (!opts.video || !isVideoOffered()) {
@@ -73326,16 +73272,20 @@ ${summary}`;
             return;
           }
           void this.startVideoRecording({
-            withMicrophone: !!opts.withMicrophone,
+            withMicrophone,
             surfaceMode: opts.surfaceMode
           });
         };
         const d = Number(opts.delaySec) || 0;
-        if (d > 0) void runRecordCountdown(d).then((completed) => {
-          if (completed) go();
-          else void announceCaptureStopped();
-        });
-        else go();
+        const showMicToggle = !!opts.video && isVideoOffered();
+        if (d > 0) {
+          void runRecordCountdown(d, showMicToggle ? { withMicrophone } : void 0).then((completed) => {
+            var _a2;
+            if (showMicToggle) withMicrophone = (_a2 = getCountdownMicChoice()) != null ? _a2 : withMicrophone;
+            if (completed) go();
+            else void announceCaptureStopped();
+          });
+        } else go();
       };
       if (opts.blurFirst) {
         startBlurThenRecord({ onStart: begin, onCancel: () => void announceCaptureStopped() });

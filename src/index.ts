@@ -136,7 +136,7 @@ import {
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import { activateInspectMode, deactivateInspectMode, isInspectModeActive } from "./inspect-mode";
-import { runRecordCountdown, startBlurThenRecord } from "./ui/pre-record";
+import { runRecordCountdown, startBlurThenRecord, getCountdownMicChoice } from "./ui/pre-record";
 import {
   getAnnotationReport,
   exportAsJSON as exportAnnotationsJSON, exportAsMarkdown as exportAnnotationsMD,
@@ -198,7 +198,7 @@ export { exportSessionAsHtml, buildReplayBlob } from "./exporters/html-replay";
 export { generatePlaywrightTest, playwrightTestFilename } from "./exporters/playwright-test";
 export { captureStyleEvidence, formatStyleSummary, contrastRatio, cssColorToHex } from "./style-evidence";
 export type { StyleEvidence } from "./style-evidence";
-export { runRecordCountdown, startBlurThenRecord } from "./ui/pre-record";
+export { runRecordCountdown, startBlurThenRecord, getCountdownMicChoice } from "./ui/pre-record";
 export { isBlurModeActive, removeAllBlurBoxes } from "./ui/blur-tool";
 export type { HarLog, HarExportResult } from "./exporters/har-export";
 export {
@@ -1039,6 +1039,9 @@ class TraceBugSDK {
     surfaceMode?: "tab" | "desktop";
     video?: boolean;
   } = {}): void {
+    // Mutable: the countdown's mic toggle (below) can change this before go()
+    // reads it. Starts at the Record-options checkbox's value.
+    let withMicrophone = !!opts.withMicrophone;
     const begin = () => {
       const go = () => {
         // A stored `video: true` must not start a recording in 1.11 - an
@@ -1049,11 +1052,15 @@ class TraceBugSDK {
           return;
         }
         void this.startVideoRecording({
-          withMicrophone: !!opts.withMicrophone,
+          withMicrophone,
           surfaceMode: opts.surfaceMode,
         });
       };
       const d = Number(opts.delaySec) || 0;
+      // The countdown only gets a mic toggle for an actual video capture —
+      // events-only has no mic concept, and this is the one chance to catch
+      // "forgot to turn the mic on/off" before the recording truly starts.
+      const showMicToggle = !!opts.video && isVideoOffered();
       // Esc during the countdown cancels the whole flow — no recording starts.
       // The extension already marked this tab as capturing the moment the
       // popup's click dispatched TB_START_RECORDING (background.js's
@@ -1061,8 +1068,12 @@ class TraceBugSDK {
       // own cancel path above). Nothing else ever runs on this branch, so
       // without this the REC badge and the popup's "Capturing…" state were
       // stuck forever with no HUD to stop them from.
-      if (d > 0) void runRecordCountdown(d).then((completed) => { if (completed) go(); else void announceCaptureStopped(); });
-      else go();
+      if (d > 0) {
+        void runRecordCountdown(d, showMicToggle ? { withMicrophone } : undefined).then((completed) => {
+          if (showMicToggle) withMicrophone = getCountdownMicChoice() ?? withMicrophone;
+          if (completed) go(); else void announceCaptureStopped();
+        });
+      } else go();
     };
     if (opts.blurFirst) {
       // Same reasoning as the countdown's Esc above: clicking Cancel in the

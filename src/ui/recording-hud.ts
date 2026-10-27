@@ -27,6 +27,7 @@ import {
   setMicrophoneMuted,
   isMicrophoneMuted,
   hasMicrophoneTrack,
+  isExtensionContext,
 } from "../video-recorder";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "../draw-mode";
 import { activateBlurMode, deactivateBlurMode, isBlurModeActive, removeAllBlurBoxes } from "./blur-tool";
@@ -158,7 +159,18 @@ export function showRecordingHUD(
   // Also false in the extension: the stream lives in the offscreen document,
   // so the page cannot read or mute its tracks - the button could only ever be
   // dead there. See VIDEO_ENABLED_IN_EXTENSION in video-recorder.ts.
-  const micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
+  let micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
+  // Pause is dropped entirely in extension mode rather than shown as a dead
+  // button: pauseVideoRecording()/isVideoPaused() operate on `_active`/`_stream`,
+  // which only the npm SDK's in-page transport ever sets — in the extension the
+  // real MediaRecorder lives in the offscreen document, out of the page's
+  // reach. Before this fix the button still rendered and toggled its own
+  // pressed state on click, so it visibly LIED: it looked paused (icon
+  // switched, dataset.active set) while the timer kept counting and the
+  // recording kept running the whole time (found by e2e — see
+  // e2e/ext-feature-matrix.e2e.mjs's pause case). Hiding it here matches the
+  // mic button's existing pattern for the same underlying limitation.
+  const pauseAvailable = !eventsOnly && !isExtensionContext();
 
   setInnerHTML(hud, `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
@@ -167,10 +179,10 @@ export function showRecordingHUD(
     <button class="tb-hud-stop" data-tb-hud="stop" title="${eventsOnly ? "Stop capturing & file a ticket" : "Stop recording"}" aria-label="${eventsOnly ? "Stop capturing" : "Stop recording"}">
       <span style="width:10px;height:10px;background:#fff;border-radius:2px;display:inline-block"></span>
     </button>
-    ${eventsOnly ? "" : `
+    ${pauseAvailable ? `
     <button class="tb-hud-btn" data-tb-hud="pause" title="Pause" aria-label="Pause recording">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-    </button>`}
+    </button>` : ""}
     <span class="tb-hud-timer" data-tb-hud="timer">00:00</span>
     ${eventsOnly ? `
     <span class="tb-hud-label" data-tb-hud="label" title="Console, network, clicks and an interactive DOM replay are being captured. No screen recording — nothing is being shared with your browser's screen-share.">Capturing</span>
@@ -232,6 +244,25 @@ export function showRecordingHUD(
     }
     if (!isVideoRecording()) return;
     if (!isVideoPaused()) timerEl.textContent = _formatElapsed(getVideoElapsedMs());
+    // The mic button's enabled/disabled state is baked into the markup at
+    // mount time from hasMicrophoneTrack() — fine in page mode, where
+    // `_stream` already holds the mic track synchronously by the time the
+    // HUD mounts. In extension mode it's a real race: the HUD mounts the
+    // instant the tb:rec:start RPC resolves `{ok:true}`, but the OFFSCREEN
+    // document's separate tb:rec:started broadcast (which is what actually
+    // flips hasMicrophoneTrack() to true via _setExtMicState) travels through
+    // a different, slower path — querying every tab, then messaging each one
+    // — with no ordering guarantee against the RPC response. Found by hand-
+    // testing: a real recording with a working mic still showed the button
+    // permanently disabled because the broadcast lost that race. Piggyback
+    // the fix on this already-running poll rather than adding a new one.
+    if (micBtn && micBtn.disabled && micAvailable !== hasMicrophoneTrack()) {
+      micAvailable = hasMicrophoneTrack();
+      micBtn.disabled = !micAvailable;
+      micBtn.title = micAvailable ? "Mute / unmute microphone" : "No microphone in this recording";
+      micBtn.style.opacity = micAvailable ? "" : "0.35";
+      micBtn.style.cursor = micAvailable ? "" : "not-allowed";
+    }
   }, 500);
 
   if (gripEl) {

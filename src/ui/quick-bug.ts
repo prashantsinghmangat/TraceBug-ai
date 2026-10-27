@@ -1653,35 +1653,24 @@ ${report.steps}` : userDesc)
     });
   }
 
-  // ── Console tab filters (unified feed) ────────────────────────────────
+  // ── Console tab filters ──────────────────────────────────────────────
   const conPanel = modal.querySelector<HTMLElement>('[data-panel="console"]');
   if (conPanel) {
     const conSearch = conPanel.querySelector<HTMLInputElement>("#tb-qb-con-search");
     const conErrOnly = conPanel.querySelector<HTMLInputElement>("#tb-qb-con-errors-only");
-    const pills = conPanel.querySelectorAll<HTMLButtonElement>(".tb-qb-feed-pill");
-    let activeCat = "all";
     const applyFeedFilter = () => {
       const q = (conSearch?.value || "").trim().toLowerCase();
       const errOnly = !!conErrOnly?.checked;
       conPanel.querySelectorAll<HTMLElement>(".tb-qb-feed-row").forEach((row) => {
-        const cat = row.dataset.cat || "";
         const hay = row.dataset.search || "";
         const isErr = row.dataset.err === "1";
-        const catMatch = activeCat === "all" || cat === activeCat;
         const searchMatch = q.length === 0 || hay.indexOf(q) !== -1;
         const errMatch = !errOnly || isErr;
-        row.style.display = (catMatch && searchMatch && errMatch) ? "" : "none";
+        row.style.display = (searchMatch && errMatch) ? "" : "none";
       });
     };
     conSearch?.addEventListener("input", applyFeedFilter);
     conErrOnly?.addEventListener("change", applyFeedFilter);
-    pills.forEach((p) => {
-      p.addEventListener("click", () => {
-        activeCat = p.dataset.cat || "all";
-        pills.forEach((q) => q.classList.toggle("tb-qb-feed-pill-active", q === p));
-        applyFeedFilter();
-      });
-    });
   }
 
   // Linear — open prefilled new-issue URL in a new tab (no API key needed).
@@ -2381,38 +2370,17 @@ function _syncConsoleFeedToTimestamp(modal: HTMLElement, ts: number): void {
   }
 }
 
+// Console tab shows ONLY real console output now — navigation, network
+// errors, clicks/inputs and video start/stop used to be mixed in here too
+// (a "unified timeline"), which is exactly the "lots of other things, not
+// clean" complaint: a user scanning Console for an error had to pick it out
+// of everything else that happened in the session. Those moved to the
+// Actions tab (navigation, video markers) or already have their own home
+// (network errors in the Network tab) — see _buildActionsTab.
 function _buildConsoleFeed(report: import("../types").BugReport | null): ConsoleFeedEntry[] {
   if (!report) return [];
-  const session = report.session;
-  const events = session?.events || [];
-  const startTs = events[0]?.timestamp || report.consoleLogs?.[0]?.timestamp || Date.now();
+  const startTs = report.session?.events?.[0]?.timestamp || report.consoleLogs?.[0]?.timestamp || Date.now();
   const feed: ConsoleFeedEntry[] = [];
-
-  // Timeline entries → category mapping
-  for (const t of report.timeline || []) {
-    const elapsedMs = t.timestamp - startTs;
-    if (t.type === "route_change") {
-      feed.push({
-        timestamp: t.timestamp, elapsedMs, cat: "navigation", level: "",
-        icon: CON_ICONS.nav, message: `Navigated to ${t.description.split("→").pop()?.trim() || t.description}`,
-      });
-    } else if (t.type === "api_request" && t.isError) {
-      feed.push({
-        timestamp: t.timestamp, elapsedMs, cat: "network-error", level: "",
-        icon: CON_ICONS.netErr, message: t.description,
-      });
-    } else if (t.type === "click") {
-      feed.push({
-        timestamp: t.timestamp, elapsedMs, cat: "user-activity", level: "",
-        icon: CON_ICONS.click, message: t.description.replace(/^click /, "Clicked "),
-      });
-    } else if (t.type === "input" || t.type === "select_change" || t.type === "form_submit") {
-      feed.push({
-        timestamp: t.timestamp, elapsedMs, cat: "user-activity", level: "",
-        icon: CON_ICONS.click, message: t.description,
-      });
-    }
-  }
 
   // Console logs → console category (all levels)
   for (const l of report.consoleLogs || []) {
@@ -2437,20 +2405,6 @@ function _buildConsoleFeed(report: import("../types").BugReport | null): Console
     }
   }
 
-  // Video markers — start at recording start, stop at start + duration.
-  if (report.video) {
-    const vs = report.video.startedAt;
-    feed.push({
-      timestamp: vs, elapsedMs: vs - startTs, cat: "video", level: "",
-      icon: CON_ICONS.videoStart, message: "Video started",
-    });
-    const ve = vs + report.video.durationMs;
-    feed.push({
-      timestamp: ve, elapsedMs: ve - startTs, cat: "video", level: "",
-      icon: CON_ICONS.videoStop, message: "Video stopped",
-    });
-  }
-
   feed.sort((a, b) => a.timestamp - b.timestamp);
   return feed;
 }
@@ -2461,19 +2415,13 @@ function _buildConsoleTab(report: import("../types").BugReport | null): string {
     return `<div class="tb-qb-empty">No console output recorded this session</div>`;
   }
 
-  // Pill counts so the user sees what's available before clicking.
-  const counts: Record<string, number> = { all: feed.length, console: 0, navigation: 0, "network-error": 0, "user-activity": 0, video: 0 };
-  for (const e of feed) counts[e.cat] = (counts[e.cat] || 0) + 1;
-
-  const pill = (key: string, label: string) => {
-    const c = counts[key] || 0;
-    if (key !== "all" && c === 0) return "";
-    return `<button class="tb-qb-feed-pill${key === "all" ? " tb-qb-feed-pill-active" : ""}" data-cat="${key}">${label}${c > 0 ? `<span class="tb-qb-feed-pill-n">${c}</span>` : ""}</button>`;
-  };
-
+  // One category now (console only — see _buildConsoleFeed), so the old
+  // category pills (navigation/network-error/user-activity/video) are gone.
+  // The search box and "Errors only" toggle still work exactly as before —
+  // conPanel's filter wiring tolerates there being no pills at all.
   const rows = feed.map((e) => {
     const hay = `${e.message} ${e.detail || ""} ${e.stack || ""}`.toLowerCase();
-    const isErr = e.cat === "network-error" || e.level === "error";
+    const isErr = e.level === "error";
     const stackHtml = e.stack ? `<pre class="tb-qb-feed-stack">${escapeHtml(e.stack.split("\n").slice(0, 5).join("\n"))}</pre>` : "";
     return `<div class="tb-qb-feed-row tb-qb-feed-${e.cat}${isErr ? " tb-qb-feed-err" : ""}${e.level ? " tb-qb-feed-lvl-" + e.level : ""}" data-cat="${e.cat}" data-level="${e.level}" data-err="${isErr ? "1" : "0"}" data-ts="${e.timestamp}" data-search="${escapeHtml(hay)}" tabindex="0" role="button" title="Click to seek video to this moment">
       <span class="tb-qb-feed-time">${_formatFeedElapsed(e.elapsedMs)}</span>
@@ -2489,14 +2437,6 @@ function _buildConsoleTab(report: import("../types").BugReport | null): string {
     <div class="tb-qb-feed-toolbar">
       <input id="tb-qb-con-search" type="search" placeholder="Filter" aria-label="Filter console feed" class="tb-qb-net-search" />
       <label class="tb-qb-net-err-toggle"><input id="tb-qb-con-errors-only" type="checkbox" /> Errors only</label>
-    </div>
-    <div class="tb-qb-feed-pills">
-      ${pill("all", "All")}
-      ${pill("console", "Console")}
-      ${pill("navigation", "Page navigations")}
-      ${pill("network-error", "Network errors")}
-      ${pill("user-activity", "User activity")}
-      ${pill("video", "Video")}
     </div>
     <div class="tb-qb-feed-list">${rows}</div>
   `;
@@ -2626,18 +2566,51 @@ function _buildNetworkTab(report: import("../types").BugReport | null): string {
   `;
 }
 
+/** A plain timeline marker \u2014 recording start/stop today. Rendered as a
+ *  lightweight row (see .tb-qb-step-row), not a chip: there's no element to
+ *  preview and nothing to click into, just "this happened at this time". */
+function _renderStepRow(elapsedMs: number, icon: string, message: string): string {
+  return `<div class="tb-qb-step-row">
+    <span class="tb-qb-step-time">${_formatFeedElapsed(elapsedMs)}</span>
+    <span class="tb-qb-step-icon" aria-hidden="true">${icon}</span>
+    <span class="tb-qb-step-msg">${escapeHtml(message)}</span>
+  </div>`;
+}
+
+/** The Actions tab is the user's step-by-step story: clicks, typing,
+ *  navigation, and now recording start/stop \u2014 interleaved by time with the
+ *  richer click/input/select/submit/navigate cards (buildActionChips).
+ *  Console errors and network requests are deliberately NOT here \u2014 they
+ *  have their own tabs; mixing them in here was the "lots of other things,
+ *  not clean" complaint this split fixes. */
 function _buildActionsTab(report: import("../types").BugReport | null): string {
   const chips = report?.actionChips || [];
-  // Prefer chips (with HTML element previews). Fall back to plain
-  // sessionSteps for older reports built before actionChips was added.
-  if (chips.length === 0) {
+  const startTs = report?.session?.events?.[0]?.timestamp ?? report?.video?.startedAt ?? 0;
+
+  const markers: { timestamp: number; html: string }[] = [];
+  if (report?.video) {
+    const vs = report.video.startedAt;
+    markers.push({ timestamp: vs, html: _renderStepRow(vs - startTs, CON_ICONS.videoStart, "Recording started") });
+    const ve = vs + report.video.durationMs;
+    markers.push({ timestamp: ve, html: _renderStepRow(ve - startTs, CON_ICONS.videoStop, "Recording stopped") });
+  }
+
+  if (chips.length === 0 && markers.length === 0) {
+    // Fall back to plain sessionSteps for older reports built before
+    // actionChips existed at all.
     const steps = report?.sessionSteps || [];
     if (steps.length === 0) {
       return `<div class="tb-qb-empty">No actions recorded yet \u2014 click around the app to populate this</div>`;
     }
     return `<ol class="tb-qb-steps">${steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>`;
   }
-  return `<div class="tb-qb-chips">${chips.map(_renderActionChip).join("")}</div>`;
+
+  const items = [
+    ...chips.map((c) => ({ timestamp: c.timestamp ?? 0, html: _renderActionChip(c) })),
+    ...markers,
+  ].sort((a, b) => a.timestamp - b.timestamp);
+
+  return `<div class="tb-qb-chips">${items.map((i) => i.html).join("")}</div>`;
 }
 
 function _renderActionChip(chip: import("../types").ActionChip): string {
@@ -3422,6 +3395,12 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-chip-frust-rage { background:rgba(239,68,68,0.18); color:#ef4444; }
     #${MODAL_ID} .tb-qb-chip-frust-dead { background:rgba(245,158,11,0.18); color:#f59e0b; }
     #${MODAL_ID} .tb-qb-chip-frust-abandon { background:rgba(59,130,246,0.18); color:#3b82f6; }
+    /* Simple timeline rows interleaved with chips — recording start/stop today.
+       Deliberately plainer than a chip: nothing to click into, just a marker. */
+    #${MODAL_ID} .tb-qb-step-row { display:flex; align-items:center; gap:10px; padding:6px 12px; color:var(--tb-text-muted); font-size:11px; }
+    #${MODAL_ID} .tb-qb-step-time { font-variant-numeric:tabular-nums; min-width:32px; }
+    #${MODAL_ID} .tb-qb-step-icon { display:inline-flex; opacity:0.7; }
+    #${MODAL_ID} .tb-qb-step-msg { font-weight:600; letter-spacing:0.2px; }
 
     /* Notes tab */
     #${MODAL_ID} .tb-qb-note { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border-subtle); border-left:3px solid var(--tb-border); }

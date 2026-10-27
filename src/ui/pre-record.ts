@@ -45,6 +45,19 @@ function _ensureStyles(): void {
     }
     #${COUNTDOWN_ID} .tb-countdown-num.tb-countdown-pulse { transform: scale(1.25); opacity: 1; }
     #${COUNTDOWN_ID} .tb-countdown-hint { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.75); text-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+    #${COUNTDOWN_ID} .tb-countdown-mic {
+      pointer-events: auto;
+      display: flex; align-items: center; gap: 8px;
+      background: #1b1d24; color: #e9eaee; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 999px; padding: 8px 16px 8px 10px; font-size: 13px; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+    #${COUNTDOWN_ID} .tb-countdown-mic button {
+      width: 28px; height: 28px; border-radius: 50%; border: 0; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.12); color: #e9eaee; flex-shrink: 0;
+    }
+    #${COUNTDOWN_ID} .tb-countdown-mic[data-tb-mic="off"] button { background: rgba(239,68,68,0.22); color: #f87171; }
     #${ARM_BAR_ID} {
       position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 2147483647;
       display: flex; align-items: center; gap: 10px;
@@ -102,12 +115,35 @@ export function hidePickerHint(): void {
   try { document.getElementById(PICKER_HINT_ID)?.remove(); } catch {}
 }
 
+const MIC_ON_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+const MIC_OFF_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`;
+
+// Set when a countdown with a mic toggle mounts; read by prepareRecording()
+// right after the countdown resolves. Deliberately NOT part of
+// runRecordCountdown's return value — that's documented public SDK API
+// (docs/api-reference.md) resolving a plain boolean, and this is additive,
+// not a breaking change to it.
+let _countdownMicChoice: boolean | null = null;
+
+/** The mic toggle's final state from the most recent countdown that had one,
+ *  or null if the last countdown had no mic toggle at all. */
+export function getCountdownMicChoice(): boolean | null {
+  return _countdownMicChoice;
+}
+
 /** Fullscreen 3-2-1 countdown. Resolves `true` at zero, `false` if the user
  *  cancels with Esc. The countdown exists for privacy prep ("wrong tab",
  *  "sensitive data on screen") — being locked in for up to 10 seconds was
- *  the opposite of the control it's meant to give. */
-export function runRecordCountdown(seconds: number): Promise<boolean> {
+ *  the opposite of the control it's meant to give.
+ *
+ *  `opts.withMicrophone`, when passed, adds a mic on/off toggle to the
+ *  overlay showing its starting state — the one chance to catch "forgot to
+ *  turn the mic on/off" before the recording actually starts. Read the final
+ *  choice via getCountdownMicChoice() once this promise resolves `true`. */
+export function runRecordCountdown(seconds: number, opts?: { withMicrophone?: boolean }): Promise<boolean> {
   const total = Math.max(1, Math.min(10, Math.round(seconds)));
+  const hasMicToggle = opts?.withMicrophone !== undefined;
+  _countdownMicChoice = hasMicToggle ? !!opts!.withMicrophone : null;
   return new Promise((resolve) => {
     _ensureStyles();
     document.getElementById(COUNTDOWN_ID)?.remove();
@@ -119,6 +155,23 @@ export function runRecordCountdown(seconds: number): Promise<boolean> {
     hint.className = "tb-countdown-hint";
     hint.textContent = "Press Esc to cancel";
     overlay.appendChild(num);
+    if (hasMicToggle) {
+      const mic = document.createElement("div");
+      mic.className = "tb-countdown-mic";
+      const renderMic = () => {
+        mic.dataset.tbMic = _countdownMicChoice ? "on" : "off";
+        setInnerHTML(mic, `
+          <button type="button" aria-label="${_countdownMicChoice ? "Turn microphone off" : "Turn microphone on"}">${_countdownMicChoice ? MIC_ON_ICON : MIC_OFF_ICON}</button>
+          <span>Mic is ${_countdownMicChoice ? "on" : "off"}</span>
+        `);
+        mic.querySelector("button")!.addEventListener("click", () => {
+          _countdownMicChoice = !_countdownMicChoice;
+          renderMic();
+        });
+      };
+      renderMic();
+      overlay.appendChild(mic);
+    }
     overlay.appendChild(hint);
     document.body.appendChild(overlay);
 

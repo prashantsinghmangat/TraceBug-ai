@@ -10,7 +10,6 @@
 // `sessionSteps` strings — this module is parallel, not a replacement.
 
 import { ActionChip, ActionChipAttr, TraceBugEvent } from "./types";
-import { isNoiseRequest, isStaticResource } from "./url-hygiene";
 
 const MAX_CHIPS = 60;
 const MAX_INLINE_ATTRS = 4;
@@ -254,33 +253,6 @@ function detectFrustration(events: TraceBugEvent[]): FrustrationMap {
  * Turn a list of session events into action chips. Caps the result at the
  * last MAX_CHIPS events so the UI stays scrollable but useful.
  */
-/**
- * The message to show for an error-ish event.
- *
- * Every collector emits the text NESTED, as `data.error.message` — window
- * errors, unhandled rejections and console.error/warn/info alike (see
- * `wrapConsoleLevel` and `collectErrors` in src/collectors.ts). Reading
- * `data.message` therefore found nothing: the error row stringified
- * `data.error`, printing **[object Object]**, and the warning row fell all the
- * way through to the bare word **Warning** with no content at all.
- *
- * So: nested message first, then the error NAME (a `TypeError` with no message
- * is still worth more than "Runtime error"), then a top-level `message` for
- * any shape that grows one later. An object is never stringified — that is the
- * bug this function exists to prevent.
- */
-function errorText(data: TraceBugEvent["data"] | undefined, fallback: string): string {
-  const d = (data || {}) as Record<string, unknown>;
-  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-
-  const err: unknown = d.error;
-  if (err && typeof err === "object" && !Array.isArray(err)) {
-    const e = err as { message?: unknown; name?: unknown };
-    return str(e.message) || str(e.name) || str(d.message) || fallback;
-  }
-  return str(err) || str(d.message) || fallback;
-}
-
 export function buildActionChips(events: TraceBugEvent[]): ActionChip[] {
   if (!events || events.length === 0) return [];
 
@@ -393,48 +365,12 @@ export function buildActionChips(events: TraceBugEvent[]): ActionChip[] {
         });
         break;
       }
-      case "api_request": {
-        const r = e.data?.request || {};
-        const status = Number(r.statusCode || 0);
-        const isError = status === 0 || status >= 400;
-        const url = String(r.url || "");
-        // The Actions tab is the USER'S story — page mechanics don't belong.
-        // Beacons/analytics/badges are skipped outright (their failures are
-        // usually just an ad-blocker), and successful script/style/image
-        // loads are skipped too. A FAILED first-party chunk stays: that's a
-        // real signal. The Network tab still lists every request.
-        if (isNoiseRequest(url)) break;
-        if (!isError && isStaticResource(url)) break;
-        chips.push({
-          verb: isError ? "Request failed" : "Request",
-          kind: "api",
-          detail: `${String(r.method || "GET").toUpperCase()} ${truncate(url, MAX_DETAIL_LEN)} → ${status === 0 ? "ERR" : status}`,
-          timestamp: e.timestamp,
-          isError,
-        });
-        break;
-      }
-      case "error":
-      case "console_error":
-      case "unhandled_rejection": {
-        chips.push({
-          verb: "Error",
-          kind: "error",
-          detail: truncate(errorText(e.data, "Runtime error"), MAX_DETAIL_LEN),
-          timestamp: e.timestamp,
-          isError: true,
-        });
-        break;
-      }
-      case "console_warn": {
-        chips.push({
-          verb: "Warning",
-          kind: "error",
-          detail: truncate(errorText(e.data, "Warning"), MAX_DETAIL_LEN),
-          timestamp: e.timestamp,
-        });
-        break;
-      }
+      // api_request / error / console_error / unhandled_rejection / console_warn
+      // are deliberately NOT chips here — they duplicate the Network and
+      // Console tabs, which is exactly the "not clean" overlap this tab used
+      // to have. The Actions tab is now ONLY the user's step-by-step story:
+      // what they clicked, typed, selected, submitted, and where they
+      // navigated. Errors live in Console; requests live in Network.
       case "mark": {
         const label = String(e.data?.label || "Mark");
         chips.push({
