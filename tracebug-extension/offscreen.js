@@ -437,19 +437,32 @@ async function _startRecordingImpl(options) {
 
   let micIncluded = false;
   if (options?.withMicrophone) {
+    // Same chrome-extension:// origin as options.html, which is the only
+    // place a device can actually be picked (Options' device <select>, Phase
+    // B) — read straight out of localStorage rather than threading a value
+    // through background.js's message relay for a setting this page can read
+    // on its own.
+    let micDeviceId = "";
+    try { micDeviceId = localStorage.getItem("tracebug_mic_device_id") || ""; } catch {}
     try {
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      // `ideal`, not `exact`: if the chosen microphone is gone (unplugged,
+      // driver changed) the browser picks the system default instead of
+      // throwing, so a stale device id never costs the narration.
+      const mic = await navigator.mediaDevices.getUserMedia({
+        audio: micDeviceId ? { deviceId: { ideal: micDeviceId } } : true,
+        video: false,
+      });
       _micTracks = mic.getAudioTracks();
       _micTracks.forEach(t => displayStream.addTrack(t));
       micIncluded = _micTracks.length > 0;
     } catch (err) {
-      // Mic permission not granted to the extension. Neither this document nor
-      // the popup can prompt for it: an offscreen document has no UI, and a
-      // popup is dismissed the moment Chrome's prompt takes focus, which
-      // cancels the request. It has to be granted from TraceBug settings, which
-      // is a real tab that survives the prompt.
-      // The recording continues (screen + tab audio) so the user still gets a
-      // video rather than losing the capture over missing narration.
+      // Mic permission not granted to the extension. Neither this document
+      // nor the popup can prompt for it: an offscreen document has no UI,
+      // and a popup is dismissed the moment Chrome's prompt takes focus,
+      // which cancels the request. It has to be granted from TraceBug
+      // settings, which is a real tab that survives the prompt.
+      // The recording continues (screen + tab audio) so the user still
+      // gets a video rather than losing the capture over missing narration.
       console.warn("[TraceBug offscreen] microphone unavailable — grant it in TraceBug settings (right-click the toolbar icon → Options):", (err && err.name) || err);
     }
   }

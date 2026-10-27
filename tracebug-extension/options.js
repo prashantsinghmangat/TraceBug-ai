@@ -474,13 +474,73 @@ renderLlmSites();
   const status = document.getElementById("micStatus");
   if (!grant) return;
 
+  // Same chrome-extension:// origin as popup.html and offscreen.html, so
+  // localStorage here is visible to both — no chrome.storage plumbing needed
+  // to hand the chosen device over to the recorder or the popup's state line.
+  const MIC_DEVICE_ID_KEY = "tracebug_mic_device_id";
+  const MIC_DEVICE_LABEL_KEY = "tracebug_mic_device_label";
+  const deviceRow = document.getElementById("micDeviceRow");
+  const deviceSelect = document.getElementById("micDeviceSelect");
+
+  const MIC_WARN_STATES = new Set(["Blocked", "No microphone", "Failed"]);
   function setState(state, message) {
     if (pill) {
       pill.textContent = state;
-      pill.className = "pill" + (state === "Granted" ? " ok" : "");
+      pill.className = "pill" + (state === "Granted" ? " ok" : MIC_WARN_STATES.has(state) ? " warn" : "");
     }
     if (status) status.textContent = message || "";
   }
+
+  // Device labels only come back non-blank once mic permission is actually
+  // granted (privacy: a page can enumerate device COUNT without permission,
+  // but not names) — so this is called after every successful grant/refresh
+  // and simply hides the row again if labels still aren't there yet.
+  async function refreshMicDevices() {
+    if (!deviceSelect || !navigator.mediaDevices?.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter((d) => d.kind === "audioinput");
+      if (!inputs.length || !inputs[0].label) {
+        if (deviceRow) deviceRow.style.display = "none";
+        return;
+      }
+      let storedId = "";
+      try { storedId = localStorage.getItem(MIC_DEVICE_ID_KEY) || ""; } catch {}
+      deviceSelect.textContent = "";
+      const defaultOpt = document.createElement("option");
+      defaultOpt.value = "";
+      defaultOpt.textContent = "System default";
+      deviceSelect.appendChild(defaultOpt);
+      inputs.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label;
+        deviceSelect.appendChild(opt);
+      });
+      deviceSelect.value = inputs.some((d) => d.deviceId === storedId) ? storedId : "";
+      if (deviceRow) deviceRow.style.display = "flex";
+    } catch {
+      if (deviceRow) deviceRow.style.display = "none";
+    }
+  }
+
+  deviceSelect?.addEventListener("change", () => {
+    const id = deviceSelect.value;
+    const label = id ? (deviceSelect.selectedOptions[0]?.textContent || "") : "";
+    try {
+      if (id) {
+        localStorage.setItem(MIC_DEVICE_ID_KEY, id);
+        localStorage.setItem(MIC_DEVICE_LABEL_KEY, label);
+      } else {
+        localStorage.removeItem(MIC_DEVICE_ID_KEY);
+        localStorage.removeItem(MIC_DEVICE_LABEL_KEY);
+      }
+    } catch {}
+  });
+
+  // A device unplugged/replugged mid-session should update the list without
+  // the user having to reopen this page.
+  try { navigator.mediaDevices?.addEventListener?.("devicechange", refreshMicDevices); } catch {}
 
   async function refresh() {
     // navigator.permissions is the non-intrusive way to ask - it never prompts.
@@ -492,6 +552,7 @@ renderLlmSites();
     } catch {
       setState("Unknown", "This browser will not say without asking. Use Allow microphone.");
     }
+    void refreshMicDevices();
   }
 
   async function requestMicGrant() {
@@ -501,6 +562,7 @@ renderLlmSites();
       // We only wanted the grant - stop the tracks so no mic light stays on.
       stream.getTracks().forEach((t) => t.stop());
       setState("Granted", "Done. Turn the microphone on in the TraceBug popup before a recording.");
+      void refreshMicDevices();
     } catch (err) {
       const name = (err && err.name) || "";
       if (name === "NotFoundError" || name === "DevicesNotFoundError") {
@@ -577,4 +639,127 @@ renderLlmSites();
   });
 
   void refresh();
+})();
+
+// ── Redaction rules ──────────────────────────────────────────────────────────
+// Moved here from the popup (2026-10-27) — a settings-shaped control that was
+// taking up scroll space on the popup's hero capture flow every time it
+// opened, whether or not anyone touched it. App-specific PII fields/patterns
+// masked at capture, on top of the built-in token/secret patterns. Synced via
+// chrome.storage.sync; the content script hands them to the SDK through
+// <html data-tb-redact>.
+(function initRedactionCard() {
+  const REDACT_KEY = "tracebug_redact";
+  const fieldsTa = document.getElementById("redactFields");
+  const patternsTa = document.getElementById("redactPatterns");
+  const saveBtn = document.getElementById("redactSave");
+  const pill = document.getElementById("redactPill");
+  const status = document.getElementById("redactStatus");
+  if (!fieldsTa || !patternsTa || !saveBtn) return;
+
+  function parseFields(raw) {
+    return String(raw || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean).slice(0, 50);
+  }
+  function parsePatterns(raw) {
+    return String(raw || "").split("\n").map((s) => s.trim()).filter(Boolean).slice(0, 20);
+  }
+  function setPill(rules) {
+    if (!pill) return;
+    const n = (rules?.fields?.length || 0) + (rules?.patterns?.length || 0);
+    pill.textContent = n > 0 ? `${n} rule${n === 1 ? "" : "s"}` : "none set";
+    pill.classList.toggle("on", n > 0);
+  }
+
+  try {
+    chrome.storage.sync.get(REDACT_KEY).then((r) => {
+      const rules = r?.[REDACT_KEY];
+      if (rules) {
+        fieldsTa.value = (rules.fields || []).join(", ");
+        patternsTa.value = (rules.patterns || []).join("\n");
+      }
+      setPill(rules);
+    }).catch(() => {});
+  } catch {}
+
+  saveBtn.addEventListener("click", async () => {
+    const fields = parseFields(fieldsTa.value);
+    const patterns = parsePatterns(patternsTa.value);
+    // Reject regexes that don't compile so a typo can't silently no-op.
+    const bad = patterns.find((p) => { try { new RegExp(p, "gi"); return false; } catch { return true; } });
+    if (bad) {
+      if (status) { status.textContent = `Invalid regex: ${bad}`; status.className = "status err"; }
+      return;
+    }
+    const rules = { fields, patterns };
+    try {
+      await chrome.storage.sync.set({ [REDACT_KEY]: rules });
+      setPill(rules);
+      if (status) {
+        status.textContent = fields.length + patterns.length > 0 ? "Saved — applies to new captures." : "Cleared.";
+        status.className = "status ok";
+      }
+    } catch (err) {
+      if (status) { status.textContent = "Save failed: " + (err?.message || err); status.className = "status err"; }
+    }
+  });
+})();
+
+// ── Diagnostics / "Having trouble?" ──────────────────────────────────────────
+// Moved here from the popup (2026-10-27), same reason as Redaction rules
+// above. TraceBug sends nothing anywhere, so the only route for a bug report
+// is the user's own clipboard — both buttons produce the SAME scrubbed text
+// (no URLs, no page content, no stored values; see diagnostics.js). The
+// popup's version read a page CLASSIFICATION for the tab it opened for
+// (diagPageState() there); this page isn't tied to any one tab, so that
+// field is just a fixed, honest string instead.
+(function initDiagnosticsCard() {
+  const copyBtn = document.getElementById("diagCopy");
+  const reportBtn = document.getElementById("diagReport");
+  const pill = document.getElementById("diagPill");
+  const status = document.getElementById("diagStatus");
+  if (!copyBtn || !reportBtn) return;
+
+  const DIAG_ISSUE_URL = "https://github.com/prashantsinghmangat/TraceBug-ai/issues/new";
+  const PAGE_STATE = "opened from TraceBug settings, not a specific tab";
+
+  if (typeof TraceBugDiagnostics !== "undefined" && pill) {
+    TraceBugDiagnostics.readErrors().then((list) => {
+      pill.textContent = list.length ? `${list.length} error${list.length === 1 ? "" : "s"}` : "no errors";
+      pill.classList.toggle("on", list.length === 0);
+    }).catch(() => {});
+  }
+
+  async function buildDiagnostics() {
+    if (typeof TraceBugDiagnostics === "undefined") return "";
+    return TraceBugDiagnostics.build({ pageState: PAGE_STATE });
+  }
+
+  copyBtn.addEventListener("click", async () => {
+    const text = await buildDiagnostics();
+    if (!text) { if (status) { status.textContent = "Diagnostics unavailable"; status.className = "status err"; } return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      if (status) { status.textContent = "Copied — paste it into an issue."; status.className = "status ok"; }
+    } catch {
+      if (status) { status.textContent = "Couldn't copy — see the browser console for the text."; status.className = "status err"; }
+      console.log(text);
+    }
+  });
+
+  reportBtn.addEventListener("click", async () => {
+    const text = await buildDiagnostics();
+    // Prefilled, but the user reads and submits it themselves. GitHub caps the
+    // whole URL around 8 KB, so the body is trimmed rather than silently
+    // truncated by the browser into something that ends mid-stack.
+    const body = [
+      "**What happened?**", "", "", "**Steps**", "", "1. ", "",
+      "<details><summary>Diagnostics</summary>", "", "```", text.slice(0, 5500), "```", "", "</details>",
+    ].join("\n");
+    const url = `${DIAG_ISSUE_URL}?labels=bug&body=${encodeURIComponent(body)}`;
+    try {
+      chrome.tabs.create({ url });
+    } catch {
+      if (status) { status.textContent = "Couldn't open GitHub — copy the diagnostics instead."; status.className = "status err"; }
+    }
+  });
 })();

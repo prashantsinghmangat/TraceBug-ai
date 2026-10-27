@@ -192,7 +192,14 @@
              sits at the foot of the popup, far enough below the fold that a
              user has to scroll to find out why their click did nothing. -->
         <div class="opt-row">
-          <div class="opt-row-text"><div class="opt-row-title">Microphone</div></div>
+          <div class="opt-row-text">
+            <div class="opt-row-title">Microphone</div>
+            <!-- Always shows the real permission state (Off / Not granted yet /
+                 Blocked / On · device) — set by popup.js's renderMicSub(), so
+                 a user sees what will happen before they click, not only after
+                 a click silently does nothing. -->
+            <div class="opt-row-sub" id="micOptSub">Off</div>
+          </div>
           <button type="button" class="switch-track" id="micOpt" aria-pressed="false" title="Toggle microphone for the recording">
             <span id="micOptState" class="sr-only">Off</span>
           </button>
@@ -228,24 +235,9 @@
         </button>
       </div>
 
-      <!-- Redaction rules — app-specific PII masked at capture, on top of the
-           built-in token/secret patterns. Stored in chrome.storage.sync and
-           handed to the SDK via <html data-tb-redact> by the content script. -->
-      <details class="redact" id="redactBox">
-        <summary class="redact-sum">
-          <span class="redact-sum-label">🛡 Redaction rules</span>
-          <span class="redact-state" id="redactState"></span>
-        </summary>
-        <div class="redact-body">
-          <label class="redact-label" for="redactFields">Sensitive field names</label>
-          <div class="redact-help">Comma or newline separated. Matches form fields, storage keys, URL params, and JSON keys in captured data — "email" also covers "customer_email".</div>
-          <textarea id="redactFields" class="redact-ta" rows="2" spellcheck="false" placeholder="email, customer_id, phone"></textarea>
-          <label class="redact-label" for="redactPatterns">Mask patterns</label>
-          <div class="redact-help">One regex per line, case-insensitive. Masked in console output, network response bodies, error text and the DOM replay — not in URLs, screenshots or video.</div>
-          <textarea id="redactPatterns" class="redact-ta" rows="2" spellcheck="false" placeholder="\d{3}-\d{2}-\d{4}"></textarea>
-          <button class="redact-save" id="redactSave">Save rules</button>
-        </div>
-      </details>
+      <!-- Redaction rules moved to options.html (2026-10-27) — freed up popup
+           scroll space; was a settings-shaped control sitting on the hero
+           capture flow whether or not anyone touched it on a given open. -->
 
       <!-- Cross-site capture opt-IN row deliberately removed (T-13,
            docs/audit/product-review.md): granting <all_urls> today buys only
@@ -257,21 +249,10 @@
            A user who already granted <all_urls> in an earlier version can
            still see and remove it from options.html. -->
 
-      <!-- Having trouble (Phase 7). TraceBug sends nothing anywhere, so the
-           only route for a bug report is the user's own clipboard. Both
-           buttons produce the SAME scrubbed text — no URLs, no page content,
-           no stored values; see diagnostics.js. -->
-      <details class="redact" id="diagBox">
-        <summary class="redact-sum">
-          <span class="redact-sum-label">🩺 Having trouble?</span>
-          <span class="redact-state" id="diagState"></span>
-        </summary>
-        <div class="redact-body">
-          <div class="redact-help">Copies TraceBug's version, your browser and OS, which permissions you've granted, and TraceBug's own recent errors. No URLs, no page content, nothing you've captured.</div>
-          <button class="redact-save" id="diagCopy">Copy diagnostics</button>
-          <button class="redact-save" id="diagReport" style="margin-top:6px;background:transparent;color:var(--accent);border:1px solid var(--border)">Report a TraceBug bug</button>
-        </div>
-      </details>
+      <!-- "Having trouble?" diagnostics moved to options.html (2026-10-27),
+           same reason as Redaction rules above — see diagnostics.js for what
+           the copied text actually contains (no URLs, no page content, no
+           stored values). -->
 
       <!-- Toast slot -->
       <div class="toast" id="toast" style="display:none;"></div>
@@ -306,7 +287,6 @@
   </div>
   <!-- page-support.js first: popup.js calls into TraceBugPageSupport at DOMContentLoaded. -->
   <script src="page-support.js"></script>
-  <script src="diagnostics.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
