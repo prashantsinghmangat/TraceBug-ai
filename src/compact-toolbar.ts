@@ -850,6 +850,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
   hdrTitle.textContent = `Saved Tickets (${sessions.length})`;
   const closeX = document.createElement("button");
   closeX.textContent = "×";
+  closeX.setAttribute("aria-label", "Close");
   setInlineStyle(closeX, "background:none;border:none;color:var(--tb-text-muted,#666);cursor:pointer;font-size:16px;line-height:1;padding:0");
   closeX.addEventListener("click", closePop);
   hdr.appendChild(hdrTitle);

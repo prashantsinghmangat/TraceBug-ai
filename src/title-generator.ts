@@ -2,7 +2,7 @@
 // Generates intelligent, human-readable bug titles from session data.
 // Uses heuristic rules — no AI API needed.
 
-import { TraceBugEvent, StoredSession } from "./types";
+import { TraceBugEvent, StoredSession, ScreenshotData } from "./types";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 
 export function generateBugTitle(session: StoredSession): string {
@@ -14,7 +14,7 @@ export function generateBugTitle(session: StoredSession): string {
 
   // No error — generate a flow summary title
   if (errorEvents.length === 0) {
-    return generateFlowTitle(userActions, events);
+    return generateFlowTitle(userActions, events, session.screenshots);
   }
 
   const errorMsg = errorEvents[0].data.error?.message || session.errorMessage || "Unknown error";
@@ -52,7 +52,7 @@ export function generateFlowSummary(events: TraceBugEvent[]): string {
   return parts.join(" → ");
 }
 
-function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEvent[]): string {
+function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEvent[], screenshots?: ScreenshotData[]): string {
   // Failed badge/image/analytics requests are page noise — a session where
   // ONLY those failed gets a flow title, never "API Failure: <500-char hash>".
   const failedApis = allEvents.filter(e =>
@@ -70,7 +70,9 @@ function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEven
       : `API Failure: ${api?.method} ${shortenUrl(api?.url)} Returns ${api?.statusCode || "Network Error"}`;
   }
 
-  if (userActions.length === 0) return "Empty Session — No User Interactions";
+  if (userActions.length === 0) {
+    return screenshots && screenshots.length > 0 ? "Screenshot Capture — No User Interactions" : "Empty Session — No User Interactions";
+  }
 
   const lastActions = userActions.slice(-3);
   const parts = lastActions.map(a => describeAction(a));
