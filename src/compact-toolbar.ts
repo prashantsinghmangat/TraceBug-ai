@@ -24,6 +24,8 @@ import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
 const DRAG_POS_KEY = "tracebug_toolbar_pos";
+const TOOLBAR_BASE_STYLE_ID = "tracebug-toolbar-base-style";
+const TOOLBAR_POS_STYLE_ID = "tracebug-toolbar-pos-style";
 
 export type ToolbarPosition = "right" | "left" | "bottom-right" | "bottom-left";
 
@@ -1042,7 +1044,44 @@ function _showOfflineTicketList(root: HTMLElement): void {
 
 // ── Position & Layout ────────────────────────────────────────────────────
 
+// The toolbar's own position used to go through setInlineStyle()/el.style.x =
+// y, same as everything else documented at the top of this file's CSP note
+// (see blur-tool.ts for the full reasoning) — a strict page CSP blocks that
+// outright, and this is the single most foundational instance of it: if the
+// rail itself never gets position:fixed, nothing about TraceBug renders
+// correctly on that page, Record/Stop included. The parts of its look that
+// never change (flex layout, padding, background, border, shadow, z-index)
+// go in one static <style> tag made once; only left/top/right/bottom/
+// transform/transition/cursor — genuinely different per mount and while
+// dragging — get written into a second tag that's rewritten in place
+// (CSP-safe no matter how often, since it's the <style> element's own text,
+// not an element's style attribute).
+function _ensureToolbarBaseStyles(): void {
+  if (document.getElementById(TOOLBAR_BASE_STYLE_ID)) return;
+  const style = createStyleTag(TOOLBAR_BASE_STYLE_ID);
+  style.textContent = `
+    #${TOOLBAR_ID} {
+      position: fixed; z-index: 2147483647;
+      display: flex; align-items: center; gap: 3px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function _setToolbarPositionRule(cssDecls: string): void {
+  let style = document.getElementById(TOOLBAR_POS_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = createStyleTag(TOOLBAR_POS_STYLE_ID);
+    document.head.appendChild(style);
+  }
+  style.textContent = `#${TOOLBAR_ID} { ${cssDecls} }`;
+}
+
 function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition): void {
+  _ensureToolbarBaseStyles();
+
   // Check for saved drag position
   let savedPos: { x: number; y: number } | null = null;
   try {
@@ -1062,30 +1101,21 @@ function _applyToolbarPosition(toolbar: HTMLElement, position: ToolbarPosition):
   const isLeft = position === "left" || position === "bottom-left";
 
   if (savedPos) {
-    setInlineStyle(toolbar, `
-      position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
-      z-index: 2147483647; display: flex; flex-direction: column;
-      align-items: center; gap: 3px; padding: 8px 6px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    _setToolbarPositionRule(`
+      left: ${savedPos.x}px; top: ${savedPos.y}px;
+      flex-direction: column; padding: 8px 6px;
       transition: none; cursor: grab;
     `);
   } else if (isBottom) {
-    setInlineStyle(toolbar, `
-      position: fixed; ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
-      z-index: 2147483647; display: flex; flex-direction: row;
-      align-items: center; gap: 3px; padding: 6px 8px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    _setToolbarPositionRule(`
+      ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
+      flex-direction: row; padding: 6px 8px;
       transition: all 0.3s ease;
     `);
   } else {
-    setInlineStyle(toolbar, `
-      position: fixed; ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
-      z-index: 2147483647; display: flex; flex-direction: column;
-      align-items: center; gap: 3px; padding: 8px 6px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    _setToolbarPositionRule(`
+      ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
+      flex-direction: column; padding: 8px 6px;
       transition: ${isLeft ? "left" : "right"} 0.3s ease;
     `);
   }
@@ -1099,6 +1129,12 @@ function _initDrag(toolbar: HTMLElement): () => void {
   let startTop = 0;
   let hasMoved = false;
 
+  // Tracks where the rail currently sits while a drag is in progress — reads
+  // back from these instead of toolbar.style.left/top (see the CSP note on
+  // _applyToolbarPosition: nothing here may write toolbar.style directly).
+  let curLeft = 0;
+  let curTop = 0;
+
   const onMouseDown = (e: MouseEvent) => {
     // Only drag from the toolbar itself (not buttons)
     if ((e.target as HTMLElement).tagName === "BUTTON" || (e.target as HTMLElement).closest("button")) return;
@@ -1109,8 +1145,7 @@ function _initDrag(toolbar: HTMLElement): () => void {
     const rect = toolbar.getBoundingClientRect();
     startLeft = rect.left;
     startTop = rect.top;
-    toolbar.style.cursor = "grabbing";
-    toolbar.style.transition = "none";
+    _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; cursor: grabbing; transition: none;`);
     e.preventDefault();
   };
 
@@ -1121,26 +1156,19 @@ function _initDrag(toolbar: HTMLElement): () => void {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
     if (!hasMoved) return;
 
-    const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-    const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-    toolbar.style.left = `${newLeft}px`;
-    toolbar.style.top = `${newTop}px`;
-    toolbar.style.right = "auto";
-    toolbar.style.bottom = "auto";
-    toolbar.style.transform = "none";
+    curLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+    curTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; cursor: grabbing; transition: none;`);
   };
 
   const onMouseUp = () => {
     if (!isDragging) return;
     isDragging = false;
-    toolbar.style.cursor = "grab";
+    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; cursor: grab; transition: none;`);
 
     if (hasMoved) {
       try {
-        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
-          x: parseInt(toolbar.style.left),
-          y: parseInt(toolbar.style.top),
-        }));
+        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop }));
       } catch {}
     }
   };
@@ -1156,7 +1184,7 @@ function _initDrag(toolbar: HTMLElement): () => void {
     const rect = toolbar.getBoundingClientRect();
     startLeft = rect.left;
     startTop = rect.top;
-    toolbar.style.transition = "none";
+    _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; transition: none;`);
   };
   const onTouchMove = (e: TouchEvent) => {
     if (!isDragging) return;
@@ -1166,23 +1194,16 @@ function _initDrag(toolbar: HTMLElement): () => void {
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
     if (!hasMoved) return;
 
-    const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-    const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-    toolbar.style.left = `${newLeft}px`;
-    toolbar.style.top = `${newTop}px`;
-    toolbar.style.right = "auto";
-    toolbar.style.bottom = "auto";
-    toolbar.style.transform = "none";
+    curLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+    curTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+    _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; transition: none;`);
   };
   const onTouchEnd = () => {
     if (!isDragging) return;
     isDragging = false;
     if (hasMoved) {
       try {
-        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
-          x: parseInt(toolbar.style.left),
-          y: parseInt(toolbar.style.top),
-        }));
+        localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop }));
       } catch {}
     }
   };

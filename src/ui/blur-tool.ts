@@ -10,8 +10,19 @@
 // Each blur records a timestamped BlurEvent so the replay timeline can show
 // a "blur added" marker. Blurs persist after the picker mode exits (that's
 // the point — they redact the recording) until removeAllBlurBoxes().
+//
+// Everything here that touches .style (the blur filter itself, the hover
+// outline, the hint label, document.body's cursor) used to go through
+// el.style.setProperty()/el.style.x = y. A page with a strict CSP (style-src
+// with a nonce, no 'unsafe-inline') blocks that outright — confirmed on a
+// real page, not assumed — with no nonce/hash escape for a style mutation
+// (that's spec'd). createStyleTag() attaches the page's own nonce to a real
+// <style> element, and CSS rules inside THAT element are free to use no
+// matter how specific or how often its text is rewritten — so every style
+// below goes through one nonce-carrying stylesheet instead.
 
 import { isTraceBugUiElement } from "../dom-helpers";
+import { createStyleTag } from "./helpers";
 
 export interface BlurEvent {
   id: string;
@@ -20,7 +31,10 @@ export interface BlurEvent {
 
 const HINT_ID = "tracebug-blur-hint";
 const OUTLINE_ID = "tracebug-blur-outline";
-const BLUR_FILTER = "blur(12px)";
+const STATIC_STYLE_ID = "tracebug-blur-static-styles";
+const OUTLINE_POS_STYLE_ID = "tracebug-blur-outline-pos";
+const CURSOR_CLASS = "tb-blur-cursor-active";
+const BLURRED_CLASS = "tb-blurred-el";
 
 let _active = false;
 let _onExit: (() => void) | null = null;
@@ -28,11 +42,49 @@ const _events: BlurEvent[] = [];
 
 interface BlurredEl {
   el: HTMLElement;
-  prevFilter: string;
-  prevPriority: string;
   evtId: string;
 }
 let _blurred: BlurredEl[] = [];
+
+/** The hint label, the hover outline's fixed chrome, and the crosshair
+ *  cursor — everything here is the SAME every time, so one static <style>
+ *  tag covers all of it. Only the outline's position/size varies per
+ *  mousemove, which gets its own, separately-rewritten tag below. */
+function _ensureStaticStyles(): void {
+  if (document.getElementById(STATIC_STYLE_ID)) return;
+  const style = createStyleTag(STATIC_STYLE_ID);
+  style.textContent = `
+    .${BLURRED_CLASS} { filter: blur(12px) !important; }
+    body.${CURSOR_CLASS} { cursor: crosshair !important; }
+    #${OUTLINE_ID} {
+      position: fixed; display: none; pointer-events: none; z-index: 2147483646;
+      outline: 2px solid #6366F1; outline-offset: 1px; border-radius: 4px;
+      background: rgba(99,102,241,0.08);
+    }
+    #${HINT_ID} {
+      position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 2147483647;
+      background: #1b1d24; color: #e9eaee; border: 1px solid rgba(255,255,255,0.12);
+      padding: 7px 14px; border-radius: 999px; font: 600 12px/1 system-ui, sans-serif;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5); pointer-events: none; white-space: nowrap;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+/** The one thing that's genuinely different every mousemove: where the
+ *  hover outline sits. Rewriting a nonce-carrying <style> tag's own text is
+ *  CSP-safe no matter how often it happens — unlike mutating an element's
+ *  style attribute, nothing here touches outline.style at all. */
+function _setOutlineRect(rect: { left: number; top: number; width: number; height: number } | null): void {
+  let style = document.getElementById(OUTLINE_POS_STYLE_ID) as HTMLStyleElement | null;
+  if (!style) {
+    style = createStyleTag(OUTLINE_POS_STYLE_ID);
+    document.head.appendChild(style);
+  }
+  style.textContent = rect
+    ? `#${OUTLINE_ID} { display: block; left: ${rect.left}px; top: ${rect.top}px; width: ${rect.width}px; height: ${rect.height}px; }`
+    : `#${OUTLINE_ID} { display: none; }`;
+}
 
 export function isBlurModeActive(): boolean {
   return _active;
@@ -76,23 +128,25 @@ function _findBlurred(el: Element): BlurredEl | undefined {
 }
 
 function _blur(el: HTMLElement): void {
-  const prevFilter = el.style.getPropertyValue("filter");
-  const prevPriority = el.style.getPropertyPriority("filter");
-  el.style.setProperty("filter", BLUR_FILTER, "important");
+  _ensureStaticStyles();
+  // A shared class + !important wins over whatever filter the host page's
+  // own CSS set, the same way the old !important inline style did — and
+  // removing the class on unblur lets that original CSS reassert itself, so
+  // there's nothing to save/restore here any more.
+  el.classList.add(BLURRED_CLASS);
   // Mask the text in the rrweb DOM replay too — the visual blur only covers
   // pixels; tb-mask covers the recorded DOM.
   el.classList.add("tb-mask");
   el.setAttribute("data-tb-blurred", "1");
   const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  _blurred.push({ el, prevFilter, prevPriority, evtId });
+  _blurred.push({ el, evtId });
   _events.push({ id: evtId, timestamp: Date.now() });
 }
 
 function _unblur(entry: BlurredEl): void {
-  const { el, prevFilter, prevPriority, evtId } = entry;
+  const { el, evtId } = entry;
   try {
-    if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
-    else el.style.removeProperty("filter");
+    el.classList.remove(BLURRED_CLASS);
     el.classList.remove("tb-mask");
     el.removeAttribute("data-tb-blurred");
   } catch {}
@@ -115,41 +169,26 @@ export function activateBlurMode(_root: HTMLElement, onExit?: () => void): void 
   if (_active) return;
   _active = true;
   _onExit = onExit || null;
+  _ensureStaticStyles();
 
   const outline = document.createElement("div");
   outline.id = OUTLINE_ID;
-  outline.setAttribute(
-    "style",
-    "position:fixed;display:none;pointer-events:none;z-index:2147483646;" +
-      "outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
-  );
   document.body.appendChild(outline);
 
   const hint = document.createElement("div");
   hint.id = HINT_ID;
-  hint.setAttribute(
-    "style",
-    "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;" +
-      "background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);" +
-      "padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;" +
-      "box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
-  );
   hint.textContent = "Click elements to blur · click again to unblur · Esc to finish";
   document.body.appendChild(hint);
-  document.body.style.cursor = "crosshair";
+  document.body.classList.add(CURSOR_CLASS);
 
   _onMove = (e: MouseEvent) => {
     const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
     if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
-      outline.style.display = "none";
+      _setOutlineRect(null);
       return;
     }
     const r = el.getBoundingClientRect();
-    outline.style.display = "block";
-    outline.style.left = r.left + "px";
-    outline.style.top = r.top + "px";
-    outline.style.width = r.width + "px";
-    outline.style.height = r.height + "px";
+    _setOutlineRect({ left: r.left, top: r.top, width: r.width, height: r.height });
   };
   _onClick = (e: MouseEvent) => {
     const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
@@ -180,7 +219,8 @@ export function deactivateBlurMode(): void {
   _onMove = _onClick = _onKey = null;
   document.getElementById(OUTLINE_ID)?.remove();
   document.getElementById(HINT_ID)?.remove();
-  document.body.style.cursor = "";
+  document.getElementById(OUTLINE_POS_STYLE_ID)?.remove();
+  document.body.classList.remove(CURSOR_CLASS);
   const cb = _onExit;
   _onExit = null;
   cb?.();

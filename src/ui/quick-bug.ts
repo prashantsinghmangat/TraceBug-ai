@@ -20,7 +20,7 @@ import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast, showActionToast } from "./toast";
-import { escapeHtml, tbIsolationCss, setInnerHTML, createStyleTag, setInlineStyle } from "./helpers";
+import { escapeHtml, tbIsolationCss, setInnerHTML, createStyleTag } from "./helpers";
 import { mountReplayScrubber } from "./replay-scrubber";
 import { getBlurEvents } from "./blur-tool";
 import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
@@ -529,32 +529,15 @@ function _openModal(
 
   const overlay = document.createElement("div");
   overlay.id = MODAL_ID;
+  overlay.className = "tb-qb-overlay";
   overlay.dataset.tracebug = "quick-bug-modal";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-label", "Quick bug capture");
-  setInlineStyle(overlay, `
-    position: fixed; inset: 0; z-index: 2147483647;
-    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px; pointer-events: auto;
-    animation: tracebug-qb-fade-in 0.15s ease;
-  `);
 
   const modal = document.createElement("div");
+  modal.className = "tb-qb-shell";
   modal.dataset.tracebug = "quick-bug-inner";
-  setInlineStyle(modal, `
-    background: var(--tb-bg-secondary, #11151A);
-    border: 1px solid var(--tb-border, #1F2630);
-    border-radius: var(--tb-radius-lg, 16px);
-    width: 100%; max-width: 1180px; max-height: 92vh;
-    display: flex; flex-direction: column;
-    font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--tb-text-primary, #FAFAFA);
-    box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
-    animation: tracebug-qb-slide-up 0.2s ease;
-    overflow: hidden;
-  `);
 
   const ssCount = screenshots.length;
   const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
@@ -1981,12 +1964,12 @@ ${report.steps}` : userDesc)
               return bytes.buffer as ArrayBuffer;
             }).catch(() => null)
           : Promise.resolve(null);
-      host.style.background = "#0B0B10";
+      host.classList.add("tb-qb-player-host");
       setInnerHTML(host, "");
       const iframe = document.createElement("iframe");
       iframe.src = playerUrl;
       iframe.title = "TraceBug recording";
-      setInlineStyle(iframe, "display:block;width:100%;aspect-ratio:16/9;border:0;background:#0B0B10");
+      iframe.className = "tb-qb-player-iframe";
       host.appendChild(iframe);
       const onMsg = (e: MessageEvent) => {
         if (!iframe.isConnected) { window.removeEventListener("message", onMsg); return; }
@@ -2155,9 +2138,10 @@ async function _copyToClipboard(text: string): Promise<boolean> {
   } catch {}
   // Fallback: textarea + execCommand
   try {
+    _injectStyles();
     const ta = document.createElement("textarea");
     ta.value = text;
-    setInlineStyle(ta, "position:fixed;left:-9999px;top:0");
+    ta.className = "tb-qb-offscreen-ta";
     document.body.appendChild(ta);
     ta.select();
     const ok = document.execCommand("copy");
@@ -2803,10 +2787,10 @@ function _inlineMd(s: string): string {
 // script relays to the background worker, which opens the page.
 
 function showSettingsPointerModal(root: HTMLElement, title: string, body: string): void {
+  _injectStyles();
   const overlay = document.createElement("div");
   overlay.id = "tb-ext-settings-pointer";
-  setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
-    "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
+  overlay.className = "tb-qb-pointer-overlay";
 
   setInnerHTML(overlay, `
     <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
@@ -2855,10 +2839,10 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
   const existing = getAIConfig();
   const provider: AIProvider = existing?.provider || "anthropic";
 
+  _injectStyles();
   const overlay = document.createElement("div");
   overlay.id = "tb-ai-config";
-  setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
-    "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
+  overlay.className = "tb-qb-pointer-overlay";
 
   setInnerHTML(overlay, `
     <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
@@ -2951,10 +2935,10 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   }
   const cfg = getIntegrationsConfig();
 
+  _injectStyles();
   const overlay = document.createElement("div");
   overlay.id = "tb-int-config";
-  setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);" +
-    "display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
+  overlay.className = "tb-qb-pointer-overlay";
 
   const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
   const lbl = "font-size:12px;color:#A1A1AA";
@@ -3106,9 +3090,48 @@ function _injectStyles(): void {
       #${MODAL_ID}, #${MODAL_ID} * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
 
+    /* Shared by the settings-pointer / AI-config / integrations pop-ins
+       below — same CSP reasoning as .tb-qb-overlay above. Not scoped under
+       #${MODAL_ID}: these can attach directly to document.body too. */
+    .tb-qb-offscreen-ta { position: fixed; left: -9999px; top: 0; }
+
+    .tb-qb-pointer-overlay {
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(5,7,12,0.65); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; font-family: system-ui, -apple-system, sans-serif;
+    }
+
     /* ── Modal shell ─────────────────────────────────── */
+    /* Was two setInlineStyle() calls — moved here because a page's CSP can
+       enforce a nonce-only style-src (no 'unsafe-inline'), which blocks an
+       inline style attribute outright and has no nonce/hash escape for it
+       (that's spec'd, not a bug to work around): confirmed on a real page,
+       the overlay silently got appended with no positioning at all, so the
+       ticket modal never visibly appeared — "click Stop, nothing happens". */
+    #${MODAL_ID}.tb-qb-overlay {
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; pointer-events: auto;
+      animation: tracebug-qb-fade-in 0.15s ease;
+    }
+    #${MODAL_ID} .tb-qb-shell {
+      background: var(--tb-bg-secondary, #11151A);
+      border: 1px solid var(--tb-border, #1F2630);
+      border-radius: var(--tb-radius-lg, 16px);
+      width: 100%; max-width: 1180px; max-height: 92vh;
+      display: flex; flex-direction: column;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
+      color: var(--tb-text-primary, #FAFAFA);
+      box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
+      animation: tracebug-qb-slide-up 0.2s ease;
+      overflow: hidden;
+    }
     #${MODAL_ID} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
     #${MODAL_ID} * { box-sizing: border-box; }
+    #${MODAL_ID} .tb-qb-player-host { background: #0B0B10; }
+    #${MODAL_ID} .tb-qb-player-iframe { display: block; width: 100%; aspect-ratio: 16/9; border: 0; background: #0B0B10; }
 
     /* ── Focus ring (shadcn new-york: ring-2 ring-primary/60 ring-offset-2) ──
        One consistent keyboard-focus treatment for every interactive element:
@@ -3527,19 +3550,36 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
 
   const overlay = document.createElement("div");
   overlay.id = "tb-ai-popover";
-  setInlineStyle(overlay, `
-    position: fixed; inset: 0; z-index: 2147483647;
-    background: rgba(5, 7, 12, 0.65);
-    backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-    font-family: system-ui, -apple-system, sans-serif;
-    animation: tb-ai-pop-in 0.16s ease;
-  `);
+  overlay.className = "tb-ai-pop-overlay";
 
   if (!document.getElementById("tb-ai-pop-anim")) {
     const s = createStyleTag("tb-ai-pop-anim");
-    s.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
+    // Was two setInlineStyle() calls — see the comment on .tb-qb-overlay
+    // above for why: a strict page CSP blocks inline style attributes
+    // outright, with no nonce/hash escape for them, so this popover would
+    // silently never appear on such a page.
+    s.textContent = `
+      @keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+      .tb-ai-pop-overlay {
+        position: fixed; inset: 0; z-index: 2147483647;
+        background: rgba(5, 7, 12, 0.65);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+        animation: tb-ai-pop-in 0.16s ease;
+      }
+      .tb-ai-pop-card {
+        width: 100%; max-width: 560px; max-height: 80vh;
+        background: #11151A;
+        border: 1px solid rgba(99,102,241,0.28);
+        border-radius: 14px;
+        box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+        display: flex; flex-direction: column;
+        color: #FAFAFA;
+        overflow: hidden;
+      }
+    `;
     document.head.appendChild(s);
   }
 
@@ -3554,16 +3594,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
     .replace(/>/g, "&gt;");
 
   const card = document.createElement("div");
-  setInlineStyle(card, `
-    width: 100%; max-width: 560px; max-height: 80vh;
-    background: #11151A;
-    border: 1px solid rgba(99,102,241,0.28);
-    border-radius: 14px;
-    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
-    display: flex; flex-direction: column;
-    color: #FAFAFA;
-    overflow: hidden;
-  `);
+  card.className = "tb-ai-pop-card";
   setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -3702,35 +3733,54 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
     },
   };
   let mcpTool = "claude";
-  const toolBtnCss = (active: boolean) => `
-    padding:5px 11px;border-radius:999px;cursor:pointer;
-    font:600 11px system-ui,-apple-system,sans-serif;
-    border:1px solid ${active ? "#6366F1" : "rgba(255,255,255,0.14)"};
-    background:${active ? "rgba(99,102,241,0.18)" : "transparent"};
-    color:${active ? "#A5B4FC" : "#A1A1AA"};`;
+
+  // Same overlay/card look as showAIPromptPopover — shares its stylesheet
+  // (injected here too, in case this popover runs first). The tool-picker
+  // buttons used to recompute an inline style string per click
+  // (toolBtnCss) — replaced with a .active class toggle, since that inline
+  // mutation is blocked the same way under a strict page CSP.
+  if (!document.getElementById("tb-ai-pop-anim")) {
+    const s = createStyleTag("tb-ai-pop-anim");
+    s.textContent = `
+      @keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+      .tb-ai-pop-overlay {
+        position: fixed; inset: 0; z-index: 2147483647;
+        background: rgba(5, 7, 12, 0.65);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+        animation: tb-ai-pop-in 0.16s ease;
+      }
+      .tb-ai-pop-card {
+        width: 100%; max-width: 560px; max-height: 80vh;
+        background: #11151A;
+        border: 1px solid rgba(99,102,241,0.28);
+        border-radius: 14px;
+        box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+        display: flex; flex-direction: column;
+        color: #FAFAFA;
+        overflow: hidden;
+      }
+      .tb-mcp-tool-btn {
+        padding: 5px 11px; border-radius: 999px; cursor: pointer;
+        font: 600 11px system-ui, -apple-system, sans-serif;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: transparent; color: #A1A1AA;
+      }
+      .tb-mcp-tool-btn.active {
+        border-color: #6366F1; background: rgba(99,102,241,0.18); color: #A5B4FC;
+      }
+    `;
+    document.head.appendChild(s);
+  }
 
   const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const overlay = document.createElement("div");
   overlay.id = "tb-mcp-handoff";
-  setInlineStyle(overlay, `
-    position: fixed; inset: 0; z-index: 2147483647;
-    background: rgba(5, 7, 12, 0.65);
-    backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-    font-family: system-ui, -apple-system, sans-serif;
-  `);
+  overlay.className = "tb-ai-pop-overlay";
   const card = document.createElement("div");
-  setInlineStyle(card, `
-    width: 100%; max-width: 560px; max-height: 80vh;
-    background: #11151A;
-    border: 1px solid rgba(99,102,241,0.28);
-    border-radius: 14px;
-    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
-    display: flex; flex-direction: column;
-    color: #FAFAFA;
-    overflow: hidden;
-  `);
+  card.className = "tb-ai-pop-card";
   setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -3745,7 +3795,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         <div style="display:flex;gap:6px;margin-bottom:7px;align-items:center">
           <span style="font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#71717A;margin-right:2px">One-time setup</span>
           ${Object.entries(MCP_SETUP)
-            .map(([key, t]) => `<button data-mcp-tool="${key}" style="${toolBtnCss(key === "claude")}">${t.label}</button>`)
+            .map(([key, t]) => `<button data-mcp-tool="${key}" class="tb-mcp-tool-btn${key === "claude" ? " active" : ""}">${t.label}</button>`)
             .join("")}
         </div>
         <div style="display:flex;gap:6px;align-items:stretch">
@@ -3807,7 +3857,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
       if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
       card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
-        setInlineStyle((b as HTMLElement), toolBtnCss(b.getAttribute("data-mcp-tool") === tool));
+        b.classList.toggle("active", b.getAttribute("data-mcp-tool") === tool);
       });
       return;
     }
@@ -3867,31 +3917,37 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
 
     const overlay = document.createElement("div");
     overlay.id = "tb-share-consent";
-    setInlineStyle(overlay, `
-      position: fixed; inset: 0; z-index: 2147483647;
-      background: rgba(5, 7, 12, 0.72);
-      backdrop-filter: blur(4px);
-      display: flex; align-items: center; justify-content: center;
-      padding: 20px;
-      font-family: system-ui, -apple-system, sans-serif;
-      animation: tb-share-consent-in 0.16s ease;
-    `);
+    overlay.className = "tb-share-consent-overlay";
 
     if (!document.getElementById("tb-share-consent-anim")) {
       const s = createStyleTag("tb-share-consent-anim");
-      s.textContent = "@keyframes tb-share-consent-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }";
+      // Was setInlineStyle() calls on the overlay/card — see .tb-qb-overlay's
+      // comment above for why that silently fails under a strict page CSP.
+      s.textContent = `
+        @keyframes tb-share-consent-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+        .tb-share-consent-overlay {
+          position: fixed; inset: 0; z-index: 2147483647;
+          background: rgba(5, 7, 12, 0.72);
+          backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center;
+          padding: 20px;
+          font-family: system-ui, -apple-system, sans-serif;
+          animation: tb-share-consent-in 0.16s ease;
+        }
+        .tb-share-consent-card {
+          width: 100%; max-width: 460px;
+          background: #11151A; color: #FAFAFA;
+          border: 1px solid rgba(99,102,241,0.32);
+          border-radius: 14px;
+          box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+          padding: 22px 24px;
+        }
+      `;
       document.head.appendChild(s);
     }
 
     const card = document.createElement("div");
-    setInlineStyle(card, `
-      width: 100%; max-width: 460px;
-      background: #11151A; color: #FAFAFA;
-      border: 1px solid rgba(99,102,241,0.32);
-      border-radius: 14px;
-      box-shadow: 0 24px 72px rgba(0,0,0,0.6);
-      padding: 22px 24px;
-    `);
+    card.className = "tb-share-consent-card";
     setInnerHTML(card, `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <span style="font-size:18px;line-height:1">☁️</span>

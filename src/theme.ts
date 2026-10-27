@@ -224,6 +224,10 @@ export function injectTheme(mode: ThemeMode): void {
 
 /** Remove theme styles and listeners */
 export function removeTheme(): void {
+  const root = document.getElementById("tracebug-root");
+  if (root) root.removeAttribute("data-tb-theme");
+  // Legacy cleanup: an older build of this function injected a <style> tag
+  // with this id. Harmless to also remove if a stale one is ever found.
   const el = document.getElementById(THEME_STYLE_ID);
   if (el) el.remove();
 
@@ -234,21 +238,35 @@ export function removeTheme(): void {
   }
 }
 
+/**
+ * Both themes' full token sets are static CSS in
+ * tracebug-extension/tracebug-injected-styles.css, keyed on
+ * #tracebug-root[data-tb-theme="dark"|"light"]. This used to instead REWRITE
+ * a <style> tag's textContent with whichever theme's tokens were active —
+ * which needs a nonce (or chrome.scripting.insertCSS) just like any other
+ * injected stylesheet, and was one more thing silently inert on a page
+ * whose CSP had no discoverable nonce. A plain `data-*` attribute has no
+ * such dependency: HTML attributes other than `style` are outside
+ * style-src's reach entirely, so this now just flips which pre-shipped
+ * block of CSS rules matches — nothing to authorize, ever.
+ */
 function _applyThemeVars(): void {
-  const tokens = getThemeTokens();
+  const root = document.getElementById("tracebug-root");
+  if (!root) return;
+  root.setAttribute("data-tb-theme", getResolvedTheme());
+  // createStyleTag import kept: non-extension (npm SDK) pages have no
+  // chrome.scripting.insertCSS, so this is still the fallback there — see
+  // the comment on tracebug-injected-styles.css for why it's additive, not
+  // a replacement, in the extension context.
   let existing = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null;
-
   if (!existing) {
     existing = createStyleTag(THEME_STYLE_ID);
     document.head.appendChild(existing);
   }
-
-  const vars = Object.entries(tokens)
-    .map(([k, v]) => `  ${k}: ${v};`)
-    .join("\n");
-
+  const tokens = getThemeTokens();
+  const vars = Object.entries(tokens).map(([k, v]) => `  ${k}: ${v};`).join("\n");
   existing.textContent = `
-    #tracebug-root {
+    #tracebug-root[data-tb-theme="${getResolvedTheme()}"] {
 ${vars}
     }
   `;
