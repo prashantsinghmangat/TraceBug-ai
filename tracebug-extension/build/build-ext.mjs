@@ -87,6 +87,7 @@ const SHARED_FILES = [
   "player.js",
   "player.html",
   "styles.css",
+  "tracebug-injected-styles.css",
   "tracebug-init.js",
   // tracebug-sdk.js is NOT packaged here — the extension never loads it
   // (background.js's injectPageWorld injects tracebug-sdk-ext.js exclusively,

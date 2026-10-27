@@ -58,26 +58,35 @@ describe('showPickerHint', () => {
   it('cannot be hidden or restyled by the host page', () => {
     // It mounts into a page whose CSS we do not control, so the positioning and
     // visibility have to be !important or a hostile/greedy stylesheet wins.
-    // Asserted via the live CSSOM (not the serialized `style` attribute
-    // string) because setInlineStyle() applies these through
-    // style.setProperty(), which is what actually governs rendering and
-    // survives a CSP that silently drops the attribute/cssText form —
-    // see src/ui/helpers.ts.
+    //
+    // This used to assert style.setProperty(el, 'position', 'fixed',
+    // 'important') directly on the element, on the theory that the CSSOM API
+    // survives a strict CSP where the attribute/cssText form doesn't. That
+    // theory was wrong — confirmed on a real page, not assumed: a style-src
+    // CSP with a nonce and no 'unsafe-inline' blocks ANY inline style
+    // mutation, .style.setProperty() included, with no nonce/hash escape for
+    // style attributes at all (that's spec'd). The fix moved this into a
+    // real <style> tag instead — a nonce can authorize THAT, so this now
+    // asserts the stylesheet actually carries the rule, not a direct
+    // property read that a strict-CSP page would silently never have set.
     showPickerHint('tab');
-    const el = hint()! as HTMLElement;
-    expect(el.style.position).toBe('fixed');
-    expect(el.style.getPropertyPriority('position')).toBe('important');
-    expect(el.style.zIndex).toBe('2147483647');
-    expect(el.style.getPropertyPriority('z-index')).toBe('important');
+    const styleEl = document.getElementById('tracebug-pre-record-styles');
+    expect(styleEl).toBeTruthy();
+    expect(styleEl!.tagName).toBe('STYLE');
+    const css = styleEl!.textContent || '';
+    expect(css).toMatch(/#tracebug-picker-hint\s*\{[^}]*position:\s*fixed\s*!important/);
+    expect(css).toMatch(/#tracebug-picker-hint\s*\{[^}]*z-index:\s*2147483647\s*!important/);
   });
 
   it('does not take clicks away from the page', () => {
     // It sits top-centre over the page for a second or two while the dialog
-    // opens; it must not eat a click meant for the app underneath.
+    // opens; it must not eat a click meant for the app underneath. Same CSP
+    // reasoning as above — asserted against the stylesheet, not a direct
+    // .style read.
     showPickerHint('tab');
-    const el = hint()! as HTMLElement;
-    expect(el.style.pointerEvents).toBe('none');
-    expect(el.style.getPropertyPriority('pointer-events')).toBe('important');
+    const styleEl = document.getElementById('tracebug-pre-record-styles');
+    const css = styleEl!.textContent || '';
+    expect(css).toMatch(/#tracebug-picker-hint\s*\{[^}]*pointer-events:\s*none\s*!important/);
   });
 
   it('is announced to screen readers', () => {

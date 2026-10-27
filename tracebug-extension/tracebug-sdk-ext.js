@@ -20121,137 +20121,6 @@ var TraceBugExtensionModule = (() => {
     }
   });
 
-  // src/ui/blur-tool.ts
-  function isBlurModeActive() {
-    return _active;
-  }
-  function getBlurEvents() {
-    return [..._events2];
-  }
-  function removeAllBlurBoxes() {
-    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
-  }
-  function undoLastBlur() {
-    const last = _blurred[_blurred.length - 1];
-    if (last) _unblur(last);
-    return _blurred.length;
-  }
-  function _isOurNode(el) {
-    return isTraceBugUiElement(el);
-  }
-  function _findBlurred(el) {
-    return _blurred.find((b) => b.el === el);
-  }
-  function _blur(el) {
-    const prevFilter = el.style.getPropertyValue("filter");
-    const prevPriority = el.style.getPropertyPriority("filter");
-    el.style.setProperty("filter", BLUR_FILTER, "important");
-    el.classList.add("tb-mask");
-    el.setAttribute("data-tb-blurred", "1");
-    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    _blurred.push({ el, prevFilter, prevPriority, evtId });
-    _events2.push({ id: evtId, timestamp: Date.now() });
-  }
-  function _unblur(entry) {
-    const { el, prevFilter, prevPriority, evtId } = entry;
-    try {
-      if (prevFilter) el.style.setProperty("filter", prevFilter, prevPriority);
-      else el.style.removeProperty("filter");
-      el.classList.remove("tb-mask");
-      el.removeAttribute("data-tb-blurred");
-    } catch (e2) {
-    }
-    _blurred = _blurred.filter((b) => b !== entry);
-    const i2 = _events2.findIndex((ev) => ev.id === evtId);
-    if (i2 >= 0) _events2.splice(i2, 1);
-  }
-  function activateBlurMode(_root4, onExit) {
-    if (_active) return;
-    _active = true;
-    _onExit = onExit || null;
-    const outline = document.createElement("div");
-    outline.id = OUTLINE_ID;
-    outline.setAttribute(
-      "style",
-      "position:fixed;display:none;pointer-events:none;z-index:2147483646;outline:2px solid #6366F1;outline-offset:1px;border-radius:4px;background:rgba(99,102,241,0.08);"
-    );
-    document.body.appendChild(outline);
-    const hint = document.createElement("div");
-    hint.id = HINT_ID;
-    hint.setAttribute(
-      "style",
-      "position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1b1d24;color:#e9eaee;border:1px solid rgba(255,255,255,0.12);padding:7px 14px;border-radius:999px;font:600 12px/1 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.5);pointer-events:none;white-space:nowrap;"
-    );
-    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
-    document.body.appendChild(hint);
-    document.body.style.cursor = "crosshair";
-    _onMove = (e2) => {
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
-        outline.style.display = "none";
-        return;
-      }
-      const r2 = el.getBoundingClientRect();
-      outline.style.display = "block";
-      outline.style.left = r2.left + "px";
-      outline.style.top = r2.top + "px";
-      outline.style.width = r2.width + "px";
-      outline.style.height = r2.height + "px";
-    };
-    _onClick = (e2) => {
-      var _a2;
-      const el = document.elementFromPoint(e2.clientX, e2.clientY);
-      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
-      e2.preventDefault();
-      e2.stopPropagation();
-      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
-      const existing = _findBlurred(el);
-      if (existing) _unblur(existing);
-      else _blur(el);
-    };
-    _onKey = (e2) => {
-      if (e2.key === "Escape") {
-        e2.preventDefault();
-        deactivateBlurMode();
-      }
-    };
-    document.addEventListener("mousemove", _onMove, true);
-    document.addEventListener("click", _onClick, true);
-    document.addEventListener("keydown", _onKey, true);
-  }
-  function deactivateBlurMode() {
-    var _a2, _b;
-    if (!_active) return;
-    _active = false;
-    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
-    if (_onClick) document.removeEventListener("click", _onClick, true);
-    if (_onKey) document.removeEventListener("keydown", _onKey, true);
-    _onMove = _onClick = _onKey = null;
-    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
-    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
-    document.body.style.cursor = "";
-    const cb = _onExit;
-    _onExit = null;
-    cb == null ? void 0 : cb();
-  }
-  var HINT_ID, OUTLINE_ID, BLUR_FILTER, _active, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
-  var init_blur_tool = __esm({
-    "src/ui/blur-tool.ts"() {
-      "use strict";
-      init_dom_helpers();
-      HINT_ID = "tracebug-blur-hint";
-      OUTLINE_ID = "tracebug-blur-outline";
-      BLUR_FILTER = "blur(12px)";
-      _active = false;
-      _onExit = null;
-      _events2 = [];
-      _blurred = [];
-      _onMove = null;
-      _onClick = null;
-      _onKey = null;
-    }
-  });
-
   // src/ui/helpers.ts
   function tbIsolationCss(root2) {
     return `
@@ -20396,18 +20265,206 @@ var TraceBugExtensionModule = (() => {
     }
   });
 
+  // src/ui/blur-tool.ts
+  function _ensureStaticStyles() {
+    if (document.getElementById(STATIC_STYLE_ID)) return;
+    const style = createStyleTag(STATIC_STYLE_ID);
+    style.textContent = `
+    .${BLURRED_CLASS} { filter: blur(12px) !important; }
+    body.${CURSOR_CLASS} { cursor: crosshair !important; }
+    #${OUTLINE_ID} {
+      position: fixed; display: none; pointer-events: none; z-index: 2147483646;
+      outline: 2px solid #6366F1; outline-offset: 1px; border-radius: 4px;
+      background: rgba(99,102,241,0.08);
+    }
+    #${HINT_ID} {
+      position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 2147483647;
+      background: #1b1d24; color: #e9eaee; border: 1px solid rgba(255,255,255,0.12);
+      padding: 7px 14px; border-radius: 999px; font: 600 12px/1 system-ui, sans-serif;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5); pointer-events: none; white-space: nowrap;
+    }
+  `;
+    document.head.appendChild(style);
+  }
+  function _setOutlineRect(rect) {
+    let style = document.getElementById(OUTLINE_POS_STYLE_ID);
+    if (!style) {
+      style = createStyleTag(OUTLINE_POS_STYLE_ID);
+      document.head.appendChild(style);
+    }
+    style.textContent = rect ? `#${OUTLINE_ID} { display: block; left: ${rect.left}px; top: ${rect.top}px; width: ${rect.width}px; height: ${rect.height}px; }` : `#${OUTLINE_ID} { display: none; }`;
+  }
+  function isBlurModeActive() {
+    return _active;
+  }
+  function getBlurEvents() {
+    return [..._events2];
+  }
+  function removeAllBlurBoxes() {
+    while (_blurred.length) _unblur(_blurred[_blurred.length - 1]);
+  }
+  function undoLastBlur() {
+    const last = _blurred[_blurred.length - 1];
+    if (last) _unblur(last);
+    return _blurred.length;
+  }
+  function _isOurNode(el) {
+    return isTraceBugUiElement(el);
+  }
+  function _findBlurred(el) {
+    return _blurred.find((b) => b.el === el);
+  }
+  function _blur(el) {
+    _ensureStaticStyles();
+    el.classList.add(BLURRED_CLASS);
+    el.classList.add("tb-mask");
+    el.setAttribute("data-tb-blurred", "1");
+    const evtId = `blur_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    _blurred.push({ el, evtId });
+    _events2.push({ id: evtId, timestamp: Date.now() });
+  }
+  function _unblur(entry) {
+    const { el, evtId } = entry;
+    try {
+      el.classList.remove(BLURRED_CLASS);
+      el.classList.remove("tb-mask");
+      el.removeAttribute("data-tb-blurred");
+    } catch (e2) {
+    }
+    _blurred = _blurred.filter((b) => b !== entry);
+    const i2 = _events2.findIndex((ev) => ev.id === evtId);
+    if (i2 >= 0) _events2.splice(i2, 1);
+  }
+  function activateBlurMode(_root4, onExit) {
+    if (_active) return;
+    _active = true;
+    _onExit = onExit || null;
+    _ensureStaticStyles();
+    const outline = document.createElement("div");
+    outline.id = OUTLINE_ID;
+    document.body.appendChild(outline);
+    const hint = document.createElement("div");
+    hint.id = HINT_ID;
+    hint.textContent = "Click elements to blur \xB7 click again to unblur \xB7 Esc to finish";
+    document.body.appendChild(hint);
+    document.body.classList.add(CURSOR_CLASS);
+    _onMove = (e2) => {
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) {
+        _setOutlineRect(null);
+        return;
+      }
+      const r2 = el.getBoundingClientRect();
+      _setOutlineRect({ left: r2.left, top: r2.top, width: r2.width, height: r2.height });
+    };
+    _onClick = (e2) => {
+      var _a2;
+      const el = document.elementFromPoint(e2.clientX, e2.clientY);
+      if (!el || el === document.body || el === document.documentElement || _isOurNode(el)) return;
+      e2.preventDefault();
+      e2.stopPropagation();
+      (_a2 = e2.stopImmediatePropagation) == null ? void 0 : _a2.call(e2);
+      const existing = _findBlurred(el);
+      if (existing) _unblur(existing);
+      else _blur(el);
+    };
+    _onKey = (e2) => {
+      if (e2.key === "Escape") {
+        e2.preventDefault();
+        deactivateBlurMode();
+      }
+    };
+    document.addEventListener("mousemove", _onMove, true);
+    document.addEventListener("click", _onClick, true);
+    document.addEventListener("keydown", _onKey, true);
+  }
+  function deactivateBlurMode() {
+    var _a2, _b, _c;
+    if (!_active) return;
+    _active = false;
+    if (_onMove) document.removeEventListener("mousemove", _onMove, true);
+    if (_onClick) document.removeEventListener("click", _onClick, true);
+    if (_onKey) document.removeEventListener("keydown", _onKey, true);
+    _onMove = _onClick = _onKey = null;
+    (_a2 = document.getElementById(OUTLINE_ID)) == null ? void 0 : _a2.remove();
+    (_b = document.getElementById(HINT_ID)) == null ? void 0 : _b.remove();
+    (_c = document.getElementById(OUTLINE_POS_STYLE_ID)) == null ? void 0 : _c.remove();
+    document.body.classList.remove(CURSOR_CLASS);
+    const cb = _onExit;
+    _onExit = null;
+    cb == null ? void 0 : cb();
+  }
+  var HINT_ID, OUTLINE_ID, STATIC_STYLE_ID, OUTLINE_POS_STYLE_ID, CURSOR_CLASS, BLURRED_CLASS, _active, _onExit, _events2, _blurred, _onMove, _onClick, _onKey;
+  var init_blur_tool = __esm({
+    "src/ui/blur-tool.ts"() {
+      "use strict";
+      init_dom_helpers();
+      init_helpers();
+      HINT_ID = "tracebug-blur-hint";
+      OUTLINE_ID = "tracebug-blur-outline";
+      STATIC_STYLE_ID = "tracebug-blur-static-styles";
+      OUTLINE_POS_STYLE_ID = "tracebug-blur-outline-pos";
+      CURSOR_CLASS = "tb-blur-cursor-active";
+      BLURRED_CLASS = "tb-blurred-el";
+      _active = false;
+      _onExit = null;
+      _events2 = [];
+      _blurred = [];
+      _onMove = null;
+      _onClick = null;
+      _onKey = null;
+    }
+  });
+
   // src/ui/pre-record.ts
+  function _ensureStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = createStyleTag(STYLE_ID);
+    style.textContent = `
+    #${PICKER_HINT_ID} {
+      position: fixed !important; top: 18px !important; left: 50% !important; transform: translateX(-50%) !important;
+      z-index: 2147483647 !important; max-width: min(560px, calc(100vw - 32px)) !important;
+      background: #1b1d24 !important; color: #e9eaee !important; border: 1px solid rgba(255,255,255,0.08) !important;
+      border-radius: 12px !important; padding: 11px 16px !important; box-sizing: border-box !important;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important; font-size: 13px !important;
+      font-weight: 500 !important; line-height: 1.45 !important; text-align: center !important;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.55) !important; pointer-events: none !important;
+    }
+    #${COUNTDOWN_ID} {
+      position: fixed; inset: 0; z-index: 2147483646;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      background: rgba(11,11,16,0.55); pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    #${COUNTDOWN_ID} .tb-countdown-num {
+      font-size: 120px; font-weight: 800; color: #fff; text-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      transform: scale(1); opacity: 0.75;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+    #${COUNTDOWN_ID} .tb-countdown-num.tb-countdown-pulse { transform: scale(1.25); opacity: 1; }
+    #${COUNTDOWN_ID} .tb-countdown-hint { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.75); text-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+    #${ARM_BAR_ID} {
+      position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 2147483647;
+      display: flex; align-items: center; gap: 10px;
+      background: #0B0B10; color: #EAECF3; border: 1px solid #26262E; border-radius: 999px;
+      padding: 8px 10px 8px 18px; font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    }
+    #${ARM_BAR_ID} button { font: 600 12px inherit; cursor: pointer; border-radius: 999px; }
+    #${ARM_BAR_ID} [data-tb-arm="undo"], #${ARM_BAR_ID} [data-tb-arm="cancel"] {
+      background: transparent; color: #A1A1AA; border: 1px solid #26262E; padding: 7px 12px;
+    }
+    #${ARM_BAR_ID} [data-tb-arm="start"] { background: #ef4444; color: #fff; border: 0; padding: 7px 16px; font-size: 13px; }
+  `;
+    document.head.appendChild(style);
+  }
   function showPickerHint(surfaceMode) {
     try {
       hidePickerHint();
+      _ensureStyles();
       const el = document.createElement("div");
       el.id = PICKER_HINT_ID;
       el.setAttribute("role", "status");
       el.setAttribute("aria-live", "polite");
-      setInlineStyle(
-        el,
-        "position:fixed!important;top:18px!important;left:50%!important;transform:translateX(-50%)!important;z-index:2147483647!important;max-width:min(560px,calc(100vw - 32px))!important;background:#1b1d24!important;color:#e9eaee!important;border:1px solid rgba(255,255,255,0.08)!important;border-radius:12px!important;padding:11px 16px!important;box-sizing:border-box!important;font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif!important;font-size:13px!important;font-weight:500!important;line-height:1.45!important;text-align:center!important;box-shadow:0 12px 40px rgba(0,0,0,0.55)!important;pointer-events:none!important;"
-      );
       el.textContent = surfaceMode === "tab" ? "Your browser will ask what to share. It's already set to this tab \u2014 choose Share." : "Your browser will ask what to share. Pick this tab, unless you need a window or the whole screen.";
       document.body.appendChild(el);
     } catch (e2) {
@@ -20424,21 +20481,15 @@ var TraceBugExtensionModule = (() => {
     const total = Math.max(1, Math.min(10, Math.round(seconds)));
     return new Promise((resolve) => {
       var _a2;
+      _ensureStyles();
       (_a2 = document.getElementById(COUNTDOWN_ID)) == null ? void 0 : _a2.remove();
       const overlay = document.createElement("div");
       overlay.id = COUNTDOWN_ID;
-      setInlineStyle(
-        overlay,
-        "position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(11,11,16,0.55);pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;"
-      );
       const num = document.createElement("div");
-      setInlineStyle(
-        num,
-        "font-size:120px;font-weight:800;color:#fff;text-shadow:0 8px 40px rgba(0,0,0,0.6);transition:transform 0.25s ease, opacity 0.25s ease;"
-      );
+      num.className = "tb-countdown-num";
       const hint = document.createElement("div");
+      hint.className = "tb-countdown-hint";
       hint.textContent = "Press Esc to cancel";
-      setInlineStyle(hint, "font-size:14px;font-weight:500;color:rgba(255,255,255,0.75);text-shadow:0 2px 12px rgba(0,0,0,0.5);");
       overlay.appendChild(num);
       overlay.appendChild(hint);
       document.body.appendChild(overlay);
@@ -20466,11 +20517,9 @@ var TraceBugExtensionModule = (() => {
           return;
         }
         num.textContent = String(n2);
-        num.style.transform = "scale(1.25)";
-        num.style.opacity = "1";
+        num.classList.add("tb-countdown-pulse");
         setTimeout(() => {
-          num.style.transform = "scale(1)";
-          num.style.opacity = "0.75";
+          num.classList.remove("tb-countdown-pulse");
         }, 200);
         n2--;
         timer = setTimeout(tick, 1e3);
@@ -20481,19 +20530,16 @@ var TraceBugExtensionModule = (() => {
   function startBlurThenRecord(opts) {
     var _a2;
     (_a2 = document.getElementById(ARM_BAR_ID)) == null ? void 0 : _a2.remove();
+    _ensureStyles();
     const root2 = document.getElementById("tracebug-root") || document.body;
     activateBlurMode(root2);
     const bar = document.createElement("div");
     bar.id = ARM_BAR_ID;
-    setInlineStyle(
-      bar,
-      "position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:8px 10px 8px 18px;font:13px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);"
-    );
     setInnerHTML(bar, `
     <span>\u{1FAE5} Click elements to blur/unblur \u2014 the blur is captured into the recording</span>
-    <button data-tb-arm="undo" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Undo</button>
-    <button data-tb-arm="start" style="background:#ef4444;color:#fff;border:0;border-radius:999px;padding:7px 16px;font:600 13px inherit;cursor:pointer">\u25CF Start recording</button>
-    <button data-tb-arm="cancel" style="background:transparent;color:#A1A1AA;border:1px solid #26262E;border-radius:999px;padding:7px 12px;font:600 12px inherit;cursor:pointer">Cancel</button>
+    <button data-tb-arm="undo">Undo</button>
+    <button data-tb-arm="start">\u25CF Start recording</button>
+    <button data-tb-arm="cancel">Cancel</button>
   `);
     document.body.appendChild(bar);
     bar.querySelector('[data-tb-arm="undo"]').addEventListener("click", () => {
@@ -20518,7 +20564,7 @@ var TraceBugExtensionModule = (() => {
       if (opts.onCancel) opts.onCancel();
     });
   }
-  var COUNTDOWN_ID, ARM_BAR_ID, PICKER_HINT_ID;
+  var COUNTDOWN_ID, ARM_BAR_ID, PICKER_HINT_ID, STYLE_ID;
   var init_pre_record = __esm({
     "src/ui/pre-record.ts"() {
       "use strict";
@@ -20527,6 +20573,7 @@ var TraceBugExtensionModule = (() => {
       COUNTDOWN_ID = "tracebug-record-countdown";
       ARM_BAR_ID = "tracebug-record-armbar";
       PICKER_HINT_ID = "tracebug-picker-hint";
+      STYLE_ID = "tracebug-pre-record-styles";
     }
   });
 
@@ -20566,33 +20613,68 @@ var TraceBugExtensionModule = (() => {
     showCaptureBlockedNotice: () => showCaptureBlockedNotice,
     showToast: () => showToast
   });
+  function _ensureToastStyles() {
+    if (document.getElementById("tracebug-toast-anim")) return;
+    const style = createStyleTag("tracebug-toast-anim");
+    style.textContent = `
+    @keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    .bt-toast {
+      position: fixed !important;
+      bottom: 32px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      background: #0E1117 !important;
+      color: #FFFFFF !important;
+      border: 1px solid #6366F1 !important;
+      border-radius: 10px !important;
+      padding: 14px 22px !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      letter-spacing: -0.005em !important;
+      font-family: system-ui, -apple-system, sans-serif !important;
+      z-index: 2147483647 !important;
+      box-shadow: 0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(99,102,241,0.12) !important;
+      pointer-events: auto !important;
+      max-width: 460px !important;
+      text-align: center !important;
+      line-height: 1.4 !important;
+      animation: tracebug-toast-in 0.2s ease !important;
+    }
+    .bt-toast.bt-toast-action {
+      background: var(--tb-bg-secondary, #1a1a2e); color: var(--tb-text-primary, #e0e0e0);
+      border: 1px solid var(--tb-error, #ef4444); border-left: 4px solid var(--tb-error, #ef4444);
+      border-radius: 10px; padding: 12px 14px 12px 16px; font-size: 13px; font-weight: 400;
+      letter-spacing: normal; text-align: left;
+      font-family: system-ui, -apple-system, sans-serif;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      max-width: 480px; line-height: 1.4;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .bt-toast-dismissing { opacity: 0 !important; transform: translateX(-50%) translateY(8px) !important; transition: all 0.3s ease !important; }
+    .bt-toast-action .bt-toast-msg { flex: 1; }
+    .bt-toast-action .bt-toast-action-btn {
+      background: var(--tb-accent, #6366F1); color: #fff; border: none; border-radius: 6px;
+      padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .bt-toast-action .bt-toast-dismiss-btn {
+      background: none; border: none; color: var(--tb-text-muted, #888); cursor: pointer;
+      font-size: 16px; padding: 2px 6px; border-radius: 4px;
+    }
+  `;
+    document.head.appendChild(style);
+  }
   function showActionToast(message, actionLabel, onAction, root2, options) {
     const existing = root2.querySelector(".bt-toast");
     if (existing) existing.remove();
+    _ensureToastStyles();
     const toast = document.createElement("div");
     toast.className = "bt-toast bt-toast-action";
     toast.dataset.tracebug = "toast";
     toast.setAttribute("role", "alert");
-    setInlineStyle(toast, `
-    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
-    background:var(--tb-bg-secondary, #1a1a2e);color:var(--tb-text-primary, #e0e0e0);
-    border:1px solid var(--tb-error, #ef4444);border-left:4px solid var(--tb-error, #ef4444);
-    border-radius:10px;padding:12px 14px 12px 16px;font-size:13px;
-    font-family:system-ui,-apple-system,sans-serif;z-index:2147483647;
-    box-shadow:0 8px 32px rgba(0,0,0,0.4);pointer-events:auto;
-    max-width:480px;line-height:1.4;
-    display:flex;align-items:center;gap:12px;
-    animation:tracebug-toast-in 0.2s ease;
-  `);
-    if (!document.getElementById("tracebug-toast-anim")) {
-      const style = createStyleTag("tracebug-toast-anim");
-      style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
-      document.head.appendChild(style);
-    }
     setInnerHTML(toast, `
-    <span style="flex:1">${message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
-    <button data-tb-action="capture" style="background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${actionLabel.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</button>
-    <button data-tb-action="dismiss" aria-label="Dismiss" style="background:none;border:none;color:var(--tb-text-muted, #888);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:4px">\u2715</button>
+    <span class="bt-toast-msg">${message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>
+    <button data-tb-action="capture" class="bt-toast-action-btn">${actionLabel.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</button>
+    <button data-tb-action="dismiss" aria-label="Dismiss" class="bt-toast-dismiss-btn">\u2715</button>
   `);
     root2.appendChild(toast);
     const liveRegion = document.getElementById("tracebug-live");
@@ -20602,9 +20684,7 @@ var TraceBugExtensionModule = (() => {
       if (_dismissed) return;
       _dismissed = true;
       clearTimeout(autoTimer);
-      toast.style.opacity = "0";
-      toast.style.transform = "translateX(-50%) translateY(8px)";
-      toast.style.transition = "all 0.3s ease";
+      toast.classList.add("bt-toast-dismissing");
       setTimeout(() => toast.remove(), 300);
     };
     toast.querySelector('[data-tb-action="capture"]').addEventListener("click", () => {
@@ -20629,45 +20709,17 @@ var TraceBugExtensionModule = (() => {
     const existing = root2.querySelector(".bt-toast");
     if (existing == null ? void 0 : existing.classList.contains("bt-toast-action")) return;
     if (existing) existing.remove();
+    _ensureToastStyles();
     const toast = document.createElement("div");
     toast.className = "bt-toast";
     toast.dataset.tracebug = "toast";
-    setInlineStyle(toast, `
-    position:fixed !important;
-    bottom:32px !important;
-    left:50% !important;
-    transform:translateX(-50%) !important;
-    background:#0E1117 !important;
-    color:#FFFFFF !important;
-    border:1px solid #6366F1 !important;
-    border-radius:10px !important;
-    padding:14px 22px !important;
-    font-size:14px !important;
-    font-weight:600 !important;
-    letter-spacing:-0.005em !important;
-    font-family:system-ui,-apple-system,sans-serif !important;
-    z-index:2147483647 !important;
-    box-shadow:0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(99,102,241,0.12) !important;
-    pointer-events:auto !important;
-    max-width:460px !important;
-    text-align:center !important;
-    line-height:1.4 !important;
-    animation:tracebug-toast-in 0.2s ease !important;
-  `);
-    if (!document.getElementById("tracebug-toast-anim")) {
-      const style = createStyleTag("tracebug-toast-anim");
-      style.textContent = `@keyframes tracebug-toast-in { from { opacity:0; transform:translateX(-50%) translateY(8px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }`;
-      document.head.appendChild(style);
-    }
     toast.textContent = message;
     toast.setAttribute("role", "status");
     root2.appendChild(toast);
     const liveRegion = document.getElementById("tracebug-live");
     if (liveRegion) liveRegion.textContent = message;
     setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateX(-50%) translateY(8px)";
-      toast.style.transition = "all 0.3s ease";
+      toast.classList.add("bt-toast-dismissing");
       setTimeout(() => toast.remove(), 300);
     }, 2800);
   }
@@ -20995,7 +21047,18 @@ var TraceBugExtensionModule = (() => {
       if (d.micRequested && d.micIncluded === false) {
         const root2 = document.getElementById("tracebug-root");
         if (root2) {
-          Promise.resolve().then(() => (init_toast(), toast_exports)).then((m) => m.showToast("Recording without mic \u2014 turn on the microphone toggle in the TraceBug extension popup (it'll ask for permission), then record again.", root2)).catch(() => {
+          Promise.resolve().then(() => (init_toast(), toast_exports)).then((m) => m.showActionToast(
+            "Recording without microphone \u2014 TraceBug doesn't have mic permission yet.",
+            "Grant microphone access",
+            () => {
+              try {
+                window.dispatchEvent(new CustomEvent("tracebug-open-mic-settings"));
+              } catch (e3) {
+              }
+            },
+            root2,
+            { autoDismissMs: null }
+          )).catch(() => {
           });
         }
       }
@@ -28693,8 +28756,8 @@ ${issueSignatureSlack()}`;
     });
   }
   function _injectStyles() {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = createStyleTag(STYLE_ID);
+    if (document.getElementById(STYLE_ID2)) return;
+    const style = createStyleTag(STYLE_ID2);
     style.textContent = `
     .tb-rs-root {
       box-sizing: border-box !important;
@@ -28917,12 +28980,12 @@ ${issueSignatureSlack()}`;
   `;
     document.head.appendChild(style);
   }
-  var STYLE_ID, MARKER_COLORS, CHIP_META;
+  var STYLE_ID2, MARKER_COLORS, CHIP_META;
   var init_replay_scrubber = __esm({
     "src/ui/replay-scrubber.ts"() {
       "use strict";
       init_helpers();
-      STYLE_ID = "tracebug-replay-scrubber-styles";
+      STYLE_ID2 = "tracebug-replay-scrubber-styles";
       MARKER_COLORS = {
         click: "#6366F1",
         input: "#6366F1",
@@ -29929,6 +29992,8 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   }
   function removeTheme() {
+    const root2 = document.getElementById("tracebug-root");
+    if (root2) root2.removeAttribute("data-tb-theme");
     const el = document.getElementById(THEME_STYLE_ID);
     if (el) el.remove();
     if (_mediaQuery && _mediaListener) {
@@ -29938,15 +30003,18 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
     }
   }
   function _applyThemeVars() {
-    const tokens = getThemeTokens();
+    const root2 = document.getElementById("tracebug-root");
+    if (!root2) return;
+    root2.setAttribute("data-tb-theme", getResolvedTheme());
     let existing = document.getElementById(THEME_STYLE_ID);
     if (!existing) {
       existing = createStyleTag(THEME_STYLE_ID);
       document.head.appendChild(existing);
     }
+    const tokens = getThemeTokens();
     const vars = Object.entries(tokens).map(([k, v2]) => `  ${k}: ${v2};`).join("\n");
     existing.textContent = `
-    #tracebug-root {
+    #tracebug-root[data-tb-theme="${getResolvedTheme()}"] {
 ${vars}
     }
   `;
@@ -30661,31 +30729,14 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
     if (existing) existing.remove();
     const overlay = document.createElement("div");
     overlay.id = MODAL_ID;
+    overlay.className = "tb-qb-overlay";
     overlay.dataset.tracebug = "quick-bug-modal";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "Quick bug capture");
-    setInlineStyle(overlay, `
-    position: fixed; inset: 0; z-index: 2147483647;
-    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px; pointer-events: auto;
-    animation: tracebug-qb-fade-in 0.15s ease;
-  `);
     const modal = document.createElement("div");
+    modal.className = "tb-qb-shell";
     modal.dataset.tracebug = "quick-bug-inner";
-    setInlineStyle(modal, `
-    background: var(--tb-bg-secondary, #11151A);
-    border: 1px solid var(--tb-border, #1F2630);
-    border-radius: var(--tb-radius-lg, 16px);
-    width: 100%; max-width: 1180px; max-height: 92vh;
-    display: flex; flex-direction: column;
-    font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
-    color: var(--tb-text-primary, #FAFAFA);
-    box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
-    animation: tracebug-qb-slide-up 0.2s ease;
-    overflow: hidden;
-  `);
     const ssCount = screenshots2.length;
     const ssCountLabel = ssCount === 0 ? "No screenshots" : `${ssCount} screenshot${ssCount === 1 ? "" : "s"} attached`;
     const video = !data.suppressVideo ? getSessionVideo(data.currentSession) : null;
@@ -31851,12 +31902,12 @@ ${report.steps}` : userDesc : void 0,
           for (let i2 = 0; i2 < bin.length; i2++) bytes[i2] = bin.charCodeAt(i2);
           return bytes.buffer;
         }).catch(() => null) : Promise.resolve(null);
-        host2.style.background = "#0B0B10";
+        host2.classList.add("tb-qb-player-host");
         setInnerHTML(host2, "");
         const iframe = document.createElement("iframe");
         iframe.src = playerUrl;
         iframe.title = "TraceBug recording";
-        setInlineStyle(iframe, "display:block;width:100%;aspect-ratio:16/9;border:0;background:#0B0B10");
+        iframe.className = "tb-qb-player-iframe";
         host2.appendChild(iframe);
         const onMsg = (e2) => {
           if (!iframe.isConnected) {
@@ -32018,9 +32069,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     } catch (e2) {
     }
     try {
+      _injectStyles2();
       const ta = document.createElement("textarea");
       ta.value = text;
-      setInlineStyle(ta, "position:fixed;left:-9999px;top:0");
+      ta.className = "tb-qb-offscreen-ta";
       document.body.appendChild(ta);
       ta.select();
       const ok = document.execCommand("copy");
@@ -32571,9 +32623,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
   }
   function showSettingsPointerModal(root2, title, body) {
     var _a2, _b;
+    _injectStyles2();
     const overlay = document.createElement("div");
     overlay.id = "tb-ext-settings-pointer";
-    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
+    overlay.className = "tb-qb-pointer-overlay";
     setInnerHTML(overlay, `
     <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
@@ -32615,9 +32668,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     const existing = getAIConfig();
     const provider = (existing == null ? void 0 : existing.provider) || "anthropic";
+    _injectStyles2();
     const overlay = document.createElement("div");
     overlay.id = "tb-ai-config";
-    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
+    overlay.className = "tb-qb-pointer-overlay";
     setInnerHTML(overlay, `
     <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
@@ -32704,9 +32758,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       return;
     }
     const cfg = getIntegrationsConfig();
+    _injectStyles2();
     const overlay = document.createElement("div");
     overlay.id = "tb-int-config";
-    setInlineStyle(overlay, "position:fixed;inset:0;z-index:2147483647;background:rgba(5,7,12,0.65);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,sans-serif");
+    overlay.className = "tb-qb-pointer-overlay";
     const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
     const lbl = "font-size:12px;color:#A1A1AA";
     setInnerHTML(overlay, `
@@ -32866,9 +32921,48 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       #${MODAL_ID}, #${MODAL_ID} * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
 
+    /* Shared by the settings-pointer / AI-config / integrations pop-ins
+       below \u2014 same CSP reasoning as .tb-qb-overlay above. Not scoped under
+       #${MODAL_ID}: these can attach directly to document.body too. */
+    .tb-qb-offscreen-ta { position: fixed; left: -9999px; top: 0; }
+
+    .tb-qb-pointer-overlay {
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(5,7,12,0.65); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; font-family: system-ui, -apple-system, sans-serif;
+    }
+
     /* \u2500\u2500 Modal shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
+    /* Was two setInlineStyle() calls \u2014 moved here because a page's CSP can
+       enforce a nonce-only style-src (no 'unsafe-inline'), which blocks an
+       inline style attribute outright and has no nonce/hash escape for it
+       (that's spec'd, not a bug to work around): confirmed on a real page,
+       the overlay silently got appended with no positioning at all, so the
+       ticket modal never visibly appeared \u2014 "click Stop, nothing happens". */
+    #${MODAL_ID}.tb-qb-overlay {
+      position: fixed; inset: 0; z-index: 2147483647;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px; pointer-events: auto;
+      animation: tracebug-qb-fade-in 0.15s ease;
+    }
+    #${MODAL_ID} .tb-qb-shell {
+      background: var(--tb-bg-secondary, #11151A);
+      border: 1px solid var(--tb-border, #1F2630);
+      border-radius: var(--tb-radius-lg, 16px);
+      width: 100%; max-width: 1180px; max-height: 92vh;
+      display: flex; flex-direction: column;
+      font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
+      color: var(--tb-text-primary, #FAFAFA);
+      box-shadow: var(--tb-shadow-lg, 0 20px 60px rgba(0,0,0,0.5));
+      animation: tracebug-qb-slide-up 0.2s ease;
+      overflow: hidden;
+    }
     #${MODAL_ID} { font-family: var(--tb-font-family); -webkit-font-smoothing: antialiased; }
     #${MODAL_ID} * { box-sizing: border-box; }
+    #${MODAL_ID} .tb-qb-player-host { background: #0B0B10; }
+    #${MODAL_ID} .tb-qb-player-iframe { display: block; width: 100%; aspect-ratio: 16/9; border: 0; background: #0B0B10; }
 
     /* \u2500\u2500 Focus ring (shadcn new-york: ring-2 ring-primary/60 ring-offset-2) \u2500\u2500
        One consistent keyboard-focus treatment for every interactive element:
@@ -33263,34 +33357,38 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     (_a2 = document.getElementById("tb-ai-popover")) == null ? void 0 : _a2.remove();
     const overlay = document.createElement("div");
     overlay.id = "tb-ai-popover";
-    setInlineStyle(overlay, `
-    position: fixed; inset: 0; z-index: 2147483647;
-    background: rgba(5, 7, 12, 0.65);
-    backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-    font-family: system-ui, -apple-system, sans-serif;
-    animation: tb-ai-pop-in 0.16s ease;
-  `);
+    overlay.className = "tb-ai-pop-overlay";
     if (!document.getElementById("tb-ai-pop-anim")) {
       const s2 = createStyleTag("tb-ai-pop-anim");
-      s2.textContent = `@keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }`;
+      s2.textContent = `
+      @keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+      .tb-ai-pop-overlay {
+        position: fixed; inset: 0; z-index: 2147483647;
+        background: rgba(5, 7, 12, 0.65);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+        animation: tb-ai-pop-in 0.16s ease;
+      }
+      .tb-ai-pop-card {
+        width: 100%; max-width: 560px; max-height: 80vh;
+        background: #11151A;
+        border: 1px solid rgba(99,102,241,0.28);
+        border-radius: 14px;
+        box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+        display: flex; flex-direction: column;
+        color: #FAFAFA;
+        overflow: hidden;
+      }
+    `;
       document.head.appendChild(s2);
     }
     const sizeKb = (prompt.length / 1024).toFixed(1);
     const approxTokens = Math.round(prompt.length / 4);
     const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const card = document.createElement("div");
-    setInlineStyle(card, `
-    width: 100%; max-width: 560px; max-height: 80vh;
-    background: #11151A;
-    border: 1px solid rgba(99,102,241,0.28);
-    border-radius: 14px;
-    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
-    display: flex; flex-direction: column;
-    color: #FAFAFA;
-    overflow: hidden;
-  `);
+    card.className = "tb-ai-pop-card";
     setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -33412,34 +33510,47 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     };
     let mcpTool = "claude";
-    const toolBtnCss = (active) => `
-    padding:5px 11px;border-radius:999px;cursor:pointer;
-    font:600 11px system-ui,-apple-system,sans-serif;
-    border:1px solid ${active ? "#6366F1" : "rgba(255,255,255,0.14)"};
-    background:${active ? "rgba(99,102,241,0.18)" : "transparent"};
-    color:${active ? "#A5B4FC" : "#A1A1AA"};`;
+    if (!document.getElementById("tb-ai-pop-anim")) {
+      const s2 = createStyleTag("tb-ai-pop-anim");
+      s2.textContent = `
+      @keyframes tb-ai-pop-in { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
+      .tb-ai-pop-overlay {
+        position: fixed; inset: 0; z-index: 2147483647;
+        background: rgba(5, 7, 12, 0.65);
+        backdrop-filter: blur(4px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+        animation: tb-ai-pop-in 0.16s ease;
+      }
+      .tb-ai-pop-card {
+        width: 100%; max-width: 560px; max-height: 80vh;
+        background: #11151A;
+        border: 1px solid rgba(99,102,241,0.28);
+        border-radius: 14px;
+        box-shadow: 0 24px 72px rgba(0,0,0,0.6);
+        display: flex; flex-direction: column;
+        color: #FAFAFA;
+        overflow: hidden;
+      }
+      .tb-mcp-tool-btn {
+        padding: 5px 11px; border-radius: 999px; cursor: pointer;
+        font: 600 11px system-ui, -apple-system, sans-serif;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: transparent; color: #A1A1AA;
+      }
+      .tb-mcp-tool-btn.active {
+        border-color: #6366F1; background: rgba(99,102,241,0.18); color: #A5B4FC;
+      }
+    `;
+      document.head.appendChild(s2);
+    }
     const escaped = prompt.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const overlay = document.createElement("div");
     overlay.id = "tb-mcp-handoff";
-    setInlineStyle(overlay, `
-    position: fixed; inset: 0; z-index: 2147483647;
-    background: rgba(5, 7, 12, 0.65);
-    backdrop-filter: blur(4px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px;
-    font-family: system-ui, -apple-system, sans-serif;
-  `);
+    overlay.className = "tb-ai-pop-overlay";
     const card = document.createElement("div");
-    setInlineStyle(card, `
-    width: 100%; max-width: 560px; max-height: 80vh;
-    background: #11151A;
-    border: 1px solid rgba(99,102,241,0.28);
-    border-radius: 14px;
-    box-shadow: 0 24px 72px rgba(0,0,0,0.6);
-    display: flex; flex-direction: column;
-    color: #FAFAFA;
-    overflow: hidden;
-  `);
+    card.className = "tb-ai-pop-card";
     setInnerHTML(card, `
     <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -33453,7 +33564,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <div style="margin-top:12px">
         <div style="display:flex;gap:6px;margin-bottom:7px;align-items:center">
           <span style="font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#71717A;margin-right:2px">One-time setup</span>
-          ${Object.entries(MCP_SETUP).map(([key, t2]) => `<button data-mcp-tool="${key}" style="${toolBtnCss(key === "claude")}">${t2.label}</button>`).join("")}
+          ${Object.entries(MCP_SETUP).map(([key, t2]) => `<button data-mcp-tool="${key}" class="tb-mcp-tool-btn${key === "claude" ? " active" : ""}">${t2.label}</button>`).join("")}
         </div>
         <div style="display:flex;gap:6px;align-items:stretch">
           <code id="tb-mcp-setup-cmd" style="flex:1;overflow-x:auto;white-space:nowrap;padding:8px 10px;border-radius:8px;background:#0B0B10;border:1px solid rgba(255,255,255,0.08);font:11px ui-monospace,'SF Mono',Consolas,monospace;color:#CBD2DA">${MCP_SETUP.claude.cmd}</code>
@@ -33512,7 +33623,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
         if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
         card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
-          setInlineStyle(b, toolBtnCss(b.getAttribute("data-mcp-tool") === tool));
+          b.classList.toggle("active", b.getAttribute("data-mcp-tool") === tool);
         });
         return;
       }
@@ -34739,7 +34850,29 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (pop.isConnected) document.addEventListener("mousedown", closeOnOutside);
     }, 0);
   }
+  function _ensureToolbarBaseStyles() {
+    if (document.getElementById(TOOLBAR_BASE_STYLE_ID)) return;
+    const style = createStyleTag(TOOLBAR_BASE_STYLE_ID);
+    style.textContent = `
+    #${TOOLBAR_ID} {
+      position: fixed; z-index: 2147483647;
+      display: flex; align-items: center; gap: 3px;
+      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
+      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+    }
+  `;
+    document.head.appendChild(style);
+  }
+  function _setToolbarPositionRule(cssDecls) {
+    let style = document.getElementById(TOOLBAR_POS_STYLE_ID);
+    if (!style) {
+      style = createStyleTag(TOOLBAR_POS_STYLE_ID);
+      document.head.appendChild(style);
+    }
+    style.textContent = `#${TOOLBAR_ID} { ${cssDecls} }`;
+  }
   function _applyToolbarPosition(toolbar, position) {
+    _ensureToolbarBaseStyles();
     let savedPos = null;
     try {
       const raw = localStorage.getItem(DRAG_POS_KEY);
@@ -34753,30 +34886,21 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const isBottom = position === "bottom-right" || position === "bottom-left";
     const isLeft = position === "left" || position === "bottom-left";
     if (savedPos) {
-      setInlineStyle(toolbar, `
-      position: fixed; left: ${savedPos.x}px; top: ${savedPos.y}px;
-      z-index: 2147483647; display: flex; flex-direction: column;
-      align-items: center; gap: 3px; padding: 8px 6px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      _setToolbarPositionRule(`
+      left: ${savedPos.x}px; top: ${savedPos.y}px;
+      flex-direction: column; padding: 8px 6px;
       transition: none; cursor: grab;
     `);
     } else if (isBottom) {
-      setInlineStyle(toolbar, `
-      position: fixed; ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
-      z-index: 2147483647; display: flex; flex-direction: row;
-      align-items: center; gap: 3px; padding: 6px 8px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      _setToolbarPositionRule(`
+      ${isLeft ? "left" : "right"}: 12px; bottom: 12px;
+      flex-direction: row; padding: 6px 8px;
       transition: all 0.3s ease;
     `);
     } else {
-      setInlineStyle(toolbar, `
-      position: fixed; ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
-      z-index: 2147483647; display: flex; flex-direction: column;
-      align-items: center; gap: 3px; padding: 8px 6px;
-      background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
-      border-radius: 14px; box-shadow: var(--tb-shadow-md, 0 4px 24px rgba(0,0,0,0.5));
+      _setToolbarPositionRule(`
+      ${isLeft ? "left" : "right"}: 12px; top: 50%; transform: translateY(-50%);
+      flex-direction: column; padding: 8px 6px;
       transition: ${isLeft ? "left" : "right"} 0.3s ease;
     `);
     }
@@ -34788,6 +34912,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     let startLeft = 0;
     let startTop = 0;
     let hasMoved = false;
+    let curLeft = 0;
+    let curTop = 0;
     const onMouseDown = (e2) => {
       if (e2.target.tagName === "BUTTON" || e2.target.closest("button")) return;
       isDragging = true;
@@ -34797,8 +34923,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const rect = toolbar.getBoundingClientRect();
       startLeft = rect.left;
       startTop = rect.top;
-      toolbar.style.cursor = "grabbing";
-      toolbar.style.transition = "none";
+      _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; cursor: grabbing; transition: none;`);
       e2.preventDefault();
     };
     const onMouseMove = (e2) => {
@@ -34807,24 +34932,17 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const dy = e2.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
       if (!hasMoved) return;
-      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-      const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-      toolbar.style.left = `${newLeft}px`;
-      toolbar.style.top = `${newTop}px`;
-      toolbar.style.right = "auto";
-      toolbar.style.bottom = "auto";
-      toolbar.style.transform = "none";
+      curLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+      curTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+      _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; cursor: grabbing; transition: none;`);
     };
     const onMouseUp = () => {
       if (!isDragging) return;
       isDragging = false;
-      toolbar.style.cursor = "grab";
+      _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; cursor: grab; transition: none;`);
       if (hasMoved) {
         try {
-          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
-            x: parseInt(toolbar.style.left),
-            y: parseInt(toolbar.style.top)
-          }));
+          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop }));
         } catch (e2) {
         }
       }
@@ -34839,7 +34957,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const rect = toolbar.getBoundingClientRect();
       startLeft = rect.left;
       startTop = rect.top;
-      toolbar.style.transition = "none";
+      _setToolbarPositionRule(`left: ${startLeft}px; top: ${startTop}px; right: auto; bottom: auto; transform: none; transition: none;`);
     };
     const onTouchMove = (e2) => {
       if (!isDragging) return;
@@ -34848,23 +34966,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const dy = touch.clientY - startY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
       if (!hasMoved) return;
-      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
-      const newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
-      toolbar.style.left = `${newLeft}px`;
-      toolbar.style.top = `${newTop}px`;
-      toolbar.style.right = "auto";
-      toolbar.style.bottom = "auto";
-      toolbar.style.transform = "none";
+      curLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + dx));
+      curTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+      _setToolbarPositionRule(`left: ${curLeft}px; top: ${curTop}px; right: auto; bottom: auto; transform: none; transition: none;`);
     };
     const onTouchEnd = () => {
       if (!isDragging) return;
       isDragging = false;
       if (hasMoved) {
         try {
-          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({
-            x: parseInt(toolbar.style.left),
-            y: parseInt(toolbar.style.top)
-          }));
+          localStorage.setItem(DRAG_POS_KEY, JSON.stringify({ x: curLeft, y: curTop }));
         } catch (e2) {
         }
       }
@@ -34920,7 +35031,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _panelEl.style.right = _panelOpen ? "0" : "-480px";
     }
   }
-  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, _onSessionStart, _onSessionEnd, _onNewCapture, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
+  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, TOOLBAR_BASE_STYLE_ID, TOOLBAR_POS_STYLE_ID, _onSessionStart, _onSessionEnd, _onNewCapture, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
   var init_compact_toolbar = __esm({
     "src/compact-toolbar.ts"() {
       "use strict";
@@ -34941,6 +35052,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       TOOLBAR_ID = "tracebug-compact-toolbar";
       SETTINGS_ID = "tracebug-settings-card";
       DRAG_POS_KEY = "tracebug_toolbar_pos";
+      TOOLBAR_BASE_STYLE_ID = "tracebug-toolbar-base-style";
+      TOOLBAR_POS_STYLE_ID = "tracebug-toolbar-pos-style";
       _onSessionStart = null;
       _onSessionEnd = null;
       _onNewCapture = null;
@@ -34964,8 +35077,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   }
   function ensurePulseStyles() {
-    if (document.getElementById(STYLE_ID2)) return;
-    const style = createStyleTag(STYLE_ID2);
+    if (document.getElementById(STYLE_ID3)) return;
+    const style = createStyleTag(STYLE_ID3);
     style.textContent = `
     @keyframes tracebug-onboard-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
@@ -34989,16 +35102,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }, 1e4);
   }
   function cleanupOnboarding() {
-    const style = document.getElementById(STYLE_ID2);
+    const style = document.getElementById(STYLE_ID3);
     if (style) style.remove();
   }
-  var STORAGE_KEY3, STYLE_ID2;
+  var STORAGE_KEY3, STYLE_ID3;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
       init_helpers();
       STORAGE_KEY3 = "tracebug_onboarding_complete";
-      STYLE_ID2 = "tracebug-onboarding-styles";
+      STYLE_ID3 = "tracebug-onboarding-styles";
     }
   });
 
@@ -71143,8 +71256,8 @@ First element: \`${exampleSnippet}\``,
     return parts.join("");
   }
   function _injectStyles3() {
-    if (document.getElementById(STYLE_ID3)) return;
-    const style = createStyleTag(STYLE_ID3);
+    if (document.getElementById(STYLE_ID4)) return;
+    const style = createStyleTag(STYLE_ID4);
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -71257,13 +71370,13 @@ First element: \`${exampleSnippet}\``,
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID3, STYLE_ID3, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID3, STYLE_ID4, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
       init_helpers();
       CARD_ID3 = "tracebug-live-bug-card";
-      STYLE_ID3 = "tracebug-live-bug-card-styles";
+      STYLE_ID4 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
       _currentRoot = null;
@@ -71295,8 +71408,8 @@ First element: \`${exampleSnippet}\``,
     _renderBody(getIssues());
   }
   function _injectStyles4() {
-    if (document.getElementById(STYLE_ID4)) return;
-    const style = createStyleTag(STYLE_ID4);
+    if (document.getElementById(STYLE_ID5)) return;
+    const style = createStyleTag(STYLE_ID5);
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }
@@ -71574,14 +71687,14 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID3, STYLE_ID4, _isOpen2, _root3, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID3, STYLE_ID5, _isOpen2, _root3, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
       init_scanner();
       init_helpers();
       PANEL_ID3 = "tracebug-issues-panel";
-      STYLE_ID4 = "tracebug-issues-panel-styles";
+      STYLE_ID5 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
       _root3 = null;
       SEVERITY_COLORS = {
@@ -73511,6 +73624,7 @@ ${summary}`;
       }
       void announceCaptureStopped();
       hideRecordingHUD();
+      this._syncToolbarRecordIcon(false);
       try {
         this._endActiveSession();
       } catch (e2) {
@@ -74029,11 +74143,23 @@ ${summary}`;
           });
         }
       });
+      this._syncToolbarRecordIcon(true);
+    }
+    /**
+     * Reflect "is a recording active" on the on-page toolbar's Record button,
+     * regardless of what started or stopped the recording. The toolbar's own
+     * button already does this itself when ITS click handler runs the whole
+     * start/stop cycle — this is for the other case: a recording started via
+     * the popup/keyboard shortcut only ever reaches the toolbar icon through
+     * here, and (before this existed) stopVideoRecording() below stopped the
+     * recording and the HUD correctly, but never told the toolbar icon, which
+     * stayed stuck red/"recording" until the next page load.
+     */
+    _syncToolbarRecordIcon(active) {
       const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
-      if (recordBtn) {
-        recordBtn.classList.add("tb-active");
-        recordBtn.style.color = "var(--tb-error, #ef4444)";
-      }
+      if (!recordBtn) return;
+      recordBtn.classList.toggle("tb-active", active);
+      recordBtn.style.color = active ? "var(--tb-error, #ef4444)" : "var(--tb-btn-text, #aaa)";
     }
     /**
      * Called when the offscreen document auto-finalizes the recording because
@@ -74044,11 +74170,7 @@ ${summary}`;
       var _a2;
       void announceCaptureStopped();
       hideRecordingHUD();
-      const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
-      if (recordBtn) {
-        recordBtn.classList.remove("tb-active");
-        recordBtn.style.color = "var(--tb-btn-text, #aaa)";
-      }
+      this._syncToolbarRecordIcon(false);
       this._endActiveSession();
       if (!((_a2 = this.config) == null ? void 0 : _a2.enableDashboard)) return;
       void recording2;
