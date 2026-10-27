@@ -17,7 +17,11 @@ import { dirname, join } from 'node:path';
 
 const extDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'tracebug-extension');
 const SOURCE = readFileSync(join(extDir, 'diagnostics.js'), 'utf8');
-const POPUP = readFileSync(join(extDir, 'popup.js'), 'utf8');
+// Diagnostics UI lives in options.js, not popup.js (moved 2026-10-27 — see
+// docs/launch/PROGRESS.md: it was taking up popup scroll space, and the
+// options page is a real tab that survives the microphone permission prompt
+// the same way the diagnostics flow never needed to worry about).
+const OPTIONS = readFileSync(join(extDir, 'options.js'), 'utf8');
 const BG = readFileSync(join(extDir, 'background.js'), 'utf8');
 
 interface Diag {
@@ -290,27 +294,32 @@ describe('it is wired in, and it never phones home', () => {
     expect(BG).toContain('diagnostics.js');
   });
 
-  it('is offered in the popup, both ways', () => {
-    expect(POPUP).toContain('initDiagnosticsUI');
-    expect(POPUP).toContain('navigator.clipboard.writeText');
-    expect(POPUP).toContain('issues/new');
+  it('is offered in settings, both ways', () => {
+    expect(OPTIONS).toContain('initDiagnosticsCard');
+    expect(OPTIONS).toContain('navigator.clipboard.writeText');
+    expect(OPTIONS).toContain('issues/new');
   });
 
-  it('passes a classification to the builder, not the URL', () => {
-    const fn = POPUP.slice(POPUP.indexOf('function diagPageState'), POPUP.indexOf('async function buildDiagnostics'));
-    expect(fn).toContain('verdict.reason');
-    expect(fn).not.toMatch(/pageState:\s*currentTabUrl/);
-    expect(POPUP).toContain('pageState: diagPageState()');
+  it('passes a fixed, honest string to the builder, never a URL or a live tab read', () => {
+    // options.html isn't opened for any one tab, so there is no per-tab
+    // classification to read any more (that was popup.js's diagPageState(),
+    // before this moved) — just confirm the constant reads as a plain
+    // description, not something reaching for a URL/tab variable.
+    const fn = OPTIONS.slice(OPTIONS.indexOf('function initDiagnosticsCard'));
+    const pageStateLine = fn.slice(0, fn.indexOf('buildDiagnostics'));
+    expect(pageStateLine).toMatch(/PAGE_STATE\s*=\s*"[^"]+"/);
+    expect(pageStateLine).not.toMatch(/currentTabUrl|location\.href|\.url\b/);
+    expect(fn).toContain('pageState: PAGE_STATE');
   });
 
   it('leaves no dead button if the clipboard is refused', () => {
-    const fn = POPUP.slice(POPUP.indexOf('copyBtn.addEventListener'));
-    expect(fn.slice(0, 700)).toMatch(/catch \{[\s\S]*showToast/);
+    const fn = OPTIONS.slice(OPTIONS.indexOf('copyBtn.addEventListener'));
+    expect(fn.slice(0, 700)).toMatch(/catch \{[\s\S]*status/);
   });
 
   it('prefills the issue but lets the user submit it', () => {
     // Opened in a tab, with a body the user reads. Nothing is posted.
-    const fn = POPUP.slice(POPUP.indexOf('reportBtn.addEventListener'));
+    const fn = OPTIONS.slice(OPTIONS.indexOf('reportBtn.addEventListener'));
     expect(fn.slice(0, 1400)).toContain('chrome.tabs.create');
     expect(fn.slice(0, 1400)).not.toMatch(/method:\s*"POST"/);
   });
