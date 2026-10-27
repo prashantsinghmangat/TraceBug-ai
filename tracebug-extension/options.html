@@ -34,6 +34,10 @@
       margin-bottom: 16px;
     }
     .card h2 { font-size: 14px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+    /* Marks the card a #hash deep link (e.g. #mic) landed on, so it's
+       unmistakable which one matters on a page that otherwise shows every
+       setting at once. */
+    .card.deep-link-target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25); }
     .card p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
     label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
     input, select {
