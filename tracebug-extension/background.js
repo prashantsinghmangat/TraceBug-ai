@@ -689,6 +689,32 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 // tab's persisted ON state.
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   try { await _hydrated; } catch {}
+  // If the tab closing right now is the one actively being recorded, finalize
+  // BEFORE clearing any state. Found by e2e: a Tab-mode recording's captured
+  // video track does not reliably fire its own "ended" event when the source
+  // tab closes, so offscreen.js's auto-stop watcher (wired for the Desktop-mode
+  // "Stop sharing" case) never runs here — nothing was ever written to
+  // chrome.storage.local, and the offscreen document stayed alive forever with
+  // no way for the user to recover the recording. Explicitly stopping forces
+  // the same finalize-and-persist path a normal tb:rec:stop takes
+  // (stopAndBuildRecording() -> persistLastRecording()), independent of
+  // whether the track ever reports itself ended. A Desktop-mode recording of
+  // an unrelated surface is unaffected: it only acts when this tab IS the one
+  // pinned by _recordingTabId.
+  if (_recordingTabId === tabId) {
+    try {
+      const hostAbsent = HAS_OFFSCREEN ? !(await offscreenDocumentExists()) : _recorderWindowId == null;
+      if (!hostAbsent) {
+        await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: "tb:rec:stop", _toOffscreen: true }, () => {
+            void chrome.runtime.lastError; // no listener left to answer is fine — best-effort finalize
+            resolve();
+          });
+        });
+      }
+    } catch {}
+    closeRecorderHost();
+  }
   injectedTabs.delete(tabId);
   activeTabs.delete(tabId);
   captureTabs.delete(tabId);
