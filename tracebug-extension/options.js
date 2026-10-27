@@ -584,7 +584,16 @@ renderLlmSites();
   // that the popup cannot survive the permission prompt, so landing here is
   // already the one extra step; don't add a second one on top of it.
   if (location.hash === "#mic") {
-    document.getElementById("micCard")?.scrollIntoView({ block: "center" });
+    // The browser's own permission prompt below (requestMicGrant) should
+    // appear almost immediately, but this page still loads with every other
+    // card (AI Debugger, GitHub, Linear, Slack…) visible above and below it —
+    // a brief highlight on the one card that matters makes it unmistakable
+    // even in the moment before the native prompt shows up.
+    const card = document.getElementById("micCard");
+    if (card) {
+      card.scrollIntoView({ block: "center" });
+      card.classList.add("deep-link-target");
+    }
     void requestMicGrant();
   }
 })();
