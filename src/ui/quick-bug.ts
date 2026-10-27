@@ -3231,10 +3231,16 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-sec-head { font-size:10px; color:var(--tb-text-muted); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin:18px 0 8px; }
     #${MODAL_ID} .tb-qb-sec-head:first-child { margin-top:0; }
     #${MODAL_ID} .tb-qb-info { display:flex; flex-direction:column; gap:5px; }
-    #${MODAL_ID} .tb-qb-kv { display:flex; gap:12px; padding:8px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); transition:border-color 0.15s; }
+    #${MODAL_ID} .tb-qb-kv { display:flex; gap:12px; padding:8px 12px; background:var(--tb-bg-primary); border:1px solid var(--tb-border-subtle); border-radius:var(--tb-radius-sm); transition:border-color 0.15s; overflow-x:auto; }
     #${MODAL_ID} .tb-qb-kv:hover { border-color:var(--tb-border); }
     #${MODAL_ID} .tb-qb-kv-k { font-size:11px; color:var(--tb-text-muted); min-width:98px; text-transform:uppercase; letter-spacing:0.5px; font-weight:700; flex-shrink:0; }
-    #${MODAL_ID} .tb-qb-kv-v { font-size:12px; color:var(--tb-text-primary); word-break:break-word; min-width:0; flex:1; font-family:var(--tb-font-mono); display:flex; align-items:center; gap:6px; }
+    /* min-width:0 on a flex child lets it wrap at all, but in a narrow panel
+       (narrower than label + a usable value column) that meant the value had
+       essentially no width to wrap INTO, so word-break:break-word degraded to
+       one character per line — confirmed, not a guess: reproduced in an
+       undocked/narrow window. A 110px floor means a cramped row now overflows
+       horizontally (.tb-qb-kv above scrolls) instead of going vertical. */
+    #${MODAL_ID} .tb-qb-kv-v { font-size:12px; color:var(--tb-text-primary); word-break:break-word; min-width:110px; flex:1; font-family:var(--tb-font-mono); display:flex; align-items:center; gap:6px; }
     #${MODAL_ID} .tb-qb-kv-icon { display:inline-flex; align-items:center; flex-shrink:0; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-lu { width:14px; height:14px; display:inline-block; vertical-align:middle; flex-shrink:0; }
     #${MODAL_ID} .tb-qb-log { padding:10px 12px; margin-bottom:8px; background:var(--tb-bg-primary); border:1px solid var(--tb-border); border-left:3px solid var(--tb-border-hover); border-radius:var(--tb-radius-sm); }
