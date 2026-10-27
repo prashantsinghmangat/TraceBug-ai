@@ -278,6 +278,23 @@
         }
         break;
 
+      // stop: the popup's Stop button, for when a capture is running on this
+      // tab but the on-page bar that started it isn't where the user expects
+      // to find it. Mirrors whichever stop the on-page UI itself would have
+      // called — video vs events-only — using only the SDK's public,
+      // already-exported isRecording()/isVideoRecording() state checks, so
+      // this never opens an empty ticket modal when nothing is running.
+      case "stop":
+        var ext = window.__TraceBugExtension;
+        if (ext && ext.isVideoRecording && ext.isVideoRecording()) {
+          Promise.resolve(ext.stopVideoRecording()).catch(function () {});
+        } else if (ext && ext.isRecording && ext.isRecording() && ext.stopEventsCapture) {
+          Promise.resolve(ext.stopEventsCapture()).catch(function () {});
+        } else {
+          showToast("Nothing is being recorded on this tab");
+        }
+        break;
+
       // view-tickets: open the offline saved-tickets list from the floating toolbar.
       case "view-tickets":
         var ticketsBtn = document.getElementById("tracebug-toolbar-tickets-btn");

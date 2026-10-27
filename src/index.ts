@@ -1368,6 +1368,11 @@ class TraceBugSDK {
     // its own stop.
     void announceCaptureStopped();
     hideRecordingHUD();
+    // The actual bug this fixes: this is the HUD's own Stop button for a
+    // recording the toolbar did not start (see _remountRecordingHud) — until
+    // now, nothing here told the toolbar's Record icon the recording ended,
+    // so it stayed stuck red until the next page load.
+    this._syncToolbarRecordIcon(false);
     // End the event session if one is active so events stop flowing.
     try { this._endActiveSession(); } catch {}
     // Always open the ticket modal — user clicked Stop, user expects to see
@@ -1972,12 +1977,27 @@ class TraceBugSDK {
       onStop: () => { this.stopVideoRecording().catch(() => {}); },
     });
     // Also flip the toolbar Record button to its active state so the user
-    // sees that recording is on.
+    // sees that recording is on — this is what runs for a recording the
+    // toolbar did not itself start (popup, keyboard shortcut), since the
+    // toolbar's own _toggleRecording() has no other way to learn it happened.
+    this._syncToolbarRecordIcon(true);
+  }
+
+  /**
+   * Reflect "is a recording active" on the on-page toolbar's Record button,
+   * regardless of what started or stopped the recording. The toolbar's own
+   * button already does this itself when ITS click handler runs the whole
+   * start/stop cycle — this is for the other case: a recording started via
+   * the popup/keyboard shortcut only ever reaches the toolbar icon through
+   * here, and (before this existed) stopVideoRecording() below stopped the
+   * recording and the HUD correctly, but never told the toolbar icon, which
+   * stayed stuck red/"recording" until the next page load.
+   */
+  private _syncToolbarRecordIcon(active: boolean): void {
     const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
-    if (recordBtn) {
-      recordBtn.classList.add("tb-active");
-      recordBtn.style.color = "var(--tb-error, #ef4444)";
-    }
+    if (!recordBtn) return;
+    recordBtn.classList.toggle("tb-active", active);
+    recordBtn.style.color = active ? "var(--tb-error, #ef4444)" : "var(--tb-btn-text, #aaa)";
   }
 
   /**
@@ -1990,11 +2010,7 @@ class TraceBugSDK {
     // much as the HUD's own Stop — see the comment in stopVideoRecording().
     void announceCaptureStopped();
     hideRecordingHUD();
-    const recordBtn = document.getElementById("tracebug-toolbar-record-btn");
-    if (recordBtn) {
-      recordBtn.classList.remove("tb-active");
-      recordBtn.style.color = "var(--tb-btn-text, #aaa)";
-    }
+    this._syncToolbarRecordIcon(false);
     // Native "Stop sharing" is a stop too — finalize the session so the
     // active-session flag clears and the next Record starts fresh.
     this._endActiveSession();

@@ -610,12 +610,25 @@ export function wireStartedListener(): void {
     }
     _setExtMicState(!!d.micIncluded, false);
     // Mic was requested but the extension lacks microphone permission (an
-    // offscreen document can't prompt). Tell the user where to grant it.
+    // offscreen document can't prompt). This is the one place that symptom
+    // is visible at all — offscreen.js only logs a console.warn, which is
+    // where "I turned the toggle on and there's still no audio" came from:
+    // the toggle just means "I want this"; it is not proof the grant ever
+    // happened, and nothing said otherwise until now. The message used to
+    // say "turn on the microphone toggle" — wrong instruction when the
+    // toggle was already on, which is exactly what triggers this branch.
+    // The real fix is the grant, so the button goes straight to it.
     if (d.micRequested && d.micIncluded === false) {
       const root = document.getElementById("tracebug-root");
       if (root) {
         import("./ui/toast")
-          .then((m) => m.showToast("Recording without mic — turn on the microphone toggle in the TraceBug extension popup (it'll ask for permission), then record again.", root))
+          .then((m) => m.showActionToast(
+            "Recording without microphone — TraceBug doesn't have mic permission yet.",
+            "Grant microphone access",
+            () => { try { window.dispatchEvent(new CustomEvent("tracebug-open-mic-settings")); } catch {} },
+            root,
+            { autoDismissMs: null },
+          ))
           .catch(() => {});
       }
     }
