@@ -123,83 +123,108 @@
         <svg class="cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
       </button>
 
-      <!-- Record options — what happens BEFORE the recording rolls. All
-           persisted per user; passed with TB_START_RECORDING. -->
-      <details class="redact" id="recordOptsBox">
-        <summary class="redact-sum">
-          <span class="redact-sum-label">⚙ Record options</span>
-          <span class="redact-state" id="recordOptsState"></span>
-        </summary>
-        <div class="redact-body">
-          <!-- Video is OPT-IN (Phase 4). Off by default, so the very first
-               capture after install never opens a screen-share picker. The
-               choice is remembered. Everything that only describes a video
-               (surface, microphone) is disabled while this is off. Restored
-               in 1.11.2 — see docs/launch/video-1.11.1.md and the
-               VIDEO_ENABLED_IN_EXTENSION switch in src/video-recorder.ts. -->
-          <label class="redact-label" style="display:flex;align-items:center;gap:7px;cursor:pointer">
-            <input type="checkbox" id="optVideo" style="accent-color:#6366F1" />
-            Record video too
-          </label>
-          <div class="redact-help">A capture always records console, network, clicks and an interactive DOM replay. Turn this on to also ask your browser to share a tab, window or screen for a video.</div>
-          <!-- Tab | Desktop (1.11.3). Tab asks once for the optional
-               `tabCapture` permission so the current tab records with no
-               browser share picker (chrome.tabCapture.getMediaStreamId,
-               resolved in background.js — an offscreen document has no tab
-               of its own to target). Declining, or Firefox (no tabCapture
-               API), falls back to Desktop's getDisplayMedia picker — see
-               docs/audit/capture-flow-1.11.3.md. -->
-          <div class="redact-label" id="surfaceModeRow" style="display:flex;align-items:center;gap:7px">
-            <span>Record</span>
-            <div class="surface-switch" role="group" aria-label="Recording surface">
-              <button type="button" class="surface-opt" id="surfaceTab" data-mode="tab" aria-pressed="false">Tab</button>
-              <button type="button" class="surface-opt" id="surfaceDesktop" data-mode="desktop" aria-pressed="true">Desktop</button>
-            </div>
+      <!-- Shown INSTEAD of the hero's own click behavior while a capture is
+           already running on this tab (applyCapturingUI in popup.js) — the
+           hero itself is disabled then, so there must be another way to stop
+           that doesn't require finding the on-page bar. -->
+      <button class="cta-stop" id="btnStopCapture" type="button" style="display:none">
+        <span class="cta-icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span>
+        <span class="cta-body">
+          <span class="cta-title">Stop &amp; file ticket</span>
+          <span class="cta-sub">Ends the capture already running on this tab</span>
+        </span>
+      </button>
+
+      <!-- What to capture — Events only vs Events + Video is one pill, not a
+           checkbox: the pill already says whether a screen recording happens,
+           so a separate "Record video too" checkbox would just repeat it
+           (Variant G). The real checkbox is kept, hidden, as the single
+           source of truth popup.js already reads/writes/migrates — the pill
+           just drives it via a dispatched "change" event, so every existing
+           listener (markVideoChosen, saveRecordOpts, the legacy migration)
+           keeps working unchanged. -->
+      <input type="checkbox" id="optVideo" aria-label="Record video too" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" />
+      <div class="seg-wide" id="captureModeSwitch" role="group" aria-label="What to capture">
+        <button type="button" id="pillEventsOnly" aria-pressed="true">Events only</button>
+        <button type="button" id="pillEventsVideo" aria-pressed="false">Events + Video</button>
+      </div>
+
+      <!-- Only exists while Events + Video is selected — applyVideoUI() in
+           popup.js shows/hides this whole block, rather than greying its
+           rows out, so "Events only" stays a two-line state instead of four
+           disabled-looking ones. -->
+      <div class="opt-body" id="recordOptsBody" style="display:none">
+        <!-- Tab | Desktop (1.11.3). Tab asks once for the optional
+             `tabCapture` permission so the current tab records with no
+             browser share picker (chrome.tabCapture.getMediaStreamId,
+             resolved in background.js — an offscreen document has no tab of
+             its own to target). Declining, or Firefox (no tabCapture API),
+             falls back to Desktop's getDisplayMedia picker — see
+             docs/audit/capture-flow-1.11.3.md. -->
+        <div class="opt-row" id="surfaceModeRow">
+          <div class="opt-row-text">
+            <div class="opt-row-title">Capture</div>
+            <div class="opt-row-sub" id="surfaceModeHelp">Tab needs no share picker</div>
           </div>
-          <div class="redact-help" id="surfaceModeHelp">Tab records the current tab with no share picker. Desktop asks your browser to share a tab, window or screen.</div>
-          <label class="redact-label" for="optDelay">Start delay</label>
-          <select id="optDelay" class="redact-ta" style="resize:none;height:30px;padding:4px 8px">
+          <div class="seg" role="group" aria-label="Recording surface">
+            <button type="button" class="seg-opt" id="surfaceTab" data-mode="tab" aria-pressed="false">Tab</button>
+            <button type="button" class="seg-opt" id="surfaceDesktop" data-mode="desktop" aria-pressed="true">Desktop</button>
+          </div>
+        </div>
+
+        <div class="opt-row">
+          <div class="opt-row-text"><div class="opt-row-title">Start delay</div></div>
+          <select id="optDelay" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
             <option value="0" selected>No delay</option>
             <option value="3">After 3 seconds</option>
             <option value="5">After 5 seconds</option>
           </select>
-          <label class="redact-label" style="display:flex;align-items:center;gap:7px;margin-top:10px;cursor:pointer">
-            <input type="checkbox" id="optBlurFirst" style="accent-color:#6366F1" />
-            Blur before recording
-          </label>
-          <div class="redact-help">Pick sensitive areas to blur first — the blur is captured into the video, and the element's text is masked in the DOM replay.</div>
+          <div class="seg" id="delaySeg" role="group" aria-label="Start delay">
+            <button type="button" class="seg-opt" data-delay="0" aria-pressed="true">0s</button>
+            <button type="button" class="seg-opt" data-delay="3" aria-pressed="false">3s</button>
+            <button type="button" class="seg-opt" data-delay="5" aria-pressed="false">5s</button>
+          </div>
         </div>
-      </details>
 
-      <!-- Microphone toggle, restored in 1.11.2 — see docs/launch/video-1.11.1.md.
-           Describes a screen recording only; disabled (greyed, not hidden) by
-           applyVideoUI() while "Record video too" is off. Mic problems are
-           reported HERE, directly under the control they are about — the
-           shared toast sits at the foot of the popup, far enough below the
-           fold that a user has to scroll to find out why their click did
-           nothing. -->
-      <button type="button" class="mic-opt" id="micOpt" aria-pressed="false" title="Turn on “Record video too” first — there is no audio track without a recording">
-        <span class="mic-opt-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-        </span>
-        <span class="mic-opt-text">Include microphone</span>
-        <span class="mic-opt-pill" id="micOptState">Off</span>
-      </button>
-      <div class="mic-notice" id="micNotice" style="display:none"></div>
+        <!-- Microphone toggle, restored in 1.11.2 — see
+             docs/launch/video-1.11.1.md. Mic problems are reported HERE,
+             directly under the control they are about — the shared toast
+             sits at the foot of the popup, far enough below the fold that a
+             user has to scroll to find out why their click did nothing. -->
+        <div class="opt-row">
+          <div class="opt-row-text"><div class="opt-row-title">Microphone</div></div>
+          <button type="button" class="switch-track" id="micOpt" aria-pressed="false" title="Toggle microphone for the recording">
+            <span id="micOptState" class="sr-only">Off</span>
+          </button>
+        </div>
+        <div class="mic-notice" id="micNotice" style="display:none"></div>
 
-      <!-- Secondary row -->
-      <div class="cta-row">
-        <button class="cta-secondary" id="btnScreenshot">
-          <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
-          <span class="cta2-label">Screenshot only</span>
+        <div class="opt-row">
+          <div class="opt-row-text">
+            <div class="opt-row-title">Blur before recording</div>
+            <div class="opt-row-sub">Pick sensitive areas to mask first</div>
+          </div>
+          <label class="switch-wrap">
+            <input type="checkbox" id="optBlurFirst" class="switch-input" />
+            <span class="switch-track" aria-hidden="true"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Tools dock — always visible regardless of the capture-mode choice
+           above, since none of these three care whether video is on. -->
+      <div class="dock">
+        <button class="dock-btn" id="btnScreenshot">
+          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+          <span class="dock-label">Screenshot</span>
         </button>
-        <button class="cta-secondary" id="btnViewTickets">
-          <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
-          <span class="cta2-label">View tickets</span>
+        <button class="dock-btn" id="btnViewTickets">
+          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
+          <span class="dock-label">Tickets</span>
         </button>
-        <button class="cta-secondary" id="btnInspect" title="Hover elements to see their computed styles; click to attach the style evidence to a bug report">
-          <span class="cta2-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
-          <span class="cta2-label">Inspect element</span>
+        <button class="dock-btn" id="btnInspect" title="Hover elements to see their computed styles; click to attach the style evidence to a bug report">
+          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
+          <span class="dock-label">Inspect</span>
         </button>
       </div>
 

@@ -494,7 +494,7 @@ renderLlmSites();
     }
   }
 
-  grant.addEventListener("click", async () => {
+  async function requestMicGrant() {
     setState("Asking…", "Answer the browser's prompt.");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -511,13 +511,19 @@ renderLlmSites();
         setState("Failed", (err && err.message) || "Could not access the microphone.");
       }
     }
-  });
+  }
 
+  grant.addEventListener("click", requestMicGrant);
   check.addEventListener("click", refresh);
   void refresh();
-  // Deep-linked from the popup's mic notice.
+  // Deep-linked from the popup's mic notice. Asks immediately, rather than
+  // just scrolling the card into view and waiting for a second manual click
+  // on "Allow microphone" — the whole reason this tab had to open at all is
+  // that the popup cannot survive the permission prompt, so landing here is
+  // already the one extra step; don't add a second one on top of it.
   if (location.hash === "#mic") {
     document.getElementById("micCard")?.scrollIntoView({ block: "center" });
+    void requestMicGrant();
   }
 })();
 

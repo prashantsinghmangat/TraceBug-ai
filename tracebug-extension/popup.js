@@ -450,6 +450,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   // requested, and that request must be the first statement in a synchronous
   // click handler or the click's user-gesture activation doesn't carry
   // through (Chrome silently resolves false with no prompt otherwise).
+  //
+  // The Tab button is NEVER pre-disabled on `chrome.tabCapture` being
+  // present: that namespace is undefined until the permission is actually
+  // granted (confirmed empirically, not assumed), even though the browser
+  // declares it as an optional permission. Gating the button on it created a
+  // deadlock — disabled until granted, but the button is the only way to
+  // grant it — so Tab could never be turned on by anyone, ever. Below,
+  // TAB_CAPTURE_AVAILABLE is only read for an ALREADY-granted user (their
+  // grant persisted from a past session, so the namespace is already visible
+  // by the time this file runs) — never to decide whether the button works.
   const surfaceTabBtn = document.getElementById("surfaceTab");
   const surfaceDesktopBtn = document.getElementById("surfaceDesktop");
   const surfaceModeHelp = document.getElementById("surfaceModeHelp");
@@ -463,6 +473,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   const blurCb = document.getElementById("optBlurFirst");
   const videoCb = document.getElementById("optVideo");
   const optsState = document.getElementById("recordOptsState");
+  // Events only / Events + Video pill (Variant G) — a visual skin over the
+  // real `videoCb` checkbox above, not a second source of truth. A click just
+  // sets the checkbox and dispatches the "change" event it already listens
+  // for, so markVideoChosen/saveRecordOpts/the legacy migration all keep
+  // working exactly as they did for a real checkbox click.
+  const pillEventsOnlyBtn = document.getElementById("pillEventsOnly");
+  const pillEventsVideoBtn = document.getElementById("pillEventsVideo");
+  function selectCaptureMode(wantVideo) {
+    if (!videoCb || videoCb.checked === wantVideo) return;
+    videoCb.checked = wantVideo;
+    videoCb.dispatchEvent(new Event("change"));
+  }
+  // Start delay — a 3-way segmented control standing in for the hidden
+  // <select id="optDelay">, the same way the pill stands in for the checkbox.
+  const delaySegBtns = Array.from(document.querySelectorAll("#delaySeg [data-delay]"));
+  function renderDelayButtons() {
+    const cur = String(Number(delaySel.value) || 0);
+    delaySegBtns.forEach((btn) => {
+      btn.setAttribute("aria-pressed", String(btn.dataset.delay === cur));
+    });
+  }
   /**
    * Read the options, migrating the legacy localStorage blob on the way.
    *
@@ -547,22 +578,17 @@ document.addEventListener("DOMContentLoaded", async () => {
    * user in a hurry reads, and it must not promise a recording it won't make.
    */
   function applyVideoUI(on) {
-    const surfaceRow = document.getElementById("surfaceModeRow");
-    if (surfaceRow) surfaceRow.style.opacity = on ? "" : "0.45";
-    [surfaceTabBtn, surfaceDesktopBtn].filter(Boolean).forEach((btn) => {
-      // A disabled Tab button must still say WHY if it's disabled for lack of
-      // the API (Firefox), not just because video is off — don't clobber that
-      // title with the generic "video is off" one.
-      btn.disabled = !on || (btn === surfaceTabBtn && !TAB_CAPTURE_AVAILABLE);
-    });
-    const micRow = document.getElementById("micOpt");
-    if (micRow) {
-      micRow.disabled = !on;
-      micRow.style.opacity = on ? "" : "0.45";
-      micRow.title = on
-        ? "Toggle microphone for the recording"
-        : "Turn on “Record video too” in Record options first — there is no audio track without a recording";
-    }
+    // The pill IS the on/off control now — see selectCaptureMode. This just
+    // keeps its visual state in sync with whatever last changed videoCb,
+    // whether that was a pill click or the legacy migration.
+    if (pillEventsOnlyBtn) pillEventsOnlyBtn.setAttribute("aria-pressed", String(!on));
+    if (pillEventsVideoBtn) pillEventsVideoBtn.setAttribute("aria-pressed", String(on));
+    // Capture/delay/mic/blur only describe a video, so the whole block is
+    // hidden — not disabled-and-dimmed — while video is off. "Events only"
+    // then stays a two-line state instead of four greyed-out rows.
+    const optsBody = document.getElementById("recordOptsBody");
+    if (optsBody) optsBody.style.display = on ? "" : "none";
+    // Tab is never pre-disabled here — see the click handler below for why.
     const sub = document.getElementById("ctaSub");
     if (sub) {
       sub.textContent = on
@@ -578,7 +604,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   {
     const o = await loadRecordOpts();
-    // The default itself now comes from the worker (off on install, on on
+    // The default itself now comes from the worker (on, for both install and
     // update) and from the legacy migration, so this only has to render what
     // was decided. Still `=== true` rather than truthy: a storage read that
     // came back empty must land on off, not on whatever coerces.
@@ -596,7 +622,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       surfaceMode = "desktop";
     }
     renderSurfaceButtons();
+    // The HTML's static copy describes Tab (the markup default); say the
+    // right thing when the actual starting mode is Desktop instead. The two
+    // click handlers below set their own text afterwards, including the
+    // "permission declined" case — this only covers the state before either
+    // has ever been clicked.
+    if (surfaceModeHelp && surfaceMode === "desktop") {
+      surfaceModeHelp.textContent = "Desktop asks your browser to share a tab, window or screen";
+    }
     if (o.delaySec) delaySel.value = String(o.delaySec);
+    renderDelayButtons();
     blurCb.checked = !!o.blurFirst;
     updateOptsState({
       video: videoCb ? videoCb.checked : false,
@@ -623,19 +658,41 @@ document.addEventListener("DOMContentLoaded", async () => {
         // first thing in this handler — see the comment where these
         // elements are declared. Already-granted resolves true immediately
         // with no prompt, so re-clicking Tab after granting it once is free.
-        chrome.permissions.request({ permissions: ["tabCapture"] }, (granted) => {
-          void chrome.runtime.lastError;
-          surfaceMode = granted ? "tab" : "desktop";
-          if (surfaceModeHelp) {
-            surfaceModeHelp.textContent = granted
-              ? "Tab records the current tab with no share picker."
-              : "Permission declined — falling back to Desktop's share picker.";
-          }
+        //
+        // A browser that never declared `tabCapture` as an optional
+        // permission at all (Firefox — see build-ext.mjs firefoxManifest)
+        // can throw synchronously here instead of calling back, since the
+        // name being requested was never in the manifest. Caught, not left
+        // to hang the UI in "requesting…" forever.
+        try {
+          chrome.permissions.request({ permissions: ["tabCapture"] }, (granted) => {
+            void chrome.runtime.lastError;
+            surfaceMode = granted ? "tab" : "desktop";
+            if (surfaceModeHelp) {
+              surfaceModeHelp.textContent = granted
+                ? "Tab records the current tab with no share picker"
+                : "Permission declined — falling back to Desktop's share picker";
+            }
+            renderSurfaceButtons();
+            saveRecordOpts();
+          });
+        } catch {
+          surfaceMode = "desktop";
+          if (surfaceModeHelp) surfaceModeHelp.textContent = "Tab mode isn't available in this browser — using Desktop instead";
           renderSurfaceButtons();
           saveRecordOpts();
-        });
+        }
       });
     }
+    if (pillEventsOnlyBtn) pillEventsOnlyBtn.addEventListener("click", () => selectCaptureMode(false));
+    if (pillEventsVideoBtn) pillEventsVideoBtn.addEventListener("click", () => selectCaptureMode(true));
+    delaySegBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        delaySel.value = btn.dataset.delay;
+        renderDelayButtons();
+        delaySel.dispatchEvent(new Event("change"));
+      });
+    });
   }
   // Applied last, deliberately: applyVideoUI() above also writes ctaSub, and
   // a capture already running on this tab must win that race, not lose it.
@@ -668,6 +725,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btnInspect").addEventListener("click", async () => {
     await runCombo("TB_INSPECT", "Starting inspect…");
   });
+
+  // ── Stop a capture already running on this tab — shown by
+  // applyCapturingUI() instead of the (disabled) hero button. Relays into
+  // the page the same way TB_START_RECORDING does; the page decides whether
+  // that means stopVideoRecording() or stopEventsCapture() (tracebug-init.js).
+  document.getElementById("btnStopCapture").addEventListener("click", async () => {
+    await runCombo("TB_STOP_RECORDING", "Stopping…");
+  });
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -698,14 +763,25 @@ async function runCombo(messageType, busyText, extra) {
     }
     // Tab mode fell back to the picker server-side (no tabCapture API, or the
     // permission check raced a revoke) — say so rather than silently landing
-    // on Desktop with no explanation for why a picker just appeared.
+    // on Desktop with no explanation for why a picker just appeared. Do NOT
+    // auto-close here: the native "Choose what to share" dialog about to open
+    // steals focus and closes this popup on its own a moment later anyway, so
+    // a timed window.close() only raced that and usually lost — the one
+    // sentence explaining what just happened was never actually readable.
     if (res?.tabModeFallback) {
       showToast("Tab recording wasn't available — showing the share picker instead.");
+      return;
+    }
+    // Positive confirmation for the one mode with no picker to show instead —
+    // otherwise "it worked" and "it silently fell back" look identical for a
+    // moment, and the fallback case above is the one that must NOT be
+    // mistaken for this one.
+    if (extra?.surfaceMode === "tab") {
+      showToast("Recording this tab — no share picker");
     }
     // Success — close popup so focus returns to the page, where the modal /
-    // HUD / panel is about to appear. If site access was just declined, leave
-    // the honest limitation on screen a beat longer before closing.
-    setTimeout(() => window.close(), res?.tabModeFallback ? 900 : 350);
+    // HUD / panel is about to appear.
+    setTimeout(() => window.close(), 350);
   } catch (err) {
     reportFailure(err);
   }
@@ -725,7 +801,7 @@ function reportFailure(err) {
 }
 
 function setBusy(busy) {
-  ["btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect"].forEach((id) => {
+  ["btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect", "btnStopCapture"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
@@ -736,14 +812,20 @@ function setBusy(busy) {
  *  would silently discard the running session instead of doing nothing -
  *  the toolbar's red REC badge is the only other hint, and it's not visible
  *  from inside the popup. Disabling here, not hiding: the button vanishing
- *  would read as a bug. */
+ *  would read as a bug. The hero's own disabled state already prevents a
+ *  second capture from starting before this one stops — what it does NOT do
+ *  is give the user a way to stop from here, which is what btnStopCapture is
+ *  for: a user who closed the tab the on-page bar was on, or who never
+ *  learned where it is, had no way back in before this existed. */
 function applyCapturingUI() {
   const btn = document.getElementById("btnCaptureBug");
   const title = document.getElementById("ctaTitle");
   const sub = document.getElementById("ctaSub");
+  const stopBtn = document.getElementById("btnStopCapture");
   if (btn) btn.disabled = true;
   if (title) title.textContent = "Capturing…";
-  if (sub) sub.textContent = "Already running on this tab — use Stop in the on-page bar";
+  if (sub) sub.textContent = "Already running on this tab";
+  if (stopBtn) stopBtn.style.display = "flex";
 }
 
 function updateHint(isLoaded) {

@@ -75,40 +75,26 @@ async function flagWhatsNew() {
 /**
  * Seed the video default once, without ever overriding a choice.
  *
- * The default differs by reason, because the two populations differ:
- *
- *   install — a new user. Their first capture should not open a share dialog
- *             before they have seen TraceBug do anything, so: video off.
- *   update  — someone who has been using TraceBug. Before Phase 4 EVERY
- *             capture was a screen recording, there being no way to ask for
- *             anything else, so video off would silently take away the thing
- *             they have been doing all along: video on.
- *
- * Two guards keep that from running away:
- *
- *   • `videoSetBy: "user"` is never touched, in either direction.
- *   • On update, a stored `video` boolean means this build's own install or
- *     update seed has already run, so the update default does NOT apply a
- *     second time. Without this, a fresh 1.11 installer who never opened
- *     Record options would have video switched ON by their next update.
- *     "No boolean here on an update" is what identifies a pre-1.11 install.
+ * Video defaults ON for everyone — fresh installs and updates alike. The one
+ * guard that matters: `videoSetBy: "user"` is never touched. A stored `video`
+ * boolean with no user flag means a previous install/update already seeded
+ * this default once, so it is not re-applied on every subsequent update.
  */
-async function seedRecordOptsDefault(reason) {
+async function seedRecordOptsDefault() {
   try {
     const stored = (await chrome.storage.local.get(RECORD_OPTS_KEY))[RECORD_OPTS_KEY];
     if (stored && stored.videoSetBy === "user") return;
-    if (reason === "update" && stored && typeof stored.video === "boolean") return;
+    if (stored && typeof stored.video === "boolean") return;
     await chrome.storage.local.set({
       [RECORD_OPTS_KEY]: {
         ...(stored || {}),
-        video: reason === "update",
+        video: true,
         videoSetBy: "default",
       },
     });
   } catch (err) {
     // A failed seed is not fatal — the popup falls back to video off when the
-    // key is absent. What it costs is this distinction: an upgrading user
-    // would then be treated like a new one.
+    // key is absent.
     console.warn("[TraceBug] couldn't seed record options", err);
   }
 }
@@ -122,11 +108,9 @@ chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
   }
-  // Both reasons, but NOT the same default — see seedRecordOptsDefault. A new
-  // user gets a quiet first capture; an upgrading user keeps the video they
-  // have been getting all along.
+  // Both reasons seed the same default now — see seedRecordOptsDefault.
   if (details.reason === "install" || details.reason === "update") {
-    void seedRecordOptsDefault(details.reason);
+    void seedRecordOptsDefault();
   }
   // Only an update has something new to report. A fresh install has just been
   // shown the welcome page; telling them what changed since a version they
@@ -387,6 +371,29 @@ async function injectBridge(tabId) {
   });
 }
 
+/**
+ * The SDK's own CSS, injected via the privileged chrome.scripting API instead
+ * of a page-level <style> tag — the only way to style the toolbar/HUD/modal
+ * correctly on a page whose CSP has no discoverable nonce to borrow (the SDK
+ * tries that first; it works when a nonce is visible in the DOM, and quietly
+ * doesn't when a page sets nonces via JS property assignment instead of a
+ * static HTML attribute — confirmed on a real Microsoft 365 page, not
+ * assumed). insertCSS bypasses style-src entirely, the same way this file's
+ * own executeScript calls already bypass script-src. Never fails loudly:
+ * same reasoning as injectBridge's caller — a page the extension can't touch
+ * at all is the normal "no host access" case, not a thing to surface here.
+ */
+async function injectStyles(tabId) {
+  try {
+    await chrome.scripting.insertCSS({
+      target: { tabId },
+      files: ["tracebug-injected-styles.css"],
+    });
+  } catch (err) {
+    console.warn("[TraceBug] couldn't insert extension stylesheet:", err?.message || err);
+  }
+}
+
 /** MAIN world: the SDK bundle and its initializer.
  *
  *  tracebug-sdk-ext.js, NOT tracebug-sdk.js — a separate build of the same
@@ -454,6 +461,7 @@ async function ensureAlive(tabId) {
   injectedTabs.delete(tabId);
 
   await injectBridge(tabId);
+  void injectStyles(tabId);
 
   const pong = await pingTab(tabId);
   if (!pong?.alive) {
@@ -488,6 +496,7 @@ async function injectSDK(tabId) {
 
   try {
     await injectBridge(tabId);
+    void injectStyles(tabId);
 
     // One interface per page (deliberately not supported — see
     // docs/launch/sdk-isolation-1.11.2.md): if this tab already has a host
@@ -972,7 +981,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Each one: ensure the site is enabled, inject the SDK if needed, then
   // dispatch the matching action message to the page. Lets the popup
   // express user intent in a single call instead of a 3-step dance.
-  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT") {
+  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT" || message.type === "TB_STOP_RECORDING") {
     handleComboAction(message, sender)
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ error: (err && err.message) || String(err) }));
@@ -1018,6 +1027,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Fallback for builds/browsers where openOptionsPage is unavailable.
       try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html") }); } catch {}
     }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // Same destination, but straight to the mic card asking for the permission
+  // immediately (options.js's "#mic" handling) — chrome.runtime.openOptionsPage()
+  // above has no way to carry a hash fragment, so this needs tabs.create.
+  if (message.type === "TB_OPEN_OPTIONS_MIC") {
+    try {
+      chrome.tabs.create({ url: chrome.runtime.getURL("options.html#mic") });
+    } catch {}
     sendResponse({ ok: true });
     return true;
   }

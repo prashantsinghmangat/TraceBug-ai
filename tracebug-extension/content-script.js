@@ -305,6 +305,14 @@ window.addEventListener("tracebug-open-settings", () => safeRun(() => {
   safeSendMessage({ type: "TB_OPEN_OPTIONS" }, function () {});
 }));
 
+// Same destination, but landing directly on the mic card and asking for the
+// permission immediately — see options.js's "#mic" handling. Needs its own
+// message because chrome.runtime.openOptionsPage() (TB_OPEN_OPTIONS above)
+// has no way to carry a hash fragment through to the opened page.
+window.addEventListener("tracebug-open-mic-settings", () => safeRun(() => {
+  safeSendMessage({ type: "TB_OPEN_OPTIONS_MIC" }, function () {});
+}));
+
 // ── Listen for SDK requesting a screenshot (toolbar camera button) ──────────
 // The SDK dispatches this event when it detects it's in an extension context.
 // We route it to background.js which calls chrome.tabs.captureVisibleTab,
@@ -652,6 +660,11 @@ if (isExtAlive()) {
           delaySec: message.delaySec || 0,
           surfaceMode: message.surfaceMode || undefined,
         });
+        sendResponse({ ok: true });
+        break;
+
+      case "TB_STOP_RECORDING":
+        dispatchToPage("tracebug-ext-action", { action: "stop" });
         sendResponse({ ok: true });
         break;
 

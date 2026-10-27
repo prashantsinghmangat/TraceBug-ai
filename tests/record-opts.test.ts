@@ -9,18 +9,19 @@
 // silently, with nothing recording that it had happened.
 //
 // Now the blob lives in chrome.storage.local under `tb_record_opts` with an
-// explicit `videoSetBy` discriminator, and the worker seeds a default that
-// DIFFERS BY REASON: off on install (a new user should not meet a share
-// dialog first) and on on update (before Phase 4 every capture was a video,
-// so off would quietly take that away). Two failure modes are guarded here:
+// explicit `videoSetBy` discriminator, and the worker seeds the SAME default
+// — video ON — for both install and update: a new user gets the full capture
+// (events + video) from their first click, and an upgrading user keeps the
+// video they have been getting all along. One failure mode is guarded here:
 //
 //   • Ordering. onInstalled runs before the popup is ever opened, so the seed
 //     is ALWAYS already present by migration time. A naive "only migrate when
 //     the key is absent" rule would throw away the choice of a user who had
-//     turned video on, and a merge that fell back to a hardcoded `false`
-//     would undo the update seed on the first popup open.
-//   • Re-seeding. A fresh installer who never opens Record options must not
-//     have video switched ON by their next update.
+//     turned video off, and a merge that fell back to a hardcoded `false`
+//     would undo the seed on the first popup open.
+//   • Re-seeding. A stored `video` boolean (with no user flag) means this
+//     build's own install or update seed has already run once, so a later
+//     update does not re-apply it and stomp a value storage otherwise holds.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readText } from './helpers/read-source';
 import { createContext, runInContext } from 'node:vm';
@@ -39,19 +40,18 @@ async function install(mock: ChromeMock, reason: string) {
   return mock.localStore[KEY] as Record<string, unknown> | undefined;
 }
 
-describe('the worker seeds the video default, differently per reason', () => {
+describe('the worker seeds the video default — on, for both install and update', () => {
   let mock: ChromeMock;
   beforeEach(() => {
     mock = createChromeMock();
     loadBackground(mock);
   });
 
-  it('writes video off on a fresh install', async () => {
-    expect(await install(mock, 'install')).toMatchObject({ video: false, videoSetBy: 'default' });
+  it('writes video ON on a fresh install', async () => {
+    expect(await install(mock, 'install')).toMatchObject({ video: true, videoSetBy: 'default' });
   });
 
   it('writes video ON for an update from a build that had no such option', async () => {
-    // The whole reason the update branch exists, and the opposite of install.
     // A 1.10 user recorded video on every capture because there was no way
     // not to; switching them to events-only without asking would take away
     // the thing they have been using TraceBug for.
@@ -73,19 +73,20 @@ describe('the worker seeds the video default, differently per reason', () => {
   });
 
   it('does NOT overwrite a user who turned video OFF', async () => {
-    // Now that the update default is ON, this is the direction that would
-    // actually hurt: re-enabling a screen share for someone who went looking
-    // for the checkbox to turn it off.
+    // With the default ON, this is the direction that would actually hurt:
+    // re-enabling a screen share for someone who went looking for the
+    // checkbox to turn it off.
     mock.localStore[KEY] = { video: false, videoSetBy: 'user' };
     expect(await install(mock, 'update')).toMatchObject({ video: false, videoSetBy: 'user' });
   });
 
-  it('does not flip a fresh installer to video on at their next update', async () => {
-    // install seeds { video: false, videoSetBy: "default" }. That stored
-    // boolean is what tells the update branch this build has already decided
-    // for this profile — without the check, every update would re-apply the
-    // "existing user" default to someone who has never recorded a video.
+  it('does not re-seed a later update over a default already written', async () => {
+    // install seeds { video: true, videoSetBy: "default" }. That stored
+    // boolean is what tells a later update this build has already decided for
+    // this profile — without the check, every update would re-run the seed
+    // and could stomp a value storage otherwise holds for other reasons.
     await install(mock, 'install');
+    mock.localStore[KEY] = { video: false, videoSetBy: 'default' };
     expect(await install(mock, 'update')).toMatchObject({ video: false, videoSetBy: 'default' });
   });
 
