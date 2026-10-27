@@ -78,15 +78,19 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* ── Main ───────────────────────────────────────────── */
 .main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; }
 
+/* One compact line, not a two-line stacked box — this just names which site
+   a capture would be about, not something worth a quarter of the popup's
+   visible height on every open. */
 .site-label {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 8px 12px;
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 5px 10px;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  overflow: hidden;
 }
-.site-host { font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-.site-path { font-size: 11px; color: var(--text-3); font-family: ui-monospace, "SF Mono", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.site-host { font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; flex-shrink: 0; }
+.site-path { font-size: 11px; color: var(--text-3); font-family: ui-monospace, "SF Mono", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ── Primary CTA ────────────────────────────────────── */
 .cta-primary {
@@ -151,6 +155,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .opt-row-text { min-width: 0; }
 .opt-row-title { font-size: 12px; font-weight: 600; color: var(--text); }
 .opt-row-sub { font-size: 10.5px; color: var(--text-3); margin-top: 1px; line-height: 1.4; }
+.opt-row-sub.warn { color: var(--error); }
 
 /* ── Segmented controls — Tab|Desktop and start delay ────────────────
    Shared look: .seg is the pill wrapper, .seg-opt each option inside it. */
@@ -228,42 +233,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .toast.error { background: rgba(239, 68, 68, 0.10); color: var(--error); border-color: var(--error); }
 
-/* ── Redaction rules (collapsible) ───────────────────── */
-.redact {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-.redact-sum {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 9px 12px;
-  font-size: 12px; font-weight: 600; color: var(--text-2);
-  cursor: pointer; list-style: none; user-select: none;
-}
-.redact-sum::-webkit-details-marker { display: none; }
-.redact-sum:hover { color: var(--text); }
-.redact-state { font-size: 10.5px; font-weight: 600; color: var(--success); }
-.redact-body { padding: 0 12px 12px; }
-.redact-label {
-  display: block; font-size: 11px; font-weight: 600; color: var(--text-2);
-  margin: 8px 0 2px;
-}
-.redact-help { font-size: 10.5px; color: var(--text-3); line-height: 1.4; margin-bottom: 5px; }
-.redact-ta {
-  width: 100%; box-sizing: border-box; resize: vertical;
-  background: var(--bg); color: var(--text);
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
-  padding: 6px 8px;
-}
-.redact-ta:focus { outline: none; border-color: var(--border-hover); }
-.redact-save {
-  margin-top: 8px; padding: 6px 14px;
-  background: transparent; color: var(--text-2);
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  font-size: 11.5px; font-weight: 600; cursor: pointer;
-}
-.redact-save:hover { background: var(--bg); border-color: var(--border-hover); color: var(--text); }
+/* Redaction-rules / diagnostics styles moved to options.html's own inline
+   <style> block (2026-10-27) — their markup moved there too. */
 
 /* ── Hint row (informational, no action) ────────────── */
 .hint {

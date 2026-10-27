@@ -48,6 +48,17 @@
       font-size: 13px;
     }
     input[type="password"] { font-family: ui-monospace, monospace; }
+    textarea {
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font: 12px/1.4 ui-monospace, monospace;
+      resize: vertical;
+    }
     .row { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
     button {
       padding: 9px 14px;
@@ -75,7 +86,8 @@
       border: 1px solid var(--line);
       color: var(--muted);
     }
-    .pill.on { color: var(--ok); border-color: rgba(34, 197, 94, 0.4); }
+    .pill.on, .pill.ok { color: var(--ok); border-color: rgba(34, 197, 94, 0.4); }
+    .pill.warn { color: var(--warn); border-color: rgba(245, 158, 11, 0.4); }
     .notice {
       background: rgba(245, 158, 11, 0.1);
       border: 1px solid rgba(245, 158, 11, 0.3);
@@ -215,6 +227,13 @@
         <button class="ghost" id="micCheck" type="button">Re-check</button>
       </div>
       <div class="status" id="micStatus"></div>
+      <!-- Device labels only come back non-blank once permission is granted,
+           so this stays hidden until refreshMicDevices() has something real
+           to show — see options.js. -->
+      <div class="row" id="micDeviceRow" style="display:none">
+        <label for="micDeviceSelect" class="hint" style="margin:0">Use this microphone:</label>
+        <select id="micDeviceSelect"></select>
+      </div>
     </section>
 
     <section class="card" id="tabCaptureCard" style="display:none">
@@ -256,12 +275,60 @@
       <div class="status" id="llmSitesStatus"></div>
     </section>
 
+    <!-- Moved here from the popup (2026-10-27) — a settings-shaped control that
+         was taking up scroll space on the popup's hero capture flow every time
+         it opened, whether or not anyone touched it. -->
+    <section class="card" id="redactCard">
+      <h2>Redaction rules <span class="pill" id="redactPill"></span></h2>
+      <p class="hint">
+        App-specific PII masked at capture, on top of TraceBug's built-in token/secret patterns.
+      </p>
+      <label for="redactFields">Sensitive field names</label>
+      <textarea id="redactFields" rows="2" spellcheck="false" placeholder="email, customer_id, phone"></textarea>
+      <p class="hint" style="margin-top:6px">
+        Comma or newline separated. Matches form fields, storage keys, URL params, and JSON keys in captured
+        data — "email" also covers "customer_email".
+      </p>
+      <label for="redactPatterns">Mask patterns</label>
+      <textarea id="redactPatterns" rows="2" spellcheck="false" placeholder="\d{3}-\d{2}-\d{4}"></textarea>
+      <p class="hint" style="margin-top:6px">
+        One regex per line, case-insensitive. Masked in console output, network response bodies, error text and
+        the DOM replay — not in URLs, screenshots or video.
+      </p>
+      <div class="row">
+        <button id="redactSave" type="button">Save rules</button>
+      </div>
+      <div class="status" id="redactStatus"></div>
+    </section>
+
+    <!-- Moved here from the popup (2026-10-27), same reason as Redaction rules
+         above. TraceBug sends nothing anywhere, so the only route for a bug
+         report is the user's own clipboard — both buttons produce the SAME
+         scrubbed text (no URLs, no page content, no stored values; see
+         diagnostics.js). Not tied to any one tab the way the popup's version
+         was (diagPageState() there read the tab the popup opened for) — this
+         page isn't opened from a specific tab, so that one field is omitted
+         here rather than guessed at.  -->
+    <section class="card" id="diagCard">
+      <h2>Having trouble? <span class="pill" id="diagPill"></span></h2>
+      <p class="hint">
+        Copies TraceBug's version, your browser and OS, which permissions you've granted, and TraceBug's own
+        recent errors. No URLs, no page content, nothing you've captured.
+      </p>
+      <div class="row">
+        <button id="diagCopy" type="button">Copy diagnostics</button>
+        <button class="ghost" id="diagReport" type="button">Report a TraceBug bug</button>
+      </div>
+      <div class="status" id="diagStatus"></div>
+    </section>
+
     <p class="rotate">
       <strong>Upgrading from before 1.11?</strong> Earlier versions stored these tokens in each website's own
       storage, where scripts on that site could read them. Revoke and re-create any token you configured before
       1.11, then enter the new one here.
     </p>
   </div>
+  <script src="diagnostics.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

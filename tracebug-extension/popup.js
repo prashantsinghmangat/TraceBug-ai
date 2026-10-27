@@ -11,7 +11,11 @@
 const STORAGE_KEY = "tracebug_enabled_sites";
 const THEME_KEY = "tracebug_popup_theme";
 const MIC_KEY = "tracebug_mic_enabled";
-const REDACT_KEY = "tracebug_redact";
+// Written by options.js's device picker (Phase B); read here only to show
+// which physical mic is selected next to the On/Off state. Same chrome-
+// extension:// origin as options.html and offscreen.html, so localStorage is
+// shared across all three — no chrome.storage plumbing needed for this.
+const MIC_DEVICE_LABEL_KEY = "tracebug_mic_device_label";
 const CLOUD_ENDPOINT_KEY = "tracebug_cloud_endpoint";
 // Production default; override for local dev via:
 //   chrome.storage.local.set({ tracebug_cloud_endpoint: "http://localhost:3001" })
@@ -345,9 +349,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // wireAccountButtons();
   // void refreshAccount();
 
-  void initRedactionUI();
   void initWhatsNew();
-  initDiagnosticsUI();
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id ?? null;
@@ -393,37 +395,106 @@ document.addEventListener("DOMContentLoaded", async () => {
   // to the recording. The pref persists across popup opens.
   let micOn = false;
   try { micOn = localStorage.getItem(MIC_KEY) === "1"; } catch {}
+  let micDeviceLabel = "";
+  try { micDeviceLabel = localStorage.getItem(MIC_DEVICE_LABEL_KEY) || ""; } catch {}
   const micBtn = document.getElementById("micOpt");
   const micPill = document.getElementById("micOptState");
+  const micSub = document.getElementById("micOptSub");
   function applyMicUI() {
-    // The row is not rendered in 1.11 - see popup.html. Everything below is
-    // kept, not deleted, so restoring the markup in 1.11.2 restores the
-    // behaviour with it.
     if (!micBtn || !micPill) return;
     micBtn.classList.toggle("mic-opt-on", micOn);
     micBtn.setAttribute("aria-pressed", micOn ? "true" : "false");
     micPill.textContent = micOn ? "On" : "Off";
   }
   applyMicUI();
+
+  // Renders the one-line state under "Microphone" — the point of this pass:
+  // a user should see "Blocked", "Not granted yet", or "On · <device>" at a
+  // glance, never discover the real state only after a click does nothing.
+  // `permState` is the result of the navigator.permissions query below, or
+  // null when that API isn't available at all (notably older Firefox), in
+  // which case this falls back to the stored on/off alone.
+  function renderMicSub(permState) {
+    if (!micSub) return;
+    let text; let warn = false;
+    if (permState === "denied") {
+      text = "Blocked — tap to fix"; warn = true;
+    } else if (!micOn) {
+      text = permState === "prompt" ? "Off · not granted yet" : "Off";
+    } else {
+      text = micDeviceLabel ? `On · ${micDeviceLabel}` : "On";
+    }
+    micSub.textContent = text;
+    micSub.classList.toggle("warn", warn);
+  }
+  renderMicSub(null);
+
+  // The toggle's ON state is a stored preference, not a live permission check
+  // — found by hand-testing: if the actual browser permission was never
+  // really granted (the click-time getUserMedia below can silently fail to
+  // even run its own catch block, since the native prompt closes the popup
+  // and kills the pending promise before either branch executes — see
+  // showMicNotice's comment) or was later revoked/reset (e.g. an unpacked
+  // extension reload), the toggle keeps showing ON from before while the
+  // offscreen recorder's own getUserMedia then fails every time with nothing
+  // telling the user — the recording just silently has no narration. Re-check
+  // the REAL permission once on open, always (not just when stored ON — the
+  // visible state line needs the truth too), and correct the toggle instead
+  // of trusting the stored flag.
+  if (navigator.permissions?.query) {
+    navigator.permissions.query({ name: "microphone" }).then((st) => {
+      if (micOn && st.state !== "granted") {
+        micOn = false;
+        try { localStorage.setItem(MIC_KEY, "0"); } catch {}
+        applyMicUI();
+      }
+      renderMicSub(st.state);
+    }).catch(() => {
+      // navigator.permissions doesn't cover "microphone" in every browser
+      // (notably older Firefox) — leave the stored preference and the
+      // on/off-only label alone rather than claim a state we can't confirm.
+    });
+  }
+
   micBtn?.addEventListener("click", async () => {
     const turningOn = !micOn;
     if (turningOn) {
-      // Request mic permission HERE. The popup is an extension page that can
-      // show the permission prompt; the offscreen recorder cannot. A grant
-      // persists for the extension origin, so the offscreen getUserMedia({audio})
-      // then succeeds and narration is actually included. If denied, stay OFF
-      // and tell the user instead of silently recording without a mic.
+      // Request mic permission HERE, but only when it's safe to: calling
+      // getUserMedia on a never-before-asked ("prompt") permission shows
+      // Chrome's native prompt, which steals focus and closes this popup —
+      // killing the pending promise before EITHER branch below runs, so the
+      // click silently does nothing and the toggle never updates (found by
+      // hand-testing: first-time toggle clicks had no visible effect at all).
+      // Routing straight to Options in that case is the only path that can
+      // actually complete the grant — see showMicNotice's comment.
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showToast("Microphone not available in this browser", true);
         return;
       }
       try {
+        if (navigator.permissions?.query) {
+          const st = await navigator.permissions.query({ name: "microphone" });
+          if (st.state === "denied") {
+            showMicNotice({ name: "NotAllowedError" });
+            return;
+          }
+          if (st.state === "prompt") {
+            // Nothing has gone wrong yet, so there is nothing to explain —
+            // go straight to the one place that can actually ask, instead of
+            // making the user read a notice and click a second button first.
+            openMicSettings();
+            return;
+          }
+        }
+        // Already granted (or this browser can't tell us either way) — safe
+        // to call directly: no prompt shows, so the popup survives.
         const test = await navigator.mediaDevices.getUserMedia({ audio: true });
         test.getTracks().forEach((t) => t.stop());
       } catch (err) {
         micOn = false;
         try { localStorage.setItem(MIC_KEY, "0"); } catch {}
         applyMicUI();
+        renderMicSub("denied");
         showMicNotice(err);
         return;
       }
@@ -431,6 +502,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     micOn = turningOn;
     try { localStorage.setItem(MIC_KEY, micOn ? "1" : "0"); } catch {}
     applyMicUI();
+    renderMicSub(turningOn ? "granted" : undefined);
   });
 
   // ── Primary: Capture Bug — starts tab-capture recording ──────────────
@@ -931,6 +1003,19 @@ function showToastAction(msg, actionLabel, onAction, steps) {
  * which is a real tab. It asks there, the grant persists for the extension
  * origin, and the offscreen recorder then gets the mic for every later recording.
  */
+// Jumps to the one tab that can survive the native mic/cam prompt — used by
+// both the mic toggle (when permission is still unasked) and the notice below
+// (when it is blocked) so there's one route out, not two slightly different
+// ones.
+function openMicSettings() {
+  try {
+    chrome.runtime.openOptionsPage();
+    window.close();
+  } catch {
+    try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#mic") }); window.close(); } catch {}
+  }
+}
+
 function showMicNotice(err) {
   const box = document.getElementById("micNotice");
   if (!box) return;
@@ -943,25 +1028,18 @@ function showMicNotice(err) {
   const line = document.createElement("div");
   line.textContent = noDevice
     ? "No microphone found on this computer."
-    : "Chrome can't ask for the microphone from this popup.";
+    : "The microphone is blocked for TraceBug.";
   box.appendChild(line);
 
   if (!noDevice) {
     const steps = document.createElement("div");
     steps.className = "mic-notice-steps";
-    steps.textContent = "The popup closes as soon as the permission prompt opens, so the request never completes. Grant it once in TraceBug settings and it applies to every recording.";
+    steps.textContent = "Use the padlock in the address bar of any page (or chrome://settings/content/microphone) to allow it, then try again — or fix it from TraceBug settings.";
     box.appendChild(steps);
 
     const go = document.createElement("button");
-    go.textContent = "Grant in TraceBug settings";
-    go.addEventListener("click", () => {
-      try {
-        chrome.runtime.openOptionsPage();
-        window.close();
-      } catch {
-        try { chrome.tabs.create({ url: chrome.runtime.getURL("options.html#mic") }); window.close(); } catch {}
-      }
-    });
+    go.textContent = "Open TraceBug settings";
+    go.addEventListener("click", openMicSettings);
     box.appendChild(go);
   }
 
@@ -972,31 +1050,7 @@ function showMicNotice(err) {
   box.appendChild(dismiss);
 }
 
-// ── Redaction rules ─────────────────────────────────────────────────────────
-// App-specific PII fields/patterns masked at capture, on top of the built-in
-// token/secret patterns. Synced via chrome.storage.sync; the content script
-// hands them to the SDK through <html data-tb-redact>.
-
-function parseRedactFields(raw) {
-  return String(raw || "")
-    .split(/[\n,]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 50);
-}
-
-function parseRedactPatterns(raw) {
-  return String(raw || "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 20);
-}
-
-function redactStateLabel(rules) {
-  const n = (rules?.fields?.length || 0) + (rules?.patterns?.length || 0);
-  return n > 0 ? `${n} rule${n === 1 ? "" : "s"}` : "";
-}
+// Redaction rules UI moved to options.html/options.js (2026-10-27).
 
 // ── "What's new" after an update (Phase 4 Step D) ───────────────────────────
 // background.js records which version landed (tb_whats_new); the copy lives
@@ -1130,121 +1184,8 @@ async function initWhatsNew() {
 // version can still see and remove it from options.html. Revisit when ADR
 // 008 (v2.0) makes captures actually survive cross-origin navigation.
 
-// ── Diagnostics (Phase 7) ───────────────────────────────────────────────────
-// Both buttons produce the same scrubbed text. The popup's job is only to say
-// what page state the user is on - a CLASSIFICATION from page-support, never a
-// URL - and to put the result somewhere the user controls.
-const DIAG_ISSUE_URL = "https://github.com/prashantsinghmangat/TraceBug-ai/issues/new";
-
-/** The page's classification, for the report. Never the URL itself. */
-function diagPageState() {
-  try {
-    if (!currentTabUrl) return "unknown (no site access)";
-    const verdict = PageSupport.classifyPage(currentTabUrl, {});
-    return verdict.ok ? "ok" : String(verdict.reason || "blocked");
-  } catch { return "unknown"; }
-}
-
-async function buildDiagnostics() {
-  if (typeof TraceBugDiagnostics === "undefined") return "";
-  return TraceBugDiagnostics.build({ pageState: diagPageState() });
-}
-
-function initDiagnosticsUI() {
-  const copyBtn = document.getElementById("diagCopy");
-  const reportBtn = document.getElementById("diagReport");
-  const state = document.getElementById("diagState");
-  if (!copyBtn || !reportBtn) return;
-
-  // Say up front whether there is anything to report. Someone with no errors
-  // should not go hunting for a problem that is not recorded.
-  if (typeof TraceBugDiagnostics !== "undefined" && state) {
-    TraceBugDiagnostics.readErrors().then((list) => {
-      state.textContent = list.length
-        ? `${list.length} error${list.length === 1 ? "" : "s"} this session`
-        : "no errors";
-    }).catch(() => {});
-  }
-
-  copyBtn.addEventListener("click", async () => {
-    const text = await buildDiagnostics();
-    if (!text) { showToast("Diagnostics unavailable", true); return; }
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast("Diagnostics copied - paste it into an issue");
-    } catch {
-      // A popup can lose clipboard permission; never leave a dead button.
-      showToast("Couldn't copy - open the browser console for the text", true);
-      console.log(text);
-    }
-  });
-
-  reportBtn.addEventListener("click", async () => {
-    const text = await buildDiagnostics();
-    // Prefilled, but the user reads and submits it themselves. GitHub caps the
-    // whole URL around 8 KB, so the body is trimmed rather than silently
-    // truncated by the browser into something that ends mid-stack.
-    const body = [
-      "**What happened?**",
-      "",
-      "",
-      "**Steps**",
-      "",
-      "1. ",
-      "",
-      "<details><summary>Diagnostics</summary>",
-      "",
-      "```",
-      text.slice(0, 5500),
-      "```",
-      "",
-      "</details>",
-    ].join("\n");
-    const url = `${DIAG_ISSUE_URL}?labels=bug&body=${encodeURIComponent(body)}`;
-    try {
-      chrome.tabs.create({ url });
-      window.close();
-    } catch {
-      showToast("Couldn't open GitHub - copy the diagnostics instead", true);
-    }
-  });
-}
-
-async function initRedactionUI() {
-  const fieldsTa = document.getElementById("redactFields");
-  const patternsTa = document.getElementById("redactPatterns");
-  const saveBtn = document.getElementById("redactSave");
-  const state = document.getElementById("redactState");
-  if (!fieldsTa || !patternsTa || !saveBtn) return;
-
-  try {
-    const r = await chrome.storage.sync.get(REDACT_KEY);
-    const rules = r?.[REDACT_KEY];
-    if (rules) {
-      fieldsTa.value = (rules.fields || []).join(", ");
-      patternsTa.value = (rules.patterns || []).join("\n");
-      state.textContent = redactStateLabel(rules);
-    }
-  } catch {}
-
-  saveBtn.addEventListener("click", async () => {
-    const fields = parseRedactFields(fieldsTa.value);
-    const patterns = parseRedactPatterns(patternsTa.value);
-    // Reject regexes that don't compile so a typo can't silently no-op.
-    const bad = patterns.find((p) => { try { new RegExp(p, "gi"); return false; } catch { return true; } });
-    if (bad) {
-      showToast(`Invalid regex: ${bad}`, true);
-      return;
-    }
-    const rules = { fields, patterns };
-    try {
-      await chrome.storage.sync.set({ [REDACT_KEY]: rules });
-      state.textContent = redactStateLabel(rules);
-      showToast(fields.length + patterns.length > 0
-        ? "Redaction rules saved — applies to new captures"
-        : "Redaction rules cleared");
-    } catch (err) {
-      showToast("Save failed: " + (err?.message || err), true);
-    }
-  });
-}
+// Diagnostics UI moved to options.html/options.js (2026-10-27) alongside
+// Redaction rules — see the same note at that section's old location above.
+// The options-page version omits the page-classification field this popup
+// version had (diagPageState(), read from the tab the popup opened for):
+// options.html isn't tied to any one tab, so there is nothing to classify.
