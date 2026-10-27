@@ -281,6 +281,14 @@ the rejected alternatives are `docs/adr/008-extension-owns-the-session.md`.
   ENDS the capture. When this phase lands, that spec inverts - the capture continues and the ticket carries
   both origins.
 
+## Ideas parked for later (not scheduled, no phase assigned)
+
+- **Audio transcript of the recorded microphone narration.** User-requested
+  (2026-10-27). Would need a speech-to-text step (local/on-device to keep the
+  zero-backend/no-telemetry promise, or an opt-in BYO-key provider call similar
+  to the AI Debugger's pattern) run over the mic track and attached to the
+  report. Not investigated beyond the idea itself — no design, no estimate.
+
 ## Final report
 
 When all phases are done, produce:

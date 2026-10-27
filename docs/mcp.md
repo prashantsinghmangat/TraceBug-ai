@@ -6,6 +6,8 @@ TraceBug ships a local [Model Context Protocol](https://modelcontextprotocol.io)
 npx -y tracebug mcp --dir ./bug-reports
 ```
 
+`-y` skips the install prompt but does not pin a version — npx resolves whatever's newest on the npm registry when it runs. If you want a known, audited build instead, pin it: `npx tracebug@1.10.1 mcp --dir ./bug-reports`, and bump the version string yourself when you choose to upgrade.
+
 **Everything stays on your machine.** The server reads the same self-contained `.html` files TraceBug already exports — no account, no cloud, no upload. This is the difference from every other bug-reporting tool's MCP server: theirs are hosted services that require your bug data to live in their cloud first. TraceBug's runs locally over stdio and reads from your disk.
 
 ## The workflow

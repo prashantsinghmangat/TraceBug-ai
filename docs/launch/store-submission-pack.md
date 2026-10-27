@@ -60,6 +60,10 @@ Declare on the cautious side. TraceBug never sends data to its developer. But at
 - ✅ Tick all three certifications: not sold to third parties; not used for purposes unrelated to the single purpose; not used for creditworthiness or lending.
 - Privacy policy URL: the existing one on tracebug.dev. Check that it says "nothing goes to TraceBug" and describes the user-initiated sends.
 
+**Two mechanisms worth disclosing explicitly, found during a buyer's code review (2026-10-26):**
+- **"Open in Claude" / "Open in ChatGPT"** (`src/exporters/ai-prompt.ts`) puts the full report text — console errors, URLs, user actions, stack traces — into the destination URL's query string when it's ≤6000 chars, then opens it. A URL is readable from browser history/autocomplete, unlike a clipboard copy or a POSTed form. Disclose this explicitly next to the AI-provider disclosure above, or switch the mechanism to clipboard-copy + paste before claiming otherwise.
+- **The Share-link/upload-to-tracebug.dev feature exists in the codebase (Supabase-backed, `website/app/api/upload`, `website/app/api/share`, 14-day retention) but is currently disabled in the shipped extension** (`src/ui/quick-bug.ts`, tagged `PHASE2-CLOUD`, commented out for the offline-only release). The "Free, no account, no upload" manifest description is accurate **today**. If this ships in a future release, the listing, this pack's data-use section, and the privacy policy all need to mention it — including where reports are hosted and the retention window — *before* that release, not after.
+
 ## 4. What's new in 1.11.3 (store description, top)
 
 1.11.2 never reached the stores, so this listing covers both. The 1.11.1 capture fixes stay
