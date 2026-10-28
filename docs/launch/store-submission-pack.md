@@ -73,6 +73,8 @@ installing for the first time, not only by upgraders.
 - Screen recording is back, with a new **Tab** mode: record the current tab with no "Choose what to
   share" dialog (Chrome asks once). **Desktop** mode records a window or screen through the usual picker.
 - Mic mute works during a recording, and the toolbar icon shows a red REC while one is running.
+- Choose which microphone records; the popup shows whether the mic is on, off or blocked.
+- Screenshot options: the visible area or a crop, now or after a 3- or 5-second delay.
 - Works on sites with strict security policies (Trusted Types) that used to block TraceBug's toolbar.
 - Works properly on sites that use the TraceBug npm SDK, and steps aside where that site's own
   TraceBug toolbar is already showing.

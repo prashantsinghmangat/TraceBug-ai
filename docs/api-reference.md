@@ -195,6 +195,14 @@ const region = await TraceBug.takeRegionScreenshot();
 
 In the Chrome Extension, screenshots use `chrome.tabs.captureVisibleTab` instead of html2canvas for reliable cross-origin capture.
 
+### `TraceBug.prepareScreenshot({ crop?, delaySec? }): Promise<ScreenshotData | null>`
+
+Optional countdown, then a screenshot: the visible area by default, or the drag-to-crop picker with `crop: true`. Resolves `null` if the countdown or the crop is cancelled. The extension popup's Screenshot options use this.
+
+```typescript
+const shot = await TraceBug.prepareScreenshot({ crop: true, delaySec: 3 });
+```
+
 ### `TraceBug.takeRegionScreenshot(): Promise<ScreenshotData | null>`
 
 Snipping-tool style screenshot. Shows a fullscreen overlay; the user drags a rectangle; the cropped PNG is **added to the active ticket** (`getScreenshots()`). It is **not** auto-downloaded — downloads happen only when the user exports the ticket from the review modal.
@@ -715,9 +723,13 @@ Render the summary line shown in the export modal and the exported Info tab — 
 
 Swap the app-specific redaction rules (`{ fields?, patterns? }`) at runtime — same shape as the `redact` init option ([configuration.md](configuration.md#redact)).
 
-### `runRecordCountdown(seconds): Promise<void>`
+### `runRecordCountdown(seconds, opts?): Promise<boolean>`
 
-Fullscreen 3-2-1 countdown overlay; resolves when it hits zero. Used by `prepareRecording({ delaySec })`.
+Fullscreen 3-2-1 countdown overlay. Resolves `true` when it reaches zero, `false` if the user pressed Esc. Used by `prepareRecording({ delaySec })` and `prepareScreenshot({ delaySec })`. Pass `{ withMicrophone }` to show a mic on/off toggle on the overlay, starting in that state.
+
+### `getCountdownMicChoice(): boolean | null`
+
+The mic toggle's final state from the most recent countdown that showed one, or `null` if it had none. Read it after `runRecordCountdown(..., { withMicrophone })` resolves `true`.
 
 ### `startBlurThenRecord({ onStart, onCancel? })`
 

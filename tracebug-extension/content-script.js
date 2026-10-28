@@ -392,6 +392,16 @@ function reattachDataUrl(rec, cb) {
 const REC_RPC_TYPES = new Set([
   "tb:rec:start", "tb:rec:stop", "tb:rec:capture",
   "tb:rec:comment", "tb:rec:status", "tb:rec:last-recording",
+  // HUD mic-mute button (1.11.3). Missing from this allowlist meant every
+  // mute/unmute request was rejected here as "Unsupported request type"
+  // before ever reaching offscreen.js — silently, since video-recorder.ts's
+  // setMicrophoneMuted() sets its optimistic flag and fires this RPC with a
+  // bare .catch(() => {}). The HUD icon flipped to "muted" and stayed that
+  // way, but the real MediaStreamTrack's `enabled` was never touched, so the
+  // recording kept the microphone audio the whole time regardless of what
+  // the button showed. Carries no secret and targets only the tab's own
+  // in-progress recording, same trust level as the other tb:rec:* verbs.
+  "tb:rec:mic-mute",
   // Capture ownership (1.11.1). These three carry no secret and no
   // destination: the page asks whether ITS OWN tab is still capturing, and
   // reports its own origin. The worker answers for sender.tab.id only, so a

@@ -97,164 +97,33 @@
       </div>
       PHASE2-CLOUD -->
 
-      <!-- Site label -->
-      <div class="site-label">
-        <span class="site-host" id="hostname">—</span>
-        <span class="site-path" id="sitePath"></span>
-      </div>
+      <!-- Site label removed (2026-10-27, user-requested) to give the two
+           action cards below more of the popup's limited vertical space —
+           popup.js keeps writing to #hostname/#sitePath if a future layout
+           brings them back, guarded with optional chaining so their absence
+           here is never an error. -->
 
-      <!-- Hero CTA — starts a capture. Reproduce, then stop in the on-page HUD;
-           modal opens with the full replay + auto-collected data. Events-only
-           by default (no screen-share picker); the sub-label and icon are
-           rewritten by popup.js when "Record video too" is on. -->
-      <button class="cta-primary" id="btnCaptureBug">
-        <!-- Both icons ship in the markup and popup.js shows one. Not an
-             innerHTML swap on purpose: web-ext lint flags every dynamic
-             innerHTML assignment (UNSAFE_VAR_ASSIGNMENT), and an icon is not
-             worth adding a warning a reviewer then has to triage. -->
-        <span class="cta-icon">
-          <svg id="ctaIconEvents" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          <svg id="ctaIconVideo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
-        </span>
-        <span class="cta-body">
-          <span class="cta-title" id="ctaTitle">Capture Bug</span>
-          <span class="cta-sub" id="ctaSub">Console, network &amp; replay · stop when done</span>
-        </span>
-        <svg class="cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
-      </button>
-
-      <!-- Shown INSTEAD of the hero's own click behavior while a capture is
-           already running on this tab (applyCapturingUI in popup.js) — the
-           hero itself is disabled then, so there must be another way to stop
-           that doesn't require finding the on-page bar. -->
-      <button class="cta-stop" id="btnStopCapture" type="button" style="display:none">
-        <span class="cta-icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span>
-        <span class="cta-body">
-          <span class="cta-title">Stop &amp; file ticket</span>
-          <span class="cta-sub">Ends the capture already running on this tab</span>
-        </span>
-      </button>
-
-      <!-- What to capture — Events only vs Events + Video is one pill, not a
-           checkbox: the pill already says whether a screen recording happens,
-           so a separate "Record video too" checkbox would just repeat it
-           (Variant G). The real checkbox is kept, hidden, as the single
-           source of truth popup.js already reads/writes/migrates — the pill
-           just drives it via a dispatched "change" event, so every existing
-           listener (markVideoChosen, saveRecordOpts, the legacy migration)
-           keeps working unchanged. -->
-      <input type="checkbox" id="optVideo" aria-label="Record video too" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" />
-      <div class="seg-wide" id="captureModeSwitch" role="group" aria-label="What to capture">
-        <button type="button" id="pillEventsOnly" aria-pressed="true">Events only</button>
-        <button type="button" id="pillEventsVideo" aria-pressed="false">Events + Video</button>
-      </div>
-
-      <!-- Only exists while Events + Video is selected — applyVideoUI() in
-           popup.js shows/hides this whole block, rather than greying its
-           rows out, so "Events only" stays a two-line state instead of four
-           disabled-looking ones. -->
-      <div class="opt-body" id="recordOptsBody" style="display:none">
-        <!-- Tab | Desktop (1.11.3). Tab asks once for the optional
-             `tabCapture` permission so the current tab records with no
-             browser share picker (chrome.tabCapture.getMediaStreamId,
-             resolved in background.js — an offscreen document has no tab of
-             its own to target). Declining, or Firefox (no tabCapture API),
-             falls back to Desktop's getDisplayMedia picker — see
-             docs/audit/capture-flow-1.11.3.md. -->
-        <div class="opt-row" id="surfaceModeRow">
-          <div class="opt-row-text">
-            <div class="opt-row-title">Capture</div>
-            <div class="opt-row-sub" id="surfaceModeHelp">Tab needs no share picker</div>
-          </div>
-          <div class="seg" role="group" aria-label="Recording surface">
-            <button type="button" class="seg-opt" id="surfaceTab" data-mode="tab" aria-pressed="false">Tab</button>
-            <button type="button" class="seg-opt" id="surfaceDesktop" data-mode="desktop" aria-pressed="true">Desktop</button>
-          </div>
-        </div>
-
-        <div class="opt-row">
-          <div class="opt-row-text"><div class="opt-row-title">Start delay</div></div>
-          <select id="optDelay" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
-            <option value="0" selected>No delay</option>
-            <option value="3">After 3 seconds</option>
-            <option value="5">After 5 seconds</option>
-          </select>
-          <div class="seg" id="delaySeg" role="group" aria-label="Start delay">
-            <button type="button" class="seg-opt" data-delay="0" aria-pressed="true">0s</button>
-            <button type="button" class="seg-opt" data-delay="3" aria-pressed="false">3s</button>
-            <button type="button" class="seg-opt" data-delay="5" aria-pressed="false">5s</button>
-          </div>
-        </div>
-
-        <!-- Microphone toggle, restored in 1.11.2 — see
-             docs/launch/video-1.11.1.md. Mic problems are reported HERE,
-             directly under the control they are about — the shared toast
-             sits at the foot of the popup, far enough below the fold that a
-             user has to scroll to find out why their click did nothing. -->
-        <div class="opt-row">
-          <div class="opt-row-text">
-            <div class="opt-row-title">Microphone</div>
-            <!-- Always shows the real permission state (Off / Not granted yet /
-                 Blocked / On · device) — set by popup.js's renderMicSub(), so
-                 a user sees what will happen before they click, not only after
-                 a click silently does nothing. -->
-            <div class="opt-row-sub" id="micOptSub">Off</div>
-          </div>
-          <button type="button" class="switch-track" id="micOpt" aria-pressed="false" title="Toggle microphone for the recording">
-            <span id="micOptState" class="sr-only">Off</span>
-          </button>
-        </div>
-        <div class="mic-notice" id="micNotice" style="display:none"></div>
-        <!-- Device labels only come back non-blank once mic permission is
-             actually granted, so this stays hidden until popup.js's
-             refreshMicDeviceRow() has something real to show. Same storage
-             keys as options.html's device picker — whichever surface changes
-             it, the other reflects it next time it opens. -->
-        <div class="opt-row" id="micDeviceOptRow" style="display:none">
-          <div class="opt-row-text"><div class="opt-row-sub">Use this microphone</div></div>
-          <select class="mini-select" id="micDeviceSelect"></select>
-        </div>
-
-        <div class="opt-row">
-          <div class="opt-row-text">
-            <div class="opt-row-title">Blur before recording</div>
-            <div class="opt-row-sub">Pick sensitive areas to mask first</div>
-          </div>
-          <label class="switch-wrap">
-            <input type="checkbox" id="optBlurFirst" class="switch-input" />
-            <span class="switch-track" aria-hidden="true"></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Tools dock — always visible regardless of the capture-mode choice
-           above, since none of these three care whether video is on. -->
-      <div class="dock">
-        <button class="dock-btn" id="btnScreenshot">
-          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
-          <span class="dock-label">Screenshot</span>
+      <!-- Capture Screenshot — its own card (BetterBugs-style layout pass,
+           2026-10-27). The main row captures instantly with whatever
+           mode/delay is currently set; the chevron ONLY reveals that card's
+           options, it never captures — two separate buttons, not one
+           overloaded control, so a click's effect is never ambiguous. -->
+      <div class="action-card">
+        <button type="button" class="action-card-main" id="btnScreenshot">
+          <span class="action-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+          <span class="action-card-text">
+            <span class="action-card-title">Capture Screenshot</span>
+            <!-- Kept in sync with the Crop/Visible + delay choice below by
+                 popup.js's renderShotSummary(), so the card itself always
+                 says what a click will actually do. -->
+            <span class="action-card-sub" id="screenshotCardSub">Visible, Instantly</span>
+          </span>
         </button>
-        <button class="dock-btn" id="btnViewTickets">
-          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
-          <span class="dock-label">Tickets</span>
-        </button>
-        <button class="dock-btn" id="btnInspect" title="Hover elements to see their computed styles; click to attach the style evidence to a bug report">
-          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
-          <span class="dock-label">Inspect</span>
+        <button type="button" class="action-card-chev" id="screenshotOptsToggle" aria-expanded="false" aria-controls="screenshotOptsBody" title="Screenshot options">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       </div>
-
-      <!-- Screenshot options — Crop (the existing drag-to-select region tool)
-           vs Visible (today's instant viewport shot), plus a start delay.
-           Collapsed by default so the dock row above stays compact; clicking
-           the Screenshot button itself still captures instantly using
-           whatever is set here, same as before — this only adds a way to SEE
-           and change those settings without a trip to Options. -->
-      <button type="button" class="screenshot-opts-toggle" id="screenshotOptsToggle" aria-expanded="false" aria-controls="screenshotOptsBody">
-        <span id="screenshotOptsSummary">Screenshot: Visible · Now</span>
-        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="opt-body" id="screenshotOptsBody" style="display:none">
+      <div class="action-card-body" id="screenshotOptsBody" style="display:none">
         <div class="opt-row">
           <div class="opt-row-text"><div class="opt-row-title">Capture</div></div>
           <div class="seg" id="shotModeSeg" role="group" aria-label="Screenshot mode">
@@ -270,6 +139,153 @@
             <button type="button" class="seg-opt" data-delay="5" aria-pressed="false">5s</button>
           </div>
         </div>
+      </div>
+
+      <!-- Capture Bug — the peer card to Screenshot above. Events-only by
+           default (no screen-share picker, no OS permission); the icon/
+           title/sub rewrite when "Events + Video" is chosen in the chevron's
+           panel. Reproduce, then stop in the on-page HUD; modal opens with
+           the full replay + auto-collected data. -->
+      <div class="action-card">
+        <button type="button" class="action-card-main" id="btnCaptureBug">
+          <!-- Both icons ship in the markup and popup.js shows one. Not an
+               innerHTML swap on purpose: web-ext lint flags every dynamic
+               innerHTML assignment (UNSAFE_VAR_ASSIGNMENT), and an icon is
+               not worth adding a warning a reviewer then has to triage. -->
+          <span class="action-card-icon">
+            <svg id="ctaIconEvents" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <svg id="ctaIconVideo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:none"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
+          </span>
+          <span class="action-card-text">
+            <span class="action-card-title" id="ctaTitle">Capture Bug</span>
+            <span class="action-card-sub" id="ctaSub">Console, network &amp; replay · stop when done</span>
+          </span>
+        </button>
+        <button type="button" class="action-card-chev" id="captureOptsToggle" aria-expanded="false" aria-controls="captureOptsBody" title="Capture options">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+
+      <!-- Shown INSTEAD of the hero's own click behavior while a capture is
+           already running on this tab (applyCapturingUI in popup.js) — the
+           hero itself is disabled then, so there must be another way to stop
+           that doesn't require finding the on-page bar. -->
+      <button class="cta-stop" id="btnStopCapture" type="button" style="display:none">
+        <span class="cta-icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></span>
+        <span class="cta-body">
+          <span class="cta-title">Stop &amp; file ticket</span>
+          <span class="cta-sub">Ends the capture already running on this tab</span>
+        </span>
+      </button>
+
+      <!-- Collapsed by default, same as Screenshot's panel above — holds the
+           Events-only/Events+Video choice and (while Events + Video is
+           picked) the recording options beneath it. -->
+      <div class="action-card-body" id="captureOptsBody" style="display:none">
+        <!-- What to capture — Events only vs Events + Video is one pill, not
+             a checkbox: the pill already says whether a screen recording
+             happens, so a separate "Record video too" checkbox would just
+             repeat it (Variant G). The real checkbox is kept, hidden, as the
+             single source of truth popup.js already reads/writes/migrates —
+             the pill just drives it via a dispatched "change" event, so
+             every existing listener (markVideoChosen, saveRecordOpts, the
+             legacy migration) keeps working unchanged. -->
+        <input type="checkbox" id="optVideo" aria-label="Record video too" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" />
+        <div class="seg-wide" id="captureModeSwitch" role="group" aria-label="What to capture">
+          <button type="button" id="pillEventsOnly" aria-pressed="true">Events only</button>
+          <button type="button" id="pillEventsVideo" aria-pressed="false">Events + Video</button>
+        </div>
+
+        <!-- Only exists while Events + Video is selected — applyVideoUI() in
+             popup.js shows/hides this whole block, rather than greying its
+             rows out, so "Events only" stays a two-line state instead of four
+             disabled-looking ones. -->
+        <div class="opt-body" id="recordOptsBody" style="display:none">
+          <!-- Tab | Desktop (1.11.3). Tab asks once for the optional
+               `tabCapture` permission so the current tab records with no
+               browser share picker (chrome.tabCapture.getMediaStreamId,
+               resolved in background.js — an offscreen document has no tab of
+               its own to target). Declining, or Firefox (no tabCapture API),
+               falls back to Desktop's getDisplayMedia picker — see
+               docs/audit/capture-flow-1.11.3.md. -->
+          <div class="opt-row" id="surfaceModeRow">
+            <div class="opt-row-text">
+              <div class="opt-row-title">Capture</div>
+              <div class="opt-row-sub" id="surfaceModeHelp">Tab needs no share picker</div>
+            </div>
+            <div class="seg" role="group" aria-label="Recording surface">
+              <button type="button" class="seg-opt" id="surfaceTab" data-mode="tab" aria-pressed="false">Tab</button>
+              <button type="button" class="seg-opt" id="surfaceDesktop" data-mode="desktop" aria-pressed="true">Desktop</button>
+            </div>
+          </div>
+
+          <div class="opt-row">
+            <div class="opt-row-text"><div class="opt-row-title">Start delay</div></div>
+            <select id="optDelay" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
+              <option value="0" selected>No delay</option>
+              <option value="3">After 3 seconds</option>
+              <option value="5">After 5 seconds</option>
+            </select>
+            <div class="seg" id="delaySeg" role="group" aria-label="Start delay">
+              <button type="button" class="seg-opt" data-delay="0" aria-pressed="true">0s</button>
+              <button type="button" class="seg-opt" data-delay="3" aria-pressed="false">3s</button>
+              <button type="button" class="seg-opt" data-delay="5" aria-pressed="false">5s</button>
+            </div>
+          </div>
+
+          <!-- Microphone toggle, restored in 1.11.2 — see
+               docs/launch/video-1.11.1.md. Mic problems are reported HERE,
+               directly under the control they are about — the shared toast
+               sits at the foot of the popup, far enough below the fold that a
+               user has to scroll to find out why their click did nothing. -->
+          <div class="opt-row">
+            <div class="opt-row-text">
+              <div class="opt-row-title">Microphone</div>
+              <!-- Always shows the real permission state (Off / Not granted yet /
+                   Blocked / On · device) — set by popup.js's renderMicSub(), so
+                   a user sees what will happen before they click, not only after
+                   a click silently does nothing. -->
+              <div class="opt-row-sub" id="micOptSub">Off</div>
+            </div>
+            <button type="button" class="switch-track" id="micOpt" aria-pressed="false" title="Toggle microphone for the recording">
+              <span id="micOptState" class="sr-only">Off</span>
+            </button>
+          </div>
+          <div class="mic-notice" id="micNotice" style="display:none"></div>
+          <!-- Device labels only come back non-blank once mic permission is
+               actually granted, so this stays hidden until popup.js's
+               refreshMicDeviceRow() has something real to show. Same storage
+               keys as options.html's device picker — whichever surface changes
+               it, the other reflects it next time it opens. -->
+          <div class="opt-row" id="micDeviceOptRow" style="display:none">
+            <div class="opt-row-text"><div class="opt-row-sub">Use this microphone</div></div>
+            <select class="mini-select" id="micDeviceSelect"></select>
+          </div>
+
+          <div class="opt-row">
+            <div class="opt-row-text">
+              <div class="opt-row-title">Blur before recording</div>
+              <div class="opt-row-sub">Pick sensitive areas to mask first</div>
+            </div>
+            <label class="switch-wrap">
+              <input type="checkbox" id="optBlurFirst" class="switch-input" />
+              <span class="switch-track" aria-hidden="true"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tools dock — Tickets / Inspect. Screenshot moved into its own card
+           above (2026-10-27). -->
+      <div class="dock dock-2">
+        <button class="dock-btn" id="btnViewTickets">
+          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
+          <span class="dock-label">Tickets</span>
+        </button>
+        <button class="dock-btn" id="btnInspect" title="Hover elements to see their computed styles; click to attach the style evidence to a bug report">
+          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
+          <span class="dock-label">Inspect</span>
+        </button>
       </div>
 
       <!-- Redaction rules moved to options.html (2026-10-27) — freed up popup

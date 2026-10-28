@@ -374,9 +374,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   currentHostname = url ? url.hostname : "";
 
   // With site access withheld there is no URL to show. Say "this tab" rather
-  // than rendering an empty header that looks broken.
-  document.getElementById("hostname").textContent = currentHostname || "this tab";
-  document.getElementById("sitePath").textContent = url ? (url.pathname || "/") : "";
+  // than rendering an empty header that looks broken. The elements
+  // themselves were removed from popup.html (2026-10-27, freed up vertical
+  // space for the action cards) — guarded rather than deleted outright, so
+  // a future layout can bring the row back without touching this logic.
+  const hostnameEl = document.getElementById("hostname");
+  const sitePathEl = document.getElementById("sitePath");
+  if (hostnameEl) hostnameEl.textContent = currentHostname || "this tab";
+  if (sitePathEl) sitePathEl.textContent = url ? (url.pathname || "/") : "";
 
   // Show whether the SDK is currently loaded on this tab. Informational
   // only — there's no enable/disable toggle here. Reloading the tab is
@@ -636,6 +641,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   // working exactly as they did for a real checkbox click.
   const pillEventsOnlyBtn = document.getElementById("pillEventsOnly");
   const pillEventsVideoBtn = document.getElementById("pillEventsVideo");
+
+  // Capture Bug's own chevron (card-layout pass, 2026-10-27) — only reveals
+  // the Events-only/Events+Video choice and, within that, recordOptsBody;
+  // never starts anything itself. Collapsed on every popup open, same as
+  // Screenshot's panel, regardless of which mode was last chosen — matches
+  // reference: the options are a deliberate look-up, not an always-open
+  // wall of settings.
+  const captureOptsToggle = document.getElementById("captureOptsToggle");
+  const captureOptsBody = document.getElementById("captureOptsBody");
+  captureOptsToggle?.addEventListener("click", () => {
+    const expanded = captureOptsToggle.getAttribute("aria-expanded") === "true";
+    captureOptsToggle.setAttribute("aria-expanded", String(!expanded));
+    if (captureOptsBody) captureOptsBody.style.display = expanded ? "none" : "flex";
+  });
+
   function selectCaptureMode(wantVideo) {
     if (!videoCb || videoCb.checked === wantVideo) return;
     videoCb.checked = wantVideo;
@@ -879,15 +899,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   try { shotDelaySec = Number(localStorage.getItem(SHOT_DELAY_KEY)) || 0; } catch {}
 
   const shotToggle = document.getElementById("screenshotOptsToggle");
-  const shotSummary = document.getElementById("screenshotOptsSummary");
+  const shotCardSub = document.getElementById("screenshotCardSub");
   const shotBody = document.getElementById("screenshotOptsBody");
   const shotModeBtns = Array.from(document.querySelectorAll("#shotModeSeg .seg-opt"));
   const shotDelayBtns = Array.from(document.querySelectorAll("#shotDelaySeg .seg-opt"));
 
+  // The card's own subtitle says exactly what a click will do, so there is
+  // no separate expand-to-see-settings step just to answer that question.
   function renderShotSummary() {
     const modeLabel = shotMode === "crop" ? "Crop" : "Visible";
-    const delayLabel = shotDelaySec > 0 ? `${shotDelaySec}s` : "Now";
-    if (shotSummary) shotSummary.textContent = `Screenshot: ${modeLabel} · ${delayLabel}`;
+    const delayLabel = shotDelaySec > 0 ? `in ${shotDelaySec}s` : "Instantly";
+    if (shotCardSub) shotCardSub.textContent = `${modeLabel}, ${delayLabel}`;
   }
   function renderShotButtons() {
     shotModeBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === shotMode)));
@@ -1215,7 +1237,8 @@ const WHATS_NEW = {
     lines: [
       "Screen recording is back — turn on “Record video too” in Record options",
       "A “Tab” record mode — captures the current tab with no browser share picker (asks once for permission)",
-      "The capture bar's mic mute works, and the toolbar icon shows a red REC while recording",
+      "Choose which microphone records, and see the mic's state right in the popup",
+      "Screenshot options: the visible area or a crop, now or after a short delay",
       "Works on sites with strict security policies, and on sites that run their own copy of TraceBug",
     ],
   },
