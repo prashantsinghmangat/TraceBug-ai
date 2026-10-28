@@ -20,6 +20,7 @@ import { showQuickBugCapture, isQuickBugOpen, refreshQuickBugCapture } from "./u
 import { matchesShortcut, setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 import { startVideoRecording, stopVideoRecording, isVideoRecording, isVideoSupported, getCaptureCount, isVideoOffered } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD } from "./ui/recording-hud";
+import { announceCaptureStopped } from "./capture-ownership";
 
 const TOOLBAR_ID = "tracebug-compact-toolbar";
 const SETTINGS_ID = "tracebug-settings-card";
@@ -531,6 +532,12 @@ async function _finishRecording(
   const captures = getCaptureCount();
   showToast("Stopping recording...", root);
   await stopVideoRecording();
+  // This calls video-recorder.ts's stop directly, not index.ts's
+  // TraceBug.stopVideoRecording() wrapper (that path is for the HUD's Stop
+  // button) — so the worker never otherwise learns this tab's capture ended,
+  // and the REC badge sticks forever. Same bug, same fix as the comment in
+  // index.ts's stopVideoRecording().
+  void announceCaptureStopped();
   hideRecordingHUD();
   setInnerHTML(btn, iconFn(false));
   btn.classList.remove("tb-active");
