@@ -34020,6 +34020,56 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   });
 
+  // src/capture-ownership.ts
+  function currentOrigin() {
+    try {
+      return location.origin || "";
+    } catch (e2) {
+      return "";
+    }
+  }
+  async function getCaptureStatus() {
+    var _a2;
+    if (!isExtensionContext2()) return NOT_APPLICABLE;
+    try {
+      const res = await rpcCall("tb:capture:status", { origin: currentOrigin() }, 3e3);
+      return {
+        running: !!(res == null ? void 0 : res.running),
+        startedAt: typeof (res == null ? void 0 : res.startedAt) === "number" ? res.startedAt : null,
+        ended: (_a2 = res == null ? void 0 : res.ended) != null ? _a2 : null
+      };
+    } catch (e2) {
+      return NOT_APPLICABLE;
+    }
+  }
+  async function announceCaptureStarted(startedAt) {
+    if (!isExtensionContext2()) return;
+    try {
+      await rpcCall("tb:capture:started", { origin: currentOrigin(), startedAt }, 3e3);
+    } catch (e2) {
+    }
+  }
+  async function announceCaptureStopped() {
+    if (!isExtensionContext2()) return;
+    try {
+      await rpcCall("tb:capture:stopped", {}, 3e3);
+    } catch (e2) {
+    }
+  }
+  function captureEndedMessage(notice) {
+    const host2 = notice.host ? notice.host : "the previous site";
+    return `Capture ended when you left ${host2} \u2014 captures can't follow you across sites yet. What you captured there was kept: go back to ${host2} to open its ticket.`;
+  }
+  var NOT_APPLICABLE;
+  var init_capture_ownership = __esm({
+    "src/capture-ownership.ts"() {
+      "use strict";
+      init_ext_rpc();
+      init_video_recorder();
+      NOT_APPLICABLE = { running: false, startedAt: null, ended: null };
+    }
+  });
+
   // src/compact-toolbar.ts
   function setToolbarRecordingState(_isRecording2, _onToggle) {
   }
@@ -34385,6 +34435,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const captures = getCaptureCount();
     showToast3("Stopping recording...", root2);
     await stopVideoRecording();
+    void announceCaptureStopped();
     hideRecordingHUD();
     setInnerHTML(btn, iconFn(false));
     btn.classList.remove("tb-active");
@@ -34999,6 +35050,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_helpers();
       init_video_recorder();
       init_recording_hud();
+      init_capture_ownership();
       TOOLBAR_ID = "tracebug-compact-toolbar";
       SETTINGS_ID = "tracebug-settings-card";
       DRAG_POS_KEY = "tracebug_toolbar_pos";
@@ -71785,52 +71837,7 @@ First element: \`${exampleSnippet}\``,
   init_collectors();
   init_custom_redaction();
   init_ext_transport();
-
-  // src/capture-ownership.ts
-  init_ext_rpc();
-  init_video_recorder();
-  var NOT_APPLICABLE = { running: false, startedAt: null, ended: null };
-  function currentOrigin() {
-    try {
-      return location.origin || "";
-    } catch (e2) {
-      return "";
-    }
-  }
-  async function getCaptureStatus() {
-    var _a2;
-    if (!isExtensionContext2()) return NOT_APPLICABLE;
-    try {
-      const res = await rpcCall("tb:capture:status", { origin: currentOrigin() }, 3e3);
-      return {
-        running: !!(res == null ? void 0 : res.running),
-        startedAt: typeof (res == null ? void 0 : res.startedAt) === "number" ? res.startedAt : null,
-        ended: (_a2 = res == null ? void 0 : res.ended) != null ? _a2 : null
-      };
-    } catch (e2) {
-      return NOT_APPLICABLE;
-    }
-  }
-  async function announceCaptureStarted(startedAt) {
-    if (!isExtensionContext2()) return;
-    try {
-      await rpcCall("tb:capture:started", { origin: currentOrigin(), startedAt }, 3e3);
-    } catch (e2) {
-    }
-  }
-  async function announceCaptureStopped() {
-    if (!isExtensionContext2()) return;
-    try {
-      await rpcCall("tb:capture:stopped", {}, 3e3);
-    } catch (e2) {
-    }
-  }
-  function captureEndedMessage(notice) {
-    const host2 = notice.host ? notice.host : "the previous site";
-    return `Capture ended when you left ${host2} \u2014 captures can't follow you across sites yet. What you captured there was kept: go back to ${host2} to open its ticket.`;
-  }
-
-  // src/index.ts
+  init_capture_ownership();
   init_network_dedupe();
   init_environment();
   init_screenshot();
