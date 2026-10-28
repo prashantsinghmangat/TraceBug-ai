@@ -78,41 +78,59 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* ── Main ───────────────────────────────────────────── */
 .main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; }
 
-/* One compact line, not a two-line stacked box — this just names which site
-   a capture would be about, not something worth a quarter of the popup's
-   visible height on every open. */
-.site-label {
-  display: flex; align-items: baseline; gap: 6px;
-  padding: 5px 10px;
+/* .site-label/.site-host/.site-path removed (2026-10-27) along with the
+   markup that used them — see popup.html/popup.js for why. */
+
+/* ── Action cards — Capture Screenshot / Capture Bug ─────────────────
+   Two equal peer cards (BetterBugs-style layout pass, 2026-10-27): a wide
+   "main" button that acts immediately using whatever is currently set, and
+   a separate small chevron button that only reveals/hides that card's own
+   options panel (.action-card-body, a sibling right below). Deliberately
+   TWO buttons, not one with a nested toggle — a single control that
+   sometimes acts and sometimes just expands is the exact ambiguity this
+   avoids; the divider between them signals "these do different things". */
+.action-card {
+  display: flex; align-items: stretch;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-}
-.site-host { font-size: 12px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; flex-shrink: 0; }
-.site-path { font-size: 11px; color: var(--text-3); font-family: ui-monospace, "SF Mono", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-
-/* ── Primary CTA ────────────────────────────────────── */
-.cta-primary {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-  color: #ffffff;
-  border: none;
   border-radius: var(--radius-md);
+  margin-bottom: 8px;
   box-shadow: var(--shadow);
-  transition: transform 0.15s, box-shadow 0.15s;
-  text-align: left;
 }
-.cta-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.28); }
-.cta-primary:active { transform: translateY(0); }
-.cta-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+.action-card-main {
+  flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0;
+  padding: 12px 14px;
+  background: none; border: none; color: var(--text); text-align: left;
+  transition: background 0.15s;
+}
+.action-card-main:hover { background: var(--bg-3); }
+.action-card-main:disabled { opacity: 0.5; cursor: not-allowed; }
+.action-card-icon { display: inline-flex; flex-shrink: 0; color: var(--accent); }
+.action-card-icon svg { width: 20px; height: 20px; }
+.action-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.action-card-title { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+.action-card-sub { font-size: 11px; color: var(--text-3); font-weight: 500; }
+.action-card-chev {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 38px;
+  background: none; border: none; border-left: 1px solid var(--border);
+  color: var(--text-2); cursor: pointer;
+}
+.action-card-chev:hover { background: var(--bg-3); color: var(--text); }
+.action-card-chev svg { width: 14px; height: 14px; transition: transform 0.15s; }
+.action-card-chev[aria-expanded="true"] svg { transform: rotate(180deg); }
+.action-card-body {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; margin: -8px 0 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border); border-top: 1px dashed var(--border-hover);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
 .cta-icon { display: inline-flex; flex-shrink: 0; }
 .cta-icon svg { width: 22px; height: 22px; }
 .cta-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .cta-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 .cta-sub { font-size: 11px; opacity: 0.85; font-weight: 500; }
-.cta-arrow { opacity: 0.85; flex-shrink: 0; }
 
 /* ── Stop button (shown instead of the hero while already capturing) ── */
 .cta-stop {
@@ -216,6 +234,9 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Tools dock — Screenshot / Tickets / Inspect, always visible ────── */
 .dock { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Screenshot moved into its own action-card above (2026-10-27) — the dock
+   now holds only Tickets + Inspect. */
+.dock.dock-2 { grid-template-columns: repeat(2, 1fr); }
 .dock-btn {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 10px 6px 9px;

@@ -2,16 +2,18 @@
 
 All notable changes to TraceBug are documented here.
 
-## [1.11.3] - 2026-10-23
+## [1.11.3] - 2026-10-28
 
 > Jam-style "record this tab" with no browser share picker, plus a real fix for the HUD mic-mute button that 1.11.2 left disabled on purpose. See `docs/audit/capture-flow-1.11.3.md`.
 
 ### Added
 
 - **A Tab | Desktop switch in Record options.** Tab asks once for the optional `tabCapture` permission (Chrome shows "Read and change all your data on all websites" — the same wording as the existing all-sites permission) and then records the current tab directly, with no "Choose what to share" dialog. Desktop keeps today's picker. Decline the Tab prompt, or use Firefox (no equivalent API there), and it falls back to Desktop automatically, with a one-line notice. Settings shows the grant with a Remove button, the same as the all-sites permission.
-- **The HUD's mic-mute button now actually works during a tab/desktop recording in the extension.** It was wired to a stream the page never owned since 1.11.2 restored video (Bug 4, `docs/launch/video-1.11.1.md`) and rendered disabled rather than dead; it now forwards mute/unmute to the offscreen recorder over a new `tb:rec:mic-mute` message.
-- **Pick which microphone records.** Once the mic is allowed, TraceBug settings lists your microphones; the recorder uses the one you chose and falls back to the system default if it has been unplugged.
-- **The popup's Microphone row always shows its state** (off, not allowed yet, on with the chosen device, or blocked). Turning it on for the first time goes straight to TraceBug settings and asks the browser there, one click instead of three; the explanation box now appears only when the mic is blocked.
+- **The HUD's mic-mute button now actually works during a tab/desktop recording in the extension.** It was wired to a stream the page never owned since 1.11.2 restored video (Bug 4, `docs/launch/video-1.11.1.md`) and rendered disabled rather than dead; it now forwards mute/unmute to the offscreen recorder over a new `tb:rec:mic-mute` message (which the content script now lets through; before, every mute was silently dropped there and the recording kept the mic).
+- **Pick which microphone records.** Once the mic is allowed, the popup and TraceBug settings both list your microphones; the recorder uses the one you chose and falls back to the system default if it has been unplugged.
+- **The popup's Microphone row always shows its state** (off, not allowed yet, on with the chosen device, or blocked). Turning it on for the first time goes straight to the Microphone card in TraceBug settings and asks the browser there, one click instead of three; the explanation box now appears only when the mic is blocked.
+- **Mic toggle on the start countdown.** With a start delay set, a video recording's 3-2-1 overlay has a mic on/off switch, the last chance to catch a forgotten mic before recording starts.
+- **Screenshot options in the popup: Visible or Crop, now or after 3s/5s.** New SDK method `TraceBug.prepareScreenshot({ crop, delaySec })`; `runRecordCountdown()` now resolves `true`/`false` and takes an optional `{ withMicrophone }`, read back with the new `getCountdownMicChoice()`.
 
 ### Fixed
 
@@ -21,11 +23,14 @@ All notable changes to TraceBug are documented here.
 - **Closing the tab you are recording no longer loses the recording.** In Tab mode the recorder never noticed its tab was gone, so nothing was saved and the hidden recorder page stayed open. Closing the tab now stops and saves the recording.
 - **The capture bar no longer shows a Pause button that didn't pause** in the extension. It looked paused while the recording and timer kept running, so it is gone there until pausing really works; the npm SDK keeps it.
 - **The popup knows a capture is already running.** Reopening it mid-capture showed the idle Capture Bug button, and clicking it silently ended the running capture. It now reads "Capturing…" and points to Stop in the on-page bar.
-- **TraceBug is no longer invisible on a page with a strict `style-src` CSP** (nonce-based, no `unsafe-inline` — confirmed on a claude.ai artifact page, where the toolbar mounted into the DOM with zero layout and nothing ever appeared). Every `<style>` element TraceBug creates now carries the host page's own CSP nonce when it uses one. Separately — and this was the one actually making the UI disappear — inline `style="..."` attributes (how most of the toolbar/HUD/modal are positioned) survive the same CSP too: TraceBug now re-applies them through the CSSOM after they're inserted, which isn't subject to the same restriction.
+- **TraceBug is no longer invisible on a page with a strict `style-src` CSP** (nonce-based, no `unsafe-inline` — confirmed on a claude.ai artifact page and Outlook on the web). The extension now injects TraceBug's CSS with `chrome.scripting.insertCSS`, which the page's CSP doesn't govern; the npm SDK's `<style>` elements carry the page's nonce when one is visible. Separately — and this was the one actually making the UI disappear — inline `style="..."` attributes (how most of the toolbar/HUD/modal are positioned) survive the same CSP too: TraceBug now re-applies them through the CSSOM after they're inserted, which isn't subject to the same restriction.
 
 ### Changed
 
 - A tab recording made in Tab mode keeps going through a same-origin navigation in that tab (the stream is bound to the tab, not the page); it still ends on a cross-origin navigation, same as before.
+- **Console and Actions are separate stories.** Console shows console output only; Actions shows only what the user did (clicks, typing, selects, submits, navigation) plus recording start/stop, in time order. Network and error rows no longer repeat across both. A bare `new TypeError()` or an empty `console.warn()` shows in Console again instead of being dropped.
+- **Info and Network values no longer wrap one character per line** in a narrow window; a cramped row scrolls sideways instead.
+- **The popup is reorganized into cards.** Capture Bug and Screenshot each have a chevron that shows their options; each card's subtitle says what a click will do. Diagnostics and redaction settings moved to TraceBug settings.
 
 ## [1.11.2] - 2026-10-23
 

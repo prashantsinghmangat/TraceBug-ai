@@ -290,9 +290,44 @@ API) rather than silently doing nothing or erroring — `chrome.tabCapture` feat
 browser-name check. **Desktop** still works exactly as it did before 1.11.3 (Firefox's window-host
 recorder, `offscreen.js`'s `IS_WINDOW_HOST` branch).
 
+### 16. Microphone: grant, choose, unplug, block (1.11.3)
+
+Start with the mic never asked (remove TraceBug and load it fresh, or reset the site permission).
+
+1. Popup: the Microphone row reads "Off · not granted yet". Turn it on. **Pass:** TraceBug settings
+   opens scrolled to the Microphone card and the browser's mic prompt appears at once.
+2. Allow. **Pass:** the card shows a green "Granted" and a device list; the popup row reads "On" and
+   shows the same device list. Pick a non-default mic (USB or Bluetooth).
+3. Record a short Tab video while talking. **Pass:** the voice is in the video, from the chosen mic.
+4. During a recording, click the capture bar's mic button. **Pass:** the part recorded while muted is
+   silent.
+5. Unplug the chosen mic and record again. **Pass:** the voice is still there, from the default mic.
+6. Block the mic in the browser's site settings for the extension. **Pass:** the popup row reads
+   "Blocked — tap to fix" in red, and clicking it explains how to unblock.
+
+Repeat 1–3 in Firefox.
+
+### 17. Countdown mic toggle (1.11.3)
+
+Record options: video on, 3s delay. Start a recording. **Pass:** the 3-2-1 overlay shows a mic switch
+in the popup's current state; flipping it decides whether the recording has your voice. Esc during
+the countdown starts nothing and leaves no REC badge.
+
+### 18. Screenshot options (1.11.3)
+
+Popup → Screenshot chevron. **Pass:** the card subtitle reads e.g. "Visible, Instantly" and matches
+the choice. Visible + Now captures at once; Crop opens the drag-to-crop picker; 3s shows the countdown
+first; Esc in the countdown or the picker adds nothing to the ticket.
+
+### 19. Console and Actions tabs (1.11.3)
+
+Capture a session with clicks, typing, a page error and a fetch. **Pass:** Console has console output
+only; Actions has only what you did plus recording start/stop, in order; neither repeats Network rows.
+In a narrow (undocked) window, Info and Network values don't stack one character per line.
+
 ### 10. Diagnostics
 
-Open the popup, expand **Having trouble?**. **Pass:** the summary says "no errors" on a clean session.
+Open TraceBug settings (it moved out of the popup in 1.11.3) and find the **Having trouble?** card. **Pass:** the summary says "no errors" on a clean session.
 Click **Copy diagnostics** and paste it somewhere: it must name TraceBug's version, your browser and
 OS, the granted permissions, and end with "No URLs, page content or stored values are included".
 
