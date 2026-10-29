@@ -115,28 +115,27 @@ renders with real size and a clickable button, not just that a nonce exists) and
 
 ## Left before release — all of it needs a person
 
-1. **`develop` has uncommitted work again — three Tab-mode fixes from hand-testing, not yet committed.**
-   Everything in "What 1.11.3 adds" above, plus `6ff46a4` (toolbar-stop REC badge) and `c49ec65`
-   (mic-mute RPC dropped) are committed. On top of those, the user hand-tested 1.11.3's Tab mode and
-   found three more real bugs, now fixed but **uncommitted**: (1) `popup.js`'s Tab-select permission
-   grant didn't persist if the native OS dialog closed the popup before its callback ran (it does) —
-   `background.js` now has a `chrome.permissions.onAdded` listener that persists the choice
-   independent of the popup surviving. (2) Tab mode could silently fall back to the Desktop/
-   getDisplayMedia picker with zero explanation — `background.js`'s `resolveTabCaptureStreamId` now
-   checks `permissions.contains` before bailing and retries briefly, and `video-recorder.ts` now
-   surfaces the fallback as a warning toast when it still happens. (3) A fully silent recording (no
-   mic, no tab/system audio) had no indication on Chrome — `video-recorder.ts` now warns using
-   `offscreen.js`'s already-broadcast but previously-unread `audioIncluded` flag. See
-   `docs/launch/PROGRESS.md`'s 2026-10-29 entry for the full writeup. **Not verified here** — bug (2)'s
-   deepest cause (a `chrome.tabCapture` binding-visibility race in an already-running service worker)
-   can't be reproduced or measured without a real browser; the retry is a bounded, safe improvement,
-   not a proven fix. The user needs to re-run their exact repro (grant Tab permission, start a Tab
-   recording without reopening the extension) before trusting this is actually closed.
-   `node scripts/check.mjs --full` is green: **936 passing / 58 files**, `ext:lint` 0 errors / 26
-   warnings (unchanged baseline), `check:versions` all surfaces on **1.11.3**. Per the repo's "never
-   push" rule, nothing here pushes or tags itself — commit these three fixes, re-verify Tab mode by
-   hand, then push `develop`, merge to `main`, tag `v1.11.3` once the manual rows below (including
-   11–15) are walked.
+1. **Shipped to `main` and tagged.** `develop` and `main` both sit at `0a9a038`, tagged **`v1.11.3`**
+   and pushed to `origin/main` (done by the user directly, not by an agent here — this repo's "never
+   push" rule still holds). That commit carries everything in "What 1.11.3 adds" above, plus three
+   rounds of hand-testing fixes: `6ff46a4` (toolbar-stop REC badge), `c49ec65` (mic-mute RPC dropped),
+   and `0a9a038` — three Tab-mode bugs: (1) `popup.js`'s Tab-select permission grant didn't persist if
+   the native OS dialog closed the popup before its callback ran (it does) — `background.js` now has a
+   `chrome.permissions.onAdded` listener that persists the choice independent of the popup surviving.
+   (2) Tab mode could silently fall back to the Desktop/getDisplayMedia picker with zero explanation —
+   `resolveTabCaptureStreamId` now checks `permissions.contains` before bailing and retries briefly, and
+   `video-recorder.ts` surfaces the fallback as a warning toast when it still happens. (3) A fully
+   silent recording (no mic, no tab/system audio) had no indication on Chrome — `video-recorder.ts` now
+   warns using `offscreen.js`'s already-broadcast but previously-unread `audioIncluded` flag. See
+   `docs/launch/PROGRESS.md`'s 2026-10-29 entry for the full writeup. `node scripts/check.mjs --full`
+   was green before the merge: **936 passing / 58 files**, `ext:lint` 0 errors / 26 warnings,
+   `check:versions` all surfaces on **1.11.3**.
+   **Still not verified**, carried over from before the merge: bug (2) above's deepest cause (a
+   `chrome.tabCapture` binding-visibility race in an already-running service worker) can't be
+   reproduced or measured without a real browser — the retry is a bounded, safe improvement, not a
+   proven fix. Re-run the exact repro (grant Tab permission, start a Tab recording without reopening
+   the extension) before trusting it's fully closed. **The git side is done — everything else in this
+   numbered list (manual QA, store zips, listings, npm publish, website deploy) is still open.**
 2. **`docs/RELEASE_CHECKLIST.md`** — now needs a **full** manual pass, not just 10a–10h: rows 1–3
    (video setting survives the upgrade) and row 9 (oversize-export notice) are live again now that
    video is restored and have not been run by a human yet, only by the new e2e. Plus 10 (diagnostics)
