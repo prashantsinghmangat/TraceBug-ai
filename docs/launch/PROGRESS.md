@@ -120,3 +120,18 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   `e2e/pre-record.e2e.mjs` 11/11, `e2e/inspect-mode.e2e.mjs` 8/8, `e2e/ext-shipping-path.e2e.mjs` 16/16,
   `e2e/ext-no-secrets-in-page.e2e.mjs` 13/13) run clean locally end to end, matching the CI job's own
   commands. `check.mjs --full` still green (936/58, unchanged baseline).
+
+## npm published; STATE.md's Firefox-pass status corrected, not closed (2026-10-29)
+
+- **Published for real:** `tracebug-sdk` and `tracebug` (the MCP CLI) both now show `1.11.3` as
+  `dist-tags.latest` on the real registry (confirmed via a raw `registry.npmjs.org` fetch, not just
+  `npm view`'s cache — the first publish attempt looked successful in the terminal but silently never
+  completed because the browser-based 2FA/publish-approval step was skipped). A fresh `npx
+  tracebug@latest help` resolves and runs. The MCP registry (`server.json`) is still not pushed — a
+  separate submission flow, not attempted yet.
+- **STATE.md's open item 9 corrected, not marked done:** asked the user directly what Firefox testing
+  actually happened rather than assume — confirmed only RELEASE_CHECKLIST rows 16 (mic grant/choose) and
+  17 (countdown mic toggle) were hand-verified in a real Firefox build. Row 15 (Tab mode greyed out with
+  a tooltip) and the Oct 23 capture-flow/rendering bug list remain Chromium-only. STATE.md now says this
+  explicitly instead of a blanket "still owed" that undersold what's done or a blanket "verified" that
+  would have oversold it.

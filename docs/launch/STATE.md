@@ -161,11 +161,17 @@ renders with real size and a clickable button, not just that a nonce exists) and
    instead of inviting a second start. This one is NOT covered by e2e — Playwright can't drive a real
    MV3 action popup without breaking its `active tab` resolution — only by code review and the unit
    test for the `GET_STATE` field it reads.
-9. **A manual Firefox pass is still owed.** Everything in this round's six capture-flow / rendering
-   bugs (see `PROGRESS.md` 2026-10-23 entries) was verified in Chromium only — this project has no
-   automated Firefox e2e (`npm run ext:firefox` is interactive, deliberately not a gate). `background.js`
-   and `src/ui/helpers.ts` are shared files, not Chrome-specific, so the fixes should carry over, but
-   none of them has actually been run in Firefox yet.
+9. **A manual Firefox pass is still owed — partially started, not complete.** Confirmed by hand in a
+   real Firefox build: RELEASE_CHECKLIST row 16 (microphone grant/choose, matching Chrome's prompt) and
+   row 17 (the record-countdown mic toggle, audio verified present in the result). **Still unverified in
+   Firefox**: row 15 (Tab mode's button actually greyed out with a tooltip, Desktop still working via
+   the window-host recorder — `offscreen.js`'s `IS_WINDOW_HOST` branch has only ever been exercised by
+   reading code), and this round's six capture-flow / rendering bugs (see `PROGRESS.md` 2026-10-23
+   entries), verified in Chromium only so far. This project has no automated Firefox e2e
+   (`npm run ext:firefox` is interactive, deliberately not a gate). `background.js` and
+   `src/ui/helpers.ts` are shared files, not Chrome-specific, so the fixes should carry over, but that is
+   an expectation, not a confirmed result — treat Firefox as **not yet release-ready** until rows 15 and
+   the Oct 23 bug list get the same hands-on pass rows 16/17 just got.
 
 All six bugs this round were found by hand-testing the real unpacked extension — none were caught by
 the original e2e suite, because it drove `background.js` through synthetic `sendMessage` shortcuts
