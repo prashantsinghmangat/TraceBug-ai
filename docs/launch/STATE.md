@@ -156,9 +156,12 @@ renders with real size and a clickable button, not just that a nonce exists) and
    (item 9) hasn't caught yet — don't treat the submission itself as proof Firefox works correctly.
 5. **npm: done.** `tracebug-sdk` and `tracebug` (the MCP CLI) are both published at **1.11.3** —
    confirmed live via a raw registry fetch (`dist-tags.latest: "1.11.3"` on both, a fresh `npx
-   tracebug@latest help` runs). **The MCP registry (`packages/tracebug/server.json`, entry
-   `io.github.prashantsinghmangat/tracebug`) is still not submitted** — a separate flow from `npm
-   publish` (likely the `mcp-publisher` CLI or a PR against the registry repo), not attempted yet.
+   tracebug@latest help` runs). **MCP registry: done too.** `io.github.prashantsinghmangat/tracebug`
+   published via the `mcp-publisher` CLI (device-flow GitHub auth; the first attempt 403'd because the
+   browser was signed into a different GitHub account — `io.github.prashantsingh1-tz`, which only has
+   publish rights to its own namespace — re-authenticating as `prashantsinghmangat` fixed it). Confirmed
+   live via the registry's own public search API: `"version": "1.11.3"`, `"status": "active"`,
+   `"isLatest": true`, published 2026-10-29T11:46:42Z.
 6. **Deploy the website** (Netlify, `website/`), then check `/privacy` (now mentions `offscreen`),
    `/try`, `/bye`. One real `/bye` submission must show in Netlify Forms under `uninstall`.
 7. **Known, accepted gaps to disclose or track, not block on**: Bug 2 (no fullscreen in the video

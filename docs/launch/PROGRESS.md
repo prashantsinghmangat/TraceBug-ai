@@ -135,3 +135,18 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   a tooltip) and the Oct 23 capture-flow/rendering bug list remain Chromium-only. STATE.md now says this
   explicitly instead of a blanket "still owed" that undersold what's done or a blanket "verified" that
   would have oversold it.
+
+## MCP registry published: io.github.prashantsinghmangat/tracebug@1.11.3 (2026-10-29)
+
+- Installed `mcp-publisher` (the official CLI, github.com/modelcontextprotocol/registry releases —
+  Windows amd64 tarball). `packages/tracebug/server.json` validated clean against the live registry
+  schema on the first try (`mcp-publisher validate`) — no changes needed to the file itself.
+- **First publish attempt 403'd**: the GitHub device-flow login authenticated as
+  `io.github.prashantsingh1-tz` (a different GitHub account than the repo's actual owner,
+  `prashantsinghmangat`) because that was the account already signed into the browser. Fixed by logging
+  out and re-authenticating with the browser signed into the correct personal account.
+- **Verified independently**, not just trusting the CLI's own success message: queried the registry's
+  public search API directly (`registry.modelcontextprotocol.io/v0.1/servers?search=...`) and confirmed
+  `"version": "1.11.3"`, `"status": "active"`, `"isLatest": true`.
+- All three 1.11.3 distribution channels are now done: npm (`tracebug-sdk` + `tracebug`), MCP registry,
+  and AMO submission (pending review). CWS upload is the one still open.
