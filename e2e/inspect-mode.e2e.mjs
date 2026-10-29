@@ -44,6 +44,13 @@ const total = () => `${passes}/${passes + failures} checks passed`;
 try {
   await page.goto("http://localhost:4175/try.html", { waitUntil: "load" });
   await page.waitForTimeout(1500);
+  // try.html deliberately does not load the SDK on page load any more (see
+  // its own comment: loading it unconditionally would race the extension's
+  // injected copy and lock the page into page mode) — the "No extension? Try
+  // the in-page demo" button is what loads it now. Without this click
+  // window.TraceBug stays undefined and every call below throws.
+  await page.click("#inPageDemoBtn");
+  await page.waitForTimeout(1000);
 
   await page.evaluate(() => window.TraceBug.startRecording());
   await page.waitForTimeout(300);
