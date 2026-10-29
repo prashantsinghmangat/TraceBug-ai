@@ -96,3 +96,27 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   count, the same). No new automated test for any of the five fixes — all five need a human clicking
   through a real popup/native-dialog flow, which the existing fake-media-stream e2e harness doesn't
   drive.
+
+## CI red on push to main — two e2e suites broken since Oct 21, unrelated to the push (2026-10-29)
+
+- **What broke CI:** the push of the Tab-mode fixes (`0a9a038`) and a follow-up docs commit both failed
+  the `e2e` job. Root cause confirmed pre-existing, not caused by either push: `website/public/try.html`
+  stopped auto-loading the SDK on page load back in `4a7511d` (2026-10-21, a deliberate fix so the demo
+  page doesn't race the extension's own injected copy) — the "No extension? Try the in-page demo" button
+  is what loads it now. `e2e/blur-tracking.e2e.mjs` and `e2e/inspect-mode.e2e.mjs` were never updated to
+  click `#inPageDemoBtn` first (unlike `e2e/pre-record.e2e.mjs`, which got this fix at the time), so
+  every run since Oct 21 has called into `window.TraceBug` while it was still `undefined` and thrown
+  immediately — `ext-shipping-path` and `ext-no-secrets-in-page` don't touch `try.html` and were
+  unaffected. Fixed both by adding the same `await page.click("#inPageDemoBtn")` + wait that
+  `pre-record.e2e.mjs` already has.
+- **A second, genuinely separate bug surfaced once blur-tracking could run far enough to hit it:**
+  clicking `#inPageDemoBtn` itself scrolls the page ~226px (a pre-existing quirk of this specific demo
+  page's layout, unrelated to blur mode or anything TraceBug does) — the test captured the coupon
+  field's bounding box once, then reused that now-stale coordinate after a scroll-down-then-back-to-0
+  round trip, so its "click again to unblur" landed on the wrong element and silently blurred something
+  else instead. Fixed by re-measuring the bounding box after the scroll round trip rather than reusing
+  the original one. The actual blur/unblur toggle logic (`src/ui/blur-tool.ts`) was never at fault.
+- **Verified:** all 5 suites the CI workflow actually runs (`e2e/blur-tracking.e2e.mjs` 7/7,
+  `e2e/pre-record.e2e.mjs` 11/11, `e2e/inspect-mode.e2e.mjs` 8/8, `e2e/ext-shipping-path.e2e.mjs` 16/16,
+  `e2e/ext-no-secrets-in-page.e2e.mjs` 13/13) run clean locally end to end, matching the CI job's own
+  commands. `check.mjs --full` still green (936/58, unchanged baseline).
