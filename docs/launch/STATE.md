@@ -162,8 +162,11 @@ renders with real size and a clickable button, not just that a nonce exists) and
    publish rights to its own namespace — re-authenticating as `prashantsinghmangat` fixed it). Confirmed
    live via the registry's own public search API: `"version": "1.11.3"`, `"status": "active"`,
    `"isLatest": true`, published 2026-10-29T11:46:42Z.
-6. **Deploy the website** (Netlify, `website/`), then check `/privacy` (now mentions `offscreen`),
-   `/try`, `/bye`. One real `/bye` submission must show in Netlify Forms under `uninstall`.
+6. **Website: deployed, confirmed live.** `tracebug.dev/tracebug-sdk.js`'s SHA-256 matches this repo's
+   committed `website/public/tracebug-sdk.js` byte-for-byte — not just the version badge (which only
+   shows the rounded `v1.11` tag, not the patch number, so that alone wasn't proof). **Still
+   unverified**: `/privacy` (mentions `offscreen`), `/try`, `/bye`, and one real `/bye` submission
+   showing up in Netlify Forms under `uninstall` — none of those were specifically checked here.
 7. **Known, accepted gaps to disclose or track, not block on**: Bug 2 (no fullscreen in the video
    player/exported viewer) and Bug 4 (HUD mic-mute button renders disabled in the extension rather
    than working) — both in `docs/launch/video-1.11.1.md`.
