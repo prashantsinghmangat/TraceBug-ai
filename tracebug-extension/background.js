@@ -753,6 +753,28 @@ if (chrome.permissions && chrome.permissions.onRemoved) {
   chrome.permissions.onRemoved.addListener(notifyHostAccessChanged);
 }
 
+// popup.js's surfaceTabBtn click handler requests `tabCapture` and only
+// saves `surfaceMode: "tab"` inside that request's own callback — but the
+// native OS grant dialog steals focus from the action popup the same way
+// the share-picker does (see popup.js's own comment on runCombo), and a
+// popup that gets torn down mid-request never runs that callback. The grant
+// still lands at the browser level (no second prompt on retry), it just
+// never gets recorded — so the user has to reopen the popup and click Tab
+// again before the save actually goes through. This listener persists the
+// choice independent of whether the requesting popup survived, so a grant
+// is reflected the next time the popup opens with no re-click needed.
+if (chrome.permissions && chrome.permissions.onAdded) {
+  chrome.permissions.onAdded.addListener(async (perms) => {
+    if (!perms.permissions || !perms.permissions.includes("tabCapture")) return;
+    try {
+      const stored = (await chrome.storage.local.get(RECORD_OPTS_KEY))[RECORD_OPTS_KEY] || {};
+      if (stored.surfaceMode !== "tab") {
+        await chrome.storage.local.set({ [RECORD_OPTS_KEY]: { ...stored, surfaceMode: "tab" } });
+      }
+    } catch {}
+  });
+}
+
 // ── Keyboard command (Phase 3) ──────────────────────────────────────────────
 // Until now Ctrl/Cmd+Shift+B was ONLY a keydown handler inside the injected
 // SDK, so it did nothing on a page TraceBug had never been started on — which
@@ -1952,7 +1974,6 @@ function hasHostAccess(pattern) {
  * caller falls back to the getDisplayMedia picker.
  */
 async function resolveTabCaptureStreamId(tabId) {
-  if (typeof chrome === "undefined" || !chrome.tabCapture?.getMediaStreamId) return null;
   const granted = await new Promise((resolve) => {
     try {
       chrome.permissions.contains({ permissions: ["tabCapture"] }, (g) => {
@@ -1962,6 +1983,20 @@ async function resolveTabCaptureStreamId(tabId) {
     } catch { resolve(false); }
   });
   if (!granted) return null;
+  // Checked AFTER `contains`, not before: granting an optional permission
+  // does not reliably make its namespace visible in an ALREADY-RUNNING
+  // service worker the instant the grant resolves (popup.js's own comment
+  // on TAB_CAPTURE_AVAILABLE found this empirically for a fresh popup
+  // context — the same gap applies here, except this worker has no
+  // equivalent "fresh load" to wait for short of an idle restart). Bailing
+  // out the moment the namespace looks absent silently forces the
+  // getDisplayMedia/Desktop fallback even though the user is actually
+  // granted — so retry briefly instead of failing on the first look.
+  const tabCaptureAvailable = () => !!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId);
+  for (let i = 0; i < 5 && !tabCaptureAvailable(); i++) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (!tabCaptureAvailable()) return null;
   return new Promise((resolve) => {
     try {
       chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (streamId) => {

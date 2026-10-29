@@ -368,11 +368,11 @@ async function _startVideoRecordingInner(options?: {
   }
 
   if (isExtensionContext()) {
-    const result = await rpcCall<{ ok: boolean; error?: string }>("tb:rec:start", {
+    const result = await rpcCall<{ ok: boolean; error?: string; tabModeFallback?: boolean }>("tb:rec:start", {
       mode: requestedMode,
       surfaceMode,
       withMicrophone: !!options?.withMicrophone,
-    }).catch((err) => ({ ok: false, error: (err && err.message) || String(err) }));
+    }).catch((err) => ({ ok: false, error: (err && err.message) || String(err), tabModeFallback: undefined }));
 
     if (!result || !result.ok) {
       if (result?.error === "cancelled") _onStatus?.("stopped", "cancelled");
@@ -384,6 +384,15 @@ async function _startVideoRecordingInner(options?: {
       }
       else _onStatus?.("error", result?.error || "Could not start screen capture.");
       return false;
+    }
+
+    // background.js silently swapped "tab" for "desktop" because Tab mode
+    // wasn't actually usable this time (no tabCapture API, or the permission
+    // wasn't visible yet) — the user picked Tab and is about to see the
+    // native share-picker they specifically chose Tab to avoid, with no clue
+    // why, unless this says so.
+    if (surfaceMode === "tab" && result.tabModeFallback) {
+      _onStatus?.("warning", "Tab recording wasn't available — using the browser's share picker instead.");
     }
 
     _active = true;
@@ -591,7 +600,7 @@ export function wireStartedListener(): void {
   window.addEventListener("tracebug-rec-started", (e: Event) => {
     const d = ((e as CustomEvent).detail || {}) as {
       startedAt?: number; mode?: string; mimeType?: string;
-      micRequested?: boolean; micIncluded?: boolean;
+      micRequested?: boolean; micIncluded?: boolean; audioIncluded?: boolean;
     };
     if (!_active) {
       _active = true;
@@ -629,6 +638,25 @@ export function wireStartedListener(): void {
             root,
             { autoDismissMs: null },
           ))
+          .catch(() => {});
+      }
+    }
+    // Desktop mode's "Share tab audio" toggle lives entirely inside Chrome's
+    // native picker — nothing in this extension can see whether the user
+    // ticked it, only whether the resulting stream actually came back with
+    // an audio track. The mic-permission toast above only fires when
+    // `withMicrophone` was requested; a recording with no mic requested AND
+    // no tab/system audio either is silent with no indication anywhere, which
+    // is exactly "I ticked every audio option I could find and it's still
+    // silent" — this is the one place that can be told apart from "the user
+    // never wanted audio" (this fires regardless of intent, but a toast on an
+    // intentionally-silent recording costs far less than another report like
+    // that one).
+    if (!d.micRequested && d.audioIncluded === false) {
+      const root = document.getElementById("tracebug-root");
+      if (root) {
+        import("./ui/toast")
+          .then((m) => m.showToast("Recording has no audio — the browser didn't include tab/system audio for this capture.", root))
           .catch(() => {});
       }
     }

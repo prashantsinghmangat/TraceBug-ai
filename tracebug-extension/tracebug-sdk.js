@@ -20911,13 +20911,16 @@ var TraceBugModule = (() => {
         mode: requestedMode,
         surfaceMode,
         withMicrophone: !!(options == null ? void 0 : options.withMicrophone)
-      }).catch((err) => ({ ok: false, error: err && err.message || String(err) }));
+      }).catch((err) => ({ ok: false, error: err && err.message || String(err), tabModeFallback: void 0 }));
       if (!result2 || !result2.ok) {
         if ((result2 == null ? void 0 : result2.error) === "cancelled") _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
         else if ((result2 == null ? void 0 : result2.error) === "system-permission") {
           _onStatus == null ? void 0 : _onStatus("blocked", explainCaptureFailure("system-permission"));
         } else _onStatus == null ? void 0 : _onStatus("error", (result2 == null ? void 0 : result2.error) || "Could not start screen capture.");
         return false;
+      }
+      if (surfaceMode === "tab" && result2.tabModeFallback) {
+        _onStatus == null ? void 0 : _onStatus("warning", "Tab recording wasn't available \u2014 using the browser's share picker instead.");
       }
       _active2 = true;
       _startedAt = Date.now();
@@ -21097,6 +21100,13 @@ var TraceBugModule = (() => {
             root2,
             { autoDismissMs: null }
           )).catch(() => {
+          });
+        }
+      }
+      if (!d.micRequested && d.audioIncluded === false) {
+        const root2 = document.getElementById("tracebug-root");
+        if (root2) {
+          Promise.resolve().then(() => (init_toast(), toast_exports)).then((m) => m.showToast("Recording has no audio \u2014 the browser didn't include tab/system audio for this capture.", root2)).catch(() => {
           });
         }
       }
