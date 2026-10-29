@@ -147,10 +147,18 @@ renders with real size and a clickable button, not just that a nonce exists) and
    been exercised by reading code, not by a real recording in Firefox.
 3. **Store screenshots**: the popup gained a video checkbox + mic row back (on top of the row it lost
    earlier) and the welcome page is new; check the five listing shots still match.
-4. **Build zips** (`npm run zip:ext` — 30 files per zip now, was 28 with video off), upload to CWS and
-   AMO with the §4 copy in `store-submission-pack.md`, **and** the `offscreen` permission justification
-   now in §7b — a listing that doesn't justify a permission the manifest requests is a review flag.
-5. **npm**: publish `tracebug-sdk` and `packages/tracebug` 1.11.2 (and the MCP registry `server.json`).
+4. **AMO: submitted.** The v1.11.3 build has been uploaded to addons.mozilla.org and is pending review —
+   done by the user directly, not verified from here (no way to see AMO's dashboard). **CWS (Chrome Web
+   Store): still not done** — build the zip (`npm run zip:ext` — 30 files per zip now, was 28 with video
+   off) and upload it with the §4 copy in `store-submission-pack.md`, **and** the `offscreen` permission
+   justification in §7b (a listing that doesn't justify a permission the manifest requests is a review
+   flag). Caution: AMO's own review may surface issues the "partially started" local Firefox pass above
+   (item 9) hasn't caught yet — don't treat the submission itself as proof Firefox works correctly.
+5. **npm: done.** `tracebug-sdk` and `tracebug` (the MCP CLI) are both published at **1.11.3** —
+   confirmed live via a raw registry fetch (`dist-tags.latest: "1.11.3"` on both, a fresh `npx
+   tracebug@latest help` runs). **The MCP registry (`packages/tracebug/server.json`, entry
+   `io.github.prashantsinghmangat/tracebug`) is still not submitted** — a separate flow from `npm
+   publish` (likely the `mcp-publisher` CLI or a PR against the registry repo), not attempted yet.
 6. **Deploy the website** (Netlify, `website/`), then check `/privacy` (now mentions `offscreen`),
    `/try`, `/bye`. One real `/bye` submission must show in Netlify Forms under `uninstall`.
 7. **Known, accepted gaps to disclose or track, not block on**: Bug 2 (no fullscreen in the video
@@ -161,17 +169,18 @@ renders with real size and a clickable button, not just that a nonce exists) and
    instead of inviting a second start. This one is NOT covered by e2e — Playwright can't drive a real
    MV3 action popup without breaking its `active tab` resolution — only by code review and the unit
    test for the `GET_STATE` field it reads.
-9. **A manual Firefox pass is still owed — partially started, not complete.** Confirmed by hand in a
-   real Firefox build: RELEASE_CHECKLIST row 16 (microphone grant/choose, matching Chrome's prompt) and
-   row 17 (the record-countdown mic toggle, audio verified present in the result). **Still unverified in
-   Firefox**: row 15 (Tab mode's button actually greyed out with a tooltip, Desktop still working via
-   the window-host recorder — `offscreen.js`'s `IS_WINDOW_HOST` branch has only ever been exercised by
-   reading code), and this round's six capture-flow / rendering bugs (see `PROGRESS.md` 2026-10-23
-   entries), verified in Chromium only so far. This project has no automated Firefox e2e
-   (`npm run ext:firefox` is interactive, deliberately not a gate). `background.js` and
-   `src/ui/helpers.ts` are shared files, not Chrome-specific, so the fixes should carry over, but that is
-   an expectation, not a confirmed result — treat Firefox as **not yet release-ready** until rows 15 and
-   the Oct 23 bug list get the same hands-on pass rows 16/17 just got.
+9. **A manual Firefox pass is still owed — partially started, not complete — even though AMO submission
+   has already happened (item 4).** Confirmed by hand in a real Firefox build: RELEASE_CHECKLIST row 16
+   (microphone grant/choose, matching Chrome's prompt) and row 17 (the record-countdown mic toggle, audio
+   verified present in the result). **Still unverified in Firefox**: row 15 (Tab mode's button actually
+   greyed out with a tooltip, Desktop still working via the window-host recorder — `offscreen.js`'s
+   `IS_WINDOW_HOST` branch has only ever been exercised by reading code), and this round's six
+   capture-flow / rendering bugs (see `PROGRESS.md` 2026-10-23 entries), verified in Chromium only so
+   far. This project has no automated Firefox e2e (`npm run ext:firefox` is interactive, deliberately not
+   a gate). `background.js` and `src/ui/helpers.ts` are shared files, not Chrome-specific, so the fixes
+   should carry over, but that is an expectation, not a confirmed result. Submitting to AMO before this
+   pass is a real, accepted risk (reviewer time is slower feedback than a local run); worth finishing the
+   local pass regardless of review being in flight, in case something needs fixing and resubmitting.
 
 All six bugs this round were found by hand-testing the real unpacked extension — none were caught by
 the original e2e suite, because it drove `background.js` through synthetic `sendMessage` shortcuts
