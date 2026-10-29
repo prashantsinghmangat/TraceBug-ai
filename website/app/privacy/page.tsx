@@ -19,7 +19,7 @@ export default function PrivacyPage() {
 
         <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: October 13, 2026
+          Last updated: October 29, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -46,8 +46,9 @@ export default function PrivacyPage() {
               Data Collection
             </h2>
             <p className="mb-3">
-              When a user explicitly enables TraceBug on a website, the following
-              data is recorded locally during the active session:
+              TraceBug records nothing until you start a capture on a tab. While
+              a capture you started is running, the following is recorded on
+              your device:
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>
@@ -67,8 +68,18 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong className="text-text-primary">Screenshots</strong> —
-                captured only when the user clicks the Screenshot button,
-                stored in memory (not persisted)
+                captured only when you take one, and kept with the bug report
+              </li>
+              <li>
+                <strong className="text-text-primary">Screen recording</strong>{" "}
+                — only if you turn on &ldquo;Events + Video&rdquo;: a video of
+                the tab, window or screen you choose to share, including that
+                tab&apos;s audio
+              </li>
+              <li>
+                <strong className="text-text-primary">Microphone audio</strong>{" "}
+                — only if you turn the microphone on for a recording; your voice
+                is recorded into that video and nowhere else
               </li>
               <li>
                 <strong className="text-text-primary">Environment info</strong>{" "}
@@ -90,16 +101,22 @@ export default function PrivacyPage() {
             </h2>
             <ul className="list-disc pl-6 space-y-1">
               <li>
-                All recorded session data is stored in the browser&apos;s{" "}
-                <strong className="text-text-primary">localStorage</strong>{" "}
-                under the key <code className="text-accent">tracebug_sessions</code>
+                A capture&apos;s events and the bug tickets you save are stored
+                in the{" "}
+                <strong className="text-text-primary">localStorage</strong> of
+                the website you captured. That storage belongs to the website,
+                so the website&apos;s own scripts can read it. Saved tickets stay
+                until you delete them.
               </li>
-              <li>Screenshots and voice transcripts are stored in memory only and are not persisted</li>
-              <li>Sessions are capped at 50, with a maximum of 200 events per session</li>
-              <li>Old sessions are automatically pruned when limits are exceeded</li>
               <li>
-                The Chrome Extension stores the list of enabled site hostnames in{" "}
-                <code className="text-accent">chrome.storage.local</code>
+                Screen recordings, your settings and the recording options are
+                stored in the extension&apos;s own storage (
+                <code className="text-accent">chrome.storage.local</code>), which
+                websites cannot read.
+              </li>
+              <li>
+                Voice-note transcripts are produced by your browser&apos;s
+                built-in speech recognition; TraceBug keeps only the text.
               </li>
               <li>
                 <strong className="text-text-primary">
@@ -156,7 +173,7 @@ export default function PrivacyPage() {
               What leaves your device, and when
             </h2>
             <p className="mb-3">
-              Three things can leave your device. All three are started by you,
+              Four things can leave your device. All four are started by you,
               and none of them goes to TraceBug.
             </p>
             <ul className="list-disc pl-6 space-y-2">
@@ -170,6 +187,14 @@ export default function PrivacyPage() {
                 you see the full report and the destination in a confirmation
                 window first, and nothing is sent until you approve it. Those
                 services then handle that data under their own privacy policies.
+              </li>
+              <li>
+                <strong className="text-text-primary">
+                  &ldquo;Open in Claude&rdquo; or &ldquo;Open in ChatGPT&rdquo;
+                </strong>{" "}
+                — opens that chat site with the report text already filled in.
+                For a short report the text is placed in the page address, so it
+                is kept in your browser history like any address you visit.
               </li>
               <li>
                 <strong className="text-text-primary">
@@ -196,12 +221,13 @@ export default function PrivacyPage() {
               User Control
             </h2>
             <ul className="list-disc pl-6 space-y-1">
-              <li>TraceBug only records on websites where the user has explicitly enabled it</li>
-              <li>Recording can be paused and resumed at any time</li>
-              <li>All session data can be cleared with the &quot;Clear&quot; button in the dashboard</li>
+              <li>TraceBug only records a tab after you start a capture on it, and stops when you click Stop</li>
+              <li>Screen recording and the microphone are off unless you turn them on</li>
+              <li>Saved tickets can be deleted one by one from the Saved Tickets list</li>
               <li>The extension can be disabled or uninstalled at any time</li>
               <li>
-                Clearing browser data or localStorage removes all TraceBug data permanently
+                Clearing a website&apos;s data removes the TraceBug tickets saved
+                on it; uninstalling the extension removes its own storage
               </li>
             </ul>
           </section>
@@ -218,7 +244,8 @@ export default function PrivacyPage() {
               </div>
               <div>
                 <strong className="text-text-primary">storage</strong> — To
-                remember which sites the user has enabled TraceBug on
+                keep your settings, integration tokens and screen recordings on
+                your device
               </div>
               <div>
                 <strong className="text-text-primary">scripting</strong> — To
@@ -255,11 +282,11 @@ export default function PrivacyPage() {
                 </strong>{" "}
                 — <strong className="text-text-primary">Not requested at
                 install.</strong> TraceBug captures the tab you are on from your
-                own click. It asks for site access only if you want a capture to
-                keep running after you navigate to another site, and for one
-                specific address when you save a GitHub, Linear, Slack, OpenAI,
-                Anthropic or Ollama integration. Declining is fine — capture
-                still works on the page you are on.
+                own click. It asks for access to one specific address only when
+                you save a GitHub, Linear, Slack, OpenAI, Anthropic or Ollama
+                integration. Older versions could also ask for access to all
+                sites; if you granted that, you can remove it in TraceBug
+                settings.
               </div>
             </div>
           </section>
@@ -303,8 +330,9 @@ export default function PrivacyPage() {
 
           <section className="border-t border-border pt-6 mt-10">
             <p className="text-sm text-text-muted">
-              This privacy policy applies to the TraceBug Chrome Extension and
-              the TraceBug SDK (npm package: tracebug-sdk).
+              This privacy policy applies to the TraceBug browser extension
+              (Chrome and Firefox) and the TraceBug SDK (npm package:
+              tracebug-sdk).
             </p>
           </section>
         </div>

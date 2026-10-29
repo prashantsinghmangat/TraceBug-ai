@@ -246,6 +246,10 @@ console.log("  saved 2-try-page.png");
 // while a session is active. Then interact so the session has evidence:
 // page-button clicks, a sensitive-looking request (URL-param redaction),
 // and a console error carrying a token (capture-time scrub → 🛡 summary).
+// try.html loads no SDK until its in-page demo button is clicked (so it can't
+// race the extension's injected copy).
+await page.click("#inPageDemoBtn");
+await page.waitForFunction(() => window.TraceBug && window.TraceBug.startRecording, null, { timeout: 15000 });
 await page.evaluate(() => window.TraceBug.startRecording());
 await page.waitForTimeout(500);
 // Click ONLY the demo page's own buttons — blind-clicking all <button>s hits
@@ -333,6 +337,8 @@ try {
 console.log("Part 4: store crops…");
 const store = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 await store.goto(SANDBOX_URL, { waitUntil: "load" });
+await store.click("#inPageDemoBtn");
+await store.waitForFunction(() => window.TraceBug && window.TraceBug.startVideoRecording, null, { timeout: 15000 });
 await store.waitForTimeout(2000);
 
 const vidOk = await store.evaluate(() =>
@@ -439,7 +445,8 @@ await store.waitForTimeout(300);
   await (await must(store, '[data-tab="console"]', "viewer Console tab")).click();
   await store.waitForTimeout(1200);
   await settle(store, "#panel-console .tb-vfeed-list", "console feed rows");
-  const consoleMarkers = ["TypeError", "/api/orders", "/api/checkout", "[REDACTED]"];
+  // Console is console output only from 1.11.3; the 404s live in Network.
+  const consoleMarkers = ["TypeError", "[REDACTED]"];
   await mustContain(store, "#panel-console", consoleMarkers, "shot-02 console evidence");
   // .tb-vtabpanels is a 500px-tall overflow-y:auto scrollport and the 11-entry
   // feed is 665 tall, so no scroll offset puts the TypeError, both 404s and the
@@ -541,8 +548,14 @@ if (await popup.locator("#unavailable").isVisible()) {
   throw new MissingTarget("popup rendered the \"Can't run on this page\" state — the active-tab shim did not take");
 }
 await must(popup, "#mainContent", "popup main content");
-await must(popup, "#hostname", "popup hostname row");
 await cropEl(popup, ".popup", "popup.png", "extension popup body");
+
+// Same popup with Capture Bug's options open on Events + Video: the Tab |
+// Desktop switch and the mic row, the 1.11.3 recording story.
+await (await must(popup, "#captureOptsToggle", "Capture Bug options chevron")).click();
+await (await must(popup, "#pillEventsVideo", "Events + Video option")).click();
+await popup.waitForTimeout(600);
+await cropEl(popup, ".popup", "popup-record.png", "popup with record options open");
 
 } finally {
   console.log("\nStore crops written (" + written.length + "):");
