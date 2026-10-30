@@ -42,7 +42,7 @@ TraceBug.init({ projectId: "my-app", maxEvents: 500 });
 
 ### `maxSessions`
 
-Maximum number of sessions kept in localStorage. Oldest sessions are pruned when the limit is exceeded.
+Maximum number of sessions kept in localStorage. Oldest *unsaved* sessions are pruned when the limit is exceeded; saved tickets are never pruned (see [ticket-flow.md](ticket-flow.md)).
 
 - **Default:** `50`
 - **Range:** Any positive integer
@@ -251,13 +251,15 @@ The user object is stored in `localStorage` under `tracebug_user` and automatica
 | Data | Storage | Limit |
 |------|---------|-------|
 | Sessions & events | localStorage | `maxSessions` x `maxEvents` |
+| Saved tickets (incl. their screenshots) | localStorage | Until you delete them — never evicted |
 | Screenshots | In-memory only | 50 per session |
 | Voice transcripts | In-memory only | Unlimited |
 | Element annotations | In-memory only | Unlimited |
 | Draw regions | In-memory only | Unlimited |
 | Environment info | localStorage (per session) | 1 per session |
+| Screen recordings (extension) | `chrome.storage.local` | Not readable by the page |
 
-In-memory data persists for the current page session. It's included in generated reports but lost on page refresh.
+In-memory data persists for the current page session. It's included in generated reports and in a ticket you save, but is otherwise lost on page refresh.
 
 ## Self-Filtering
 
