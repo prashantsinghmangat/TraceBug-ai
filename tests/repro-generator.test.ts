@@ -83,6 +83,34 @@ describe('generateReproSteps', () => {
     expect(r.reproSteps).toContain('500');
   });
 
+  it('omits failed page-asset requests (favicon, images) from the steps', () => {
+    const events = [
+      ev('api_request', { request: { method: '', url: 'http://localhost:3000/favicon.ico', statusCode: 404, durationMs: 5 } }),
+      ev('click', { element: { tag: 'button', text: 'Apply coupon' } }),
+    ];
+    const r = generateReproSteps(events, 'x');
+    expect(r.reproSteps).not.toContain('favicon');
+    expect(r.reproSteps.split('\n')[0]).toContain('Apply coupon');
+  });
+
+  it('names the field values a click acted on when no Type step shows them', () => {
+    const events = [
+      ev('click', { element: { tag: 'button', text: 'Apply coupon' }, fields: [{ name: 'coupon', value: 'SAVE20' }] }),
+    ];
+    const r = generateReproSteps(events, 'x');
+    expect(r.reproSteps).toContain('Click the "Apply coupon" button (coupon = "SAVE20")');
+  });
+
+  it('does not repeat a click-context value the user typed during the capture', () => {
+    const events = [
+      ev('input', { element: { name: 'coupon', type: 'text', value: 'SAVE20' } }),
+      ev('click', { element: { tag: 'button', text: 'Apply coupon' }, fields: [{ name: 'coupon', value: 'SAVE20' }] }),
+    ];
+    const r = generateReproSteps(events, 'x');
+    expect(r.reproSteps).toContain('Type "SAVE20" in "coupon" field');
+    expect(r.reproSteps).not.toContain('(coupon = ');
+  });
+
   it('omits successful API calls', () => {
     const events = [
       ev('api_request', { request: { method: 'GET', url: '/api/ok', statusCode: 200, durationMs: 50 } }),

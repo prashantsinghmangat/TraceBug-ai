@@ -228,6 +228,10 @@ export function collectClicks(emit: Emit): () => void {
       if (testId) el.testId = testId;
       const form = t.closest("form");
       if (form) { el.formId = form.id || ""; el.formAction = form.action || ""; }
+      try {
+        const fields = clickContextFields(t);
+        if (fields.length) data.fields = fields;
+      } catch {}
 
       // CSS selector for precise reproduction
       try { el.selector = buildSelector(t); } catch {}
@@ -303,6 +307,63 @@ export function isSensitiveField(name: string, inputType = ""): boolean {
     SENSITIVE_FIELD_RE.test(name || "") ||
     isCustomSensitiveKey(name)
   );
+}
+
+// ── Click context: the fields a clicked button acts on ────────────────────
+
+const CLICK_CONTEXT_MAX_FIELDS = 5;
+/** Field types never reported as click context: not text, or too personal to
+ *  record when the user did not type them during the capture. */
+const CLICK_CONTEXT_SKIP_TYPES = new Set([
+  "hidden", "file", "submit", "button", "reset", "image", "checkbox", "radio",
+  "password", "email", "tel",
+]);
+const CLICK_CONTEXT_SKIP_AUTOCOMPLETE = /cc-|password|one-time-code/i;
+
+/**
+ * Values of the fields a clicked button (or link) acts on: those in its form,
+ * else in the nearest ancestor (up to 3 levels) that holds a field.
+ *
+ * A value typed BEFORE the capture started never produced an `input` event,
+ * so the report said `Click "Apply coupon"` without saying which code was
+ * applied, and an AI agent fixing the bug had to guess. Stricter than typed
+ * input: a sensitive field is left out entirely rather than listed as
+ * "[REDACTED]", and email/phone/card/one-time-code fields are skipped, since
+ * the user did not type them during this capture.
+ */
+export function clickContextFields(target: HTMLElement): Array<{ name: string; value: string; selector?: string }> {
+  const actionable = target.closest(
+    'button, [role="button"], input[type="submit"], input[type="button"], a',
+  );
+  if (!actionable) return [];
+  let scope: Element | null = actionable.closest("form");
+  if (!scope) {
+    let node = actionable.parentElement;
+    for (let depth = 0; node && node !== document.body && depth < 3; depth++, node = node.parentElement) {
+      if (node.querySelector("input, textarea")) { scope = node; break; }
+    }
+  }
+  if (!scope) return [];
+
+  const out: Array<{ name: string; value: string; selector?: string }> = [];
+  for (const f of Array.from(scope.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea"))) {
+    if (out.length >= CLICK_CONTEXT_MAX_FIELDS) break;
+    if (isTraceBugElement(f)) continue;
+    const type = f.tagName.toLowerCase() === "textarea" ? "textarea" : (f.getAttribute("type") || "text").toLowerCase();
+    if (CLICK_CONTEXT_SKIP_TYPES.has(type)) continue;
+    if (CLICK_CONTEXT_SKIP_AUTOCOMPLETE.test(f.getAttribute("autocomplete") || "")) continue;
+    const name = fieldLabel(f);
+    if (!name || isSensitiveField(name, type)) continue;
+    const value = (f.value || "").trim();
+    if (!value) continue;
+    const field: { name: string; value: string; selector?: string } = {
+      name,
+      value: sanitizeTokenShapes(value.slice(0, INPUT_VALUE_MAX)),
+    };
+    try { field.selector = buildSelector(f); } catch {}
+    out.push(field);
+  }
+  return out;
 }
 
 /**

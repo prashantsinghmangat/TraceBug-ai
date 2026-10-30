@@ -150,3 +150,14 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   `"version": "1.11.3"`, `"status": "active"`, `"isLatest": true`.
 - All three 1.11.3 distribution channels are now done: npm (`tracebug-sdk` + `tracebug`), MCP registry,
   and AMO submission (pending review). CWS upload is the one still open.
+
+## 1.11.4 prepared: report fixes found while recording the demo video (2026-10-31)
+
+- **What:** clicks record the values their button acted on (`clickContextFields` in `src/collectors.ts`;
+  steps read `Click … (coupon = "SAVE20")`, Playwright spec fills them first); failed favicon/asset
+  requests left out of repro steps and the AI prompt; `console.error(err)` keeps message + stack (9addaf2).
+- **Files:** `src/{collectors,repro-generator}.ts`, `src/exporters/{ai-prompt,playwright-test}.ts`, privacy
+  page, popup What's New, CHANGELOG, all version surfaces → 1.11.4; tests `click-context`, `ai-prompt` (new).
+- **Verified:** `check.mjs --full` 950/950, versions on 1.11.4; real Chromium run of the demo shop with the
+  built SDK (SAVE20 typed before capture → step shows it; `.ico` 404 out of steps). `package-lock.json`
+  root version not bumped (file is permission-blocked here). Not released: stores, npm, MCP all pending.

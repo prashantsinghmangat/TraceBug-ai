@@ -1,5 +1,10 @@
 # Launch state — read this, not the archives
 
+**1.11.4 is prepared, not released (2026-10-31):** clicks record the field values their button acted on
+(sensitive/personal fields left out), favicon/asset failures dropped from repro steps and the AI prompt,
+`console.error(err)` keeps message + stack. All surfaces on 1.11.4, gates green; stores/npm/MCP pending.
+1.11.3 is live everywhere (CWS approved 2026-10-30). Demo video source: `marketing/demo-video/`.
+
 Engineering state only, verified against code. Last updated 2026-10-29. Calendar, channels and the
 32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored, and now
 stale on the video-pause dates below — not corrected, it is a scheduling doc, not a spec).

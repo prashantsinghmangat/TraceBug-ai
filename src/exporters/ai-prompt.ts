@@ -14,6 +14,7 @@
 // Target output: 2-5K characters. Worst case ~8K (lots of unique errors).
 
 import { BugReport } from "../types";
+import { isNoiseRequest } from "../url-hygiene";
 
 const MAX_CONSOLE_ERRORS = 5;
 const MAX_NETWORK_FAILURES = 5;
@@ -88,7 +89,12 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
   }
 
   // ── Network failures + a few successful ones for narrative ────────────
-  const failures = (report.networkErrors || []).slice(0, MAX_NETWORK_FAILURES);
+  // Failed favicons, images, fonts and beacons are left out: the model tends
+  // to treat any failure listed here as a lead.
+  const allFailures = report.networkErrors || [];
+  const realFailures = allFailures.filter((f) => !isNoiseRequest(f.url));
+  const noiseOmitted = allFailures.length - realFailures.length;
+  const failures = realFailures.slice(0, MAX_NETWORK_FAILURES);
   const allRequests = report.networkRequests || [];
   const recentSuccess = allRequests
     .filter((r) => r.status >= 200 && r.status < 400)
@@ -102,6 +108,9 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
         const responseBit = f.response ? ` — ${truncate(f.response, 120).replace(/\n/g, " ")}` : "";
         lines.push(`- ${f.method || "—"} ${truncate(f.url, 120)} → ${f.status}${responseBit}`);
       });
+    }
+    if (noiseOmitted > 0) {
+      lines.push(`_(${noiseOmitted} failed page-asset request${noiseOmitted === 1 ? "" : "s"}, e.g. favicon or images, omitted)_`);
     }
     if (recentSuccess.length > 0) {
       lines.push(`**Recent successful calls (for context):**`);

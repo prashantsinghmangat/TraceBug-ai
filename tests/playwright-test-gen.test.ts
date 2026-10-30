@@ -51,6 +51,18 @@ describe('generatePlaywrightTest', () => {
     expect(spec).toContain('value was masked at capture');
   });
 
+  it('fills click-context fields typed before the capture, but not ones already filled', () => {
+    const spec = generatePlaywrightTest(report([
+      ev('click', { element: { id: 'applyBtn' }, fields: [{ name: 'coupon', value: 'SAVE20', selector: '#coupon' }] }, 1),
+      ev('input', { element: { name: 'qty', type: 'number', value: '2', selector: '#qty' } }, 2),
+      ev('click', { element: { id: 'update' }, fields: [{ name: 'qty', value: '2', selector: '#qty' }] }, 3),
+    ]))!;
+    const fill = spec.indexOf("page.locator('#coupon').fill('SAVE20')");
+    expect(fill).toBeGreaterThan(-1);
+    expect(fill).toBeLessThan(spec.indexOf("page.locator('#applyBtn').click()"));
+    expect(spec.match(/#qty'\)\.fill/g)!.length).toBe(1);
+  });
+
   it('dedupes consecutive identical clicks (rage clicks)', () => {
     const spec = generatePlaywrightTest(report([
       ev('click', { element: { id: 'save' } }, 1),
