@@ -4,7 +4,7 @@ The TraceBug CLI — a **local MCP server** that lets AI coding agents debug [Tr
 
 Zero dependencies. ~24 KB. Node ≥ 18.
 
-**See it work first:** [tracebug.dev/proof](https://tracebug.dev/proof) — an unedited transcript of Claude going from crash to root cause in five tool calls, reading a real export through this server.
+**See it work first:** the [1-minute demo video](https://www.youtube.com/watch?v=-U64GIPfeiQ) (capture a bug, Claude Code fixes it), or [tracebug.dev/proof](https://tracebug.dev/proof), an unedited transcript of Claude going from crash to root cause in five tool calls, reading a real export through this server.
 
 ## MCP server
 

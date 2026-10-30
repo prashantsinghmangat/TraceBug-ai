@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GitHubIcon, NpmIcon } from "@/components/ui/brand-icons";
 import { LogoMark } from "@/components/Logo";
 import Mascot from "@/components/Mascot";
+import { YOUTUBE_CHANNEL_URL } from "@/lib/links";
 
 const REPO = "https://github.com/prashantsinghmangat/tracebug-ai";
 const NPM = "https://www.npmjs.com/package/tracebug-sdk";
@@ -41,6 +42,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
     links: [
       { label: "Send feedback", href: "/feedback" },
       { label: "Review us on Product Hunt", href: "https://www.producthunt.com/products/tracebug/reviews", external: true },
+      { label: "YouTube", href: YOUTUBE_CHANNEL_URL, external: true },
       { label: "Issues", href: `${REPO}/issues`, external: true },
       { label: "Discussions", href: `${REPO}/discussions`, external: true },
       { label: "Report a bug", href: `${REPO}/issues/new`, external: true },

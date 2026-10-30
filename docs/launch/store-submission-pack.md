@@ -110,6 +110,11 @@ JPEGs (the store rejects PNGs with alpha). Order for Chrome (5 max): report hero
 recording popup, Console tab, AI agent, privacy. Firefox also gets the export slide. Promo tiles:
 440×280 small, 1400×560 marquee.
 
+**Promo video (2026-10-30):** https://www.youtube.com/watch?v=-U64GIPfeiQ (57 s, 16:9), set in the
+Chrome Web Store promo video field and in the Product Hunt gallery. Vertical Short:
+https://www.youtube.com/shorts/Q1toEvFVW0c. Channel: https://www.youtube.com/@tracebugdev. AMO has no
+video field, so the description links it (see §5). Source and rebuild steps: `marketing/demo-video/`.
+
 ## 5. Store description (1.11.3) — paste into both listings
 
 Replaces the pre-1.11 text, which promised a popup ON toggle, Ctrl+Shift+B, "full page screenshots",
@@ -120,6 +125,8 @@ drop the "Tab mode" sentence (Firefox has no tab-capture API; it always uses the
 Record a bug once. Get a report a developer can actually reproduce: a replay of what happened, the console errors, the failed requests and the steps, in one file that opens offline.
 
 Free and open source (MIT). No account, no upload, no TraceBug server.
+
+Watch the 1-minute demo: https://www.youtube.com/watch?v=-U64GIPfeiQ
 
 ━━━━━━━━━━━━━━━━━━━━
 HOW IT WORKS

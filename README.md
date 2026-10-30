@@ -8,9 +8,9 @@
 </p>
 
 <p align="center">
-  <a href="https://tracebug.dev/#demo"><img src="./website/public/tracebug-demo-poster.png" alt="TraceBug 15-second demo — a crash happens, TraceBug catches it live, one click builds the ticket" width="820"></a>
+  <a href="https://www.youtube.com/watch?v=-U64GIPfeiQ"><img src="./website/public/tracebug-demo-video-poster.jpg" alt="TraceBug demo: a checkout coupon bug is captured, and Claude Code fixes it" width="820"></a>
   <br>
-  <a href="https://tracebug.dev/#demo"><b>▶ Watch the 15-second demo</b></a> · <a href="https://tracebug.dev/proof"><b>watch Claude debug a real bug</b></a> · <a href="https://tracebug.dev/try.html">try it live in the sandbox</a>
+  <a href="https://www.youtube.com/watch?v=-U64GIPfeiQ"><b>▶ Watch the 1-minute demo</b></a> (<a href="https://www.youtube.com/shorts/Q1toEvFVW0c">vertical Short</a>) · <a href="https://tracebug.dev/proof"><b>watch Claude debug a real bug</b></a> · <a href="https://tracebug.dev/try.html">try it live in the sandbox</a>
 </p>
 
 <p align="center">
