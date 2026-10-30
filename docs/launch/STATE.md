@@ -46,7 +46,7 @@ someone is in that file.
 is tagged (`v1.11.1`, `42becbb`) and pushed. Branch `develop`, **1.11.3** on the eight surfaces
 `check:versions` guards. `check.mjs --full`: **939 passing / 58 files**, `ext:lint` 0 errors /
 26 warnings (baseline raised from 22 for the `tabCapture` feature-detection above). The npm packages
-(`tracebug-sdk`, `tracebug`) are still **1.10.1 on npm** — 1.11.x has never been published there.
+(`tracebug-sdk`, `tracebug`) are **1.11.3 on npm** (checked 2026-10-31 with `npm view`); 1.11.4 not yet published.
 
 **Screen recording is RESTORED in the extension as of 1.11.2** (PLAN Phase 10b, done — this moved up
 from 1.11.3). `VIDEO_ENABLED_IN_EXTENSION = true` in `src/video-recorder.ts`; a stored
