@@ -107,4 +107,10 @@ describe('formatConsoleArgs / capMessage', () => {
     expect(() => formatConsoleArgs([c])).not.toThrow();
     expect(formatConsoleArgs([c])).toBe('[unserializable]');
   });
+
+  it('formats an Error as name: message instead of "{}"', () => {
+    const err = new TypeError("Cannot read properties of undefined (reading 'discount')");
+    expect(formatConsoleArgs([err])).toBe("TypeError: Cannot read properties of undefined (reading 'discount')");
+    expect(formatConsoleArgs(['Coupon failed:', err])).toBe("Coupon failed: TypeError: Cannot read properties of undefined (reading 'discount')");
+  });
 });

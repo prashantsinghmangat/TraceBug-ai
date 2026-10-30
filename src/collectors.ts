@@ -864,6 +864,9 @@ export function capMessage(s: string, max = CONSOLE_MSG_MAX): string {
 export function formatConsoleArgs(args: unknown[]): string {
   const parts = args.map((a) => {
     if (typeof a === "string") return a;
+    // An Error's own props are non-enumerable, so JSON.stringify gives "{}" —
+    // `catch (err) { console.error(err) }` captured as an empty message.
+    if (a instanceof Error) return `${a.name}: ${a.message}`;
     try {
       const s = JSON.stringify(a);
       return s === undefined ? String(a) : s;
@@ -926,11 +929,15 @@ export function collectConsoleErrors(emit: Emit): () => void {
     if (_insideEmit) { origConsoleError.apply(console, args); return; }
     _insideEmit = true;
     try {
+      const err = args.find((a): a is Error => a instanceof Error);
       emit("console_error", {
         // Token-shape scrub at capture — a token logged to the console must
         // never reach the offline .html export unmasked (the cloud sanitizer
         // only covers the upload path). formatConsoleArgs caps + is circular-safe.
-        error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) },
+        error: {
+          message: sanitizeTokenShapes(formatConsoleArgs(args)),
+          stack: err?.stack ? sanitizeTokenShapes(capMessage(err.stack)) : undefined,
+        },
       });
     } catch {} finally { _insideEmit = false; }
     origConsoleError.apply(console, args);

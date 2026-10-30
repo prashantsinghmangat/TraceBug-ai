@@ -1865,6 +1865,7 @@ var TraceBugExtensionModule = (() => {
   function formatConsoleArgs(args) {
     const parts = args.map((a2) => {
       if (typeof a2 === "string") return a2;
+      if (a2 instanceof Error) return `${a2.name}: ${a2.message}`;
       try {
         const s2 = JSON.stringify(a2);
         return s2 === void 0 ? String(a2) : s2;
@@ -1924,11 +1925,15 @@ var TraceBugExtensionModule = (() => {
       }
       _insideEmit = true;
       try {
+        const err = args.find((a2) => a2 instanceof Error);
         emit("console_error", {
           // Token-shape scrub at capture — a token logged to the console must
           // never reach the offline .html export unmasked (the cloud sanitizer
           // only covers the upload path). formatConsoleArgs caps + is circular-safe.
-          error: { message: sanitizeTokenShapes(formatConsoleArgs(args)) }
+          error: {
+            message: sanitizeTokenShapes(formatConsoleArgs(args)),
+            stack: (err == null ? void 0 : err.stack) ? sanitizeTokenShapes(capMessage(err.stack)) : void 0
+          }
         });
       } catch (e2) {
       } finally {
@@ -21969,7 +21974,8 @@ var TraceBugExtensionModule = (() => {
   function generateBugTitle(session) {
     var _a2;
     const events = session.events;
-    const errorEvents = events.filter((e2) => e2.type === "error" || e2.type === "unhandled_rejection");
+    const uncaught = events.filter((e2) => e2.type === "error" || e2.type === "unhandled_rejection");
+    const errorEvents = uncaught.length > 0 ? uncaught : events.filter((e2) => e2.type === "console_error");
     const userActions = events.filter(
       (e2) => ["click", "input", "select_change", "form_submit", "route_change"].includes(e2.type)
     );

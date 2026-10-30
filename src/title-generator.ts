@@ -7,7 +7,10 @@ import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 
 export function generateBugTitle(session: StoredSession): string {
   const events = session.events;
-  const errorEvents = events.filter(e => e.type === "error" || e.type === "unhandled_rejection");
+  const uncaught = events.filter(e => e.type === "error" || e.type === "unhandled_rejection");
+  // An app that catches and logs (`catch (err) { console.error(err) }`) never
+  // throws uncaught — fall back to its logged errors so the title names the bug.
+  const errorEvents = uncaught.length > 0 ? uncaught : events.filter(e => e.type === "console_error");
   const userActions = events.filter(e =>
     ["click", "input", "select_change", "form_submit", "route_change"].includes(e.type)
   );

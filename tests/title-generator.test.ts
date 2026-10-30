@@ -68,6 +68,16 @@ describe('generateBugTitle', () => {
     expect(title).toMatch(/Session|Click|Button/);
   });
 
+  it('names a caught-and-logged console error when nothing threw uncaught', () => {
+    const events = [
+      ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/checkout'),
+      ev('console_error', { error: { message: "TypeError: Cannot read properties of undefined (reading 'discount')" } }, '/checkout'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).toMatch(/Apply coupon/i);
+    expect(title).not.toMatch(/^Session:/);
+  });
+
   it('returns the empty-session fallback when no events exist', () => {
     const title = generateBugTitle(session([]));
     expect(title).toMatch(/Empty Session/i);

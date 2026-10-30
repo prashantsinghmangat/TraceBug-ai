@@ -2,6 +2,13 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **`console.error(err)` is captured with the error's message and stack.** An `Error` passed to `console.error` (the usual `catch (err) { console.error(err) }`) was serialized with `JSON.stringify` and landed in the report as `"{}"` with no stack, so an AI agent reading the report had nothing to go on. It is now recorded as `TypeError: …` with its stack trace.
+- **The auto-generated title names a caught-and-logged error.** A session whose only error was logged (nothing thrown uncaught) got a generic "Session: …" or "Empty Session" title; it now gets an error title such as `"Apply coupon" Action Fails — TypeError`.
+
 ## [1.11.3] - 2026-10-28
 
 > Jam-style "record this tab" with no browser share picker, plus a real fix for the HUD mic-mute button that 1.11.2 left disabled on purpose. See `docs/audit/capture-flow-1.11.3.md`.
