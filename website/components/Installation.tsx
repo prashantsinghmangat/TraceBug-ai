@@ -211,7 +211,7 @@ TraceBug — the exact setup for your framework
                   ["Microsoft Edge", "Chrome extensions work natively", true],
                   ["Brave", "Chrome extensions work natively", true],
                   ["Opera", "Add “Install Chrome Extensions” first", true],
-                  ["Firefox", "Not supported yet — use the npm SDK", false],
+                  ["Firefox", "Install from Firefox Add-ons (128+)", true],
                   ["Safari", "Not supported — use the npm SDK", false],
                 ].map(([browser, note, ok], i) => (
                   <div

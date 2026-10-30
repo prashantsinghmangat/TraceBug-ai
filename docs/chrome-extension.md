@@ -14,7 +14,7 @@ The TraceBug Chrome Extension lets non-developers (QA, PMs, support) capture bug
 | Edge    | Yes | Chrome Web Store (Edge runs Chrome extensions) |
 | Brave   | Yes | Chrome Web Store |
 | Opera   | Yes | Install "Install Chrome Extensions" add-on first, then Chrome Web Store |
-| Firefox | No (different extension format) | Use the npm SDK: `npm install tracebug-sdk` |
+| Firefox | Yes (128+) | [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/) |
 | Safari  | No | Use the npm SDK |
 
 ## Install from Source (Developers)

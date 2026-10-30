@@ -229,7 +229,7 @@ const comparisons: Record<string, {
     ],
     disadvantages: [
       "Backend-only bugs never reach the browser — server logs and APM tools are still the right evidence there",
-      "The extension ships for Chrome (plus Edge, Brave, Opera); the Firefox build is in final testing ahead of its AMO listing",
+      "The extension ships for Chrome (plus Edge, Brave, Opera) and Firefox 128+; there is no Safari build",
       "There's no hosted team dashboard — reports are local files you share yourself",
       "The AI-agent step needs a one-time local MCP setup",
     ],
