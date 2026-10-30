@@ -1,0 +1,11 @@
+You found a bug. You ask your AI to fix it... and it asks you for the error, the steps, and the logs.
+Meet TraceBug.
+Install it free, on Chrome or Firefox. No account needed.
+Click Capture, and reproduce the bug. Every click, console error and network request is recorded.
+You get one report, with the error, the stack trace, a replay, and the video.
+Click Fix with AI, and the whole report is copied as a ready-made prompt.
+Paste it into Claude Code. It reads the error and the stack trace, and opens the right file.
+It finds the real cause: SAVE20 was never added to the coupon list. And it fixes it.
+Reload, apply the code, and the discount works.
+TraceBug works with Claude Code, Cursor, GitHub, Linear and Slack.
+Capture. Hand off. Fixed. Free and open source, at tracebug dot dev.

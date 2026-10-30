@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Checkout — Acme Keys</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111113'/%3E%3Ctext x='16' y='22' font-size='18' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header class="top">
+  <span class="mark">A</span>
+  <b>Acme Keys</b>
+  <nav><a href="#">Keyboards</a><a href="#">Keycaps</a><a href="#">Switches</a></nav>
+  <span class="cart">Cart (1)</span>
+</header>
+
+<div class="promo">Black Friday: use code <b>SAVE20</b> for 20% off everything</div>
+
+<main class="wrap">
+  <h1>Checkout</h1>
+
+  <section class="card">
+    <div class="item">
+      <span class="thumb"></span>
+      <div>
+        <div class="nm">Mechanical Keyboard — Indigo</div>
+        <div class="sub">75% layout · hot-swap · tactile switches</div>
+      </div>
+      <span class="pr">$129.00</span>
+    </div>
+
+    <div class="row">
+      <input id="coupon" placeholder="Coupon code" autocomplete="off" />
+      <button class="btn-ghost" id="applyBtn">Apply coupon</button>
+    </div>
+
+    <div class="line"><span>Subtotal</span><span id="subtotal">$129.00</span></div>
+    <div class="line"><span>Shipping</span><span>Free</span></div>
+    <div class="line total"><span>Total</span><b id="total">$129.00</b></div>
+
+    <div class="row">
+      <button class="btn-primary" id="orderBtn">Place order</button>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+  </section>
+</main>
+
+<script src="coupons.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

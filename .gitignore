@@ -26,6 +26,10 @@ src/exporters/rrweb-runtime.generated.ts
 # Local release artifacts (extension zips etc.)
 releases/
 
+# Demo video: raw recordings and everything generated (see marketing/demo-video/README.md)
+marketing/demo-video/clips/
+marketing/demo-video/out/
+
 # Playwright e2e output
 e2e/bug-reports/
 e2e/output/
