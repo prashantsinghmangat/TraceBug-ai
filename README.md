@@ -122,7 +122,7 @@ Install the browser extension — no code needed. QA testers, PMs, and clients c
 | Edge | Yes — Chrome Web Store extensions work natively |
 | Brave | Yes — Chrome Web Store extensions work natively |
 | Opera | Yes — install "Install Chrome Extensions" add-on first |
-| Firefox | Not yet — use the npm SDK instead |
+| Firefox | Yes — [install from Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/) (Firefox 128+) |
 
 ## Browser support
 
@@ -131,15 +131,15 @@ Install the browser extension — no code needed. QA testers, PMs, and clients c
 | Chrome | ✅ | ✅ |
 | Edge | ✅ | ✅ |
 | Brave / Opera | ✅ | ✅ |
-| Firefox | ✅ | ⏳ (port paused — SDK only) |
+| Firefox | ✅ | ✅ (128+) |
 | Safari | ✅¹ | ❌ (SDK only) |
 
 The **SDK** is framework- and browser-agnostic — it runs anywhere modern JS runs.
 ¹ The interactive DOM-replay export uses the browser-native `CompressionStream` /
 `DecompressionStream` (Chrome 80+, Firefox 113+, Safari 16.4+); on older engines
 the exporter ships the replay uncompressed and the viewer falls back to the
-screenshot gallery. The **extension** is Chromium-only today (Firefox port paused;
-no Safari build) — on those, use the npm SDK.
+screenshot gallery. The **extension** runs on Chromium browsers and Firefox 128+ (no
+Safari build — on Safari, use the npm SDK).
 
 ## Features
 
@@ -605,7 +605,7 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 | Microsoft Edge | Yes |
 | Brave | Yes |
 | Opera | Yes (install "Install Chrome Extensions" add-on first) |
-| Firefox | Not yet — use the npm SDK |
+| Firefox | Yes, 128+ — [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/) |
 
 ### Chrome Web Store
 
