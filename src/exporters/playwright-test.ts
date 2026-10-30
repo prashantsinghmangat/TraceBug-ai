@@ -99,6 +99,7 @@ export function generatePlaywrightTest(report: BugReport): string | null {
   // ── Steps ──────────────────────────────────────────────────────────────
   const steps: string[] = [];
   let lastStep = "";
+  const filled = new Map<string, string>(); // field name -> value already filled
   const push = (line: string) => {
     if (line === lastStep) return; // dedupe rage-clicks etc.
     steps.push(line);
@@ -110,7 +111,17 @@ export function generatePlaywrightTest(report: BugReport): string | null {
     switch (ev.type) {
       case "click": {
         const loc = locatorFor(el);
-        if (loc) push(`  await ${loc}.click();`);
+        if (!loc) break;
+        // Fields the click acted on that no captured input filled (typed
+        // before the capture started) — fill them first, or the replay clicks
+        // with an empty field and never reproduces the bug.
+        for (const f of (ev.data?.fields || []) as Array<{ name: string; value: string; selector?: string }>) {
+          if (filled.get(f.name) === f.value) continue;
+          const fl = fieldLocatorFor({ name: f.name, selector: f.selector });
+          if (fl) push(`  await ${fl}.fill(${q(f.value)});`);
+          filled.set(f.name, f.value);
+        }
+        push(`  await ${loc}.click();`);
         break;
       }
       case "input": {
@@ -122,6 +133,7 @@ export function generatePlaywrightTest(report: BugReport): string | null {
           push(`  await ${loc}.fill(${q("TODO-redacted-value")}); // value was masked at capture — fill in a test value`);
         } else if (el.value) {
           push(`  await ${loc}.fill(${q(el.value)});`);
+          if (el.name) filled.set(el.name, el.value);
         }
         break;
       }

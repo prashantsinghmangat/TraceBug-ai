@@ -1232,6 +1232,14 @@ function showMicNotice(err) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.11.4": {
+    label: "New in 1.11.4",
+    lines: [
+      "Reports show what a button acted on, e.g. Apply coupon (coupon = “SAVE20”)",
+      "Logged errors (console.error) keep their message and stack trace",
+      "No more favicon 404s cluttering the repro steps and the AI prompt",
+    ],
+  },
   "1.11.3": {
     label: "New in 1.11.3",
     lines: [

@@ -2,10 +2,17 @@
 
 All notable changes to TraceBug are documented here.
 
-## [Unreleased]
+## [1.11.4] - 2026-10-31
+
+> Reports an AI agent can act on: the real error instead of `"{}"`, the value a button acted on, and no favicon noise. Found by recording the demo video (`marketing/demo-video/`), where Claude Code first fixed the wrong thing.
+
+### Added
+
+- **A click records the values its button acted on.** Clicking a button or link now records the values in the fields of the same form (or, without a form, the nearest section holding a field), so the steps read `Click the "Apply coupon" button (coupon = "SAVE20")`, and the generated Playwright test fills those fields before clicking. Before, a value typed before the capture started, or autofilled, never reached the report, and the agent had to guess which code was applied. A value already shown by a `Type "…"` step is not repeated. Stricter than typed input: password, email, phone, card (`autocomplete="cc-*"`), one-time-code, hidden and sensitive-named fields are left out entirely, at most 5 fields, values capped and token-scrubbed.
 
 ### Fixed
 
+- **Failed page assets no longer appear as repro steps or AI-prompt leads.** A `favicon.ico` 404 was listed as reproduction step 1 and as a network failure in the AI prompt. Failed favicons, images, fonts and analytics beacons are now left out of both (the prompt notes how many were omitted); the Network tab and HAR export still show every request.
 - **`console.error(err)` is captured with the error's message and stack.** An `Error` passed to `console.error` (the usual `catch (err) { console.error(err) }`) was serialized with `JSON.stringify` and landed in the report as `"{}"` with no stack, so an AI agent reading the report had nothing to go on. It is now recorded as `TypeError: …` with its stack trace.
 - **The auto-generated title names a caught-and-logged error.** A session whose only error was logged (nothing thrown uncaught) got a generic "Session: …" or "Empty Session" title; it now gets an error title such as `"Apply coupon" Action Fails — TypeError`.
 

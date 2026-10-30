@@ -19,7 +19,7 @@ export default function PrivacyPage() {
 
         <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: October 29, 2026
+          Last updated: October 31, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -54,7 +54,11 @@ export default function PrivacyPage() {
               <li>
                 <strong className="text-text-primary">User interactions</strong>{" "}
                 — clicks (element tag, text, id, class), form inputs, select
-                changes, form submissions, and page navigation
+                changes, form submissions, and page navigation. When you click
+                a button, the values in the fields of that same form or section
+                are recorded too, so the report shows what the button acted on;
+                password, email, phone, card and one-time-code fields are left
+                out entirely
               </li>
               <li>
                 <strong className="text-text-primary">Console errors</strong> —

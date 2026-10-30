@@ -3,6 +3,7 @@
 // Analyzes the event timeline and produces human-readable steps.
 
 import { TraceBugEvent } from "./types";
+import { isNoiseRequest } from "./url-hygiene";
 
 export interface ReproResult {
   reproSteps: string;
@@ -24,6 +25,8 @@ export function generateReproSteps(
   // Track state for smarter descriptions
   // Track last step text to avoid duplicates
   let lastStepText = "";
+  // Last value typed per field, so click context doesn't repeat a "Type" step
+  const typed = new Map<string, string>();
 
   for (const event of events) {
     switch (event.type) {
@@ -37,7 +40,13 @@ export function generateReproSteps(
       case "click": {
         const el = event.data.element;
         const label = describeElement(el);
-        const stepText = `Click ${label}`;
+        // Values the click acted on that no "Type" step shows (typed before the
+        // capture started, or autofilled) — e.g. (coupon = "SAVE20").
+        const context = ((event.data.fields || []) as Array<{ name: string; value: string }>)
+          .filter((f) => typed.get(f.name) !== f.value)
+          .slice(0, 3)
+          .map((f) => `${f.name} = "${f.value.length > 40 ? f.value.slice(0, 40) + "…" : f.value}"`);
+        const stepText = `Click ${label}${context.length ? ` (${context.join(", ")})` : ""}`;
         if (stepText !== lastStepText) {
           steps.push(`${stepNum++}. ${stepText}`);
           lastStepText = stepText;
@@ -54,6 +63,7 @@ export function generateReproSteps(
           steps.push(`${stepNum++}. ${inp?.checked ? "Check" : "Uncheck"} "${fieldName}"`);
         } else {
           const val = inp?.value;
+          if (val) typed.set(fieldName, val);
           if (val && val !== "[REDACTED]" && val.length <= 60) {
             steps.push(`${stepNum++}. Type "${val}" in "${fieldName}" field`);
           } else {
@@ -83,7 +93,9 @@ export function generateReproSteps(
 
       case "api_request": {
         const req = event.data.request;
-        if (req?.statusCode >= 400 || req?.statusCode === 0) {
+        // A failed favicon/image/font/beacon is page noise, not a repro step —
+        // as step 1 it sent readers (and the AI) after the wrong request.
+        if ((req?.statusCode >= 400 || req?.statusCode === 0) && !isNoiseRequest(req?.url)) {
           steps.push(
             `${stepNum++}. API call fails: ${req.method} ${shortenUrl(req.url)} → ${
               req.statusCode === 0 ? "Network Error" : `HTTP ${req.statusCode}`

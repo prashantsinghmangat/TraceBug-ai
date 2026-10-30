@@ -46,9 +46,11 @@ demo-video/
 | `05-proof.mp4` | Reload → type `SAVE20` → Apply → hold on "SAVE20 applied" and **$103.20** |
 
 Type `SAVE20` **after** starting the capture, and click **Discard** if the ticket
-shows a "Restored draft" pill. TraceBug does not record what is typed into text
-fields (privacy), which is why the extra line for Claude is needed. Before each
-retake, put the bug back:
+shows a "Restored draft" pill. TraceBug records what is typed during a capture
+(sensitive fields masked), so the steps then read `Type "SAVE20" in "coupon"`;
+anything typed *before* the capture started is not in the report. The 2026-10-30
+takes typed it first, which is why they needed the extra line for Claude. Before
+each retake, put the bug back:
 `git checkout -- marketing/demo-video/demo-shop`.
 
 The scenes cut into these takes by timestamp (`src.ss` / `src.to` in

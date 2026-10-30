@@ -393,12 +393,83 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/url-hygiene.ts
+  function isSensitiveParamName(name) {
+    return !!name && SENSITIVE_PARAM_RE.test(name);
+  }
+  function isNoiseRequest(url) {
+    if (!url) return false;
+    if (ASSET_EXT_RE.test(url)) return true;
+    if (!/^https?:\/\//i.test(url)) return false;
+    try {
+      const u2 = new URL(url);
+      const host2 = u2.hostname.toLowerCase();
+      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
+      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
+      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
+      if (pageHost && host2 === pageHost) return false;
+      return NOISE_PATH_RE.test(u2.pathname);
+    } catch (e2) {
+      return false;
+    }
+  }
+  function isStaticResource(url) {
+    if (!url) return false;
+    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
+  }
+  function shortDisplayPath(url, base) {
+    if (!url) return "";
+    let pathname;
+    try {
+      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
+      pathname = new URL(url, origin).pathname || url;
+    } catch (e2) {
+      pathname = url;
+    }
+    const segments = pathname.split("/").map(
+      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
+    );
+    let out = segments.join("/");
+    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
+    return out;
+  }
+  var SENSITIVE_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
+  var init_url_hygiene = __esm({
+    "src/url-hygiene.ts"() {
+      "use strict";
+      SENSITIVE_PARAM_RE = /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
+      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
+      NOISE_HOSTS = [
+        "camo.githubusercontent.com",
+        "avatars.githubusercontent.com",
+        "img.shields.io",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "google-analytics.com",
+        "www.google-analytics.com",
+        "googletagmanager.com",
+        "www.googletagmanager.com",
+        "stats.g.doubleclick.net",
+        "connect.facebook.net",
+        "cdn.segment.com",
+        "api.segment.io",
+        "gravatar.com",
+        "www.gravatar.com"
+      ];
+      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
+      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
+      SEGMENT_MAX = 24;
+      PATH_MAX = 60;
+    }
+  });
+
   // src/repro-generator.ts
   function generateReproSteps(events, errorMessage, errorStack) {
     var _a2, _b;
     const steps = [];
     let stepNum = 1;
     let lastStepText = "";
+    const typed = /* @__PURE__ */ new Map();
     for (const event of events) {
       switch (event.type) {
         case "route_change": {
@@ -410,7 +481,8 @@ var TraceBugModule = (() => {
         case "click": {
           const el = event.data.element;
           const label = describeElement(el);
-          const stepText = `Click ${label}`;
+          const context2 = (event.data.fields || []).filter((f2) => typed.get(f2.name) !== f2.value).slice(0, 3).map((f2) => `${f2.name} = "${f2.value.length > 40 ? f2.value.slice(0, 40) + "\u2026" : f2.value}"`);
+          const stepText = `Click ${label}${context2.length ? ` (${context2.join(", ")})` : ""}`;
           if (stepText !== lastStepText) {
             steps.push(`${stepNum++}. ${stepText}`);
             lastStepText = stepText;
@@ -425,6 +497,7 @@ var TraceBugModule = (() => {
             steps.push(`${stepNum++}. ${(inp == null ? void 0 : inp.checked) ? "Check" : "Uncheck"} "${fieldName}"`);
           } else {
             const val = inp == null ? void 0 : inp.value;
+            if (val) typed.set(fieldName, val);
             if (val && val !== "[REDACTED]" && val.length <= 60) {
               steps.push(`${stepNum++}. Type "${val}" in "${fieldName}" field`);
             } else {
@@ -451,7 +524,7 @@ var TraceBugModule = (() => {
         }
         case "api_request": {
           const req = event.data.request;
-          if ((req == null ? void 0 : req.statusCode) >= 400 || (req == null ? void 0 : req.statusCode) === 0) {
+          if (((req == null ? void 0 : req.statusCode) >= 400 || (req == null ? void 0 : req.statusCode) === 0) && !isNoiseRequest(req == null ? void 0 : req.url)) {
             steps.push(
               `${stepNum++}. API call fails: ${req.method} ${shortenUrl(req.url)} \u2192 ${req.statusCode === 0 ? "Network Error" : `HTTP ${req.statusCode}`}`
             );
@@ -562,6 +635,7 @@ var TraceBugModule = (() => {
   var init_repro_generator = __esm({
     "src/repro-generator.ts"() {
       "use strict";
+      init_url_hygiene();
     }
   });
 
@@ -1059,76 +1133,6 @@ var TraceBugModule = (() => {
     }
   });
 
-  // src/url-hygiene.ts
-  function isSensitiveParamName(name) {
-    return !!name && SENSITIVE_PARAM_RE.test(name);
-  }
-  function isNoiseRequest(url) {
-    if (!url) return false;
-    if (ASSET_EXT_RE.test(url)) return true;
-    if (!/^https?:\/\//i.test(url)) return false;
-    try {
-      const u2 = new URL(url);
-      const host2 = u2.hostname.toLowerCase();
-      if (NOISE_HOSTS.some((h) => host2 === h || host2.endsWith("." + h))) return true;
-      if (NOISE_HOST_PREFIX_RE.test(host2)) return true;
-      const pageHost = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : null;
-      if (pageHost && host2 === pageHost) return false;
-      return NOISE_PATH_RE.test(u2.pathname);
-    } catch (e2) {
-      return false;
-    }
-  }
-  function isStaticResource(url) {
-    if (!url) return false;
-    return ASSET_EXT_RE.test(url) || /\.(m?js)(\?|#|$)/i.test(url);
-  }
-  function shortDisplayPath(url, base) {
-    if (!url) return "";
-    let pathname;
-    try {
-      const origin = base || (typeof window !== "undefined" ? window.location.origin : "http://relative.local");
-      pathname = new URL(url, origin).pathname || url;
-    } catch (e2) {
-      pathname = url;
-    }
-    const segments = pathname.split("/").map(
-      (seg) => seg.length > SEGMENT_MAX ? `${seg.slice(0, 10)}\u2026${seg.slice(-6)}` : seg
-    );
-    let out = segments.join("/");
-    if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
-    return out;
-  }
-  var SENSITIVE_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
-  var init_url_hygiene = __esm({
-    "src/url-hygiene.ts"() {
-      "use strict";
-      SENSITIVE_PARAM_RE = /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
-      ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
-      NOISE_HOSTS = [
-        "camo.githubusercontent.com",
-        "avatars.githubusercontent.com",
-        "img.shields.io",
-        "fonts.googleapis.com",
-        "fonts.gstatic.com",
-        "google-analytics.com",
-        "www.google-analytics.com",
-        "googletagmanager.com",
-        "www.googletagmanager.com",
-        "stats.g.doubleclick.net",
-        "connect.facebook.net",
-        "cdn.segment.com",
-        "api.segment.io",
-        "gravatar.com",
-        "www.gravatar.com"
-      ];
-      NOISE_HOST_PREFIX_RE = /^(collector|stats|telemetry|analytics|metrics|beacon|track(ing)?|pixel|events|logs?)\./i;
-      NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
-      SEGMENT_MAX = 24;
-      PATH_MAX = 60;
-    }
-  });
-
   // src/sanitize/cloud-upload.ts
   function mask(s2) {
     if (s2.length <= 12) return REDACTED2;
@@ -1415,6 +1419,11 @@ var TraceBugModule = (() => {
           el.formAction = form.action || "";
         }
         try {
+          const fields = clickContextFields(t2);
+          if (fields.length) data.fields = fields;
+        } catch (e3) {
+        }
+        try {
           el.selector = buildSelector(t2);
         } catch (e3) {
         }
@@ -1462,6 +1471,45 @@ var TraceBugModule = (() => {
   }
   function isSensitiveField(name, inputType = "") {
     return ["password", "credit-card", "ssn"].includes(inputType) || SENSITIVE_FIELD_RE.test(name || "") || isCustomSensitiveKey(name);
+  }
+  function clickContextFields(target) {
+    const actionable = target.closest(
+      'button, [role="button"], input[type="submit"], input[type="button"], a'
+    );
+    if (!actionable) return [];
+    let scope = actionable.closest("form");
+    if (!scope) {
+      let node2 = actionable.parentElement;
+      for (let depth = 0; node2 && node2 !== document.body && depth < 3; depth++, node2 = node2.parentElement) {
+        if (node2.querySelector("input, textarea")) {
+          scope = node2;
+          break;
+        }
+      }
+    }
+    if (!scope) return [];
+    const out = [];
+    for (const f2 of Array.from(scope.querySelectorAll("input, textarea"))) {
+      if (out.length >= CLICK_CONTEXT_MAX_FIELDS) break;
+      if (isTraceBugElement(f2)) continue;
+      const type = f2.tagName.toLowerCase() === "textarea" ? "textarea" : (f2.getAttribute("type") || "text").toLowerCase();
+      if (CLICK_CONTEXT_SKIP_TYPES.has(type)) continue;
+      if (CLICK_CONTEXT_SKIP_AUTOCOMPLETE.test(f2.getAttribute("autocomplete") || "")) continue;
+      const name = fieldLabel(f2);
+      if (!name || isSensitiveField(name, type)) continue;
+      const value = (f2.value || "").trim();
+      if (!value) continue;
+      const field = {
+        name,
+        value: sanitizeTokenShapes(value.slice(0, INPUT_VALUE_MAX))
+      };
+      try {
+        field.selector = buildSelector(f2);
+      } catch (e2) {
+      }
+      out.push(field);
+    }
+    return out;
   }
   function contentEditableHost(t2) {
     if (!t2) return null;
@@ -1982,7 +2030,7 @@ var TraceBugModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, SENSITIVE_FIELD_WORDS, SENSITIVE_FIELD_RE, FIELD_LABEL_ATTRS, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, SENSITIVE_FIELD_WORDS, SENSITIVE_FIELD_RE, FIELD_LABEL_ATTRS, CLICK_CONTEXT_MAX_FIELDS, CLICK_CONTEXT_SKIP_TYPES, CLICK_CONTEXT_SKIP_AUTOCOMPLETE, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -2014,6 +2062,21 @@ var TraceBugModule = (() => {
       SENSITIVE_FIELD_WORDS = ["password", "secret", "token", "ssn", "credit"];
       SENSITIVE_FIELD_RE = new RegExp(SENSITIVE_FIELD_WORDS.join("|"), "i");
       FIELD_LABEL_ATTRS = ["name", "id", "aria-label", "data-placeholder", "placeholder", "data-testid"];
+      CLICK_CONTEXT_MAX_FIELDS = 5;
+      CLICK_CONTEXT_SKIP_TYPES = /* @__PURE__ */ new Set([
+        "hidden",
+        "file",
+        "submit",
+        "button",
+        "reset",
+        "image",
+        "checkbox",
+        "radio",
+        "password",
+        "email",
+        "tel"
+      ]);
+      CLICK_CONTEXT_SKIP_AUTOCOMPLETE = /cc-|password|one-time-code/i;
       EDITABLE_SELECTOR = '[contenteditable=""],[contenteditable="true"],[contenteditable="plaintext-only"]';
       _perfSeen = /* @__PURE__ */ new Set();
       GET_ONLY_INITIATORS = /* @__PURE__ */ new Set([
@@ -27465,12 +27528,13 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     return { kind: "none", needle: "", display: "" };
   }
   function generatePlaywrightTest(report) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i;
     const events = [...((_a2 = report.session) == null ? void 0 : _a2.events) || []].sort(
       (a2, b) => a2.timestamp - b.timestamp
     );
     const steps = [];
     let lastStep = "";
+    const filled = /* @__PURE__ */ new Map();
     const push = (line) => {
       if (line === lastStep) return;
       steps.push(line);
@@ -27481,7 +27545,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       switch (ev.type) {
         case "click": {
           const loc = locatorFor(el);
-          if (loc) push(`  await ${loc}.click();`);
+          if (!loc) break;
+          for (const f2 of ((_c = ev.data) == null ? void 0 : _c.fields) || []) {
+            if (filled.get(f2.name) === f2.value) continue;
+            const fl = fieldLocatorFor({ name: f2.name, selector: f2.selector });
+            if (fl) push(`  await ${fl}.fill(${q(f2.value)});`);
+            filled.set(f2.name, f2.value);
+          }
+          push(`  await ${loc}.click();`);
           break;
         }
         case "input": {
@@ -27493,6 +27564,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
             push(`  await ${loc}.fill(${q("TODO-redacted-value")}); // value was masked at capture \u2014 fill in a test value`);
           } else if (el.value) {
             push(`  await ${loc}.fill(${q(el.value)});`);
+            if (el.name) filled.set(el.name, el.value);
           }
           break;
         }
@@ -27504,7 +27576,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
           break;
         }
         case "route_change": {
-          if ((_c = ev.data) == null ? void 0 : _c.to) push(`  // \u2192 navigated to ${ev.data.to}`);
+          if ((_d = ev.data) == null ? void 0 : _d.to) push(`  // \u2192 navigated to ${ev.data.to}`);
           break;
         }
       }
@@ -27512,11 +27584,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     const hasActions = steps.some((s2) => s2.trimStart().startsWith("await"));
     if (!hasActions) return null;
     let origin = "http://localhost:3000";
-    let startPath = ((_d = events[0]) == null ? void 0 : _d.page) || "/";
+    let startPath = ((_e = events[0]) == null ? void 0 : _e.page) || "/";
     try {
-      const u2 = new URL(((_e = report.environment) == null ? void 0 : _e.url) || "");
+      const u2 = new URL(((_f = report.environment) == null ? void 0 : _f.url) || "");
       origin = u2.origin;
-      if (!((_f = events[0]) == null ? void 0 : _f.page)) startPath = u2.pathname;
+      if (!((_g = events[0]) == null ? void 0 : _g.page)) startPath = u2.pathname;
     } catch (e2) {
     }
     const failure = pickPrimaryFailure(report);
@@ -27526,7 +27598,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     lines.push(``);
     lines.push(`// Captured with TraceBug \u2014 free, local-first bug reports: https://tracebug.dev/?ref=playwright-test`);
     lines.push(`// Generated from bug report: ${title}`);
-    lines.push(`// Session ${((_h = (_g = report.session) == null ? void 0 : _g.sessionId) == null ? void 0 : _h.slice(0, 8)) || "?"} \xB7 captured ${new Date(report.generatedAt).toISOString()}`);
+    lines.push(`// Session ${((_i = (_h = report.session) == null ? void 0 : _h.sessionId) == null ? void 0 : _i.slice(0, 8)) || "?"} \xB7 captured ${new Date(report.generatedAt).toISOString()}`);
     lines.push(`//`);
     lines.push(`// This test REPRODUCES the captured bug \u2014 expect it to FAIL until the bug`);
     lines.push(`// is fixed, then pass. Point BASE_URL at your running dev server.`);
@@ -29324,7 +29396,10 @@ ${issueSignatureSlack()}`;
         }
       });
     }
-    const failures = (report.networkErrors || []).slice(0, MAX_NETWORK_FAILURES);
+    const allFailures = report.networkErrors || [];
+    const realFailures = allFailures.filter((f2) => !isNoiseRequest(f2.url));
+    const noiseOmitted = allFailures.length - realFailures.length;
+    const failures = realFailures.slice(0, MAX_NETWORK_FAILURES);
     const allRequests = report.networkRequests || [];
     const recentSuccess = allRequests.filter((r2) => r2.status >= 200 && r2.status < 400).slice(-MAX_NETWORK_CONTEXT);
     if (failures.length > 0 || recentSuccess.length > 0) {
@@ -29336,6 +29411,9 @@ ${issueSignatureSlack()}`;
           const responseBit = f2.response ? ` \u2014 ${truncate3(f2.response, 120).replace(/\n/g, " ")}` : "";
           lines.push(`- ${f2.method || "\u2014"} ${truncate3(f2.url, 120)} \u2192 ${f2.status}${responseBit}`);
         });
+      }
+      if (noiseOmitted > 0) {
+        lines.push(`_(${noiseOmitted} failed page-asset request${noiseOmitted === 1 ? "" : "s"}, e.g. favicon or images, omitted)_`);
       }
       if (recentSuccess.length > 0) {
         lines.push(`**Recent successful calls (for context):**`);
@@ -29568,6 +29646,7 @@ ${renderMarkdownLite(md)}
   var init_ai_prompt = __esm({
     "src/exporters/ai-prompt.ts"() {
       "use strict";
+      init_url_hygiene();
       MAX_CONSOLE_ERRORS = 5;
       MAX_NETWORK_FAILURES = 5;
       MAX_NETWORK_CONTEXT = 3;
