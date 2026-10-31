@@ -10,10 +10,13 @@ Open phases: `PLAN.md` 8, 11, 12.
 - **1.11.3 is live everywhere**: Chrome Web Store (approved 2026-10-30), AMO, npm (`tracebug-sdk` and
   `tracebug` both `latest`), MCP registry (`io.github.prashantsinghmangat/tracebug`), website. Tagged
   `v1.11.3` (`0a9a038`); `main` is at `4271e9c` (site/docs on top of the tag).
-- **1.11.4 is prepared, not released.** Committed on `develop` as `fda52c6` (3 commits ahead of `main`,
-  untagged): clicks record the field values their button acted on (sensitive/personal fields left out),
-  favicon/asset failures dropped from repro steps and the AI prompt, `console.error(err)` keeps message +
-  stack. All eight `check:versions` surfaces are on 1.11.4. Stores, npm, MCP registry: not yet published.
+- **1.11.4 is released (2026-11-01)**: Chrome Web Store, AMO, npm (`tracebug-sdk`, `tracebug`), website
+  (`main`), tag `v1.11.4`. **MCP registry still lists 1.11.3**: run `mcp-publisher publish` from
+  `packages/tracebug` (see `docs/RELEASING.md` §6). Contents: clicks record the field values their button
+  acted on, favicon/asset failures dropped from repro steps and the AI prompt, `console.error(err)` keeps
+  message + stack, the extension's injected bundle is 42% smaller (axe-core stubbed), plugin
+  `onReport`/`onExport` hooks fire, website on Next 14.2.35 with the image optimizer off. How to release:
+  `docs/RELEASING.md`.
   `package-lock.json`'s root version was not bumped (uncommitted edit pending; agents are
   permission-blocked from that file).
 - **Gates**: `node scripts/check.mjs --full` green — 955 tests / 61 files, `ext:lint` 0 errors / 14

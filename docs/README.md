@@ -36,6 +36,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [performance.md](performance.md) | Measured numbers (init, capture overhead, export time/size) + the reproducible benchmark. |
 | [compatibility.md](compatibility.md) | Browser matrix, version support policy, and known limitations. |
 | [migrating.md](migrating.md) | Upgrade notes 1.6 → 1.10; API stability guarantees. |
+| [RELEASING.md](RELEASING.md) | Maintainer runbook: shipping a version to Chrome Web Store, AMO, npm, the MCP Registry and the website. |
 
 > The self-contained offline **HTML replay export** (rrweb DOM replay + gzip),
 > the lean **Export for AI (.html)**, and **event capture surviving navigation**
