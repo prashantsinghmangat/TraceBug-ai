@@ -1,206 +1,77 @@
 # Launch state — read this, not the archives
 
-**1.11.4 is prepared, not released (2026-10-31):** clicks record the field values their button acted on
-(sensitive/personal fields left out), favicon/asset failures dropped from repro steps and the AI prompt,
-`console.error(err)` keeps message + stack. All surfaces on 1.11.4, gates green; stores/npm/MCP pending.
-1.11.3 is live everywhere (CWS approved 2026-10-30). Demo video source: `marketing/demo-video/`.
+Engineering state only, verified against code and git. Last updated 2026-10-31. Calendar, channels and
+the 32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored; a
+scheduling doc, not a spec — may be stale). History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`.
+Open phases: `PLAN.md` 8, 11, 12.
 
-Engineering state only, verified against code. Last updated 2026-10-29. Calendar, channels and the
-32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored, and now
-stale on the video-pause dates below — not corrected, it is a scheduling doc, not a spec).
-History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`. Open phases: `PLAN.md` 8, 11, 12 (10b's
-"flip the switch" step and 1.11.3's Tab-mode step are both DONE — see below).
+## Where things stand
 
-**1.11.3 adds a Jam-style no-picker "Tab" record mode** (`docs/audit/capture-flow-1.11.3.md`, the
-user's explicit decision to add `tabCapture` as an **optional** permission — never required, never at
-install). `chrome.tabCapture.getMediaStreamId` is resolved in `background.js` (`resolveTabCaptureStreamId`,
-only background has a real tab to target) and handed to `offscreen.js`, which consumes it via
-`getUserMedia`'s legacy `chromeMediaSource` constraint and re-routes the captured tab audio back to the
-user's speakers (chrome.tabCapture mutes it otherwise). The popup's Record options gained a **Tab |
-Desktop** switch (`popup.js`'s `surfaceTabBtn`/`surfaceDesktopBtn`, replacing the old dead `#optSurface`
-select) that requests the permission synchronously on first use and falls back to Desktop's picker on
-decline or on Firefox (no `chrome.tabCapture` there — feature-detected, not user-agent-branched).
-Options gained a matching grant/remove card. **Bug 4** from `video-1.11.1.md` (HUD mic-mute wired to a
-stream the extension page doesn't own) is now properly fixed via a `tb:rec:mic-mute` offscreen RPC,
-not just safely disabled — see `tests/video-enabled-1-11-2.test.ts`'s updated "Bug 4 is fixed" test and
-`src/video-recorder.ts`'s `_extMicIncluded`/`_extMicMuted` cache. Verified with two new real-browser
-e2e scenarios in `e2e/ext-video-recording-tab.e2e.mjs` (no-picker start, same-origin nav survival) —
-8/8 — plus the existing Desktop-mode and shipping-path suites re-run clean. **Not verified here, and
-listed in `docs/RELEASE_CHECKLIST.md` rows 11-15**: the real Chrome permission-prompt click, the
-decline-fallback UI in a live browser, that an existing 1.11.2 user is not disabled on update, macOS's
-Screen Recording permission interaction (if any) with Tab mode, and a real Firefox run (`npm run
-ext:firefox` cannot be driven from here — it blocks until a human closes the browser).
-`scripts/check-baseline.json`'s `ext:lint` baseline was raised 22 → 26 (user-approved): `chrome.tabCapture`
-references in the three shared files now flag `UNSUPPORTED_API` on the Firefox lint target, harmlessly,
-since Firefox never reaches that code path (feature-detected).
+- **1.11.3 is live everywhere**: Chrome Web Store (approved 2026-10-30), AMO, npm (`tracebug-sdk` and
+  `tracebug` both `latest`), MCP registry (`io.github.prashantsinghmangat/tracebug`), website. Tagged
+  `v1.11.3` (`0a9a038`); `main` is at `4271e9c` (site/docs on top of the tag).
+- **1.11.4 is prepared, not released.** Committed on `develop` as `fda52c6` (3 commits ahead of `main`,
+  untagged): clicks record the field values their button acted on (sensitive/personal fields left out),
+  favicon/asset failures dropped from repro steps and the AI prompt, `console.error(err)` keeps message +
+  stack. All eight `check:versions` surfaces are on 1.11.4. Stores, npm, MCP registry: not yet published.
+  `package-lock.json`'s root version was not bumped (uncommitted edit pending; agents are
+  permission-blocked from that file).
+- **Gates**: `node scripts/check.mjs --full` green — 955 tests / 61 files, `ext:lint` 0 errors / 14
+  warnings (baseline lowered 26 → 14 on 2026-10-31: the axe-core stub removed 12 warnings that came from
+  axe's own code in the injected bundle; the `tabCapture` feature-detection warnings are still among the 14).
+- **Hygiene audit 2026-10-31** (`docs/audit/hygiene-2026-10-31.md`): approved rows applied, uncommitted —
+  see `PROGRESS.md` 2026-10-31. Outcomes that matter here:
+  - The injected extension bundle (`tracebug-sdk-ext.js`) no longer carries axe-core: 3.45 MB → 1.99 MB.
+    The script-tag/npm builds keep it (`scanPage()` is public API there).
+  - **Website: Next 14.2.35 with the image optimizer off** (`images: { unoptimized: true }` — nothing
+    uses `next/image`). That closes the two image-optimizer RCEs (GHSA-2xp9, GHSA-2464). Still open
+    until a Next ≥ 15.5.28 upgrade (**user decision: not now**): GHSA-p293 (RCE only when the Next server
+    runs on Windows — production is Netlify/Linux) and 22 non-critical advisories. After the next
+    deploy, check by hand that `https://tracebug.dev/_next/image?url=…` no longer serves (it was
+    answered by Netlify Image CDN before the change).
+  - **Plugin `onReport` / `onExport` hooks now fire** (they were documented but never called):
+    `buildReport()` runs `onReport`; 9 text exports run `onExport` (format names in
+    `docs/api-reference.md`). A throwing/wrong-typed hook is skipped with a warning. `tests/plugin-hooks.test.ts`.
+  - The script-tag SDK is built straight to `website/public/tracebug-sdk.js` — the only copy;
+    `tracebug-extension/tracebug-sdk.js` no longer exists.
+  - Deferred by the user: lazy-loading the 269 KB rrweb replay runtime in the extension (audit #3),
+    root `npm audit fix` (audit #4).
 
-**Known pre-existing drift, found while working here, not fixed in this pass:** several of
-`CODEMAP.md`'s `background.js` symbol line numbers (`injectBridge`, `injectSDK`, `handleComboAction`,
-`pingTab`, the message-verb table, etc.) were already hundreds of lines stale **before** this change —
-confirmed while locating `handleRecordingMessage` (mapped ~1055, actually 1302 pre-1.11.3 edits). This
-pass only corrected the two entries it directly touched (`background.js`'s line count,
-`video-recorder.ts`'s mic-function lines). `background.js` deserves a full CODEMAP re-pass next time
-someone is in that file.
+## What 1.11.x added (pointers — details live in PROGRESS and the audit docs)
 
-**1.11.2 is release-ready** (PLAN Phase 10a, correctness — plus screen recording). 1.11.1
-is tagged (`v1.11.1`, `42becbb`) and pushed. Branch `develop`, **1.11.3** on the eight surfaces
-`check:versions` guards. `check.mjs --full`: **939 passing / 58 files**, `ext:lint` 0 errors /
-26 warnings (baseline raised from 22 for the `tabCapture` feature-detection above). The npm packages
-(`tracebug-sdk`, `tracebug`) are **1.11.3 on npm** (checked 2026-10-31 with `npm view`); 1.11.4 not yet published.
+- **1.11.2**: SDK isolation (`tracebug-sdk-ext.js` under `window.__TraceBugExtension`, defers when a
+  host page's own toolbar is up — `docs/launch/sdk-isolation-1.11.2.md`); screen recording restored
+  (`VIDEO_ENABLED_IN_EXTENSION = true`, `offscreen` permission back); T-01/02/05/06/13 UI fixes.
+- **Host-page CSP hardening**: Trusted Types (`setInnerHTML()` with TraceBug's own policy) and
+  `style-src` (nonce borrowing in `createStyleTag()`, inline styles replayed through the CSSOM) — both in
+  `src/ui/helpers.ts`; e2e `ext-trusted-types-page`, `ext-style-nonce-page`. PROGRESS 2026-10-23/26.
+- **1.11.3**: Tab record mode via `chrome.tabCapture` (**optional** permission only, never at install;
+  falls back to the Desktop picker on decline or on Firefox, feature-detected). HUD mic-mute works for
+  extension recordings via the `tb:rec:mic-mute` offscreen RPC (**Bug 4 is fixed**). Three Tab-mode bugs
+  and the stuck REC badge fixed before release. `docs/audit/capture-flow-1.11.3.md`, PROGRESS 2026-10-29.
 
-**Screen recording is RESTORED in the extension as of 1.11.2** (PLAN Phase 10b, done — this moved up
-from 1.11.3). `VIDEO_ENABLED_IN_EXTENSION = true` in `src/video-recorder.ts`; a stored
-`tb_record_opts.video: true` is honoured again, the `offscreen` permission is back in both manifests
-(`tracebug-extension/manifest.json`, and `build-ext.mjs`'s `chromeManifest()` gates it on the same
-flag it already parses), and the popup's `optVideo`/`micOpt` markup is back. Of the four bugs in
-`docs/launch/video-1.11.1.md` (the FILE name is historical): **Bug 1** (recording lost on stop) was
-re-verified in a real browser two ways (plain stop, mid-recording reload) and did **not**
-reproduce — the `quick-bug.ts` stash-then-refresh rework (`dda5ac8`) looks to have already fixed it;
-see `e2e/ext-video-recording.e2e.mjs`. **Bug 4** (HUD mic-mute wired to a stream the extension never
-owns) is still real, left unfixed on purpose: `hasMicrophoneTrack()` is permanently false for the
-extension transport, so the button already renders disabled with an honest tooltip instead of a dead
-click. **Bug 2** (no fullscreen in the player) is still open, polish only, not a blocker. The npm SDK
-was never affected and records video as before.
+## Open — all of it needs a person
 
-**A host page enforcing Trusted Types CSP used to break the entire dashboard** — confirmed live on
-stitch.withgoogle.com, which sets `require-trusted-types-for 'script'`. That gates every HTML-string
-sink (innerHTML/outerHTML/insertAdjacentHTML, and — contrary to a common belief — also
-`DOMParser.parseFromString` and `Range.createContextualFragment`), so all 89 raw
-`el.innerHTML = html` assignments across the dashboard, toolbar, HUD and ticket-modal code threw
-synchronously there. Fixed: `src/ui/helpers.ts`'s `setInnerHTML()` — direct assignment, then
-TraceBug's own cached Trusted Types policy (works unless the site ALSO restricts which policy names
-are allowed, confirmed stitch.withgoogle.com does not), then a safe empty-rather-than-throw last
-resort. `ext:lint` warnings dropped 69 → 22 as a direct, confirming side effect. See
-`e2e/ext-trusted-types-page.e2e.mjs` and `PROGRESS.md` 2026-10-23.
-
-**A separate, sibling gap: CSP `style-src` — both elements AND attributes, now fully closed** —
-confirmed live on a claude.ai artifact page (`style-src 'nonce-...'`, no `unsafe-inline`). Unlike
-Trusted Types this doesn't throw, so TraceBug's `<style>` elements (theme vars, the dashboard reset,
-every keyframe animation) were just silently dropped — and, worse, so was nearly every inline
-`style="..."` HTML attribute, which is how the bulk of the toolbar/HUD/modal is actually positioned.
-With both gone the dashboard mounted into the DOM with zero layout — invisible, reported as "nothing
-appears at all" on claude.ai while the same build worked fine elsewhere. Two fixes: (1) `<style>`
-elements — `src/ui/helpers.ts`'s `createStyleTag()` borrows the host page's own nonce (via `.nonce`,
-not `getAttribute`) when it has one. (2) inline `style=""` attributes — confirmed experimentally that
-CSP blocks folding the attribute into the live `CSSStyleDeclaration` (rendering stays empty) but does
-NOT remove the attribute itself (`getAttribute("style")` still returns it), so `setInnerHTML()` now
-walks the inserted subtree afterward and replays every `style` attribute through the CSSOM
-(`el.style.setProperty(...)`, which bypasses the gate entirely since it never reparses the attribute)
-via a new `reviveInlineStylesForCsp()`; the ~108 direct `el.setAttribute("style", ...)`/
-`el.style.cssText = ...` call sites across the codebase were converted to the same CSSOM-based
-`setInlineStyle()` helper. See `e2e/ext-style-nonce-page.e2e.mjs` (7/7, asserts the toolbar actually
-renders with real size and a clickable button, not just that a nonce exists) and `PROGRESS.md`
-2026-10-26.
-
-## What 1.11.2 contains
-
-- **Bug 0 — SDK isolation** (`docs/launch/sdk-isolation-1.11.2.md`): the extension injects
-  `tracebug-sdk-ext.js` under `window.__TraceBugExtension`; it never adopts a page's `window.TraceBug`,
-  and **defers entirely** when a host page's own toolbar is up. `tracebug-sdk.js` is no longer in the
-  package (~700 KB smaller). `e2e/ext-sdk-isolation.e2e.mjs` 17/17.
-- **T-01/T-02**: Summary skips noise requests; tracker buttons say "Send to…" when configured.
-- **T-05**: no MCP modal after export — a one-line "Open in your AI agent →" link on the toast.
-- **T-06**: the live error card drops its Capture button while a capture runs.
-- **T-13**: popup "Keep capturing across sites" row removed; `tb_host_perm_declined` no longer
-  written. Options shows an existing `<all_urls>` grant with **Remove**. `<all_urls>` stays declared
-  optional — it is what lets settings request a single custom Ollama host.
-- Ollama: changing/removing a custom host releases the old origin. Welcome page v2 (three steps,
-  `npx tracebug mcp` + Copy, `⌥` on Mac, Firefox pin copy).
-
-## What 1.11.3 adds
-
-- **Tab mode**: a no-picker current-tab recording via `chrome.tabCapture`, `tabCapture` added to
-  `optional_permissions` only (user-approved; never required, never at install). Popup's Record
-  options gained a **Tab | Desktop** switch; Options gained a matching grant/remove card. Falls back
-  to Desktop's picker on decline or on Firefox (no `chrome.tabCapture` there).
-- **Bug 4 fixed properly** (`video-1.11.1.md`): the HUD mic-mute button now works for an extension
-  recording via a new `tb:rec:mic-mute` offscreen RPC, not just rendered disabled.
-- See `docs/audit/capture-flow-1.11.3.md` and `PROGRESS.md` 2026-10-24 for the full writeup.
-  **Uncommitted** — nothing in this section has been pushed or tagged yet.
-
-## Left before release — all of it needs a person
-
-1. **Shipped to `main` and tagged.** `develop` and `main` both sit at `0a9a038`, tagged **`v1.11.3`**
-   and pushed to `origin/main` (done by the user directly, not by an agent here — this repo's "never
-   push" rule still holds). That commit carries everything in "What 1.11.3 adds" above, plus three
-   rounds of hand-testing fixes: `6ff46a4` (toolbar-stop REC badge), `c49ec65` (mic-mute RPC dropped),
-   and `0a9a038` — three Tab-mode bugs: (1) `popup.js`'s Tab-select permission grant didn't persist if
-   the native OS dialog closed the popup before its callback ran (it does) — `background.js` now has a
-   `chrome.permissions.onAdded` listener that persists the choice independent of the popup surviving.
-   (2) Tab mode could silently fall back to the Desktop/getDisplayMedia picker with zero explanation —
-   `resolveTabCaptureStreamId` now checks `permissions.contains` before bailing and retries briefly, and
-   `video-recorder.ts` surfaces the fallback as a warning toast when it still happens. (3) A fully
-   silent recording (no mic, no tab/system audio) had no indication on Chrome — `video-recorder.ts` now
-   warns using `offscreen.js`'s already-broadcast but previously-unread `audioIncluded` flag. See
-   `docs/launch/PROGRESS.md`'s 2026-10-29 entry for the full writeup. `node scripts/check.mjs --full`
-   was green before the merge: **936 passing / 58 files**, `ext:lint` 0 errors / 26 warnings,
-   `check:versions` all surfaces on **1.11.3**.
-   **Still not verified**, carried over from before the merge: bug (2) above's deepest cause (a
-   `chrome.tabCapture` binding-visibility race in an already-running service worker) can't be
-   reproduced or measured without a real browser — the retry is a bounded, safe improvement, not a
-   proven fix. Re-run the exact repro (grant Tab permission, start a Tab recording without reopening
-   the extension) before trusting it's fully closed. **The git side is done — everything else in this
-   numbered list (manual QA, store zips, listings, npm publish, website deploy) is still open.**
-2. **`docs/RELEASE_CHECKLIST.md`** — now needs a **full** manual pass, not just 10a–10h: rows 1–3
-   (video setting survives the upgrade) and row 9 (oversize-export notice) are live again now that
-   video is restored and have not been run by a human yet, only by the new e2e. Plus 10 (diagnostics)
-   and the new **11–15** (Tab mode's permission prompt, decline fallback, existing-user update,
-   macOS, Firefox fallback — none of which can be driven from here). Run in Chrome **and**
-   `npm run ext:firefox` (not a gate — `web-ext run` blocks until Firefox
-   closes). Firefox needs its own look at video specifically: it uses a window-host recorder, not
-   Chrome's offscreen document (`offscreen.js`'s `IS_WINDOW_HOST` branch), and that path has only ever
-   been exercised by reading code, not by a real recording in Firefox.
-3. **Store screenshots**: the popup gained a video checkbox + mic row back (on top of the row it lost
-   earlier) and the welcome page is new; check the five listing shots still match.
-4. **AMO: submitted.** The v1.11.3 build has been uploaded to addons.mozilla.org and is pending review —
-   done by the user directly, not verified from here (no way to see AMO's dashboard). **CWS (Chrome Web
-   Store): still not done** — build the zip (`npm run zip:ext` — 30 files per zip now, was 28 with video
-   off) and upload it with the §4 copy in `store-submission-pack.md`, **and** the `offscreen` permission
-   justification in §7b (a listing that doesn't justify a permission the manifest requests is a review
-   flag). Caution: AMO's own review may surface issues the "partially started" local Firefox pass above
-   (item 9) hasn't caught yet — don't treat the submission itself as proof Firefox works correctly.
-5. **npm: done.** `tracebug-sdk` and `tracebug` (the MCP CLI) are both published at **1.11.3** —
-   confirmed live via a raw registry fetch (`dist-tags.latest: "1.11.3"` on both, a fresh `npx
-   tracebug@latest help` runs). **MCP registry: done too.** `io.github.prashantsinghmangat/tracebug`
-   published via the `mcp-publisher` CLI (device-flow GitHub auth; the first attempt 403'd because the
-   browser was signed into a different GitHub account — `io.github.prashantsingh1-tz`, which only has
-   publish rights to its own namespace — re-authenticating as `prashantsinghmangat` fixed it). Confirmed
-   live via the registry's own public search API: `"version": "1.11.3"`, `"status": "active"`,
-   `"isLatest": true`, published 2026-10-29T11:46:42Z.
-6. **Website: deployed, confirmed live.** `tracebug.dev/tracebug-sdk.js`'s SHA-256 matches this repo's
-   committed `website/public/tracebug-sdk.js` byte-for-byte — not just the version badge (which only
-   shows the rounded `v1.11` tag, not the patch number, so that alone wasn't proof). **Still
-   unverified**: `/privacy` (mentions `offscreen`), `/try`, `/bye`, and one real `/bye` submission
-   showing up in Netlify Forms under `uninstall` — none of those were specifically checked here.
-7. **Known, accepted gaps to disclose or track, not block on**: Bug 2 (no fullscreen in the video
-   player/exported viewer) and Bug 4 (HUD mic-mute button renders disabled in the extension rather
-   than working) — both in `docs/launch/video-1.11.1.md`.
-8. **Manually verify the popup's "already capturing" state** (`applyCapturingUI()` in `popup.js`):
-   start a capture, reopen the popup, confirm it shows "Capturing…" with the hero button disabled
-   instead of inviting a second start. This one is NOT covered by e2e — Playwright can't drive a real
-   MV3 action popup without breaking its `active tab` resolution — only by code review and the unit
-   test for the `GET_STATE` field it reads.
-9. **A manual Firefox pass is still owed — partially started, not complete — even though AMO submission
-   has already happened (item 4).** Confirmed by hand in a real Firefox build: RELEASE_CHECKLIST row 16
-   (microphone grant/choose, matching Chrome's prompt) and row 17 (the record-countdown mic toggle, audio
-   verified present in the result). **Still unverified in Firefox**: row 15 (Tab mode's button actually
-   greyed out with a tooltip, Desktop still working via the window-host recorder — `offscreen.js`'s
-   `IS_WINDOW_HOST` branch has only ever been exercised by reading code), and this round's six
-   capture-flow / rendering bugs (see `PROGRESS.md` 2026-10-23 entries), verified in Chromium only so
-   far. This project has no automated Firefox e2e (`npm run ext:firefox` is interactive, deliberately not
-   a gate). `background.js` and `src/ui/helpers.ts` are shared files, not Chrome-specific, so the fixes
-   should carry over, but that is an expectation, not a confirmed result. Submitting to AMO before this
-   pass is a real, accepted risk (reviewer time is slower feedback than a local run); worth finishing the
-   local pass regardless of review being in flight, in case something needs fixing and resubmitting.
-
-All six bugs this round were found by hand-testing the real unpacked extension — none were caught by
-the original e2e suite, because it drove `background.js` through synthetic `sendMessage` shortcuts
-rather than real popup clicks, real worker restarts, or real host-page CSP. The sixth (a hydration
-race in `handleComboAction`) is the likely TRUE root cause tying together the chatgpt.com and
-stitch.withgoogle.com host-UI misdiagnoses reported at different points — a narrow timing window, not
-anything site-specific. An architectural simplification was proposed but not acted on: see
-`PROGRESS.md`'s "Open architectural question" note for the DOM-marker alternative to the current
-in-memory-bookkeeping heuristic.
+1. **Release 1.11.4**: tag, merge to `main`, `npm run zip:ext` → CWS + AMO uploads, npm publish (both
+   packages), MCP registry (`mcp-publisher`), website deploy. Not done from here (no push, no publish).
+2. **Manual checks never recorded as run** (1.11.3 shipped with them open):
+   `docs/RELEASE_CHECKLIST.md` rows 1–3 and 9 (video upgrade path, oversize notice), 10 (diagnostics),
+   11–15 (Tab mode's real permission prompt, decline fallback, existing-user update, macOS, Firefox
+   fallback); the popup's "already capturing" state (`applyCapturingUI()` in `popup.js` — not
+   e2e-coverable); store screenshots vs. the current popup and welcome page.
+3. **Tab-mode retry is unproven**: `resolveTabCaptureStreamId`'s bounded retry targets a
+   `chrome.tabCapture` binding race in an already-running worker that can't be reproduced here. Re-run the
+   repro (grant Tab permission, start a Tab recording without reopening the extension).
+4. **Firefox pass is partial**: rows 16–17 (mic grant, countdown mic toggle) verified by hand. Row 15
+   (Tab greyed out, Desktop via the window-host recorder — `offscreen.js`'s `IS_WINDOW_HOST` branch) and
+   the 2026-10-23 capture-flow/rendering fixes are Chromium-only so far. No automated Firefox e2e exists
+   (`npm run ext:firefox` is interactive).
+5. **Website unverified pages**: `/privacy` (mentions `offscreen`), `/try`, `/bye`, and one real `/bye`
+   submission arriving in Netlify Forms under `uninstall`.
+6. **Known, accepted gap**: Bug 2 — no fullscreen in the video player / exported viewer
+   (`docs/launch/video-1.11.1.md`). Polish, not a blocker.
+7. **Open architectural question**: the DOM-marker alternative to the in-memory host-UI heuristic in
+   `handleComboAction` — see PROGRESS's "Open architectural question" note. Proposed, not acted on.
 
 ## Gotchas that are still true
 
@@ -248,3 +119,6 @@ in-memory-bookkeeping heuristic.
   not be added; `chrome.storage.sync` redaction rules are correct; worker state lives in
   `chrome.storage.session` (`tb_sw_state_v1`) — mutate only after awaiting `_hydrated`. The SDK runs
   in the page's **MAIN world**: no secrets in page `localStorage`, ever.
+- **The extension build stubs html2canvas and axe-core** (`tsup.config.ts`); the script-tag build
+  (`website/public/tracebug-sdk.js`) stubs only html2canvas. A feature that needs axe in the extension must remove that
+  stub deliberately — it will otherwise silently return no a11y results.

@@ -161,3 +161,17 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Verified:** `check.mjs --full` 950/950, versions on 1.11.4; real Chromium run of the demo shop with the
   built SDK (SAVE20 typed before capture → step shows it; `.ico` 404 out of steps). `package-lock.json`
   root version not bumped (file is permission-blocked here). Not released: stores, npm, MCP all pending.
+
+## Hygiene audit applied: axe out of the extension bundle, dead code, stale docs, Next patch (2026-10-31)
+
+- **What:** `docs/audit/hygiene-2026-10-31.md` rows 1, 2, 6, 7 (minus documented plugin runners), 9–13. axe-core stubbed in the `tracebug-sdk-ext` build only (3,454,292 → 1,988,928 B); 19 unused exports + `_trimmed` removed (159 lines); unused `tracebug-demo-poster.png` deleted; website `next` 14.2.5 → 14.2.35 + non-force `npm audit fix`.
+- **Files:** `tsup.config.ts`, 14 `src/` files, `website/package{,-lock}.json`, `scripts/check-baseline.json` (ext:lint 26 → 14), CLAUDE.md, ADR 004/005, `docs/performance.md`, STATE.md (rewritten), CODEMAP.md (all line refs refreshed).
+- **Verified:** `check.mjs --full` green (950/60, ext:lint 0/14, versions 1.11.4); e2e `ext-shipping-path` 16/16, `ext-sdk-isolation` 17/17, `ext-events-capture` 22/22; `next build` OK.
+- **Open:** Next 14.2.35 still has 25 advisories (3 critical, need ≥15.5.28 — major upgrade, user decision); documented plugin `onReport`/`onExport` hooks never fire; audit #3/#4 deferred, #5/#8/#14–16 not approved.
+
+## Follow-ups: image optimizer off, plugin hooks wired, single script-tag SDK copy (2026-10-31)
+
+- **Next:** `website/next.config.js` `images: { unoptimized: true }` (no `next/image` users) closes GHSA-2xp9/2464; GHSA-p293 (Windows-hosted only) + 22 others wait for a ≥15.5.28 upgrade, deferred by the user. Local `next start`: `/_next/image` → 404; live check owed after deploy.
+- **Plugins:** documented `onReport`/`onExport` now run (`report-builder.ts`, 9 export sites in 6 files; isolated runners in `plugin-system.ts`); format names in `docs/api-reference.md`; `tests/plugin-hooks.test.ts` (5).
+- **#5:** tsup writes `website/public/tracebug-sdk.js` directly; copy steps, `tracebug-extension/tracebug-sdk.js`, its eslint ignore gone; CI size check, README, `docs/architecture.md`, CLAUDE.md repointed.
+- **Verified:** `check.mjs --full` green; CI's 5 e2e suites pass; benchmark reads the new path. `.claude/settings.json:35` still denies reading the deleted path — harmless, left alone.
