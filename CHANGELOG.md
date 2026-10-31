@@ -16,6 +16,7 @@ All notable changes to TraceBug are documented here.
 - **`console.error(err)` is captured with the error's message and stack.** An `Error` passed to `console.error` (the usual `catch (err) { console.error(err) }`) was serialized with `JSON.stringify` and landed in the report as `"{}"` with no stack, so an AI agent reading the report had nothing to go on. It is now recorded as `TypeError: …` with its stack trace.
 - **The auto-generated title names a caught-and-logged error.** A session whose only error was logged (nothing thrown uncaught) got a generic "Session: …" or "Empty Session" title; it now gets an error title such as `"Apply coupon" Action Fails — TypeError`.
 - **Plugin `onReport` and `onExport` hooks now fire.** Both were documented in `docs/api-reference.md` but never called. `onReport` runs at the end of report building; `onExport` runs before every text export is downloaded (the `.html` export also covers the `.zip` and the cloud-share copy). A plugin that throws or returns the wrong type is skipped with a console warning instead of breaking the report or export.
+- **A recording without a microphone shows a crossed-out mic on the recording bar.** It used to show a dimmed normal mic, which on the dark bar still looked like audio was being recorded. The tooltip now says to turn on "Include microphone" before starting.
 
 ### Changed
 
