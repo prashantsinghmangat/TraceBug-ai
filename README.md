@@ -630,7 +630,8 @@ npm run build
 #   dist/index.js              — ESM (npm package)
 #   dist/index.cjs             — CJS (npm package)
 #   dist/index.d.ts            — TypeScript declarations
-#   tracebug-extension/tracebug-sdk.js — IIFE (Chrome Extension)
+#   tracebug-extension/tracebug-sdk-ext.js — IIFE (injected by the browser extension)
+#   website/public/tracebug-sdk.js     — IIFE (plain <script> tag, window.TraceBug)
 ```
 
 ### Run Example App
@@ -666,7 +667,7 @@ npm run dev
 |--------|------|------------|
 | ESM (`import`) | `dist/index.js` | Vite, Next.js, Nuxt, SvelteKit, modern webpack |
 | CJS (`require`) | `dist/index.cjs` | Angular CLI, older webpack, Node.js |
-| IIFE (global) | `tracebug-extension/tracebug-sdk.js` | Chrome Extension, plain `<script>` tag |
+| IIFE (global) | `website/public/tracebug-sdk.js` | Plain `<script>` tag (`window.TraceBug`); the browser extension injects its own build, `tracebug-extension/tracebug-sdk-ext.js` |
 | TypeScript | `dist/index.d.ts` | Full type support in both ESM and CJS |
 
 ## Uninstall
