@@ -852,18 +852,3 @@ function _injectStyles(): void {
   `;
   document.head.appendChild(style);
 }
-
-/** Helper for callers that want to find the screenshot closest to a timestamp. */
-export function findClosestScreenshot<T extends { timestamp: number }>(
-  screenshots: T[],
-  ts: number
-): T | null {
-  if (!screenshots || screenshots.length === 0) return null;
-  let best = screenshots[0];
-  let bestDelta = Math.abs(best.timestamp - ts);
-  for (const s of screenshots) {
-    const d = Math.abs(s.timestamp - ts);
-    if (d < bestDelta) { best = s; bestDelta = d; }
-  }
-  return best;
-}

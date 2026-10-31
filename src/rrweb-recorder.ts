@@ -31,7 +31,6 @@ let _loadPromise: Promise<RecordFn | null> | null = null;
 let _events: RrwebEvent[] = [];
 let _stopFn: (() => void) | null = null;
 let _recording = false;
-let _trimmed = false;
 
 // ── Buffer bounds ─────────────────────────────────────────────────────────
 // rrweb emits continuously (50–200 mutations/s on dynamic apps), so a
@@ -77,12 +76,6 @@ export function trimEventBuffer(
   return trimmed;
 }
 
-/** True when the DOM buffer was trimmed during this session — the exported
- *  replay covers only the most recent window, not the whole (long) session. */
-export function wasDomBufferTrimmed(): boolean {
-  return _trimmed;
-}
-
 function loadRrweb(): Promise<RecordFn | null> {
   if (_recordFn !== undefined) return Promise.resolve(_recordFn);
   if (!_loadPromise) {
@@ -112,10 +105,9 @@ export async function startDomRecording(): Promise<boolean> {
   const record = await loadRrweb();
   if (!record) return false;
   _events = [];
-  _trimmed = false;
   try {
     const stop = record({
-      emit: (event: RrwebEvent) => { _events.push(event); if (trimEventBuffer(_events)) _trimmed = true; },
+      emit: (event: RrwebEvent) => { _events.push(event); trimEventBuffer(_events); },
       // Periodic full snapshots keep the buffer trimmable without losing
       // replayability, and also speed up seeking in long recordings.
       checkoutEveryNms: CHECKOUT_EVERY_MS,
@@ -178,10 +170,6 @@ export function snapshotDomEvents(): RrwebEvent[] {
   return _events.slice();
 }
 
-export function isDomRecording(): boolean {
-  return _recording;
-}
-
 // ── Replay-only stash (events-only capture) ───────────────────────────────
 // A DOM replay normally rides along on a VideoRecording, because until Phase 4
 // the only thing that started DOM recording was a screen recording. The
@@ -212,14 +200,4 @@ export function getStashedDomReplay(): StashedDomReplay | null {
 
 export function clearStashedDomReplay(): void {
   _stashed = null;
-}
-
-/** Approximate serialized size of an rrweb event stream, in bytes. */
-export function domEventsSizeBytes(events: RrwebEvent[] | undefined): number {
-  if (!events || events.length === 0) return 0;
-  try {
-    return new Blob([JSON.stringify(events)]).size;
-  } catch {
-    return JSON.stringify(events).length;
-  }
 }

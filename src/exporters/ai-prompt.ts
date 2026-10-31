@@ -15,6 +15,7 @@
 
 import { BugReport } from "../types";
 import { isNoiseRequest } from "../url-hygiene";
+import { runExportPlugins } from "../plugin-system";
 
 const MAX_CONSOLE_ERRORS = 5;
 const MAX_NETWORK_FAILURES = 5;
@@ -258,7 +259,7 @@ export function exportReportAsMarkdown(
   options: AIPromptOptions & { filename?: string } = {},
 ): MarkdownReportResult {
   const hasShots = (report.screenshots?.length ?? 0) > 0;
-  const md = generateAIPrompt(report, { ...options, screenshotsAttached: hasShots });
+  const md = runExportPlugins("markdown", generateAIPrompt(report, { ...options, screenshotsAttached: hasShots }));
   const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const filename = options.filename || defaultMarkdownFilename(report);
@@ -307,7 +308,7 @@ export function exportReportAsAiHtml(
   report: BugReport,
   options: AIPromptOptions & { filename?: string } = {},
 ): MarkdownReportResult {
-  const html = generateAiHtml(report, options);
+  const html = runExportPlugins("ai-html", generateAiHtml(report, options));
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const sid = report.session?.sessionId?.slice(0, 8) || "session";

@@ -635,10 +635,16 @@ TraceBug.use({
 |--------|------|-------------|
 | `name` | `string` | Unique plugin name |
 | `onEvent` | `(event) => event \| null` | Filter/transform events before storage. Return `null` to drop. |
-| `onReport` | `(report) => report` | Enrich reports before export |
-| `onExport` | `(format, data) => data` | Transform export output |
+| `onReport` | `(report) => report` | Enrich reports before export. Runs on every report built. |
+| `onExport` | `(format, data) => data` | Transform export output (text) just before it is downloaded |
 | `onInit` | `() => void` | Called when plugin is registered |
 | `onDestroy` | `() => void` | Called when plugin is removed |
+
+`onExport`'s `format` is one of `"html"` (the replay `.html`, also inside the `.zip`), `"markdown"`,
+`"ai-html"`, `"har"`, `"playwright"`, `"pdf"` (the print view), `"json"`, `"text"`, `"html-report"`
+(the dashboard downloads). A hook that throws, or returns the wrong type, is skipped with a console
+warning, so one broken plugin never blocks a report or an export. In the ticket modal, a title typed
+by the tester replaces the report title after `onReport` runs.
 
 ### `TraceBug.removePlugin(name)`
 

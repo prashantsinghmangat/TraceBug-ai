@@ -14,6 +14,7 @@ import { summarizeRedactions, formatRedactionSummary } from "../redaction-summar
 import { generateGitHubIssue, generateGitHubIssueUrl } from "../github-issue";
 import { generatePlaywrightTest, playwrightTestFilename } from "./playwright-test";
 import { formatStyleSummary, type StyleEvidence } from "../style-evidence";
+import { runExportPlugins } from "../plugin-system";
 
 export interface HtmlReplayOptions {
   /** Include the video blob in the bundle (can be 50+ MB). Default: true if present. */
@@ -308,7 +309,7 @@ async function buildReplayPayload(
     }
   }
 
-  const html = buildReplayHtml(payload, rrwebExtras);
+  const html = runExportPlugins("html", buildReplayHtml(payload, rrwebExtras));
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   return { blob, html };
 }

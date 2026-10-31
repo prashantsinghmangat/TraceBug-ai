@@ -36,10 +36,6 @@ const DETECTOR_LABELS: Record<Issue["detector"], string> = {
   "frustration-error-correlated": "Click → error",
 };
 
-export function isIssuesPanelOpen(): boolean {
-  return _isOpen;
-}
-
 /**
  * Run a scan (or use cached results) and open the panel. The scan promise
  * resolves before we render so the panel never flashes empty.

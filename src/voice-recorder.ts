@@ -215,11 +215,6 @@ export function isVoiceRecording(): boolean {
   return isRecording;
 }
 
-/** Get the current transcript (including interim) */
-export function getCurrentTranscript(): string {
-  return transcript + (interimTranscript ? ` ${interimTranscript}` : "");
-}
-
 /** Get all saved transcripts from this session */
 export function getVoiceTranscripts(): VoiceTranscript[] {
   return [...transcripts];

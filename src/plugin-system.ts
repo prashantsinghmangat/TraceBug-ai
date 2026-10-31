@@ -48,10 +48,6 @@ export function unregisterPlugin(name: string): void {
   }
 }
 
-export function getPlugins(): readonly TraceBugPlugin[] {
-  return _plugins;
-}
-
 /** Run all plugin onEvent hooks. Returns null if any plugin filters the event. */
 export function runEventPlugins(event: TraceBugEvent): TraceBugEvent | null {
   let result: TraceBugEvent | null = event;
@@ -63,23 +59,42 @@ export function runEventPlugins(event: TraceBugEvent): TraceBugEvent | null {
   return result;
 }
 
-/** Run all plugin onReport hooks. */
+/**
+ * Run all plugin onReport hooks. A hook that throws, or returns something that
+ * isn't a report, is skipped with a warning — one broken plugin must not stop
+ * every report from being built.
+ */
 export function runReportPlugins(report: BugReport): BugReport {
   let result = report;
   for (const plugin of _plugins) {
-    if (plugin.onReport) {
-      result = plugin.onReport(result);
+    if (!plugin.onReport) continue;
+    try {
+      const next = plugin.onReport(result);
+      if (next && typeof next === "object") result = next;
+      else console.warn(`[TraceBug] Plugin "${plugin.name}" onReport returned no report — ignored.`);
+    } catch (err) {
+      console.warn(`[TraceBug] Plugin "${plugin.name}" onReport threw — skipped:`, err);
     }
   }
   return result;
 }
 
-/** Run all plugin onExport hooks. */
+/**
+ * Run all plugin onExport hooks over an export's text. `format` is one of
+ * "html", "markdown", "ai-html", "har", "playwright", "pdf", "json", "text",
+ * "html-report". Same isolation as runReportPlugins: a hook that throws or
+ * returns a non-string is skipped, and the export goes out unchanged by it.
+ */
 export function runExportPlugins(format: string, data: string): string {
   let result = data;
   for (const plugin of _plugins) {
-    if (plugin.onExport) {
-      result = plugin.onExport(format, result);
+    if (!plugin.onExport) continue;
+    try {
+      const next = plugin.onExport(format, result);
+      if (typeof next === "string") result = next;
+      else console.warn(`[TraceBug] Plugin "${plugin.name}" onExport returned a non-string — ignored.`);
+    } catch (err) {
+      console.warn(`[TraceBug] Plugin "${plugin.name}" onExport threw — skipped:`, err);
     }
   }
   return result;

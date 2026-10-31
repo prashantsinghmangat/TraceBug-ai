@@ -199,10 +199,6 @@ export function getLastVideoRecording(): VideoRecording | null {
   return _lastRecording;
 }
 
-export function clearLastVideoRecording(): void {
-  _lastRecording = null;
-}
-
 // ── Pause / Resume ───────────────────────────────────────────────────────
 // Only the in-page transport supports pause/resume today — the extension's
 // MediaRecorder lives in the offscreen doc and would need an additional RPC
@@ -447,19 +443,6 @@ export function captureRollingBuffer(): Promise<VideoRecording | null> {
     }).catch(() => null);
   }
   return captureRollingBufferInPage();
-}
-
-export function addVideoComment(text: string): VideoComment | null {
-  if (!_active) return null;
-  const trimmed = String(text || "").trim();
-  if (!trimmed) return null;
-  const c: VideoComment = { offsetMs: Date.now() - _startedAt, text: trimmed };
-  _comments.push(c);
-  if (isExtensionContext()) {
-    // Fire-and-forget — local update is authoritative for the HUD.
-    rpcCall("tb:rec:comment", { text: trimmed }).catch(() => {});
-  }
-  return c;
 }
 
 /** Drop the cached recording and revoke its blob URL. */

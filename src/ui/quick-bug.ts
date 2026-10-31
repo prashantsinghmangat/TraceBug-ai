@@ -45,6 +45,7 @@ import {
   getIntegrationsConfig, setIntegrationsConfig, clearIntegrationsConfig,
 } from "../integrations/tracker-client";
 import { isExtensionMode, getBoundShortcut } from "../ext-transport";
+import { runExportPlugins } from "../plugin-system";
 import {
   TRACKER_LABELS, type TrackerProvider, type IntegrationsConfig,
 } from "../integrations/tracker-client";
@@ -1363,7 +1364,7 @@ ${report.steps}` : userDesc)
         showToast("No replayable user actions in this session", root);
         return;
       }
-      const blob = new Blob([spec], { type: "text/plain;charset=utf-8" });
+      const blob = new Blob([runExportPlugins("playwright", spec)], { type: "text/plain;charset=utf-8" });
       const filename = playwrightTestFilename(report);
       triggerDownload(URL.createObjectURL(blob), filename);
       showToast(`✓ ${filename} — run with: npx playwright test ${filename}`, root);

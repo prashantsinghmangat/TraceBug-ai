@@ -311,34 +311,6 @@ function saveSessions(sessions: StoredSession[]): boolean {
   return false;
 }
 
-// ── Get or create the current session ─────────────────────────────────────
-
-export function getOrCreateSession(
-  sessionId: string,
-  projectId: string
-): StoredSession {
-  const sessions = getAllSessions();
-  let session = sessions.find((s) => s.sessionId === sessionId);
-  if (!session) {
-    session = {
-      sessionId,
-      projectId,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      errorMessage: null,
-      errorStack: null,
-      reproSteps: null,
-      errorSummary: null,
-      events: [],
-      annotations: [],
-      environment: null,
-    };
-    sessions.push(session);
-    saveSessions(sessions);
-  }
-  return session;
-}
-
 // ── Batched writes — avoid blocking main thread on every event ────────────
 
 let _cachedSessions: StoredSession[] | null = null;

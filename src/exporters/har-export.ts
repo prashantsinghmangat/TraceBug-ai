@@ -13,6 +13,7 @@
 // empty arrays / -1 sentinels, which is valid per the HAR 1.2 schema.
 
 import type { BugReport, NetworkRequestEntry, NetworkErrorEntry } from "../types";
+import { runExportPlugins } from "../plugin-system";
 
 // ── HAR 1.2 types (only the fields we emit) ──────────────────────────────
 
@@ -154,7 +155,7 @@ export function exportSessionAsHar(
   options: { filename?: string; creatorVersion?: string } = {},
 ): HarExportResult {
   const har = buildHar(report, options.creatorVersion);
-  const json = JSON.stringify(har, null, 2);
+  const json = runExportPlugins("har", JSON.stringify(har, null, 2));
   const blob = new Blob([json], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const filename = options.filename || defaultFilename(report);

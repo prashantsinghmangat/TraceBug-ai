@@ -29,6 +29,7 @@ import { buildActionChips } from "./action-chips";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 import { getElementAnnotations } from "./annotation-store";
 import { getStashedDomReplay } from "./rrweb-recorder";
+import { runReportPlugins } from "./plugin-system";
 
 /** Element annotations from the in-memory store — [] outside the browser. */
 function safeElementAnnotations() {
@@ -333,7 +334,7 @@ export function buildReport(
   report.severity = determineSeverity(report);
   // Priority is the tester's call; default it from severity when unset.
   report.priority = session.priority ?? derivePriorityFromSeverity(report.severity);
-  return report;
+  return runReportPlugins(report);
 }
 
 /** Default priority mapping when the tester hasn't set one explicitly. */

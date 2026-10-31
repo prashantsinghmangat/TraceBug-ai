@@ -45,10 +45,6 @@ export function clearAllAnnotations(): void {
   _drawRegions = [];
 }
 
-export function getAnnotationCount(): number {
-  return _elementAnnotations.length + _drawRegions.length;
-}
-
 // ── Export ─────────────────────────────────────────────────────────────────
 
 export function exportAsJSON(): string {
