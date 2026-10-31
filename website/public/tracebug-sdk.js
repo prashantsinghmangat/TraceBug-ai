@@ -33966,6 +33966,9 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
     let micAvailable = !eventsOnly && isVideoOffered() && hasMicrophoneTrack();
     const pauseAvailable = !eventsOnly && !isExtensionContext2();
+    const MIC_ON_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+    const MIC_OFF_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`;
+    const NO_MIC_TITLE = 'No microphone in this recording (turn on "Include microphone" before you start)';
     setInnerHTML(hud, `
     <span data-tb-hud="grip" title="Drag to move" aria-label="Drag to move">
       <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor"><circle cx="2" cy="3" r="1.2"/><circle cx="6" cy="3" r="1.2"/><circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/><circle cx="2" cy="11" r="1.2"/><circle cx="6" cy="11" r="1.2"/></svg>
@@ -33983,12 +33986,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <span class="tb-hud-kind" data-tb-hud="kind" title="This capture records the page's DOM, console and network and replays them. It is not a screen recording \u2014 your browser is not sharing your screen.">Replay, not video</span>
     <span class="tb-hud-count" data-tb-hud="count" title="What this capture has recorded so far. If these stay at zero, the page is not producing anything TraceBug can see \u2014 content inside embedded frames is the usual reason.">0 events</span>` : `
     <button class="tb-hud-btn" data-tb-hud="mic"
-      title="${micAvailable ? "Mute / unmute microphone" : "No microphone in this recording"}"
-      aria-label="Toggle microphone"
+      title="${micAvailable ? "Mute / unmute microphone" : NO_MIC_TITLE}"
+      aria-label="${micAvailable ? "Toggle microphone" : "No microphone in this recording"}"
       ${micAvailable ? "" : "disabled"}
       style="${micAvailable ? "" : "opacity:0.35;cursor:not-allowed"}"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      ${micAvailable ? MIC_ON_SVG : MIC_OFF_SVG}
     </button>`}
     <span class="tb-hud-sep"></span>
     <button class="tb-hud-btn" data-tb-hud="shot" title="Take a screenshot now (adds to the ticket)" aria-label="Take a screenshot">
@@ -34039,9 +34042,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (micBtn && micBtn.disabled && micAvailable !== hasMicrophoneTrack()) {
         micAvailable = hasMicrophoneTrack();
         micBtn.disabled = !micAvailable;
-        micBtn.title = micAvailable ? "Mute / unmute microphone" : "No microphone in this recording";
+        micBtn.title = micAvailable ? "Mute / unmute microphone" : NO_MIC_TITLE;
+        micBtn.setAttribute("aria-label", micAvailable ? "Toggle microphone" : "No microphone in this recording");
         micBtn.style.opacity = micAvailable ? "" : "0.35";
         micBtn.style.cursor = micAvailable ? "" : "not-allowed";
+        setInnerHTML(micBtn, micAvailable ? MIC_ON_SVG : MIC_OFF_SVG);
       }
     }, 500);
     if (gripEl) {
@@ -34099,7 +34104,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       setMicrophoneMuted(nextMuted);
       micBtn.dataset.muted = nextMuted ? "1" : "";
       micBtn.title = nextMuted ? "Microphone muted \u2014 click to unmute" : "Mute microphone";
-      setInnerHTML(micBtn, nextMuted ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`);
+      setInnerHTML(micBtn, nextMuted ? MIC_OFF_SVG : MIC_ON_SVG);
     });
     annotateBtn == null ? void 0 : annotateBtn.addEventListener("click", () => {
       const drawRoot = _root;
