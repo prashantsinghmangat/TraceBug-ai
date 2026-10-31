@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Nothing on the site uses next/image, so the Image Optimization API
+  // (/_next/image) is pure attack surface: Next 14.x carries unpatched RCEs in
+  // it (GHSA-2xp9-vwfh-vxw4, GHSA-2464-fhr4-w9xw — fixed only in >=15.5.28).
+  // unoptimized turns the optimizer off entirely.
   images: {
-    formats: ['image/avif', 'image/webp'],
+    unoptimized: true,
   },
   poweredByHeader: false,
   compress: true,
