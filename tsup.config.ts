@@ -40,6 +40,26 @@ const stubRrweb = {
   },
 };
 
+// axe-core is ~1.46 MB of the unminified IIFE, and only the a11y auto-scanner
+// uses it — reachable through the public scanPage()/showIssuesPanel() API and
+// nothing else. The extension never calls either, so its injected build (and
+// only that one — script-tag and npm users keep scanPage()) drops it.
+// detectA11yViolations() sees no axe.run and returns no a11y issues; the other
+// detectors are unaffected.
+const stubAxeCore = {
+  name: "stub-axe-core",
+  setup(build: { onResolve: Function; onLoad: Function }) {
+    build.onResolve({ filter: /^axe-core$/ }, () => ({
+      path: "axe-core",
+      namespace: "tb-stub-axe",
+    }));
+    build.onLoad({ filter: /.*/, namespace: "tb-stub-axe" }, () => ({
+      contents: "export default null;",
+      loader: "js",
+    }));
+  },
+};
+
 // The ~137 KB inlined rrweb-player runtime is only needed to *generate* a
 // DOM-replay .html. IIFE can't code-split, so without this it would inline into
 // the content-script bundle as dead weight (the extension never produces rrweb
@@ -130,13 +150,14 @@ export default defineConfig([
   // web-accessible resource instead of inlining. (stubRrweb / stubRrwebRuntime
   // remain defined above so this is a one-line revert if needed.)
   //
-  // Despite living in tracebug-extension/, this file is NOT what the extension
-  // injects into a page (see the tracebug-sdk-ext entry below) — it's the
-  // npm/page-mode build, published under window.TraceBug. `npm run build:ext`
-  // also copies it to website/public/tracebug-sdk.js for the website's own
-  // opt-in in-page demo. Kept unchanged by Bug 0's fix on purpose: any real
-  // app embedding this as a plain <script> tag keeps working exactly as
-  // before. See docs/launch/sdk-isolation-1.11.2.md.
+  // This file is NOT what the extension injects into a page (see the
+  // tracebug-sdk-ext entry below) — it's the page-mode build, published under
+  // window.TraceBug for plain <script> tag use. It is written straight to
+  // website/public/ (the website's opt-in in-page demo, the e2e suites and the
+  // benchmark all load it from there) — the only copy, so it can't drift.
+  // Kept unchanged by Bug 0's fix on purpose: any real app embedding this as a
+  // plain <script> tag keeps working exactly as before. See
+  // docs/launch/sdk-isolation-1.11.2.md.
   {
     entry: { "tracebug-sdk": "src/index.ts" },
     format: ["iife"],
@@ -146,7 +167,7 @@ export default defineConfig([
     splitting: false,
     sourcemap: false,
     esbuildPlugins: [stubHtml2Canvas],
-    outDir: "tracebug-extension",
+    outDir: "website/public",
     outExtension: () => ({ js: ".js" }),
     footer: {
       js: `
@@ -176,7 +197,7 @@ export default defineConfig([
     clean: false,
     splitting: false,
     sourcemap: false,
-    esbuildPlugins: [stubHtml2Canvas],
+    esbuildPlugins: [stubHtml2Canvas, stubAxeCore],
     outDir: "tracebug-extension",
     outExtension: () => ({ js: ".js" }),
     footer: {

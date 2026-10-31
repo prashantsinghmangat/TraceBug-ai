@@ -15,7 +15,6 @@
   "ignorePatterns": [
     "dist/",
     "node_modules/",
-    "tracebug-extension/tracebug-sdk.js",
     "example-app/",
     "website/",
     "tests/"

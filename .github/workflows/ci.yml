@@ -30,7 +30,7 @@ jobs:
         run: |
           ESM_SIZE=$(wc -c < dist/index.js)
           CJS_SIZE=$(wc -c < dist/index.cjs)
-          IIFE_SIZE=$(wc -c < tracebug-extension/tracebug-sdk.js)
+          IIFE_SIZE=$(wc -c < website/public/tracebug-sdk.js)
           echo "=== Bundle Sizes ==="
           echo "ESM:  $ESM_SIZE bytes ($(($ESM_SIZE / 1024)) KB)"
           echo "CJS:  $CJS_SIZE bytes ($(($CJS_SIZE / 1024)) KB)"
@@ -54,7 +54,7 @@ jobs:
           node-version: 20
           cache: 'npm'
       - run: npm ci
-      - name: Build extension bundle (produces website/public/tracebug-sdk.js)
+      - name: Build SDK + extension bundle (writes website/public/tracebug-sdk.js)
         run: npm run build:ext
       - name: Install Chromium
         run: npx playwright install --with-deps chromium

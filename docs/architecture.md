@@ -17,7 +17,8 @@ npm run build
 |--------|--------|----------|---------|
 | ESM | `dist/index.js` | npm package (import) | Modern bundlers (Vite, webpack 5+) |
 | CJS | `dist/index.cjs` | npm package (require) | Node.js, older bundlers |
-| IIFE | `tracebug-extension/tracebug-sdk.js` | Chrome Extension | `window.TraceBug` global |
+| IIFE | `website/public/tracebug-sdk.js` | Plain `<script>` tag | `window.TraceBug` global |
+| IIFE | `tracebug-extension/tracebug-sdk-ext.js` | Browser extension (injected) | `window.__TraceBugExtension` global |
 | CLI | `dist/bin.mjs` | `npx tracebug` | CLI tool for project setup |
 | DTS | `dist/index.d.ts` / `dist/index.d.cts` | TypeScript types | IDE autocompletion |
 
