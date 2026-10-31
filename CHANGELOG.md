@@ -15,6 +15,15 @@ All notable changes to TraceBug are documented here.
 - **Failed page assets no longer appear as repro steps or AI-prompt leads.** A `favicon.ico` 404 was listed as reproduction step 1 and as a network failure in the AI prompt. Failed favicons, images, fonts and analytics beacons are now left out of both (the prompt notes how many were omitted); the Network tab and HAR export still show every request.
 - **`console.error(err)` is captured with the error's message and stack.** An `Error` passed to `console.error` (the usual `catch (err) { console.error(err) }`) was serialized with `JSON.stringify` and landed in the report as `"{}"` with no stack, so an AI agent reading the report had nothing to go on. It is now recorded as `TypeError: …` with its stack trace.
 - **The auto-generated title names a caught-and-logged error.** A session whose only error was logged (nothing thrown uncaught) got a generic "Session: …" or "Empty Session" title; it now gets an error title such as `"Apply coupon" Action Fails — TypeError`.
+- **Plugin `onReport` and `onExport` hooks now fire.** Both were documented in `docs/api-reference.md` but never called. `onReport` runs at the end of report building; `onExport` runs before every text export is downloaded (the `.html` export also covers the `.zip` and the cloud-share copy). A plugin that throws or returns the wrong type is skipped with a console warning instead of breaking the report or export.
+
+### Changed
+
+- **The extension injects 42% less code into each page you capture** (3.45 MB → 1.99 MB). axe-core, used only by the `scanPage()` API and never by the extension itself, is no longer in the extension's bundle. The npm SDK and the script-tag build still include it, so `scanPage()` works there as before.
+
+### Security
+
+- **Website: Next.js 14.2.5 → 14.2.35, and the unused image optimizer is turned off** (`images: { unoptimized: true }`; nothing on the site uses `next/image`). This closes two critical advisories in the optimizer (GHSA-2xp9, GHSA-2464). The browser extension and the npm packages were not affected.
 
 ## [1.11.3] - 2026-10-28
 
