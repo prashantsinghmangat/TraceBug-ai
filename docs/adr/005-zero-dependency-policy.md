@@ -12,13 +12,15 @@ audit burden. Several needs looked like "just add a library": an MCP server
 
 ## Decision
 
-The published packages carry **zero runtime dependencies**. Where a
+The `tracebug` CLI package carries **zero runtime dependencies**. Where a
 protocol is small enough to own, we hand-roll it: the MCP stdio JSON-RPC
 loop (~5 methods), the ZIP container (~150 lines, STORE +
 `CompressionStream` deflate), the source-map VLQ decoder (~150 lines), HAR
-1.2 assembly. The three heavyweights the SDK genuinely needs — `rrweb`,
-`html2canvas`, `axe-core` — are build-time/lazy-loaded, never runtime deps
-of the published CLI, and additions must be justified in review.
+1.2 assembly. The `tracebug-sdk` package declares exactly the three
+heavyweights it genuinely needs — `rrweb`, `html2canvas`, `axe-core` — each
+lazy-loaded via `import()` in the npm build and inlined (or stubbed) in the
+IIFE builds; they are never runtime deps of the published CLI, and any
+addition must be justified in review.
 
 ## Consequences
 

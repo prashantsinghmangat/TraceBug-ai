@@ -25,8 +25,9 @@ shared codebase emitting Chrome + Firefox targets from `manifest.base.json`
   injection model doubles as the privacy story (nothing runs until the user
   clicks).
 - The offscreen recording pattern is Chrome-only API surface — the Firefox
-  port (paused) uses an event-page background instead; recording parity is
-  the hard part of that port.
+  build (live on AMO since 1.10.1) uses an event-page background instead and
+  records in a window-host page (`offscreen.js`'s `IS_WINDOW_HOST` branch);
+  recording parity is the hard part of that port.
 - Every popup→page interaction is a 4-hop pipeline (popup → background →
   content script → page world), which costs boilerplate per feature but
   keeps each hop auditable.
