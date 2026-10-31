@@ -21179,10 +21179,9 @@ var TraceBugModule = (() => {
       _onStarted == null ? void 0 : _onStarted();
     });
   }
-  function pickMimeType() {
+  function pickMimeType(hasAudio) {
     const candidates = [
-      "video/webm;codecs=vp9,opus",
-      "video/webm;codecs=vp8,opus",
+      ...hasAudio ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus"] : [],
       "video/webm;codecs=vp9",
       "video/webm;codecs=vp8",
       "video/webm"
@@ -21236,7 +21235,7 @@ var TraceBugModule = (() => {
     _chunks = [];
     _comments = [];
     _startedAt = Date.now();
-    _mimeType = pickMimeType();
+    _mimeType = pickMimeType(displayStream.getAudioTracks().length > 0);
     _mode = requestedMode;
     _capturesTaken = 0;
     try {

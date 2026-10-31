@@ -226,10 +226,18 @@ const _hydratePromise = hydratePersistedRecording();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function pickMimeType() {
+/** How long a stop waits for MediaRecorder's `stop` event before finishing anyway. */
+const STOP_FALLBACK_MS = 5000;
+
+// Only name an audio codec when the stream really has audio. Firefox's
+// MediaRecorder given "…,opus" and a stream with NO audio track (Firefox's
+// getDisplayMedia never delivers tab audio, so: any recording without the mic)
+// emits no data and never fires `stop` — the recording was lost and the
+// recorder window stayed on "Recording". Measured in Firefox 158; Chrome
+// tolerates the mismatch.
+function pickMimeType(hasAudio) {
   const candidates = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
+    ...(hasAudio ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus"] : []),
     "video/webm;codecs=vp9",
     "video/webm;codecs=vp8",
     "video/webm",
@@ -488,7 +496,7 @@ async function _startRecordingImpl(options) {
   _startedAt = Date.now();
   _capturesTaken = 0;
   _mode = options?.mode === "standard" ? "standard" : "rolling";
-  _mimeType = pickMimeType();
+  _mimeType = pickMimeType(displayStream.getAudioTracks().length > 0);
 
   try {
     _recorder = _mimeType
@@ -533,7 +541,10 @@ async function _startRecordingImpl(options) {
         try { _recorder.requestData(); } catch {}
         recording = await new Promise((resolve) => {
           const r = _recorder;
-          r.onstop = async () => {
+          let done = false;
+          const finish = async () => {
+            if (done) return;
+            done = true;
             try {
               const rec = await buildRecording(_chunks);
               _lastBuiltRecording = rec;
@@ -543,7 +554,9 @@ async function _startRecordingImpl(options) {
               resolve(_lastBuiltRecording);
             }
           };
-          try { r.stop(); } catch { resolve(_lastBuiltRecording); }
+          r.onstop = finish;
+          setTimeout(finish, STOP_FALLBACK_MS); // same guard as stopAndBuildRecording
+          try { r.stop(); } catch { done = true; resolve(_lastBuiltRecording); }
         });
       } else if (_chunks.length > 0) {
         // Recorder already inactive but we still have buffered chunks.
@@ -608,7 +621,10 @@ async function stopAndBuildRecording() {
 
   return await new Promise((resolve) => {
     const recorder = _recorder;
-    recorder.onstop = async () => {
+    let done = false;
+    const finish = async () => {
+      if (done) return;
+      done = true;
       try {
         // Read _chunks AT onstop time — we want the final dataavailable
         // that stop() emits BEFORE this event to have already pushed.
@@ -622,7 +638,12 @@ async function stopAndBuildRecording() {
         resolve(null);
       }
     };
-    try { recorder.stop(); } catch { teardown(); resolve(null); }
+    recorder.onstop = finish;
+    // If `stop` never fires (the Firefox codec stall pickMimeType now avoids,
+    // or anything like it), don't leave the page's RPC hanging and the screen
+    // still shared: finish with whatever was recorded.
+    setTimeout(finish, STOP_FALLBACK_MS);
+    try { recorder.stop(); } catch { done = true; teardown(); resolve(null); }
   });
 }
 

@@ -649,10 +649,12 @@ export function wireStartedListener(): void {
 
 // ── In-page transport (preserved unchanged) ──────────────────────────────
 
-function pickMimeType(): string {
+// Only name an audio codec when the stream has audio: Firefox's MediaRecorder
+// given "…,opus" with no audio track emits no data and never fires `stop`
+// (same fix as offscreen.js's pickMimeType).
+function pickMimeType(hasAudio: boolean): string {
   const candidates = [
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
+    ...(hasAudio ? ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus"] : []),
     "video/webm;codecs=vp9",
     "video/webm;codecs=vp8",
     "video/webm",
@@ -723,7 +725,7 @@ async function startVideoRecordingInPage(
   _chunks = [];
   _comments = [];
   _startedAt = Date.now();
-  _mimeType = pickMimeType();
+  _mimeType = pickMimeType(displayStream.getAudioTracks().length > 0);
   _mode = requestedMode;
   _capturesTaken = 0;
 
