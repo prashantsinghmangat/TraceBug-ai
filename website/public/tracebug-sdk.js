@@ -19992,12 +19992,11 @@ var TraceBugModule = (() => {
     const record2 = await loadRrweb();
     if (!record2) return false;
     _events = [];
-    _trimmed = false;
     try {
       const stop = record2({
         emit: (event) => {
           _events.push(event);
-          if (trimEventBuffer(_events)) _trimmed = true;
+          trimEventBuffer(_events);
         },
         // Periodic full snapshots keep the buffer trimmable without losing
         // replayability, and also speed up seeking in long recordings.
@@ -20068,7 +20067,7 @@ var TraceBugModule = (() => {
   function clearStashedDomReplay() {
     _stashed = null;
   }
-  var _recordFn, _loadPromise, _events, _stopFn, _recording, _trimmed, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX, _stashed;
+  var _recordFn, _loadPromise, _events, _stopFn, _recording, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX, _stashed;
   var init_rrweb_recorder = __esm({
     "src/rrweb-recorder.ts"() {
       "use strict";
@@ -20077,7 +20076,6 @@ var TraceBugModule = (() => {
       _events = [];
       _stopFn = null;
       _recording = false;
-      _trimmed = false;
       FULL_SNAPSHOT = 2;
       CHECKOUT_EVERY_MS = 12e4;
       SOFT_MAX = 3e4;
@@ -22799,6 +22797,95 @@ var TraceBugModule = (() => {
     }
   });
 
+  // src/plugin-system.ts
+  function registerPlugin(plugin) {
+    if (_plugins.some((p) => p.name === plugin.name)) {
+      console.warn(`[TraceBug] Plugin "${plugin.name}" already registered.`);
+      return;
+    }
+    _plugins.push(plugin);
+    if (plugin.onInit) plugin.onInit();
+  }
+  function unregisterPlugin(name) {
+    const idx = _plugins.findIndex((p) => p.name === name);
+    if (idx >= 0) {
+      const plugin = _plugins[idx];
+      if (plugin.onDestroy) plugin.onDestroy();
+      _plugins.splice(idx, 1);
+    }
+  }
+  function runEventPlugins(event) {
+    let result2 = event;
+    for (const plugin of _plugins) {
+      if (plugin.onEvent && result2) {
+        result2 = plugin.onEvent(result2);
+      }
+    }
+    return result2;
+  }
+  function runReportPlugins(report) {
+    let result2 = report;
+    for (const plugin of _plugins) {
+      if (!plugin.onReport) continue;
+      try {
+        const next = plugin.onReport(result2);
+        if (next && typeof next === "object") result2 = next;
+        else console.warn(`[TraceBug] Plugin "${plugin.name}" onReport returned no report \u2014 ignored.`);
+      } catch (err) {
+        console.warn(`[TraceBug] Plugin "${plugin.name}" onReport threw \u2014 skipped:`, err);
+      }
+    }
+    return result2;
+  }
+  function runExportPlugins(format, data) {
+    let result2 = data;
+    for (const plugin of _plugins) {
+      if (!plugin.onExport) continue;
+      try {
+        const next = plugin.onExport(format, result2);
+        if (typeof next === "string") result2 = next;
+        else console.warn(`[TraceBug] Plugin "${plugin.name}" onExport returned a non-string \u2014 ignored.`);
+      } catch (err) {
+        console.warn(`[TraceBug] Plugin "${plugin.name}" onExport threw \u2014 skipped:`, err);
+      }
+    }
+    return result2;
+  }
+  function onHook(event, callback) {
+    if (!_hooks.has(event)) _hooks.set(event, /* @__PURE__ */ new Set());
+    _hooks.get(event).add(callback);
+    return () => {
+      const set = _hooks.get(event);
+      if (set) set.delete(callback);
+    };
+  }
+  function emitHook(event, ...args) {
+    const callbacks = _hooks.get(event);
+    if (!callbacks) return;
+    for (const cb of callbacks) {
+      try {
+        cb(...args);
+      } catch (err) {
+        console.warn(`[TraceBug] Hook "${event}" error:`, err);
+      }
+    }
+  }
+  function clearAllPlugins() {
+    for (const plugin of _plugins) {
+      if (plugin.onDestroy) plugin.onDestroy();
+    }
+    _plugins.length = 0;
+    _hooks.clear();
+  }
+  var _plugins, _hooks;
+  var init_plugin_system = __esm({
+    "src/plugin-system.ts"() {
+      "use strict";
+      _plugins = [];
+      _hooks = /* @__PURE__ */ new Map();
+    }
+  });
+
   // src/report-builder.ts
   function safeElementAnnotations() {
     try {
@@ -22992,7 +23079,7 @@ var TraceBugModule = (() => {
     report.rootCause = generateRootCauseHint(report);
     report.severity = determineSeverity(report);
     report.priority = (_e = session.priority) != null ? _e : derivePriorityFromSeverity(report.severity);
-    return report;
+    return runReportPlugins(report);
   }
   function derivePriorityFromSeverity(severity) {
     if (severity === "critical" || severity === "high") return "high";
@@ -23255,6 +23342,7 @@ var TraceBugModule = (() => {
       init_url_hygiene();
       init_annotation_store();
       init_rrweb_recorder();
+      init_plugin_system();
       VIDEO_SESSION_GRACE_MS = 1e4;
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
@@ -23939,7 +24027,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 
   // src/pdf-generator.ts
   function generatePdfReport(report) {
-    const html = buildPdfHtml(report);
+    const html = runExportPlugins("pdf", buildPdfHtml(report));
     const printWindow = window.open("", "_blank", "width=900,height=700");
     if (!printWindow) {
       downloadAsHtml(html, `tracebug-report-${report.session.sessionId.slice(0, 8)}.html`);
@@ -23954,7 +24042,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     };
   }
   function downloadPdfAsHtml(report) {
-    const html = buildPdfHtml(report);
+    const html = runExportPlugins("pdf", buildPdfHtml(report));
     downloadAsHtml(html, `tracebug-report-${report.session.sessionId.slice(0, 8)}.html`);
   }
   function buildPdfHtml(report) {
@@ -24203,6 +24291,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     "src/pdf-generator.ts"() {
       "use strict";
       init_report_builder();
+      init_plugin_system();
     }
   });
 
@@ -27872,7 +27961,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         console.warn("[TraceBug] Failed to load rrweb replay runtime \u2014 export will fall back to screenshots:", err);
       }
     }
-    const html = buildReplayHtml(payload, rrwebExtras);
+    const html = runExportPlugins("html", buildReplayHtml(payload, rrwebExtras));
     const blob2 = new Blob([html], { type: "text/html;charset=utf-8" });
     return { blob: blob2, html };
   }
@@ -28010,6 +28099,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       init_github_issue();
       init_playwright_test();
       init_style_evidence();
+      init_plugin_system();
     }
   });
 
@@ -29256,7 +29346,7 @@ ${issueSignatureSlack()}`;
   }
   function exportSessionAsHar(report, options = {}) {
     const har = buildHar(report, options.creatorVersion);
-    const json = JSON.stringify(har, null, 2);
+    const json = runExportPlugins("har", JSON.stringify(har, null, 2));
     const blob2 = new Blob([json], { type: "application/json;charset=utf-8" });
     const url = URL.createObjectURL(blob2);
     const filename = options.filename || defaultFilename2(report);
@@ -29326,6 +29416,7 @@ ${issueSignatureSlack()}`;
   var init_har_export = __esm({
     "src/exporters/har-export.ts"() {
       "use strict";
+      init_plugin_system();
       STATUS_TEXT = {
         0: "",
         200: "OK",
@@ -29518,7 +29609,7 @@ ${issueSignatureSlack()}`;
   function exportReportAsMarkdown(report, options = {}) {
     var _a2, _b;
     const hasShots = ((_b = (_a2 = report.screenshots) == null ? void 0 : _a2.length) != null ? _b : 0) > 0;
-    const md = generateAIPrompt(report, { ...options, screenshotsAttached: hasShots });
+    const md = runExportPlugins("markdown", generateAIPrompt(report, { ...options, screenshotsAttached: hasShots }));
     const blob2 = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob2);
     const filename = options.filename || defaultMarkdownFilename(report);
@@ -29552,7 +29643,7 @@ ${renderMarkdownLite(md)}
   }
   function exportReportAsAiHtml(report, options = {}) {
     var _a2, _b;
-    const html = generateAiHtml(report, options);
+    const html = runExportPlugins("ai-html", generateAiHtml(report, options));
     const blob2 = new Blob([html], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob2);
     const sid = ((_b = (_a2 = report.session) == null ? void 0 : _a2.sessionId) == null ? void 0 : _b.slice(0, 8)) || "session";
@@ -29647,6 +29738,7 @@ ${renderMarkdownLite(md)}
     "src/exporters/ai-prompt.ts"() {
       "use strict";
       init_url_hygiene();
+      init_plugin_system();
       MAX_CONSOLE_ERRORS = 5;
       MAX_NETWORK_FAILURES = 5;
       MAX_NETWORK_CONTEXT = 3;
@@ -31521,7 +31613,7 @@ ${report.steps}` : userDesc : void 0,
           showToast("No replayable user actions in this session", root2);
           return;
         }
-        const blob2 = new Blob([spec], { type: "text/plain;charset=utf-8" });
+        const blob2 = new Blob([runExportPlugins("playwright", spec)], { type: "text/plain;charset=utf-8" });
         const filename = playwrightTestFilename(report);
         triggerDownload(URL.createObjectURL(blob2), filename);
         showToast(`\u2713 ${filename} \u2014 run with: npx playwright test ${filename}`, root2);
@@ -33728,6 +33820,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_slack_export();
       init_tracker_client();
       init_ext_transport();
+      init_plugin_system();
       init_tracker_client();
       _githubRepo = null;
       MODAL_ID = "tracebug-quick-bug-modal";
@@ -36011,7 +36104,7 @@ ${s2.errorSummary || ""}`;
     content.querySelector("#bt-download-json").addEventListener("click", () => {
       downloadFile(
         `tracebug-${s2.sessionId.slice(0, 8)}.json`,
-        JSON.stringify(s2, null, 2),
+        runExportPlugins("json", JSON.stringify(s2, null, 2)),
         "application/json"
       );
     });
@@ -36019,7 +36112,7 @@ ${s2.errorSummary || ""}`;
       const report = buildTextReport(s2, problems, apiEvents, sessionDur);
       downloadFile(
         `tracebug-report-${s2.sessionId.slice(0, 8)}.txt`,
-        report,
+        runExportPlugins("text", report),
         "text/plain"
       );
     });
@@ -36027,7 +36120,7 @@ ${s2.errorSummary || ""}`;
       const htmlReport = buildHtmlReport(s2, problems, apiEvents, sessionDur);
       downloadFile(
         `tracebug-report-${s2.sessionId.slice(0, 8)}.html`,
-        htmlReport,
+        runExportPlugins("html-report", htmlReport),
         "text/html"
       );
     });
@@ -37320,6 +37413,7 @@ ${"-".repeat(40)}
       init_quick_bug();
       init_helpers();
       init_video_recorder();
+      init_plugin_system();
       EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
       PANEL_ID2 = "tracebug-dashboard-panel";
       _isRecording = true;
@@ -71483,12 +71577,8 @@ First element: \`${exampleSnippet}\``,
   // src/ui/issues-panel.ts
   var issues_panel_exports = {};
   __export(issues_panel_exports, {
-    isIssuesPanelOpen: () => isIssuesPanelOpen,
     showIssuesPanel: () => showIssuesPanel
   });
-  function isIssuesPanelOpen() {
-    return _isOpen2;
-  }
   async function showIssuesPanel(root2, options) {
     var _a2;
     if (_isOpen2) return;
@@ -72702,63 +72792,7 @@ ${summary}`;
   init_pre_record();
   init_annotation_store();
   init_theme();
-
-  // src/plugin-system.ts
-  var _plugins = [];
-  var _hooks = /* @__PURE__ */ new Map();
-  function registerPlugin(plugin) {
-    if (_plugins.some((p) => p.name === plugin.name)) {
-      console.warn(`[TraceBug] Plugin "${plugin.name}" already registered.`);
-      return;
-    }
-    _plugins.push(plugin);
-    if (plugin.onInit) plugin.onInit();
-  }
-  function unregisterPlugin(name) {
-    const idx = _plugins.findIndex((p) => p.name === name);
-    if (idx >= 0) {
-      const plugin = _plugins[idx];
-      if (plugin.onDestroy) plugin.onDestroy();
-      _plugins.splice(idx, 1);
-    }
-  }
-  function runEventPlugins(event) {
-    let result2 = event;
-    for (const plugin of _plugins) {
-      if (plugin.onEvent && result2) {
-        result2 = plugin.onEvent(result2);
-      }
-    }
-    return result2;
-  }
-  function onHook(event, callback) {
-    if (!_hooks.has(event)) _hooks.set(event, /* @__PURE__ */ new Set());
-    _hooks.get(event).add(callback);
-    return () => {
-      const set = _hooks.get(event);
-      if (set) set.delete(callback);
-    };
-  }
-  function emitHook(event, ...args) {
-    const callbacks = _hooks.get(event);
-    if (!callbacks) return;
-    for (const cb of callbacks) {
-      try {
-        cb(...args);
-      } catch (err) {
-        console.warn(`[TraceBug] Hook "${event}" error:`, err);
-      }
-    }
-  }
-  function clearAllPlugins() {
-    for (const plugin of _plugins) {
-      if (plugin.onDestroy) plugin.onDestroy();
-    }
-    _plugins.length = 0;
-    _hooks.clear();
-  }
-
-  // src/index.ts
+  init_plugin_system();
   init_storage();
   init_repro_generator();
   init_environment();

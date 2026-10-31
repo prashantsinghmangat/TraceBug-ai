@@ -104,11 +104,6 @@ export function getCurrentContext(): ContextData {
   return { ..._context };
 }
 
-/** Wipe context — used by tests or callers who want to reset between sessions. */
-export function clearContext(): void {
-  _context = {};
-}
-
 /**
  * Defensive sanitizer for `mark()` payloads. We don't try to be clever —
  * just stringify-safe values (primitives + plain object/array). Anything
@@ -122,15 +117,4 @@ function sanitizePayload(payload: unknown): Record<string, unknown> | undefined 
   } catch {
     return undefined;
   }
-}
-
-/** Filter helper used by report-builder to extract mark events. */
-export function filterMarks(events: TraceBugEvent[]): Array<{ timestamp: number; label: string; payload?: Record<string, unknown> }> {
-  return events
-    .filter(e => e.type === "mark")
-    .map(e => ({
-      timestamp: e.timestamp,
-      label: e.data?.label || "",
-      payload: e.data?.payload,
-    }));
 }

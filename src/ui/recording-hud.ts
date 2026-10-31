@@ -397,7 +397,3 @@ export function hideRecordingHUD(): void {
   _onStopRequested = null;
   _eventsStartedAt = null;
 }
-
-export function isRecordingHUDVisible(): boolean {
-  return _hud !== null;
-}

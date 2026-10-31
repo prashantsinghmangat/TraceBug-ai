@@ -33,21 +33,6 @@ export async function computeFingerprint(
   return djb2(input).toString(16).padStart(8, "0");
 }
 
-/**
- * Synchronous fallback fingerprint — used in code paths that can't `await`.
- * Collision rate higher than SHA-1 but acceptable for in-session grouping.
- */
-export function computeFingerprintSync(
-  errorMessage: string,
-  errorStack: string | undefined,
-  page: string
-): string {
-  const errorType = extractErrorType(errorMessage);
-  const topFrames = extractTopFrames(errorStack || "", 3);
-  const input = `${errorType}|${topFrames.join("\n")}|${page}`;
-  return djb2(input).toString(16).padStart(8, "0");
-}
-
 /** Pick out the JS error class — TypeError, ReferenceError, etc. */
 function extractErrorType(message: string): string {
   const m = message.match(/^([A-Z][a-zA-Z]+Error|Error)\b/);

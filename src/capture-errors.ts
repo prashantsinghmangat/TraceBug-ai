@@ -20,9 +20,6 @@
 // cannot import this module. tests/capture-errors.test.ts asserts both copies
 // agree, so a drift fails there rather than in a user's recording.
 
-/** A capture failure that carries an action, keyed by the code the transports pass around. */
-export type CaptureErrorCode = "system-permission" | "cancelled" | "unsupported" | "unknown";
-
 /**
  * Did the OS refuse screen capture, as opposed to the user cancelling?
  *

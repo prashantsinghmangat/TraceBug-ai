@@ -23,6 +23,7 @@ import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
 import { matchesShortcut, setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 import { isExtensionContext } from "./video-recorder";
+import { runExportPlugins } from "./plugin-system";
 
 // sessionStorage key the extension build's content-script.js (TB_PING) and
 // background.js (injectSDK's host-UI check) read to tell "our own surviving
@@ -980,7 +981,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   content.querySelector("#bt-download-json")!.addEventListener("click", () => {
     downloadFile(
       `tracebug-${s.sessionId.slice(0,8)}.json`,
-      JSON.stringify(s, null, 2),
+      runExportPlugins("json", JSON.stringify(s, null, 2)),
       "application/json"
     );
   });
@@ -990,7 +991,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     const report = buildTextReport(s, problems, apiEvents, sessionDur);
     downloadFile(
       `tracebug-report-${s.sessionId.slice(0,8)}.txt`,
-      report,
+      runExportPlugins("text", report),
       "text/plain"
     );
   });
@@ -1000,7 +1001,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     const htmlReport = buildHtmlReport(s, problems, apiEvents, sessionDur);
     downloadFile(
       `tracebug-report-${s.sessionId.slice(0,8)}.html`,
-      htmlReport,
+      runExportPlugins("html-report", htmlReport),
       "text/html"
     );
   });

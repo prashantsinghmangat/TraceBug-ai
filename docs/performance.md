@@ -16,7 +16,7 @@ Load/init figures are the median of 5 cold page loads.
 
 | Metric | Measured |
 |---|---|
-| SDK bundle (IIFE, on disk — extension build) | 3.19 MB |
+| SDK bundle (IIFE, on disk — script-tag build, `tracebug-sdk.js`) | 3.19 MB (3.29 MB as of 1.11.4) |
 | Script load + eval | 18 ms |
 | `TraceBug.init()` | 8.2 ms |
 | Capture overhead per interaction | ~5 µs |
@@ -33,9 +33,11 @@ Load/init figures are the median of 5 cold page loads.
   with capture on than off — ~5 µs per interaction. Event capture is
   passive listeners plus batched `localStorage` writes; it does not sit on
   the render path.
-- **The 3.19 MB IIFE is the extension/script-tag build**, which inlines the
+- **The 3.29 MB IIFE is the script-tag build**, which inlines the
   rrweb replayer runtime and every lazy surface so it works with zero
-  network requests. The **npm ESM build is code-split**: the core entry is
+  network requests. The extension injects its own build of the same source
+  (`tracebug-sdk-ext.js`, 1.99 MB as of 1.11.4), which also leaves out
+  axe-core because the extension never runs the a11y scanner. The **npm ESM build is code-split**: the core entry is
   ~65 KB with the heavy pieces (rrweb runtime ~262 KB, UI panels) loaded
   lazily only when used — a bundler app never pays the 3 MB.
 - **Export size scales with what you captured.** The 130 KB figure is an
@@ -51,10 +53,11 @@ Load/init figures are the median of 5 cold page loads.
 
 ## Extension startup
 
-The extension injects the same IIFE bundle on user action (nothing runs
-before you click), so extension startup cost = script eval + init from the
-table above: **~26 ms** from click-to-capture-ready on the bench machine
-(18 ms eval + 8.2 ms init). The popup itself is static HTML and opens
+The extension injects `tracebug-sdk-ext.js` on user action (nothing runs
+before you click) — the same source as the benchmarked bundle, 42% smaller
+because axe-core is stubbed out — so the table's script eval + init is an
+upper bound on extension startup: **~26 ms** from click-to-capture-ready on
+the bench machine (18 ms eval + 8.2 ms init). The popup itself is static HTML and opens
 instantly.
 
 ## Website (Lighthouse)

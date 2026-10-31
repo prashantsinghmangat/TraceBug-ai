@@ -104,13 +104,3 @@ export async function setPlan(plan: Plan): Promise<void> {
   } catch {}
   try { localStorage.setItem(STORAGE_KEY, plan); } catch {}
 }
-
-/**
- * Returns true if the user has room for another screenshot. Free users are
- * capped at FREE_LIMITS.screenshots; premium users are unbounded (the
- * underlying ring buffer in screenshot.ts still applies a global ceiling).
- */
-export function canAddScreenshot(currentCount: number): boolean {
-  if (isPremium()) return true;
-  return currentCount < FREE_LIMITS.screenshots;
-}

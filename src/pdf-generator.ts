@@ -5,9 +5,10 @@
 
 import { BugReport } from "./types";
 import { formatRootCauseLine } from "./report-builder";
+import { runExportPlugins } from "./plugin-system";
 
 export function generatePdfReport(report: BugReport): void {
-  const html = buildPdfHtml(report);
+  const html = runExportPlugins("pdf", buildPdfHtml(report));
 
   // Open in new window and trigger print
   const printWindow = window.open("", "_blank", "width=900,height=700");
@@ -29,7 +30,7 @@ export function generatePdfReport(report: BugReport): void {
 }
 
 export function downloadPdfAsHtml(report: BugReport): void {
-  const html = buildPdfHtml(report);
+  const html = runExportPlugins("pdf", buildPdfHtml(report));
   downloadAsHtml(html, `tracebug-report-${report.session.sessionId.slice(0, 8)}.html`);
 }
 

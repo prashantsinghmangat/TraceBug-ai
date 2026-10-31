@@ -95,17 +95,6 @@ export function getBlurEvents(): BlurEvent[] {
   return [..._events];
 }
 
-/** Number of currently-blurred elements (arming-bar badge). */
-export function getBlurredCount(): number {
-  return _blurred.length;
-}
-
-/** Reset the event log and unblur everything. */
-export function clearBlurEvents(): void {
-  _events.length = 0;
-  removeAllBlurBoxes();
-}
-
 /** Unblur every element (used when a recording stops — the video already
  *  captured them blurred). Name kept from the box era for API stability. */
 export function removeAllBlurBoxes(): void {
