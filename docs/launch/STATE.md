@@ -103,20 +103,19 @@ Open phases: `PLAN.md` 8, 11, 12.
    Optional: GitHub release from tag `v1.11.5` with the CHANGELOG section.
 2. **Manual checks never recorded as run** (1.11.3 shipped with them open):
    `docs/RELEASE_CHECKLIST.md` rows 1–3 and 9 (video upgrade path, oversize notice), 10 (diagnostics),
-   11–13, 12b, 15 (rewritten for 1.11.5: Tab with no prompt on a real click, Desktop, existing-user
-   re-approval on update, Desktop-default migration, Firefox Desktop-only), 14 (macOS); the popup's "already capturing" state (`applyCapturingUI()` in `popup.js` — not
+   12b and 13 (Desktop-default migration, existing-user re-approval on update — 13 is checked best on
+   the real store update), 14 (macOS); 11–12 were covered by the user's pre-release sanity pass; the popup's "already capturing" state (`applyCapturingUI()` in `popup.js` — not
    e2e-coverable); store screenshots vs. the current popup and welcome page.
-3. **Early-Stop wait, by hand**: a Stop in the first ~3 s now finishes at ~3 s (`waitForFirstData`);
-   check what the on-page toolbar shows meanwhile and whether it feels unresponsive.
-4. **Firefox pass is partial**: rows 16–17 (mic grant, countdown mic toggle) verified by hand. Row 15
-   (Tab switch hidden, Desktop via the window-host recorder — `offscreen.js`'s `IS_WINDOW_HOST` branch) and
-   the 2026-10-23 capture-flow/rendering fixes are Chromium-only so far. No automated Firefox e2e exists
-   (`npm run ext:firefox` is interactive).
-5. **Website unverified pages**: `/privacy` (mentions `offscreen`), `/try`, `/bye`, and one real `/bye`
+3. **Firefox pass is partial**: rows 15 (Tab switch hidden, Desktop recording; checked by the user
+   2026-11-01 on 1.11.5), 16–17 (mic grant, countdown mic toggle) verified by hand. The 2026-10-23
+   capture-flow/rendering fixes are Chromium-only so far. No automated Firefox e2e exists
+   (`npm run ext:firefox` is interactive). The early-Stop wait (`waitForFirstData`) was also checked by
+   hand 2026-11-01, with no problem reported.
+4. **Website unverified pages**: `/privacy` (mentions `offscreen`), `/try`, `/bye`, and one real `/bye`
    submission arriving in Netlify Forms under `uninstall`.
-6. **Known, accepted gap**: Bug 2 — no fullscreen in the video player / exported viewer
+5. **Known, accepted gap**: Bug 2 — no fullscreen in the video player / exported viewer
    (`docs/launch/video-1.11.1.md`). Polish, not a blocker.
-7. **Open architectural question**: the DOM-marker alternative to the in-memory host-UI heuristic in
+6. **Open architectural question**: the DOM-marker alternative to the in-memory host-UI heuristic in
    `handleComboAction` — see PROGRESS's "Open architectural question" note. Proposed, not acted on.
 
 ## Gotchas that are still true
