@@ -210,3 +210,10 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Files:** `package.json`, `tracebug-extension/manifest.json`, `packages/tracebug/{package,server}.json`, `website/lib/version.ts`, `docs/getting-started.md`, `CHANGELOG.md`, `tracebug-extension/popup.js`, STATE, PROGRESS.
 - **Verified:** `check.mjs --full` green (986/64, lint 0/12, all surfaces on 1.11.5).
 - **Open:** `package-lock.json` root version (permission-blocked here); manual checklist rows; CWS listing text; the release itself. Not committed.
+
+## 1.11.5 released to npm, MCP registry, website; stores in review (2026-11-01)
+
+- **What:** user committed the release (`4975bbc`) and lockfile (`4da3203`), ran sanity checks, built zips (`npm run zip:ext`), submitted CWS (new `tabCapture` justification in the privacy form) and AMO, published `tracebug-sdk` and `tracebug` 1.11.5, installed `mcp-publisher` and published registry 1.11.5, deployed the site, tagged `v1.11.5`.
+- **Files:** STATE, PROGRESS; `docs-internal/CHROME-WEB-STORE-LISTING.md` §7b (gitignored).
+- **Verified:** `npm view` both packages at 1.11.5 (`bin` = `bin.mjs`); registry query shows 1.11.5 `isLatest`; live `tracebug-sdk.js` sha256 = repo's (`8B1582…D92D`).
+- **Open:** CWS and AMO approval; post-release surface check and `npx tracebug@1.11.5 mcp --help`.

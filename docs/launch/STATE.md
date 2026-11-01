@@ -11,19 +11,17 @@ Open phases: `PLAN.md` 8, 11, 12.
   `tracebug` both `latest`), MCP registry (`io.github.prashantsinghmangat/tracebug`), website. Tagged
   `v1.11.3` (`0a9a038`); `main` is at `4271e9c` (site/docs on top of the tag).
 - **1.11.4 is released (2026-11-01)**: Chrome Web Store, AMO, npm (`tracebug-sdk`, `tracebug`), website
-  (`main`), tag `v1.11.4`. **MCP registry still lists 1.11.3**: run `mcp-publisher publish` from
-  `packages/tracebug` (see `docs/RELEASING.md` §6). Contents: clicks record the field values their button
-  acted on, favicon/asset failures dropped from repro steps and the AI prompt, `console.error(err)` keeps
-  message + stack, the extension's injected bundle is 42% smaller (axe-core stubbed), plugin
-  `onReport`/`onExport` hooks fire, website on Next 14.2.35 with the image optimizer off. How to release:
-  `docs/RELEASING.md`.
-- **1.11.5 is prepared on `develop`, not released** (2026-11-01): the recording work below, on `main`
-  as merge `edd1dbe`. All `check:versions` surfaces, CHANGELOG and the popup's `WHATS_NEW` are on
-  1.11.5. Not done from here: `package-lock.json`'s root version (agents are permission-blocked from
-  that file), the manual checks, the store listing text, and the release itself (`docs/RELEASING.md`).
-  **This release adds a required permission (`tabCapture`)**: Chrome disables TraceBug for existing users
-  until they approve it, and CWS review sees a new permission — paste the justification from
-  `docs/launch/store-submission-pack.md`.
+  (`main`), tag `v1.11.4`. Contents: clicks record the field values their button acted on, favicon/asset
+  failures dropped from repro steps and the AI prompt, `console.error(err)` keeps message + stack, the
+  extension's injected bundle is 42% smaller (axe-core stubbed), plugin `onReport`/`onExport` hooks fire,
+  website on Next 14.2.35 with the image optimizer off. How to release: `docs/RELEASING.md`.
+- **1.11.5 is released except the store reviews (2026-11-01)**: npm `tracebug-sdk@1.11.5` and
+  `tracebug@1.11.5` (`bin` present), MCP registry 1.11.5 (`isLatest`), website deployed (live
+  `tracebug-sdk.js` sha256 matches the repo), tag `v1.11.5` on `4da3203` (= `main` = `develop`).
+  **Chrome Web Store and AMO: submitted, in review.** This release adds a **required** `tabCapture`
+  permission: Chrome disables TraceBug for existing users until they approve it. The CWS privacy form
+  carries the justification from `docs/launch/store-submission-pack.md`; `docs-internal/` listing
+  text updated. `mcp-publisher` lives at `C:\tools\mcp-publisher.exe` on the release machine.
 - **Gates**: `node scripts/check.mjs --full` green — see the recording section below for current counts.
 - **Hygiene audit 2026-10-31** (`docs/audit/hygiene-2026-10-31.md`): approved rows applied, uncommitted —
   see `PROGRESS.md` 2026-10-31. Outcomes that matter here:
@@ -100,10 +98,9 @@ Open phases: `PLAN.md` 8, 11, 12.
 
 ## Open — all of it needs a person
 
-1. **Release 1.11.5** per `docs/RELEASING.md` (CWS, AMO, npm both packages, MCP registry — which still
-   lists 1.11.3 — website). Before it: bump `package-lock.json`'s root version, run the manual rows
-   below, update the CWS listing's permission text (`docs-internal/`, gitignored, still calls
-   `tabCapture` optional).
+1. **Finish 1.11.5**: wait for CWS and AMO approval, then check every surface shows 1.11.5, run
+   `npx -y tracebug@1.11.5 mcp --help` in an empty folder, and mark 1.11.5 "live everywhere" here.
+   Optional: GitHub release from tag `v1.11.5` with the CHANGELOG section.
 2. **Manual checks never recorded as run** (1.11.3 shipped with them open):
    `docs/RELEASE_CHECKLIST.md` rows 1–3 and 9 (video upgrade path, oversize notice), 10 (diagnostics),
    11–13, 12b, 15 (rewritten for 1.11.5: Tab with no prompt on a real click, Desktop, existing-user
