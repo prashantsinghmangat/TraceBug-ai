@@ -8,6 +8,8 @@
 //     surfaceMode "tab" + tabCaptureStreamId (resolved by background.js, which
 //     alone has a real tab to target) skips getDisplayMedia's picker via
 //     chrome.tabCapture.getMediaStreamId. Anything else uses getDisplayMedia.
+//     A stream id that can't be opened falls back to the picker and answers
+//     { ok, tabModeFallback: true, tabModeReason: "expired" }.
 //   tb:rec:stop     {}                       → VideoRecording | null
 //   tb:rec:capture  {}                       → VideoRecording | null
 //   tb:rec:comment  { text }                 → { offsetMs?, ok }
@@ -114,6 +116,10 @@ let _startInFlight = null;
 // captured from it, so Tab mode re-routes the captured audio back to the
 // user's speakers via this AudioContext. Null outside Tab mode.
 let _tabAudioCtx = null;
+// Mixes tab/system audio and the microphone into the ONE audio track the
+// MediaRecorder gets — see where it is built. Null when there is at most one
+// audio source.
+let _mixAudioCtx = null;
 // The microphone track(s) mixed into _stream, kept separately from the
 // tab/screen audio tracks so tb:rec:mic-mute can mute narration without
 // touching the recorded page's own sound. Bug 4 (video-1.11.1.md): the page
@@ -286,6 +292,10 @@ function teardown() {
   if (_stream) {
     _stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
   }
+  if (_mixAudioCtx) {
+    try { _mixAudioCtx.close(); } catch {}
+    _mixAudioCtx = null;
+  }
   if (_tabAudioCtx) {
     try { _tabAudioCtx.close(); } catch {}
     _tabAudioCtx = null;
@@ -358,6 +368,9 @@ async function _startRecordingImpl(options) {
   }
   const wantsTabMode = options?.surfaceMode === "tab" && !!options?.tabCaptureStreamId;
   let displayStream;
+  // Set when Tab mode was asked for but its stream id could not be opened.
+  // The recording then falls back to the picker below, and the page says why.
+  let tabModeReason = null;
   if (wantsTabMode) {
     // Tab mode: background.js already resolved chrome.tabCapture.getMediaStreamId
     // into a stream id before forwarding this message — only background has a
@@ -381,9 +394,14 @@ async function _startRecordingImpl(options) {
         },
       });
     } catch (err) {
-      setHostPanel("idle");
-      return { ok: false, error: (err && err.message) || "Could not start tab capture." };
+      // The id is single-use and expires a few seconds after it was issued
+      // (chrome.tabCapture docs), so a slow hand-off is the usual cause. Fall
+      // back to the picker rather than failing the recording.
+      console.warn("[TraceBug offscreen] tab capture failed, using the picker:", (err && err.message) || err);
+      tabModeReason = "expired";
     }
+  }
+  if (displayStream) {
     // chrome.tabCapture mutes the tab's own audio output once an audio track
     // is captured from it (so the user doesn't hear it twice if the caller
     // pipes it elsewhere) — re-route it back to the speakers or the user's
@@ -496,12 +514,30 @@ async function _startRecordingImpl(options) {
   _startedAt = Date.now();
   _capturesTaken = 0;
   _mode = options?.mode === "standard" ? "standard" : "rolling";
-  _mimeType = pickMimeType(displayStream.getAudioTracks().length > 0);
+  // MediaRecorder records only the FIRST audio track of its stream. With tab
+  // (or shared system) audio first and the mic second, the narration was
+  // silently dropped — measured: disabling the tab track left a silent file
+  // while the mic was live. So with more than one audio source, record one
+  // track mixed from all of them. Muting the mic still works: a disabled
+  // track feeds silence into the mix.
+  let recordStream = displayStream;
+  const audioSources = displayStream.getAudioTracks();
+  if (audioSources.length > 1) {
+    try {
+      _mixAudioCtx = new AudioContext();
+      const mixed = _mixAudioCtx.createMediaStreamDestination();
+      audioSources.forEach((t) => _mixAudioCtx.createMediaStreamSource(new MediaStream([t])).connect(mixed));
+      recordStream = new MediaStream([...displayStream.getVideoTracks(), ...mixed.stream.getAudioTracks()]);
+    } catch (err) {
+      console.warn("[TraceBug offscreen] could not mix audio — only the first source will be recorded:", (err && err.name) || err);
+    }
+  }
+  _mimeType = pickMimeType(recordStream.getAudioTracks().length > 0);
 
   try {
     _recorder = _mimeType
-      ? new MediaRecorder(displayStream, { mimeType: _mimeType })
-      : new MediaRecorder(displayStream);
+      ? new MediaRecorder(recordStream, { mimeType: _mimeType })
+      : new MediaRecorder(recordStream);
   } catch (err) {
     teardown();
     return { ok: false, error: (err && err.message) || "MediaRecorder failed to construct." };
@@ -598,7 +634,7 @@ async function _startRecordingImpl(options) {
   // cancelled" with no controls while the screen was actually being recorded.
   try { broadcast({ type: "tb:rec:started", startedAt: _startedAt, mode: _mode, mimeType: _mimeType, micRequested: !!options?.withMicrophone, micIncluded, audioIncluded }); } catch (e) {}
   setHostPanel("recording");
-  return { ok: true };
+  return tabModeReason ? { ok: true, tabModeFallback: true, tabModeReason } : { ok: true };
 }
 
 async function stopAndBuildRecording() {
