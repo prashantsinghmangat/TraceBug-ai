@@ -196,3 +196,10 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **What:** user report — Tab + Microphone On gave a video with no voice; Desktop had it. MediaRecorder records only the first audio track, and Tab mode puts tab audio first. Measured in Chromium (tab track disabled, mic live → silent file). `offscreen.js` now mixes all audio sources into one track when there is more than one (`_mixAudioCtx`, closed in teardown); also fixes Desktop + "Share tab audio" + mic.
 - **Files:** `tracebug-extension/offscreen.js`; `tests/offscreen-capture.test.ts` (3 guards).
 - **Verified:** probes on the real extension — mic audible with the tab track disabled, tab audible with the mic muted, mic-off unchanged; `check.mjs --full` green (982/64, lint 0/12); e2e desktop 8/8, tab 8/8. Real voice check is the user's (fake devices only here). Not committed.
+
+## Recording: an early Stop no longer saves an empty video (2026-11-01)
+
+- **What:** MediaRecorder emits no real data for ~3 s after start() (measured: first data ~3.1 s, any codec/page), so a Stop before that finalized a 0-byte file — also `ext-shipping-path`'s intermittent failure. `stopAndBuildRecording` now waits (≤6 s) for ≥1 KB before stopping, and keeps captured chunks if the recorder ends meanwhile.
+- **Files:** `tracebug-extension/offscreen.js`; `tests/offscreen-capture.test.ts` (4 cases, harness gains `run`), `tests/recorder-mime.test.ts` (seeds data so the stop-hang test isolates the `stop` fallback).
+- **Verified:** A/B on the real extension, Stop at 1 s: without the wait 0 bytes ×2, with it 66–77 KB playable with audio ×2. `check.mjs --full` green (986/64, lint 0/12); e2e desktop 8/8, tab 8/8, shipping-path 16/16 ×3.
+- **Open:** what the on-page toolbar shows during that ≤3 s wait was not checked. Not committed.

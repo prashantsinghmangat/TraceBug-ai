@@ -69,9 +69,12 @@ Open phases: `PLAN.md` 8, 11, 12.
     Measured: tab track disabled + live mic → silent file. Now >1 audio source is mixed into one track
     (`_mixAudioCtx`); probes: mic survives with the tab track disabled, tab audio survives a muted mic,
     mic-off path unchanged. `check.mjs --full` 982/64; e2e desktop 8/8, tab 8/8.
-  - **Open, found in the probes:** a Tab recording stopped at ~3.5s saved **0 bytes** in 2 of 6 runs —
-    MediaRecorder emitted no data for the first 2–3s (VP9 start-up), so very short recordings can come
-    out empty. Not fixed; separate issue.
+  - **Empty short recordings — fixed** (`offscreen.js` `waitForFirstData`): MediaRecorder writes nothing
+    for the first ~2–3 s (Chromium 149: first data ~3.1 s; VP8 or VP9, static or animated page), so a
+    Stop before then saved 0 bytes — the cause of `ext-shipping-path`'s intermittent "video rode along"
+    failure too. An explicit stop now keeps recording until ≥1 KB is written (≤6 s), then stops; if the
+    recorder ends during the wait it keeps what it has. A/B at a 1 s stop: 0 bytes → ~70 KB, audible.
+    Trade-off: a Stop in the first ~3 s takes that long to finish.
   - **Owed by hand:** RELEASE_CHECKLIST rows 11–13, 12b, 15; Firefox not looked at. Step 2 (Tab from
     the on-page toolbar) not started — the measured rule above answers its question (works on a tab
     TraceBug was opened on, until a cross-origin navigation).

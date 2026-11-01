@@ -235,6 +235,27 @@ const _hydratePromise = hydratePersistedRecording();
 /** How long a stop waits for MediaRecorder's `stop` event before finishing anyway. */
 const STOP_FALLBACK_MS = 5000;
 
+// MediaRecorder writes nothing for the first ~2–3 s of a recording: measured
+// in Chromium 149, the first dataavailable came ~2.1 s after start() and was
+// 1 byte, real data ~3.1 s — VP8 or VP9, static or animated page, timeslice
+// notwithstanding. A stop() before then finalized an EMPTY video. So an early
+// stop keeps recording until the first real data lands, bounded.
+const FIRST_DATA_MIN_BYTES = 1024;
+const FIRST_DATA_WAIT_MS = 6000;
+function waitForFirstData() {
+  const deadline = Date.now() + FIRST_DATA_WAIT_MS;
+  return new Promise((resolve) => {
+    const check = () => {
+      if (_chunksBytes >= FIRST_DATA_MIN_BYTES || !_recorder || _recorder.state === "inactive" || Date.now() >= deadline) {
+        resolve();
+      } else {
+        setTimeout(check, 100);
+      }
+    };
+    check();
+  });
+}
+
 // Only name an audio codec when the stream really has audio. Firefox's
 // MediaRecorder given "…,opus" and a stream with NO audio track (Firefox's
 // getDisplayMedia never delivers tab audio, so: any recording without the mic)
@@ -648,6 +669,18 @@ async function stopAndBuildRecording() {
   // doesn't also fire a tb:rec:auto-stopped broadcast — the RPC response
   // already carries the recording back to the page.
   _autoStopBroadcast = true;
+
+  await waitForFirstData();
+  // The recorder can end during that wait (the recorded tab closed, sharing
+  // stopped). Keep what it captured rather than returning an older recording.
+  if (!_recorder || _recorder.state === "inactive") {
+    if (_chunks.length === 0) return _lastBuiltRecording;
+    const recording = await buildRecording(_chunks);
+    _lastBuiltRecording = recording;
+    await persistLastRecording(recording);
+    teardown();
+    return recording;
+  }
 
   // Flush any buffered data BEFORE stop() so very short recordings (under
   // one timeslice / 1000ms) still have a chunk. MediaRecorder.stop() does
