@@ -2,6 +2,23 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.11.5] - 2026-11-01
+
+> Tab recording that just starts: no permission prompt, no "Choose what to share" dialog, and your voice in the video. See `docs/audit/recording-architecture-proposal.md`.
+
+### Changed
+
+- **Tab recording starts straight away, with no prompt and no share dialog.** Open TraceBug on a tab, choose Events + Video, press Capture Bug: the tab records. Desktop still opens Chrome's share dialog, for a window or your whole screen. In 1.11.3–1.11.4 Tab asked for permission the first time, and even after you allowed it, that first tab still showed the share dialog: Chrome only records a tab without the dialog if TraceBug already had the permission when you opened it there.
+- **Chrome now asks for the tab-recording permission at install, not later.** `tabCapture` is a required permission. The install screen (and, for existing users, Chrome's prompt after this update) lists "Read and change all your data on all websites". **Existing Chrome users: Chrome turns TraceBug off after this update until you approve it** in the extensions menu. Nothing is recorded until you press Start, and recordings stay on your device. The "Record current tab" card in TraceBug settings is gone, because the permission can't be removed separately any more.
+- **Tab is the default recording mode on Chrome**, unless you chose Desktop. Firefox has no way to record a tab without the dialog, so it shows Desktop only.
+
+### Fixed
+
+- **Your microphone is in Tab recordings.** With the mic on, a Tab recording kept the tab's sound and dropped your voice: the browser's recorder keeps only the first audio track. The tab's sound and your microphone are now mixed into one track. This also fixes Desktop recordings where you ticked "Share tab audio" with the mic on. Muting the mic during a recording still works.
+- **Stopping a recording in its first few seconds no longer saves an empty video.** The browser's recorder writes nothing for about the first 3 seconds, so an early Stop produced a ticket with a blank video. An early Stop now keeps recording until there is video to save, up to a few seconds longer.
+- **When Tab recording can't start, TraceBug says why.** It falls back to the share dialog and names the reason: Chrome doesn't allow recording this page directly (for example after you moved to another site, so open TraceBug from its toolbar icon again), or the one-time recording link expired.
+- **No more "TrustedHTML" errors on sites like YouTube.** On pages that enforce Trusted Types, TraceBug's toolbar worked, but every update logged an error under the extension's Errors in `chrome://extensions`. It now uses its own Trusted Types policy first.
+
 ## [1.11.4] - 2026-10-31
 
 > Reports an AI agent can act on: the real error instead of `"{}"`, the value a button acted on, and no favicon noise. Found by recording the demo video (`marketing/demo-video/`), where Claude Code first fixed the wrong thing.

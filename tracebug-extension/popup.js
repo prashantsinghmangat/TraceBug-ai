@@ -1211,6 +1211,14 @@ function showMicNotice(err) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.11.5": {
+    label: "New in 1.11.5",
+    lines: [
+      "Tab recording just starts — no permission prompt, no “Choose what to share” dialog",
+      "Your microphone is now in Tab recordings, together with the tab's sound",
+      "Stopping a recording right after starting no longer leaves an empty video",
+    ],
+  },
   "1.11.4": {
     label: "New in 1.11.4",
     lines: [
