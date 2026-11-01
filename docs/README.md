@@ -37,6 +37,8 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [compatibility.md](compatibility.md) | Browser matrix, version support policy, and known limitations. |
 | [migrating.md](migrating.md) | Upgrade notes 1.6 → 1.10; API stability guarantees. |
 | [RELEASING.md](RELEASING.md) | Maintainer runbook: shipping a version to Chrome Web Store, AMO, npm, the MCP Registry and the website. |
+| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Manual test rows to run before a release. |
+| [STORE-LISTINGS.md](STORE-LISTINGS.md) | Every word the Chrome Web Store and Firefox Add-ons listings show, including permission justifications. |
 
 > The self-contained offline **HTML replay export** (rrweb DOM replay + gzip),
 > the lean **Export for AI (.html)**, and **event capture surviving navigation**

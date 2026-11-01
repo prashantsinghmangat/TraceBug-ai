@@ -1,7 +1,7 @@
 # Launch state — read this, not the archives
 
 Engineering state only, verified against code and git. Last updated 2026-11-01. Calendar, channels and
-the 32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored; a
+the 32-item audit tracker are OUTSIDE the repo: `docs-internal/marketing/growth-plan-30day.md` (gitignored; a
 scheduling doc, not a spec — may be stale). History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`.
 Open phases: `PLAN.md` 8, 11, 12.
 
@@ -18,10 +18,16 @@ Open phases: `PLAN.md` 8, 11, 12.
 - **1.11.5 is released except the store reviews (2026-11-01)**: npm `tracebug-sdk@1.11.5` and
   `tracebug@1.11.5` (`bin` present), MCP registry 1.11.5 (`isLatest`), website deployed (live
   `tracebug-sdk.js` sha256 matches the repo), tag `v1.11.5` on `4da3203` (= `main` = `develop`).
-  **Chrome Web Store and AMO: submitted, in review.** This release adds a **required** `tabCapture`
+  **AMO: live (1.11.5). Chrome Web Store: in review, still serving 1.11.4.** Announced 2026-11-01
+  (blog post `/blog/record-browser-tab-without-share-dialog`, dev.to with canonical to it, LinkedIn,
+  X); kit in `docs-internal/marketing/posts-1.11.5.md`. This release adds a **required** `tabCapture`
   permission: Chrome disables TraceBug for existing users until they approve it. The CWS privacy form
-  carries the justification from `docs/launch/store-submission-pack.md`; `docs-internal/` listing
-  text updated. `mcp-publisher` lives at `C:\tools\mcp-publisher.exe` on the release machine.
+  carries the justification from `docs/STORE-LISTINGS.md` (now the single source for both stores'
+  text). `mcp-publisher` lives at `C:\tools\mcp-publisher.exe` on the release machine.
+- **Docs and assets reorganised (2026-11-02)**: store text → `docs/STORE-LISTINGS.md` (was
+  `docs/launch/store-submission-pack.md` + `docs-internal/CHROME-WEB-STORE-LISTING.md` + `.txt` files);
+  marketing → `docs-internal/marketing/`; every image, banner, store frame and video →
+  `assets/` (gitignored, index in `assets/README.md`). Release mechanics stay in `docs/RELEASING.md`.
 - **Gates**: `node scripts/check.mjs --full` green — see the recording section below for current counts.
 - **Hygiene audit 2026-10-31** (`docs/audit/hygiene-2026-10-31.md`): approved rows applied, uncommitted —
   see `PROGRESS.md` 2026-10-31. Outcomes that matter here:
@@ -98,7 +104,7 @@ Open phases: `PLAN.md` 8, 11, 12.
 
 ## Open — all of it needs a person
 
-1. **Finish 1.11.5**: wait for CWS and AMO approval, then check every surface shows 1.11.5, run
+1. **Finish 1.11.5**: wait for CWS approval (AMO is live), then check every surface shows 1.11.5, run
    `npx -y tracebug@1.11.5 mcp --help` in an empty folder, and mark 1.11.5 "live everywhere" here.
    Optional: GitHub release from tag `v1.11.5` with the CHANGELOG section.
 2. **Manual checks never recorded as run** (1.11.3 shipped with them open):

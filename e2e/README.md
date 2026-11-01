@@ -34,7 +34,7 @@ Run with `npx playwright test e2e/demo-failure.spec.ts`.
 | Script | Produces |
 | --- | --- |
 | `benchmark.mjs` | The measured numbers in [docs/performance.md](../docs/performance.md) — prints a markdown table. |
-| `marketing-screenshots.mjs` | Current-build product screenshots + a fresh sample export → `D:/tmp/tracebug-shots/`. |
+| `marketing-screenshots.mjs` | Current-build product screenshots + a fresh sample export → `assets/screenshots/product/`. |
 
 Conventions: each script serves `website/public` on its own port (no shared
 state), and every path is derived from `e2e/paths.mjs` rather than hardcoded -

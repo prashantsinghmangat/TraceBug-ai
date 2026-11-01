@@ -7,7 +7,7 @@ this file's live sections only - not the archives.
 **As of 2026-10-14 every engineering phase for 1.11.0 is closed.** What is left before submission
 needs a person, not a session: `STATE.md` § "Left before submission". The marketing,
 distribution and release calendar - and the status of all 32 items from the Oct 11 growth audit -
-live in `docs-internal/GROWTH-PLAN-30DAY.md`, which is gitignored and deliberately not in this
+live in `docs-internal/marketing/growth-plan-30day.md`, which is gitignored and deliberately not in this
 repo. The phases below that are still open are **post-submission**: Phase 8's
 remainder, Phase 10 (10a: 1.11.2 correctness, 10b: 1.11.3 video), Phase 11 (1.12, declutter + Site
 Audit) and Phase 12 (v2.0, ADR 008).
@@ -134,7 +134,7 @@ post-submission work.
 ## Phase 9 - Docs and copy consistency (DONE)
 
 **PHASE 9 IS DONE** (2026-10-13/14). Every item below landed; they are kept for context, not as
-instructions. The listing copy that came out of it is in `store-submission-pack.md`.
+instructions. The listing copy that came out of it is in `docs/STORE-LISTINGS.md`.
 
 - `docs/chrome-extension.md`: Firefox **is** supported (link the AMO listing). Fix "three-action popup" (there
   are four actions). Update the permissions table to the new manifest. Explain why site access is optional.

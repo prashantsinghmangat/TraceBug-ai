@@ -14,6 +14,9 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
   `website/public/tracebug-sdk.js` - the only copy.
 - `tests/` - Vitest unit tests (e.g. `tests/storage.test.ts`). `e2e/` - Playwright specs + `.e2e.mjs` scripts; benchmark at `e2e/benchmark.mjs`.
 - `docs/` - user docs; `docs/adr/` - architecture decisions (read the relevant ADR before changing architecture).
+  Releasing: `docs/RELEASING.md` (steps), `docs/RELEASE_CHECKLIST.md` (manual rows), `docs/STORE-LISTINGS.md` (all store text).
+- `assets/` (gitignored) - store screenshots, banners, icons, demo video and their generators; index in `assets/README.md`.
+  `docs-internal/` (gitignored) - marketing posts (`marketing/`) and private business notes.
 - `docs/launch/` - current launch work: `STATE.md` (where things stand - **start here**), `PLAN.md` (what's left), `PROGRESS.md`. The `*-archive.md` files are closed history; don't read them unless you need why.
 
 ## Commands

@@ -1,6 +1,6 @@
 // A custom Ollama/OpenAI-compatible base URL is the one place the settings
-// page still asks for `<all_urls>` (docs/launch/store-submission-pack.md
-// §7b, docs/chrome-extension.md): `chrome.permissions.request()` can only
+// page still asks for `<all_urls>` (docs/STORE-LISTINGS.md
+// "Permission justifications", docs/chrome-extension.md): `chrome.permissions.request()` can only
 // grant an origin that is a subset of something already declared, and an
 // arbitrary remote host isn't a subset of any of the fixed provider origins
 // or the two hardcoded localhost patterns.

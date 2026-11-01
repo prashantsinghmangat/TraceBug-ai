@@ -1,5 +1,5 @@
 // Run: npm run build:ext && node e2e/marketing-screenshots.mjs
-// Generates real product screenshots into D:/tmp/tracebug-shots/:
+// Generates real product screenshots into assets/screenshots/product/ (gitignored):
 //   Part 1-3  the originals: the exported .html report viewer (replay + each
 //             evidence tab) and try.html with the Quick Bug modal open
 //   Part 4    store-ready ELEMENT CROPS from a real video-recording session —
@@ -14,7 +14,7 @@ import { createServer } from "node:http";
 import { join, extname } from "node:path";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
-const OUT = "D:/tmp/tracebug-shots";
+const OUT = "D:/Project/TraceBug-ai/assets/screenshots/product";
 mkdirSync(OUT, { recursive: true });
 
 const REPORT = "D:/Project/TraceBug-ai/demo-bug-reports/tracebug-replay-93e6615d-2026-07-19T08-07-00.html";
@@ -483,7 +483,7 @@ if (!existsSync(join(EXT_DIR, "manifest.json"))) {
 const EXT_GRANTED = withGrantedHostAccess(EXT_DIR, "marketing");
 server = await servePublic(4173);
 
-const USER_DATA = join(OUT, ".chrome-profile");
+const USER_DATA = "D:/Project/TraceBug-ai/e2e/output/marketing-chrome-profile";
 try { rmSync(USER_DATA, { recursive: true, force: true }); } catch {}
 
 extCtx = await chromium.launchPersistentContext(USER_DATA, {

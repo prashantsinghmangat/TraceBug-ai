@@ -2,10 +2,17 @@
 
 How to ship a version to every surface: Chrome Web Store, Firefox Add-ons (AMO), npm (`tracebug-sdk`
 and the `tracebug` MCP CLI), the official MCP Registry, the website, and the git tag. Last used for
-**1.11.4** (2026-11-01).
+**1.11.5** (2026-11-01).
 
-Manual test rows that can't be automated live in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). This file
-is the mechanics.
+This file is the mechanics. The other release documents, one job each:
+
+| What | Where |
+|---|---|
+| Manual test rows that can't be automated | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) |
+| Every word both stores show (description, permission justifications, data-use answers, AMO notes) | [STORE-LISTINGS.md](STORE-LISTINGS.md) |
+| Store screenshots, promo tiles, banners, icons, demo video (gitignored) | `assets/` — index in `assets/README.md` |
+| Announcement posts per release (gitignored) | `docs-internal/marketing/posts-<x.y.z>.md` |
+| What changed, for users | [CHANGELOG.md](../CHANGELOG.md) |
 
 ## What ships where
 
@@ -51,6 +58,9 @@ This checks versions, rebuilds `dist/chrome` and `dist/firefox`, and writes both
 `zip-ext.mjs` uses `bsdtar` deliberately: an earlier method silently produced an uncompressed TAR named
 `.zip`, and that shipped as v1.11.0. Don't swap in another zip tool.
 
+Keep only the two newest versions' zips in `releases/` (the current one and one to roll back to); older
+ones can be rebuilt from their tag.
+
 Before uploading, load each `dist/` folder unpacked (Chrome: `chrome://extensions` → Load unpacked;
 Firefox: `npm run ext:firefox`). Exercise what this release changed, plus a basic capture →
 export → open the `.html`. Run the rows in `RELEASE_CHECKLIST.md` that apply to this release.
@@ -58,11 +68,15 @@ export → open the `.html`. Run the rows in `RELEASE_CHECKLIST.md` that apply t
 ## 3. Chrome Web Store
 
 1. Developer dashboard → TraceBug → **Package** → upload `releases/tracebug-extension-v<x.y.z>.zip`.
-2. Update the description/screenshots only if the release changes them.
-3. If `manifest.json` gained a **required** permission, existing users get disabled until they
-   re-approve. Never add one without deciding that explicitly (CLAUDE.md hard rule). Optional
-   permissions update silently.
-4. Submit for review. Review typically takes 1–3 days. The listing keeps showing the old version until
+2. **Store listing** tab: add the "New in x.y.z" block at the top of the description and change
+   screenshots only if the release changes them. All text: [STORE-LISTINGS.md](STORE-LISTINGS.md) §2;
+   images: `assets/chrome-store/`, `assets/banners/promo-tiles/`.
+3. **Privacy** tab: if the permissions changed, a new box appears for each new permission — paste its
+   justification from STORE-LISTINGS.md. Check the data-use answers still match it.
+4. If `manifest.json` gained a **required** permission, existing users get disabled until they
+   re-approve, and review takes longer. Never add one without deciding that explicitly (CLAUDE.md hard
+   rule). Optional permissions update silently. Add the reviewer note from STORE-LISTINGS.md §2.
+5. Submit for review. Review typically takes 1–3 days. The listing keeps showing the old version until
    it's approved.
 
 ## 4. Firefox Add-ons (AMO)
@@ -73,8 +87,8 @@ export → open the `.html`. Run the rows in `RELEASE_CHECKLIST.md` that apply t
    ```bash
    git archive --format=zip -o releases/tracebug-source-v<x.y.z>.zip HEAD
    ```
-   Build instructions for the reviewer: Node 18+, `npm ci`, `npm run zip:ext`, then compare
-   `tracebug-extension/dist/firefox`.
+   Paste **Release notes** and **Notes to reviewer** from [STORE-LISTINGS.md](STORE-LISTINGS.md) §3
+   (fill in the version; leave Chrome-only items out of the release notes).
 3. Validation warnings are expected. The `tabCapture` `UNSUPPORTED_API` warnings are harmless because
    Firefox feature-detects and never reaches that code. Errors must be 0.
 4. `strict_min_version` is 128. Don't lower it: main-world injection needs Firefox 128.
@@ -124,7 +138,15 @@ mcp-publisher publish
 - `server.json`'s `description` must be ≤ 100 characters.
 - `mcp-publisher` is the official CLI from the
   [modelcontextprotocol/registry releases](https://github.com/modelcontextprotocol/registry/releases).
+  On the release machine it lives at `C:\tools\mcp-publisher.exe` (not on PATH: call it by that path).
+  To install it on Windows:
+  ```powershell
+  Invoke-WebRequest -Uri "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_windows_amd64.tar.gz" -OutFile $env:TEMP\mcp-publisher.tar.gz
+  tar xf $env:TEMP\mcp-publisher.tar.gz -C C:\tools mcp-publisher.exe
+  ```
+  `login github` prints a device code; approve it with the `prashantsinghmangat` GitHub account.
   Run `mcp-publisher validate` first if `server.json` changed shape.
+- The query below also lists older versions; the new one should carry `"isLatest": true`.
 - Verify:
   ```bash
   curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.prashantsinghmangat/tracebug"
@@ -133,7 +155,9 @@ mcp-publisher publish
 
 ## 7. Website, tag, and GitHub release
 
-1. Merge `develop` into `main` and push. Netlify builds `website/` and deploys it.
+1. Merge `develop` into `main` and push, then bring `develop` back level with `main`
+   (`git checkout develop && git merge --ff-only origin/main`), so the next change doesn't start from
+   an older tree. Netlify builds `website/` and deploys it.
 2. Confirm the deploy really shipped the new SDK. The version badge isn't proof, so compare hashes:
    ```bash
    sha256sum website/public/tracebug-sdk.js
@@ -151,7 +175,21 @@ mcp-publisher publish
    ```
 4. Optional: create a GitHub release from the tag and paste the CHANGELOG section.
 
-## 8. After release
+## 8. Announce (after the Chrome Web Store approves)
+
+Wait for CWS approval: until then the store serves the old version, and anyone installing from a post
+gets the old behaviour.
+
+1. **Blog post** (the anchor every post links to): add an entry to `website/lib/blog.ts` and its images
+   under `website/public/blog/<slug>/`; `cover` (1200×630) is also the link-preview image. The sitemap
+   picks it up. Merge to `main` and confirm the page and its images return 200 before posting anywhere.
+2. **Posts:** write `docs-internal/marketing/posts-<x.y.z>.md` (start from the newest one there). Banners
+   go in `assets/banners/social-<x.y.z>/` (generator: `assets/source/banners/banners.mjs`).
+3. **dev.to / Hashnode:** set the canonical URL to the blog post. If an image showed as broken once,
+   append `?v=2` to its URL; dev.to caches failed fetches.
+4. Log objections and "I keep using TraceBug because…" replies in `METRICS.md`.
+
+## 9. After release
 
 - Check every surface shows the new version: the CWS listing, the AMO listing, `npm view tracebug-sdk
   version`, `npm view tracebug version`, the MCP Registry query above, and the tracebug.dev badge.
@@ -164,3 +202,4 @@ mcp-publisher publish
 
 Store reviews are the slow part, so submit to CWS and AMO first. npm → MCP Registry is strictly in that
 order. The website deploy and the tag can go any time after the release commit is on `main`.
+Announcements go last, after CWS approval.
