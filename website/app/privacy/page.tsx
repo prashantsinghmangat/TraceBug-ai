@@ -271,14 +271,11 @@ export default function PrivacyPage() {
                 between pages.
               </div>
               <div>
-                <strong className="text-text-primary">
-                  tabCapture (optional)
-                </strong>{" "}
-                — <strong className="text-text-primary">Not requested at
-                install.</strong> Asked for only if you turn on screen recording
-                and pick "Tab" instead of "Desktop", so the current tab can be
-                recorded without a share-picker dialog. Declining falls back to
-                the normal picker.
+                <strong className="text-text-primary">tabCapture</strong> — To
+                record the tab you opened TraceBug on, when you start a screen
+                recording in "Tab" mode, without a share-picker dialog. Nothing
+                is recorded until you click Start, and the recording stays on
+                your device. Chrome only.
               </div>
               <div>
                 <strong className="text-text-primary">

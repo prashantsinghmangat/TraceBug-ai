@@ -201,13 +201,12 @@
              rows out, so "Events only" stays a two-line state instead of four
              disabled-looking ones. -->
         <div class="opt-body" id="recordOptsBody" style="display:none">
-          <!-- Tab | Desktop (1.11.3). Tab asks once for the optional
-               `tabCapture` permission so the current tab records with no
-               browser share picker (chrome.tabCapture.getMediaStreamId,
-               resolved in background.js — an offscreen document has no tab of
-               its own to target). Declining, or Firefox (no tabCapture API),
-               falls back to Desktop's getDisplayMedia picker — see
-               docs/audit/capture-flow-1.11.3.md. -->
+          <!-- Tab | Desktop. Tab records the current tab with no browser share
+               picker (chrome.tabCapture.getMediaStreamId, resolved in
+               background.js); the optional `tabCapture` permission is asked
+               for once, from Start. Tab is the default on Chrome unless the
+               user chose Desktop. Firefox hides this row (Desktop only) — see
+               docs/audit/recording-architecture-proposal.md. -->
           <div class="opt-row" id="surfaceModeRow">
             <div class="opt-row-text">
               <div class="opt-row-title">Capture</div>

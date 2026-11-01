@@ -111,7 +111,7 @@ import {
 } from "./video-recorder";
 import { showRecordingHUD, hideRecordingHUD, flashRecordingHUD } from "./ui/recording-hud";
 import { startDomRecording, stopDomRecording, stashDomReplay, clearStashedDomReplay } from "./rrweb-recorder";
-import { showCaptureBlockedNotice, showActionToast } from "./ui/toast";
+import { showCaptureBlockedNotice, showActionToast, showToast } from "./ui/toast";
 import { eventsCaptureFidelityWarning, framesCaptureWarning } from "./replay-fidelity";
 import { isVideoOffered } from "./video-recorder";
 import {
@@ -1334,6 +1334,7 @@ class TraceBugSDK {
     try { this._startActiveSession(); } catch {}
 
     let blockedMessage: string | null = null;
+    let warningMessage: string | null = null;
     const ok = await _startVideoRecording({
       mode: options?.mode ?? "rolling",
       surfaceMode: options?.surfaceMode,
@@ -1346,6 +1347,9 @@ class TraceBugSDK {
       // letting an explicit caller (the toolbar) handle its own reporting.
       onStatus: (status, message) => {
         if (status === "blocked" && message) blockedMessage = message;
+        // Same silent-path problem for a Tab-mode fallback: the popup user
+        // just got the share dialog they chose Tab to avoid, and this is why.
+        if (status === "warning" && message) warningMessage = message;
         options?.onStatus?.(status, message);
       },
     });
@@ -1371,6 +1375,7 @@ class TraceBugSDK {
       showRecordingHUD(root, {
         onStop: () => { this.stopVideoRecording().catch(() => {}); },
       });
+      if (warningMessage && !options?.onStatus) showToast(warningMessage, root);
     }
     return true;
   }

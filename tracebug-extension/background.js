@@ -753,28 +753,6 @@ if (chrome.permissions && chrome.permissions.onRemoved) {
   chrome.permissions.onRemoved.addListener(notifyHostAccessChanged);
 }
 
-// popup.js's surfaceTabBtn click handler requests `tabCapture` and only
-// saves `surfaceMode: "tab"` inside that request's own callback — but the
-// native OS grant dialog steals focus from the action popup the same way
-// the share-picker does (see popup.js's own comment on runCombo), and a
-// popup that gets torn down mid-request never runs that callback. The grant
-// still lands at the browser level (no second prompt on retry), it just
-// never gets recorded — so the user has to reopen the popup and click Tab
-// again before the save actually goes through. This listener persists the
-// choice independent of whether the requesting popup survived, so a grant
-// is reflected the next time the popup opens with no re-click needed.
-if (chrome.permissions && chrome.permissions.onAdded) {
-  chrome.permissions.onAdded.addListener(async (perms) => {
-    if (!perms.permissions || !perms.permissions.includes("tabCapture")) return;
-    try {
-      const stored = (await chrome.storage.local.get(RECORD_OPTS_KEY))[RECORD_OPTS_KEY] || {};
-      if (stored.surfaceMode !== "tab") {
-        await chrome.storage.local.set({ [RECORD_OPTS_KEY]: { ...stored, surfaceMode: "tab" } });
-      }
-    } catch {}
-  });
-}
-
 // ── Keyboard command (Phase 3) ──────────────────────────────────────────────
 // Until now Ctrl/Cmd+Shift+B was ONLY a keydown handler inside the injected
 // SDK, so it did nothing on a page TraceBug had never been started on — which
@@ -1392,16 +1370,16 @@ async function handleRecordingMessage(message, sender) {
     message.data?.surfaceMode === "tab" &&
     sender?.tab?.id != null
   ) {
-    const streamId = await resolveTabCaptureStreamId(sender.tab.id);
-    if (streamId) {
-      extraData.tabCaptureStreamId = streamId;
+    const tab = await resolveTabCaptureStreamId(sender.tab.id);
+    if (tab.streamId) {
+      extraData.tabCaptureStreamId = tab.streamId;
     } else {
-      // No tabCapture API (Firefox) or permission not granted (declined, or
-      // never requested) — fall back to the picker rather than failing the
-      // capture outright. The popup tells the user this happened via
-      // `tabModeFallback` on the response.
+      // Permission not granted, Chrome refused this page, or no tabCapture API
+      // (Firefox) — fall back to the picker rather than failing the capture
+      // outright. The page says which via `tabModeReason` on the response.
       message = { ...message, data: { ...message.data, surfaceMode: "desktop" } };
       extraData.tabModeFallback = true;
+      extraData.tabModeReason = tab.reason;
     }
   }
 
@@ -1475,6 +1453,7 @@ async function handleRecordingMessage(message, sender) {
   });
   if (extraData.tabModeFallback && result && typeof result === "object") {
     result.tabModeFallback = true;
+    result.tabModeReason = extraData.tabModeReason;
   }
 
   // Track the recording tab so we can re-attach the on-page HUD after a
@@ -1966,12 +1945,16 @@ function hasHostAccess(pattern) {
 }
 
 /**
- * Resolve a stream id for Tab mode's no-picker recording, or null if it
- * can't be done — Firefox has no `chrome.tabCapture` at all, and even on
- * Chrome the `tabCapture` permission may not be granted (declined, or never
- * requested because popup.js only calls `chrome.permissions.request` on the
- * first Tab-mode use). Both are ordinary fallback cases, not errors — the
- * caller falls back to the getDisplayMedia picker.
+ * Resolve a stream id for Tab mode's no-picker recording.
+ *
+ * Resolves `{ streamId }`, or `{ reason }` when it can't be done:
+ *   "permission"  — this build doesn't hold `tabCapture`.
+ *   "not-allowed" — Chrome refused this tab. Its own error covers both pages
+ *                   it never captures and a tab TraceBug wasn't opened on
+ *                   ("Extension has not been invoked for the current page").
+ *   "unavailable" — no chrome.tabCapture at all (Firefox), or it never bound.
+ * All are ordinary fallback cases, not errors — the caller falls back to the
+ * getDisplayMedia picker and the page says which reason applied.
  */
 async function resolveTabCaptureStreamId(tabId) {
   const granted = await new Promise((resolve) => {
@@ -1982,28 +1965,16 @@ async function resolveTabCaptureStreamId(tabId) {
       });
     } catch { resolve(false); }
   });
-  if (!granted) return null;
-  // Checked AFTER `contains`, not before: granting an optional permission
-  // does not reliably make its namespace visible in an ALREADY-RUNNING
-  // service worker the instant the grant resolves (popup.js's own comment
-  // on TAB_CAPTURE_AVAILABLE found this empirically for a fresh popup
-  // context — the same gap applies here, except this worker has no
-  // equivalent "fresh load" to wait for short of an idle restart). Bailing
-  // out the moment the namespace looks absent silently forces the
-  // getDisplayMedia/Desktop fallback even though the user is actually
-  // granted — so retry briefly instead of failing on the first look.
-  const tabCaptureAvailable = () => !!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId);
-  for (let i = 0; i < 5 && !tabCaptureAvailable(); i++) {
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (!tabCaptureAvailable()) return null;
+  if (!granted) return { reason: "permission" };
+  if (!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId)) return { reason: "unavailable" };
   return new Promise((resolve) => {
     try {
       chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (streamId) => {
-        void chrome.runtime.lastError;
-        resolve(streamId || null);
+        const err = chrome.runtime.lastError;
+        if (err) console.warn("[TraceBug] tab capture refused:", err.message);
+        resolve(streamId ? { streamId } : { reason: "not-allowed" });
       });
-    } catch { resolve(null); }
+    } catch { resolve({ reason: "not-allowed" }); }
   });
 }
 

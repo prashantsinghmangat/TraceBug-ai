@@ -175,3 +175,24 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Plugins:** documented `onReport`/`onExport` now run (`report-builder.ts`, 9 export sites in 6 files; isolated runners in `plugin-system.ts`); format names in `docs/api-reference.md`; `tests/plugin-hooks.test.ts` (5).
 - **#5:** tsup writes `website/public/tracebug-sdk.js` directly; copy steps, `tracebug-extension/tracebug-sdk.js`, its eslint ignore gone; CI size check, README, `docs/architecture.md`, CLAUDE.md repointed.
 - **Verified:** `check.mjs --full` green; CI's 5 e2e suites pass; benchmark reads the new path. `.claude/settings.json:35` still denies reading the deleted path — harmless, left alone.
+
+## Recording: Tab-mode fallback reasons + Tab default on Chrome (2026-11-01)
+
+- **What:** proposal §16 steps 1 and 3 (`docs/audit/recording-architecture-proposal.md`). User decisions: Tab is the default only for users on the default (`surfaceSetBy`), with Desktop choices kept. Failure still falls back to the share dialog, now naming the reason (permission declined / link expired / page not allowed). Step 4 (required `tabCapture`): no. Step 2 waits on a manual check.
+- **Files:** `tracebug-extension/{background,offscreen,popup}.js`, `popup.html`, `src/{video-recorder,index}.ts`, `scripts/check-baseline.json` (14 → 13); tests `surface-default`, `tab-mode-fallback` (new), `record-opts`, `offscreen-capture`; `docs/chrome-extension.md`, `docs/RELEASE_CHECKLIST.md` rows 11/12/12b/15.
+- **Verified:** `check.mjs --full` green (978/64, ext:lint 0/13, versions 1.11.4); e2e tab 8/8, desktop 8/8, shipping-path 16/16.
+- **Open:** real permission flow, including the popup closing on the grant bubble (parked start); Firefox pass; and the step-2 check (toolbar start on a granted tab, before and after navigation). Not committed.
+
+## Recording: tabCapture required (Jam/BetterBugs parity), Trusted Types noise, honest Tab e2e (2026-11-01)
+
+- **What:** user chose required `tabCapture` after measured evidence: Chrome refuses a tab invoked before an optional grant, so the optional flow always showed the share picker on its first tab. Jam 5.96.0 / BetterBugs 1.1.10 manifests (read from their CWS packages) both declare it required. Removed the optional-grant code; `setInnerHTML` tries the TT policy first (youtube.com error spam); Tab e2e asserts real results.
+- **Files:** `tracebug-extension/{manifest.json,build/manifest.base.json,build/build-ext.mjs,background.js,popup.js,options.{js,html}}`, `src/ui/helpers.ts`, `scripts/check-baseline.json` (13 → 12); tests `surface-default`, `tab-mode-fallback`, `safe-set-inner-html`; `e2e/ext-video-recording-tab.e2e.mjs`; `docs/chrome-extension.md`, `RELEASE_CHECKLIST.md` 11–13, `store-submission-pack.md`, website `/privacy`.
+- **Verified:** `check.mjs --full` green (979/64, lint 0/12); e2e tab 8/8, trusted-types 9/9, style-nonce 7/7; dist manifests checked (Chrome has `tabCapture`, Firefox none); real-click probe on the new build: no picker, audible playback (peak 0.51).
+- **Open:** 0-byte Tab recordings when stopped at ~3.5s (2/6 probe runs); CWS listing (`docs-internal/`) permission text; re-approval on update (row 13) and Firefox by hand. Not committed.
+
+
+## Recording: microphone lost in Tab mode — mix audio sources into one track (2026-11-01)
+
+- **What:** user report — Tab + Microphone On gave a video with no voice; Desktop had it. MediaRecorder records only the first audio track, and Tab mode puts tab audio first. Measured in Chromium (tab track disabled, mic live → silent file). `offscreen.js` now mixes all audio sources into one track when there is more than one (`_mixAudioCtx`, closed in teardown); also fixes Desktop + "Share tab audio" + mic.
+- **Files:** `tracebug-extension/offscreen.js`; `tests/offscreen-capture.test.ts` (3 guards).
+- **Verified:** probes on the real extension — mic audible with the tab track disabled, tab audible with the mic muted, mic-off unchanged; `check.mjs --full` green (982/64, lint 0/12); e2e desktop 8/8, tab 8/8. Real voice check is the user's (fake devices only here). Not committed.

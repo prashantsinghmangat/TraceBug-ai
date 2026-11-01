@@ -169,3 +169,43 @@ describe('the offscreen recorder does not ask for a tab it has no concept of', (
     expect(off).toMatch(/tabCapture\.getMediaStreamId/);
   });
 });
+
+// Tab mode's stream id is single-use and expires within seconds. If it can't
+// be opened, the recording still happens — through the picker — and the
+// result carries the reason the page shows.
+describe('a Tab-mode stream id that cannot be opened falls back to the picker', () => {
+  it('asks getDisplayMedia instead of failing', async () => {
+    // The harness's getUserMedia always rejects, standing in for an expired id.
+    await h.start({ surfaceMode: 'tab', tabCaptureStreamId: 'stale-id' });
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0].selfBrowserSurface).toBe('exclude');
+  });
+
+  it('returns the "expired" reason on success', () => {
+    expect(SOURCE).toContain('tabModeReason = "expired";');
+    expect(SOURCE).toContain('{ ok: true, tabModeFallback: true, tabModeReason }');
+  });
+});
+
+// MediaRecorder records only the FIRST audio track of its stream. Tab mode
+// puts tab audio first and the mic second, so the narration was silently
+// dropped (measured in Chromium: disabling the tab track left a silent file
+// while the mic was live). Desktop with "Share tab audio" + mic had the same
+// bug. More than one audio source must reach the recorder as one mixed track.
+describe('the recorder gets one mixed audio track', () => {
+  it('mixes every audio source when there is more than one', () => {
+    expect(SOURCE).toContain('if (audioSources.length > 1) {');
+    expect(SOURCE).toContain('_mixAudioCtx.createMediaStreamDestination()');
+    expect(SOURCE).toContain('recordStream = new MediaStream([...displayStream.getVideoTracks(), ...mixed.stream.getAudioTracks()]);');
+  });
+
+  it('builds the MediaRecorder from the mixed stream, not the raw one', () => {
+    expect(SOURCE).toContain('new MediaRecorder(recordStream, { mimeType: _mimeType })');
+    expect(SOURCE).not.toContain('new MediaRecorder(displayStream');
+  });
+
+  it('closes the mixing context on teardown', () => {
+    const teardown = SOURCE.slice(SOURCE.indexOf('function teardown()'));
+    expect(teardown.slice(0, teardown.indexOf('\n}'))).toContain('_mixAudioCtx.close()');
+  });
+});

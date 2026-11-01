@@ -45,7 +45,7 @@ The extension popup has four actions:
 
 A collapsible panel below the Capture Bug button — options persist per user and flow popup → background → content script → `prepareRecording()`.
 
-- **Record video too** — off by default, so the first capture never opens a screen-share picker. Turn it on to also ask your browser to share a tab, window or screen; a microphone row appears alongside it to include audio. A **Tab | Desktop** switch picks the mode: Tab asks once for the optional `tabCapture` permission (Chrome shows "Read and change all your data on all websites" when you grant it, not an install-time warning — it's requested on demand) and records the current tab with no share picker; Desktop uses the browser's own share picker as before. Decline the Tab prompt and TraceBug falls back to the picker.
+- **Record video too** — off by default, so the first capture never opens a screen-share picker. Turn it on to also ask your browser to share a tab, window or screen; a microphone row appears alongside it to include audio. A **Tab | Desktop** switch picks the mode. **Tab** (the default on Chrome, unless you picked Desktop) records the current tab with no share picker and no prompt — open TraceBug from its toolbar icon on that tab, then Start. **Desktop** uses the browser's own share picker, for a window or your whole screen. If Tab can't run — Chrome refuses the page (it only allows a tab TraceBug was opened on, and asks again after you move to another site) or its one-time recording link expired — TraceBug records through the share picker instead and says which. Firefox has no tab-capture API, so it shows Desktop only.
 - **Start delay** — none, **3 s**, or **5 s**, with an on-page 3-2-1 countdown overlay before recording rolls.
 - **Blur before recording** — arms the element-level blur tool *before* capture starts: click elements to blur/unblur, then a floating **"● Start recording / Cancel"** bar (with **Undo** for the last blur) begins the recording with the redaction applied from the very first frame. Cancel clears the blurs.
 
@@ -121,6 +121,7 @@ Required:
 | `scripting` | Inject the TraceBug SDK into the page when you start a capture |
 | `alarms` | Cancel an unanswered send-confirmation window after two minutes |
 | `offscreen` | Host the optional screen recording ("Record video too") so it survives moving between pages |
+| `tabCapture` | Record the current tab in **Tab** mode with no browser share picker (`chrome.tabCapture.getMediaStreamId`). Chrome shows it at install as "Read and change all your data on all websites". Chrome only, and only for a tab you opened TraceBug on |
 
 Optional host permissions — **not requested at install**, asked for only at the moment they are
 needed, and the extension degrades gracefully if you decline:
@@ -134,12 +135,11 @@ needed, and the extension degrades gracefully if you decline:
 | `https://api.openai.com/*`, `https://api.anthropic.com/*` | You save an AI key for that provider |
 | `http://localhost/*`, `http://127.0.0.1/*` | You point the AI debugger at a local model (Ollama) |
 
-Also optional, not a host permission: **`tabCapture`** — asked once, the first time you pick
-**Tab** mode in the record switch, so TraceBug can record the current tab with no browser share
-picker (`chrome.tabCapture.getMediaStreamId`). Chrome's grant prompt reads "Read and change all
-your data on all websites" — the same wording as `<all_urls>`, since both let a script capture
-anything on the page. Decline it and TraceBug falls back to the Desktop picker instead. Settings
-shows the grant with a Remove button once you've accepted it, same as `<all_urls>`.
+Why `tabCapture` is required rather than optional (it was optional in 1.11.3–1.11.4): Chrome
+issues a tab stream id only for a tab the extension was opened on *while it already held*
+`tabCapture`. A permission granted from the popup therefore could never record the tab it was
+granted on — that tab kept showing the share picker. Jam and BetterBugs declare it required for
+the same reason. The Firefox build doesn't include it (no tab-capture API there).
 
 Not present, and deliberately so: **`tabs`** (removed in 1.10.1 — it caused the "Read your browsing
 history" warning). `tabCapture` does not need `tabs` and does not cause that warning.

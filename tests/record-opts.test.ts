@@ -272,6 +272,7 @@ describe('popup.js only calls the video setting "chosen" when it was', () => {
       videoSetBy,
       videoCb: { checked },
       surfaceMode: 'tab',
+      surfaceSetBy: 'default',
       delaySel: { value: '0' },
       blurCb: { checked: false },
       updateOptsState: () => {},

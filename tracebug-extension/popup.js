@@ -606,29 +606,42 @@ document.addEventListener("DOMContentLoaded", async () => {
   // is the pre-1.11 localStorage blob, migrated once on first open.
   const OPTS_KEY = "tb_record_opts";
   const LEGACY_OPTS_KEY = "tracebug_record_opts";
-  // Tab | Desktop switch (1.11.3) — two buttons, not a <select>, because
-  // choosing "Tab" is the moment the optional tabCapture permission is
-  // requested, and that request must be the first statement in a synchronous
-  // click handler or the click's user-gesture activation doesn't carry
-  // through (Chrome silently resolves false with no prompt otherwise).
+  // Tab | Desktop switch. Tab records the current tab with no share dialog
+  // through the `tabCapture` permission (stream id resolved in background.js);
+  // Desktop is the browser's own "Choose what to share" dialog. Tab is the
+  // default on Chrome for anyone still on the default — `surfaceSetBy`, like
+  // videoSetBy — and a Desktop choice is kept.
   //
-  // The Tab button is NEVER pre-disabled on `chrome.tabCapture` being
-  // present: that namespace is undefined until the permission is actually
-  // granted (confirmed empirically, not assumed), even though the browser
-  // declares it as an optional permission. Gating the button on it created a
-  // deadlock — disabled until granted, but the button is the only way to
-  // grant it — so Tab could never be turned on by anyone, ever. Below,
-  // TAB_CAPTURE_AVAILABLE is only read for an ALREADY-granted user (their
-  // grant persisted from a past session, so the namespace is already visible
-  // by the time this file runs) — never to decide whether the button works.
+  // Tab exists only where the build declares `tabCapture`: the Firefox build
+  // leaves it out (no live tab-capture API there). Read from the manifest, a
+  // feature test that needs no browser-name check.
   const surfaceTabBtn = document.getElementById("surfaceTab");
   const surfaceDesktopBtn = document.getElementById("surfaceDesktop");
   const surfaceModeHelp = document.getElementById("surfaceModeHelp");
-  const TAB_CAPTURE_AVAILABLE = !!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId);
+  const TAB_CAPTURE_DECLARED = (chrome.runtime.getManifest().permissions || []).includes("tabCapture");
   let surfaceMode = "desktop";
+  let surfaceSetBy = "default";
   function renderSurfaceButtons() {
     if (surfaceTabBtn) surfaceTabBtn.setAttribute("aria-pressed", String(surfaceMode === "tab"));
     if (surfaceDesktopBtn) surfaceDesktopBtn.setAttribute("aria-pressed", String(surfaceMode === "desktop"));
+    if (surfaceModeHelp) {
+      surfaceModeHelp.textContent = surfaceMode === "desktop"
+        ? "Chrome asks which tab, window or screen to share"
+        : "Records this tab — no share dialog";
+    }
+  }
+  /**
+   * Which surface the popup opens on, and whether the user picked it.
+   *
+   * A stored "tab" with no `surfaceSetBy` predates the flag (1.11.3–1.11.4),
+   * where Tab was never the default, so it was chosen. A flagless "desktop"
+   * was the old default, written by any option change — it moves to Tab.
+   */
+  function resolveSurface(stored, tabDeclared) {
+    const chosen = stored.surfaceSetBy === "user" || stored.surfaceMode === "tab";
+    if (!tabDeclared) return { surfaceMode: "desktop", surfaceSetBy: chosen ? "user" : "default" };
+    if (!chosen) return { surfaceMode: "tab", surfaceSetBy: "default" };
+    return { surfaceMode: stored.surfaceMode === "tab" ? "tab" : "desktop", surfaceSetBy: "user" };
   }
   const delaySel = document.getElementById("optDelay");
   const blurCb = document.getElementById("optBlurFirst");
@@ -693,6 +706,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const chosen = stored.videoSetBy === "user" || legacyAnswered;
     const merged = {
       surfaceMode: legacy.surfaceMode ?? stored.surfaceMode,
+      surfaceSetBy: stored.surfaceSetBy,
       delaySec: legacy.delaySec ?? stored.delaySec,
       blurFirst: legacy.blurFirst ?? stored.blurFirst,
       // No answer anywhere → keep the worker's seed. It must NOT fall back to
@@ -729,6 +743,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const o = {
       video: videoCb ? !!videoCb.checked : false,
       surfaceMode,
+      surfaceSetBy,
       delaySec: Number(delaySel.value) || 0,
       blurFirst: !!blurCb.checked,
       videoSetBy,
@@ -786,26 +801,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     // came back empty must land on off, not on whatever coerces.
     if (videoCb) videoCb.checked = o.video === true;
     if (o.videoSetBy === "user") videoSetBy = "user";
-    // A stored "tab" choice is only honored if the permission is STILL
-    // granted — the user may have revoked it from Options (the grant card's
-    // Remove button) since choosing it, or this may be a sync'd profile on a
-    // browser with no tabCapture at all.
-    if (o.surfaceMode === "tab" && TAB_CAPTURE_AVAILABLE) {
-      let stillGranted = false;
-      try { stillGranted = await new Promise((r) => chrome.permissions.contains({ permissions: ["tabCapture"] }, r)); } catch {}
-      surfaceMode = stillGranted ? "tab" : "desktop";
-    } else {
-      surfaceMode = "desktop";
+    ({ surfaceMode, surfaceSetBy } = resolveSurface(o, TAB_CAPTURE_DECLARED));
+    if (!TAB_CAPTURE_DECLARED) {
+      // Desktop is the only surface here, so there is nothing to choose.
+      const surfaceRow = document.getElementById("surfaceModeRow");
+      if (surfaceRow) surfaceRow.style.display = "none";
     }
     renderSurfaceButtons();
-    // The HTML's static copy describes Tab (the markup default); say the
-    // right thing when the actual starting mode is Desktop instead. The two
-    // click handlers below set their own text afterwards, including the
-    // "permission declined" case — this only covers the state before either
-    // has ever been clicked.
-    if (surfaceModeHelp && surfaceMode === "desktop") {
-      surfaceModeHelp.textContent = "Desktop asks your browser to share a tab, window or screen";
-    }
     if (o.delaySec) delaySel.value = String(o.delaySec);
     renderDelayButtons();
     blurCb.checked = !!o.blurFirst;
@@ -823,41 +825,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (surfaceDesktopBtn) {
       surfaceDesktopBtn.addEventListener("click", () => {
         surfaceMode = "desktop";
-        if (surfaceModeHelp) surfaceModeHelp.textContent = "Desktop asks your browser to share a tab, window or screen.";
+        surfaceSetBy = "user";
         renderSurfaceButtons();
         saveRecordOpts();
       });
     }
     if (surfaceTabBtn) {
       surfaceTabBtn.addEventListener("click", () => {
-        // chrome.permissions.request must be called synchronously as the
-        // first thing in this handler — see the comment where these
-        // elements are declared. Already-granted resolves true immediately
-        // with no prompt, so re-clicking Tab after granting it once is free.
-        //
-        // A browser that never declared `tabCapture` as an optional
-        // permission at all (Firefox — see build-ext.mjs firefoxManifest)
-        // can throw synchronously here instead of calling back, since the
-        // name being requested was never in the manifest. Caught, not left
-        // to hang the UI in "requesting…" forever.
-        try {
-          chrome.permissions.request({ permissions: ["tabCapture"] }, (granted) => {
-            void chrome.runtime.lastError;
-            surfaceMode = granted ? "tab" : "desktop";
-            if (surfaceModeHelp) {
-              surfaceModeHelp.textContent = granted
-                ? "Tab records the current tab with no share picker"
-                : "Permission declined — falling back to Desktop's share picker";
-            }
-            renderSurfaceButtons();
-            saveRecordOpts();
-          });
-        } catch {
-          surfaceMode = "desktop";
-          if (surfaceModeHelp) surfaceModeHelp.textContent = "Tab mode isn't available in this browser — using Desktop instead";
-          renderSurfaceButtons();
-          saveRecordOpts();
-        }
+        surfaceMode = "tab";
+        surfaceSetBy = "user";
+        renderSurfaceButtons();
+        saveRecordOpts();
       });
     }
     if (pillEventsOnlyBtn) pillEventsOnlyBtn.addEventListener("click", () => selectCaptureMode(false));
@@ -876,7 +854,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("btnCaptureBug").addEventListener("click", async () => {
     const o = saveRecordOpts();
-    await runCombo("TB_START_RECORDING", o.video ? "Starting recording…" : "Starting capture…", {
+    const opts = {
       video: o.video,
       // Only meaningful with video on; sent as false/undefined otherwise so the
       // page side can't mistake a leftover pref for a request to record.
@@ -884,7 +862,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       blurFirst: o.blurFirst,
       delaySec: o.delaySec,
       surfaceMode: o.video ? o.surfaceMode : undefined,
-    });
+    };
+    await runCombo("TB_START_RECORDING", o.video ? "Starting recording…" : "Starting capture…", opts);
   });
 
   // ── Screenshot options — Crop (existing drag-select tool) vs Visible
