@@ -17,11 +17,14 @@ Open phases: `PLAN.md` 8, 11, 12.
   message + stack, the extension's injected bundle is 42% smaller (axe-core stubbed), plugin
   `onReport`/`onExport` hooks fire, website on Next 14.2.35 with the image optimizer off. How to release:
   `docs/RELEASING.md`.
-  `package-lock.json`'s root version was not bumped (uncommitted edit pending; agents are
-  permission-blocked from that file).
-- **Gates**: `node scripts/check.mjs --full` green — 955 tests / 61 files, `ext:lint` 0 errors / 14
-  warnings (baseline lowered 26 → 14 on 2026-10-31: the axe-core stub removed 12 warnings that came from
-  axe's own code in the injected bundle; the `tabCapture` feature-detection warnings are still among the 14).
+- **1.11.5 is prepared on `develop`, not released** (2026-11-01): the recording work below, on `main`
+  as merge `edd1dbe`. All `check:versions` surfaces, CHANGELOG and the popup's `WHATS_NEW` are on
+  1.11.5. Not done from here: `package-lock.json`'s root version (agents are permission-blocked from
+  that file), the manual checks, the store listing text, and the release itself (`docs/RELEASING.md`).
+  **This release adds a required permission (`tabCapture`)**: Chrome disables TraceBug for existing users
+  until they approve it, and CWS review sees a new permission — paste the justification from
+  `docs/launch/store-submission-pack.md`.
+- **Gates**: `node scripts/check.mjs --full` green — see the recording section below for current counts.
 - **Hygiene audit 2026-10-31** (`docs/audit/hygiene-2026-10-31.md`): approved rows applied, uncommitted —
   see `PROGRESS.md` 2026-10-31. Outcomes that matter here:
   - The injected extension bundle (`tracebug-sdk-ext.js`) no longer carries axe-core: 3.45 MB → 1.99 MB.
@@ -40,7 +43,7 @@ Open phases: `PLAN.md` 8, 11, 12.
   - Deferred by the user: lazy-loading the 269 KB rrweb replay runtime in the extension (audit #3),
     root `npm audit fix` (audit #4).
 
-- **Recording Tab/Desktop work on `develop`, uncommitted (2026-11-01)** — see
+- **Recording Tab/Desktop work, committed (`a1d17af`, `97eae7e`) and merged to `main` (2026-11-01)** — see
   `docs/audit/recording-architecture-proposal.md`; user decisions in PROGRESS 2026-11-01.
   - **`tabCapture` is a REQUIRED Chrome permission now** (user decision after the evidence below;
     `build-ext.mjs` adds it with `offscreen`; `manifest.json`; Firefox build has none). Existing Chrome
@@ -97,18 +100,19 @@ Open phases: `PLAN.md` 8, 11, 12.
 
 ## Open — all of it needs a person
 
-1. **Release 1.11.4**: tag, merge to `main`, `npm run zip:ext` → CWS + AMO uploads, npm publish (both
-   packages), MCP registry (`mcp-publisher`), website deploy. Not done from here (no push, no publish).
+1. **Release 1.11.5** per `docs/RELEASING.md` (CWS, AMO, npm both packages, MCP registry — which still
+   lists 1.11.3 — website). Before it: bump `package-lock.json`'s root version, run the manual rows
+   below, update the CWS listing's permission text (`docs-internal/`, gitignored, still calls
+   `tabCapture` optional).
 2. **Manual checks never recorded as run** (1.11.3 shipped with them open):
    `docs/RELEASE_CHECKLIST.md` rows 1–3 and 9 (video upgrade path, oversize notice), 10 (diagnostics),
-   11–15 (Tab mode's real permission prompt, decline fallback, existing-user update, macOS, Firefox
-   fallback); the popup's "already capturing" state (`applyCapturingUI()` in `popup.js` — not
+   11–13, 12b, 15 (rewritten for 1.11.5: Tab with no prompt on a real click, Desktop, existing-user
+   re-approval on update, Desktop-default migration, Firefox Desktop-only), 14 (macOS); the popup's "already capturing" state (`applyCapturingUI()` in `popup.js` — not
    e2e-coverable); store screenshots vs. the current popup and welcome page.
-3. **Tab-mode retry is unproven**: `resolveTabCaptureStreamId`'s bounded retry targets a
-   `chrome.tabCapture` binding race in an already-running worker that can't be reproduced here. Re-run the
-   repro (grant Tab permission, start a Tab recording without reopening the extension).
+3. **Early-Stop wait, by hand**: a Stop in the first ~3 s now finishes at ~3 s (`waitForFirstData`);
+   check what the on-page toolbar shows meanwhile and whether it feels unresponsive.
 4. **Firefox pass is partial**: rows 16–17 (mic grant, countdown mic toggle) verified by hand. Row 15
-   (Tab greyed out, Desktop via the window-host recorder — `offscreen.js`'s `IS_WINDOW_HOST` branch) and
+   (Tab switch hidden, Desktop via the window-host recorder — `offscreen.js`'s `IS_WINDOW_HOST` branch) and
    the 2026-10-23 capture-flow/rendering fixes are Chromium-only so far. No automated Firefox e2e exists
    (`npm run ext:firefox` is interactive).
 5. **Website unverified pages**: `/privacy` (mentions `offscreen`), `/try`, `/bye`, and one real `/bye`

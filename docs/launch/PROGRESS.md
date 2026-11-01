@@ -203,3 +203,10 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Files:** `tracebug-extension/offscreen.js`; `tests/offscreen-capture.test.ts` (4 cases, harness gains `run`), `tests/recorder-mime.test.ts` (seeds data so the stop-hang test isolates the `stop` fallback).
 - **Verified:** A/B on the real extension, Stop at 1 s: without the wait 0 bytes ×2, with it 66–77 KB playable with audio ×2. `check.mjs --full` green (986/64, lint 0/12); e2e desktop 8/8, tab 8/8, shipping-path 16/16 ×3.
 - **Open:** what the on-page toolbar shows during that ≤3 s wait was not checked. Not committed.
+
+## 1.11.5 prepared: version bump, CHANGELOG, What's New (2026-11-01)
+
+- **What:** `develop` fast-forwarded to `main` (`edd1dbe`), then every `check:versions` surface → 1.11.5; CHANGELOG `[1.11.5]` (Tab with no prompt/dialog, `tabCapture` now required + re-approval on update, Tab default, mic mixed in, early Stop not empty, fallback reasons, no TrustedHTML errors); popup `WHATS_NEW["1.11.5"]` (3 lines); STATE release status and Open list rewritten.
+- **Files:** `package.json`, `tracebug-extension/manifest.json`, `packages/tracebug/{package,server}.json`, `website/lib/version.ts`, `docs/getting-started.md`, `CHANGELOG.md`, `tracebug-extension/popup.js`, STATE, PROGRESS.
+- **Verified:** `check.mjs --full` green (986/64, lint 0/12, all surfaces on 1.11.5).
+- **Open:** `package-lock.json` root version (permission-blocked here); manual checklist rows; CWS listing text; the release itself. Not committed.
