@@ -116,6 +116,39 @@ describe('setInnerHTML — tier 2: our own Trusted Types policy', () => {
     setInnerHTML(makeTrustedTypesAwareEl(), '<span>c</span>');
     expect(createCount).toBe(1);
   });
+
+  it('never tries the raw string first, so an enforcing page logs no violation', async () => {
+    // Chrome logs every blocked raw assignment even when it is caught — on
+    // youtube.com that filled chrome://extensions Errors while the UI rendered.
+    const setInnerHTML = await freshSetInnerHTML();
+    const el = makeTrustedTypesAwareEl();
+    const nativeSetter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!.set!;
+    let rawAttempts = 0;
+    Object.defineProperty(el, 'innerHTML', {
+      set(v: unknown) {
+        if (v instanceof FakeTrustedHTML) { nativeSetter.call(el, v.value); return; }
+        rawAttempts++;
+        throw new TypeError("This document requires 'TrustedHTML' assignment.");
+      },
+      configurable: true,
+    });
+    setInnerHTML(el, '<span>a</span>');
+    setInnerHTML(el, '<span>b</span>');
+    expect(rawAttempts).toBe(0);
+    expect(el.textContent).toBe('b');
+  });
+
+  it('falls back to the raw assignment when the policy name is refused', async () => {
+    // A `trusted-types` allow-list without our name, on a page that does not
+    // also require Trusted Types: the plain string still works there.
+    (window as Window & { trustedTypes?: unknown }).trustedTypes = {
+      createPolicy: () => { throw new TypeError('Policy "tracebug-html" disallowed.'); },
+    };
+    const setInnerHTML = await freshSetInnerHTML();
+    const el = document.createElement('div');
+    setInnerHTML(el, '<span class="a">hi</span>');
+    expect(el.querySelector('span.a')?.textContent).toBe('hi');
+  });
 });
 
 describe('setInnerHTML — tier 3: no usable path at all', () => {

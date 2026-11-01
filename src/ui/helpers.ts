@@ -217,10 +217,14 @@ interface TrustedTypePolicy {
  * through mounting the dashboard, leaving it half-built or entirely absent.
  *
  * Three tiers, each tried only if the one before it isn't available:
- *   1. The direct assignment — works on the overwhelming majority of pages.
- *   2. Our own Trusted Types policy, turning `html` into a value the CSP
- *      accepts. Works on any page enforcing Trusted Types without also
- *      restricting which policy names may be created (the common case).
+ *   1. Our own Trusted Types policy, whenever the browser has Trusted Types,
+ *      turning `html` into a value an enforcing CSP accepts. First, not as a
+ *      fallback: a blocked raw assignment is caught, but Chrome still logs a
+ *      violation for every one — on youtube.com (`require-trusted-types-for
+ *      'script'`, no name allow-list) that filled chrome://extensions Errors
+ *      while the UI rendered fine. TrustedHTML is accepted everywhere else too.
+ *   2. The direct assignment — browsers without Trusted Types, or a page
+ *      whose `trusted-types` allow-list refused our policy name.
  *   3. Give up on THIS element's markup rather than let the exception
  *      propagate and abort every statement after it in the caller — a page
  *      that both enforces Trusted Types AND locks the policy name allow-list
@@ -229,12 +233,6 @@ interface TrustedTypePolicy {
  *      APIs.
  */
 export function setInnerHTML(el: Element, html: string): void {
-  try {
-    el.innerHTML = html;
-    reviveInlineStylesForCsp(el);
-    return;
-  } catch { /* fall through */ }
-
   const policy = getTrustedTypesPolicy();
   if (policy) {
     try {
@@ -244,8 +242,14 @@ export function setInnerHTML(el: Element, html: string): void {
       el.innerHTML = policy.createHTML(html) as unknown as string;
       reviveInlineStylesForCsp(el);
       return;
-    } catch { /* fall through to the last resort */ }
+    } catch { /* fall through */ }
   }
+
+  try {
+    el.innerHTML = html;
+    reviveInlineStylesForCsp(el);
+    return;
+  } catch { /* fall through to the last resort */ }
 
   try { el.replaceChildren(); } catch { /* nothing left to try */ }
 }

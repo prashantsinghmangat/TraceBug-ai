@@ -30,6 +30,8 @@ interface Harness {
   calls: Record<string, unknown>[];
   /** What getDisplayMedia should do: return a stream, or throw this error. */
   setOutcome: (fn: () => never) => void;
+  /** Evaluate code inside offscreen.js's own scope (its top-level lets). */
+  run: (code: string) => unknown;
 }
 
 /** Load offscreen.js with just enough browser around it to reach the picker. */
@@ -74,6 +76,7 @@ function harness(): Harness {
     start: runInContext('_startRecordingImpl', ctx) as Harness['start'],
     calls,
     setOutcome: (fn) => { outcome = fn; },
+    run: (code) => runInContext(code, ctx),
   };
 }
 
@@ -169,3 +172,90 @@ describe('the offscreen recorder does not ask for a tab it has no concept of', (
     expect(off).toMatch(/tabCapture\.getMediaStreamId/);
   });
 });
+
+// Tab mode's stream id is single-use and expires within seconds. If it can't
+// be opened, the recording still happens — through the picker — and the
+// result carries the reason the page shows.
+describe('a Tab-mode stream id that cannot be opened falls back to the picker', () => {
+  it('asks getDisplayMedia instead of failing', async () => {
+    // The harness's getUserMedia always rejects, standing in for an expired id.
+    await h.start({ surfaceMode: 'tab', tabCaptureStreamId: 'stale-id' });
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0].selfBrowserSurface).toBe('exclude');
+  });
+
+  it('returns the "expired" reason on success', () => {
+    expect(SOURCE).toContain('tabModeReason = "expired";');
+    expect(SOURCE).toContain('{ ok: true, tabModeFallback: true, tabModeReason }');
+  });
+});
+
+// MediaRecorder records only the FIRST audio track of its stream. Tab mode
+// puts tab audio first and the mic second, so the narration was silently
+// dropped (measured in Chromium: disabling the tab track left a silent file
+// while the mic was live). Desktop with "Share tab audio" + mic had the same
+// bug. More than one audio source must reach the recorder as one mixed track.
+describe('the recorder gets one mixed audio track', () => {
+  it('mixes every audio source when there is more than one', () => {
+    expect(SOURCE).toContain('if (audioSources.length > 1) {');
+    expect(SOURCE).toContain('_mixAudioCtx.createMediaStreamDestination()');
+    expect(SOURCE).toContain('recordStream = new MediaStream([...displayStream.getVideoTracks(), ...mixed.stream.getAudioTracks()]);');
+  });
+
+  it('builds the MediaRecorder from the mixed stream, not the raw one', () => {
+    expect(SOURCE).toContain('new MediaRecorder(recordStream, { mimeType: _mimeType })');
+    expect(SOURCE).not.toContain('new MediaRecorder(displayStream');
+  });
+
+  it('closes the mixing context on teardown', () => {
+    const teardown = SOURCE.slice(SOURCE.indexOf('function teardown()'));
+    expect(teardown.slice(0, teardown.indexOf('\n}'))).toContain('_mixAudioCtx.close()');
+  });
+});
+
+// MediaRecorder writes nothing for the first ~2–3 s (measured in Chromium
+// 149: first real data ~3.1 s after start(), any codec, any page). A Stop
+// before that finalized an EMPTY video — 0 bytes in a 1 s A/B, ~70 KB with
+// this wait. An early stop keeps recording until the first real data.
+describe('an early stop waits for the first real data', () => {
+  const settled = (p: Promise<unknown>) => {
+    let done = false;
+    p.then(() => { done = true; });
+    return () => done;
+  };
+
+  it('keeps waiting while the recorder runs and nothing has been written', async () => {
+    h.run('_recorder = { state: "recording" }; _chunksBytes = 1;');
+    const done = settled(h.run('waitForFirstData()') as Promise<void>);
+    await new Promise((r) => setTimeout(r, 350));
+    expect(done()).toBe(false);
+    h.run('_chunksBytes = 5000;');
+    await new Promise((r) => setTimeout(r, 250));
+    expect(done()).toBe(true);
+  });
+
+  it('does not wait once real data is there', async () => {
+    h.run('_recorder = { state: "recording" }; _chunksBytes = 5000;');
+    const done = settled(h.run('waitForFirstData()') as Promise<void>);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(done()).toBe(true);
+  });
+
+  it('stops waiting if the recorder ends (tab closed, sharing stopped)', async () => {
+    h.run('_recorder = { state: "recording" }; _chunksBytes = 0;');
+    const done = settled(h.run('waitForFirstData()') as Promise<void>);
+    h.run('_recorder.state = "inactive";');
+    await new Promise((r) => setTimeout(r, 250));
+    expect(done()).toBe(true);
+  });
+
+  it('is bounded, and the explicit stop path uses it', () => {
+    expect(SOURCE).toContain('const FIRST_DATA_WAIT_MS = 6000;');
+    const stop = SOURCE.slice(SOURCE.indexOf('async function stopAndBuildRecording()'));
+    const body = stop.slice(0, stop.indexOf('\n}'));
+    expect(body).toContain('await waitForFirstData();');
+    // ...before it stops the recorder.
+    expect(body.indexOf('await waitForFirstData();')).toBeLessThan(body.indexOf('recorder.stop()'));
+  });
+});
+

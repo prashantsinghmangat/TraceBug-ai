@@ -8,6 +8,8 @@
 //     surfaceMode "tab" + tabCaptureStreamId (resolved by background.js, which
 //     alone has a real tab to target) skips getDisplayMedia's picker via
 //     chrome.tabCapture.getMediaStreamId. Anything else uses getDisplayMedia.
+//     A stream id that can't be opened falls back to the picker and answers
+//     { ok, tabModeFallback: true, tabModeReason: "expired" }.
 //   tb:rec:stop     {}                       → VideoRecording | null
 //   tb:rec:capture  {}                       → VideoRecording | null
 //   tb:rec:comment  { text }                 → { offsetMs?, ok }
@@ -114,6 +116,10 @@ let _startInFlight = null;
 // captured from it, so Tab mode re-routes the captured audio back to the
 // user's speakers via this AudioContext. Null outside Tab mode.
 let _tabAudioCtx = null;
+// Mixes tab/system audio and the microphone into the ONE audio track the
+// MediaRecorder gets — see where it is built. Null when there is at most one
+// audio source.
+let _mixAudioCtx = null;
 // The microphone track(s) mixed into _stream, kept separately from the
 // tab/screen audio tracks so tb:rec:mic-mute can mute narration without
 // touching the recorded page's own sound. Bug 4 (video-1.11.1.md): the page
@@ -229,6 +235,27 @@ const _hydratePromise = hydratePersistedRecording();
 /** How long a stop waits for MediaRecorder's `stop` event before finishing anyway. */
 const STOP_FALLBACK_MS = 5000;
 
+// MediaRecorder writes nothing for the first ~2–3 s of a recording: measured
+// in Chromium 149, the first dataavailable came ~2.1 s after start() and was
+// 1 byte, real data ~3.1 s — VP8 or VP9, static or animated page, timeslice
+// notwithstanding. A stop() before then finalized an EMPTY video. So an early
+// stop keeps recording until the first real data lands, bounded.
+const FIRST_DATA_MIN_BYTES = 1024;
+const FIRST_DATA_WAIT_MS = 6000;
+function waitForFirstData() {
+  const deadline = Date.now() + FIRST_DATA_WAIT_MS;
+  return new Promise((resolve) => {
+    const check = () => {
+      if (_chunksBytes >= FIRST_DATA_MIN_BYTES || !_recorder || _recorder.state === "inactive" || Date.now() >= deadline) {
+        resolve();
+      } else {
+        setTimeout(check, 100);
+      }
+    };
+    check();
+  });
+}
+
 // Only name an audio codec when the stream really has audio. Firefox's
 // MediaRecorder given "…,opus" and a stream with NO audio track (Firefox's
 // getDisplayMedia never delivers tab audio, so: any recording without the mic)
@@ -285,6 +312,10 @@ function teardown() {
   }
   if (_stream) {
     _stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+  }
+  if (_mixAudioCtx) {
+    try { _mixAudioCtx.close(); } catch {}
+    _mixAudioCtx = null;
   }
   if (_tabAudioCtx) {
     try { _tabAudioCtx.close(); } catch {}
@@ -358,6 +389,9 @@ async function _startRecordingImpl(options) {
   }
   const wantsTabMode = options?.surfaceMode === "tab" && !!options?.tabCaptureStreamId;
   let displayStream;
+  // Set when Tab mode was asked for but its stream id could not be opened.
+  // The recording then falls back to the picker below, and the page says why.
+  let tabModeReason = null;
   if (wantsTabMode) {
     // Tab mode: background.js already resolved chrome.tabCapture.getMediaStreamId
     // into a stream id before forwarding this message — only background has a
@@ -381,9 +415,14 @@ async function _startRecordingImpl(options) {
         },
       });
     } catch (err) {
-      setHostPanel("idle");
-      return { ok: false, error: (err && err.message) || "Could not start tab capture." };
+      // The id is single-use and expires a few seconds after it was issued
+      // (chrome.tabCapture docs), so a slow hand-off is the usual cause. Fall
+      // back to the picker rather than failing the recording.
+      console.warn("[TraceBug offscreen] tab capture failed, using the picker:", (err && err.message) || err);
+      tabModeReason = "expired";
     }
+  }
+  if (displayStream) {
     // chrome.tabCapture mutes the tab's own audio output once an audio track
     // is captured from it (so the user doesn't hear it twice if the caller
     // pipes it elsewhere) — re-route it back to the speakers or the user's
@@ -496,12 +535,30 @@ async function _startRecordingImpl(options) {
   _startedAt = Date.now();
   _capturesTaken = 0;
   _mode = options?.mode === "standard" ? "standard" : "rolling";
-  _mimeType = pickMimeType(displayStream.getAudioTracks().length > 0);
+  // MediaRecorder records only the FIRST audio track of its stream. With tab
+  // (or shared system) audio first and the mic second, the narration was
+  // silently dropped — measured: disabling the tab track left a silent file
+  // while the mic was live. So with more than one audio source, record one
+  // track mixed from all of them. Muting the mic still works: a disabled
+  // track feeds silence into the mix.
+  let recordStream = displayStream;
+  const audioSources = displayStream.getAudioTracks();
+  if (audioSources.length > 1) {
+    try {
+      _mixAudioCtx = new AudioContext();
+      const mixed = _mixAudioCtx.createMediaStreamDestination();
+      audioSources.forEach((t) => _mixAudioCtx.createMediaStreamSource(new MediaStream([t])).connect(mixed));
+      recordStream = new MediaStream([...displayStream.getVideoTracks(), ...mixed.stream.getAudioTracks()]);
+    } catch (err) {
+      console.warn("[TraceBug offscreen] could not mix audio — only the first source will be recorded:", (err && err.name) || err);
+    }
+  }
+  _mimeType = pickMimeType(recordStream.getAudioTracks().length > 0);
 
   try {
     _recorder = _mimeType
-      ? new MediaRecorder(displayStream, { mimeType: _mimeType })
-      : new MediaRecorder(displayStream);
+      ? new MediaRecorder(recordStream, { mimeType: _mimeType })
+      : new MediaRecorder(recordStream);
   } catch (err) {
     teardown();
     return { ok: false, error: (err && err.message) || "MediaRecorder failed to construct." };
@@ -598,7 +655,7 @@ async function _startRecordingImpl(options) {
   // cancelled" with no controls while the screen was actually being recorded.
   try { broadcast({ type: "tb:rec:started", startedAt: _startedAt, mode: _mode, mimeType: _mimeType, micRequested: !!options?.withMicrophone, micIncluded, audioIncluded }); } catch (e) {}
   setHostPanel("recording");
-  return { ok: true };
+  return tabModeReason ? { ok: true, tabModeFallback: true, tabModeReason } : { ok: true };
 }
 
 async function stopAndBuildRecording() {
@@ -612,6 +669,18 @@ async function stopAndBuildRecording() {
   // doesn't also fire a tb:rec:auto-stopped broadcast — the RPC response
   // already carries the recording back to the page.
   _autoStopBroadcast = true;
+
+  await waitForFirstData();
+  // The recorder can end during that wait (the recorded tab closed, sharing
+  // stopped). Keep what it captured rather than returning an older recording.
+  if (!_recorder || _recorder.state === "inactive") {
+    if (_chunks.length === 0) return _lastBuiltRecording;
+    const recording = await buildRecording(_chunks);
+    _lastBuiltRecording = recording;
+    await persistLastRecording(recording);
+    teardown();
+    return recording;
+  }
 
   // Flush any buffered data BEFORE stop() so very short recordings (under
   // one timeslice / 1000ms) still have a chunk. MediaRecorder.stop() does

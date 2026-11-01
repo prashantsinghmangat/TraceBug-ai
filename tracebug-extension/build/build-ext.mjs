@@ -112,11 +112,14 @@ function chromeManifest() {
   return {
     ...base,
     version,
-    permissions: [...base.permissions, ...(VIDEO_ON ? ["offscreen"] : [])],
-    // tabCapture (optional, never at install) powers the no-picker "Tab"
-    // record mode — see docs/audit/capture-flow-1.11.3.md. Gated on VIDEO_ON
-    // for the same reason offscreen is: it is useless without the recorder.
-    optional_permissions: VIDEO_ON ? base.optional_permissions : [],
+    // tabCapture powers the no-picker "Tab" record mode. Required, not
+    // optional: Chrome only issues a tab stream id for a tab the extension was
+    // invoked on while it already held tabCapture, so a runtime grant from the
+    // popup could never record the tab it was granted on — measured, see
+    // docs/audit/recording-architecture-proposal.md. Jam and BetterBugs ship it
+    // required for the same reason. Gated on VIDEO_ON like offscreen: it is
+    // useless without the recorder.
+    permissions: [...base.permissions, ...(VIDEO_ON ? ["offscreen", "tabCapture"] : [])],
     background: { service_worker: "background.js" },
     // Hard API floors: offscreen (109), storage.session (102),
     // runtime.getContexts (116). Without this, Chrome ≤108 installs the
@@ -130,14 +133,12 @@ function chromeManifest() {
  *
  * `chrome.tabCapture` has no Firefox equivalent that captures a live stream
  * (`browser.tabs.captureTab()` is a single still frame) — see
- * docs/audit/capture-flow-1.11.3.md §6. `optional_permissions` is stripped
- * entirely rather than shipped unused; Tab mode feature-detects
- * `chrome.tabCapture` at runtime and falls back to the Desktop picker.
+ * docs/audit/capture-flow-1.11.3.md §6. Only the Chrome build adds
+ * `tabCapture`; the popup reads the manifest and shows Desktop only here.
  */
 function firefoxManifest() {
-  const { optional_permissions: _dropped, ...rest } = base;
   return {
-    ...rest,
+    ...base,
     version,
     // Firefox event pages have no importScripts, so the worker-side scripts
     // are listed ahead of background.js and run in the same global.

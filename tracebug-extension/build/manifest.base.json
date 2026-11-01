@@ -23,10 +23,6 @@
     }
   },
 
-  "optional_permissions": [
-    "tabCapture"
-  ],
-
   "optional_host_permissions": [
     "<all_urls>",
     "https://api.github.com/*",
