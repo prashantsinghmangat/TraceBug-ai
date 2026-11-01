@@ -30,6 +30,8 @@ interface Harness {
   calls: Record<string, unknown>[];
   /** What getDisplayMedia should do: return a stream, or throw this error. */
   setOutcome: (fn: () => never) => void;
+  /** Evaluate code inside offscreen.js's own scope (its top-level lets). */
+  run: (code: string) => unknown;
 }
 
 /** Load offscreen.js with just enough browser around it to reach the picker. */
@@ -74,6 +76,7 @@ function harness(): Harness {
     start: runInContext('_startRecordingImpl', ctx) as Harness['start'],
     calls,
     setOutcome: (fn) => { outcome = fn; },
+    run: (code) => runInContext(code, ctx),
   };
 }
 
@@ -209,3 +212,50 @@ describe('the recorder gets one mixed audio track', () => {
     expect(teardown.slice(0, teardown.indexOf('\n}'))).toContain('_mixAudioCtx.close()');
   });
 });
+
+// MediaRecorder writes nothing for the first ~2–3 s (measured in Chromium
+// 149: first real data ~3.1 s after start(), any codec, any page). A Stop
+// before that finalized an EMPTY video — 0 bytes in a 1 s A/B, ~70 KB with
+// this wait. An early stop keeps recording until the first real data.
+describe('an early stop waits for the first real data', () => {
+  const settled = (p: Promise<unknown>) => {
+    let done = false;
+    p.then(() => { done = true; });
+    return () => done;
+  };
+
+  it('keeps waiting while the recorder runs and nothing has been written', async () => {
+    h.run('_recorder = { state: "recording" }; _chunksBytes = 1;');
+    const done = settled(h.run('waitForFirstData()') as Promise<void>);
+    await new Promise((r) => setTimeout(r, 350));
+    expect(done()).toBe(false);
+    h.run('_chunksBytes = 5000;');
+    await new Promise((r) => setTimeout(r, 250));
+    expect(done()).toBe(true);
+  });
+
+  it('does not wait once real data is there', async () => {
+    h.run('_recorder = { state: "recording" }; _chunksBytes = 5000;');
+    const done = settled(h.run('waitForFirstData()') as Promise<void>);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(done()).toBe(true);
+  });
+
+  it('stops waiting if the recorder ends (tab closed, sharing stopped)', async () => {
+    h.run('_recorder = { state: "recording" }; _chunksBytes = 0;');
+    const done = settled(h.run('waitForFirstData()') as Promise<void>);
+    h.run('_recorder.state = "inactive";');
+    await new Promise((r) => setTimeout(r, 250));
+    expect(done()).toBe(true);
+  });
+
+  it('is bounded, and the explicit stop path uses it', () => {
+    expect(SOURCE).toContain('const FIRST_DATA_WAIT_MS = 6000;');
+    const stop = SOURCE.slice(SOURCE.indexOf('async function stopAndBuildRecording()'));
+    const body = stop.slice(0, stop.indexOf('\n}'));
+    expect(body).toContain('await waitForFirstData();');
+    // ...before it stops the recorder.
+    expect(body.indexOf('await waitForFirstData();')).toBeLessThan(body.indexOf('recorder.stop()'));
+  });
+});
+
