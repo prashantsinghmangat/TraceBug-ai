@@ -20225,12 +20225,6 @@ var TraceBugExtensionModule = (() => {
     return _ttPolicy;
   }
   function setInnerHTML(el, html) {
-    try {
-      el.innerHTML = html;
-      reviveInlineStylesForCsp(el);
-      return;
-    } catch (e2) {
-    }
     const policy = getTrustedTypesPolicy();
     if (policy) {
       try {
@@ -20239,6 +20233,12 @@ var TraceBugExtensionModule = (() => {
         return;
       } catch (e2) {
       }
+    }
+    try {
+      el.innerHTML = html;
+      reviveInlineStylesForCsp(el);
+      return;
+    } catch (e2) {
     }
     try {
       el.replaceChildren();
@@ -20940,10 +20940,23 @@ var TraceBugExtensionModule = (() => {
       t2.enabled = !muted;
     });
   }
+  function explainTabModeFallback(reason) {
+    const tail = " \u2014 used the browser's share dialog instead.";
+    switch (reason) {
+      case "permission":
+        return "Tab recording permission was declined" + tail;
+      case "expired":
+        return "Chrome's tab recording link expired before it could be used" + tail;
+      case "not-allowed":
+        return "Chrome doesn't allow recording this page directly" + tail;
+      default:
+        return "Tab recording isn't available here" + tail;
+    }
+  }
   async function startVideoRecording(options) {
     if (_active2) return false;
     if (_startInFlight) return _startInFlight;
-    const hintable = typeof document !== "undefined" && !!document.body;
+    const hintable = typeof document !== "undefined" && !!document.body && !((options == null ? void 0 : options.surfaceMode) === "tab" && isExtensionContext2());
     if (hintable) showPickerHint(options == null ? void 0 : options.surfaceMode);
     _startInFlight = _startVideoRecordingInner(options).finally(() => {
       _startInFlight = null;
@@ -20964,7 +20977,7 @@ var TraceBugExtensionModule = (() => {
         mode: requestedMode,
         surfaceMode,
         withMicrophone: !!(options == null ? void 0 : options.withMicrophone)
-      }).catch((err) => ({ ok: false, error: err && err.message || String(err), tabModeFallback: void 0 }));
+      }).catch((err) => ({ ok: false, error: err && err.message || String(err), tabModeFallback: void 0, tabModeReason: void 0 }));
       if (!result2 || !result2.ok) {
         if ((result2 == null ? void 0 : result2.error) === "cancelled") _onStatus == null ? void 0 : _onStatus("stopped", "cancelled");
         else if ((result2 == null ? void 0 : result2.error) === "system-permission") {
@@ -20973,7 +20986,7 @@ var TraceBugExtensionModule = (() => {
         return false;
       }
       if (surfaceMode === "tab" && result2.tabModeFallback) {
-        _onStatus == null ? void 0 : _onStatus("warning", "Tab recording wasn't available \u2014 using the browser's share picker instead.");
+        _onStatus == null ? void 0 : _onStatus("warning", explainTabModeFallback(result2.tabModeReason));
       }
       _active2 = true;
       _startedAt = Date.now();
@@ -40548,6 +40561,7 @@ ${summary}`;
       } catch (e2) {
       }
       let blockedMessage = null;
+      let warningMessage = null;
       const ok = await startVideoRecording({
         mode: (_a2 = options == null ? void 0 : options.mode) != null ? _a2 : "rolling",
         surfaceMode: options == null ? void 0 : options.surfaceMode,
@@ -40561,6 +40575,7 @@ ${summary}`;
         onStatus: (status, message) => {
           var _a3;
           if (status === "blocked" && message) blockedMessage = message;
+          if (status === "warning" && message) warningMessage = message;
           (_a3 = options == null ? void 0 : options.onStatus) == null ? void 0 : _a3.call(options, status, message);
         }
       });
@@ -40581,6 +40596,7 @@ ${summary}`;
             });
           }
         });
+        if (warningMessage && !(options == null ? void 0 : options.onStatus)) showToast(warningMessage, root2);
       }
       return true;
     }

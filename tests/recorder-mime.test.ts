@@ -65,7 +65,9 @@ describe('a stop can no longer hang when MediaRecorder never fires `stop`', () =
     let stopCalls = 0;
     // A recorder that behaves like Firefox's stalled one: stop() is accepted
     // but `stop` is never dispatched.
-    runInContext('_startedAt = Date.now(); _recorder = undefined;', ctx);
+    // Data already written, so the early-stop wait (waitForFirstData, polled
+    // with setTimeout — collected, not run, here) passes straight through.
+    runInContext('_startedAt = Date.now(); _recorder = undefined; _chunksBytes = 5000;', ctx);
     (ctx as Record<string, unknown>).__fakeRecorder = {
       state: 'recording',
       onstop: null,

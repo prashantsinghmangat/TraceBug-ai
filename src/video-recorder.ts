@@ -312,6 +312,21 @@ export function setMicrophoneMuted(muted: boolean): void {
 
 // ── Public mutators — dispatch to the right transport ────────────────────
 
+/**
+ * The sentence shown when an extension Tab-mode recording fell back to the
+ * browser's share picker. `reason` comes from background.js
+ * (resolveTabCaptureStreamId) or offscreen.js ("expired").
+ */
+export function explainTabModeFallback(reason?: string): string {
+  const tail = " — used the browser's share dialog instead.";
+  switch (reason) {
+    case "permission": return "Tab recording permission was declined" + tail;
+    case "expired": return "Chrome's tab recording link expired before it could be used" + tail;
+    case "not-allowed": return "Chrome doesn't allow recording this page directly" + tail;
+    default: return "Tab recording isn't available here" + tail;
+  }
+}
+
 // Coalesces concurrent startVideoRecording() calls (e.g., the SDK listener
 // firing twice for some reason, or the popup dispatching the action while
 // a previous start is still mid-flight awaiting getDisplayMedia). Without
@@ -335,7 +350,10 @@ export async function startVideoRecording(options?: {
   // SDK — funnels through this function. Cleared in the finally, which covers
   // started, cancelled and failed alike. Guarded for non-DOM callers (tests,
   // SSR): this module is otherwise DOM-agnostic at import time.
-  const hintable = typeof document !== "undefined" && !!document.body;
+  // Extension Tab mode opens no dialog at all, so there is nothing to explain;
+  // if it falls back to the picker, the reason is shown once recording starts.
+  const hintable = typeof document !== "undefined" && !!document.body &&
+    !(options?.surfaceMode === "tab" && isExtensionContext());
   if (hintable) showPickerHint(options?.surfaceMode);
   _startInFlight = _startVideoRecordingInner(options).finally(() => {
     _startInFlight = null;
@@ -364,11 +382,11 @@ async function _startVideoRecordingInner(options?: {
   }
 
   if (isExtensionContext()) {
-    const result = await rpcCall<{ ok: boolean; error?: string; tabModeFallback?: boolean }>("tb:rec:start", {
+    const result = await rpcCall<{ ok: boolean; error?: string; tabModeFallback?: boolean; tabModeReason?: string }>("tb:rec:start", {
       mode: requestedMode,
       surfaceMode,
       withMicrophone: !!options?.withMicrophone,
-    }).catch((err) => ({ ok: false, error: (err && err.message) || String(err), tabModeFallback: undefined }));
+    }).catch((err) => ({ ok: false, error: (err && err.message) || String(err), tabModeFallback: undefined, tabModeReason: undefined }));
 
     if (!result || !result.ok) {
       if (result?.error === "cancelled") _onStatus?.("stopped", "cancelled");
@@ -382,13 +400,10 @@ async function _startVideoRecordingInner(options?: {
       return false;
     }
 
-    // background.js silently swapped "tab" for "desktop" because Tab mode
-    // wasn't actually usable this time (no tabCapture API, or the permission
-    // wasn't visible yet) — the user picked Tab and is about to see the
-    // native share-picker they specifically chose Tab to avoid, with no clue
-    // why, unless this says so.
+    // Tab mode wasn't usable this time and the recording fell back to the
+    // share picker — the one the user chose Tab to avoid. Say why.
     if (surfaceMode === "tab" && result.tabModeFallback) {
-      _onStatus?.("warning", "Tab recording wasn't available — using the browser's share picker instead.");
+      _onStatus?.("warning", explainTabModeFallback(result.tabModeReason));
     }
 
     _active = true;

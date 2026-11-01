@@ -226,48 +226,50 @@ Serve a local page that loads `website/public/tracebug-sdk.js` and calls
 capture; `Alt+B` shows the same sentence on the page. Exactly one TraceBug toolbar is ever visible.
 `e2e/ext-sdk-isolation.e2e.mjs` covers the logic; this row is the rendered sentence.
 
-### 11. Tab mode's permission prompt (1.11.3)
+### 11. Tab mode records with no prompt and no share picker (1.11.5)
 
-`chrome.permissions.request({ permissions: ["tabCapture"] })` has to be the first synchronous
-statement in a click handler or Chrome silently resolves `false` with no dialog at all — this is the
-kind of thing a real click can falsify that no RPC-driven e2e can. Load this build unpacked, fresh
-profile.
+`tabCapture` is a required permission now (Chrome issues a tab stream id only for a tab the
+extension was opened on while it already held it — measured, see
+`docs/audit/recording-architecture-proposal.md`). No e2e can cover this: headless Chromium can't
+click the toolbar icon. Load this build unpacked, fresh profile.
 
-1. Open the popup → **Record options** → turn on **Record video too** → click **Tab**.
+1. Install. **Pass:** the install/permissions screen lists "Read and change all your data on all
+   websites" (that is `tabCapture`); no prompt appears later.
+2. Open any site, click the TraceBug icon → **Events + Video** (Tab is selected, help text "Records
+   this tab — no share dialog") → **Capture Bug**. **Pass:** no "Choose what to share" dialog and no
+   "Sharing this tab" bar; the countdown/HUD appears and the ticket gets a video with the tab's sound.
+3. Navigate the same tab to a different site, start from the on-page toolbar without clicking the
+   icon. **Expected:** the share dialog, with the toast "Chrome doesn't allow recording this page
+   directly — used the browser's share dialog instead." Clicking the icon first fixes it.
 
-**Pass:** Chrome's permission bubble appears near the toolbar icon (not a full-page dialog), reading
-*"Read and change all your data on all websites"* — **not** a browsing-history warning; if the wording
-differs from the copy in `docs/chrome-extension.md`, that doc is now wrong and needs the real wording
-pasted in, since it was paraphrased from Chrome's documented permission list rather than seen live.
-Accept it. **Pass:** the **Tab** button shows pressed/selected state, the popup closes normally on
-**Capture Bug**, and no "Choose what to share" picker opens before the HUD appears.
+### 12. Desktop still uses the share picker (1.11.5)
 
-### 12. Declining the Tab-mode prompt falls back to Desktop (1.11.3)
+1. Popup → **Desktop** → **Capture Bug**. **Pass:** Chrome's "Choose what to share" dialog opens
+   with Chrome Tab / Window / Entire Screen; the recording completes and lands in the ticket.
 
-Fresh profile (tabCapture not yet granted).
+### 12b. Tab is the default only for users on the default (1.11.5)
 
-1. Popup → Record options → **Record video too** → **Tab** → in Chrome's permission bubble, click
-   **Block**/deny (or dismiss it).
+1. Profile where 1.11.4 had **Desktop** stored with no `surfaceSetBy` (anyone who never touched the
+   switch). **Pass:** after the update the popup shows **Tab**.
+2. Click **Desktop**, close, reopen. **Pass:** still **Desktop** (`surfaceSetBy: "user"` in
+   `tb_record_opts`). Reload the extension (an update): still Desktop.
+3. Known trade-off: a 1.11.3/1.11.4 user who explicitly clicked Desktop has no flag either and moves to
+   Tab once; clicking Desktop again keeps it for good.
 
-**Pass:** the help text under the switch says the permission was declined and it's falling back to
-Desktop; clicking **Capture Bug** opens the normal "Choose what to share" picker, and the recording
-still completes and lands in the ticket. The popup does **not** silently stay on "Tab" as if nothing
-happened.
+### 13. Existing users after the update: Chrome asks them to re-approve (1.11.5)
 
-### 13. Existing 1.11.2 users are not disabled by the 1.11.3 update (1.11.3)
+`tabCapture` moved from `optional_permissions` to `permissions`, which is a permission increase:
+Chrome disables the extension on update until the user approves it. Expected and accepted (user
+decision, 2026-11-01). Needs a real update, not a fresh install.
 
-`tabCapture` was added to `optional_permissions`, not `permissions` — Chrome's "this extension has new
-permissions and has been disabled" re-approval flow applies only to the required
-`permissions`/`host_permissions` arrays, so an optional addition should update silently. This needs a
-real update, not a fresh install, to actually exercise that code path.
+1. Install the **previous** released build (1.11.4) unpacked, set Desktop and a 3s delay, save a
+   ticket.
+2. Load this build over the same profile.
 
-1. Install the **previous** released build (1.11.2) unpacked, confirm it works (toolbar icon active,
-   not greyed).
-2. Load this build over the same profile (Reload on the unpacked extension — not a new profile).
-
-**Pass:** the extension is **not** disabled and shows no "review these changes" interstitial;
-`chrome://extensions` still shows it enabled immediately after the reload, with no click required to
-re-enable it.
+**Pass:** Chrome shows the "needs new permissions" prompt naming "Read and change all your data on
+all websites"; after approving, the extension works, the 3s delay is kept, and the saved ticket is
+still there. The surface shows **Tab** — 1.11.4 saved Desktop with no `surfaceSetBy`, which reads as
+the old default (row 12b).
 
 ### 14. macOS: Tab mode and the system Screen Recording permission
 
@@ -279,16 +281,15 @@ macOS Screen Recording permission at all (only Desktop mode does) — if it turn
 needs it, `offscreen.js`'s `isSystemPermissionDenial()` error branch needs a Tab-mode path, since today
 it is only reachable from the `getDisplayMedia` catch block.
 
-### 15. Firefox: "Tab" falls back to the picker, with no user-agent branching (1.11.3)
+### 15. Firefox: Desktop only, with no user-agent branching (1.11.5)
 
 `npm run ext:firefox` (not a gate — stays running until you close the browser).
 
-1. Popup → Record options → **Record video too**.
+1. Popup → **Events + Video**.
 
-**Pass:** the **Tab** button is disabled (greyed, with a tooltip explaining Firefox has no equivalent
-API) rather than silently doing nothing or erroring — `chrome.tabCapture` feature-detection, not a
-browser-name check. **Desktop** still works exactly as it did before 1.11.3 (Firefox's window-host
-recorder, `offscreen.js`'s `IS_WINDOW_HOST` branch).
+**Pass:** there is no Tab | Desktop switch at all. The row is hidden because the Firefox build declares
+no `tabCapture` (`TAB_CAPTURE_DECLARED` reads the manifest, not the browser name). **Capture Bug** works
+exactly as before: Firefox's window-host recorder, `offscreen.js`'s `IS_WINDOW_HOST` branch.
 
 ### 16. Microphone: grant, choose, unplug, block (1.11.3)
 

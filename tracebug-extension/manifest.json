@@ -12,12 +12,10 @@
     "unlimitedStorage",
     "scripting",
     "alarms",
-    "offscreen"
-  ],
-  "minimum_chrome_version": "116",
-  "optional_permissions": [
+    "offscreen",
     "tabCapture"
   ],
+  "minimum_chrome_version": "116",
   "commands": {
     "tb-quick-capture": {
       "suggested_key": {

@@ -1,6 +1,6 @@
 # Launch state — read this, not the archives
 
-Engineering state only, verified against code and git. Last updated 2026-10-31. Calendar, channels and
+Engineering state only, verified against code and git. Last updated 2026-11-01. Calendar, channels and
 the 32-item audit tracker are OUTSIDE the repo: `docs-internal/GROWTH-PLAN-30DAY.md` (gitignored; a
 scheduling doc, not a spec — may be stale). History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`.
 Open phases: `PLAN.md` 8, 11, 12.
@@ -39,6 +39,48 @@ Open phases: `PLAN.md` 8, 11, 12.
     `tracebug-extension/tracebug-sdk.js` no longer exists.
   - Deferred by the user: lazy-loading the 269 KB rrweb replay runtime in the extension (audit #3),
     root `npm audit fix` (audit #4).
+
+- **Recording Tab/Desktop work on `develop`, uncommitted (2026-11-01)** — see
+  `docs/audit/recording-architecture-proposal.md`; user decisions in PROGRESS 2026-11-01.
+  - **`tabCapture` is a REQUIRED Chrome permission now** (user decision after the evidence below;
+    `build-ext.mjs` adds it with `offscreen`; `manifest.json`; Firefox build has none). Existing Chrome
+    users get Chrome's re-approval prompt on the update (RELEASE_CHECKLIST row 13). The optional-grant
+    machinery is gone: popup request-on-Start, the parked start in `chrome.storage.session`, the
+    `permissions.onAdded` Tab listener, the Options "Record current tab" card, the worker's
+    namespace-binding retry (STATE's old "Tab-mode retry is unproven" item is moot).
+  - **Why (measured in real Chromium with scratch probes, not in the repo):** `getMediaStreamId` needs
+    the extension invoked on the tab (`<all_urls>` doesn't substitute); invoked → works, incl. after
+    same-origin navigation; cross-origin navigation → refused until invoked again. A tab invoked
+    BEFORE an optional grant stays refused after it (even re-invoked or reloaded) — so the optional
+    flow could never record the tab it was granted on. A runtime grant binds `chrome.<ns>` in a
+    running worker instantly. **Jam 5.96.0 and BetterBugs 1.1.10** (manifests read from their CWS
+    packages) declare `tabCapture` + `<all_urls>` required and capture the same way TraceBug does.
+  - Tab is the Chrome default for users on the default (`surfaceSetBy` in `tb_record_opts`;
+    `resolveSurface` in `popup.js`); Firefox hides the switch. A fallback to the share dialog names its
+    reason (`permission` / `not-allowed` / `expired` / `unavailable`; `explainTabModeFallback`); an
+    expired stream id falls back instead of failing. No picker hint in extension Tab mode.
+  - **`setInnerHTML` tries the Trusted Types policy first** (`src/ui/helpers.ts`): on youtube.com the
+    raw-first order logged one violation per call in chrome://extensions Errors though the UI rendered.
+  - **`ext-video-recording-tab` used to prove nothing** (it read the content script's instant ack and
+    the fake-UI flag auto-accepted the picker). Scenario 1 now asserts the real fallback reason; the
+    no-picker path is manual (row 11) — headless can't click the toolbar icon.
+  - **Gates:** `check.mjs --full` green: 979 tests / 64 files, `ext:lint` 0 errors / 12 warnings
+    (baseline 14 → 12 across these changes), versions 1.11.4. e2e: tab 8/8, trusted-types 9/9,
+    style-nonce 7/7 (desktop 8/8 and shipping-path 16/16 earlier in the day, before the permission move).
+  - **Mic narration was dropped in Tab mode — fixed** (`offscreen.js`): MediaRecorder records only the
+    FIRST audio track; Tab mode had tab audio first, mic second (Desktop + "Share tab audio" + mic too).
+    Measured: tab track disabled + live mic → silent file. Now >1 audio source is mixed into one track
+    (`_mixAudioCtx`); probes: mic survives with the tab track disabled, tab audio survives a muted mic,
+    mic-off path unchanged. `check.mjs --full` 982/64; e2e desktop 8/8, tab 8/8.
+  - **Empty short recordings — fixed** (`offscreen.js` `waitForFirstData`): MediaRecorder writes nothing
+    for the first ~2–3 s (Chromium 149: first data ~3.1 s; VP8 or VP9, static or animated page), so a
+    Stop before then saved 0 bytes — the cause of `ext-shipping-path`'s intermittent "video rode along"
+    failure too. An explicit stop now keeps recording until ≥1 KB is written (≤6 s), then stops; if the
+    recorder ends during the wait it keeps what it has. A/B at a 1 s stop: 0 bytes → ~70 KB, audible.
+    Trade-off: a Stop in the first ~3 s takes that long to finish.
+  - **Owed by hand:** RELEASE_CHECKLIST rows 11–13, 12b, 15; Firefox not looked at. Step 2 (Tab from
+    the on-page toolbar) not started — the measured rule above answers its question (works on a tab
+    TraceBug was opened on, until a cross-origin navigation).
 
 ## What 1.11.x added (pointers — details live in PROGRESS and the audit docs)
 

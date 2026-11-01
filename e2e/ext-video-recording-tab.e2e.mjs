@@ -6,17 +6,17 @@
 // ext-video-recording.e2e.mjs, which covers the existing getDisplayMedia
 // "Desktop" path; this file is the same shape for the new path.
 //
-// Granting the optional `tabCapture` permission needs a real
-// chrome.permissions.request() click — a native dialog Playwright cannot
-// click, the same limitation ext-host-access.mjs already documents for
-// `<all_urls>`. withGrantedTabCapture() works around it the same way: a copy
-// of the build with `tabCapture` moved into required `permissions`, which is
-// exactly the state a user is in after accepting the popup's prompt once.
+// `tabCapture` is a required permission now, so the build already holds it;
+// withGrantedTabCapture() also grants `<all_urls>` for injection. What no
+// headless run can do is click the toolbar icon, which Chrome requires before
+// it issues a tab stream id — see scenario 1.
 //
 // Scenarios:
-//   1. start (surfaceMode: "tab") → stop: no picker needed, a real stream
-//      comes back, a real recording lands in chrome.storage.local and the
-//      ticket modal.
+//   1. start (surfaceMode: "tab") → stop. Headless Playwright can't click the
+//      toolbar icon, and Chrome only issues a tab stream id after one, so this
+//      covers the FALLBACK: the reason is shown and a real recording still
+//      lands in chrome.storage.local and the ticket modal. The no-picker path
+//      itself is a manual check (RELEASE_CHECKLIST row 11).
 //   2. same-origin navigation mid-recording: the tab-bound stream must
 //      survive it (unlike a cross-origin navigation, which ADR 008 already
 //      ends the capture on) — assert the recording is still active and the
@@ -100,7 +100,7 @@ async function readModalVideo(page) {
   });
 }
 
-// ── Scenario 1: Tab mode start → stop, no picker ────────────────────────────
+// ── Scenario 1: Tab mode start → stop (fallback path; see the note inside) ──
 try {
   const ctx = await newContext("tab-plain");
   try {
@@ -113,8 +113,19 @@ try {
     const tabId = await inject(sw, `http://localhost:${PORT}/*`);
     await sleep(400);
     const started = await startTabRecording(sw, tabId);
-    check("[tab] recording started with no picker", started?.ok === true, JSON.stringify(started));
-    check("[tab] did not fall back to the Desktop picker", started?.tabModeFallback !== true, JSON.stringify(started));
+    check("[tab] the start message reached the page", started?.ok === true, JSON.stringify(started));
+    // `started` is the content script's immediate ack — it never carries the
+    // recorder's result, which is how this suite used to "prove" no fallback
+    // while recording through the picker. Read what the user is told instead.
+    // Headless Playwright cannot click the toolbar icon, so Chrome refuses the
+    // tab ("not invoked") and TraceBug must say so and record via the picker
+    // (auto-accepted by --use-fake-ui-for-media-stream). The no-picker path
+    // needs a real icon click: RELEASE_CHECKLIST row 11.
+    const fallbackToast = await page.waitForFunction(
+      () => [...document.querySelectorAll(".bt-toast")].some((t) => /doesn't allow recording this page directly/.test(t.textContent || "")),
+      null, { timeout: 8000, polling: 100 },
+    ).then(() => true, () => false);
+    check("[tab] with no icon click, the fallback to the share dialog names its reason", fallbackToast);
     await sleep(2500);
 
     await page.click('#tracebug-recording-hud [data-tb-hud="stop"]').catch(() => {});
@@ -148,7 +159,7 @@ try {
     let tabId = await inject(sw, `http://localhost:${PORT}/*`);
     await sleep(400);
     const started = await startTabRecording(sw, tabId);
-    check("[nav] recording started with no picker", started?.ok === true, JSON.stringify(started));
+    check("[nav] the start message reached the page", started?.ok === true, JSON.stringify(started));
     await sleep(1500);
 
     await page.goto(`http://localhost:${PORT}/b`, { waitUntil: "load" });
@@ -159,7 +170,7 @@ try {
       try { return (await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] })).length; }
       catch { return -1; }
     });
-    check("[nav] the tab-bound stream survived a same-origin navigation — offscreen still active", offscreenCount === 1, String(offscreenCount));
+    check("[nav] the recording survived a same-origin navigation — offscreen still active", offscreenCount === 1, String(offscreenCount));
 
     const hudAfterNav = await page.evaluate(() => !!document.getElementById("tracebug-recording-hud"));
     check("[nav] the HUD re-mounted on the navigated-to page", hudAfterNav);
