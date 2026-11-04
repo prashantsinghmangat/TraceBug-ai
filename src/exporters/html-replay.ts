@@ -85,7 +85,7 @@ async function buildReplayPayload(
   const includeVideo = options?.includeVideo ?? (hasRrweb ? false : !!report.video);
 
   // Build a timeline that mirrors the live scrubber's marker logic.
-  const timeline = buildTimeline(report.session.events).map(t => ({
+  const timeline = buildTimeline(report.session.events, { baseUrl: report.environment?.url }).map(t => ({
     timestamp: t.timestamp,
     type: t.type,
     description: t.description,

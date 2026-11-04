@@ -63,6 +63,15 @@ describe('generatePlaywrightTest', () => {
     expect(spec.match(/#qty'\)\.fill/g)!.length).toBe(1);
   });
 
+  it('fills a slowly typed field once, with the final value', () => {
+    const spec = generatePlaywrightTest(report([
+      ...['SA', 'SAVE', 'SAVE20'].map((v, i) => ev('input', { element: { name: 'coupon', type: 'text', value: v, selector: '#coupon' } }, i + 1)),
+      ev('click', { element: { id: 'applyBtn' } }, 10),
+    ]))!;
+    expect(spec.match(/#coupon'\)\.fill/g)).toHaveLength(1);
+    expect(spec).toContain("page.locator('#coupon').fill('SAVE20')");
+  });
+
   it('dedupes consecutive identical clicks (rage clicks)', () => {
     const spec = generatePlaywrightTest(report([
       ev('click', { element: { id: 'save' } }, 1),

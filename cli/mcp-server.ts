@@ -16,6 +16,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { resolveStackWithMaps, type ResolvedFrame } from "./source-map";
+import { agentWorkflowSteps, numberedSteps } from "../src/exporters/agent-workflow";
 
 // ── Payload shape (mirrors BundlePayload in src/exporters/html-template.ts) ──
 
@@ -264,6 +265,17 @@ export function buildInvestigationGuide(p: ReportPayload): string[] {
     if (step) steps.push(step);
   }
 
+  // Nothing failed: say so first, so the agent doesn't hunt for a cause the
+  // capture never saw. (A playground run: the agent spent its turn proving a
+  // fixed app had no bug.) No error is not proof of no bug — a wrong total
+  // throws nothing — so the description is where "expected" lives.
+  const noFailure = consoleErrors === 0 && netFailures === 0;
+  if (noFailure) {
+    steps.push(
+      "[HIGH] No errors or failed requests were captured, so the evidence alone does not name a bug. Read the reporter's description (in get_bug_report) for what they expected versus what happened. If it doesn't say, ask the user what looked wrong before proposing changes, and don't present a guess as a root cause."
+    );
+  }
+
   steps.push(
     frustration > 0
       ? `[HIGH] get_repro_steps — includes ${frustration} frustration signal${frustration === 1 ? "" : "s"} (rage/dead clicks) marking where the user got stuck, plus the action-to-error timeline.`
@@ -284,7 +296,9 @@ export function buildInvestigationGuide(p: ReportPayload): string[] {
 
   if (p.playwrightTest) {
     steps.push(
-      "[HIGH] get_playwright_test — this report includes a generated Playwright spec that REPLAYS the session and asserts the captured failure is gone. Save it, run it to reproduce (red), then use it to verify your fix (green)."
+      noFailure
+        ? "[LOW] get_playwright_test — a generated spec replays the session, but with no captured failure it only checks that the flow runs without page errors; it won't fail on a silent bug such as a wrong value."
+        : "[HIGH] get_playwright_test — this report includes a generated Playwright spec that REPLAYS the session and asserts the captured failure is gone. Save it, run it to reproduce (red), then use it to verify your fix (green)."
     );
   }
   if ((p.elementAnnotations ?? []).length > 0) {
@@ -334,6 +348,9 @@ export function toolListBugReports(baseDir: string, args: { dir?: string }) {
       },
     };
   });
+  // Newest first: "debug the latest report" (and the debug prompt's default)
+  // means reports[0]; scan order is filesystem order, which says nothing.
+  reports.sort((a, b) => (Date.parse(b.generatedAt) || 0) - (Date.parse(a.generatedAt) || 0));
   return {
     count: reports.length,
     scannedDir: args.dir ? scanDir : (AUTO_DISCOVER ? knownReportDirs(baseDir).join(", ") : baseDir),
@@ -453,9 +470,13 @@ export function toolGetScreenshot(baseDir: string, args: { file: string; index?:
 export function toolGetPlaywrightTest(baseDir: string, args: { file: string }) {
   const { payload: p, resolved } = requireReport(baseDir, args.file);
   if (!p.playwrightTest) {
+    // Two causes, and the payload can't tell them apart: the generator
+    // returns null when the session has nothing to replay, which used to be
+    // blamed on an old export.
     throw new Error(
-      "This report was exported before TraceBug 1.9 and has no generated test. " +
-        "Re-export the session from the TraceBug widget (Export .html) to include one."
+      "This report has no generated Playwright test. Either the session had no clicks, typing or " +
+        "navigation to replay (for example a screenshot-only capture), or it was exported before " +
+        "TraceBug 1.9. Use get_repro_steps to reproduce it by hand."
     );
   }
   const filename = p.playwrightTestFilename || "tracebug-bug.spec.ts";
@@ -464,10 +485,12 @@ export function toolGetPlaywrightTest(baseDir: string, args: { file: string }) {
     spec: p.playwrightTest,
     sourceReport: path.basename(resolved),
     howToUse: [
-      `1. Save the spec as tests/${filename} (or your e2e folder).`,
-      "2. Set BASE_URL to your running dev server if it differs from the captured origin.",
-      `3. Run: npx playwright test ${filename} — the test FAILS while the bug exists.`,
-      "4. Fix the bug, re-run — green means the captured failure is gone.",
+      "1. If the project has no Playwright yet: npm i -D @playwright/test && npx playwright install chromium",
+      `2. Save the spec as tests/${filename} (or the project's e2e folder).`,
+      "3. Start the app's dev server, and set BASE_URL to it (e.g. BASE_URL=http://localhost:3000). " +
+        "Without BASE_URL the spec runs against the origin the bug was captured on, which may be staging rather than your local fix.",
+      `4. Run: npx playwright test ${filename} — it FAILS while the bug exists (red).`,
+      "5. Fix the bug and re-run — green means the captured failure is gone.",
     ],
   };
 }
@@ -696,12 +719,10 @@ export function buildDebugPrompt(file?: string): string {
       ? `This is a TraceBug bug report: ${target}`
       : "Debug the most recent TraceBug bug report.",
     "",
-    target
-      ? `1. Call get_bug_report("${target}") to load the report overview and its investigation guide.`
-      : "1. Call list_bug_reports to find the reports, then get_bug_report on the most recent one to load its overview and investigation guide.",
-    "2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).",
-    "3. Cross-reference the findings with this codebase — search for the failing endpoint path, stack-trace symbols, or the UI text near the error — to identify the root cause.",
-    "4. Propose a concrete fix, citing the files and lines involved, and note edge cases worth testing once it lands.",
+    // Shared with the extension's hand-off card and the exported file's AI tab.
+    numberedSteps(agentWorkflowSteps(target || undefined)),
+    "",
+    "To find the code, search for the failing endpoint path, stack-trace symbols, or the UI text near the error.",
   ].join("\n");
 }
 

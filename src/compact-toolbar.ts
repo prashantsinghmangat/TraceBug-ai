@@ -651,7 +651,7 @@ async function _toggleRecording(
 function _showRecordPreflight(
   root: HTMLElement,
   anchor: HTMLElement,
-): Promise<{ surface: "tab" | "desktop"; withMicrophone: boolean } | null> {
+): Promise<{ surface: "tab" | "desktop" | "auto"; withMicrophone: boolean } | null> {
   return new Promise((resolve) => {
     const prior = root.querySelector('[data-tracebug="record-preflight"]');
     if (prior) prior.remove();
@@ -688,10 +688,9 @@ function _showRecordPreflight(
     //
     // In the npm SDK the caller is the user's own tab, so `preferCurrentTab`
     // works and "This tab" collapses the picker to a one-click confirm. In the
-    // EXTENSION the recorder runs in an offscreen document, which has no tab to
-    // prefer, so both buttons produced the identical picker - a control that
-    // changes nothing, which is what the popup's copy of it was removed for.
-    // See the note in tracebug-extension/offscreen.js.
+    // EXTENSION the choice already lives in the popup's Record options (Tab
+    // mode via chrome.tabCapture, no picker), so the toolbar asks for "auto"
+    // and background.js applies that stored choice — no second control.
     const showSurfaceChoice = !isExtensionMode();
     setInnerHTML(pop, `
       <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
@@ -724,9 +723,8 @@ function _showRecordPreflight(
 
     root.appendChild(pop);
 
-    // "desktop" when there is no choice: it is the only honest value, since the
-    // extension always gets the full picker.
-    let surface: "tab" | "desktop" = showSurfaceChoice ? "tab" : "desktop";
+    // "auto" in the extension: follow the popup's Tab/Desktop choice.
+    let surface: "tab" | "desktop" | "auto" = showSurfaceChoice ? "tab" : "auto";
     const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]') as HTMLButtonElement | null;
     const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]') as HTMLButtonElement | null;
     const micEl = pop.querySelector('[data-tb-pre="mic"]') as HTMLInputElement;
@@ -745,7 +743,7 @@ function _showRecordPreflight(
     }
 
     let settled = false;
-    const finish = (value: { surface: "tab" | "desktop"; withMicrophone: boolean } | null) => {
+    const finish = (value: { surface: "tab" | "desktop" | "auto"; withMicrophone: boolean } | null) => {
       if (settled) return;
       settled = true;
       pop.remove();

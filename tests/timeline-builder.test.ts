@@ -15,6 +15,30 @@ function ev(type: TraceBugEvent['type'], data: Record<string, any>, timestamp: n
 }
 
 describe('buildTimeline', () => {
+  it('shows a fetch once, not again as a method-less Resource Timing row', () => {
+    // Playground run: "POST /api/orders → 201" then " /api/orders → 201".
+    const t = 1_700_000_000_000;
+    const events = [
+      ev('click', { element: { text: 'Place order', tag: 'button' } }, t),
+      ev('api_request', { request: { method: 'POST', url: '/api/orders', statusCode: 201, durationMs: 11 } }, t + 11),
+      ev('api_request', { request: { url: 'http://localhost:4321/api/orders', statusCode: 201, durationMs: 8,
+        source: 'resource-timing', initiatorType: 'fetch', startedAt: t + 1 } }, t + 15),
+    ];
+    const rows = buildTimeline(events, { baseUrl: 'http://localhost:4321/' }).filter((r) => r.type === 'api_request');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].description).toContain('POST');
+  });
+
+  it('keeps two real requests to the same URL', () => {
+    const t = 1_700_000_000_000;
+    const events = [
+      ev('api_request', { request: { method: 'GET', url: '/api/cart', statusCode: 200, durationMs: 5 } }, t + 5),
+      ev('click', { element: { text: 'Refresh', tag: 'button' } }, t + 4000),
+      ev('api_request', { request: { method: 'GET', url: '/api/cart', statusCode: 200, durationMs: 5 } }, t + 5000),
+    ];
+    expect(buildTimeline(events, { baseUrl: 'http://localhost:4321/' }).filter((r) => r.type === 'api_request')).toHaveLength(2);
+  });
+
   it('returns an empty array for empty events', () => {
     expect(buildTimeline([])).toEqual([]);
   });

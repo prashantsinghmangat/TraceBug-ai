@@ -2,6 +2,34 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.11.6] - 2026-11-03
+
+> Fewer dead ends between a captured bug and an AI fix. From the minimum-click workflow map (`docs/launch/minimum-click-workflow.md`); no new features.
+
+### Fixed
+
+- **The recommended MCP setup no longer hides your reports.** Every published setup command carried `--dir ./bug-reports`, which turns off the server's search of Downloads and Desktop, so a report just exported from the extension gave `count: 0`. The docs, both READMEs, the website, the exported file's AI tab and the hand-off prompt now use `claude mcp add -s user tracebug -- npx -y tracebug mcp` (`-s user` makes it work in every project; native Windows gets a `cmd /c` note). `--dir` is documented as "limit to one folder".
+- **No more "Restored draft" with the previous bug's title.** The ticket saved its untouched auto-filled title as a draft on close, so the next capture within the hour opened under the old title. Drafts are now saved only when you actually edit, and a successful Export replay or .zip clears them.
+- **The in-page toolbar's Record follows your Tab / Desktop choice.** In the extension it always asked for Desktop, so every toolbar recording opened the share picker even with Tab mode set up. It now uses the popup's stored choice (Desktop on Firefox, which has no tab capture).
+- **The welcome page copies the real setup command.** It offered a bare `npx tracebug mcp`, which only waits on stdin. The Alt+B shortcut is described as what it does (screenshot + ticket), not "start a capture".
+- **Fix with AI uses the ticket as you edited it.** It sent the auto-generated title and ignored your description; it now applies your title, and an edited description is included as "Reporter's description".
+- **The title and summary name the action that caused the bug.** Both used the session's last action, so a coupon crash followed by a click on "Place order" was titled "Place order Fails" and summarized "thrown when clicking Place order". They now use the last action before the first error or failed request, with a neutral title when nothing came before it. Found in the first playground run, where Claude Code had to point out the mismatch.
+- **The root-cause hint for "Cannot read properties of undefined" no longer prescribes optional chaining.** It now says to find out why the value is missing (a config entry, a failed request, a wrong key) and to add a guard only where the value can really be absent. "Add `?.`" is the fix that silences the crash ("SAVE20 applied — NaN% off") instead of fixing it.
+- **A capture where nothing failed says so instead of inventing a cause.** With no error and no failed request, the root-cause hint claimed "Click on 'Place order' did not trigger any observable effect" without checking anything, right after the click had visibly placed an order. It now reads "No errors or failed requests were captured — last action was clicking 'Place order'" and points at the reporter's description. The Fix with AI prompt shows a "No errors captured" section in place of a cause, and the MCP investigation guide tells the agent to read the description or ask what looked wrong, and marks the generated test as low value for such a report. No error is not proof of no bug: a wrong total throws nothing, which is what the description is for.
+- **Slow typing is one step, not five.** A field's value is recorded after each 300 ms pause, so typing a coupon produced `Type "SA"`, `Type "SAV"`, … `Type "SAVE20"` in the repro steps and five `fill()` calls in the generated test. Consecutive typing in the same field (no click, navigation or error in between) now collapses to its final value: `Type "SAVE20" in "coupon"`.
+- **A clean capture's title says so:** `No errors captured: Click "Apply coupon" → …` instead of `Session: …`, with repeated actions shown once.
+- **"Dead click" now means a re-click, not a pause.** A click was flagged dead whenever the next captured event came more than 1.5 s later, so stopping to read a message marked a working button as dead and raised the agent's guide to "[HIGH] … where the user got stuck". It now takes a second click on the same element 1.5–8 s later.
+- **The timeline lists each request once.** The browser's Resource Timing copy of a fetch showed up as a second, method-less row (" /api/orders → 201"); the timeline now drops it the way the Network tab already did.
+- **One workflow in every agent prompt.** The hand-off card, the exported file's AI tab, the MCP `/tracebug:debug_bug_report` prompt and Fix with AI said different things (one "propose a fix", one "implement the fix", only one mentioned the generated test). They now share `src/exporters/agent-workflow.ts`: gather the evidence, find the root cause, explain the fix, ask for approval before editing, add or update a regression test, run it red → green.
+- **`get_playwright_test` explains a missing test correctly** (no replayable actions, or a pre-1.9 export) and its run steps now include installing Playwright, starting the dev server and setting `BASE_URL`, so a spec doesn't silently test the captured staging site.
+
+### Changed
+
+- **The "Open in your AI agent →" link after an export stays until you dismiss it** (it vanished after 8 s, and with it the only way to the setup card).
+- **`list_bug_reports` returns the newest report first**, so "debug the latest report" means the latest.
+- **Setup card:** the Cursor snippet is now valid JSON you can paste, a Windsurf tab is added, and each tab says where its snippet goes.
+- Copy: the popup subtitle names the surface ("Records a window or screen" in Desktop mode); the Tab/Desktop switch no longer flashes Desktop on open; the AI tab no longer claims keys live in `localStorage`; quickstart button names match the UI.
+
 ## [1.11.5] - 2026-11-01
 
 > Tab recording that just starts: no permission prompt, no "Choose what to share" dialog, and your voice in the video. See `docs/audit/recording-architecture-proposal.md`.

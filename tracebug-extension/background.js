@@ -1365,6 +1365,9 @@ async function handleRecordingMessage(message, sender) {
   // only background.js has a real tab to target chrome.tabCapture.getMediaStreamId
   // at; an offscreen document has none. See docs/audit/capture-flow-1.11.3.md.
   const extraData = {};
+  if (message.type === "tb:rec:start" && message.data?.surfaceMode === "auto") {
+    message = { ...message, data: { ...message.data, surfaceMode: await preferredSurfaceMode() } };
+  }
   if (
     message.type === "tb:rec:start" &&
     message.data?.surfaceMode === "tab" &&
@@ -1956,6 +1959,24 @@ function hasHostAccess(pattern) {
  * All are ordinary fallback cases, not errors — the caller falls back to the
  * getDisplayMedia picker and the page says which reason applied.
  */
+/**
+ * The surface a recording started from the in-page toolbar ("auto") should
+ * use: the popup's stored Tab/Desktop choice, by the same rule as popup.js's
+ * resolveSurface — Tab unless the user picked Desktop, and Desktop wherever
+ * the build doesn't declare `tabCapture` (Firefox). Before this, the toolbar
+ * always asked for Desktop, so every toolbar recording opened the share
+ * picker even with Tab mode set up.
+ */
+async function preferredSurfaceMode() {
+  const tabDeclared = (chrome.runtime.getManifest().permissions || []).includes("tabCapture");
+  if (!tabDeclared) return "desktop";
+  let stored = {};
+  try { stored = (await localGet([RECORD_OPTS_KEY], {}))[RECORD_OPTS_KEY] || {}; } catch {}
+  const chosen = stored.surfaceSetBy === "user" || stored.surfaceMode === "tab";
+  if (!chosen) return "tab";
+  return stored.surfaceMode === "tab" ? "tab" : "desktop";
+}
+
 async function resolveTabCaptureStreamId(tabId) {
   const granted = await new Promise((resolve) => {
     try {

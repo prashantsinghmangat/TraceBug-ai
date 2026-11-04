@@ -451,13 +451,30 @@ var TraceBugExtensionModule = (() => {
   });
 
   // src/repro-generator.ts
+  function collapseTyping(events) {
+    const fieldOf = (e2) => {
+      var _a2;
+      const el = (_a2 = e2.data) == null ? void 0 : _a2.element;
+      if (e2.type !== "input" || !el || el.type === "checkbox" || el.type === "radio") return null;
+      return el.selector || el.name || el.id || null;
+    };
+    return events.filter((e2, i2) => {
+      const field = fieldOf(e2);
+      if (!field) return true;
+      for (let j = i2 + 1; j < events.length; j++) {
+        if (!TYPING_BOUNDARY.has(events[j].type)) continue;
+        return fieldOf(events[j]) !== field;
+      }
+      return true;
+    });
+  }
   function generateReproSteps(events, errorMessage, errorStack) {
     var _a2, _b;
     const steps = [];
     let stepNum = 1;
     let lastStepText = "";
     const typed = /* @__PURE__ */ new Map();
-    for (const event of events) {
+    for (const event of collapseTyping(events)) {
       switch (event.type) {
         case "route_change": {
           const to = event.data.to || event.page;
@@ -619,10 +636,21 @@ var TraceBugExtensionModule = (() => {
     }
     return parts.join("\n");
   }
+  var TYPING_BOUNDARY;
   var init_repro_generator = __esm({
     "src/repro-generator.ts"() {
       "use strict";
       init_url_hygiene();
+      TYPING_BOUNDARY = /* @__PURE__ */ new Set([
+        "click",
+        "input",
+        "select_change",
+        "form_submit",
+        "route_change",
+        "error",
+        "unhandled_rejection",
+        "console_error"
+      ]);
     }
   });
 
@@ -20956,8 +20984,8 @@ var TraceBugExtensionModule = (() => {
   async function startVideoRecording(options) {
     if (_active2) return false;
     if (_startInFlight) return _startInFlight;
-    const hintable = typeof document !== "undefined" && !!document.body && !((options == null ? void 0 : options.surfaceMode) === "tab" && isExtensionContext2());
-    if (hintable) showPickerHint(options == null ? void 0 : options.surfaceMode);
+    const hintable = typeof document !== "undefined" && !!document.body && !(((options == null ? void 0 : options.surfaceMode) === "tab" || (options == null ? void 0 : options.surfaceMode) === "auto") && isExtensionContext2());
+    if (hintable) showPickerHint((options == null ? void 0 : options.surfaceMode) === "auto" ? "desktop" : options == null ? void 0 : options.surfaceMode);
     _startInFlight = _startVideoRecordingInner(options).finally(() => {
       _startInFlight = null;
       if (hintable) hidePickerHint();
@@ -20967,7 +20995,7 @@ var TraceBugExtensionModule = (() => {
   async function _startVideoRecordingInner(options) {
     _onStatus = (options == null ? void 0 : options.onStatus) || null;
     const requestedMode = (options == null ? void 0 : options.mode) === "standard" ? "standard" : "rolling";
-    const surfaceMode = (options == null ? void 0 : options.surfaceMode) === "tab" ? "tab" : "desktop";
+    const surfaceMode = (options == null ? void 0 : options.surfaceMode) === "tab" || (options == null ? void 0 : options.surfaceMode) === "auto" ? options.surfaceMode : "desktop";
     if (!isVideoOffered()) {
       _onStatus == null ? void 0 : _onStatus("error", "Screen recording is paused in this version \u2014 capturing console, network and a replay instead.");
       return false;
@@ -20985,7 +21013,7 @@ var TraceBugExtensionModule = (() => {
         } else _onStatus == null ? void 0 : _onStatus("error", (result2 == null ? void 0 : result2.error) || "Could not start screen capture.");
         return false;
       }
-      if (surfaceMode === "tab" && result2.tabModeFallback) {
+      if (surfaceMode !== "desktop" && result2.tabModeFallback) {
         _onStatus == null ? void 0 : _onStatus("warning", explainTabModeFallback(result2.tabModeReason));
       }
       _active2 = true;
@@ -20999,7 +21027,7 @@ var TraceBugExtensionModule = (() => {
       _onStatus == null ? void 0 : _onStatus("recording");
       return true;
     }
-    return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode });
+    return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode: surfaceMode === "auto" ? "desktop" : surfaceMode });
   }
   function stopVideoRecording() {
     if (!_active2) return Promise.resolve(null);
@@ -21917,8 +21945,11 @@ var TraceBugExtensionModule = (() => {
         {
           id: "general-undefined-access",
           pattern: /(cannot read prop|cannot read properties|of undefined|of null)/,
-          hint: "reading a property of undefined/null \u2014 usually missing data, async race, or destructuring a missing return",
-          fix: "add a null-check, use optional chaining (`obj?.prop`), or initialize state with a safe default",
+          hint: "reading a property of undefined/null \u2014 usually a missing config entry or lookup key, a failed or empty response, an async race, or destructuring a missing return",
+          // Find the cause first: "add `?.`" was the old advice, and agents took it —
+          // silencing the crash (e.g. "SAVE20 applied — NaN% off") instead of fixing
+          // the missing value. A guard is right only where the value can truly be absent.
+          fix: "find out why the value is missing (a lookup key absent from a map/config, a request that failed or returned no data) and fix that; add a guard or a clear user-facing message only where the value can legitimately be absent",
           category: "JS undefined access"
         },
         {
@@ -22031,6 +22062,21 @@ var TraceBugExtensionModule = (() => {
   });
 
   // src/title-generator.ts
+  function lastUserActionBefore(events, index2) {
+    const end = index2 >= 0 ? index2 : events.length - 1;
+    for (let i2 = end; i2 >= 0; i2--) {
+      if (USER_ACTION_TYPES.includes(events[i2].type)) return events[i2];
+    }
+    return null;
+  }
+  function firstFailureIndex(events) {
+    return events.findIndex(
+      (e2) => {
+        var _a2, _b, _c;
+        return e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error" || e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0) && !isNoiseRequest((_c = e2.data.request) == null ? void 0 : _c.url);
+      }
+    );
+  }
   function generateBugTitle(session) {
     var _a2;
     const events = session.events;
@@ -22044,7 +22090,7 @@ var TraceBugExtensionModule = (() => {
     }
     const errorMsg = ((_a2 = errorEvents[0].data.error) == null ? void 0 : _a2.message) || session.errorMessage || "Unknown error";
     const errorType = classifyError(errorMsg);
-    const lastAction = userActions.length > 0 ? userActions[userActions.length - 1] : null;
+    const lastAction = lastUserActionBefore(events, events.indexOf(errorEvents[0]));
     const page = errorEvents[0].page || "";
     const context2 = getActionContext(lastAction);
     const pageName = friendlyPage(page);
@@ -22079,16 +22125,19 @@ var TraceBugExtensionModule = (() => {
     );
     if (failedApis.length > 0) {
       const api = failedApis[0].data.request;
-      const lastAction = userActions.length > 0 ? userActions[userActions.length - 1] : null;
+      const lastAction = lastUserActionBefore(allEvents, allEvents.indexOf(failedApis[0]));
       const context2 = getActionContext(lastAction);
       return context2 ? `${context2} \u2014 API ${api == null ? void 0 : api.method} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}` : `API Failure: ${api == null ? void 0 : api.method} ${shortenUrl2(api == null ? void 0 : api.url)} Returns ${(api == null ? void 0 : api.statusCode) || "Network Error"}`;
     }
     if (userActions.length === 0) {
       return screenshots2 && screenshots2.length > 0 ? "Screenshot Capture \u2014 No User Interactions" : "Empty Session \u2014 No User Interactions";
     }
-    const lastActions = userActions.slice(-3);
-    const parts = lastActions.map((a2) => describeAction(a2));
-    return `Session: ${parts.join(" \u2192 ")}`;
+    const parts = [];
+    for (const a2 of collapseTyping(userActions)) {
+      const d = describeAction(a2);
+      if (parts[parts.length - 1] !== d) parts.push(d);
+    }
+    return `No errors captured: ${parts.slice(-3).join(" \u2192 ")}`;
   }
   function getActionContext(event) {
     var _a2, _b, _c, _d, _e, _f;
@@ -22177,27 +22226,121 @@ var TraceBugExtensionModule = (() => {
   function shortenUrl2(url) {
     return shortDisplayPath(url);
   }
+  var USER_ACTION_TYPES;
   var init_title_generator = __esm({
     "src/title-generator.ts"() {
       "use strict";
       init_url_hygiene();
+      init_repro_generator();
+      USER_ACTION_TYPES = ["click", "input", "select_change", "form_submit", "route_change"];
+    }
+  });
+
+  // src/network-dedupe.ts
+  function normalizeUrl(url, base) {
+    if (!url) return "";
+    try {
+      const u2 = new URL(url, base || void 0);
+      u2.hash = "";
+      return u2.href;
+    } catch (e2) {
+      return url;
+    }
+  }
+  function startOf(row) {
+    if (typeof row.startedAt === "number" && row.startedAt > 0) return row.startedAt;
+    return row.timestamp - (row.duration || 0);
+  }
+  function dedupeNetworkRows(rows, opts) {
+    var _a2;
+    if (!Array.isArray(rows) || rows.length < 2) return Array.isArray(rows) ? rows : [];
+    const base = opts == null ? void 0 : opts.baseUrl;
+    const windowMs = (_a2 = opts == null ? void 0 : opts.windowMs) != null ? _a2 : DEDUPE_WINDOW_MS;
+    const isTiming = (r2) => r2.source === "resource-timing";
+    const wrapperStarts = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      if (isTiming(row)) continue;
+      const key = normalizeUrl(row.url, base);
+      const list = wrapperStarts.get(key);
+      const entry = { start: startOf(row), used: false };
+      if (list) list.push(entry);
+      else wrapperStarts.set(key, [entry]);
+    }
+    if (wrapperStarts.size === 0) return rows;
+    return rows.filter((row) => {
+      if (!isTiming(row)) return true;
+      if (row.initiatorType && STATIC_INITIATORS.has(row.initiatorType)) return true;
+      const candidates = wrapperStarts.get(normalizeUrl(row.url, base));
+      if (!candidates) return true;
+      const start = startOf(row);
+      let best = null;
+      let bestDelta = Infinity;
+      for (const c2 of candidates) {
+        if (c2.used) continue;
+        const delta = Math.abs(c2.start - start);
+        if (delta <= windowMs && delta < bestDelta) {
+          best = c2;
+          bestDelta = delta;
+        }
+      }
+      if (!best) return true;
+      best.used = true;
+      return false;
+    });
+  }
+  var STATIC_INITIATORS, DEDUPE_WINDOW_MS;
+  var init_network_dedupe = __esm({
+    "src/network-dedupe.ts"() {
+      "use strict";
+      STATIC_INITIATORS = /* @__PURE__ */ new Set([
+        "img",
+        "image",
+        "css",
+        "link",
+        "script",
+        "font",
+        "media",
+        "video",
+        "audio",
+        "track",
+        "embed",
+        "object"
+      ]);
+      DEDUPE_WINDOW_MS = 50;
     }
   });
 
   // src/timeline-builder.ts
-  function buildTimeline(events) {
-    var _a2, _b, _c;
+  function keptRequests(events, baseUrl) {
+    const rows = events.filter((e2) => e2.type === "api_request").map((e2) => {
+      var _a2, _b, _c, _d, _e;
+      return {
+        ev: e2,
+        url: ((_a2 = e2.data.request) == null ? void 0 : _a2.url) || "",
+        duration: ((_b = e2.data.request) == null ? void 0 : _b.durationMs) || 0,
+        timestamp: e2.timestamp,
+        source: (_c = e2.data.request) == null ? void 0 : _c.source,
+        initiatorType: (_d = e2.data.request) == null ? void 0 : _d.initiatorType,
+        startedAt: (_e = e2.data.request) == null ? void 0 : _e.startedAt
+      };
+    });
+    return new Set(dedupeNetworkRows(rows, { baseUrl }).map((r2) => r2.ev));
+  }
+  function buildTimeline(events, opts) {
+    var _a2, _b, _c, _d;
     if (events.length === 0) return [];
     const ordered = [...events].sort((a2, b) => a2.timestamp - b.timestamp);
+    const requests = keptRequests(ordered, (_a2 = opts == null ? void 0 : opts.baseUrl) != null ? _a2 : typeof location !== "undefined" ? location.href : void 0);
     const startTs = ordered[0].timestamp;
     const timeline = [];
     let lastDescription = "";
     for (const ev of ordered) {
       const elapsed = formatElapsed(ev.timestamp - startTs);
       const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-      const isApiError = ev.type === "api_request" && (((_a2 = ev.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = ev.data.request) == null ? void 0 : _b.statusCode) === 0);
+      const isApiError = ev.type === "api_request" && (((_b = ev.data.request) == null ? void 0 : _b.statusCode) >= 400 || ((_c = ev.data.request) == null ? void 0 : _c.statusCode) === 0);
       if (ev.type === "api_request") {
-        const reqUrl = (_c = ev.data.request) == null ? void 0 : _c.url;
+        if (!requests.has(ev)) continue;
+        const reqUrl = (_d = ev.data.request) == null ? void 0 : _d.url;
         if (isNoiseRequest(reqUrl)) continue;
         if (!isApiError && isStaticResource(reqUrl)) continue;
       }
@@ -22303,80 +22446,7 @@ var TraceBugExtensionModule = (() => {
     "src/timeline-builder.ts"() {
       "use strict";
       init_url_hygiene();
-    }
-  });
-
-  // src/network-dedupe.ts
-  function normalizeUrl(url, base) {
-    if (!url) return "";
-    try {
-      const u2 = new URL(url, base || void 0);
-      u2.hash = "";
-      return u2.href;
-    } catch (e2) {
-      return url;
-    }
-  }
-  function startOf(row) {
-    if (typeof row.startedAt === "number" && row.startedAt > 0) return row.startedAt;
-    return row.timestamp - (row.duration || 0);
-  }
-  function dedupeNetworkRows(rows, opts) {
-    var _a2;
-    if (!Array.isArray(rows) || rows.length < 2) return Array.isArray(rows) ? rows : [];
-    const base = opts == null ? void 0 : opts.baseUrl;
-    const windowMs = (_a2 = opts == null ? void 0 : opts.windowMs) != null ? _a2 : DEDUPE_WINDOW_MS;
-    const isTiming = (r2) => r2.source === "resource-timing";
-    const wrapperStarts = /* @__PURE__ */ new Map();
-    for (const row of rows) {
-      if (isTiming(row)) continue;
-      const key = normalizeUrl(row.url, base);
-      const list = wrapperStarts.get(key);
-      const entry = { start: startOf(row), used: false };
-      if (list) list.push(entry);
-      else wrapperStarts.set(key, [entry]);
-    }
-    if (wrapperStarts.size === 0) return rows;
-    return rows.filter((row) => {
-      if (!isTiming(row)) return true;
-      if (row.initiatorType && STATIC_INITIATORS.has(row.initiatorType)) return true;
-      const candidates = wrapperStarts.get(normalizeUrl(row.url, base));
-      if (!candidates) return true;
-      const start = startOf(row);
-      let best = null;
-      let bestDelta = Infinity;
-      for (const c2 of candidates) {
-        if (c2.used) continue;
-        const delta = Math.abs(c2.start - start);
-        if (delta <= windowMs && delta < bestDelta) {
-          best = c2;
-          bestDelta = delta;
-        }
-      }
-      if (!best) return true;
-      best.used = true;
-      return false;
-    });
-  }
-  var STATIC_INITIATORS, DEDUPE_WINDOW_MS;
-  var init_network_dedupe = __esm({
-    "src/network-dedupe.ts"() {
-      "use strict";
-      STATIC_INITIATORS = /* @__PURE__ */ new Set([
-        "img",
-        "image",
-        "css",
-        "link",
-        "script",
-        "font",
-        "media",
-        "video",
-        "audio",
-        "track",
-        "embed",
-        "object"
-      ]);
-      DEDUPE_WINDOW_MS = 50;
+      init_network_dedupe();
     }
   });
 
@@ -22512,7 +22582,7 @@ var TraceBugExtensionModule = (() => {
     return false;
   }
   function detectFrustration(events) {
-    var _a2, _b, _c, _d;
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
     const map = /* @__PURE__ */ new Map();
     for (let i2 = 0; i2 < events.length; i2++) {
       const e2 = events[i2];
@@ -22525,14 +22595,14 @@ var TraceBugExtensionModule = (() => {
       }
       if (count2 >= RAGE_MIN_CLICKS) map.set(i2, "rage");
     }
-    for (let i2 = 0; i2 < events.length; i2++) {
+    for (let i2 = 0; i2 < events.length - 1; i2++) {
       if (events[i2].type !== "click") continue;
       if (map.get(i2) === "rage") continue;
-      if (i2 === events.length - 1) continue;
+      const sel = ((_f = (_e = events[i2].data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector) || "";
       const next = events[i2 + 1];
-      if (next.timestamp - events[i2].timestamp > DEAD_RESPONSE_WINDOW_MS) {
-        map.set(i2, "dead");
-      }
+      if (!sel || next.type !== "click" || (((_h = (_g = next.data) == null ? void 0 : _g.element) == null ? void 0 : _h.selector) || "") !== sel) continue;
+      const gap = next.timestamp - events[i2].timestamp;
+      if (gap > DEAD_RESPONSE_WINDOW_MS && gap <= DEAD_RETRY_WINDOW_MS) map.set(i2, "dead");
     }
     let lastInputIdx = -1;
     for (let i2 = 0; i2 < events.length; i2++) {
@@ -22671,7 +22741,7 @@ var TraceBugExtensionModule = (() => {
     }
     return chips;
   }
-  var MAX_CHIPS, MAX_INLINE_ATTRS, MAX_VALUE_LEN2, MAX_DETAIL_LEN, MAX_TARGET_LEN, RAGE_WINDOW_MS, RAGE_MIN_CLICKS, DEAD_RESPONSE_WINDOW_MS, ATTR_PRIORITY;
+  var MAX_CHIPS, MAX_INLINE_ATTRS, MAX_VALUE_LEN2, MAX_DETAIL_LEN, MAX_TARGET_LEN, RAGE_WINDOW_MS, RAGE_MIN_CLICKS, DEAD_RESPONSE_WINDOW_MS, DEAD_RETRY_WINDOW_MS, ATTR_PRIORITY;
   var init_action_chips = __esm({
     "src/action-chips.ts"() {
       "use strict";
@@ -22683,6 +22753,7 @@ var TraceBugExtensionModule = (() => {
       RAGE_WINDOW_MS = 1500;
       RAGE_MIN_CLICKS = 3;
       DEAD_RESPONSE_WINDOW_MS = 1500;
+      DEAD_RETRY_WINDOW_MS = 8e3;
       ATTR_PRIORITY = [
         { key: "id" },
         { key: "class", label: "class" },
@@ -23026,7 +23097,7 @@ var TraceBugExtensionModule = (() => {
     }
     const networkErrors = networkRequests.filter((r2) => r2.status >= 400 || r2.status === 0).map((r2) => ({ ...r2 }));
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
-    const timeline = buildTimeline(events);
+    const timeline = buildTimeline(events, { baseUrl: pageUrl });
     const voiceTranscripts = getVoiceTranscripts();
     const lastVideo = getSessionVideo(session);
     const video = lastVideo ? {
@@ -23190,7 +23261,8 @@ var TraceBugExtensionModule = (() => {
     }
   }
   function extractClickedElement(events) {
-    for (let i2 = events.length - 1; i2 >= 0; i2--) {
+    const failure = firstFailureIndex(events);
+    for (let i2 = failure >= 0 ? failure : events.length - 1; i2 >= 0; i2--) {
       const ev = events[i2];
       if (ev.type !== "click") continue;
       const el = ev.data.element || {};
@@ -23237,19 +23309,14 @@ var TraceBugExtensionModule = (() => {
       };
     }
     if (click) {
-      if ((click.tag || "").toLowerCase() === "a") {
-        return {
-          hint: `No errors captured \u2014 last action was clicking the link '${clickLabel(click)}' (navigation)`,
-          confidence: "low"
-        };
-      }
+      const what = (click.tag || "").toLowerCase() === "a" ? `clicking the link '${clickLabel(click)}' (navigation)` : `clicking '${clickLabel(click)}'`;
       return {
-        hint: `Click on '${clickLabel(click)}' did not trigger any observable effect`,
+        hint: `${NO_FAILURE_HINT} \u2014 last action was ${what}. If something looked wrong, the reporter's description says what was expected.`,
         confidence: "low"
       };
     }
     return {
-      hint: "Not enough signal captured to suggest a likely cause",
+      hint: `${NO_FAILURE_HINT}. If something looked wrong, the reporter's description says what was expected.`,
       confidence: "low"
     };
   }
@@ -23321,7 +23388,7 @@ var TraceBugExtensionModule = (() => {
     }
     return "suggests an unexpected runtime value \u2014 inspect inputs and data sources";
   }
-  var VIDEO_SESSION_GRACE_MS, SESSION_STEPS_LIMIT, RC_LABEL_MAX, SEVERITY_EMOJI, SEVERITY_LABEL;
+  var VIDEO_SESSION_GRACE_MS, SESSION_STEPS_LIMIT, RC_LABEL_MAX, NO_FAILURE_HINT, SEVERITY_EMOJI, SEVERITY_LABEL;
   var init_report_builder = __esm({
     "src/report-builder.ts"() {
       "use strict";
@@ -23345,6 +23412,7 @@ var TraceBugExtensionModule = (() => {
       VIDEO_SESSION_GRACE_MS = 1e4;
       SESSION_STEPS_LIMIT = 10;
       RC_LABEL_MAX = 40;
+      NO_FAILURE_HINT = "No errors or failed requests were captured";
       SEVERITY_EMOJI = {
         critical: "\u{1F534}",
         // \uD83D\uDD34
@@ -25856,6 +25924,37 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     }
   });
 
+  // src/exporters/agent-workflow.ts
+  function agentWorkflowSteps(file) {
+    const target = file ? `"${file}"` : "the newest report";
+    return [
+      file ? `Call get_bug_report(${target}) and follow its investigation guide to gather the captured evidence: console errors, network failures, repro steps, screenshots.` : "Call list_bug_reports (newest first), then get_bug_report on the newest one, and follow its investigation guide to gather the captured evidence: console errors, network failures, repro steps, screenshots.",
+      ROOT_CAUSE_STEP,
+      "Explain the root cause and the fix you propose, citing the evidence and the files and lines involved.",
+      "Ask for approval before editing any files.",
+      `Once approved, apply the fix and add or update a regression test. get_playwright_test(${target}) returns a generated failing test you can start from.`,
+      "Run the relevant test and report the result: it should fail before the fix and pass after it."
+    ];
+  }
+  function numberedSteps(steps) {
+    return steps.map((s2, i2) => `${i2 + 1}. ${s2}`).join("\n");
+  }
+  var ROOT_CAUSE_STEP, CHAT_WORKFLOW_STEPS;
+  var init_agent_workflow = __esm({
+    "src/exporters/agent-workflow.ts"() {
+      "use strict";
+      ROOT_CAUSE_STEP = "Identify the root cause in this codebase. If a value is missing or undefined, find out why first (a missing config entry or key, a failed or incomplete request, a wrong identifier, a data transformation) instead of only adding a guard.";
+      CHAT_WORKFLOW_STEPS = [
+        "Diagnose from the evidence above: name the most likely root cause and tie your reasoning to it. If a value is missing or undefined, explain why it is missing rather than only guarding against it.",
+        "List the specific files or components to inspect.",
+        "Propose a concrete fix (code where possible).",
+        "Add or update a regression test, or give the exact assertions, that would catch this bug if it returns.",
+        "If you can run tests, run it: it should fail before the fix and pass after it.",
+        "If you can edit files, ask for approval before changing anything."
+      ];
+    }
+  });
+
   // src/exporters/html-template.ts
   function buildReplayHtml(payload, extras) {
     const dataJson = JSON.stringify(payload).replace(/<\/script>/gi, "<\\/script>");
@@ -26006,6 +26105,7 @@ ${REPLAY_RUNTIME}
     "src/exporters/html-template.ts"() {
       "use strict";
       init_links();
+      init_agent_workflow();
       REPLAY_CSS = `
 /* \u2500\u2500 Theme tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 /* Light is the unconditional default. Dark requires an explicit
@@ -26772,7 +26872,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       if (c.frustration) {
         var sym = c.frustration === "rage" ? "\u26A1" : c.frustration === "dead" ? "\u2715" : "\u21A9";
         var title = c.frustration === "rage" ? "Rage click \u2014 multiple rapid clicks on the same element" :
-                    c.frustration === "dead" ? "Dead click \u2014 no visible response within 1.5s" :
+                    c.frustration === "dead" ? "Dead click \u2014 clicked again a few seconds later, as if nothing happened" :
                     "Form abandoned \u2014 filled but never submitted";
         frust = '<span class="tb-vchip-frust tb-vchip-frust-' + esc(c.frustration) + '" title="' + esc(title) + '">' + sym + '</span>';
       }
@@ -26808,12 +26908,13 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   var mcpFile = "";
   try { mcpFile = decodeURIComponent(location.pathname.split(/[\\\\/]/).pop() || ""); } catch (e) {}
   if (!mcpFile || !/\\.html?$/i.test(mcpFile)) mcpFile = "<this .html export>";
+  // Steps come from src/exporters/agent-workflow.ts (shared with the hand-off
+  // card and the MCP debug prompt); {FILE} is filled in at view time.
+  var mcpSteps = ${JSON.stringify(agentWorkflowSteps("{FILE}"))};
   var mcpPrompt = 'This is a TraceBug bug report export: ' + mcpFile + '\\n\\n' +
-    '1. Call get_bug_report("' + mcpFile + '") to load the report overview and its investigation guide.\\n' +
-    '2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).\\n' +
-    '3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.\\n\\n' +
-    'If the tracebug MCP server is not connected yet, register it first (point --dir at the folder containing this file):\\n' +
-    'claude mcp add tracebug -- npx -y tracebug mcp --dir <reports-folder>';
+    mcpSteps.map(function(s, i){ return (i + 1) + '. ' + s.split('{FILE}').join(mcpFile); }).join('\\n') + '\\n\\n' +
+    'If the tracebug MCP server is not connected yet, register it first. It finds reports in your Downloads and Desktop folders and in this project, so if this file is somewhere else, move it into the project:\\n' +
+    'claude mcp add tracebug -- npx -y tracebug mcp';
   aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
     '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
     '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +
@@ -27628,7 +27729,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       steps.push(line);
       lastStep = line;
     };
-    for (const ev of events) {
+    for (const ev of collapseTyping(events)) {
       const el = ((_b = ev.data) == null ? void 0 : _b.element) || {};
       switch (ev.type) {
         case "click": {
@@ -27736,6 +27837,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     "src/exporters/playwright-test.ts"() {
       "use strict";
       init_url_hygiene();
+      init_repro_generator();
     }
   });
 
@@ -27767,11 +27869,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     return blob2;
   }
   async function buildReplayPayload(session, report, options) {
-    var _a2, _b, _c, _d, _e, _f, _g;
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
     const rrwebEvents = (_a2 = report.video) == null ? void 0 : _a2.rrwebEvents;
     const hasRrweb = Array.isArray(rrwebEvents) && rrwebEvents.length > 0;
     const includeVideo = (_b = options == null ? void 0 : options.includeVideo) != null ? _b : hasRrweb ? false : !!report.video;
-    const timeline = buildTimeline(report.session.events).map((t2) => ({
+    const timeline = buildTimeline(report.session.events, { baseUrl: (_c = report.environment) == null ? void 0 : _c.url }).map((t2) => ({
       timestamp: t2.timestamp,
       type: t2.type,
       description: t2.description,
@@ -27889,14 +27991,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         severity: report.severity,
         priority: session.priority ? priorityLabel(session.priority) : void 0,
         summary: report.summary || "",
-        rootCause: ((_c = report.rootCause) == null ? void 0 : _c.hint) || "",
-        page: ((_d = report.environment) == null ? void 0 : _d.url) || ((_e = report.session.events[0]) == null ? void 0 : _e.page) || "",
+        rootCause: ((_d = report.rootCause) == null ? void 0 : _d.hint) || "",
+        page: ((_e = report.environment) == null ? void 0 : _e.url) || ((_f = report.session.events[0]) == null ? void 0 : _f.page) || "",
         generatedAt: report.generatedAt,
         sessionId: session.sessionId,
         environment: formatEnv(report),
         durationMs: estimateDuration(report.session, report)
       },
-      description: withElementEvidence((_g = (_f = options == null ? void 0 : options.descriptionOverride) != null ? _f : report.steps) != null ? _g : "", report),
+      description: withElementEvidence((_h = (_g = options == null ? void 0 : options.descriptionOverride) != null ? _g : report.steps) != null ? _h : "", report),
       events: timeline,
       screenshots: report.screenshots.map((s2) => ({
         timestamp: s2.timestamp,
@@ -29444,7 +29546,7 @@ ${issueSignatureSlack()}`;
 
   // src/exporters/ai-prompt.ts
   function generateAIPrompt(report, options = {}) {
-    var _a2, _b, _c, _d, _e;
+    var _a2, _b, _c, _d, _e, _f;
     const { includeTask = true, projectName, screenshotsAttached = false } = options;
     const env = report.environment;
     const lines = [];
@@ -29455,6 +29557,12 @@ ${issueSignatureSlack()}`;
     if (report.summary) lines.push(`**Summary:** ${truncate3(report.summary, 240)}`);
     if (report.severity) lines.push(`**Severity:** ${report.severity}`);
     if (report.priority) lines.push(`**Priority:** ${report.priority}`);
+    const notes = (_a2 = options.reporterNotes) == null ? void 0 : _a2.trim();
+    if (notes) {
+      lines.push(`
+## Reporter's description`);
+      lines.push(notes.length > MAX_REPORTER_NOTES ? notes.slice(0, MAX_REPORTER_NOTES) + "\u2026" : notes);
+    }
     if (env) {
       lines.push(`
 ## Environment`);
@@ -29464,7 +29572,14 @@ ${issueSignatureSlack()}`;
       if (env.viewport) lines.push(`- Viewport: ${env.viewport}`);
       if (env.deviceType) lines.push(`- Device: ${env.deviceType}`);
     }
-    if ((_a2 = report.rootCause) == null ? void 0 : _a2.hint) {
+    const nothingFailed = (report.consoleErrors || []).length === 0 && !(report.networkErrors || []).some((f2) => !isNoiseRequest(f2.url));
+    if (nothingFailed) {
+      lines.push(`
+## No errors captured`);
+      lines.push(
+        "No errors or failed requests were captured in this session, so the evidence alone does not show a bug. Use the reporter's description for what was expected. If it doesn't say, ask what looked wrong before suggesting a cause."
+      );
+    } else if ((_b = report.rootCause) == null ? void 0 : _b.hint) {
       lines.push(`
 ## Auto-detected root cause hint (${report.rootCause.confidence || "low"} confidence)`);
       lines.push(report.rootCause.hint);
@@ -29477,7 +29592,7 @@ ${issueSignatureSlack()}`;
     const dedupedConsole = dedupeByMessage(report.consoleErrors || [], MAX_CONSOLE_ERRORS);
     if (dedupedConsole.length > 0) {
       lines.push(`
-## Console errors (${dedupedConsole.length}${(((_b = report.consoleErrors) == null ? void 0 : _b.length) || 0) > dedupedConsole.length ? `, of ${report.consoleErrors.length} total \u2014 dedup'd` : ""})`);
+## Console errors (${dedupedConsole.length}${(((_c = report.consoleErrors) == null ? void 0 : _c.length) || 0) > dedupedConsole.length ? `, of ${report.consoleErrors.length} total \u2014 dedup'd` : ""})`);
       dedupedConsole.forEach((e2, i2) => {
         lines.push(`${i2 + 1}. ${truncate3(e2.message, MAX_LINE)}`);
         if (e2.stack) {
@@ -29532,8 +29647,8 @@ ${issueSignatureSlack()}`;
         ctxBits.push(`${n2} screenshot${n2 === 1 ? "" : "s"} captured (not embedded \u2014 share the .html or cloud link for visuals)`);
       }
     }
-    if ((_c = report.video) == null ? void 0 : _c.dataUrl) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1e3)}s)`);
-    else if ((_e = (_d = report.video) == null ? void 0 : _d.rrwebEvents) == null ? void 0 : _e.length) ctxBits.push(`interactive DOM replay available (${Math.round(report.video.durationMs / 1e3)}s)`);
+    if ((_d = report.video) == null ? void 0 : _d.dataUrl) ctxBits.push(`video recording available (${Math.round(report.video.durationMs / 1e3)}s)`);
+    else if ((_f = (_e = report.video) == null ? void 0 : _e.rrwebEvents) == null ? void 0 : _f.length) ctxBits.push(`interactive DOM replay available (${Math.round(report.video.durationMs / 1e3)}s)`);
     if (report.annotations && report.annotations.length > 0) ctxBits.push(`${report.annotations.length} tester note${report.annotations.length === 1 ? "" : "s"}`);
     if (ctxBits.length > 0) {
       lines.push(`
@@ -29550,11 +29665,7 @@ ${issueSignatureSlack()}`;
     if (includeTask) {
       lines.push(`
 ## Task`);
-      lines.push(`Analyze this bug report and respond with:`);
-      lines.push(`1. The most likely root cause, with your reasoning tied to the evidence above`);
-      lines.push(`2. Specific files or components to inspect`);
-      lines.push(`3. A concrete fix (code where possible)`);
-      lines.push(`4. A regression test \u2014 or the exact assertions \u2014 that would catch this bug if it returns`);
+      lines.push(numberedSteps(CHAT_WORKFLOW_STEPS));
     }
     return lines.join("\n");
   }
@@ -29579,14 +29690,11 @@ ${issueSignatureSlack()}`;
     return [
       `This is a TraceBug bug report export: ${filename}`,
       ``,
-      `1. Call get_bug_report("${filename}") to load the report overview and its investigation guide.`,
-      `2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).`,
-      `3. Cross-reference the findings with this codebase to identify the root cause and implement the fix.`,
-      `4. Call get_playwright_test("${filename}") for the generated failing test \u2014 run it to reproduce the bug (red), then re-run after your fix to confirm it passes (green).`,
+      numberedSteps(agentWorkflowSteps(filename)),
       ``,
       `If the tracebug MCP server isn't connected yet, register it first \u2014 it auto-finds reports in your Downloads/Desktop folders, so no path setup is needed:`,
       `claude mcp add tracebug -- npx -y tracebug mcp`,
-      `(If your reports live elsewhere, add: --dir "<reports-folder>")`
+      `(If the report was saved somewhere else, move it into this project; the server also scans the project.)`
     ].join("\n");
   }
   function openInClaude(prompt) {
@@ -29732,17 +29840,19 @@ ${renderMarkdownLite(md)}
       }
     }, 3e4);
   }
-  var MAX_CONSOLE_ERRORS, MAX_NETWORK_FAILURES, MAX_NETWORK_CONTEXT, MAX_USER_ACTIONS, MAX_LINE, URL_PREFILL_LIMIT, AI_HTML_CSS;
+  var MAX_CONSOLE_ERRORS, MAX_NETWORK_FAILURES, MAX_NETWORK_CONTEXT, MAX_USER_ACTIONS, MAX_LINE, MAX_REPORTER_NOTES, URL_PREFILL_LIMIT, AI_HTML_CSS;
   var init_ai_prompt = __esm({
     "src/exporters/ai-prompt.ts"() {
       "use strict";
       init_url_hygiene();
+      init_agent_workflow();
       init_plugin_system();
       MAX_CONSOLE_ERRORS = 5;
       MAX_NETWORK_FAILURES = 5;
       MAX_NETWORK_CONTEXT = 3;
       MAX_USER_ACTIONS = 10;
       MAX_LINE = 240;
+      MAX_REPORTER_NOTES = 1500;
       URL_PREFILL_LIMIT = 6e3;
       AI_HTML_CSS = `
 :root{color-scheme:light dark}
@@ -31214,7 +31324,12 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       return { title: (titleEl == null ? void 0 : titleEl.value) || "", description: (descEl == null ? void 0 : descEl.value) || "" };
     };
     const saveDraft = () => {
+      var _a3, _b2;
       const { title, description } = getDraft();
+      if (title === ((_a3 = data.autoTitle) != null ? _a3 : "") && description === ((_b2 = data.autoDesc) != null ? _b2 : "")) {
+        _clearDraft();
+        return;
+      }
       _saveDraft({ title, description, timestamp: Date.now() });
     };
     let saveTimer;
@@ -31581,11 +31696,15 @@ ${report.steps}` : userDesc : void 0,
           showFooter: showExportFooter()
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
+        _clearDraft();
         showActionToast(
           `\u2713 Replay exported \xB7 ${sizeMb} MB`,
           "Open in your AI agent \u2192",
           () => showMcpHandoffCard(result2.filename, result2.sizeBytes),
-          root2
+          root2,
+          // Stays until dismissed: an 8 s toast was the only way to the setup
+          // and prompt card, and missing it left no path back.
+          { autoDismissMs: null }
         );
         _maybeAskForReview(root2, (_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.sessionId) != null ? _c2 : null);
       } catch (err) {
@@ -31653,6 +31772,7 @@ ${report.steps}` : userDesc : void 0,
           showFooter: showExportFooter()
         });
         const sizeMb = (result2.sizeBytes / (1024 * 1024)).toFixed(1);
+        _clearDraft();
         showToast(`\u2713 .zip exported \xB7 ${sizeMb} MB \u2014 drag it onto a GitHub issue to attach`, root2);
         _maybeAskForReview(root2, (_c2 = (_b2 = data.currentSession) == null ? void 0 : _b2.sessionId) != null ? _c2 : null);
       } catch (err) {
@@ -31733,13 +31853,19 @@ ${report.steps}` : userDesc : void 0,
       });
     });
     (_I = modal.querySelector('[data-action="ai-prompt"]')) == null ? void 0 : _I.addEventListener("click", async (e2) => {
+      var _a3;
       if (!data.currentSession) {
         showToast("Nothing to share yet \u2014 capture something first", root2);
         return;
       }
       try {
         const report = buildReport(data.currentSession);
-        const prompt = generateAIPrompt(report);
+        const draft = getDraft();
+        if (draft.title.trim()) report.title = draft.title.trim();
+        const userDesc = draft.description.trim();
+        const prompt = generateAIPrompt(report, {
+          reporterNotes: userDesc && userDesc !== ((_a3 = data.autoDesc) != null ? _a3 : "").trim() ? userDesc : void 0
+        });
         const copied = await _copyToClipboard(prompt);
         const sizeKb = (prompt.length / 1024).toFixed(1);
         showToast(
@@ -32597,7 +32723,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const elPreview = chip.element ? _renderElementPreview(chip.element) : "";
     const detail = chip.detail ? `<span class="tb-qb-chip-detail${chip.isError ? " tb-qb-chip-detail-err" : ""}">${escapeHtml(chip.detail)}</span>` : "";
     const target = chip.target ? `<span class="tb-qb-chip-target"><span class="tb-qb-chip-target-name">${escapeHtml(`\u201C${chip.target}\u201D`)}</span>${chip.nounLabel ? ` <span class="tb-qb-chip-target-noun">${escapeHtml(chip.nounLabel)}</span>` : ""}</span>` : "";
-    const frust = chip.frustration ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click \u2014 multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click \u2014 no visible response within 1.5s" : "Form abandoned \u2014 filled but never submitted"}">${chip.frustration === "rage" ? "\u26A1" : chip.frustration === "dead" ? "\u2715" : "\u21A9"}</span>` : "";
+    const frust = chip.frustration ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click \u2014 multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click \u2014 clicked again a few seconds later, as if nothing happened" : "Form abandoned \u2014 filled but never submitted"}">${chip.frustration === "rage" ? "\u26A1" : chip.frustration === "dead" ? "\u2715" : "\u21A9"}</span>` : "";
     const errClass = chip.isError || chip.frustration ? "tb-qb-chip-err" : "";
     return `<div class="tb-qb-chip ${errClass}">
     ${frust}
@@ -32637,7 +32763,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div class="tb-qb-ai-card tb-qb-ai-empty">
       <div class="tb-qb-ai-card-head">AI Debugger \u2014 BYO API key</div>
       <div class="tb-qb-ai-card-body">
-        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys stay in localStorage \u2014 never leave your machine.</p>
+        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys are stored on this device and sent only to the provider you pick.</p>
         <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Configure API key</button>
       </div>
     </div>
@@ -33625,15 +33751,27 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
          Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} \u2014 use <strong>AI report (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;\u25BE</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
+    const MCP_JSON = '{"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}';
     const MCP_SETUP = {
-      claude: { label: "Claude Code", cmd: "claude mcp add tracebug -- npx -y tracebug mcp" },
+      claude: {
+        label: "Claude Code",
+        cmd: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
+        where: "Run once in a terminal, then restart Claude Code. Native Windows: put cmd /c before npx."
+      },
       cursor: {
         label: "Cursor",
-        cmd: 'Add to .cursor/mcp.json: {"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}'
+        cmd: MCP_JSON,
+        where: "Paste into .cursor/mcp.json in the project (or ~/.cursor/mcp.json for every project)."
+      },
+      windsurf: {
+        label: "Windsurf",
+        cmd: MCP_JSON,
+        where: "Paste into ~/.codeium/windsurf/mcp_config.json, then refresh MCP servers in Cascade."
       },
       vscode: {
         label: "VS Code",
-        cmd: 'code --add-mcp "{\\"name\\":\\"tracebug\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"tracebug\\",\\"mcp\\"]}"'
+        cmd: 'code --add-mcp "{\\"name\\":\\"tracebug\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"tracebug\\",\\"mcp\\"]}"',
+        where: "Run once in a terminal (Copilot agent mode)."
       }
     };
     let mcpTool = "claude";
@@ -33697,6 +33835,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           <code id="tb-mcp-setup-cmd" style="flex:1;overflow-x:auto;white-space:nowrap;padding:8px 10px;border-radius:8px;background:#0B0B10;border:1px solid rgba(255,255,255,0.08);font:11px ui-monospace,'SF Mono',Consolas,monospace;color:#CBD2DA">${MCP_SETUP.claude.cmd}</code>
           <button data-mcp-action="copy-setup" title="Copy setup command" style="display:inline-flex;align-items:center;padding:0 11px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 12px system-ui,sans-serif">${_ic("copy")}</button>
         </div>
+        <div id="tb-mcp-setup-where" style="margin-top:6px;font-size:11px;color:#71717A;line-height:1.4">${MCP_SETUP.claude.where}</div>
       </div>
       ${bigFileNote}
     </div>
@@ -33749,6 +33888,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         mcpTool = tool;
         const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
         if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
+        const whereEl = card.querySelector("#tb-mcp-setup-where");
+        if (whereEl) whereEl.textContent = MCP_SETUP[tool].where;
         card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
           b.classList.toggle("active", b.getAttribute("data-mcp-tool") === tool);
         });
@@ -34763,7 +34904,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       </div>
     `);
       root2.appendChild(pop);
-      let surface = showSurfaceChoice ? "tab" : "desktop";
+      let surface = showSurfaceChoice ? "tab" : "auto";
       const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]');
       const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]');
       const micEl = pop.querySelector('[data-tb-pre="mic"]');

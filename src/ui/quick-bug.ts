@@ -888,6 +888,13 @@ function _openModal(
 
   const saveDraft = () => {
     const { title, description } = getDraft();
+    // Only a real edit is a draft. Saving the untouched auto-fill made the
+    // NEXT capture (within the hour) open with this bug's title under a
+    // "Restored draft" pill.
+    if (title === (data.autoTitle ?? "") && description === (data.autoDesc ?? "")) {
+      _clearDraft();
+      return;
+    }
     _saveDraft({ title, description, timestamp: Date.now() });
   };
 
@@ -1331,11 +1338,17 @@ ${report.steps}` : userDesc)
       // unasked. The card is exactly what showMcpHandoffCard always rendered;
       // it only opens now if the user clicks through, instead of the export
       // forcing a dismissal every time.
+      // The edits are in the exported file now; a draft would only resurface
+      // them on the next, unrelated capture.
+      _clearDraft();
       showActionToast(
         `\u2713 Replay exported \u00b7 ${sizeMb} MB`,
         "Open in your AI agent \u2192",
         () => showMcpHandoffCard(result.filename, result.sizeBytes),
         root,
+        // Stays until dismissed: an 8 s toast was the only way to the setup
+        // and prompt card, and missing it left no path back.
+        { autoDismissMs: null },
       );
       // Counted only here, after a file actually exists. A review prompt
       // "earned" by a failed export is worse than no prompt.
@@ -1401,6 +1414,7 @@ ${report.steps}` : userDesc)
         showFooter: showExportFooter(),
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+      _clearDraft(); // the edits are in the file; see Export replay
       showToast(`✓ .zip exported · ${sizeMb} MB — drag it onto a GitHub issue to attach`, root);
       _maybeAskForReview(root, data.currentSession?.sessionId ?? null);
     } catch (err) {
@@ -1584,7 +1598,14 @@ ${report.steps}` : userDesc)
     }
     try {
       const report = buildReport(data.currentSession);
-      const prompt = generateAIPrompt(report);
+      // The ticket the user is looking at, not the auto-fill underneath it —
+      // Export applies these edits the same way.
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const userDesc = draft.description.trim();
+      const prompt = generateAIPrompt(report, {
+        reporterNotes: userDesc && userDesc !== (data.autoDesc ?? "").trim() ? userDesc : undefined,
+      });
       // Awaited helper — a bare writeText's rejection escapes try/catch and
       // becomes an unhandled error TraceBug's own collectors then report.
       const copied = await _copyToClipboard(prompt);
@@ -2625,7 +2646,7 @@ function _renderActionChip(chip: import("../types").ActionChip): string {
     : "";
   // Frustration glyph prefix when a heuristic fired on this action.
   const frust = chip.frustration
-    ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click — multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click — no visible response within 1.5s" : "Form abandoned — filled but never submitted"}">${chip.frustration === "rage" ? "⚡" : chip.frustration === "dead" ? "✕" : "↩"}</span>`
+    ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click — multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click — clicked again a few seconds later, as if nothing happened" : "Form abandoned — filled but never submitted"}">${chip.frustration === "rage" ? "⚡" : chip.frustration === "dead" ? "✕" : "↩"}</span>`
     : "";
   const errClass = chip.isError || chip.frustration ? "tb-qb-chip-err" : "";
   return `<div class="tb-qb-chip ${errClass}">
@@ -2672,7 +2693,7 @@ function _buildAITab(report: import("../types").BugReport | null): string {
     <div class="tb-qb-ai-card tb-qb-ai-empty">
       <div class="tb-qb-ai-card-head">AI Debugger \u2014 BYO API key</div>
       <div class="tb-qb-ai-card-body">
-        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys stay in localStorage \u2014 never leave your machine.</p>
+        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys are stored on this device and sent only to the provider you pick.</p>
         <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Configure API key</button>
       </div>
     </div>
@@ -3716,15 +3737,30 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
 
   // One-time MCP setup per tool — the prompt is identical everywhere; only
   // the "register the server" command differs. Default: Claude Code.
-  const MCP_SETUP: Record<string, { label: string; cmd: string }> = {
-    claude: { label: "Claude Code", cmd: "claude mcp add tracebug -- npx -y tracebug mcp" },
+  // `cmd` is exactly what gets copied, so it must paste as-is: the JSON ones
+  // used to start with "Add to .cursor/mcp.json:", which no file accepts.
+  // `where` says where it goes.
+  const MCP_JSON = '{"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}';
+  const MCP_SETUP: Record<string, { label: string; cmd: string; where: string }> = {
+    claude: {
+      label: "Claude Code",
+      cmd: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
+      where: "Run once in a terminal, then restart Claude Code. Native Windows: put cmd /c before npx.",
+    },
     cursor: {
       label: "Cursor",
-      cmd: 'Add to .cursor/mcp.json: {"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}',
+      cmd: MCP_JSON,
+      where: "Paste into .cursor/mcp.json in the project (or ~/.cursor/mcp.json for every project).",
+    },
+    windsurf: {
+      label: "Windsurf",
+      cmd: MCP_JSON,
+      where: "Paste into ~/.codeium/windsurf/mcp_config.json, then refresh MCP servers in Cascade.",
     },
     vscode: {
       label: "VS Code",
       cmd: 'code --add-mcp "{\\"name\\":\\"tracebug\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"tracebug\\",\\"mcp\\"]}"',
+      where: "Run once in a terminal (Copilot agent mode).",
     },
   };
   let mcpTool = "claude";
@@ -3797,6 +3833,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
           <code id="tb-mcp-setup-cmd" style="flex:1;overflow-x:auto;white-space:nowrap;padding:8px 10px;border-radius:8px;background:#0B0B10;border:1px solid rgba(255,255,255,0.08);font:11px ui-monospace,'SF Mono',Consolas,monospace;color:#CBD2DA">${MCP_SETUP.claude.cmd}</code>
           <button data-mcp-action="copy-setup" title="Copy setup command" style="display:inline-flex;align-items:center;padding:0 11px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 12px system-ui,sans-serif">${_ic("copy")}</button>
         </div>
+        <div id="tb-mcp-setup-where" style="margin-top:6px;font-size:11px;color:#71717A;line-height:1.4">${MCP_SETUP.claude.where}</div>
       </div>
       ${bigFileNote}
     </div>
@@ -3851,6 +3888,8 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       mcpTool = tool;
       const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
       if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
+      const whereEl = card.querySelector("#tb-mcp-setup-where");
+      if (whereEl) whereEl.textContent = MCP_SETUP[tool].where;
       card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
         b.classList.toggle("active", b.getAttribute("data-mcp-tool") === tool);
       });
