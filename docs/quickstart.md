@@ -20,11 +20,12 @@ matches you.
    keeps recording.
 4. Click **Stop**. The **Quick Bug** modal opens with an auto-filled title,
    summary, root-cause hint, and an interactive replay.
-5. Click **Export .html** and send the file (Slack/email/ticket). Your developer
-   opens it offline and sees the replay, errors, and network — no back-and-forth.
+5. Click **Export replay (.html)** and send the file (Slack/email/ticket). Your
+   developer opens it offline and sees the replay, errors, and network — no
+   back-and-forth.
 
-> Pasting into an AI chat instead? Use **More ▾ → Export for AI (.html)** — a tiny
-> text-only report that fits in a chat context.
+> Pasting into an AI chat instead? Click **Fix with AI** (copies a ready prompt),
+> or use **More ▾ → AI report (.html) — for chat**, a small text-only report.
 
 > **Screen recording is back in the extension as of 1.11.2** — turn on **Record
 > video too** in Record options. Console, network, clicks and the replay are
@@ -46,7 +47,7 @@ matches you.
 3. Run your app. A compact toolbar appears on the right edge. Click **⏺ Track
    session** (events-only) or **🔴 Record** (with video) to arm a session.
 4. Reproduce the bug, then press `Ctrl+Shift+B` to open the **Quick Bug** modal.
-5. **Export .html** to hand off, or **Export HAR** / file a real GitHub / Linear /
+5. **Export replay (.html)** to hand off, or **Export HAR** / file a real GitHub / Linear /
    Slack / Jira issue.
 
 ### Debug it with an AI agent
@@ -55,11 +56,13 @@ The exported `.html` is agent-ready. Point a coding agent (Claude Code, Cursor,
 VS Code) at it via the local MCP server — fully offline, nothing uploaded:
 
 ```bash
-npx -y tracebug mcp --dir <folder-with-the-report>
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 ```
 
-Then ask your agent to `get_bug_report(...)` and fix from the evidence. See
-[mcp.md](mcp.md).
+It finds reports in your project and in your Downloads and Desktop folders, so
+no path is needed. Restart your agent, then ask it to debug the latest TraceBug
+report (or type `/tracebug:debug_bug_report` in Claude Code). Cursor, Windsurf
+and VS Code setup: [mcp.md](mcp.md).
 
 ---
 

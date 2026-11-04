@@ -7,6 +7,21 @@ Open phases: `PLAN.md` 8, 11, 12.
 
 ## Where things stand
 
+- **1.11.5 is live everywhere (verified 2026-11-03)**: CWS (updated 2026-11-02), AMO, npm both packages,
+  MCP registry (`isLatest`), website SDK sha matches the repo.
+- **1.11.6 is prepared, not committed (2026-11-03)**: the P0 + P1 fixes from
+  `docs/launch/minimum-click-workflow.md`, the five-flow friction map. Setup commands drop `--dir`
+  (it disabled Downloads discovery), drafts no longer carry an old title into the next capture,
+  toolbar Record follows the popup's Tab/Desktop choice (`surfaceMode: "auto"` resolved by
+  `preferredSurfaceMode` in `background.js`), real setup command on the welcome page, persistent
+  hand-off link, `list_bug_reports` newest first, Fix with AI applies ticket edits, paste-ready
+  Cursor/Windsurf setup, corrected `get_playwright_test` text. After the first playground run, also: title and
+  summary blame the action before the first failure (not the session's last), the undefined-access hint no longer
+  prescribes `?.`, and all agent prompts share `src/exporters/agent-workflow.ts`. All surfaces on 1.11.6, gates green.
+  **Manual check before release:** toolbar Record in Chrome (Tab mode, no picker) and Firefox
+  (picker, no fallback warning), via `npm run ext:firefox`. P2 (automatic "fix verified" loop,
+  Firefox first-capture default, More-menu grouping) waits for evidence from observed users.
+
 - **1.11.3 is live everywhere**: Chrome Web Store (approved 2026-10-30), AMO, npm (`tracebug-sdk` and
   `tracebug` both `latest`), MCP registry (`io.github.prashantsinghmangat/tracebug`), website. Tagged
   `v1.11.3` (`0a9a038`); `main` is at `4271e9c` (site/docs on top of the tag).

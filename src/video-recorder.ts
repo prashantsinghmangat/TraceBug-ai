@@ -338,8 +338,9 @@ export async function startVideoRecording(options?: {
   mode?: "rolling" | "standard";
   /** "tab" prefers the current tab silently (extension) or via
    *  `preferCurrentTab` (SDK). "desktop" shows the full screen-picker.
-   *  Default "desktop" for backwards compatibility. */
-  surfaceMode?: "tab" | "desktop";
+   *  "auto" (extension) follows the popup's stored Tab/Desktop choice,
+   *  resolved in background.js. Default "desktop" for backwards compatibility. */
+  surfaceMode?: "tab" | "desktop" | "auto";
   withMicrophone?: boolean;
   onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
 }): Promise<boolean> {
@@ -353,8 +354,8 @@ export async function startVideoRecording(options?: {
   // Extension Tab mode opens no dialog at all, so there is nothing to explain;
   // if it falls back to the picker, the reason is shown once recording starts.
   const hintable = typeof document !== "undefined" && !!document.body &&
-    !(options?.surfaceMode === "tab" && isExtensionContext());
-  if (hintable) showPickerHint(options?.surfaceMode);
+    !((options?.surfaceMode === "tab" || options?.surfaceMode === "auto") && isExtensionContext());
+  if (hintable) showPickerHint(options?.surfaceMode === "auto" ? "desktop" : options?.surfaceMode);
   _startInFlight = _startVideoRecordingInner(options).finally(() => {
     _startInFlight = null;
     if (hintable) hidePickerHint();
@@ -364,13 +365,13 @@ export async function startVideoRecording(options?: {
 
 async function _startVideoRecordingInner(options?: {
   mode?: "rolling" | "standard";
-  surfaceMode?: "tab" | "desktop";
+  surfaceMode?: "tab" | "desktop" | "auto";
   withMicrophone?: boolean;
   onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
 }): Promise<boolean> {
   _onStatus = options?.onStatus || null;
   const requestedMode = options?.mode === "standard" ? "standard" : "rolling";
-  const surfaceMode = options?.surfaceMode === "tab" ? "tab" : "desktop";
+  const surfaceMode = options?.surfaceMode === "tab" || options?.surfaceMode === "auto" ? options.surfaceMode : "desktop";
 
   // Refuse here, not just in the UI. Entry points that never touch the popup -
   // the Alt+B command, a replayed message, a stored pref read at startup - all
@@ -402,7 +403,7 @@ async function _startVideoRecordingInner(options?: {
 
     // Tab mode wasn't usable this time and the recording fell back to the
     // share picker — the one the user chose Tab to avoid. Say why.
-    if (surfaceMode === "tab" && result.tabModeFallback) {
+    if (surfaceMode !== "desktop" && result.tabModeFallback) {
       _onStatus?.("warning", explainTabModeFallback(result.tabModeReason));
     }
 
@@ -423,7 +424,8 @@ async function _startVideoRecordingInner(options?: {
     return true;
   }
 
-  return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode });
+  // No popup choice to follow in the npm SDK: "auto" means the full picker.
+  return startVideoRecordingInPage(requestedMode, { ...options, surfaceMode: surfaceMode === "auto" ? "desktop" : surfaceMode });
 }
 
 export function stopVideoRecording(): Promise<VideoRecording | null> {

@@ -230,7 +230,7 @@ export { expect } from "@playwright/test";`}
               <pre className="text-text-primary font-mono text-sm">
                 <span className="text-text-muted">$ </span>
                 <span className="text-success">claude</span>
-                <span className="text-text-primary"> mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports</span>
+                <span className="text-text-primary"> mcp add -s user tracebug -- npx -y tracebug mcp</span>
               </pre>
             </div>
             <p className="text-text-muted text-sm leading-relaxed mb-4">

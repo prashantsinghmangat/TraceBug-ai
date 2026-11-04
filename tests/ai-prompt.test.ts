@@ -16,6 +16,12 @@ describe('generateAIPrompt network failures', () => {
     expect(prompt).toContain('1 failed page-asset request, e.g. favicon or images, omitted');
   });
 
+  it("includes the reporter's edited description when given, and nothing when not", () => {
+    const withNotes = generateAIPrompt(report([]), { reporterNotes: 'Expected 20% off with SAVE20 from the banner.' });
+    expect(withNotes).toContain("## Reporter's description\nExpected 20% off with SAVE20 from the banner.");
+    expect(generateAIPrompt(report([]))).not.toContain("Reporter's description");
+  });
+
   it('adds no omission note when every failure is real', () => {
     const prompt = generateAIPrompt(report([{ method: 'GET', url: '/api/cart', status: 503 }]));
     expect(prompt).toContain('GET /api/cart → 503');

@@ -1,4 +1,5 @@
 import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
+import { agentWorkflowSteps } from "./agent-workflow";
 
 // ── HTML Replay Viewer Template ───────────────────────────────────────────
 // A self-contained HTML scaffold + inlined renderer. The bundler embeds the
@@ -1104,7 +1105,7 @@ const REPLAY_RUNTIME = `(function(){
       if (c.frustration) {
         var sym = c.frustration === "rage" ? "⚡" : c.frustration === "dead" ? "✕" : "↩";
         var title = c.frustration === "rage" ? "Rage click — multiple rapid clicks on the same element" :
-                    c.frustration === "dead" ? "Dead click — no visible response within 1.5s" :
+                    c.frustration === "dead" ? "Dead click — clicked again a few seconds later, as if nothing happened" :
                     "Form abandoned — filled but never submitted";
         frust = '<span class="tb-vchip-frust tb-vchip-frust-' + esc(c.frustration) + '" title="' + esc(title) + '">' + sym + '</span>';
       }
@@ -1140,12 +1141,13 @@ const REPLAY_RUNTIME = `(function(){
   var mcpFile = "";
   try { mcpFile = decodeURIComponent(location.pathname.split(/[\\\\/]/).pop() || ""); } catch (e) {}
   if (!mcpFile || !/\\.html?$/i.test(mcpFile)) mcpFile = "<this .html export>";
+  // Steps come from src/exporters/agent-workflow.ts (shared with the hand-off
+  // card and the MCP debug prompt); {FILE} is filled in at view time.
+  var mcpSteps = ${JSON.stringify(agentWorkflowSteps("{FILE}"))};
   var mcpPrompt = 'This is a TraceBug bug report export: ' + mcpFile + '\\n\\n' +
-    '1. Call get_bug_report("' + mcpFile + '") to load the report overview and its investigation guide.\\n' +
-    '2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).\\n' +
-    '3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.\\n\\n' +
-    'If the tracebug MCP server is not connected yet, register it first (point --dir at the folder containing this file):\\n' +
-    'claude mcp add tracebug -- npx -y tracebug mcp --dir <reports-folder>';
+    mcpSteps.map(function(s, i){ return (i + 1) + '. ' + s.split('{FILE}').join(mcpFile); }).join('\\n') + '\\n\\n' +
+    'If the tracebug MCP server is not connected yet, register it first. It finds reports in your Downloads and Desktop folders and in this project, so if this file is somewhere else, move it into the project:\\n' +
+    'claude mcp add tracebug -- npx -y tracebug mcp';
   aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
     '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
     '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +

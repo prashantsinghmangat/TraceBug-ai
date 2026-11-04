@@ -114,7 +114,7 @@ export default function AiBugFixPage() {
           </p>
           <div className="code-block mb-4 rounded-lg p-4 font-mono text-sm">
             <span className="text-text-muted">$ </span>
-            <span className="text-text-primary">claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports</span>
+            <span className="text-text-primary">claude mcp add -s user tracebug -- npx -y tracebug mcp</span>
           </div>
           <p className="mb-4 text-[15px] leading-[1.75] text-text-muted">
             It gives your agent read-tools over the report (console errors, network activity,

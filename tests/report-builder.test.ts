@@ -337,6 +337,25 @@ describe('extractClickedElement', () => {
     expect(c?.text).toBe('B');
   });
 
+  it('returns the click that led to the first failure, not a later one', () => {
+    const events = [
+      ev('click', { element: { tag: 'button', text: 'Apply coupon' } }),
+      ev('console_error', { error: { message: 'TypeError: x is undefined' } }),
+      ev('click', { element: { tag: 'button', text: 'Place order' } }),
+    ];
+    expect(extractClickedElement(events)?.text).toBe('Apply coupon');
+  });
+
+  it('ignores a failed favicon when choosing the failure, and a later real failure wins', () => {
+    const events = [
+      ev('api_request', { request: { method: '', url: 'http://localhost/favicon.ico', statusCode: 404 } }),
+      ev('click', { element: { tag: 'button', text: 'Place order' } }),
+      ev('api_request', { request: { method: 'POST', url: '/api/orders', statusCode: 422 } }),
+      ev('click', { element: { tag: 'button', text: 'Track order' } }),
+    ];
+    expect(extractClickedElement(events)?.text).toBe('Place order');
+  });
+
   it('preserves selector, id, ariaLabel, testId', () => {
     const events = [
       ev('click', { element: {

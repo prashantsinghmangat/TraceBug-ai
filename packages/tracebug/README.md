@@ -11,8 +11,10 @@ Zero dependencies. ~24 KB. Node ≥ 18.
 Connect Claude Code, Cursor, Windsurf, or VS Code to the `.html` bug reports the [TraceBug Chrome extension](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) exports:
 
 ```bash
-claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 ```
+
+No `--dir` needed: the server finds reports in your project and in your Downloads and Desktop folders, where browser exports land (`--dir` limits it to one folder). On native Windows, use `-- cmd /c npx -y tracebug mcp`. Cursor, Windsurf and VS Code setup: [docs/mcp.md](https://github.com/prashantsinghmangat/tracebug-ai/blob/main/docs/mcp.md).
 
 The agent gets nine read tools and a `/tracebug:debug_bug_report` prompt:
 

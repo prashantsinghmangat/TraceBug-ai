@@ -4,6 +4,30 @@
 
 import { TraceBugEvent, StoredSession, ScreenshotData } from "./types";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
+import { collapseTyping } from "./repro-generator";
+
+const USER_ACTION_TYPES = ["click", "input", "select_change", "form_submit", "route_change"];
+
+/** The last user action at or before `index` (events are in capture order),
+ *  falling back to the session's last action when `index` is -1. */
+export function lastUserActionBefore(events: TraceBugEvent[], index: number): TraceBugEvent | null {
+  const end = index >= 0 ? index : events.length - 1;
+  for (let i = end; i >= 0; i--) {
+    if (USER_ACTION_TYPES.includes(events[i].type)) return events[i];
+  }
+  return null;
+}
+
+/** Index of the first event that IS the bug — an uncaught error or rejection,
+ *  a logged console error, or a failed (non-noise) request — or -1. */
+export function firstFailureIndex(events: TraceBugEvent[]): number {
+  return events.findIndex((e) =>
+    e.type === "error" || e.type === "unhandled_rejection" || e.type === "console_error" ||
+    (e.type === "api_request" &&
+      (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0) &&
+      !isNoiseRequest(e.data.request?.url))
+  );
+}
 
 export function generateBugTitle(session: StoredSession): string {
   const events = session.events;
@@ -22,7 +46,9 @@ export function generateBugTitle(session: StoredSession): string {
 
   const errorMsg = errorEvents[0].data.error?.message || session.errorMessage || "Unknown error";
   const errorType = classifyError(errorMsg);
-  const lastAction = userActions.length > 0 ? userActions[userActions.length - 1] : null;
+  // The action that led to the error, not the session's last one: clicking
+  // "Place order" after a coupon crash titled the bug after Place order.
+  const lastAction = lastUserActionBefore(events, events.indexOf(errorEvents[0]));
   const page = errorEvents[0].page || "";
 
   // Build title from context
@@ -66,7 +92,7 @@ function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEven
 
   if (failedApis.length > 0) {
     const api = failedApis[0].data.request;
-    const lastAction = userActions.length > 0 ? userActions[userActions.length - 1] : null;
+    const lastAction = lastUserActionBefore(allEvents, allEvents.indexOf(failedApis[0]));
     const context = getActionContext(lastAction);
     return context
       ? `${context} — API ${api?.method} Returns ${api?.statusCode || "Network Error"}`
@@ -77,9 +103,15 @@ function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEven
     return screenshots && screenshots.length > 0 ? "Screenshot Capture — No User Interactions" : "Empty Session — No User Interactions";
   }
 
-  const lastActions = userActions.slice(-3);
-  const parts = lastActions.map(a => describeAction(a));
-  return `Session: ${parts.join(" → ")}`;
+  // Nothing failed (no error, no real failed request): the title says so up
+  // front, so a clean capture reads as clean. Typing pauses and repeated
+  // clicks on the same thing collapse, so the three actions shown are distinct.
+  const parts: string[] = [];
+  for (const a of collapseTyping(userActions)) {
+    const d = describeAction(a);
+    if (parts[parts.length - 1] !== d) parts.push(d);
+  }
+  return `No errors captured: ${parts.slice(-3).join(" → ")}`;
 }
 
 function getActionContext(event: TraceBugEvent | null): string {

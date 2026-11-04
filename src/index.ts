@@ -1053,7 +1053,7 @@ class TraceBugSDK {
     blurFirst?: boolean;
     delaySec?: number;
     withMicrophone?: boolean;
-    surfaceMode?: "tab" | "desktop";
+    surfaceMode?: "tab" | "desktop" | "auto";
     video?: boolean;
   } = {}): void {
     // Mutable: the countdown's mic toggle (below) can change this before go()
@@ -1317,7 +1317,7 @@ class TraceBugSDK {
 
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
-    surfaceMode?: "tab" | "desktop";
+    surfaceMode?: "tab" | "desktop" | "auto";
     withMicrophone?: boolean;
     onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
   }): Promise<boolean> {

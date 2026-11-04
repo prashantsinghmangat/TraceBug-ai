@@ -783,7 +783,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const sub = document.getElementById("ctaSub");
     if (sub) {
       sub.textContent = on
-        ? "Records the tab · stop when done"
+        ? (surfaceMode === "tab" ? "Records this tab · stop when done" : "Records a window or screen · stop when done")
         : "Console, network & replay · stop when done";
     }
     // Both icons are in popup.html; show one. No innerHTML — see the comment
@@ -827,6 +827,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         surfaceMode = "desktop";
         surfaceSetBy = "user";
         renderSurfaceButtons();
+        // The hero subtitle names the surface; keep it true.
+        if (!stateResponse?.capturing) applyVideoUI(videoCb ? videoCb.checked : false);
         saveRecordOpts();
       });
     }
@@ -835,6 +837,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         surfaceMode = "tab";
         surfaceSetBy = "user";
         renderSurfaceButtons();
+        if (!stateResponse?.capturing) applyVideoUI(videoCb ? videoCb.checked : false);
         saveRecordOpts();
       });
     }
@@ -1050,7 +1053,7 @@ function updateHint(isLoaded) {
   // not a page handler — so the old "once TraceBug is on a page" caveat is
   // gone with it.
   text.textContent = boundShortcut
-    ? `${base} Tip: ${boundShortcut} captures a bug on this tab.`
+    ? `${base} Tip: ${boundShortcut} screenshots this tab and opens a bug ticket.`
     : `${base} No capture shortcut is set.`;
 
   dot.classList.toggle("active", !!isLoaded);
@@ -1211,6 +1214,14 @@ function showMicNotice(err) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.11.6": {
+    label: "New in 1.11.6",
+    lines: [
+      "Simpler AI hand-off: one setup command, and your agent finds reports in Downloads",
+      "The toolbar's Record follows your Tab / Desktop choice — no share picker in Tab mode",
+      "No more old bug titles carried into a new capture",
+    ],
+  },
   "1.11.5": {
     label: "New in 1.11.5",
     lines: [

@@ -481,7 +481,7 @@
         <div class="step-text">
           <div class="step-n">3</div>
           <h2 class="step-t">Your capture shortcut</h2>
-          <p class="step-h">Start a capture on any page without opening the popup.</p>
+          <p class="step-h">Take a screenshot and open a bug ticket on any page, without opening the popup.</p>
         </div>
       </article>
 
@@ -510,9 +510,9 @@
 
         <div class="ai">
           <div class="ai-t">Using an AI coding agent?</div>
-          <p class="ai-l">Let Claude Code or Cursor read your reports locally.</p>
+          <p class="ai-l">Let Claude Code read your reports locally. Run once, then restart Claude Code; it finds reports in your Downloads folder. Cursor and others: tracebug.dev/docs/mcp</p>
           <div class="ai-cmd">
-            <span class="ai-cmd-l"><span class="ai-dollar">$</span><span id="mcpCmd">npx tracebug mcp</span></span>
+            <span class="ai-cmd-l"><span class="ai-dollar">$</span><span id="mcpCmd">claude mcp add -s user tracebug -- npx -y tracebug mcp</span></span>
             <!-- Wired by welcome.js; the CSP forbids an inline handler. -->
             <button class="ai-copy" id="copyMcp" type="button" title="Copy to clipboard">Copy</button>
           </div>

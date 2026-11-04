@@ -10,6 +10,36 @@ export interface ReproResult {
   errorSummary: string;
 }
 
+const TYPING_BOUNDARY = new Set([
+  "click", "input", "select_change", "form_submit", "route_change",
+  "error", "unhandled_rejection", "console_error",
+]);
+
+/**
+ * Drop each text `input` event that the user's next action merely continues:
+ * typing into the same field again, with no click, navigation or error in
+ * between. Inputs are recorded after a 300 ms pause, so slow typing used to
+ * become `Type "SA"`, `Type "SAV"`, … `Type "SAVE20"` — five steps, and five
+ * `fill()` calls in the generated test, for one value. Only the final value
+ * is kept. Checkbox/radio toggles are each a real action and are kept.
+ */
+export function collapseTyping(events: TraceBugEvent[]): TraceBugEvent[] {
+  const fieldOf = (e: TraceBugEvent) => {
+    const el = e.data?.element;
+    if (e.type !== "input" || !el || el.type === "checkbox" || el.type === "radio") return null;
+    return el.selector || el.name || el.id || null;
+  };
+  return events.filter((e, i) => {
+    const field = fieldOf(e);
+    if (!field) return true;
+    for (let j = i + 1; j < events.length; j++) {
+      if (!TYPING_BOUNDARY.has(events[j].type)) continue; // background requests, logs
+      return fieldOf(events[j]) !== field; // continued typing in the same field → drop this one
+    }
+    return true;
+  });
+}
+
 /**
  * Takes a list of session events and the error info, and produces numbered
  * reproduction steps + a short error summary.
@@ -28,7 +58,7 @@ export function generateReproSteps(
   // Last value typed per field, so click context doesn't repeat a "Type" step
   const typed = new Map<string, string>();
 
-  for (const event of events) {
+  for (const event of collapseTyping(events)) {
     switch (event.type) {
       case "route_change": {
         const to = event.data.to || event.page;

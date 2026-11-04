@@ -20,7 +20,7 @@ import { getVoiceTranscripts } from "./voice-recorder";
 import { getLastVideoRecording, type VideoRecording } from "./video-recorder";
 import { getCurrentContext } from "./dev-api";
 import { matchErrorPattern, formatPatternMatch } from "./patterns";
-import { generateBugTitle } from "./title-generator";
+import { generateBugTitle, firstFailureIndex } from "./title-generator";
 import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
 import { dedupeNetworkRows } from "./network-dedupe";
@@ -267,7 +267,7 @@ export function buildReport(
   const screenshots = [...getScreenshots(), ...(extraScreenshots || [])];
 
   // Timeline
-  const timeline = buildTimeline(events);
+  const timeline = buildTimeline(events, { baseUrl: pageUrl });
 
   // Voice transcripts from memory
   const voiceTranscripts = getVoiceTranscripts();
@@ -511,7 +511,10 @@ function describeStep(ev: TraceBugEvent): string | null {
 // and in downstream export formats (GitHub / Jira).
 
 export function extractClickedElement(events: TraceBugEvent[]): ClickedElementSummary | null {
-  for (let i = events.length - 1; i >= 0; i--) {
+  // The click that led to the first failure, not the session's last click —
+  // the summary and root-cause hint name this element ("thrown when clicking …").
+  const failure = firstFailureIndex(events);
+  for (let i = failure >= 0 ? failure : events.length - 1; i >= 0; i--) {
     const ev = events[i];
     if (ev.type !== "click") continue;
     const el = ev.data.element || {};
@@ -536,6 +539,10 @@ export function extractClickedElement(events: TraceBugEvent[]): ClickedElementSu
 //   LOW    → only a click / fallback
 
 const RC_LABEL_MAX = 40;
+
+/** The root-cause hint's opening when nothing failed — also how the MCP
+ *  investigation guide and the AI prompt recognize a no-failure report. */
+export const NO_FAILURE_HINT = "No errors or failed requests were captured";
 
 /**
  * Produce a best-guess cause for the bug. Runs in O(1) on report fields
@@ -583,25 +590,24 @@ export function generateRootCauseHint(report: BugReport): RootCauseHint {
   }
 
   // ── LOW confidence ── Click with no error / network signal ──────────────
+  // Say what was (not) captured; never guess a cause. "Click on X did not
+  // trigger any observable effect" used to be asserted here without checking
+  // anything — a playground run showed it right after the click visibly placed
+  // an order. No captured error does not mean no bug (a wrong total throws
+  // nothing), so the reader is pointed at the description instead.
   if (click) {
-    // "Did not trigger any observable effect" is a real diagnosis for a dead
-    // button — but a link click navigates (on MPAs it unloads the page), so
-    // claiming "no effect" there is false. Links get honest phrasing instead.
-    if ((click.tag || "").toLowerCase() === "a") {
-      return {
-        hint: `No errors captured — last action was clicking the link '${clickLabel(click)}' (navigation)`,
-        confidence: "low",
-      };
-    }
+    const what = (click.tag || "").toLowerCase() === "a"
+      ? `clicking the link '${clickLabel(click)}' (navigation)`
+      : `clicking '${clickLabel(click)}'`;
     return {
-      hint: `Click on '${clickLabel(click)}' did not trigger any observable effect`,
+      hint: `${NO_FAILURE_HINT} — last action was ${what}. If something looked wrong, the reporter's description says what was expected.`,
       confidence: "low",
     };
   }
 
   // No actionable signal at all
   return {
-    hint: "Not enough signal captured to suggest a likely cause",
+    hint: `${NO_FAILURE_HINT}. If something looked wrong, the reporter's description says what was expected.`,
     confidence: "low",
   };
 }

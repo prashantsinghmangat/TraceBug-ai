@@ -162,6 +162,25 @@ describe('scanReportFiles', () => {
 });
 
 describe('tool handlers', () => {
+  it('list_bug_reports puts the newest report first', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-order-'));
+    try {
+      const at = (generatedAt: number, title: string) => {
+        const p = fixturePayload();
+        p.meta.generatedAt = generatedAt;
+        p.meta.title = title;
+        return buildReplayHtml(p);
+      };
+      fs.writeFileSync(path.join(dir, 'a-old.html'), at(1700000000000, 'Old bug'), 'utf8');
+      fs.writeFileSync(path.join(dir, 'b-new.html'), at(1800000000000, 'New bug'), 'utf8');
+      fs.writeFileSync(path.join(dir, 'c-mid.html'), at(1750000000000, 'Mid bug'), 'utf8');
+      const r = toolListBugReports(dir, { dir });
+      expect(r.reports.map((x) => x.title)).toEqual(['New bug', 'Mid bug', 'Old bug']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('list_bug_reports summarizes with counts', () => {
     const r = toolListBugReports(tmpDir, {});
     expect(r.count).toBe(2);
@@ -374,6 +393,10 @@ describe('fix-loop tools (get_playwright_test / resolve_stack / get_fix_context)
     expect(r.spec).toBe(SPEC);
     expect(r.filename).toBe('vendor-update-fails.spec.ts');
     expect(r.howToUse.join(' ')).toContain('npx playwright test');
+    // The setup an agent can't guess: install, a running dev server, BASE_URL.
+    expect(r.howToUse.join(' ')).toContain('npm i -D @playwright/test');
+    expect(r.howToUse.join(' ')).toContain('BASE_URL');
+    expect(r.howToUse.join(' ')).toMatch(/dev server/);
   });
 
   it('get_playwright_test explains itself for pre-1.9 exports', () => {

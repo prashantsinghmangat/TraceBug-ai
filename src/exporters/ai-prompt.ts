@@ -15,6 +15,7 @@
 
 import { BugReport } from "../types";
 import { isNoiseRequest } from "../url-hygiene";
+import { agentWorkflowSteps, CHAT_WORKFLOW_STEPS, numberedSteps } from "./agent-workflow";
 import { runExportPlugins } from "../plugin-system";
 
 const MAX_CONSOLE_ERRORS = 5;
@@ -35,7 +36,12 @@ export interface AIPromptOptions {
    * the copy-to-chat flow. Default: false.
    */
   screenshotsAttached?: boolean;
+  /** What the reporter wrote in the ticket's description, when they edited
+   *  it — often the one fact the capture can't know ("expected 20% off"). */
+  reporterNotes?: string;
 }
+
+const MAX_REPORTER_NOTES = 1500;
 
 export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {}): string {
   const { includeTask = true, projectName, screenshotsAttached = false } = options;
@@ -49,6 +55,11 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
   if (report.summary) lines.push(`**Summary:** ${truncate(report.summary, 240)}`);
   if (report.severity) lines.push(`**Severity:** ${report.severity}`);
   if (report.priority) lines.push(`**Priority:** ${report.priority}`);
+  const notes = options.reporterNotes?.trim();
+  if (notes) {
+    lines.push(`\n## Reporter's description`);
+    lines.push(notes.length > MAX_REPORTER_NOTES ? notes.slice(0, MAX_REPORTER_NOTES) + "…" : notes);
+  }
 
   // ── Environment ────────────────────────────────────────────────────────
   if (env) {
@@ -60,8 +71,19 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
     if (env.deviceType) lines.push(`- Device: ${env.deviceType}`);
   }
 
-  // ── Root-cause hint (only if auto-detector had something useful) ──────
-  if (report.rootCause?.hint) {
+  // ── Root-cause hint, or an honest "nothing failed" ────────────────────
+  // With no captured error or real failed request there is no cause to hint
+  // at; the model is told so instead, so it doesn't build one from the steps.
+  const nothingFailed =
+    (report.consoleErrors || []).length === 0 &&
+    !(report.networkErrors || []).some((f) => !isNoiseRequest(f.url));
+  if (nothingFailed) {
+    lines.push(`\n## No errors captured`);
+    lines.push(
+      "No errors or failed requests were captured in this session, so the evidence alone does not show a bug. " +
+        "Use the reporter's description for what was expected. If it doesn't say, ask what looked wrong before suggesting a cause.",
+    );
+  } else if (report.rootCause?.hint) {
     lines.push(`\n## Auto-detected root cause hint (${report.rootCause.confidence || "low"} confidence)`);
     lines.push(report.rootCause.hint);
   }
@@ -164,11 +186,7 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
   // ── Task (call-to-action for the AI) ───────────────────────────────────
   if (includeTask) {
     lines.push(`\n## Task`);
-    lines.push(`Analyze this bug report and respond with:`);
-    lines.push(`1. The most likely root cause, with your reasoning tied to the evidence above`);
-    lines.push(`2. Specific files or components to inspect`);
-    lines.push(`3. A concrete fix (code where possible)`);
-    lines.push(`4. A regression test — or the exact assertions — that would catch this bug if it returns`);
+    lines.push(numberedSteps(CHAT_WORKFLOW_STEPS));
   }
 
   return lines.join("\n");
@@ -204,14 +222,11 @@ export function generateMcpPrompt(filename: string): string {
   return [
     `This is a TraceBug bug report export: ${filename}`,
     ``,
-    `1. Call get_bug_report("${filename}") to load the report overview and its investigation guide.`,
-    `2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).`,
-    `3. Cross-reference the findings with this codebase to identify the root cause and implement the fix.`,
-    `4. Call get_playwright_test("${filename}") for the generated failing test — run it to reproduce the bug (red), then re-run after your fix to confirm it passes (green).`,
+    numberedSteps(agentWorkflowSteps(filename)),
     ``,
     `If the tracebug MCP server isn't connected yet, register it first — it auto-finds reports in your Downloads/Desktop folders, so no path setup is needed:`,
     `claude mcp add tracebug -- npx -y tracebug mcp`,
-    `(If your reports live elsewhere, add: --dir "<reports-folder>")`,
+    `(If the report was saved somewhere else, move it into this project; the server also scans the project.)`,
   ].join("\n");
 }
 

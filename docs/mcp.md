@@ -3,10 +3,12 @@
 TraceBug ships a local [Model Context Protocol](https://modelcontextprotocol.io) server. It exposes your exported bug reports to AI coding agents — **Claude Code, Cursor, Windsurf, VS Code**, or any MCP client — so the agent can read the console errors, network failures, repro steps, and screenshots, find the offending code in your repo, and propose the fix.
 
 ```bash
-npx -y tracebug mcp --dir ./bug-reports
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 ```
 
-`-y` skips the install prompt but does not pin a version — npx resolves whatever's newest on the npm registry when it runs. If you want a known, audited build instead, pin it: `npx tracebug@1.10.1 mcp --dir ./bug-reports`, and bump the version string yourself when you choose to upgrade.
+No `--dir` needed: the server finds reports in your project and in your **Downloads** and **Desktop** folders, where the extension's exports land. Passing `--dir` limits it to that one folder (see [Where it looks](#where-it-looks-for-reports)).
+
+`-y` skips the install prompt but does not pin a version — npx resolves whatever's newest on the npm registry when it runs. If you want a known, audited build instead, pin it: `npx tracebug@1.11.6 mcp`, and bump the version string yourself when you choose to upgrade.
 
 **Everything stays on your machine.** The server reads the same self-contained `.html` files TraceBug already exports — no account, no cloud, no upload. This is the difference from every other bug-reporting tool's MCP server: theirs are hosted services that require your bug data to live in their cloud first. TraceBug's runs locally over stdio and reads from your disk.
 
@@ -14,7 +16,7 @@ npx -y tracebug mcp --dir ./bug-reports
 
 1. A tester captures a bug and exports the report (**Quick Bug → Export HTML**). That one `.html` file contains everything: replay, console, network, user actions, screenshots, root-cause hint.
 2. The tester hands the file to a developer (Slack, email, ticket attachment — it's just a file).
-3. The developer drops it in a folder (e.g. `bug-reports/` in the repo) and asks their coding agent:
+3. The developer leaves it in Downloads (or drops it anywhere in the repo) and asks their coding agent:
 
    > *"Use the tracebug tools to list my bug reports and debug the first one."*
 
@@ -44,20 +46,26 @@ You rarely have to type it yourself — TraceBug puts it in front of you at ever
 
 ### Claude Code
 
-One-liner (global — works in every project):
+One-liner, for every project (`-s user`; without it, Claude Code registers the server for the current project only):
 
 ```bash
-claude mcp add tracebug -- npx -y tracebug mcp
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 ```
 
-Or per-project via `.mcp.json` in the repo root (committed, so the whole team gets it):
+On **native Windows** (not WSL), Claude Code needs a `cmd /c` wrapper to start `npx`:
+
+```bash
+claude mcp add -s user tracebug -- cmd /c npx -y tracebug mcp
+```
+
+Restart Claude Code afterwards so it loads the server. Or per-project via `.mcp.json` in the repo root (committed, so the whole team gets it):
 
 ```json
 {
   "mcpServers": {
     "tracebug": {
       "command": "npx",
-      "args": ["-y", "tracebug", "mcp", "--dir", "bug-reports"]
+      "args": ["-y", "tracebug", "mcp"]
     }
   }
 }
@@ -65,12 +73,22 @@ Or per-project via `.mcp.json` in the repo root (committed, so the whole team ge
 
 ### Cursor
 
-Settings → MCP → **Add new MCP server**:
+Settings → MCP → **Add new MCP server** (command `npx`, args `-y tracebug mcp`), or paste this into `.cursor/mcp.json`:
 
-- **Command:** `npx`
-- **Args:** `-y tracebug mcp --dir ./bug-reports`
+```json
+{
+  "mcpServers": {
+    "tracebug": {
+      "command": "npx",
+      "args": ["-y", "tracebug", "mcp"]
+    }
+  }
+}
+```
 
-Or add the same `mcpServers` block to `.cursor/mcp.json`.
+### Windsurf
+
+Add the same `mcpServers` block to `~/.codeium/windsurf/mcp_config.json`, then refresh the MCP servers in Cascade.
 
 ### VS Code (GitHub Copilot agent mode)
 
@@ -82,7 +100,7 @@ Add to `.vscode/mcp.json`:
     "tracebug": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "tracebug", "mcp", "--dir", "bug-reports"]
+      "args": ["-y", "tracebug", "mcp"]
     }
   }
 }
@@ -93,10 +111,17 @@ Add to `.vscode/mcp.json`:
 The server speaks standard MCP over stdio. Point the client at:
 
 ```bash
-npx -y tracebug mcp [--dir <path>]
+npx -y tracebug mcp
 ```
 
-`--dir` sets where bug reports live (default: the current working directory). The scanner searches up to 3 levels deep and skips `node_modules`, `.git`, build output, and dot-directories.
+### Where it looks for reports
+
+Without `--dir` (recommended), `list_bug_reports` finds TraceBug exports in:
+
+- the directory the agent starts the server in (normally your project root), up to 3 levels deep, skipping `node_modules`, `.git`, build output and dot-directories;
+- your **Downloads** and **Desktop** folders (top level, `tracebug-…` files only), where browser exports land.
+
+Reports are listed newest first. `--dir <path>` restricts the listing to that one folder, which is useful in CI (the [Playwright reporter](playwright.md) prints a command with its own output folder). If your browser saves downloads elsewhere (a custom folder, or "Ask where to save each file"), either move the report into your project or pass `--dir` pointing at it.
 
 ## Tools
 
@@ -137,7 +162,7 @@ Any TraceBug export:
 - **`.html` replay exports** (the primary artifact) — the report JSON is embedded in the file, so the exact file a tester shares is what the agent reads. The file still opens as a full interactive replay in any browser.
 - **`.json` report payloads** with the same structure.
 
-Files that aren't TraceBug exports are ignored — you can point `--dir` at your Downloads folder and it will only pick up real reports.
+Files that aren't TraceBug exports are ignored, so scanning your Downloads folder only ever picks up real reports.
 
 ## Try it right now
 
@@ -154,14 +179,14 @@ The Inspector opens a browser UI where you can call each tool against [`demo-bug
 ## Privacy
 
 - The server binds to **stdio only** — it opens no network ports and makes no network requests.
-- It reads files from the directory you point it at, nothing else.
+- It reads only TraceBug export files: from your project directory and your Downloads and Desktop folders (or only from `--dir`, if you pass it).
 - What the agent sees is exactly what's in the export — which already went through TraceBug's capture-time redaction (sensitive storage keys, URL params, and token shapes are scrubbed before the report is built; see [Privacy in the README](../README.md#privacy)).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `list_bug_reports` returns `count: 0` | Check `--dir` points at the folder with the `.html` exports; the scanner only goes 3 levels deep. |
+| `list_bug_reports` returns `count: 0` | If you registered the server with `--dir`, it only looks in that folder; re-add it without `--dir` so Downloads is scanned too. Otherwise the report is somewhere the server doesn't look (a custom download folder, or deeper than 3 levels in the project): move it into the project, or pass `--dir` pointing at it. |
 | Client says the server won't start | Requires Node ≥ 18. Test manually: `npx -y tracebug mcp --dir .` should print `TraceBug MCP server — reading bug reports from …` to stderr and then wait for input. |
 | Which package am I running? | The [`tracebug`](https://www.npmjs.com/package/tracebug) package is the standalone ~24 KB CLI (MCP server + `init`) — all a developer receiving reports needs. `tracebug-sdk` (the full capture SDK) bundles the same CLI, so inside a project with the SDK installed, `npx tracebug mcp` resolves locally. |
 | Report file not recognized | Only files exported by TraceBug (containing the embedded report payload) are picked up — a screenshot or PDF export is not readable by the MCP server; use **Export HTML**. |

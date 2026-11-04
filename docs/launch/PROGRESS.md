@@ -217,3 +217,26 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Files:** STATE, PROGRESS; `docs-internal/CHROME-WEB-STORE-LISTING.md` §7b (gitignored).
 - **Verified:** `npm view` both packages at 1.11.5 (`bin` = `bin.mjs`); registry query shows 1.11.5 `isLatest`; live `tracebug-sdk.js` sha256 = repo's (`8B1582…D92D`).
 - **Open:** CWS and AMO approval; post-release surface check and `npx tracebug@1.11.5 mcp --help`.
+
+## 1.11.6 prepared: minimum-click workflow fixes, P0 + P1 (2026-11-03)
+
+- **What:** mapped five flows (install → capture → report → agent → fix/verify) into
+  `minimum-click-workflow.md`, then fixed the dead ends: `--dir`-free setup everywhere, draft only on real
+  edits and cleared on export, toolbar Record `surfaceMode: "auto"`, welcome setup command + Alt+B wording,
+  persistent hand-off toast, newest-first listing, edits in Fix with AI (`reporterNotes`), Cursor/Windsurf
+  JSON, Playwright-test text, popup/AI-tab copy.
+- **Files:** `src/ui/quick-bug.ts`, `src/{compact-toolbar,video-recorder,index}.ts`, `src/exporters/{ai-prompt,html-template}.ts`,
+  `cli/mcp-server.ts`, `tracebug-extension/{background.js,popup.js,popup.html,welcome.html,welcome.js}`, docs
+  (`mcp.md`, quickstart, playwright, READMEs), website MCP/playwright/ai-bug-fix pages, versions → 1.11.6.
+- **Verified:** `check.mjs --full` 988/988; website tsc + lint; welcome page rendered. **Not verified:** toolbar
+  Tab mode in a real Chrome/Firefox (the background test fake can't start a recording). `package-lock.json` not bumped.
+- **Playground run (`D:\tmp\tracebug-playground`, guide outside it) → three more fixes:** title/summary use the action
+  before the first failure (`lastUserActionBefore`, `firstFailureIndex`); undefined-access hint says find the missing
+  value first; all four agent prompts share `src/exporters/agent-workflow.ts`. Gates 1002/1002.
+- **Second run (fixed app, no bug):** no-failure reports say "No errors or failed requests were captured" (`NO_FAILURE_HINT`)
+  instead of a guessed cause, in the hint, the AI prompt and the MCP guide; dead click = re-click within 1.5–8 s; timeline
+  drops the Resource Timing duplicate (`dedupeNetworkRows`). Gates 1012/1012. Open: reports include every cookie of the host
+  (on localhost that's other local apps' cookies too).
+- **Third run (bug + clean):** both behaved as designed (right title/hint, Claude red-tested and asked; clean run asked
+  instead of guessing). Fixed: slow typing collapses to one step/fill (`collapseTyping`), clean titles start "No errors
+  captured:". Gates 1017/1017.
