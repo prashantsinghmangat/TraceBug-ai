@@ -122,23 +122,36 @@ describe("Firefox, where responseStatus does not exist", () => {
   });
 });
 
-describe("requests made DURING the capture are untouched by the rule", () => {
-  it("keeps a fast, successful one", () => {
-    const rows = drain(
-      [entry({ name: `${ORIGIN}/api/during`, startTime: 15_000, responseStatus: 200, duration: 10 })],
-      { captureStartedAt: CAPTURE_STARTED_AT },
-    );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].phase).toBeUndefined();
+describe("requests made DURING the capture (1.12: they no longer flood the event buffer)", () => {
+  // Each row takes a slot in the session's event buffer, whose OLDEST events
+  // are evicted: a page's images and fonts used to push out the clicks that
+  // caused the bug.
+  it("leaves a fetch/XHR to its wrapper, which records it with method and status", () => {
+    const rows = drain([
+      entry({ name: `${ORIGIN}/api/during`, startTime: 15_000, responseStatus: 200, duration: 10 }),
+      entry({ name: `${ORIGIN}/api/broken`, startTime: 15_100, responseStatus: 500, duration: 10 }),
+      entry({ name: `${ORIGIN}/api/xhr`, startTime: 15_200, initiatorType: "xmlhttprequest", responseStatus: 200, duration: 10 }),
+    ], { captureStartedAt: CAPTURE_STARTED_AT });
+    expect(rows).toHaveLength(0);
   });
 
-  it("keeps everything when no capture start is given (a navigation resume)", () => {
+  it("keeps an asset only when it failed or was slow", () => {
+    const rows = drain([
+      entry({ name: `${ORIGIN}/a.png`, startTime: 15_000, initiatorType: "img", responseStatus: 200, duration: 5 }),
+      entry({ name: `${ORIGIN}/b.png`, startTime: 15_000, initiatorType: "img", responseStatus: 404, duration: 5 }),
+      entry({ name: `${ORIGIN}/c.js`, startTime: 15_000, initiatorType: "script", responseStatus: 200, duration: PAGE_LOAD_SLOW_MS + 1 }),
+    ], { captureStartedAt: CAPTURE_STARTED_AT });
+    expect(rows.map((r) => r.url)).toEqual([`${ORIGIN}/b.png`, `${ORIGIN}/c.js`]);
+    expect(rows.every((r) => r.phase === undefined)).toBe(true);
+  });
+
+  it("applies the same rule when no capture start is given (a navigation resume)", () => {
     const rows = drain([
       entry({ name: `${ORIGIN}/a.png`, initiatorType: "img", responseStatus: 200, duration: 5 }),
+      entry({ name: `${ORIGIN}/font.woff2`, initiatorType: "css", responseStatus: 404, duration: 5 }),
       entry({ name: `${ORIGIN}/api/b`, responseStatus: 200, duration: 5 }),
     ]);
-    expect(rows).toHaveLength(2);
-    expect(rows.every((r) => r.phase === undefined)).toBe(true);
+    expect(rows.map((r) => r.url)).toEqual([`${ORIGIN}/font.woff2`]);
   });
 });
 
@@ -152,16 +165,21 @@ describe("the seen-set no longer eats the page load", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("does not mark an excluded entry as seen — it can still arrive later", () => {
-    // A quiet page-load row is skipped, not consumed: if the same URL is
-    // requested again during the capture it must still be reported.
-    vi.stubGlobal("performance", { timeOrigin: TIME_ORIGIN, getEntriesByType: () => [entry({ name: `${ORIGIN}/api/quiet`, responseStatus: 200, duration: 10 })] });
+  it("does not mark an excluded page-load entry as seen — a later drain still considers it", () => {
+    // A quiet page-load row is skipped, not consumed. (Since 1.12 a quiet row
+    // is skipped during the capture too, so the proof is that a later drain
+    // still gets to look at it rather than finding it already seen.)
+    const quiet = entry({ name: `${ORIGIN}/quiet.png`, initiatorType: "img", responseStatus: 200, duration: 10 });
+    const slowLater = { ...quiet, duration: PAGE_LOAD_SLOW_MS + 1 }; // same URL, now notable
+    let entries = [quiet];
+    vi.stubGlobal("performance", { timeOrigin: TIME_ORIGIN, getEntriesByType: () => entries });
     const rows: Record<string, unknown>[] = [];
     resetPerformanceSeen();
     const emit = (_t: string, d: unknown) => { rows.push((d as { request: Record<string, unknown> }).request); };
     drainPerformanceNetwork(emit, { captureStartedAt: CAPTURE_STARTED_AT });
     expect(rows).toHaveLength(0);
-    drainPerformanceNetwork(emit); // same entry, now in-capture terms
+    entries = [slowLater];
+    drainPerformanceNetwork(emit, { captureStartedAt: CAPTURE_STARTED_AT });
     expect(rows).toHaveLength(1);
   });
 });

@@ -40,11 +40,15 @@ import {
   scheduleFlush,
   addAnnotation,
   saveEnvironment,
+  saveConsoleLevel,
   setSessionPriority,
   flushPendingEvents,
   getStorageStats,
   type StorageStats,
+  attachResponseSnippet,
+  saveStorageSnapshot,
 } from "./storage";
+import { captureStorageSnapshot } from "./storage-capture";
 import { generateReproSteps } from "./repro-generator";
 import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers, setNewCaptureHandler } from "./dashboard";
 import {
@@ -63,8 +67,10 @@ import {
   collectConsoleWarnings,
   collectConsoleInfo,
   collectConsoleLogs,
+  resetConsoleCapped,
   getNetworkFailures,
   clearNetworkFailures,
+  onNetworkFailure,
 } from "./collectors";
 import { setRedactRules } from "./sanitize/custom-redaction";
 import { setTransportMode } from "./ext-transport";
@@ -76,6 +82,7 @@ import {
   type CaptureStatus,
 } from "./capture-ownership";
 import { dedupeNetworkRows } from "./network-dedupe";
+import { isFailedRequest } from "./request-status";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
@@ -295,7 +302,7 @@ class TraceBugSDK {
    *
    * Options:
    *  - projectId:       Required. Identifies your app.
-   *  - maxEvents:       Max events per session in storage (default 200).
+   *  - maxEvents:       Max events per session in storage (default 500).
    *  - maxSessions:     Max sessions kept in localStorage (default 50).
    *  - enableDashboard: Show the floating bug button (default true).
    *  - enabled:         Control when SDK is active (default "auto").
@@ -310,7 +317,10 @@ class TraceBugSDK {
 
     try {
       this.config = {
-        maxEvents: 200,
+        // 500, not 200: the oldest events are evicted first, and those are the
+        // clicks that lead up to the bug. A few hundred small events cost far
+        // less storage than one screenshot.
+        maxEvents: 500,
         maxSessions: 50,
         enableDashboard: true,
         theme: "light",
@@ -401,8 +411,8 @@ class TraceBugSDK {
       return false;
     }
     if (config.maxEvents !== undefined && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
-      console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
-      config.maxEvents = 200;
+      console.warn("[TraceBug] maxEvents must be a positive number. Using default (500).");
+      config.maxEvents = 500;
     }
     if (config.maxSessions !== undefined && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
       console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
@@ -454,7 +464,10 @@ class TraceBugSDK {
           projectId: this.config!.projectId,
           type,
           page: window.location.pathname,
-          timestamp: Date.now(),
+          // A Resource Timing row carries when the request really started
+          // (`_ts`); without it, page-load rows drained at capture start were
+          // all stamped "now", after requests that ran before them.
+          timestamp: typeof data._ts === "number" && data._ts > 0 ? data._ts : Date.now(),
           data,
         };
 
@@ -484,6 +497,10 @@ class TraceBugSDK {
     this.cleanups.push(collectRouteChanges(emit));
     this.cleanups.push(collectApiRequests(emit));
     this.cleanups.push(collectXhrRequests(emit));
+    // Persist each failure's response snippet on its stored request event.
+    this.cleanups.push(onNetworkFailure((f) => {
+      if (this.sessionId) attachResponseSnippet(this.sessionId, f);
+    }));
     // Backfill: catches requests fired BEFORE our fetch/XHR wraps were
     // installed, plus anything that bypassed them (axios with cached XHR
     // reference, service workers, polyfills). Reads from the browser's
@@ -724,7 +741,9 @@ class TraceBugSDK {
     try {
       const env = captureEnvironment();
       saveEnvironment(id, env);
+      saveConsoleLevel(id, this._consoleLevel);
     } catch {}
+    resetConsoleCapped();
     try {
       const storedUser = localStorage.getItem("tracebug_user");
       if (storedUser) {
@@ -767,6 +786,7 @@ class TraceBugSDK {
         if (sess) sess.screenshots = shots.slice(0, 5);
       }
     } catch {}
+    this._snapshotStorage(id);
     flushPendingEvents();
     clearActiveSessionId();
     this.sessionId = null;
@@ -1793,7 +1813,7 @@ class TraceBugSDK {
 
     const flow = actions.length > 0 ? ` after ${actions.join(" \u2192 ")}` : "";
     const failedApis = session.events
-      .filter(e => e.type === "api_request" && (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0))
+      .filter(e => e.type === "api_request" && isFailedRequest(e.data.request))
       .slice(0, 1)
       .map(e => `${e.data.request?.method} ${e.data.request?.url?.split("?")[0]?.slice(-40)} returned ${e.data.request?.statusCode}`);
 
@@ -2138,12 +2158,20 @@ class TraceBugSDK {
     }, 200);
   }
 
+  /** Persist Web Storage as it is now (first call per session wins). */
+  private _snapshotStorage(sessionId: string): void {
+    if (this.config?.captureStorage === false) return;
+    try { saveStorageSnapshot(sessionId, captureStorageSnapshot()); } catch {}
+  }
+
   private processError(
     sessionId: string,
     errorMessage?: string,
     errorStack?: string
   ): void {
     if (!errorMessage) return;
+    // Storage as the error happened — before the app or the reporter changes it.
+    this._snapshotStorage(sessionId);
 
     // Small delay so the error event itself is stored first
     setTimeout(() => {

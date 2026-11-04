@@ -87,6 +87,12 @@ var TraceBugExtensionModule = (() => {
     }
   }
   function getAllSessions() {
+    if (_dirty && _cachedSessions) {
+      try {
+        return JSON.parse(JSON.stringify(_cachedSessions));
+      } catch (e2) {
+      }
+    }
     try {
       const raw = localStorage.getItem(SESSIONS_KEY);
       return raw ? JSON.parse(raw) : [];
@@ -185,8 +191,10 @@ var TraceBugExtensionModule = (() => {
     }
     if (active && !active.saved && Array.isArray(active.events)) {
       const originalEvents = active.events;
+      const originalDropped = active.droppedEvents;
       while (active.events.length > 1) {
         active.events = active.events.slice(Math.ceil(active.events.length / 2));
+        active.droppedEvents = (originalDropped || 0) + (originalEvents.length - active.events.length);
         if (commit(working)) {
           emitStorageWarning({
             code: "events_trimmed",
@@ -196,6 +204,7 @@ var TraceBugExtensionModule = (() => {
         }
       }
       active.events = originalEvents;
+      active.droppedEvents = originalDropped;
     }
     _refusedUntil = Date.now() + REFUSAL_BACKOFF_MS;
     emitStorageWarning({
@@ -262,6 +271,7 @@ var TraceBugExtensionModule = (() => {
     session.events.push(event);
     session.updatedAt = Date.now();
     if (session.events.length > maxEvents) {
+      session.droppedEvents = (session.droppedEvents || 0) + (session.events.length - maxEvents);
       session.events = session.events.slice(-maxEvents);
     }
     const unsavedCount = sessions.filter((s2) => !s2.saved).length;
@@ -311,6 +321,36 @@ var TraceBugExtensionModule = (() => {
     if (!session) return;
     session.environment = env;
     scheduleFlush();
+  }
+  function saveConsoleLevel(sessionId, level) {
+    const session = getCachedSessions().find((s2) => s2.sessionId === sessionId);
+    if (!session) return;
+    session.consoleLevel = level;
+    scheduleFlush();
+  }
+  function saveStorageSnapshot(sessionId, snapshot2) {
+    const session = getCachedSessions().find((s2) => s2.sessionId === sessionId);
+    if (!session || session.storageSnapshot) return;
+    session.storageSnapshot = snapshot2;
+    scheduleFlush();
+  }
+  function attachResponseSnippet(sessionId, f2) {
+    var _a2;
+    if (!f2.response) return false;
+    const session = getCachedSessions().find((s2) => s2.sessionId === sessionId);
+    if (!session) return false;
+    for (let i2 = session.events.length - 1; i2 >= 0; i2--) {
+      const e2 = session.events[i2];
+      const r2 = e2.type === "api_request" ? (_a2 = e2.data) == null ? void 0 : _a2.request : void 0;
+      if (!r2 || r2.response || r2.source) continue;
+      if (Math.abs(e2.timestamp - f2.timestamp) >= 5e3) continue;
+      if (r2.url === f2.url && String(r2.method).toUpperCase() === f2.method && (r2.statusCode || 0) === f2.status) {
+        r2.response = f2.response;
+        scheduleFlush();
+        return true;
+      }
+    }
+    return false;
   }
   function setSessionPriority(sessionId, priority) {
     const sessions = getCachedSessions();
@@ -377,6 +417,197 @@ var TraceBugExtensionModule = (() => {
           if (document.visibilityState === "hidden") flushPendingEvents();
         });
       }
+    }
+  });
+
+  // src/sanitize/custom-redaction.ts
+  function escapeRe(s2) {
+    return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  function setRedactRules(rules2) {
+    _fieldRe = null;
+    _fields = [];
+    _fieldTextRes = [];
+    _patterns = [];
+    _patternsCombined = null;
+    if (!rules2) return;
+    const fields = (rules2.fields || []).filter((f2) => typeof f2 === "string" && f2.trim().length > 0);
+    if (fields.length > 0) {
+      const alts = fields.map((f2) => escapeRe(f2.trim())).join("|");
+      _fieldRe = new RegExp(alts, "i");
+      _fields = fields.map((f2) => f2.trim());
+      for (const f2 of fields) {
+        const k = escapeRe(f2.trim());
+        _fieldTextRes.push({
+          re: new RegExp(`("([^"]*${k}[^"]*)"\\s*:\\s*)("(?:[^"\\\\]|\\\\.)*"|-?\\d[\\d.eE+-]*|true|false)`, "gi"),
+          replace: `$1"${REDACTED}"`
+        });
+        _fieldTextRes.push({
+          re: new RegExp(`\\b([\\w.-]*${k}[\\w.-]*)=([^&\\s"']+)`, "gi"),
+          replace: `$1=${REDACTED}`
+        });
+      }
+    }
+    for (const p of rules2.patterns || []) {
+      try {
+        if (typeof p === "string") {
+          _patterns.push(new RegExp(p, "gi"));
+        } else if (p instanceof RegExp) {
+          _patterns.push(p.flags.includes("g") ? p : new RegExp(p.source, p.flags + "g"));
+        }
+      } catch (e2) {
+      }
+    }
+    if (_patterns.length > 0) {
+      try {
+        const sources = _patterns.map((r2) => `(?:${r2.source})`).join("|");
+        const combined = new RegExp(sources, "gi");
+        "probe".replace(combined, "");
+        _patternsCombined = combined;
+      } catch (e2) {
+        _patternsCombined = null;
+      }
+    }
+  }
+  function isCustomSensitiveKey(key) {
+    if (!key || !_fieldRe) return false;
+    return _fieldRe.test(key);
+  }
+  function applyCustomRedaction(s2) {
+    if (!s2 || _fieldTextRes.length === 0 && _patterns.length === 0) return s2;
+    let out = s2;
+    for (const { re, replace } of _fieldTextRes) out = out.replace(re, replace);
+    if (_patternsCombined) out = out.replace(_patternsCombined, REDACTED);
+    else for (const re of _patterns) out = out.replace(re, REDACTED);
+    return out;
+  }
+  function getCustomSensitiveFields() {
+    return _fields.slice();
+  }
+  function hasCustomRedaction() {
+    return _fieldTextRes.length > 0 || _patterns.length > 0;
+  }
+  var REDACTED, _fieldRe, _fields, _fieldTextRes, _patterns, _patternsCombined;
+  var init_custom_redaction = __esm({
+    "src/sanitize/custom-redaction.ts"() {
+      "use strict";
+      REDACTED = "[REDACTED]";
+      _fieldRe = null;
+      _fields = [];
+      _fieldTextRes = [];
+      _patterns = [];
+      _patternsCombined = null;
+    }
+  });
+
+  // src/storage-capture.ts
+  function maskValue(raw) {
+    if (!raw) return "";
+    if (raw.length <= 8) return "[REDACTED]";
+    return `${raw.slice(0, 4)}\u2026${raw.slice(-4)} [REDACTED]`;
+  }
+  function readArea(area) {
+    var _a2;
+    const entries = [];
+    let truncated = 0;
+    let len = 0;
+    try {
+      len = area.length;
+    } catch (e2) {
+      return { entries, truncated: 0 };
+    }
+    for (let i2 = 0; i2 < len; i2++) {
+      let key = null;
+      let value = "";
+      try {
+        key = area.key(i2);
+        if (key == null) continue;
+        value = (_a2 = area.getItem(key)) != null ? _a2 : "";
+      } catch (e2) {
+        continue;
+      }
+      if (INTERNAL_KEY.test(key)) continue;
+      if (entries.length >= MAX_ENTRIES_PER_AREA) {
+        truncated++;
+        continue;
+      }
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
+      let outValue;
+      let redacted = false;
+      if (sensitive) {
+        outValue = maskValue(value);
+        redacted = true;
+      } else if (value.length > MAX_VALUE_LEN) {
+        outValue = value.slice(0, MAX_VALUE_LEN) + "\u2026";
+      } else {
+        outValue = value;
+      }
+      entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
+    }
+    return { entries, truncated };
+  }
+  function readCookies() {
+    const entries = [];
+    let truncated = 0;
+    let raw = "";
+    try {
+      raw = document.cookie || "";
+    } catch (e2) {
+      return { entries, truncated };
+    }
+    if (!raw) return { entries, truncated };
+    for (const part of raw.split(/;\s*/)) {
+      const eq = part.indexOf("=");
+      if (eq <= 0) continue;
+      const key = part.slice(0, eq).trim();
+      const value = part.slice(eq + 1);
+      if (INTERNAL_KEY.test(key)) continue;
+      if (entries.length >= MAX_ENTRIES_PER_AREA) {
+        truncated++;
+        continue;
+      }
+      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
+      if (sensitive) {
+        entries.push({ key, value: maskValue(value), redacted: true });
+      } else {
+        entries.push({ key, value: value.length > MAX_VALUE_LEN ? value.slice(0, MAX_VALUE_LEN) + "\u2026" : value });
+      }
+    }
+    return { entries, truncated };
+  }
+  function captureStorageSnapshot() {
+    const snapshot2 = { local: [], session: [] };
+    if (typeof window === "undefined") return snapshot2;
+    try {
+      const ls = readArea(window.localStorage);
+      snapshot2.local = ls.entries;
+      if (ls.truncated > 0) snapshot2.localTruncated = ls.truncated;
+    } catch (e2) {
+    }
+    try {
+      const ss = readArea(window.sessionStorage);
+      snapshot2.session = ss.entries;
+      if (ss.truncated > 0) snapshot2.sessionTruncated = ss.truncated;
+    } catch (e2) {
+    }
+    try {
+      const ck = readCookies();
+      if (ck.entries.length > 0) snapshot2.cookies = ck.entries;
+      if (ck.truncated > 0) snapshot2.cookiesTruncated = ck.truncated;
+    } catch (e2) {
+    }
+    return snapshot2;
+  }
+  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY;
+  var init_storage_capture = __esm({
+    "src/storage-capture.ts"() {
+      "use strict";
+      init_custom_redaction();
+      MAX_ENTRIES_PER_AREA = 50;
+      MAX_VALUE_LEN = 300;
+      SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
+      SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
+      INTERNAL_KEY = /^tracebug[_-]/i;
     }
   });
 
@@ -447,6 +678,31 @@ var TraceBugExtensionModule = (() => {
       NOISE_PATH_RE = /(^|\/)(collect|collector|beacon|telemetry|pixel|track|tracking)(\/|$)|\/_private\//i;
       SEGMENT_MAX = 24;
       PATH_MAX = 60;
+    }
+  });
+
+  // src/request-status.ts
+  function statusOf(r2) {
+    return typeof r2.status === "number" ? r2.status : typeof r2.statusCode === "number" ? r2.statusCode : 0;
+  }
+  function isFailedRequest(r2) {
+    if (!r2) return false;
+    const status = statusOf(r2);
+    if (status >= 400) return true;
+    if (status !== 0) return false;
+    return !(r2.source === "resource-timing" || r2.statusUnknown || r2.aborted || r2.opaque);
+  }
+  function requestStatusLabel(r2) {
+    const status = statusOf(r2);
+    if (status !== 0) return String(status);
+    if (r2.aborted) return "aborted";
+    if (r2.opaque) return "opaque";
+    if (r2.source === "resource-timing" || r2.statusUnknown) return "status unknown";
+    return "Network Error";
+  }
+  var init_request_status = __esm({
+    "src/request-status.ts"() {
+      "use strict";
     }
   });
 
@@ -528,7 +784,7 @@ var TraceBugExtensionModule = (() => {
         }
         case "api_request": {
           const req = event.data.request;
-          if (((req == null ? void 0 : req.statusCode) >= 400 || (req == null ? void 0 : req.statusCode) === 0) && !isNoiseRequest(req == null ? void 0 : req.url)) {
+          if (isFailedRequest(req) && !isNoiseRequest(req == null ? void 0 : req.url)) {
             steps.push(
               `${stepNum++}. API call fails: ${req.method} ${shortenUrl(req.url)} \u2192 ${req.statusCode === 0 ? "Network Error" : `HTTP ${req.statusCode}`}`
             );
@@ -641,6 +897,7 @@ var TraceBugExtensionModule = (() => {
     "src/repro-generator.ts"() {
       "use strict";
       init_url_hygiene();
+      init_request_status();
       TYPING_BOUNDARY = /* @__PURE__ */ new Set([
         "click",
         "input",
@@ -1068,86 +1325,6 @@ var TraceBugExtensionModule = (() => {
     }
   });
 
-  // src/sanitize/custom-redaction.ts
-  function escapeRe(s2) {
-    return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
-  function setRedactRules(rules2) {
-    _fieldRe = null;
-    _fields = [];
-    _fieldTextRes = [];
-    _patterns = [];
-    _patternsCombined = null;
-    if (!rules2) return;
-    const fields = (rules2.fields || []).filter((f2) => typeof f2 === "string" && f2.trim().length > 0);
-    if (fields.length > 0) {
-      const alts = fields.map((f2) => escapeRe(f2.trim())).join("|");
-      _fieldRe = new RegExp(alts, "i");
-      _fields = fields.map((f2) => f2.trim());
-      for (const f2 of fields) {
-        const k = escapeRe(f2.trim());
-        _fieldTextRes.push({
-          re: new RegExp(`("([^"]*${k}[^"]*)"\\s*:\\s*)("(?:[^"\\\\]|\\\\.)*"|-?\\d[\\d.eE+-]*|true|false)`, "gi"),
-          replace: `$1"${REDACTED}"`
-        });
-        _fieldTextRes.push({
-          re: new RegExp(`\\b([\\w.-]*${k}[\\w.-]*)=([^&\\s"']+)`, "gi"),
-          replace: `$1=${REDACTED}`
-        });
-      }
-    }
-    for (const p of rules2.patterns || []) {
-      try {
-        if (typeof p === "string") {
-          _patterns.push(new RegExp(p, "gi"));
-        } else if (p instanceof RegExp) {
-          _patterns.push(p.flags.includes("g") ? p : new RegExp(p.source, p.flags + "g"));
-        }
-      } catch (e2) {
-      }
-    }
-    if (_patterns.length > 0) {
-      try {
-        const sources = _patterns.map((r2) => `(?:${r2.source})`).join("|");
-        const combined = new RegExp(sources, "gi");
-        "probe".replace(combined, "");
-        _patternsCombined = combined;
-      } catch (e2) {
-        _patternsCombined = null;
-      }
-    }
-  }
-  function isCustomSensitiveKey(key) {
-    if (!key || !_fieldRe) return false;
-    return _fieldRe.test(key);
-  }
-  function applyCustomRedaction(s2) {
-    if (!s2 || _fieldTextRes.length === 0 && _patterns.length === 0) return s2;
-    let out = s2;
-    for (const { re, replace } of _fieldTextRes) out = out.replace(re, replace);
-    if (_patternsCombined) out = out.replace(_patternsCombined, REDACTED);
-    else for (const re of _patterns) out = out.replace(re, REDACTED);
-    return out;
-  }
-  function getCustomSensitiveFields() {
-    return _fields.slice();
-  }
-  function hasCustomRedaction() {
-    return _fieldTextRes.length > 0 || _patterns.length > 0;
-  }
-  var REDACTED, _fieldRe, _fields, _fieldTextRes, _patterns, _patternsCombined;
-  var init_custom_redaction = __esm({
-    "src/sanitize/custom-redaction.ts"() {
-      "use strict";
-      REDACTED = "[REDACTED]";
-      _fieldRe = null;
-      _fields = [];
-      _fieldTextRes = [];
-      _patterns = [];
-      _patternsCombined = null;
-    }
-  });
-
   // src/sanitize/cloud-upload.ts
   function mask(s2) {
     if (s2.length <= 12) return REDACTED2;
@@ -1303,10 +1480,20 @@ var TraceBugExtensionModule = (() => {
   });
 
   // src/collectors.ts
+  function onNetworkFailure(fn) {
+    _failureListener = fn;
+    return () => {
+      if (_failureListener === fn) _failureListener = null;
+    };
+  }
   function pushNetworkFailure(failure) {
     try {
-      if (failure.response) failure.response = sanitizeTokenShapes(failure.response);
+      if (failure.response) failure.response = sanitizeTokenShapes(failure.response).slice(0, RESPONSE_SNIPPET_CHARS);
       _networkFailures.push(failure);
+      if (_failureListener) try {
+        _failureListener({ ...failure });
+      } catch (e2) {
+      }
       if (_networkFailures.length > NETWORK_FAILURE_LIMIT) {
         _networkFailures.splice(0, _networkFailures.length - NETWORK_FAILURE_LIMIT);
       }
@@ -1550,6 +1737,15 @@ var TraceBugExtensionModule = (() => {
   }
   function collectInputs(emit) {
     const timers = /* @__PURE__ */ new Map();
+    const flush = () => {
+      for (const { timer, fire } of Array.from(timers.values())) {
+        clearTimeout(timer);
+        fire();
+      }
+    };
+    const onKeyDown = (e2) => {
+      if (e2.key === "Enter") flush();
+    };
     const handler = (e2) => {
       try {
         const raw = e2.target;
@@ -1559,52 +1755,56 @@ var TraceBugExtensionModule = (() => {
         if (!editable && !("value" in t2)) return;
         if (t2.tagName.toLowerCase() === "select") return;
         const prev = timers.get(t2);
-        if (prev) clearTimeout(prev);
-        timers.set(
-          t2,
-          setTimeout(() => {
+        if (prev) clearTimeout(prev.timer);
+        const fire = () => {
+          timers.delete(t2);
+          try {
+            const tag = t2.tagName.toLowerCase();
+            const inputType = editable ? "contenteditable" : t2.type || "";
+            const name = editable ? fieldLabel(editable) : t2.name || t2.id || "";
+            const rawValue = editable ? editableText(editable) : t2.value || "";
+            const isSensitive = isSensitiveField(name, inputType);
+            const element = {
+              tag,
+              name,
+              type: inputType,
+              valueLength: rawValue.length,
+              value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
+              placeholder: (editable ? editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "" : t2.placeholder) || ""
+            };
+            if (editable) element.contentEditable = true;
             try {
-              const tag = t2.tagName.toLowerCase();
-              const inputType = editable ? "contenteditable" : t2.type || "";
-              const name = editable ? fieldLabel(editable) : t2.name || t2.id || "";
-              const rawValue = editable ? editableText(editable) : t2.value || "";
-              const isSensitive = isSensitiveField(name, inputType);
-              const element = {
-                tag,
-                name,
-                type: inputType,
-                valueLength: rawValue.length,
-                value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
-                placeholder: (editable ? editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "" : t2.placeholder) || ""
-              };
-              if (editable) element.contentEditable = true;
-              try {
-                element.selector = buildSelector(editable || t2);
-              } catch (e3) {
-              }
-              const data = { element };
-              if (!editable && (inputType === "checkbox" || inputType === "radio")) {
-                element.checked = t2.checked;
-                element.value = t2.checked ? "checked" : "unchecked";
-              }
-              if (!editable && (inputType === "number" || inputType === "range")) {
-                element.value = t2.value;
-              }
-              emit("input", data);
-            } catch (err) {
-              if (typeof console !== "undefined") console.warn("[TraceBug] Input capture error:", err);
+              element.selector = buildSelector(editable || t2);
+            } catch (e3) {
             }
-            timers.delete(t2);
-          }, 300)
-        );
+            const data = { element };
+            if (!editable && (inputType === "checkbox" || inputType === "radio")) {
+              element.checked = t2.checked;
+              element.value = t2.checked ? "checked" : "unchecked";
+            }
+            if (!editable && (inputType === "number" || inputType === "range")) {
+              element.value = t2.value;
+            }
+            emit("input", data);
+          } catch (err) {
+            if (typeof console !== "undefined") console.warn("[TraceBug] Input capture error:", err);
+          }
+        };
+        timers.set(t2, { timer: setTimeout(fire, 300), fire });
       } catch (err) {
         if (typeof console !== "undefined") console.warn("[TraceBug] Input capture error:", err);
       }
     };
     document.addEventListener("input", handler, { capture: true });
+    document.addEventListener("pointerdown", flush, { capture: true });
+    document.addEventListener("keydown", onKeyDown, { capture: true });
+    window.addEventListener("pagehide", flush);
     return () => {
+      flush();
       document.removeEventListener("input", handler, { capture: true });
-      timers.forEach((t2) => clearTimeout(t2));
+      document.removeEventListener("pointerdown", flush, { capture: true });
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
+      window.removeEventListener("pagehide", flush);
     };
   }
   function collectSelectChanges(emit) {
@@ -1714,14 +1914,21 @@ var TraceBugExtensionModule = (() => {
       const safeUrl = sanitizeUrl2(url).slice(0, 500);
       try {
         const response = await originalFetch.call(window, input2, init);
+        const opaque = response.type === "opaque";
         try {
           emit("api_request", {
-            request: { url: safeUrl, method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start }
+            request: {
+              url: safeUrl,
+              method: method.toUpperCase(),
+              statusCode: response.status,
+              durationMs: Date.now() - start,
+              ...opaque ? { opaque: true } : {}
+            }
           });
         } catch (e2) {
         }
         try {
-          if (response.status >= 400 || response.status === 0) {
+          if (!opaque && (response.status >= 400 || response.status === 0)) {
             const clone = response.clone();
             readResponseBodySafe(clone).then((snippet) => {
               pushNetworkFailure({
@@ -1745,13 +1952,20 @@ var TraceBugExtensionModule = (() => {
         }
         return response;
       } catch (err) {
+        const aborted = (err == null ? void 0 : err.name) === "AbortError";
         try {
           emit("api_request", {
-            request: { url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start }
+            request: {
+              url: safeUrl,
+              method: method.toUpperCase(),
+              statusCode: 0,
+              durationMs: Date.now() - start,
+              ...aborted ? { aborted: true } : {}
+            }
           });
         } catch (e2) {
         }
-        try {
+        if (!aborted) try {
           pushNetworkFailure({
             url: safeUrl,
             method: method.toUpperCase(),
@@ -1789,13 +2003,25 @@ var TraceBugExtensionModule = (() => {
         const url = (meta == null ? void 0 : meta.url) || "";
         if (isInternalUrl(url)) return origSend.call(this, body);
         const safeUrl = sanitizeUrl2(url).slice(0, 500);
+        let aborted = false;
+        xhr.addEventListener("abort", () => {
+          aborted = true;
+        });
         xhr.addEventListener("loadend", function() {
           try {
-            emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } });
+            emit("api_request", {
+              request: {
+                url: safeUrl,
+                method: method.toUpperCase(),
+                statusCode: xhr.status,
+                durationMs: Date.now() - start,
+                ...aborted ? { aborted: true } : {}
+              }
+            });
           } catch (e2) {
           }
           try {
-            if (xhr.status >= 400 || xhr.status === 0) {
+            if (!aborted && (xhr.status >= 400 || xhr.status === 0)) {
               let body2 = "";
               try {
                 const ct = xhr.getResponseHeader && xhr.getResponseHeader("content-type") || "";
@@ -1864,6 +2090,9 @@ var TraceBugExtensionModule = (() => {
       const slow = durationMs > PAGE_LOAD_SLOW_MS;
       if (!failed && !slow) return;
       phase = "page-load";
+    } else if (WRAPPED_INITIATORS.has(initiator) || status < 400 && durationMs <= PAGE_LOAD_SLOW_MS) {
+      _perfSeen.add(key);
+      return;
     }
     _perfSeen.add(key);
     try {
@@ -2008,12 +2237,19 @@ var TraceBugExtensionModule = (() => {
       console.error = origConsoleError;
     };
   }
+  function getConsoleCapped() {
+    return Array.from(_consoleCapped);
+  }
+  function resetConsoleCapped() {
+    _consoleCapped.clear();
+  }
   function wrapConsoleLevel(method, type, emit) {
     const orig = console[method];
     let _inside = false;
     let _count = 0;
     console[method] = function(...args) {
       const own = typeof args[0] === "string" && args[0].startsWith("[TraceBug]");
+      if (!_inside && !own && _count >= CONSOLE_LEVEL_CAP) _consoleCapped.add(method);
       if (_inside || own || _count >= CONSOLE_LEVEL_CAP) {
         orig.apply(console, args);
         return;
@@ -2045,7 +2281,7 @@ var TraceBugExtensionModule = (() => {
   function collectConsoleLogs(emit) {
     return wrapConsoleLevel("log", "console_log", emit);
   }
-  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, SENSITIVE_FIELD_WORDS, SENSITIVE_FIELD_RE, FIELD_LABEL_ATTRS, CLICK_CONTEXT_MAX_FIELDS, CLICK_CONTEXT_SKIP_TYPES, CLICK_CONTEXT_SKIP_AUTOCOMPLETE, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP;
+  var ROOT_ID, PANEL_ID, BTN_ID, NETWORK_FAILURE_LIMIT, RESPONSE_SNIPPET_CHARS, _networkFailures, _failureListener, MAX_BODY_BYTES, BINARY_CONTENT_TYPE_RE, INTERNAL_URL_PATTERNS, _rootCache, INPUT_VALUE_MAX, SENSITIVE_FIELD_WORDS, SENSITIVE_FIELD_RE, FIELD_LABEL_ATTRS, CLICK_CONTEXT_MAX_FIELDS, CLICK_CONTEXT_SKIP_TYPES, CLICK_CONTEXT_SKIP_AUTOCOMPLETE, EDITABLE_SELECTOR, _perfSeen, GET_ONLY_INITIATORS, PAGE_LOAD_SLOW_MS, WRAPPED_INITIATORS, CONSOLE_MSG_MAX, CONSOLE_LEVEL_CAP, _consoleCapped;
   var init_collectors = __esm({
     "src/collectors.ts"() {
       "use strict";
@@ -2058,6 +2294,7 @@ var TraceBugExtensionModule = (() => {
       NETWORK_FAILURE_LIMIT = 10;
       RESPONSE_SNIPPET_CHARS = 200;
       _networkFailures = [];
+      _failureListener = null;
       MAX_BODY_BYTES = 10 * 1024;
       BINARY_CONTENT_TYPE_RE = /^(image|video|audio)\/|^application\/(octet-stream|pdf|zip|x-protobuf|x-msgpack|wasm|vnd\.)/i;
       INTERNAL_URL_PATTERNS = [
@@ -2111,8 +2348,10 @@ var TraceBugExtensionModule = (() => {
         "frame"
       ]);
       PAGE_LOAD_SLOW_MS = 1e3;
+      WRAPPED_INITIATORS = /* @__PURE__ */ new Set(["fetch", "xmlhttprequest"]);
       CONSOLE_MSG_MAX = 1e4;
       CONSOLE_LEVEL_CAP = 50;
+      _consoleCapped = /* @__PURE__ */ new Set();
     }
   });
 
@@ -2187,117 +2426,6 @@ var TraceBugExtensionModule = (() => {
   var init_environment = __esm({
     "src/environment.ts"() {
       "use strict";
-    }
-  });
-
-  // src/storage-capture.ts
-  function maskValue(raw) {
-    if (!raw) return "";
-    if (raw.length <= 8) return "[REDACTED]";
-    return `${raw.slice(0, 4)}\u2026${raw.slice(-4)} [REDACTED]`;
-  }
-  function readArea(area) {
-    var _a2;
-    const entries = [];
-    let truncated = 0;
-    let len = 0;
-    try {
-      len = area.length;
-    } catch (e2) {
-      return { entries, truncated: 0 };
-    }
-    for (let i2 = 0; i2 < len; i2++) {
-      let key = null;
-      let value = "";
-      try {
-        key = area.key(i2);
-        if (key == null) continue;
-        value = (_a2 = area.getItem(key)) != null ? _a2 : "";
-      } catch (e2) {
-        continue;
-      }
-      if (INTERNAL_KEY.test(key)) continue;
-      if (entries.length >= MAX_ENTRIES_PER_AREA) {
-        truncated++;
-        continue;
-      }
-      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
-      let outValue;
-      let redacted = false;
-      if (sensitive) {
-        outValue = maskValue(value);
-        redacted = true;
-      } else if (value.length > MAX_VALUE_LEN) {
-        outValue = value.slice(0, MAX_VALUE_LEN) + "\u2026";
-      } else {
-        outValue = value;
-      }
-      entries.push(redacted ? { key, value: outValue, redacted: true } : { key, value: outValue });
-    }
-    return { entries, truncated };
-  }
-  function readCookies() {
-    const entries = [];
-    let truncated = 0;
-    let raw = "";
-    try {
-      raw = document.cookie || "";
-    } catch (e2) {
-      return { entries, truncated };
-    }
-    if (!raw) return { entries, truncated };
-    for (const part of raw.split(/;\s*/)) {
-      const eq = part.indexOf("=");
-      if (eq <= 0) continue;
-      const key = part.slice(0, eq).trim();
-      const value = part.slice(eq + 1);
-      if (INTERNAL_KEY.test(key)) continue;
-      if (entries.length >= MAX_ENTRIES_PER_AREA) {
-        truncated++;
-        continue;
-      }
-      const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
-      if (sensitive) {
-        entries.push({ key, value: maskValue(value), redacted: true });
-      } else {
-        entries.push({ key, value: value.length > MAX_VALUE_LEN ? value.slice(0, MAX_VALUE_LEN) + "\u2026" : value });
-      }
-    }
-    return { entries, truncated };
-  }
-  function captureStorageSnapshot() {
-    const snapshot2 = { local: [], session: [] };
-    if (typeof window === "undefined") return snapshot2;
-    try {
-      const ls = readArea(window.localStorage);
-      snapshot2.local = ls.entries;
-      if (ls.truncated > 0) snapshot2.localTruncated = ls.truncated;
-    } catch (e2) {
-    }
-    try {
-      const ss = readArea(window.sessionStorage);
-      snapshot2.session = ss.entries;
-      if (ss.truncated > 0) snapshot2.sessionTruncated = ss.truncated;
-    } catch (e2) {
-    }
-    try {
-      const ck = readCookies();
-      if (ck.entries.length > 0) snapshot2.cookies = ck.entries;
-      if (ck.truncated > 0) snapshot2.cookiesTruncated = ck.truncated;
-    } catch (e2) {
-    }
-    return snapshot2;
-  }
-  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY;
-  var init_storage_capture = __esm({
-    "src/storage-capture.ts"() {
-      "use strict";
-      init_custom_redaction();
-      MAX_ENTRIES_PER_AREA = 50;
-      MAX_VALUE_LEN = 300;
-      SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
-      SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
-      INTERNAL_KEY = /^tracebug[_-]/i;
     }
   });
 
@@ -22072,8 +22200,8 @@ var TraceBugExtensionModule = (() => {
   function firstFailureIndex(events) {
     return events.findIndex(
       (e2) => {
-        var _a2, _b, _c;
-        return e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error" || e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0) && !isNoiseRequest((_c = e2.data.request) == null ? void 0 : _c.url);
+        var _a2;
+        return e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error" || e2.type === "api_request" && isFailedRequest(e2.data.request) && !isNoiseRequest((_a2 = e2.data.request) == null ? void 0 : _a2.url);
       }
     );
   }
@@ -22119,8 +22247,8 @@ var TraceBugExtensionModule = (() => {
   function generateFlowTitle(userActions, allEvents, screenshots2) {
     const failedApis = allEvents.filter(
       (e2) => {
-        var _a2, _b, _c;
-        return e2.type === "api_request" && (((_a2 = e2.data.request) == null ? void 0 : _a2.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0) && !isNoiseRequest((_c = e2.data.request) == null ? void 0 : _c.url);
+        var _a2;
+        return e2.type === "api_request" && isFailedRequest(e2.data.request) && !isNoiseRequest((_a2 = e2.data.request) == null ? void 0 : _a2.url);
       }
     );
     if (failedApis.length > 0) {
@@ -22232,6 +22360,7 @@ var TraceBugExtensionModule = (() => {
       "use strict";
       init_url_hygiene();
       init_repro_generator();
+      init_request_status();
       USER_ACTION_TYPES = ["click", "input", "select_change", "form_submit", "route_change"];
     }
   });
@@ -22327,7 +22456,7 @@ var TraceBugExtensionModule = (() => {
     return new Set(dedupeNetworkRows(rows, { baseUrl }).map((r2) => r2.ev));
   }
   function buildTimeline(events, opts) {
-    var _a2, _b, _c, _d;
+    var _a2, _b;
     if (events.length === 0) return [];
     const ordered = [...events].sort((a2, b) => a2.timestamp - b.timestamp);
     const requests = keptRequests(ordered, (_a2 = opts == null ? void 0 : opts.baseUrl) != null ? _a2 : typeof location !== "undefined" ? location.href : void 0);
@@ -22337,10 +22466,10 @@ var TraceBugExtensionModule = (() => {
     for (const ev of ordered) {
       const elapsed = formatElapsed(ev.timestamp - startTs);
       const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-      const isApiError = ev.type === "api_request" && (((_b = ev.data.request) == null ? void 0 : _b.statusCode) >= 400 || ((_c = ev.data.request) == null ? void 0 : _c.statusCode) === 0);
+      const isApiError = ev.type === "api_request" && isFailedRequest(ev.data.request);
       if (ev.type === "api_request") {
         if (!requests.has(ev)) continue;
-        const reqUrl = (_d = ev.data.request) == null ? void 0 : _d.url;
+        const reqUrl = (_b = ev.data.request) == null ? void 0 : _b.url;
         if (isNoiseRequest(reqUrl)) continue;
         if (!isApiError && isStaticResource(reqUrl)) continue;
       }
@@ -22396,7 +22525,7 @@ var TraceBugExtensionModule = (() => {
         return `${ev.data.from || "/"} \u2192 ${ev.data.to || "/"}`;
       case "api_request": {
         const r2 = ev.data.request;
-        const status = (r2 == null ? void 0 : r2.statusCode) === 0 ? "NETWORK_ERR" : String(r2 == null ? void 0 : r2.statusCode);
+        const status = (r2 == null ? void 0 : r2.statusCode) === 0 && isFailedRequest(r2) ? "NETWORK_ERR" : requestStatusLabel(r2 || {});
         return `${r2 == null ? void 0 : r2.method} ${shortenUrl3(r2 == null ? void 0 : r2.url)} \u2192 ${status} (${r2 == null ? void 0 : r2.durationMs}ms)`;
       }
       case "error":
@@ -22447,6 +22576,141 @@ var TraceBugExtensionModule = (() => {
       "use strict";
       init_url_hygiene();
       init_network_dedupe();
+      init_request_status();
+    }
+  });
+
+  // src/redaction-summary.ts
+  function count(s2, re) {
+    if (!s2) return 0;
+    const m = s2.match(re);
+    return m ? m.length : 0;
+  }
+  function summarizeRedactions(report) {
+    var _a2, _b, _c, _d, _e, _f, _g;
+    const requests = (((_a2 = report.networkRequests) == null ? void 0 : _a2.length) ? report.networkRequests : report.networkErrors) || [];
+    let urlParams = count((_b = report.environment) == null ? void 0 : _b.url, PARAM_RE);
+    for (const r2 of requests) urlParams += count(r2.url, PARAM_RE);
+    const seenFields = /* @__PURE__ */ new Set();
+    for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
+      if (ev.type === "input") {
+        const el = (_d = ev.data) == null ? void 0 : _d.element;
+        if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
+      } else if (ev.type === "form_submit") {
+        const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
+        if (fields && typeof fields === "object") {
+          for (const [name, v2] of Object.entries(fields)) {
+            if (v2 === REDACTED3) seenFields.add(`form:${name}`);
+          }
+        }
+      }
+    }
+    const formFields = seenFields.size;
+    let storageKeys = 0;
+    const st = report.storage;
+    for (const list of [st == null ? void 0 : st.local, st == null ? void 0 : st.session, st == null ? void 0 : st.cookies]) {
+      if (!list) continue;
+      for (const e2 of list) if (e2.redacted) storageKeys++;
+    }
+    const consoleTexts = (((_g = report.consoleLogs) == null ? void 0 : _g.length) ? report.consoleLogs : report.consoleErrors) || [];
+    let tokens = 0;
+    for (const c2 of consoleTexts) {
+      tokens += count(c2.message, TOKEN_RE) + count(c2.stack, TOKEN_RE);
+    }
+    for (const r2 of requests) tokens += count(r2.response, TOKEN_RE);
+    return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
+  }
+  function formatRedactionSummary(s2) {
+    if (s2.total === 0) return null;
+    const part = (n2, singular, plural2 = singular + "s") => n2 > 0 ? `${n2} ${n2 === 1 ? singular : plural2}` : null;
+    const parts = [
+      part(s2.tokens, "token"),
+      part(s2.urlParams, "URL param"),
+      part(s2.formFields, "form field"),
+      part(s2.storageKeys, "storage value")
+    ].filter(Boolean);
+    return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
+  }
+  var REDACTED3, TOKEN_RE, PARAM_RE;
+  var init_redaction_summary = __esm({
+    "src/redaction-summary.ts"() {
+      "use strict";
+      REDACTED3 = "[REDACTED]";
+      TOKEN_RE = /\[REDACTED\]/g;
+      PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
+    }
+  });
+
+  // src/evidence-summary.ts
+  function summarizeEvidence(report) {
+    var _a2, _b;
+    const session = report.session;
+    const events = (session == null ? void 0 : session.events) || [];
+    const captured = [];
+    const notCaptured = [];
+    const dropped = [];
+    const actions = events.filter((e2) => ACTION_TYPES.has(e2.type)).length;
+    captured.push(plural(actions, "user action"));
+    const errors = (report.consoleErrors || []).length;
+    captured.push(plural(errors, "error"));
+    const requests = (((_a2 = report.networkRequests) == null ? void 0 : _a2.length) ? report.networkRequests : report.networkErrors) || [];
+    const failed = (report.networkErrors || []).length;
+    captured.push(`${plural(requests.length, "network request")}${failed ? ` (${failed} failed)` : ""}`);
+    const shots = (report.screenshots || []).length;
+    if (shots) captured.push(plural(shots, "screenshot"));
+    const pages = Array.from(new Set(events.map((e2) => e2.page).filter(Boolean)));
+    const lastPage = pages[pages.length - 1] || "/";
+    const hasReplay = Array.isArray((_b = report.video) == null ? void 0 : _b.rrwebEvents) && report.video.rrwebEvents.length > 0;
+    const hasVideo = !!report.video && (report.video.sizeBytes || 0) > 0;
+    if (hasReplay) captured.push(`DOM replay of ${lastPage}`);
+    if (hasVideo) captured.push(`screen video (${Math.round((report.video.durationMs || 0) / 1e3)}s)`);
+    notCaptured.push("request and response bodies (only the first 200 characters of a failed response)");
+    notCaptured.push("request and response headers");
+    notCaptured.push("content inside iframes and canvas");
+    notCaptured.push("successful image, font and script loads during the capture");
+    const level = session == null ? void 0 : session.consoleLevel;
+    if (level === "none") notCaptured.push("console output (console capture was off)");
+    else if (level === "errors") notCaptured.push("console warnings, info and logs (only errors were captured)");
+    else if (level === "warnings") notCaptured.push("console info and logs (only errors and warnings were captured)");
+    if (!hasReplay && !hasVideo) notCaptured.push("screen video and DOM replay (events-only capture)");
+    const evicted = (session == null ? void 0 : session.droppedEvents) || 0;
+    if (evicted > 0) dropped.push(`the ${plural(evicted, "oldest event")} of the session (event limit), so the earliest steps may be missing`);
+    const capped = getConsoleCapped();
+    if (capped.length) dropped.push(`console.${capped.join(", console.")} output after the first 50 of each`);
+    if (hasVideo && (report.video.durationMs || 0) >= VIDEO_CAP_MS - 500) {
+      dropped.push("everything after 2 minutes of screen video (recordings stop at the 2-minute limit)");
+    }
+    if (hasReplay && pages.length > 1) {
+      dropped.push(`DOM replay of the earlier pages (${pages.slice(0, -1).join(", ")}); the replay covers only ${lastPage}`);
+    }
+    const noBody = (report.networkErrors || []).filter((r2) => !r2.response).length;
+    if (noBody) dropped.push(`the response body of ${plural(noBody, "failed request")} (empty, binary, or not readable)`);
+    return {
+      captured,
+      notCaptured,
+      redacted: formatRedactionSummary(summarizeRedactions(report)),
+      dropped,
+      complete: evicted === 0 && level !== "none"
+    };
+  }
+  function formatEvidenceMarkdown(s2) {
+    const lines = [
+      `- **Captured:** ${s2.captured.join(", ")}`,
+      `- **Not captured:** ${s2.notCaptured.join("; ")}`
+    ];
+    if (s2.redacted) lines.push(`- **Redacted:** ${s2.redacted}`);
+    if (s2.dropped.length) lines.push(`- **Dropped:** ${s2.dropped.join("; ")}`);
+    return lines.join("\n");
+  }
+  var ACTION_TYPES, VIDEO_CAP_MS, plural;
+  var init_evidence_summary = __esm({
+    "src/evidence-summary.ts"() {
+      "use strict";
+      init_redaction_summary();
+      init_collectors();
+      ACTION_TYPES = /* @__PURE__ */ new Set(["click", "input", "select_change", "form_submit", "route_change"]);
+      VIDEO_CAP_MS = 12e4;
+      plural = (n2, one, many = `${one}s`) => `${n2} ${n2 === 1 ? one : many}`;
     }
   });
 
@@ -22998,8 +23262,8 @@ var TraceBugExtensionModule = (() => {
     return str(err) || str(d.message) || fallback;
   }
   function buildReport(session, extraScreenshots) {
-    var _a2, _b, _c, _d, _e;
-    const environment = session.environment || captureEnvironment();
+    var _a2, _b, _c, _d, _e, _f;
+    let environment = session.environment || captureEnvironment();
     const _ssForAnchor = [...getScreenshots(), ...extraScreenshots || []];
     const _vidForAnchor = getSessionVideo(session);
     const captureTs = Math.max(
@@ -23008,12 +23272,24 @@ var TraceBugExtensionModule = (() => {
       0
     );
     const events = trimStaleEvents(session.events, captureTs);
-    let steps = session.reproSteps || "";
-    if (!steps && events.length > 0) {
+    const _bugIdx = firstFailureIndex(events);
+    const bugPage = (_b = _bugIdx >= 0 ? events[_bugIdx] : events[events.length - 1]) == null ? void 0 : _b.page;
+    if (bugPage && environment.url) {
+      try {
+        const start = new URL(environment.url);
+        if (start.pathname !== bugPage) {
+          environment = { ...environment, url: start.origin + bugPage, startUrl: environment.url };
+        }
+      } catch (e2) {
+      }
+    }
+    let steps = "";
+    if (events.length > 0) {
       const errorMsg = session.errorMessage || "Issue reported by tester";
       const result2 = generateReproSteps(events, errorMsg, session.errorStack || void 0);
       steps = result2.reproSteps;
     }
+    if (!steps) steps = session.reproSteps || "";
     const seenErrors = /* @__PURE__ */ new Set();
     const consoleErrors = events.filter((e2) => ["error", "unhandled_rejection", "console_error"].includes(e2.type)).map((e2) => {
       var _a3;
@@ -23052,7 +23328,7 @@ var TraceBugExtensionModule = (() => {
       };
     });
     const networkRows = events.filter((e2) => e2.type === "api_request" && e2.data.request).map((e2) => {
-      var _a3, _b2, _c2, _d2, _e2, _f, _g, _h;
+      var _a3, _b2, _c2, _d2, _e2, _f2, _g, _h, _i, _j, _k;
       return {
         // No `|| "GET"`: a Resource-Timing-only row for a fetch/XHR has a method
         // the browser never told us, and the report renders that empty value as
@@ -23064,21 +23340,25 @@ var TraceBugExtensionModule = (() => {
         duration: ((_d2 = e2.data.request) == null ? void 0 : _d2.durationMs) || 0,
         timestamp: e2.timestamp,
         phase: (_e2 = e2.data.request) == null ? void 0 : _e2.phase,
-        source: (_f = e2.data.request) == null ? void 0 : _f.source,
+        source: (_f2 = e2.data.request) == null ? void 0 : _f2.source,
         initiatorType: (_g = e2.data.request) == null ? void 0 : _g.initiatorType,
-        startedAt: (_h = e2.data.request) == null ? void 0 : _h.startedAt
+        startedAt: (_h = e2.data.request) == null ? void 0 : _h.startedAt,
+        ...((_i = e2.data.request) == null ? void 0 : _i.aborted) ? { aborted: true } : {},
+        ...((_j = e2.data.request) == null ? void 0 : _j.opaque) ? { opaque: true } : {},
+        // Persisted failure snippet (attachResponseSnippet) — survives reloads.
+        ...typeof ((_k = e2.data.request) == null ? void 0 : _k.response) === "string" && e2.data.request.response ? { response: e2.data.request.response } : {}
       };
     });
-    const pageUrl = ((_b = session.environment) == null ? void 0 : _b.url) || (typeof location !== "undefined" ? location.href : void 0);
-    const networkRequests = dedupeNetworkRows(networkRows, { baseUrl: pageUrl }).map(({ source: _s, initiatorType: _i, startedAt: _st, ...row }) => row);
-    const sessionStart = (_d = (_c = events[0]) == null ? void 0 : _c.timestamp) != null ? _d : captureTs || session.createdAt || 0;
+    const pageUrl = ((_c = session.environment) == null ? void 0 : _c.url) || (typeof location !== "undefined" ? location.href : void 0);
+    const networkRequests = dedupeNetworkRows(networkRows, { baseUrl: pageUrl }).map(({ source, initiatorType: _i, startedAt: _st, ...row }) => source === "resource-timing" && row.status === 0 ? { ...row, statusUnknown: true } : row);
+    const sessionStart = (_e = (_d = events[0]) == null ? void 0 : _d.timestamp) != null ? _e : captureTs || session.createdAt || 0;
     const buffer = getNetworkFailures().filter((b) => b.timestamp >= sessionStart);
     for (const entry of networkRequests) {
-      if (entry.status < 400 && entry.status !== 0) continue;
+      if (!isFailedRequest(entry)) continue;
       const match = buffer.find(
         (b) => b.url === entry.url && b.method === entry.method && b.status === entry.status && Math.abs(b.timestamp - entry.timestamp) < 5e3
       );
-      if (match && match.response) entry.response = match.response;
+      if (match && match.response && !entry.response) entry.response = match.response;
     }
     for (const buf of buffer) {
       const already = networkRequests.some(
@@ -23095,7 +23375,7 @@ var TraceBugExtensionModule = (() => {
         });
       }
     }
-    const networkErrors = networkRequests.filter((r2) => r2.status >= 400 || r2.status === 0).map((r2) => ({ ...r2 }));
+    const networkErrors = networkRequests.filter((r2) => isFailedRequest(r2)).map((r2) => ({ ...r2 }));
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
     const timeline = buildTimeline(events, { baseUrl: pageUrl });
     const voiceTranscripts = getVoiceTranscripts();
@@ -23131,7 +23411,9 @@ var TraceBugExtensionModule = (() => {
       rootCause: { hint: "", confidence: "low" },
       severity: "low",
       priority: "low",
-      storage: captureStorageSnapshot(),
+      // The snapshot from the first error / stop when there is one; a live read
+      // otherwise (a report built while still capturing).
+      storage: session.storageSnapshot || captureStorageSnapshot(),
       annotations: session.annotations || [],
       // Element-level markup (annotate/inspect) with computed-style evidence.
       elementAnnotations: safeElementAnnotations(),
@@ -23146,9 +23428,10 @@ var TraceBugExtensionModule = (() => {
       generatedAt: Date.now()
     };
     report.summary = generateSmartSummary(report);
+    report.evidence = summarizeEvidence(report);
     report.rootCause = generateRootCauseHint(report);
     report.severity = determineSeverity(report);
-    report.priority = (_e = session.priority) != null ? _e : derivePriorityFromSeverity(report.severity);
+    report.priority = (_f = session.priority) != null ? _f : derivePriorityFromSeverity(report.severity);
     return runReportPlugins(report);
   }
   function derivePriorityFromSeverity(severity) {
@@ -23308,17 +23591,26 @@ var TraceBugExtensionModule = (() => {
         confidence: "low"
       };
     }
+    const caveat = report.evidence && !report.evidence.complete ? ` The capture is incomplete (${incompleteReason(report)}), so an error may have been missed.` : "";
     if (click) {
       const what = (click.tag || "").toLowerCase() === "a" ? `clicking the link '${clickLabel(click)}' (navigation)` : `clicking '${clickLabel(click)}'`;
       return {
-        hint: `${NO_FAILURE_HINT} \u2014 last action was ${what}. If something looked wrong, the reporter's description says what was expected.`,
+        hint: `${NO_FAILURE_HINT} \u2014 last action was ${what}.${caveat} If something looked wrong, the reporter's description says what was expected.`,
         confidence: "low"
       };
     }
     return {
-      hint: `${NO_FAILURE_HINT}. If something looked wrong, the reporter's description says what was expected.`,
+      hint: `${NO_FAILURE_HINT}.${caveat} If something looked wrong, the reporter's description says what was expected.`,
       confidence: "low"
     };
+  }
+  function incompleteReason(report) {
+    var _a2, _b;
+    const reasons = [];
+    const evicted = ((_a2 = report.session) == null ? void 0 : _a2.droppedEvents) || 0;
+    if (evicted > 0) reasons.push(`${evicted} earliest event${evicted === 1 ? "" : "s"} dropped`);
+    if (((_b = report.session) == null ? void 0 : _b.consoleLevel) === "none") reasons.push("console capture was off");
+    return reasons.join(", ");
   }
   function formatRootCauseLine(rc) {
     if (!rc || !rc.hint) return "";
@@ -23403,6 +23695,8 @@ var TraceBugExtensionModule = (() => {
       init_timeline_builder();
       init_repro_generator();
       init_network_dedupe();
+      init_request_status();
+      init_evidence_summary();
       init_collectors();
       init_action_chips();
       init_url_hygiene();
@@ -26750,14 +27044,18 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 
     var rowsHtml = classified.map(function(item, i){
       var n = item.n;
-      var statusTxt = n.status === 0 ? "ERR" : String(n.status);
+      // Status 0 is a failure only when it isn't unknown, aborted or opaque
+      // (same rule as src/request-status.ts \u2014 this runtime can't import it).
+      var notFail0 = n.status === 0 && (n.statusUnknown || n.aborted || n.opaque);
+      var statusTxt = n.status !== 0 ? String(n.status) :
+        n.aborted ? "aborted" : n.opaque ? "opaque" : n.statusUnknown ? "\u2014" : "ERR";
       var statusCls =
-        n.status === 0 ? "serr" :
+        n.status === 0 ? (notFail0 ? "" : "serr") :
         n.status >= 500 ? "s5" :
         n.status >= 400 ? "s4" :
         n.status >= 300 ? "s3" :
         n.status >= 200 ? "s2" : "";
-      var isErr = n.status === 0 || n.status >= 400;
+      var isErr = (n.status === 0 && !notFail0) || n.status >= 400;
       var leftPct = ((n.timestamp - minTs) / span) * 100;
       var widthPct = Math.max(0.5, ((n.duration || 0) / span) * 100);
       var hay = (n.method + ' ' + n.url + ' ' + statusTxt + ' ' + item.dom).toLowerCase();
@@ -27611,67 +27909,6 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   });
 
-  // src/redaction-summary.ts
-  function count(s2, re) {
-    if (!s2) return 0;
-    const m = s2.match(re);
-    return m ? m.length : 0;
-  }
-  function summarizeRedactions(report) {
-    var _a2, _b, _c, _d, _e, _f, _g;
-    const requests = (((_a2 = report.networkRequests) == null ? void 0 : _a2.length) ? report.networkRequests : report.networkErrors) || [];
-    let urlParams = count((_b = report.environment) == null ? void 0 : _b.url, PARAM_RE);
-    for (const r2 of requests) urlParams += count(r2.url, PARAM_RE);
-    const seenFields = /* @__PURE__ */ new Set();
-    for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
-      if (ev.type === "input") {
-        const el = (_d = ev.data) == null ? void 0 : _d.element;
-        if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
-      } else if (ev.type === "form_submit") {
-        const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
-        if (fields && typeof fields === "object") {
-          for (const [name, v2] of Object.entries(fields)) {
-            if (v2 === REDACTED3) seenFields.add(`form:${name}`);
-          }
-        }
-      }
-    }
-    const formFields = seenFields.size;
-    let storageKeys = 0;
-    const st = report.storage;
-    for (const list of [st == null ? void 0 : st.local, st == null ? void 0 : st.session, st == null ? void 0 : st.cookies]) {
-      if (!list) continue;
-      for (const e2 of list) if (e2.redacted) storageKeys++;
-    }
-    const consoleTexts = (((_g = report.consoleLogs) == null ? void 0 : _g.length) ? report.consoleLogs : report.consoleErrors) || [];
-    let tokens = 0;
-    for (const c2 of consoleTexts) {
-      tokens += count(c2.message, TOKEN_RE) + count(c2.stack, TOKEN_RE);
-    }
-    for (const r2 of requests) tokens += count(r2.response, TOKEN_RE);
-    return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
-  }
-  function formatRedactionSummary(s2) {
-    if (s2.total === 0) return null;
-    const part = (n2, singular, plural = singular + "s") => n2 > 0 ? `${n2} ${n2 === 1 ? singular : plural}` : null;
-    const parts = [
-      part(s2.tokens, "token"),
-      part(s2.urlParams, "URL param"),
-      part(s2.formFields, "form field"),
-      part(s2.storageKeys, "storage value")
-    ].filter(Boolean);
-    return `${s2.total} sensitive value${s2.total === 1 ? "" : "s"} auto-masked (${parts.join(", ")})`;
-  }
-  var REDACTED3, TOKEN_RE, PARAM_RE;
-  var init_redaction_summary = __esm({
-    "src/redaction-summary.ts"() {
-      "use strict";
-      REDACTED3 = "[REDACTED]";
-      TOKEN_RE = /\[REDACTED\]/g;
-      PARAM_RE = /=(?:\[REDACTED\]|%5BREDACTED%5D)/g;
-    }
-  });
-
   // src/exporters/playwright-test.ts
   function q(s2) {
     return "'" + String(s2).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, " ") + "'";
@@ -27945,6 +28182,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
     const info = [
       { k: "URL", v: env.url, i: ic("link") },
+      ...env.startUrl ? [{ k: "Started on", v: env.startUrl, i: ic("link") }] : [],
       { k: "Timestamp", v: new Date(env.timestamp || report.generatedAt).toLocaleString(), i: ic("clock") },
       { k: "OS", v: env.os, i: osIcon(env.os) },
       { k: "Browser", v: `${env.browser} ${env.browserVersion}`.trim(), i: browserIcon(env.browser) },
@@ -27968,6 +28206,12 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
     const redactionLine = formatRedactionSummary(summarizeRedactions(report));
     if (redactionLine) info.push({ k: "Privacy", v: `\u{1F6E1} ${redactionLine}`, i: "" });
+    const evidence = report.evidence;
+    if (evidence) {
+      info.push({ k: "Captured", v: evidence.captured.join(" \xB7 "), i: "" });
+      if (evidence.dropped.length) info.push({ k: "Dropped", v: `\u26A0 ${evidence.dropped.join(" \xB7 ")}`, i: "" });
+      info.push({ k: "Not captured", v: evidence.notCaptured.join(" \xB7 "), i: "" });
+    }
     const STORAGE_DISPLAY_CAP = 20;
     function pushStorageRows(label, entries, droppedAtCapture) {
       if (!entries || entries.length === 0) return;
@@ -28041,6 +28285,9 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         hint: report.rootCause.hint,
         confidence: report.rootCause.confidence
       } : void 0,
+      // Structured, for the MCP server (get_bug_report) — the Info rows above
+      // are the human-readable copy of the same thing.
+      evidence: report.evidence,
       // Issue-filing helpers for the file's RECIPIENT — precomputed here so
       // the viewer ships zero issue-builder code. Token-free actions only;
       // API-token integrations stay in the exporter's modal.
@@ -29572,12 +29819,17 @@ ${issueSignatureSlack()}`;
       if (env.viewport) lines.push(`- Viewport: ${env.viewport}`);
       if (env.deviceType) lines.push(`- Device: ${env.deviceType}`);
     }
+    if (report.evidence) {
+      lines.push(`
+## Evidence coverage`);
+      lines.push(formatEvidenceMarkdown(report.evidence));
+    }
     const nothingFailed = (report.consoleErrors || []).length === 0 && !(report.networkErrors || []).some((f2) => !isNoiseRequest(f2.url));
     if (nothingFailed) {
       lines.push(`
 ## No errors captured`);
       lines.push(
-        "No errors or failed requests were captured in this session, so the evidence alone does not show a bug. Use the reporter's description for what was expected. If it doesn't say, ask what looked wrong before suggesting a cause."
+        "No errors or failed requests were captured in this session, so the evidence alone does not show a bug. " + (report.evidence && !report.evidence.complete ? "The capture is incomplete (see Evidence coverage), so an error may have been missed. " : "") + "Use the reporter's description for what was expected. If it doesn't say, ask what looked wrong before suggesting a cause."
       );
     } else if ((_b = report.rootCause) == null ? void 0 : _b.hint) {
       lines.push(`
@@ -29846,6 +30098,7 @@ ${renderMarkdownLite(md)}
       "use strict";
       init_url_hygiene();
       init_agent_workflow();
+      init_evidence_summary();
       init_plugin_system();
       MAX_CONSOLE_ERRORS = 5;
       MAX_NETWORK_FAILURES = 5;
@@ -32447,6 +32700,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const sevLabel = severityBadge((report == null ? void 0 : report.severity) || "low");
     const rows = [];
     rows.push(_kvRow("URL", env.url || window.location.href, _ic("link")));
+    if (env.startUrl) rows.push(_kvRow("Started on", env.startUrl, _ic("link")));
     rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
     rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
     rows.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
@@ -32459,6 +32713,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     rows.push(_kvRow("Session", ((session == null ? void 0 : session.sessionId) || "").slice(0, 12), _ic("hash")));
     rows.push(_kvRow("Severity (auto)", sevLabel));
     if (session == null ? void 0 : session.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
+    const evidence = report == null ? void 0 : report.evidence;
+    if (evidence) {
+      rows.push(`<div class="tb-qb-sec-head">Evidence${evidence.complete ? "" : " (incomplete)"}</div>`);
+      rows.push(_kvRow("Captured", evidence.captured.join(" \xB7 ")));
+      if (evidence.redacted) rows.push(_kvRow("Masked", evidence.redacted));
+      if (evidence.dropped.length) rows.push(_kvRow("Dropped", `\u26A0 ${evidence.dropped.join(" \xB7 ")}`));
+      rows.push(_kvRow("Not captured", evidence.notCaptured.join(" \xB7 ")));
+    }
     const ctxKeys = Object.keys(ctx);
     if (ctxKeys.length > 0) {
       rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
@@ -32630,9 +32892,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       return `<button class="tb-qb-net-pill${key === "all" ? " tb-qb-net-pill-active" : ""}" data-type="${key}">${label}${c2 > 0 ? `<span class="tb-qb-net-pill-n">${c2}</span>` : ""}</button>`;
     };
     const rows = classified.map((n2, i2) => {
-      const status = n2.status === 0 ? "ERR" : String(n2.status);
-      const statusClass = n2.status === 0 ? "tb-qb-net-err" : n2.status >= 500 ? "tb-qb-net-5xx" : n2.status >= 400 ? "tb-qb-net-4xx" : n2.status >= 300 ? "tb-qb-net-3xx" : n2.status >= 200 ? "tb-qb-net-2xx" : "";
-      const isErr = n2.status === 0 || n2.status >= 400;
+      const row = n2;
+      const isErr = isFailedRequest(row);
+      const status = n2.status !== 0 ? String(n2.status) : isErr ? "ERR" : row.statusUnknown ? "\u2014" : requestStatusLabel(row);
+      const statusClass = n2.status === 0 ? isErr ? "tb-qb-net-err" : "" : n2.status >= 500 ? "tb-qb-net-5xx" : n2.status >= 400 ? "tb-qb-net-4xx" : n2.status >= 300 ? "tb-qb-net-3xx" : n2.status >= 200 ? "tb-qb-net-2xx" : "";
       const leftPct = (n2.timestamp - minTs) / span * 100;
       const widthPct = Math.max(0.5, (n2.duration || 0) / span * 100);
       const haystack = `${n2.method} ${n2.url} ${status} ${n2._dom}`.toLowerCase();
@@ -33961,6 +34224,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_tracker_client();
       init_ext_transport();
       init_plugin_system();
+      init_request_status();
       init_tracker_client();
       _githubRepo = null;
       MODAL_ID = "tracebug-quick-bug-modal";
@@ -35795,17 +36059,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     return last.charAt(0).toUpperCase() + last.slice(1).replace(/[-_]/g, " ");
   }
   function renderSessionDetail(panel, session) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const content = panel.querySelector("#bt-content");
     const s2 = session;
     const problems = [];
     const apiEvents = s2.events.filter((e2) => e2.type === "api_request");
     const errorEvents = s2.events.filter((e2) => ["error", "unhandled_rejection"].includes(e2.type));
     const consoleErrors = s2.events.filter((e2) => e2.type === "console_error");
-    const failedApis = apiEvents.filter((e2) => {
-      var _a3, _b2;
-      return ((_a3 = e2.data.request) == null ? void 0 : _a3.statusCode) >= 400 || ((_b2 = e2.data.request) == null ? void 0 : _b2.statusCode) === 0;
-    });
+    const failedApis = apiEvents.filter((e2) => isFailedRequest(e2.data.request));
     const slowApis = apiEvents.filter((e2) => {
       var _a3;
       return ((_a3 = e2.data.request) == null ? void 0 : _a3.durationMs) > 3e3;
@@ -36066,8 +36327,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const ev = s2.events[i2];
       const c2 = eventConfig[ev.type] || { label: ev.type, icon: "\u{1F4CC}", color: "#666", bg: "#1a1a2e" };
       const isErr = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-      const isApiErr = ev.type === "api_request" && (((_f = ev.data.request) == null ? void 0 : _f.statusCode) >= 400 || ((_g = ev.data.request) == null ? void 0 : _g.statusCode) === 0);
-      const isSlowApi = ev.type === "api_request" && ((_h = ev.data.request) == null ? void 0 : _h.durationMs) > 3e3;
+      const isApiErr = ev.type === "api_request" && isFailedRequest(ev.data.request);
+      const isSlowApi = ev.type === "api_request" && ((_f = ev.data.request) == null ? void 0 : _f.durationMs) > 3e3;
       const hasProblem = isErr || isApiErr;
       const dotColor = hasProblem ? "#ef4444" : isSlowApi ? "#f97316" : c2.color;
       const timeSincePrev = i2 > 0 ? ev.timestamp - s2.events[i2 - 1].timestamp : 0;
@@ -36114,7 +36375,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         </div>`;
       } else if (ev.type === "click") {
         const el = ev.data.element;
-        const target = (el == null ? void 0 : el.ariaLabel) || ((_i = el == null ? void 0 : el.text) == null ? void 0 : _i.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
+        const target = (el == null ? void 0 : el.ariaLabel) || ((_g = el == null ? void 0 : el.text) == null ? void 0 : _g.trim()) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
         html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.4">Clicked "<span style="color:#60a5fa">${escapeHtml4(target.slice(0, 60))}</span>"</div>`;
         const details = [];
         if (el == null ? void 0 : el.tag) details.push(`&lt;${escapeHtml4(el.tag)}&gt;`);
@@ -36173,16 +36434,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
           <span style="color:#22d3ee;background:#0c2e3344;padding:2px 6px;border-radius:3px;font-weight:600">${escapeHtml4(ev.data.to || "/")}</span>
         </div>`;
       } else if (ev.type === "error" || ev.type === "unhandled_rejection") {
-        const errType = getErrorType(((_j = ev.data.error) == null ? void 0 : _j.message) || "");
+        const errType = getErrorType(((_h = ev.data.error) == null ? void 0 : _h.message) || "");
         html += `<div style="margin-top:2px">
           <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
             <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${errType.color}22;color:${errType.color};border:1px solid ${errType.color}33">${errType.type}</span>
           </div>
-          <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4(((_k = ev.data.error) == null ? void 0 : _k.message) || "Unknown error")}</div>
-          ${((_l = ev.data.error) == null ? void 0 : _l.source) ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml4(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
+          <div style="color:#fca5a5;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4(((_i = ev.data.error) == null ? void 0 : _i.message) || "Unknown error")}</div>
+          ${((_j = ev.data.error) == null ? void 0 : _j.source) ? `<div style="font-size:9px;color:var(--tb-text-muted, #555);margin-top:3px">at ${escapeHtml4(ev.data.error.source)}${ev.data.error.line ? `:${ev.data.error.line}` : ""}${ev.data.error.column ? `:${ev.data.error.column}` : ""}</div>` : ""}
         </div>`;
       } else if (ev.type === "console_error") {
-        html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4((((_m = ev.data.error) == null ? void 0 : _m.message) || "").slice(0, 200))}</div>`;
+        html += `<div style="color:#fb923c;font-size:11px;line-height:1.4;word-break:break-word">${escapeHtml4((((_k = ev.data.error) == null ? void 0 : _k.message) || "").slice(0, 200))}</div>`;
       } else {
         html += `<div style="color:var(--tb-text-secondary, #aaa);font-size:11px;line-height:1.3">${escapeHtml4(describeEvent(ev))}</div>`;
       }
@@ -37550,6 +37811,7 @@ ${"-".repeat(40)}
       init_title_generator();
       init_voice_recorder();
       init_annotation_store();
+      init_request_status();
       init_compact_toolbar();
       init_toast();
       init_ext_transport();
@@ -39043,6 +39305,7 @@ First element: \`${exampleSnippet}\``,
     undismissIssue: () => undismissIssue
   });
   init_storage();
+  init_storage_capture();
   init_repro_generator();
   init_dashboard();
   init_collectors();
@@ -39050,6 +39313,7 @@ First element: \`${exampleSnippet}\``,
   init_ext_transport();
   init_capture_ownership();
   init_network_dedupe();
+  init_request_status();
   init_environment();
   init_screenshot();
   init_region_screenshot();
@@ -39893,7 +40157,7 @@ ${summary}`;
      *
      * Options:
      *  - projectId:       Required. Identifies your app.
-     *  - maxEvents:       Max events per session in storage (default 200).
+     *  - maxEvents:       Max events per session in storage (default 500).
      *  - maxSessions:     Max sessions kept in localStorage (default 50).
      *  - enableDashboard: Show the floating bug button (default true).
      *  - enabled:         Control when SDK is active (default "auto").
@@ -39907,7 +40171,10 @@ ${summary}`;
       if (!this._validateConfig(config)) return;
       try {
         this.config = {
-          maxEvents: 200,
+          // 500, not 200: the oldest events are evicted first, and those are the
+          // clicks that lead up to the bug. A few hundred small events cost far
+          // less storage than one screenshot.
+          maxEvents: 500,
           maxSessions: 50,
           enableDashboard: true,
           theme: "light",
@@ -39965,8 +40232,8 @@ ${summary}`;
         return false;
       }
       if (config.maxEvents !== void 0 && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
-        console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
-        config.maxEvents = 200;
+        console.warn("[TraceBug] maxEvents must be a positive number. Using default (500).");
+        config.maxEvents = 500;
       }
       if (config.maxSessions !== void 0 && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
         console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
@@ -40021,7 +40288,10 @@ ${summary}`;
             projectId: this.config.projectId,
             type,
             page: window.location.pathname,
-            timestamp: Date.now(),
+            // A Resource Timing row carries when the request really started
+            // (`_ts`); without it, page-load rows drained at capture start were
+            // all stamped "now", after requests that ran before them.
+            timestamp: typeof data._ts === "number" && data._ts > 0 ? data._ts : Date.now(),
             data
           };
           event = runEventPlugins(event);
@@ -40046,6 +40316,9 @@ ${summary}`;
       this.cleanups.push(collectRouteChanges(emit));
       this.cleanups.push(collectApiRequests(emit));
       this.cleanups.push(collectXhrRequests(emit));
+      this.cleanups.push(onNetworkFailure((f2) => {
+        if (this.sessionId) attachResponseSnippet(this.sessionId, f2);
+      }));
       this.cleanups.push(collectPerformanceNetwork(emit));
       this.cleanups.push(collectErrors(emit));
     }
@@ -40182,8 +40455,10 @@ ${summary}`;
       try {
         const env = captureEnvironment();
         saveEnvironment(id, env);
+        saveConsoleLevel(id, this._consoleLevel);
       } catch (e2) {
       }
+      resetConsoleCapped();
       try {
         const storedUser = localStorage.getItem("tracebug_user");
         if (storedUser) {
@@ -40221,6 +40496,7 @@ ${summary}`;
         }
       } catch (e2) {
       }
+      this._snapshotStorage(id);
       flushPendingEvents();
       clearActiveSessionId();
       this.sessionId = null;
@@ -41096,10 +41372,7 @@ ${summary}`;
         return e2.type;
       });
       const flow = actions.length > 0 ? ` after ${actions.join(" \u2192 ")}` : "";
-      const failedApis = session.events.filter((e2) => {
-        var _a3, _b;
-        return e2.type === "api_request" && (((_a3 = e2.data.request) == null ? void 0 : _a3.statusCode) >= 400 || ((_b = e2.data.request) == null ? void 0 : _b.statusCode) === 0);
-      }).slice(0, 1).map((e2) => {
+      const failedApis = session.events.filter((e2) => e2.type === "api_request" && isFailedRequest(e2.data.request)).slice(0, 1).map((e2) => {
         var _a3, _b, _c, _d, _e;
         return `${(_a3 = e2.data.request) == null ? void 0 : _a3.method} ${(_d = (_c = (_b = e2.data.request) == null ? void 0 : _b.url) == null ? void 0 : _c.split("?")[0]) == null ? void 0 : _d.slice(-40)} returned ${(_e = e2.data.request) == null ? void 0 : _e.statusCode}`;
       });
@@ -41380,8 +41653,18 @@ ${summary}`;
         }
       }, 200);
     }
+    /** Persist Web Storage as it is now (first call per session wins). */
+    _snapshotStorage(sessionId) {
+      var _a2;
+      if (((_a2 = this.config) == null ? void 0 : _a2.captureStorage) === false) return;
+      try {
+        saveStorageSnapshot(sessionId, captureStorageSnapshot());
+      } catch (e2) {
+      }
+    }
     processError(sessionId, errorMessage, errorStack) {
       if (!errorMessage) return;
+      this._snapshotStorage(sessionId);
       setTimeout(() => {
         const sessions = getAllSessions();
         const session = sessions.find((s2) => s2.sessionId === sessionId);

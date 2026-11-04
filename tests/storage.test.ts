@@ -102,6 +102,21 @@ describe('appendEvent', () => {
     expect(s.events[s.events.length - 1].data.i).toBe(9);
   });
 
+  it('counts the events it trims, so a report can say the lead-up is incomplete', () => {
+    for (let i = 0; i < 10; i++) {
+      appendEvent('s1', event('s1', { data: { i } as any }), 5, 50);
+    }
+    flushPendingEvents();
+    const s = getAllSessions().find(x => x.sessionId === 's1')!;
+    expect(s.droppedEvents).toBe(5);
+  });
+
+  it('records no dropped events when nothing was trimmed', () => {
+    for (let i = 0; i < 3; i++) appendEvent('s1', event('s1'), 5, 50);
+    flushPendingEvents();
+    expect(getAllSessions().find(x => x.sessionId === 's1')!.droppedEvents).toBeUndefined();
+  });
+
   it('trims old sessions at the maxSessions limit', () => {
     for (let i = 0; i < 8; i++) {
       appendEvent(`s${i}`, event(`s${i}`), 10, 3);

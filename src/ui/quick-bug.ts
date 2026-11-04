@@ -46,6 +46,7 @@ import {
 } from "../integrations/tracker-client";
 import { isExtensionMode, getBoundShortcut } from "../ext-transport";
 import { runExportPlugins } from "../plugin-system";
+import { isFailedRequest, requestStatusLabel } from "../request-status";
 import {
   TRACKER_LABELS, type TrackerProvider, type IntegrationsConfig,
 } from "../integrations/tracker-client";
@@ -2279,6 +2280,7 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   const sevLabel = severityBadge(report?.severity || "low");
   const rows: string[] = [];
   rows.push(_kvRow("URL", env.url || window.location.href, _ic("link")));
+  if (env.startUrl) rows.push(_kvRow("Started on", env.startUrl, _ic("link")));
   rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
   rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
   rows.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
@@ -2293,6 +2295,15 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   // Priority appears only when the tester explicitly picked one — the
   // report-level fallback (derived from severity) is not their triage call.
   if (session?.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
+  // Evidence integrity (evidence-summary.ts): what this ticket can and can't show.
+  const evidence = report?.evidence;
+  if (evidence) {
+    rows.push(`<div class="tb-qb-sec-head">Evidence${evidence.complete ? "" : " (incomplete)"}</div>`);
+    rows.push(_kvRow("Captured", evidence.captured.join(" · ")));
+    if (evidence.redacted) rows.push(_kvRow("Masked", evidence.redacted));
+    if (evidence.dropped.length) rows.push(_kvRow("Dropped", `⚠ ${evidence.dropped.join(" · ")}`));
+    rows.push(_kvRow("Not captured", evidence.notCaptured.join(" · ")));
+  }
   const ctxKeys = Object.keys(ctx);
   if (ctxKeys.length > 0) {
     rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
@@ -2526,14 +2537,17 @@ function _buildNetworkTab(report: import("../types").BugReport | null): string {
   };
 
   const rows = classified.map((n, i) => {
-    const status = n.status === 0 ? "ERR" : String(n.status);
+    // Status 0 is a failure only when it isn't unknown, aborted or opaque.
+    const row = n as import("../types").NetworkRequestEntry;
+    const isErr = isFailedRequest(row);
+    const status = n.status !== 0 ? String(n.status)
+      : isErr ? "ERR" : row.statusUnknown ? "—" : requestStatusLabel(row);
     const statusClass =
-      n.status === 0 ? "tb-qb-net-err" :
+      n.status === 0 ? (isErr ? "tb-qb-net-err" : "") :
       n.status >= 500 ? "tb-qb-net-5xx" :
       n.status >= 400 ? "tb-qb-net-4xx" :
       n.status >= 300 ? "tb-qb-net-3xx" :
       n.status >= 200 ? "tb-qb-net-2xx" : "";
-    const isErr = n.status === 0 || n.status >= 400;
     const leftPct = ((n.timestamp - minTs) / span) * 100;
     const widthPct = Math.max(0.5, ((n.duration || 0) / span) * 100);
     const haystack = `${n.method} ${n.url} ${status} ${n._dom}`.toLowerCase();

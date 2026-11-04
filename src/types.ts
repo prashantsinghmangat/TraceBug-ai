@@ -2,7 +2,7 @@
 
 export interface TraceBugConfig {
   projectId: string;
-  maxEvents?: number;       // Max events stored per session (default 200)
+  maxEvents?: number;       // Max events stored per session (default 500)
   maxSessions?: number;     // Max sessions kept in localStorage (default 50)
   enableDashboard?: boolean; // Show floating dashboard button (default true)
 
@@ -220,6 +220,16 @@ export interface StoredSession {
    *  isn't surprised by missing screenshots later. Cleared by a fresh save that
    *  includes screenshots. */
   screenshotsDropped?: boolean;
+  /** How many of this session's oldest events were evicted (the `maxEvents`
+   *  limit, or trimming to fit full browser storage). Reported so a missing
+   *  lead-up is never mistaken for one that didn't happen. */
+  droppedEvents?: number;
+  /** The `captureConsole` level this capture ran with. */
+  consoleLevel?: "errors" | "warnings" | "all" | "none";
+  /** Web Storage as it was at the first error (or at stop), so a report —
+   *  and a saved ticket reopened days later — shows the state the bug ran
+   *  in, not the page's storage at the moment the report was built. */
+  storageSnapshot?: StorageSnapshot;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────
@@ -314,7 +324,10 @@ export interface EnvironmentInfo {
   language: string;
   timezone: string;
   userAgent: string;
+  /** The page the bug happened on (origin + path) when a report is built. */
   url: string;
+  /** The page the capture started on, when the bug happened elsewhere. */
+  startUrl?: string;
   deviceType: "desktop" | "tablet" | "mobile";
   connectionType: string;
   timestamp: number;
@@ -349,6 +362,12 @@ export interface NetworkRequestEntry {
    *  only kept when it failed or was slow. Lets the report group these under
    *  "Before capture" instead of implying the user triggered them. */
   phase?: "page-load";
+  /** Status 0 here is not a failure: the browser didn't expose the status
+   *  (a Resource Timing record), the app aborted the request, or the response
+   *  was opaque (`no-cors`). See src/request-status.ts. */
+  statusUnknown?: boolean;
+  aborted?: boolean;
+  opaque?: boolean;
 }
 
 /** One attribute on an ActionChip's element preview (rendered as name="value"). */
@@ -496,6 +515,9 @@ export interface BugReport {
   voiceTranscripts: VoiceTranscriptData[];
   /** Optional screen recording — present only when QA hit Record before exporting. */
   video?: VideoRecordingData;
+  /** What this report captured, didn't capture, masked and dropped — see
+   *  src/evidence-summary.ts. Set by buildReport. */
+  evidence?: import("./evidence-summary").EvidenceSummary;
   /** Custom context set via `TraceBug.context({...})` — empty object if none. */
   context: ContextData;
   session: StoredSession;

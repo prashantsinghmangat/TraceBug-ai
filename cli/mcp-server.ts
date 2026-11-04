@@ -57,6 +57,8 @@ interface ReportPayload {
     styles?: unknown;
   }>;
   rootCauseHint?: { hint: string; confidence: string };
+  /** What the report captured, didn't capture, masked and dropped (SDK 1.12+). */
+  evidence?: { captured: string[]; notCaptured: string[]; redacted: string | null; dropped: string[]; complete: boolean };
   /** Generated failing Playwright spec (exports from SDK v1.9+). */
   playwrightTest?: string;
   playwrightTestFilename?: string;
@@ -272,7 +274,17 @@ export function buildInvestigationGuide(p: ReportPayload): string[] {
   const noFailure = consoleErrors === 0 && netFailures === 0;
   if (noFailure) {
     steps.push(
-      "[HIGH] No errors or failed requests were captured, so the evidence alone does not name a bug. Read the reporter's description (in get_bug_report) for what they expected versus what happened. If it doesn't say, ask the user what looked wrong before proposing changes, and don't present a guess as a root cause."
+      "[HIGH] No errors or failed requests were captured, so the evidence alone does not name a bug. Read the reporter's description (in get_bug_report) for what they expected versus what happened. If it doesn't say, ask the user what looked wrong before proposing changes, and don't present a guess as a root cause." +
+        (p.evidence && !p.evidence.complete
+          ? " The capture is also INCOMPLETE (see `evidence.dropped` / `evidence.notCaptured`), so an error may have been missed."
+          : "")
+    );
+  }
+
+  // Anything dropped is a gap the agent must not read as "it didn't happen".
+  if (p.evidence?.dropped.length) {
+    steps.push(
+      `[MEDIUM] Evidence gaps — dropped from this report: ${p.evidence.dropped.join("; ")}. Don't treat these as absent; ask the user or reproduce if they matter.`
     );
   }
 
@@ -375,6 +387,9 @@ export function toolGetBugReport(baseDir: string, args: { file: string }) {
     environmentDetails: p.info ?? [],
     description: p.description || null,
     rootCause: p.rootCauseHint ?? p.meta.rootCause ?? null,
+    // Facts about the capture itself — read before trusting an absence
+    // (no error, no request body) as "it didn't happen". Null for pre-1.12 exports.
+    evidence: p.evidence ?? null,
     annotations: p.annotations ?? [],
     // Computed-style receipts for design-QA bugs (selector, typography,
     // colors, box model, WCAG contrast) — diff these against the codebase.
@@ -414,14 +429,24 @@ export function toolGetNetworkActivity(baseDir: string, args: { file: string; fa
     failureCount: failures.length,
     totalCaptured: all.length || failures.length,
     showing: args.failuresOnly !== false ? "failures only (pass failuresOnly:false for all requests)" : "all requests",
-    requests: rows.map((r) => ({
-      method: r.method,
-      url: r.url,
-      status: r.status,
-      durationMs: r.duration,
-      at: new Date(r.timestamp).toISOString(),
-      responseSnippet: r.response ?? null,
-    })),
+    requests: rows.map((r) => {
+      // Status 0 that is not a failure (src/request-status.ts) says why.
+      const f = r as { statusUnknown?: boolean; aborted?: boolean; opaque?: boolean };
+      const statusNote = r.status !== 0 ? undefined
+        : f.aborted ? "aborted by the app, not a network failure"
+        : f.opaque ? "opaque no-cors response, status hidden by design"
+        : f.statusUnknown ? "status not exposed by the browser (timing record), not a failure"
+        : undefined;
+      return {
+        method: r.method,
+        url: r.url,
+        status: r.status,
+        ...(statusNote ? { statusNote } : {}),
+        durationMs: r.duration,
+        at: new Date(r.timestamp).toISOString(),
+        responseSnippet: r.response ?? null,
+      };
+    }),
   };
 }
 

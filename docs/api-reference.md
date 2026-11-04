@@ -21,7 +21,7 @@ Initialize TraceBug. Call once on app startup.
 ```typescript
 TraceBug.init({
   projectId: "my-app",        // Required
-  maxEvents: 200,             // Default: 200
+  maxEvents: 500,             // Default: 500
   maxSessions: 50,            // Default: 50
   enableDashboard: true,      // Default: true
   enabled: "auto",            // Default: "auto"
@@ -38,7 +38,7 @@ TraceBug.init({
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `projectId` | `string` | *required* | Identifies your app in stored data |
-| `maxEvents` | `number` | `200` | Max events stored per session |
+| `maxEvents` | `number` | `500` | Max events stored per session; the oldest are dropped first, and the number dropped is recorded |
 | `maxSessions` | `number` | `50` | Max sessions kept in localStorage |
 | `enableDashboard` | `boolean` | `true` | Show the compact toolbar on page |
 | `enabled` | `string \| string[]` | `"auto"` | Controls when SDK is active (see [Configuration](configuration.md)) |
