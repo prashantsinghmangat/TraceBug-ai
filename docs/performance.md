@@ -46,7 +46,7 @@ Load/init figures are the median of 5 cold page loads.
   `CompressionStream` — a measured 2.96 MB stream shipped as 0.87 MB), and
   optional video (`.webm`, the dominant cost when included — tens of MB;
   DOM replay is the default precisely to avoid it).
-- **Memory** is bounded by design: `maxEvents` (default 200) caps the
+- **Memory** is bounded by design: `maxEvents` (default 500) caps the
   per-session event buffer, non-error console capture is capped at 50
   entries per level, network failure snippets at 200 chars, and sessions
   are pruned at `maxSessions` (default 50).

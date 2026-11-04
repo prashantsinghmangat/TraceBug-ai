@@ -4,6 +4,7 @@
 
 import { TraceBugEvent } from "./types";
 import { isNoiseRequest } from "./url-hygiene";
+import { isFailedRequest } from "./request-status";
 
 export interface ReproResult {
   reproSteps: string;
@@ -125,7 +126,8 @@ export function generateReproSteps(
         const req = event.data.request;
         // A failed favicon/image/font/beacon is page noise, not a repro step —
         // as step 1 it sent readers (and the AI) after the wrong request.
-        if ((req?.statusCode >= 400 || req?.statusCode === 0) && !isNoiseRequest(req?.url)) {
+        // Aborted, opaque and status-unknown rows are not failures either.
+        if (isFailedRequest(req) && !isNoiseRequest(req?.url)) {
           steps.push(
             `${stepNum++}. API call fails: ${req.method} ${shortenUrl(req.url)} → ${
               req.statusCode === 0 ? "Network Error" : `HTTP ${req.statusCode}`

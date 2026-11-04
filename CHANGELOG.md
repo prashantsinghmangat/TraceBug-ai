@@ -2,6 +2,29 @@
 
 All notable changes to TraceBug are documented here.
 
+## [Unreleased]
+
+> 1.12 "Evidence Integrity" (plan: `docs/launch/master-plan.md`).
+
+### Added
+
+- **Every report says what it captured, what it didn't, and what it lost.** An "Evidence" block lists what was captured (actions, errors, requests, screenshots, replay, video), what is never captured (request/response bodies beyond 200 characters of a failed response, headers, iframe and canvas content, successful asset loads, console levels that were off), what was masked, and what was dropped (evicted early events, console output past 50 per level, video past the 2-minute limit, replay of earlier pages, failed responses with no body). It appears in the ticket's Info tab, the exported `.html`, the Fix with AI prompt ("Evidence coverage") and the MCP `get_bug_report` (`evidence`), whose investigation guide lists the gaps. "No errors captured" now adds "the capture is incomplete, so an error may have been missed" when early events were dropped or console capture was off.
+
+### Fixed
+
+- **Only real failures are reported as failures.** A request with status 0 was "failed" everywhere, but status 0 also means three things that aren't failures: a browser timing record whose status isn't exposed (every Firefox row, and cross-origin rows without `Timing-Allow-Origin`), a fetch or XHR the app aborted, and an opaque `no-cors` response. Each became "API … failed with Network Error" at **high** confidence, sending the reader and the AI after a failure that never happened. Aborted and opaque requests are now tagged at capture, timing rows keep "status unknown", and one rule (`src/request-status.ts`) decides failure for the report, title, summary, root-cause hint, timeline, repro steps, AI prompt and MCP. The Network tabs show "aborted", "opaque" or "—" instead of a red ERR, and `get_network_activity` explains each.
+- **The clicks that lead up to a bug are no longer pushed out.** A session keeps its newest events and drops the oldest, and the browser's timing records of every image, font and fetch were filling that space while you reproduced the bug, so the clicks that caused it could be the first thing dropped. During a capture, a fetch/XHR is now recorded only by its wrapper (which has the method and status; the timing copy was always discarded later anyway), and an image, script or font only when it failed or was slow, the same rule page-load requests already followed.
+- **Typing right before a click is recorded before the click.** A typed value is recorded 300 ms after the last keystroke, so clicking "Apply" quickly put the click ahead of the value it applied, and a value typed just before Stop or leaving the page was lost. Pending typing is now written out the moment you press a mouse button or Enter, leave the page, or stop.
+- **Reports see the newest events.** Events are written to storage about a second after they happen, and the repro steps built on an error (and a report built right after a click) read storage, so the click that triggered the bug could be missing. Reads now include unwritten events, and the repro steps are rebuilt from the session's events each time a report is built instead of reusing the copy frozen at the first error.
+- **Failed responses survive a reload.** The first 200 characters of a failed response lived only in memory, so they were gone after a reload and from every saved ticket. They are now stored on the request itself.
+- **Storage is shown as it was when the bug happened.** The localStorage / sessionStorage / cookie snapshot was read when the report was built, so a saved ticket reopened days later showed that day's storage. It is now taken at the first error (or when the capture stops) and kept with the session.
+- **The report URL is the page the bug happened on.** It was the page the capture started on, so a bug two pages in was reported under the landing page. The URL is now the page of the first failure (or the last page visited), and the Info tab adds "Started on" when they differ.
+- **Page-load requests carry their real time.** Requests from before the capture were all stamped with the moment the capture started; they now keep when they actually ran.
+
+### Changed
+
+- **`maxEvents` defaults to 500 (was 200), and dropped events are counted.** The session records how many of its oldest events were evicted (`droppedEvents`), including when full browser storage forces a trim, so a report can say its lead-up is incomplete.
+
 ## [1.11.6] - 2026-11-03
 
 > Fewer dead ends between a captured bug and an AI fix. From the minimum-click workflow map (`docs/launch/minimum-click-workflow.md`); no new features.

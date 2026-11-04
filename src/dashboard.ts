@@ -13,6 +13,7 @@ import { generatePdfReport } from "./pdf-generator";
 import { generateBugTitle } from "./title-generator";
 import { isVoiceSupported, startVoiceRecording, stopVoiceRecording, isVoiceRecording, clearVoiceTranscripts } from "./voice-recorder";
 import { getElementAnnotations, getDrawRegions, removeAnnotationById, clearAllAnnotations, copyToClipboard } from "./annotation-store";
+import { isFailedRequest } from "./request-status";
 import { mountCompactToolbar, setToolbarRecordingState, updateToolbarRecordingState, setRenderPanel, setSessionLifecycleHandlers as setToolbarSessionLifecycleHandlers, setNewCaptureHandler, ToolbarPosition } from "./compact-toolbar";
 import { showToast as showUnifiedToast, showActionToast } from "./ui/toast";
 import { shouldShowPageOnlyNotice, browserOwnsQuickCapture } from "./ext-transport";
@@ -480,7 +481,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
   const apiEvents = s.events.filter(e => e.type === "api_request");
   const errorEvents = s.events.filter(e => ["error","unhandled_rejection"].includes(e.type));
   const consoleErrors = s.events.filter(e => e.type === "console_error");
-  const failedApis = apiEvents.filter(e => e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0);
+  const failedApis = apiEvents.filter(e => isFailedRequest(e.data.request));
   const slowApis = apiEvents.filter(e => e.data.request?.durationMs > 3000);
 
   for (const ev of errorEvents) {
@@ -778,7 +779,7 @@ function renderSessionDetail(panel: HTMLElement, session: StoredSession): void {
     const ev = s.events[i];
     const c = eventConfig[ev.type] || {label:ev.type,icon:"📌",color:"#666",bg:"#1a1a2e"};
     const isErr = ["error","unhandled_rejection","console_error"].includes(ev.type);
-    const isApiErr = ev.type === "api_request" && (ev.data.request?.statusCode >= 400 || ev.data.request?.statusCode === 0);
+    const isApiErr = ev.type === "api_request" && isFailedRequest(ev.data.request);
     const isSlowApi = ev.type === "api_request" && ev.data.request?.durationMs > 3000;
     const hasProblem = isErr || isApiErr;
     const dotColor = hasProblem ? "#ef4444" : isSlowApi ? "#f97316" : c.color;

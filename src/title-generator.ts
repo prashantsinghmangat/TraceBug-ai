@@ -5,6 +5,7 @@
 import { TraceBugEvent, StoredSession, ScreenshotData } from "./types";
 import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
 import { collapseTyping } from "./repro-generator";
+import { isFailedRequest } from "./request-status";
 
 const USER_ACTION_TYPES = ["click", "input", "select_change", "form_submit", "route_change"];
 
@@ -23,9 +24,7 @@ export function lastUserActionBefore(events: TraceBugEvent[], index: number): Tr
 export function firstFailureIndex(events: TraceBugEvent[]): number {
   return events.findIndex((e) =>
     e.type === "error" || e.type === "unhandled_rejection" || e.type === "console_error" ||
-    (e.type === "api_request" &&
-      (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0) &&
-      !isNoiseRequest(e.data.request?.url))
+    (e.type === "api_request" && isFailedRequest(e.data.request) && !isNoiseRequest(e.data.request?.url))
   );
 }
 
@@ -85,9 +84,7 @@ function generateFlowTitle(userActions: TraceBugEvent[], allEvents: TraceBugEven
   // Failed badge/image/analytics requests are page noise — a session where
   // ONLY those failed gets a flow title, never "API Failure: <500-char hash>".
   const failedApis = allEvents.filter(e =>
-    e.type === "api_request" &&
-    (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0) &&
-    !isNoiseRequest(e.data.request?.url)
+    e.type === "api_request" && isFailedRequest(e.data.request) && !isNoiseRequest(e.data.request?.url)
   );
 
   if (failedApis.length > 0) {

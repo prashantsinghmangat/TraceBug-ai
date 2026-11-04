@@ -16,6 +16,7 @@
 import { BugReport } from "../types";
 import { isNoiseRequest } from "../url-hygiene";
 import { agentWorkflowSteps, CHAT_WORKFLOW_STEPS, numberedSteps } from "./agent-workflow";
+import { formatEvidenceMarkdown } from "../evidence-summary";
 import { runExportPlugins } from "../plugin-system";
 
 const MAX_CONSOLE_ERRORS = 5;
@@ -71,6 +72,14 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
     if (env.deviceType) lines.push(`- Device: ${env.deviceType}`);
   }
 
+  // ── Evidence coverage: what this report can and can't show ────────────
+  // So the model doesn't read a missing request body or an evicted step as
+  // "that didn't happen". Facts only (src/evidence-summary.ts).
+  if (report.evidence) {
+    lines.push(`\n## Evidence coverage`);
+    lines.push(formatEvidenceMarkdown(report.evidence));
+  }
+
   // ── Root-cause hint, or an honest "nothing failed" ────────────────────
   // With no captured error or real failed request there is no cause to hint
   // at; the model is told so instead, so it doesn't build one from the steps.
@@ -81,6 +90,9 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
     lines.push(`\n## No errors captured`);
     lines.push(
       "No errors or failed requests were captured in this session, so the evidence alone does not show a bug. " +
+        (report.evidence && !report.evidence.complete
+          ? "The capture is incomplete (see Evidence coverage), so an error may have been missed. "
+          : "") +
         "Use the reporter's description for what was expected. If it doesn't say, ask what looked wrong before suggesting a cause.",
     );
   } else if (report.rootCause?.hint) {

@@ -7,6 +7,14 @@ Open phases: `PLAN.md` 8, 11, 12.
 
 ## Where things stand
 
+- **1.12 "Evidence Integrity" in progress (2026-11-04)** — plan: `docs/launch/master-plan.md` Part 3.
+  Items 1–4 done (gates 1063/1063): real-failure rule (`src/request-status.ts`), lead-up kept
+  (`maxEvents` 500, `droppedEvents`, typing flushed before clicks), Evidence block (`src/evidence-summary.ts`
+  → ticket, .html, AI prompt, MCP), fresh/durable evidence (unflushed reads, persisted failure snippets,
+  storage snapshot at first error, bug-page URL). **Next: item 5** (privacy by default: URL query
+  redaction everywhere, skip hidden fields, cookie names only — needs the user's yes, voice transcript
+  sanitizing), then the **report-quality benchmark** e2e against the playground, then the e2e suites and
+  benchmark not yet run after item 2, then release 1.12. 1.11.6 was committed in `b029eb1`.
 - **1.11.5 is live everywhere (verified 2026-11-03)**: CWS (updated 2026-11-02), AMO, npm both packages,
   MCP registry (`isLatest`), website SDK sha matches the repo.
 - **1.11.6 is prepared, not committed (2026-11-03)**: the P0 + P1 fixes from

@@ -172,6 +172,7 @@ async function buildReplayPayload(
   }
   const info: Array<{ k: string; v: string; i?: string }> = [
     { k: "URL", v: env.url, i: ic("link") },
+    ...(env.startUrl ? [{ k: "Started on", v: env.startUrl, i: ic("link") }] : []),
     { k: "Timestamp", v: new Date(env.timestamp || report.generatedAt).toLocaleString(), i: ic("clock") },
     { k: "OS", v: env.os, i: osIcon(env.os) },
     { k: "Browser", v: `${env.browser} ${env.browserVersion}`.trim(), i: browserIcon(env.browser) },
@@ -198,6 +199,14 @@ async function buildReplayPayload(
   // masked before export. Omitted at zero — regexes can't promise "clean".
   const redactionLine = formatRedactionSummary(summarizeRedactions(report));
   if (redactionLine) info.push({ k: "Privacy", v: `🛡 ${redactionLine}`, i: "" });
+
+  // Evidence integrity: what this file can and can't show (evidence-summary.ts).
+  const evidence = report.evidence;
+  if (evidence) {
+    info.push({ k: "Captured", v: evidence.captured.join(" · "), i: "" });
+    if (evidence.dropped.length) info.push({ k: "Dropped", v: `⚠ ${evidence.dropped.join(" · ")}`, i: "" });
+    info.push({ k: "Not captured", v: evidence.notCaptured.join(" · "), i: "" });
+  }
 
   // Web Storage snapshot — each entry as its own kv row (capped for display).
   // Values are already redacted at capture for sensitive keys.
@@ -275,6 +284,9 @@ async function buildReplayPayload(
       hint: report.rootCause.hint,
       confidence: report.rootCause.confidence,
     } : undefined,
+    // Structured, for the MCP server (get_bug_report) — the Info rows above
+    // are the human-readable copy of the same thing.
+    evidence: report.evidence,
     // Issue-filing helpers for the file's RECIPIENT — precomputed here so
     // the viewer ships zero issue-builder code. Token-free actions only;
     // API-token integrations stay in the exporter's modal.

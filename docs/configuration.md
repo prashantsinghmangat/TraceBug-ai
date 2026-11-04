@@ -5,7 +5,7 @@
 ```typescript
 TraceBug.init({
   projectId: "my-app",
-  maxEvents: 200,
+  maxEvents: 500,
   maxSessions: 50,
   enableDashboard: true,
   enabled: "auto",
@@ -31,13 +31,13 @@ TraceBug.init({ projectId: "my-saas-app" });
 
 ### `maxEvents`
 
-Maximum number of events stored per session. Oldest events are dropped when the limit is exceeded.
+Maximum number of events stored per session. Oldest events are dropped when the limit is exceeded, and the report says how many were dropped.
 
-- **Default:** `200`
+- **Default:** `500` (was 200 before 1.12)
 - **Range:** Any positive integer
 
 ```typescript
-TraceBug.init({ projectId: "my-app", maxEvents: 500 });
+TraceBug.init({ projectId: "my-app", maxEvents: 1000 });
 ```
 
 ### `maxSessions`
@@ -222,7 +222,7 @@ TraceBug.init({
 TraceBug validates your config at runtime:
 
 - `projectId` must be a non-empty string — if missing, `init()` logs a warning and returns silently
-- `maxEvents` must be a positive number — invalid values fall back to default (200)
+- `maxEvents` must be a positive number — invalid values fall back to default (500)
 - `maxSessions` must be a positive number — invalid values fall back to default (50)
 - If the config object itself is missing or not an object, `init()` warns and does nothing
 

@@ -5,6 +5,7 @@
 import { TraceBugEvent, TimelineEntry } from "./types";
 import { isNoiseRequest, isStaticResource } from "./url-hygiene";
 import { dedupeNetworkRows } from "./network-dedupe";
+import { isFailedRequest, requestStatusLabel } from "./request-status";
 
 /** The api_request events to show: the Resource Timing copy of a fetch/XHR
  *  the wrapper already recorded is dropped, as the Network tab already does.
@@ -41,8 +42,7 @@ export function buildTimeline(events: TraceBugEvent[], opts?: { baseUrl?: string
   for (const ev of ordered) {
     const elapsed = formatElapsed(ev.timestamp - startTs);
     const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-    const isApiError = ev.type === "api_request" &&
-      (ev.data.request?.statusCode >= 400 || ev.data.request?.statusCode === 0);
+    const isApiError = ev.type === "api_request" && isFailedRequest(ev.data.request);
 
     // Same story-vs-mechanics rule as the Actions tab: beacons/analytics are
     // skipped, successful asset loads are skipped, failed first-party
@@ -115,7 +115,7 @@ function describeTimelineEvent(ev: TraceBugEvent): string {
       return `${ev.data.from || "/"} → ${ev.data.to || "/"}`;
     case "api_request": {
       const r = ev.data.request;
-      const status = r?.statusCode === 0 ? "NETWORK_ERR" : String(r?.statusCode);
+      const status = r?.statusCode === 0 && isFailedRequest(r) ? "NETWORK_ERR" : requestStatusLabel(r || {});
       return `${r?.method} ${shortenUrl(r?.url)} → ${status} (${r?.durationMs}ms)`;
     }
     case "error":

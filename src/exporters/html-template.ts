@@ -100,6 +100,10 @@ export interface BundlePayload {
     duration: number;
     timestamp: number;
     response?: string;
+    /** Status 0 that is not a failure — see src/request-status.ts. */
+    statusUnknown?: boolean;
+    aborted?: boolean;
+    opaque?: boolean;
   }>;
   actions?: string[];
   /** Action chips for the Actions tab. When present, rendered instead of
@@ -139,6 +143,14 @@ export interface BundlePayload {
     styles?: unknown;
   }>;
   rootCauseHint?: { hint: string; confidence: string };
+  /** What the report captured, didn't capture, masked and dropped (src/evidence-summary.ts). */
+  evidence?: {
+    captured: string[];
+    notCaptured: string[];
+    redacted: string | null;
+    dropped: string[];
+    complete: boolean;
+  };
 }
 
 /**
@@ -983,14 +995,18 @@ const REPLAY_RUNTIME = `(function(){
 
     var rowsHtml = classified.map(function(item, i){
       var n = item.n;
-      var statusTxt = n.status === 0 ? "ERR" : String(n.status);
+      // Status 0 is a failure only when it isn't unknown, aborted or opaque
+      // (same rule as src/request-status.ts — this runtime can't import it).
+      var notFail0 = n.status === 0 && (n.statusUnknown || n.aborted || n.opaque);
+      var statusTxt = n.status !== 0 ? String(n.status) :
+        n.aborted ? "aborted" : n.opaque ? "opaque" : n.statusUnknown ? "—" : "ERR";
       var statusCls =
-        n.status === 0 ? "serr" :
+        n.status === 0 ? (notFail0 ? "" : "serr") :
         n.status >= 500 ? "s5" :
         n.status >= 400 ? "s4" :
         n.status >= 300 ? "s3" :
         n.status >= 200 ? "s2" : "";
-      var isErr = n.status === 0 || n.status >= 400;
+      var isErr = (n.status === 0 && !notFail0) || n.status >= 400;
       var leftPct = ((n.timestamp - minTs) / span) * 100;
       var widthPct = Math.max(0.5, ((n.duration || 0) / span) * 100);
       var hay = (n.method + ' ' + n.url + ' ' + statusTxt + ' ' + item.dom).toLowerCase();

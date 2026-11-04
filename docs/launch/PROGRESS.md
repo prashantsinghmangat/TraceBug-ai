@@ -240,3 +240,37 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Third run (bug + clean):** both behaved as designed (right title/hint, Claude red-tested and asked; clean run asked
   instead of guessing). Fixed: slow typing collapses to one step/fill (`collapseTyping`), clean titles start "No errors
   captured:". Gates 1017/1017.
+
+## 1.12 item 1: only real failures are failures (2026-11-04)
+
+- **What:** status 0 no longer means "failed" by itself. `src/request-status.ts` (`isFailedRequest`, `requestStatusLabel`):
+  Resource Timing status 0 = unknown, fetch AbortError / XHR abort = `aborted`, `no-cors` = `opaque`; real network errors stay failures.
+- **Files:** collectors (tagging), report-builder, title-generator, timeline-builder, repro-generator, index, dashboard,
+  quick-bug + html-template Network tabs, mcp-server `get_network_activity` (`statusNote`), types; `tests/request-status.test.ts`.
+- **Verified:** check.mjs --full 1033/1033. Not changed: the Playwright reporter's own failure rule (separate capture path).
+
+## 1.12 item 2: never lose the lead-up (2026-11-04)
+
+- **What:** in-capture Resource Timing rows skipped for fetch/XHR (wrapper records them) and kept for assets only when
+  failed/slow; `maxEvents` 200 → 500; `session.droppedEvents` counted on trim and storage-full halving; pending typing
+  flushed on pointerdown / Enter / pagehide / stop; page-load rows stamped with their own `_ts`.
+- **Files:** collectors, storage, index, types, docs (configuration, api-reference, performance); tests `input-flush` (new),
+  `page-load-backfill` (rules updated), `storage`. **Verified:** check.mjs --full 1042/1042. **Behaviour change:** the
+  Network tab no longer lists successful asset loads made during a capture. Not run: e2e suites that may count those rows.
+
+## 1.12 item 3: Evidence Integrity block (2026-11-04)
+
+- **What:** `src/evidence-summary.ts` (captured / not captured / redacted / dropped / complete) on `report.evidence`;
+  shown in the ticket Info tab, `.html` Info rows, AI prompt "Evidence coverage", MCP `get_bug_report.evidence` + guide
+  gaps step. No-failure hint caveats an incomplete capture. Session records `consoleLevel`; console caps flagged.
+- **Files:** evidence-summary (new), collectors, storage, index, types, report-builder, ai-prompt, html-replay,
+  html-template, quick-bug, mcp-server; `tests/evidence-summary.test.ts` (new, 13). **Verified:** check.mjs --full 1055/1055.
+
+## 1.12 item 4: fresh, durable evidence (2026-11-04)
+
+- **What:** `getAllSessions` returns unflushed in-memory state (copy); repro steps always rebuilt in `buildReport`;
+  failure snippets persisted on the `api_request` event (`attachResponseSnippet` via `onNetworkFailure`); storage
+  snapshot saved at first error / stop (`session.storageSnapshot`); `environment.url` = bug page, `startUrl` kept.
+- **Files:** storage, collectors, index, report-builder, evidence-summary, types, html-replay, quick-bug;
+  `tests/fresh-evidence.test.ts` (new, 8). **Verified:** check.mjs --full 1063/1063. **Cost:** saved sessions grow by
+  the storage snapshot (≤ ~45 KB worst case, usually a few KB).
