@@ -17,6 +17,7 @@ relevant one after touching its feature:
 | `ext-player-csp.e2e.mjs` | Extension player iframe on a strict-CSP page (loads the real extension). |
 | `ext-shipping-path.e2e.mjs` | The 1.11 shipping path as an UPDATER sees it: seeds `tb_record_opts.video: true`, then asserts the capture is events-only, no video/mic control renders, no offscreen document is created, the ticket carries replay + console + network, and the stored preference survives for 1.11.1. |
 | `ext-no-secrets-in-page.e2e.mjs` | The Phase 2a guarantee in a real DOM: four seeded secrets must not appear in `outerHTML`, any `input`/`textarea` **`.value`**, any open shadow root, or page storage. |
+| `report-quality.e2e.mjs` | **The report-quality benchmark** (1.12 release gate, in `check.mjs --full` as `e2e:quality`). Five bug scenarios on an in-file shop, captured with the real extension, each report checked against an answer key: right title/action, real failures only (no favicon, status-0 or aborted rows), response body kept, error order, "No errors captured" with no invented cause, typing collapsed, no dead clicks, evidence block, AI prompt size, and no URL token / cookie value / hidden-field value anywhere in the report, prompt, `.html` or DOM replay. |
 | `ext-redaction.e2e.mjs` | Popup redaction rules → storage → page bridge → `[REDACTED]` capture (real extension). |
 
 These are **not** in `npm test` (they need a browser binary and are slower);

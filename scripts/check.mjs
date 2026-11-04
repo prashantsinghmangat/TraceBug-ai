@@ -5,7 +5,9 @@
 // been byte-identical for several phases.
 //
 //   node scripts/check.mjs             fast gates: typecheck, lint, test, build
-//   node scripts/check.mjs --full      + build:ext, ext:lint, check:versions
+//   node scripts/check.mjs --full      + build:ext, ext:lint, check:versions, e2e:quality
+//                                      (the report-quality benchmark: real extension, needs
+//                                      `npx playwright install chromium` once)
 //   node scripts/check.mjs test lint   only the named gates
 //   node scripts/check.mjs --verbose   print full output even when a gate passes
 //
@@ -23,7 +25,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const FAST = ["typecheck", "lint", "test", "build"];
-const FULL = [...FAST, "build:ext", "ext:lint", "check:versions"];
+const FULL = [...FAST, "build:ext", "ext:lint", "check:versions", "e2e:quality"];
 /** Scripts that never exit on their own, so they can never be gates. */
 const INTERACTIVE = new Set(["ext:firefox", "dev", "test:watch", "ext:run"]);
 
@@ -114,6 +116,13 @@ for (const gate of gates) {
     const m = out.match(/all surfaces agree on (\S+)/);
     if (m) note = `all surfaces on ${m[1]}`;
     else if (!ok) note = "version drift — see the output";
+  }
+
+  if (gate === "e2e:quality") {
+    // "ALL CHECKS PASSED — 84/84 checks passed" / "3 CHECK(S) FAILED — 81/84 checks passed"
+    const m = out.match(/(\d+)\/(\d+) checks passed/);
+    if (m) note = `${m[1]}/${m[2]} report checks`;
+    else { ok = false; note = "no result line — see the output"; }
   }
 
   console.log(`${ok ? "PASS" : "FAIL"}  ${gate.padEnd(14)} ${secs.padStart(5)}s  ${note}`);

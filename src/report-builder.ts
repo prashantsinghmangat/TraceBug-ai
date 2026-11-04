@@ -28,7 +28,7 @@ import { isFailedRequest } from "./request-status";
 import { summarizeEvidence } from "./evidence-summary";
 import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
-import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
+import { isNoiseRequest, isBrowserFavicon, shortDisplayPath } from "./url-hygiene";
 import { getElementAnnotations } from "./annotation-store";
 import { getStashedDomReplay } from "./rrweb-recorder";
 import { runReportPlugins } from "./plugin-system";
@@ -286,8 +286,10 @@ export function buildReport(
   }
 
   // Failure-only subset used by GitHub/Jira/markdown exports + root-cause logic.
+  // The browser's own /favicon.ico request is not the app's: its 404 stays in
+  // the Network tab but is never counted as one of the report's failures.
   const networkErrors: NetworkErrorEntry[] = networkRequests
-    .filter(r => isFailedRequest(r))
+    .filter(r => isFailedRequest(r) && !isBrowserFavicon(r.url))
     .map(r => ({ ...r }));
 
   // Screenshots from memory + any extras

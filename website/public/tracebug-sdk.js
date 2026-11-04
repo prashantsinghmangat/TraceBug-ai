@@ -646,6 +646,21 @@ var TraceBugModule = (() => {
       return url;
     }
   }
+  function redactUrlsInText(s2) {
+    if (!s2 || s2.indexOf("://") === -1) return s2;
+    try {
+      return s2.replace(URL_IN_TEXT_RE, (m) => {
+        var _a2;
+        const tail = ((_a2 = m.match(LINE_COL_RE)) == null ? void 0 : _a2[0]) || "";
+        return redactUrl(m.slice(0, m.length - tail.length)) + tail;
+      });
+    } catch (e2) {
+      return s2;
+    }
+  }
+  function isBrowserFavicon(url) {
+    return !!url && /^(?:https?:\/\/[^/]+)?\/favicon\.ico(?:[?#]|$)/i.test(url);
+  }
   function isNoiseRequest(url) {
     if (!url) return false;
     if (ASSET_EXT_RE.test(url)) return true;
@@ -682,13 +697,15 @@ var TraceBugModule = (() => {
     if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
     return out;
   }
-  var SENSITIVE_PARAM_RE, URL_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
+  var SENSITIVE_PARAM_RE, URL_PARAM_RE, URL_IN_TEXT_RE, LINE_COL_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
   var init_url_hygiene = __esm({
     "src/url-hygiene.ts"() {
       "use strict";
       init_custom_redaction();
       SENSITIVE_PARAM_RE = /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
       URL_PARAM_RE = /([?&#])([^=&#?]+)=([^&#]*)/g;
+      URL_IN_TEXT_RE = /\b(?:https?|wss?):\/\/[^\s"'`<>()[\]{}]+/g;
+      LINE_COL_RE = /(:\d+){1,2}$/;
       ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
       NOISE_HOSTS = [
         "camo.githubusercontent.com",
@@ -1386,6 +1403,7 @@ var TraceBugModule = (() => {
     if (s2 == null) return s2;
     let out = String(s2);
     for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
+    out = redactUrlsInText(out);
     return applyCustomRedaction(out);
   }
   function sanitizeTokenShapes(s2) {
@@ -2197,7 +2215,7 @@ var TraceBugModule = (() => {
           error: {
             message: sanitizeTokenShapes(capMessage(typeof msg === "string" ? msg : "Unknown error")),
             stack: (error == null ? void 0 : error.stack) && sanitizeTokenShapes(capMessage(error.stack)),
-            source,
+            source: typeof source === "string" ? redactUrl(source) : source,
             line,
             column: col
           }
@@ -20154,16 +20172,48 @@ var TraceBugModule = (() => {
     }
     return _loadPromise;
   }
+  function scrubNode(node2, hidden) {
+    if (!node2) return;
+    const attrs = node2.attributes;
+    if (node2.type === 2 && String(node2.tagName).toLowerCase() === "input" && attrs && String(attrs.type || "").toLowerCase() === "hidden") {
+      if ("value" in attrs) attrs.value = "";
+      if (typeof node2.id === "number") hidden.add(node2.id);
+    }
+    for (const c2 of node2.childNodes || []) scrubNode(c2, hidden);
+  }
+  function scrubHiddenInputs(event, hidden) {
+    try {
+      const data = event.data;
+      if (!data) return;
+      if (event.type === 2) {
+        hidden.clear();
+        scrubNode(data.node, hidden);
+        return;
+      }
+      if (event.type === 3 && data.source === 0) {
+        for (const a2 of data.adds || []) scrubNode(a2.node, hidden);
+        for (const ch of data.attributes || []) {
+          const at = ch.attributes;
+          if (!at) continue;
+          if (typeof ch.id === "number" && String(at.type || "").toLowerCase() === "hidden") hidden.add(ch.id);
+          if (typeof ch.id === "number" && hidden.has(ch.id) && "value" in at) at.value = "";
+        }
+      }
+    } catch (e2) {
+    }
+  }
   async function startDomRecording() {
     if (_recording) return true;
     const record2 = await loadRrweb();
     if (!record2) return false;
     _events = [];
+    _hiddenIds = /* @__PURE__ */ new Set();
     try {
       const stop = record2({
         emit: (event) => {
           const data = event.data;
           if (event.type === 4 && data && typeof data.href === "string") data.href = redactUrl(data.href);
+          scrubHiddenInputs(event, _hiddenIds);
           _events.push(event);
           trimEventBuffer(_events);
         },
@@ -20236,7 +20286,7 @@ var TraceBugModule = (() => {
   function clearStashedDomReplay() {
     _stashed = null;
   }
-  var _recordFn, _loadPromise, _events, _stopFn, _recording, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX, _stashed;
+  var _recordFn, _loadPromise, _events, _stopFn, _recording, FULL_SNAPSHOT, CHECKOUT_EVERY_MS, SOFT_MAX, HARD_MAX, _hiddenIds, _stashed;
   var init_rrweb_recorder = __esm({
     "src/rrweb-recorder.ts"() {
       "use strict";
@@ -20250,6 +20300,7 @@ var TraceBugModule = (() => {
       CHECKOUT_EVERY_MS = 12e4;
       SOFT_MAX = 3e4;
       HARD_MAX = 6e4;
+      _hiddenIds = /* @__PURE__ */ new Set();
       _stashed = null;
     }
   });
@@ -23418,7 +23469,7 @@ var TraceBugModule = (() => {
         });
       }
     }
-    const networkErrors = networkRequests.filter((r2) => isFailedRequest(r2)).map((r2) => ({ ...r2 }));
+    const networkErrors = networkRequests.filter((r2) => isFailedRequest(r2) && !isBrowserFavicon(r2.url)).map((r2) => ({ ...r2 }));
     const screenshots2 = [...getScreenshots(), ...extraScreenshots || []];
     const timeline = buildTimeline(events, { baseUrl: pageUrl });
     const voiceTranscripts = getVoiceTranscripts();

@@ -283,3 +283,19 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Files:** url-hygiene, collectors, environment, rrweb-recorder, storage-capture, index, types, evidence-summary,
   redaction-summary, voice-recorder, dashboard, quick-bug, html-replay, annotation-store; docs (configuration,
   api-reference, bug-reporting); `tests/privacy-defaults.test.ts` (new, 12). **Verified:** check.mjs --full 1075/1075.
+
+## 1.12 report-quality benchmark (2026-11-04)
+
+- **What:** `e2e/report-quality.e2e.mjs` — 5 scenarios on an in-file shop via the real extension, 84 checks against an
+  answer key; `e2e:quality` gate in `check.mjs --full`. First run failed 4 checks → fixed: URL tokens in stacks
+  (`redactUrlsInText` in the shared text scrub + `source`), hidden-input values in rrweb (`scrubHiddenInputs`),
+  `/favicon.ico` excluded from `networkErrors` (`isBrowserFavicon`).
+- **Files:** e2e/report-quality.e2e.mjs, e2e/README, scripts/check.mjs, package.json, url-hygiene, sanitize/cloud-upload,
+  collectors, rrweb-recorder, report-builder; `tests/benchmark-leaks.test.ts` (new, 6). **Verified:** check.mjs --full 1081/1081 + 84/84.
+
+## 1.12 e2e sweep (2026-11-04)
+
+- **All 24 `e2e/*.e2e.mjs` suites pass.** No product regressions from items 1–5. Fixed two stale tests in
+  `milestone-ask.e2e.mjs` (try.html loads the SDK only via the in-page demo button since 4a7511d; the card waits for the
+  modal to close since 8ef6859). `ext-feature-matrix` static/screen-recording "stops and saves" failed once, passed
+  64/64 on re-run (timing). `ext-secret-migration` needs `git worktree add D:/tmp/tb-1101 v1.10.1` (now present) → 25/25.
