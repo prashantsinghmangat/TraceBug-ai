@@ -514,6 +514,9 @@ var TraceBugModule = (() => {
   });
 
   // src/storage-capture.ts
+  function setCookieValueCapture(on2) {
+    _cookieValues = on2;
+  }
   function maskValue(raw) {
     if (!raw) return "";
     if (raw.length <= 8) return "[REDACTED]";
@@ -579,6 +582,10 @@ var TraceBugModule = (() => {
         truncated++;
         continue;
       }
+      if (!_cookieValues) {
+        entries.push({ key, value: "", valueOmitted: true });
+        continue;
+      }
       const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);
       if (sensitive) {
         entries.push({ key, value: maskValue(value), redacted: true });
@@ -611,7 +618,7 @@ var TraceBugModule = (() => {
     }
     return snapshot2;
   }
-  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY;
+  var MAX_ENTRIES_PER_AREA, MAX_VALUE_LEN, SENSITIVE_KEY, SENSITIVE_VALUE, INTERNAL_KEY, _cookieValues;
   var init_storage_capture = __esm({
     "src/storage-capture.ts"() {
       "use strict";
@@ -621,12 +628,23 @@ var TraceBugModule = (() => {
       SENSITIVE_KEY = /token|secret|auth|password|passwd|pwd|jwt|session|api[_-]?key|access|refresh|credential|private/i;
       SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pousr]_[A-Za-z0-9]{20,})|(Bearer\s+)/;
       INTERNAL_KEY = /^tracebug[_-]/i;
+      _cookieValues = false;
     }
   });
 
   // src/url-hygiene.ts
   function isSensitiveParamName(name) {
     return !!name && SENSITIVE_PARAM_RE.test(name);
+  }
+  function redactUrl(url) {
+    if (!url) return url;
+    try {
+      const start = url.search(/[?#]/);
+      if (start === -1) return url;
+      return url.slice(0, start) + url.slice(start).replace(URL_PARAM_RE, (m, sep, key) => isSensitiveParamName(key) || isCustomSensitiveKey(key) ? `${sep}${key}=[REDACTED]` : m);
+    } catch (e2) {
+      return url;
+    }
   }
   function isNoiseRequest(url) {
     if (!url) return false;
@@ -664,11 +682,13 @@ var TraceBugModule = (() => {
     if (out.length > PATH_MAX) out = out.slice(0, PATH_MAX - 1) + "\u2026";
     return out;
   }
-  var SENSITIVE_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
+  var SENSITIVE_PARAM_RE, URL_PARAM_RE, ASSET_EXT_RE, NOISE_HOSTS, NOISE_HOST_PREFIX_RE, NOISE_PATH_RE, SEGMENT_MAX, PATH_MAX;
   var init_url_hygiene = __esm({
     "src/url-hygiene.ts"() {
       "use strict";
+      init_custom_redaction();
       SENSITIVE_PARAM_RE = /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
+      URL_PARAM_RE = /([?&#])([^=&#?]+)=([^&#]*)/g;
       ASSET_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
       NOISE_HOSTS = [
         "camo.githubusercontent.com",
@@ -1519,28 +1539,6 @@ var TraceBugModule = (() => {
   function clearNetworkFailures() {
     _networkFailures.length = 0;
   }
-  function sanitizeUrl2(url) {
-    if (!url) return url;
-    try {
-      const qIdx = url.indexOf("?");
-      if (qIdx === -1) return url;
-      const base = url.slice(0, qIdx);
-      const afterQ = url.slice(qIdx + 1);
-      const hashIdx = afterQ.indexOf("#");
-      const query = hashIdx === -1 ? afterQ : afterQ.slice(0, hashIdx);
-      const hash = hashIdx === -1 ? "" : afterQ.slice(hashIdx);
-      const redacted = query.split("&").map((part) => {
-        const eqIdx = part.indexOf("=");
-        if (eqIdx === -1) return part;
-        const key = part.slice(0, eqIdx);
-        if (isSensitiveParamName(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
-        return part;
-      }).join("&");
-      return `${base}?${redacted}${hash}`;
-    } catch (e2) {
-      return url;
-    }
-  }
   async function readResponseBodySafe(response) {
     try {
       const ct = response.headers.get("content-type") || "";
@@ -1616,7 +1614,7 @@ var TraceBugModule = (() => {
           className: typeof t2.className === "string" ? t2.className : ""
         };
         const data = { element: el };
-        if (tag === "a") el.href = t2.href || "";
+        if (tag === "a") el.href = redactUrl(t2.href || "");
         if (tag === "button" || t2.type === "submit") {
           el.buttonType = t2.type || "button";
           el.disabled = t2.disabled;
@@ -1782,7 +1780,7 @@ var TraceBugModule = (() => {
               name,
               type: inputType,
               valueLength: rawValue.length,
-              value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
+              value: isSensitive ? "[REDACTED]" : sanitizeTokenShapes(rawValue.slice(0, INPUT_VALUE_MAX)),
               placeholder: (editable ? editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "" : t2.placeholder) || ""
             };
             if (editable) element.contentEditable = true;
@@ -1856,16 +1854,27 @@ var TraceBugModule = (() => {
         const form = e2.target;
         if (!form || form.tagName.toLowerCase() !== "form" || isTraceBugElement(form)) return;
         const formData = {};
+        let hiddenSkipped = 0;
         const elements = form.elements;
         for (let i2 = 0; i2 < elements.length; i2++) {
           const el = elements[i2];
           if (!el.name) continue;
-          const isSensitive = ["password"].includes(el.type) || /password|secret|token|ssn|credit/i.test(el.name) || isCustomSensitiveKey(el.name);
-          if (el.type === "submit" || el.type === "button") continue;
-          formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
+          if (el.type === "submit" || el.type === "button" || el.type === "file") continue;
+          if (el.type === "hidden") {
+            hiddenSkipped++;
+            continue;
+          }
+          formData[el.name] = isSensitiveField(el.name, el.type) ? "[REDACTED]" : sanitizeTokenShapes((el.value || "").slice(0, INPUT_VALUE_MAX));
         }
         emit("form_submit", {
-          form: { id: form.id || "", action: form.action || "", method: form.method || "GET", fieldCount: elements.length, fields: formData }
+          form: {
+            id: form.id || "",
+            action: redactUrl(form.action || ""),
+            method: form.method || "GET",
+            fieldCount: elements.length,
+            fields: formData,
+            ...hiddenSkipped ? { hiddenSkipped } : {}
+          }
         });
       } catch (err) {
         if (typeof console !== "undefined") console.warn("[TraceBug] Form capture error:", err);
@@ -1924,7 +1933,7 @@ var TraceBugModule = (() => {
         if (url && isInternalUrl(url)) return originalFetch.call(window, input2, init);
       } catch (e2) {
       }
-      const safeUrl = sanitizeUrl2(url).slice(0, 500);
+      const safeUrl = redactUrl(url).slice(0, 500);
       try {
         const response = await originalFetch.call(window, input2, init);
         const opaque = response.type === "opaque";
@@ -2015,7 +2024,7 @@ var TraceBugModule = (() => {
         const method = (meta == null ? void 0 : meta.method) || "GET";
         const url = (meta == null ? void 0 : meta.url) || "";
         if (isInternalUrl(url)) return origSend.call(this, body);
-        const safeUrl = sanitizeUrl2(url).slice(0, 500);
+        const safeUrl = redactUrl(url).slice(0, 500);
         let aborted = false;
         xhr.addEventListener("abort", () => {
           aborted = true;
@@ -2094,7 +2103,7 @@ var TraceBugModule = (() => {
     const initiator = e2.initiatorType || "";
     const method = ext.method ? ext.method.toUpperCase() : GET_ONLY_INITIATORS.has(initiator) ? "GET" : "";
     const status = ext.responseStatus || 0;
-    const url = sanitizeUrl2(e2.name).slice(0, 500);
+    const url = redactUrl(e2.name).slice(0, 500);
     const timestamp = Math.round(navStart + e2.startTime);
     const durationMs = Math.round(e2.duration || 0);
     let phase;
@@ -2384,7 +2393,7 @@ var TraceBugModule = (() => {
       language: navigator.language || "unknown",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown",
       userAgent: ua,
-      url: window.location.href,
+      url: redactUrl(window.location.href),
       deviceType,
       connectionType: connection,
       timestamp: Date.now()
@@ -2439,6 +2448,7 @@ var TraceBugModule = (() => {
   var init_environment = __esm({
     "src/environment.ts"() {
       "use strict";
+      init_url_hygiene();
     }
   });
 
@@ -2544,7 +2554,7 @@ var TraceBugModule = (() => {
     const result2 = {
       id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       timestamp: startTime,
-      text: transcript.trim(),
+      text: sanitizeTokenShapes(transcript.trim()),
       duration: Date.now() - startTime
     };
     transcripts.push(result2);
@@ -2574,6 +2584,7 @@ var TraceBugModule = (() => {
   var init_voice_recorder = __esm({
     "src/voice-recorder.ts"() {
       "use strict";
+      init_cloud_upload();
       recognition = null;
       isRecording = false;
       transcript = "";
@@ -20151,6 +20162,8 @@ var TraceBugModule = (() => {
     try {
       const stop = record2({
         emit: (event) => {
+          const data = event.data;
+          if (event.type === 4 && data && typeof data.href === "string") data.href = redactUrl(data.href);
           _events.push(event);
           trimEventBuffer(_events);
         },
@@ -20228,6 +20241,7 @@ var TraceBugModule = (() => {
     "src/rrweb-recorder.ts"() {
       "use strict";
       init_replay_masking();
+      init_url_hygiene();
       _loadPromise = null;
       _events = [];
       _stopFn = null;
@@ -22605,15 +22619,18 @@ var TraceBugModule = (() => {
     let urlParams = count((_b = report.environment) == null ? void 0 : _b.url, PARAM_RE);
     for (const r2 of requests) urlParams += count(r2.url, PARAM_RE);
     const seenFields = /* @__PURE__ */ new Set();
+    const scrubbedValues = /* @__PURE__ */ new Set();
     for (const ev of ((_c = report.session) == null ? void 0 : _c.events) || []) {
       if (ev.type === "input") {
         const el = (_d = ev.data) == null ? void 0 : _d.element;
         if ((el == null ? void 0 : el.value) === REDACTED3) seenFields.add(`input:${el.name || el.id || "field"}`);
+        else if (typeof (el == null ? void 0 : el.value) === "string" && el.value.includes(REDACTED3)) scrubbedValues.add(el.value);
       } else if (ev.type === "form_submit") {
         const fields = (_f = (_e = ev.data) == null ? void 0 : _e.form) == null ? void 0 : _f.fields;
         if (fields && typeof fields === "object") {
           for (const [name, v2] of Object.entries(fields)) {
             if (v2 === REDACTED3) seenFields.add(`form:${name}`);
+            else if (typeof v2 === "string" && v2.includes(REDACTED3)) scrubbedValues.add(v2);
           }
         }
       }
@@ -22631,6 +22648,7 @@ var TraceBugModule = (() => {
       tokens += count(c2.message, TOKEN_RE) + count(c2.stack, TOKEN_RE);
     }
     for (const r2 of requests) tokens += count(r2.response, TOKEN_RE);
+    for (const v2 of scrubbedValues) tokens += count(v2, TOKEN_RE);
     return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
   }
   function formatRedactionSummary(s2) {
@@ -22656,7 +22674,7 @@ var TraceBugModule = (() => {
 
   // src/evidence-summary.ts
   function summarizeEvidence(report) {
-    var _a2, _b;
+    var _a2, _b, _c;
     const session = report.session;
     const events = (session == null ? void 0 : session.events) || [];
     const captured = [];
@@ -22686,6 +22704,17 @@ var TraceBugModule = (() => {
     else if (level === "errors") notCaptured.push("console warnings, info and logs (only errors were captured)");
     else if (level === "warnings") notCaptured.push("console info and logs (only errors and warnings were captured)");
     if (!hasReplay && !hasVideo) notCaptured.push("screen video and DOM replay (events-only capture)");
+    if (report.storage) {
+      if ((_c = report.storage.cookies) == null ? void 0 : _c.some((c2) => c2.valueOmitted)) {
+        notCaptured.push("cookie values (names only; set captureCookieValues: true to include them)");
+      }
+      notCaptured.push("HttpOnly cookies and IndexedDB");
+    }
+    const hiddenFields = events.filter((e2) => e2.type === "form_submit").reduce((n2, e2) => {
+      var _a3, _b2;
+      return n2 + (Number((_b2 = (_a3 = e2.data) == null ? void 0 : _a3.form) == null ? void 0 : _b2.hiddenSkipped) || 0);
+    }, 0);
+    if (hiddenFields) notCaptured.push(`${plural(hiddenFields, "hidden form field")} (CSRF tokens, ids)`);
     const evicted = (session == null ? void 0 : session.droppedEvents) || 0;
     if (evicted > 0) dropped.push(`the ${plural(evicted, "oldest event")} of the session (event limit), so the earliest steps may be missing`);
     const capped = getConsoleCapped();
@@ -23081,7 +23110,7 @@ var TraceBugModule = (() => {
   function exportAsMarkdown() {
     const lines = [];
     lines.push("# UI Annotations Report");
-    lines.push(`**Page:** ${window.location.href}`);
+    lines.push(`**Page:** ${redactUrl(window.location.href)}`);
     lines.push(`**Date:** ${(/* @__PURE__ */ new Date()).toISOString()}`);
     lines.push(`**Total:** ${_elementAnnotations.length} element annotations, ${_drawRegions.length} draw regions`);
     lines.push("");
@@ -23139,6 +23168,7 @@ var TraceBugModule = (() => {
     "src/annotation-store.ts"() {
       "use strict";
       init_helpers();
+      init_url_hygiene();
       _elementAnnotations = [];
       _drawRegions = [];
     }
@@ -28230,7 +28260,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       if (!entries || entries.length === 0) return;
       const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
       for (const e2 of shown) {
-        info.push({ k: `${label} \xB7 ${e2.key}`, v: e2.redacted ? `\u{1F512} ${e2.value}` : e2.value, i: "" });
+        info.push({ k: `${label} \xB7 ${e2.key}`, v: e2.valueOmitted ? "(value not captured)" : e2.redacted ? `\u{1F512} ${e2.value}` : e2.value, i: "" });
       }
       const hiddenForDisplay = entries.length - shown.length;
       const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
@@ -32712,7 +32742,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const ctx = (report == null ? void 0 : report.context) || {};
     const sevLabel = severityBadge((report == null ? void 0 : report.severity) || "low");
     const rows = [];
-    rows.push(_kvRow("URL", env.url || window.location.href, _ic("link")));
+    rows.push(_kvRow("URL", env.url || redactUrl(window.location.href), _ic("link")));
     if (env.startUrl) rows.push(_kvRow("Started on", env.startUrl, _ic("link")));
     rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
     rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
@@ -32748,7 +32778,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
         const shown = entries.slice(0, 20);
         for (const e2 of shown) {
-          rows.push(_kvRow(e2.key, e2.redacted ? `\u{1F512} ${e2.value}` : e2.value));
+          rows.push(_kvRow(e2.key, e2.valueOmitted ? "(value not captured)" : e2.redacted ? `\u{1F512} ${e2.value}` : e2.value));
         }
         if (entries.length > shown.length) {
           rows.push(_kvRow("\u2026", `+${entries.length - shown.length} more`));
@@ -34220,6 +34250,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_redaction_summary();
       init_style_evidence();
       init_environment();
+      init_url_hygiene();
       init_toast();
       init_helpers();
       init_replay_scrubber();
@@ -36801,7 +36832,7 @@ ${ticket.description}`;
     overlay.querySelector("#bt-voice-save").addEventListener("click", () => {
       if (isVoiceRecording()) stopVoiceRecording();
       if (pulseInterval) clearInterval(pulseInterval);
-      const text = transcriptEl.value.trim();
+      const text = sanitizeTokenShapes(transcriptEl.value.trim());
       if (!text) {
         statusText2.textContent = "No text to save. Record or type something first.";
         statusText2.style.color = "#ef4444";
@@ -37834,6 +37865,7 @@ ${"-".repeat(40)}
       init_helpers();
       init_video_recorder();
       init_plugin_system();
+      init_cloud_upload();
       EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
       PANEL_ID2 = "tracebug-dashboard-panel";
       _isRecording = true;
@@ -73317,6 +73349,7 @@ ${summary}`;
         };
         setTransportMode(this.config.transport);
         setRedactRules(this.config.redact);
+        setCookieValueCapture(this.config.captureCookieValues === true);
         this.initialized = true;
         this.sessionId = getActiveSessionId();
         this.recording = !!this.sessionId;
@@ -74844,6 +74877,7 @@ ${summary}`;
       hideRecordingHUD();
       clearNetworkFailures();
       setRedactRules(void 0);
+      setCookieValueCapture(false);
       deactivateElementAnnotateMode();
       deactivateDrawMode();
       deactivateInspectMode();

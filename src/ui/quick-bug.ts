@@ -18,6 +18,7 @@ import { generateBugTitle, generateFlowSummary } from "../title-generator";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
+import { redactUrl } from "../url-hygiene";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast, showActionToast } from "./toast";
 import { escapeHtml, tbIsolationCss, setInnerHTML, createStyleTag } from "./helpers";
@@ -2279,7 +2280,7 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   const ctx = report?.context || {};
   const sevLabel = severityBadge(report?.severity || "low");
   const rows: string[] = [];
-  rows.push(_kvRow("URL", env.url || window.location.href, _ic("link")));
+  rows.push(_kvRow("URL", env.url || redactUrl(window.location.href), _ic("link")));
   if (env.startUrl) rows.push(_kvRow("Started on", env.startUrl, _ic("link")));
   rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
   rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
@@ -2319,7 +2320,7 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
       rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
       const shown = entries.slice(0, 20);
       for (const e of shown) {
-        rows.push(_kvRow(e.key, e.redacted ? `🔒 ${e.value}` : e.value));
+        rows.push(_kvRow(e.key, e.valueOmitted ? "(value not captured)" : e.redacted ? `🔒 ${e.value}` : e.value));
       }
       if (entries.length > shown.length) {
         rows.push(_kvRow("…", `+${entries.length - shown.length} more`));
