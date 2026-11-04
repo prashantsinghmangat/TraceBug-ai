@@ -274,3 +274,12 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - **Files:** storage, collectors, index, report-builder, evidence-summary, types, html-replay, quick-bug;
   `tests/fresh-evidence.test.ts` (new, 8). **Verified:** check.mjs --full 1063/1063. **Cost:** saved sessions grow by
   the storage snapshot (≤ ~45 KB worst case, usually a few KB).
+
+## 1.12 item 5: privacy by default (2026-11-04)
+
+- **What:** `redactUrl` (url-hygiene; query + fragment) for request/page/link/form-action/rrweb-meta URLs; form submits skip
+  hidden/file fields (`hiddenSkipped`) and use `isSensitiveField`; token scrub on input/form values and voice notes; cookies
+  names only (`valueOmitted`) unless `captureCookieValues`; evidence block + redaction summary report them.
+- **Files:** url-hygiene, collectors, environment, rrweb-recorder, storage-capture, index, types, evidence-summary,
+  redaction-summary, voice-recorder, dashboard, quick-bug, html-replay, annotation-store; docs (configuration,
+  api-reference, bug-reporting); `tests/privacy-defaults.test.ts` (new, 12). **Verified:** check.mjs --full 1075/1075.

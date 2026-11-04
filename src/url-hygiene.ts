@@ -18,12 +18,40 @@
 // under-redacted what the other caught). This regex is the strict union, so
 // neither path ever redacts less than before. Substring, case-insensitive:
 // `key` matches `api_key`/`x-api-key`, `token` matches `access_token`, etc.
+import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
+
 const SENSITIVE_PARAM_RE =
   /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
 
 /** True when a query-param name looks sensitive and its value must be masked. */
 export function isSensitiveParamName(name: string | undefined): boolean {
   return !!name && SENSITIVE_PARAM_RE.test(name);
+}
+
+// `name=value` pairs after `?`, `&` or `#` — the query, an OAuth-style
+// fragment (`#access_token=…`) and a hash route's query (`#/cb?token=…`).
+const URL_PARAM_RE = /([?&#])([^=&#?]+)=([^&#]*)/g;
+
+/**
+ * Mask the values of sensitive params in a URL's query and fragment.
+ * Used for every URL a report keeps — requests, the page URL, link hrefs,
+ * form actions, the DOM replay's page URL — so none is captured unmasked.
+ *
+ *   /api/users?api_key=abc123        → /api/users?api_key=[REDACTED]
+ *   /cb#access_token=xyz&state=1     → /cb#access_token=[REDACTED]&state=1
+ *
+ * Defensive: returns the original URL on any failure.
+ */
+export function redactUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const start = url.search(/[?#]/);
+    if (start === -1) return url;
+    return url.slice(0, start) + url.slice(start).replace(URL_PARAM_RE, (m, sep: string, key: string) =>
+      isSensitiveParamName(key) || isCustomSensitiveKey(key) ? `${sep}${key}=[REDACTED]` : m);
+  } catch {
+    return url;
+  }
 }
 
 /** Static-asset file extensions — failures here are resource noise, not APIs. */

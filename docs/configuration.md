@@ -168,6 +168,17 @@ messages are never captured.
 TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
 ```
 
+### `captureCookieValues`
+
+Include cookie values in the report's storage snapshot. Default `false`: cookies are
+listed **by name only**, because `document.cookie` holds every non-HttpOnly cookie of
+the host (on `localhost`, other local apps' cookies too). Sensitive-looking values stay
+masked even when this is `true`. HttpOnly cookies are never visible to the page.
+
+```typescript
+TraceBug.init({ projectId: "my-app", captureCookieValues: true });
+```
+
 ### `redact`
 
 App-specific redaction rules, applied **at capture time** on top of the

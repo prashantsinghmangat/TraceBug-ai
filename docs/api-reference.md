@@ -46,6 +46,7 @@ TraceBug.init({
 | `toolbarPosition` | `"right" \| "left" \| "bottom-right" \| "bottom-left"` | `"right"` | Toolbar position on screen |
 | `minimized` | `boolean` | `false` | Start in minimized FAB mode |
 | `captureConsole` | `"errors" \| "warnings" \| "all" \| "none"` | `"all"` | Console capture level (see [Configuration](configuration.md)) |
+| `captureCookieValues` | `boolean` | `false` | Include cookie values in the storage snapshot (names only by default; see [Configuration](configuration.md#capturecookievalues)) |
 | `redact` | `{ fields?: string[]; patterns?: (string \| RegExp)[] }` | — | App-specific redaction rules applied at capture (see [Configuration](configuration.md#redact)) |
 | `shortcuts` | `object` | `{}` | Custom keyboard shortcuts |
 

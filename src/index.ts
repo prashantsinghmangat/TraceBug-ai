@@ -48,7 +48,7 @@ import {
   attachResponseSnippet,
   saveStorageSnapshot,
 } from "./storage";
-import { captureStorageSnapshot } from "./storage-capture";
+import { captureStorageSnapshot, setCookieValueCapture } from "./storage-capture";
 import { generateReproSteps } from "./repro-generator";
 import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers, setNewCaptureHandler } from "./dashboard";
 import {
@@ -338,6 +338,7 @@ class TraceBugSDK {
       // Install app-specific redaction rules before any collector attaches —
       // rules must be live for the first captured event.
       setRedactRules(this.config.redact);
+      setCookieValueCapture(this.config.captureCookieValues === true);
 
       this.initialized = true;
       // Restore the active session ID if a recording survived a reload.
@@ -2226,6 +2227,7 @@ class TraceBugSDK {
     hideRecordingHUD();
     clearNetworkFailures();
     setRedactRules(undefined);
+    setCookieValueCapture(false);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
     deactivateInspectMode();

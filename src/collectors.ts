@@ -5,7 +5,7 @@
 import { EventType } from "./types";
 import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
-import { isSensitiveParamName } from "./url-hygiene";
+import { redactUrl } from "./url-hygiene";
 
 type Emit = (type: EventType, data: Record<string, unknown>) => void;
 
@@ -64,43 +64,8 @@ export function clearNetworkFailures(): void {
 }
 
 // ── URL redaction ─────────────────────────────────────────────────────────
-// Strip sensitive query params before URLs are captured into events/reports.
-// The sensitive-name matcher lives in url-hygiene (isSensitiveParamName) so
-// this capture path and the upload sanitizer share one list, no drift.
-
-/**
- * Redact sensitive query-string values in a URL.
- *
- *   /api/users?api_key=abc123   → /api/users?api_key=[REDACTED]
- *   /api/users?q=hi&token=xxx   → /api/users?q=hi&token=[REDACTED]
- *
- * Defensive: wrapped in try/catch, returns the original URL on any failure.
- */
-function sanitizeUrl(url: string): string {
-  if (!url) return url;
-  try {
-    const qIdx = url.indexOf("?");
-    if (qIdx === -1) return url;
-    const base = url.slice(0, qIdx);
-    const afterQ = url.slice(qIdx + 1);
-
-    const hashIdx = afterQ.indexOf("#");
-    const query = hashIdx === -1 ? afterQ : afterQ.slice(0, hashIdx);
-    const hash = hashIdx === -1 ? "" : afterQ.slice(hashIdx);
-
-    const redacted = query.split("&").map(part => {
-      const eqIdx = part.indexOf("=");
-      if (eqIdx === -1) return part;
-      const key = part.slice(0, eqIdx);
-      if (isSensitiveParamName(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
-      return part;
-    }).join("&");
-
-    return `${base}?${redacted}${hash}`;
-  } catch {
-    return url;
-  }
-}
+// Sensitive query/fragment params are masked before a URL enters an event.
+// One redactor (url-hygiene redactUrl) for every URL a report keeps.
 
 // ── Safe response body reader ─────────────────────────────────────────────
 // Only invoked on failed responses. Caps memory by streaming and stopping
@@ -224,7 +189,7 @@ export function collectClicks(emit: Emit): () => void {
         className: typeof t.className === "string" ? t.className : "",
       };
       const data: Record<string, unknown> = { element: el };
-      if (tag === "a") el.href = (t as HTMLAnchorElement).href || "";
+      if (tag === "a") el.href = redactUrl((t as HTMLAnchorElement).href || "");
       if (tag === "button" || (t as HTMLButtonElement).type === "submit") {
         el.buttonType = (t as HTMLButtonElement).type || "button";
         el.disabled = (t as HTMLButtonElement).disabled;
@@ -477,7 +442,7 @@ export function collectInputs(emit: Emit): () => void {
             const element: Record<string, unknown> = {
               tag, name, type: inputType,
               valueLength: rawValue.length,
-              value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
+              value: isSensitive ? "[REDACTED]" : sanitizeTokenShapes(rawValue.slice(0, INPUT_VALUE_MAX)),
               placeholder: (editable ? (editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "") : t.placeholder) || "",
             };
             if (editable) element.contentEditable = true;
@@ -549,17 +514,25 @@ export function collectFormSubmits(emit: Emit): () => void {
       const form = e.target as HTMLFormElement;
       if (!form || form.tagName.toLowerCase() !== "form" || isTraceBugElement(form)) return;
       const formData: Record<string, string> = {};
+      // Hidden fields carry CSRF tokens, ids and state the user never typed;
+      // they are left out and counted, so the report can say so.
+      let hiddenSkipped = 0;
       const elements = form.elements;
       for (let i = 0; i < elements.length; i++) {
         const el = elements[i] as HTMLInputElement;
         if (!el.name) continue;
-        const isSensitive = ["password"].includes(el.type) ||
-          /password|secret|token|ssn|credit/i.test(el.name) || isCustomSensitiveKey(el.name);
-        if (el.type === "submit" || el.type === "button") continue;
-        formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
+        if (el.type === "submit" || el.type === "button" || el.type === "file") continue;
+        if (el.type === "hidden") { hiddenSkipped++; continue; }
+        formData[el.name] = isSensitiveField(el.name, el.type)
+          ? "[REDACTED]"
+          : sanitizeTokenShapes((el.value || "").slice(0, INPUT_VALUE_MAX));
       }
       emit("form_submit", {
-        form: { id: form.id || "", action: form.action || "", method: form.method || "GET", fieldCount: elements.length, fields: formData },
+        form: {
+          id: form.id || "", action: redactUrl(form.action || ""), method: form.method || "GET",
+          fieldCount: elements.length, fields: formData,
+          ...(hiddenSkipped ? { hiddenSkipped } : {}),
+        },
       });
     } catch (err) {
       if (typeof console !== 'undefined') console.warn('[TraceBug] Form capture error:', err);
@@ -629,7 +602,7 @@ export function collectApiRequests(emit: Emit): () => void {
     try { if (url && isInternalUrl(url)) return originalFetch.call(window, input, init); } catch {}
 
     // Redact sensitive query params before the URL touches events/reports.
-    const safeUrl = sanitizeUrl(url).slice(0, 500);
+    const safeUrl = redactUrl(url).slice(0, 500);
 
     // ALWAYS call the original fetch — tracking failures must never break user requests
     try {
@@ -732,7 +705,7 @@ export function collectXhrRequests(emit: Emit): () => void {
       if (isInternalUrl(url)) return origSend.call(this, body);
 
       // Redact sensitive query params once, reuse for every handler below.
-      const safeUrl = sanitizeUrl(url).slice(0, 500);
+      const safeUrl = redactUrl(url).slice(0, 500);
 
       // `abort` fires before `loadend`: an aborted XHR is status 0 but not a failure.
       let aborted = false;
@@ -852,7 +825,7 @@ function _emitPerfEntry(
   // 0 as "unknown" rather than "error", so it lands in the Network tab
   // without polluting the Errors-only filter.
   const status = ext.responseStatus || 0;
-  const url = sanitizeUrl(e.name).slice(0, 500);
+  const url = redactUrl(e.name).slice(0, 500);
   const timestamp = Math.round(navStart + e.startTime);
   const durationMs = Math.round(e.duration || 0);
 

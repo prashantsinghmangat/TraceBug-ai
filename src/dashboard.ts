@@ -25,6 +25,7 @@ import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
 import { matchesShortcut, setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 import { isExtensionContext } from "./video-recorder";
 import { runExportPlugins } from "./plugin-system";
+import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 
 // sessionStorage key the extension build's content-script.js (TB_PING) and
 // background.js (injectSDK's host-UI check) read to tell "our own surviving
@@ -1290,7 +1291,7 @@ function showVoiceDialog(sessionId: string, panel: HTMLElement, _session: Stored
     if (isVoiceRecording()) stopVoiceRecording();
     if (pulseInterval) clearInterval(pulseInterval);
 
-    const text = transcriptEl.value.trim();
+    const text = sanitizeTokenShapes(transcriptEl.value.trim());
     if (!text) {
       statusText.textContent = "No text to save. Record or type something first.";
       statusText.style.color = "#ef4444";

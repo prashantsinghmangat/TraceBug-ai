@@ -161,8 +161,8 @@ hesitation); love but no payment → wrong buyer or offer; nobody gets why → p
 
 ## Decisions needed
 
-1. **Cookies:** names only by default, values opt-in? (recommended: yes)
-2. **`maxEvents`:** raise 200 → 500? (storage cost is small next to the replay)
+1. ~~**Cookies:** names only by default, values opt-in?~~ Done in item 5 (`captureCookieValues`).
+2. ~~**`maxEvents`:** raise 200 → 500?~~ Done in item 2.
 3. **Publish the playground** as a public repo? (recommended: yes; it's the best onboarding and demo)
 4. **Release 1.11.6** now (all gates green, playground-verified), then start 1.12?
 

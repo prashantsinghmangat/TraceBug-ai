@@ -23,6 +23,7 @@ All notable changes to TraceBug are documented here.
 
 ### Changed
 
+- **Private by default, everywhere a report goes.** Before, the page URL kept its query string in local exports and the AI prompt (only the cloud upload masked it), form submits kept hidden fields such as CSRF tokens, a token pasted into a plain field was kept as typed, voice notes were not scrubbed, and the storage snapshot listed the value of every cookie on the host (on `localhost`, other local apps' too). Now: one URL redactor masks sensitive query **and fragment** params (`#access_token=…`) in request URLs, the page URL, link hrefs, form actions and the DOM replay; form submits leave hidden fields out and say how many; typed values, form values and voice notes get the same token-shape scrub as console output; cookies are listed **by name only** unless `captureCookieValues: true`. The Evidence block says "cookie values (names only)", "N hidden form fields" and "HttpOnly cookies and IndexedDB" under Not captured, and counts tokens masked in typed values.
 - **`maxEvents` defaults to 500 (was 200), and dropped events are counted.** The session records how many of its oldest events were evicted (`droppedEvents`), including when full browser storage forces a trim, so a report can say its lead-up is incomplete.
 
 ## [1.11.6] - 2026-11-03

@@ -3,6 +3,7 @@
 // Zero dependencies — uses navigator and screen APIs.
 
 import { EnvironmentInfo } from "./types";
+import { redactUrl } from "./url-hygiene";
 
 export function captureEnvironment(): EnvironmentInfo {
   const ua = navigator.userAgent;
@@ -20,7 +21,7 @@ export function captureEnvironment(): EnvironmentInfo {
     language: navigator.language || "unknown",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown",
     userAgent: ua,
-    url: window.location.href,
+    url: redactUrl(window.location.href),
     deviceType,
     connectionType: connection,
     timestamp: Date.now(),

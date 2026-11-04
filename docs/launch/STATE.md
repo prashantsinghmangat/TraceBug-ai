@@ -7,17 +7,20 @@ Open phases: `PLAN.md` 8, 11, 12.
 
 ## Where things stand
 
-- **1.12 "Evidence Integrity" in progress (2026-11-04)** — plan: `docs/launch/master-plan.md` Part 3.
-  Items 1–4 done (gates 1063/1063): real-failure rule (`src/request-status.ts`), lead-up kept
-  (`maxEvents` 500, `droppedEvents`, typing flushed before clicks), Evidence block (`src/evidence-summary.ts`
-  → ticket, .html, AI prompt, MCP), fresh/durable evidence (unflushed reads, persisted failure snippets,
-  storage snapshot at first error, bug-page URL). **Next: item 5** (privacy by default: URL query
-  redaction everywhere, skip hidden fields, cookie names only — needs the user's yes, voice transcript
-  sanitizing), then the **report-quality benchmark** e2e against the playground, then the e2e suites and
-  benchmark not yet run after item 2, then release 1.12. 1.11.6 was committed in `b029eb1`.
+- **1.12 "Evidence Integrity": all five items done (2026-11-04), not released.** Plan: `docs/launch/master-plan.md`
+  Part 3. Items 1–4 committed (`1ad44b4`); item 5 uncommitted. Real-failure rule (`src/request-status.ts`),
+  lead-up kept (`maxEvents` 500, `droppedEvents`, typing flushed before clicks), Evidence block
+  (`src/evidence-summary.ts` → ticket, .html, AI prompt, MCP), fresh/durable evidence, privacy by default
+  (`redactUrl` in `url-hygiene.ts` for every URL incl. fragments; hidden form fields skipped; token scrub on typed
+  values and voice notes; cookies names only unless `captureCookieValues`). Gates 1075/1075.
+  **Next (user's order): full testing, then release.** Testing = the report-quality benchmark e2e against the
+  playground (master-plan "Acceptance gate", not built yet), every e2e suite + `e2e/benchmark.mjs` (not run since
+  item 2, which drops successful asset rows from the Network tab), `npm run ext:firefox`, and the manual rows below.
+  **Release:** nothing after 1.11.5 has shipped — 1.11.6 is committed (`b029eb1`) but unreleased, so the next
+  release carries 1.11.6 + 1.12 together (version number to decide; CHANGELOG has `[1.11.6]` + `[Unreleased]`).
 - **1.11.5 is live everywhere (verified 2026-11-03)**: CWS (updated 2026-11-02), AMO, npm both packages,
   MCP registry (`isLatest`), website SDK sha matches the repo.
-- **1.11.6 is prepared, not committed (2026-11-03)**: the P0 + P1 fixes from
+- **1.11.6 is committed (`b029eb1`), not released (2026-11-03)**: the P0 + P1 fixes from
   `docs/launch/minimum-click-workflow.md`, the five-flow friction map. Setup commands drop `--dir`
   (it disabled Downloads discovery), drafts no longer carry an old title into the next capture,
   toolbar Record follows the popup's Tab/Desktop choice (`surfaceMode: "auto"` resolved by

@@ -215,7 +215,7 @@ async function buildReplayPayload(
     if (!entries || entries.length === 0) return;
     const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
     for (const e of shown) {
-      info.push({ k: `${label} · ${e.key}`, v: e.redacted ? `🔒 ${e.value}` : e.value, i: "" });
+      info.push({ k: `${label} · ${e.key}`, v: e.valueOmitted ? "(value not captured)" : e.redacted ? `🔒 ${e.value}` : e.value, i: "" });
     }
     const hiddenForDisplay = entries.length - shown.length;
     const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);

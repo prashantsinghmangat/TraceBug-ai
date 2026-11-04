@@ -16,6 +16,7 @@
 // still the tester's responsibility, but DOM text defaults to "don't leak."
 
 import { sensitiveEditorSelector, maskReplayText } from "./replay-masking";
+import { redactUrl } from "./url-hygiene";
 
 /** One rrweb event. Kept as a loose record so the public type surface (and the
  *  emitted .d.ts) never has to depend on rrweb's types. */
@@ -107,7 +108,14 @@ export async function startDomRecording(): Promise<boolean> {
   _events = [];
   try {
     const stop = record({
-      emit: (event: RrwebEvent) => { _events.push(event); trimEventBuffer(_events); },
+      emit: (event: RrwebEvent) => {
+        // Meta events (type 4) carry the page URL; mask its sensitive params
+        // like every other URL in the report.
+        const data = event.data as { href?: unknown } | undefined;
+        if (event.type === 4 && data && typeof data.href === "string") data.href = redactUrl(data.href);
+        _events.push(event);
+        trimEventBuffer(_events);
+      },
       // Periodic full snapshots keep the buffer trimmable without losing
       // replayability, and also speed up seeking in long recordings.
       checkoutEveryNms: CHECKOUT_EVERY_MS,

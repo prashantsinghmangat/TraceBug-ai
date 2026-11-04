@@ -92,6 +92,14 @@ export interface TraceBugConfig {
   captureStorage?: boolean;
 
   /**
+   * Include cookie values in the storage snapshot. Default: false — cookies
+   * are listed by name only, because `document.cookie` holds every
+   * non-HttpOnly cookie of the host (on localhost, other local apps' too).
+   * Sensitive-looking values stay masked even when this is true.
+   */
+  captureCookieValues?: boolean;
+
+  /**
    * Optional team/company name for custom branding in exported reports
    * (premium feature). When set and the user is on the premium plan, a
    * "Reported via TraceBug — {companyName}" header is prepended to GitHub
@@ -458,13 +466,16 @@ export interface StorageEntry {
   value: string;
   /** True when the value was masked because the key/value looked sensitive. */
   redacted?: boolean;
+  /** True when only the name was captured (cookies, unless `captureCookieValues`). */
+  valueOmitted?: boolean;
 }
 
 /** Snapshot of the page's Web Storage at the moment the report was built. */
 export interface StorageSnapshot {
   local: StorageEntry[];
   session: StorageEntry[];
-  /** Non-HttpOnly cookies visible to page JS (sensitive values redacted). */
+  /** Non-HttpOnly cookies visible to page JS — names only unless
+   *  `captureCookieValues` (sensitive values redacted either way). */
   cookies?: StorageEntry[];
   /** Entries dropped to stay under the capture cap (per area), if any. */
   localTruncated?: number;

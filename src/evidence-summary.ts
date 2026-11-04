@@ -66,6 +66,16 @@ export function summarizeEvidence(report: BugReport): EvidenceSummary {
   else if (level === "errors") notCaptured.push("console warnings, info and logs (only errors were captured)");
   else if (level === "warnings") notCaptured.push("console info and logs (only errors and warnings were captured)");
   if (!hasReplay && !hasVideo) notCaptured.push("screen video and DOM replay (events-only capture)");
+  if (report.storage) {
+    if (report.storage.cookies?.some((c) => c.valueOmitted)) {
+      notCaptured.push("cookie values (names only; set captureCookieValues: true to include them)");
+    }
+    notCaptured.push("HttpOnly cookies and IndexedDB");
+  }
+  const hiddenFields = events
+    .filter((e) => e.type === "form_submit")
+    .reduce((n, e) => n + (Number(e.data?.form?.hiddenSkipped) || 0), 0);
+  if (hiddenFields) notCaptured.push(`${plural(hiddenFields, "hidden form field")} (CSRF tokens, ids)`);
 
   // ── Dropped ─────────────────────────────────────────────────────────────
   const evicted = session?.droppedEvents || 0;
