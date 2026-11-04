@@ -101,11 +101,55 @@ function loadRrweb(): Promise<RecordFn | null> {
  * callers treat false as "no DOM replay for this session" and fall back to the
  * screen recording. Idempotent: a second call while active is a no-op.
  */
+// ── Hidden inputs ─────────────────────────────────────────────────────────
+// maskAllInputs masks what a user types; it leaves an <input type="hidden">'s
+// value attribute alone, so CSRF tokens and similar rode into every replay
+// (found by e2e/report-quality.e2e.mjs). A hidden input never renders, so its
+// value is dropped outright — from snapshots, added nodes, and later changes.
+
+type SnapNode = { type?: number; id?: number; tagName?: string; attributes?: Record<string, unknown>; childNodes?: SnapNode[] };
+
+let _hiddenIds = new Set<number>();
+
+function scrubNode(node: SnapNode | undefined, hidden: Set<number>): void {
+  if (!node) return;
+  const attrs = node.attributes;
+  if (node.type === 2 && String(node.tagName).toLowerCase() === "input" && attrs &&
+      String(attrs.type || "").toLowerCase() === "hidden") {
+    if ("value" in attrs) attrs.value = "";
+    if (typeof node.id === "number") hidden.add(node.id);
+  }
+  for (const c of node.childNodes || []) scrubNode(c, hidden);
+}
+
+/** Strip hidden inputs' values from one rrweb event (mutates it). Exported for tests. */
+export function scrubHiddenInputs(event: RrwebEvent, hidden: Set<number>): void {
+  try {
+    const data = event.data as {
+      node?: SnapNode; source?: number;
+      adds?: Array<{ node?: SnapNode }>;
+      attributes?: Array<{ id?: number; attributes?: Record<string, unknown> }>;
+    } | undefined;
+    if (!data) return;
+    if (event.type === 2) { hidden.clear(); scrubNode(data.node, hidden); return; }
+    if (event.type === 3 && data.source === 0) {
+      for (const a of data.adds || []) scrubNode(a.node, hidden);
+      for (const ch of data.attributes || []) {
+        const at = ch.attributes;
+        if (!at) continue;
+        if (typeof ch.id === "number" && String(at.type || "").toLowerCase() === "hidden") hidden.add(ch.id);
+        if (typeof ch.id === "number" && hidden.has(ch.id) && "value" in at) at.value = "";
+      }
+    }
+  } catch { /* best effort — never break recording */ }
+}
+
 export async function startDomRecording(): Promise<boolean> {
   if (_recording) return true;
   const record = await loadRrweb();
   if (!record) return false;
   _events = [];
+  _hiddenIds = new Set<number>();
   try {
     const stop = record({
       emit: (event: RrwebEvent) => {
@@ -113,6 +157,7 @@ export async function startDomRecording(): Promise<boolean> {
         // like every other URL in the report.
         const data = event.data as { href?: unknown } | undefined;
         if (event.type === 4 && data && typeof data.href === "string") data.href = redactUrl(data.href);
+        scrubHiddenInputs(event, _hiddenIds);
         _events.push(event);
         trimEventBuffer(_events);
       },

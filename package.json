@@ -43,6 +43,7 @@
     "build:example": "npm run gen:rrweb && tsup && cd example-app && npm install && echo [OK] Example app updated",
     "build:ext": "npm run gen:rrweb && tsup && node tracebug-extension/build/build-ext.mjs",
     "check:versions": "node scripts/check-versions.mjs",
+    "e2e:quality": "node e2e/report-quality.e2e.mjs",
     "zip:ext": "npm run check:versions && npm run build:ext && node tracebug-extension/build/zip-ext.mjs",
     "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",

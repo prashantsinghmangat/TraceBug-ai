@@ -985,7 +985,8 @@ export function collectErrors(emit: Emit): () => void {
       emit("error", {
         error: {
           message: sanitizeTokenShapes(capMessage(typeof msg === "string" ? msg : "Unknown error")),
-          stack: error?.stack && sanitizeTokenShapes(capMessage(error.stack)), source, line, column: col,
+          stack: error?.stack && sanitizeTokenShapes(capMessage(error.stack)),
+          source: typeof source === "string" ? redactUrl(source) : source, line, column: col,
         },
       });
     } catch {}

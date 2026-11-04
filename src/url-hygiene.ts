@@ -54,6 +54,37 @@ export function redactUrl(url: string): string {
   }
 }
 
+// A URL inside free text (a stack frame, a console message). Stops at
+// whitespace, quotes, brackets and parentheses — the delimiters around a URL
+// in a stack frame ("at fn (http://…/app.js?v=1:42:7)").
+const URL_IN_TEXT_RE = /\b(?:https?|wss?):\/\/[^\s"'`<>()[\]{}]+/g;
+// A stack frame's trailing ":line" or ":line:col".
+const LINE_COL_RE = /(:\d+){1,2}$/;
+
+/**
+ * Mask sensitive params of every URL found in a string. An inline script's
+ * stack frames carry the page URL, query and all — `access_token=…` reached
+ * the report, the AI prompt and the exported file through the error stack.
+ * A frame's ":line:col" suffix is kept, not swallowed into the masked value.
+ */
+export function redactUrlsInText(s: string): string {
+  if (!s || s.indexOf("://") === -1) return s;
+  try {
+    return s.replace(URL_IN_TEXT_RE, (m) => {
+      const tail = m.match(LINE_COL_RE)?.[0] || "";
+      return redactUrl(m.slice(0, m.length - tail.length)) + tail;
+    });
+  } catch {
+    return s;
+  }
+}
+
+/** The browser's automatic favicon request (`/favicon.ico` at the site root):
+ *  made by the browser, not the app, so its 404 is never the app's bug. */
+export function isBrowserFavicon(url: string | undefined): boolean {
+  return !!url && /^(?:https?:\/\/[^/]+)?\/favicon\.ico(?:[?#]|$)/i.test(url);
+}
+
 /** Static-asset file extensions — failures here are resource noise, not APIs. */
 const ASSET_EXT_RE =
   /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp|css|woff2?|ttf|otf|eot|map|mp4|webm|ogg|mp3|pdf)(\?|#|$)/i;
