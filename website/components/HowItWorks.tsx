@@ -1,60 +1,48 @@
-import { MousePointerClick, FileCode2, Wrench, ArrowRight } from "lucide-react";
 import SectionHeading from "@/components/SectionHeading";
+import Shortcut from "@/components/Keycap";
 
-// The one-line story of the product, told in three outcome-focused steps.
-// Reuses the same card language as the capture grid so it reads as native.
+// The product in three steps, set as a ruled row rather than three cards.
 const STEPS = [
   {
-    Icon: MousePointerClick,
     label: "Capture",
-    desc: "Hit the shortcut when a bug happens. The full session — replay, console, network, screenshot — is recorded automatically.",
+    desc: (
+      <>
+        Press <Shortcut /> when a bug happens. Replay, console, network and a screenshot are
+        already recorded.
+      </>
+    ),
   },
   {
-    Icon: FileCode2,
     label: "Share",
-    desc: "You get one self-contained report. Send it anywhere — no account, no upload, nothing to set up on the other end.",
+    desc: "You get one self-contained report. Send it anywhere. No account, no upload, nothing to set up on the other end.",
   },
   {
-    Icon: Wrench,
     label: "Fix",
-    desc: "Your developer opens it offline, sees the root cause first, and knows exactly where to look before scrolling.",
+    desc: "A developer or an AI agent opens it offline, sees the evidence first and knows where to look.",
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section id="how" className="py-20 lg:py-28">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="how" className="py-section">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
+          align="left"
           eyebrow="How it works"
           title="From bug to fix in three steps"
-          subtitle="No forms, no back-and-forth, no “cannot reproduce.” Just the bug, captured and handed off."
-          className="mb-14"
+          subtitle="No forms, no back-and-forth, no “cannot reproduce”. The bug is captured once and handed off."
+          className="mb-12"
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-          {STEPS.map(({ Icon, label, desc }, i) => (
-            <div key={label} className="relative">
-              <div className="group card-rise h-full rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-                    <Icon size={18} />
-                  </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle">
-                    Step {i + 1}
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-semibold text-text-primary mb-1.5">{label}</h3>
-                <p className="text-[13.5px] text-text-muted leading-relaxed">{desc}</p>
-              </div>
-              {i < STEPS.length - 1 && (
-                <span className="hidden md:flex absolute top-1/2 -right-2.5 -translate-y-1/2 z-10 h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-text-subtle">
-                  <ArrowRight size={13} />
-                </span>
-              )}
-            </div>
+        <ol className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-3">
+          {STEPS.map(({ label, desc }, i) => (
+            <li key={label} className="bg-background p-6 lg:p-8">
+              <span className="font-mono text-[13px] text-text-subtle">0{i + 1}</span>
+              <h3 className="mt-6 text-[18px] font-medium text-text-primary">{label}</h3>
+              <p className="mt-2 text-[15px] leading-[1.6] text-text-muted">{desc}</p>
+            </li>
           ))}
-        </div>
+        </ol>
       </div>
     </section>
   );

@@ -1,48 +1,51 @@
-import { Button } from "@/components/ui/button";
-import { ChromeIcon, NpmIcon } from "@/components/ui/brand-icons";
-import { ArrowRight, Check } from "lucide-react";
-import Mascot from "@/components/Mascot";
+import { LINKS } from "@/lib/site";
+import { TerminalSquare } from "lucide-react";
+import { Logo } from "@/components/ui/logos";
+import Shortcut from "@/components/Keycap";
+import PageMascot from "@/components/PageMascot";
 
-const CHROME_URL =
-  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
+// Same button shape as the hero's action row.
+const BTN =
+  "inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-5 text-[15px] font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]";
+const PRIMARY = "bg-text-primary text-background hover:bg-text-primary/85";
+const SECONDARY = "border border-border-strong bg-background text-text-primary hover:bg-surface";
+
+// Closing call to action: the character celebrating the fix beside the promise,
+// then every way in — Chrome, Firefox, MCP for AI agents, the npm SDK.
+// Carries the #install anchor (footer, pricing link here).
 export default function FinalCTA() {
   return (
-    <section className="py-20 lg:py-28">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-[2rem] border border-border bg-background shadow-card">
-          {/* aurora wash */}
-          <div className="absolute inset-0 -z-0 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
-          <div className="aurora animate-aurora top-[-30%] left-[15%] h-[280px] w-[320px] bg-[#818CF8]/25" />
-          <div className="aurora animate-aurora top-[10%] right-[10%] h-[240px] w-[280px] bg-[#4F46E5]/20" style={{ animationDelay: "-6s" }} />
-
-          <div className="relative px-6 py-16 sm:px-12 sm:py-20 text-center">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-3 py-1 text-[11.5px] font-medium text-success mb-6">
-              <Check size={13} strokeWidth={3} /> Free · No account
-            </span>
-            <h2 className="mx-auto max-w-2xl text-[32px] sm:text-5xl font-semibold tracking-[-0.03em] leading-[1.08] text-text-primary">
-              Ship better bug reports <span className="gradient-text-anim">today</span>
-              {/* same blinking-bug signature as the hero headline */}
-              <span className="brand-caret ml-2 inline-block w-[0.55em] align-middle" aria-hidden="true">
-                <Mascot className="h-auto w-full" animated={false} />
-              </span>
-            </h2>
-            <p className="mx-auto mt-5 max-w-xl text-text-muted text-lg">
-              Install in 30 seconds. Works in any front-end framework. Your data stays yours.
-            </p>
-            <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Button asChild size="lg" variant="gradient" className="shimmer w-full sm:w-auto">
-                <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
-                  <ChromeIcon size={16} /> Add to Chrome — free <ArrowRight size={15} />
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="secondary" className="w-full sm:w-auto">
-                <a href="/#install">
-                  <NpmIcon size={15} /> npm install tracebug-sdk
-                </a>
-              </Button>
-            </div>
+    <section id="install" className="border-t border-border py-section">
+      <div className="mx-auto flex max-w-6xl items-center gap-12 px-4 sm:px-6 lg:px-8">
+        <PageMascot size={200} pose="fixed" className="hidden shrink-0 md:block" />
+        <div className="min-w-0">
+          <h2 className="max-w-3xl text-h2 font-medium text-text-primary">
+            The next bug is one <Shortcut className="text-[0.62em] align-middle" /> away from fixed
+          </h2>
+          <p className="mt-4 max-w-xl text-lead text-text-muted">
+            Free, no account. Works with any front-end framework. Your data stays on your machine.
+          </p>
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center">
+            <a href={LINKS.chrome} target="_blank" rel="noopener noreferrer" className={`${BTN} ${PRIMARY}`}>
+              <Logo name="chrome" size={18} />
+              Add to Chrome, free
+            </a>
+            <a href={LINKS.firefox} target="_blank" rel="noopener noreferrer" className={`${BTN} ${SECONDARY}`}>
+              <Logo name="firefox" size={18} />
+              Add to Firefox
+            </a>
+            <a href="#mcp" className={`${BTN} ${SECONDARY}`}>
+              <TerminalSquare size={16} strokeWidth={1.5} />
+              MCP setup
+            </a>
+            <a href="/docs" className={`${BTN} ${SECONDARY} font-mono text-[14px] font-normal`}>
+              npm i tracebug-sdk
+            </a>
           </div>
+          <p className="mt-5 text-[13px] text-text-subtle">
+            Edge, Brave and Opera install from the Chrome Web Store.
+          </p>
         </div>
       </div>
     </section>

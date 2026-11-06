@@ -4,7 +4,7 @@ import { ArrowRight, Terminal, CheckCircle2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SectionHeading from "@/components/SectionHeading";
-import Mascot from "@/components/Mascot";
+import PageMascot from "@/components/PageMascot";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -127,9 +127,9 @@ export default function ProofPage() {
           />
 
           {/* the setup */}
-          <div className="mb-10 rounded-2xl border border-border bg-surface/50 p-5 text-[14px] leading-relaxed text-text-muted">
-            <strong className="text-text-primary">The setup.</strong> The{" "}
-            <a href="/try.html" className="text-primary hover:underline">live sandbox</a> has two
+          <div className="mb-12 rounded-2xl border border-border bg-surface/60 p-6 text-[15px] leading-[1.6] text-text-muted">
+            <span className="font-medium text-text-primary">The setup.</span> The{" "}
+            <a href="/try.html" className="text-text-primary underline underline-offset-2">live sandbox</a> has two
             intentional bugs: applying the coupon <code className="rounded border border-border bg-surface-2 px-1 font-mono text-[12.5px] text-text-primary">SAVE20</code> throws
             a TypeError, and placing the order calls an endpoint that doesn&apos;t exist. We captured
             both with two clicks, exported the report, and registered the MCP server:
@@ -142,16 +142,16 @@ export default function ProofPage() {
             {CALLS.map((c, i) => (
               <div key={c.tool}>
                 <div className="mb-2 flex items-center gap-2.5">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 font-mono text-[11px] font-bold text-primary">
-                    {i + 1}
+                  <span className="w-6 font-mono text-[13px] text-text-subtle">
+                    0{i + 1}
                   </span>
-                  <code className="font-mono text-[13.5px] font-semibold text-text-primary">
-                    <Terminal size={13} className="mr-1.5 inline text-primary" />
+                  <code className="font-mono text-[14px] font-medium text-text-primary">
+                    <Terminal size={14} strokeWidth={1.5} className="mr-1.5 inline text-text-subtle" />
                     {c.tool}
                   </code>
                 </div>
-                <p className="mb-2 pl-[34px] text-[13px] text-text-muted">{c.note}</p>
-                <pre className="code-block ml-[34px] overflow-x-auto p-4 text-[12px] leading-relaxed text-text-muted">
+                <p className="mb-2 pl-[34px] text-[14px] text-text-muted">{c.note}</p>
+                <pre className="code-block ml-[34px] overflow-x-auto p-4 text-[13px] leading-relaxed text-text-muted">
                   {c.output}
                 </pre>
               </div>
@@ -160,12 +160,12 @@ export default function ProofPage() {
 
           {/* the diagnosis */}
           <div className="mt-12 rounded-2xl border border-success/25 bg-success/[0.04] p-6">
-            <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wider text-success">
-              <CheckCircle2 size={16} /> The agent&apos;s diagnosis — from the report alone
+            <div className="mb-3 flex items-center gap-2 text-[15px] font-medium text-success">
+              <CheckCircle2 size={18} strokeWidth={1.5} /> The agent&apos;s diagnosis, from the report alone
             </div>
-            <div className="space-y-4 text-[14.5px] leading-relaxed text-text-primary">
+            <div className="space-y-4 text-[15px] leading-[1.65] text-text-primary">
               <p>
-                <strong>Bug 1 — the TypeError.</strong> The stack trace points at{" "}
+                <span className="font-medium">Bug 1, the TypeError.</span> The stack trace points at{" "}
                 <code className="rounded border border-border bg-surface-2 px-1 font-mono text-[13px]">try.html:140</code>.
                 That line reads <code className="rounded border border-border bg-surface-2 px-1 font-mono text-[13px]">coupons[code].discount</code> —
                 but the coupon map only defines <code className="rounded border border-border bg-surface-2 px-1 font-mono text-[13px]">WELCOME10</code>,
@@ -174,32 +174,32 @@ export default function ProofPage() {
                 <code className="rounded border border-border bg-surface-2 px-1 font-mono text-[13px]">undefined</code>. Fix: guard unknown codes before the read.
               </p>
               <p>
-                <strong>Bug 2 — the failed order.</strong>{" "}
+                <span className="font-medium">Bug 2, the failed order.</span>{" "}
                 <code className="rounded border border-border bg-surface-2 px-1 font-mono text-[13px]">POST /api/orders → 404</code> in
                 12ms: the endpoint doesn&apos;t exist on this host. The timeline proves the order in
                 which the user hit both bugs — 463 milliseconds, fully reconstructed.
               </p>
               <p className="text-text-muted">
-                Total investigation: <strong className="text-text-primary">5 tool calls</strong>. Nobody
+                Total investigation: <span className="text-text-primary">5 tool calls</span>. Nobody
                 explained the bug, shared a screen, or answered &quot;what were you doing when it broke?&quot;
               </p>
             </div>
           </div>
 
           {/* CTA */}
-          <div className="mt-12 flex flex-col items-center gap-5 rounded-3xl border border-border bg-surface/50 px-6 py-10 text-center">
-            <Mascot size={64} />
-            <h2 className="text-2xl font-semibold tracking-[-0.02em] text-text-primary">
+          <div className="mt-12 flex flex-col items-center gap-5 rounded-2xl border border-border bg-surface/60 px-6 py-12 text-center">
+            <PageMascot size={120} pose="fixed" />
+            <h2 className="text-[28px] font-medium tracking-[-0.02em] text-text-primary">
               Run this exact experiment yourself
             </h2>
-            <p className="max-w-md text-[14.5px] text-text-muted">
+            <p className="max-w-md text-[15px] leading-[1.6] text-text-muted">
               The sandbox, the bugs, and the MCP server are all public. Capture, export, and hand the
               report to your own agent — it takes about two minutes.
             </p>
             <div className="flex flex-col items-center gap-3 sm:flex-row">
-              <Button asChild size="lg" variant="gradient">
+              <Button asChild size="lg" variant="primary">
                 <a href="/try.html" target="_blank" rel="noopener noreferrer">
-                  Open the live sandbox <ArrowRight size={15} />
+                  Open the live sandbox <ArrowRight size={16} strokeWidth={1.5} />
                 </a>
               </Button>
               <Button asChild size="lg" variant="secondary">

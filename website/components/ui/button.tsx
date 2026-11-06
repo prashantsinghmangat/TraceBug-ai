@@ -7,28 +7,31 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/cn";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium tracking-tight " +
-  "transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 " +
-  "focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
-  "disabled:pointer-events-none disabled:opacity-50 active:translate-y-px",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium " +
+  "transition-[color,background-color,border-color,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 " +
+  "focus-visible:ring-offset-2 focus-visible:ring-offset-background " +
+  "disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
   {
     variants: {
       variant: {
+        // Ink on light, off-white on dark. The accent is kept for the content.
         primary:
-          "bg-primary text-white shadow-glow-sm hover:shadow-glow-primary hover:brightness-110",
+          "bg-text-primary text-background hover:bg-text-primary/85",
+        // Retired: the hue gradient. Same as primary so old call sites stay calm.
         gradient:
-          "text-white bg-[linear-gradient(120deg,#818CF8,#6366F1_45%,#4F46E5)] shadow-glow-sm hover:shadow-glow-primary hover:brightness-[1.06]",
+          "bg-text-primary text-background hover:bg-text-primary/85",
         secondary:
-          "bg-surface text-text-primary border border-border hover:border-border-strong hover:bg-surface-2 shadow-xs",
+          "bg-background text-text-primary border border-border-strong hover:bg-surface",
         ghost:
           "text-text-muted hover:text-text-primary hover:bg-surface",
         outline:
-          "border border-border-strong text-text-primary hover:border-primary/50 hover:text-primary",
+          "border border-border-strong text-text-primary hover:bg-surface",
       },
       size: {
-        sm: "h-8 px-3.5 rounded-lg text-[12px]",
-        md: "h-10 px-5 rounded-lg text-[13.5px]",
-        lg: "h-12 px-6 rounded-xl text-[15px]",
+        sm: "h-8 px-3 rounded-md text-[13px]",
+        md: "h-10 px-4 rounded-lg text-[14px]",
+        lg: "h-12 px-5 rounded-[10px] text-[15px]",
       },
     },
     defaultVariants: { variant: "primary", size: "md" },

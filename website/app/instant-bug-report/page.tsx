@@ -3,7 +3,7 @@ import { ArrowRight, Zap, FileText, MousePointerClick, ShieldCheck } from "lucid
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { ChromeIcon } from "@/components/ui/brand-icons";
+import { Logo } from "@/components/ui/logos";
 
 // Exact-match landing page for the primary keyword "instant bug report".
 // Same programmatic-SEO play as /compare/* — real, honest content that
@@ -61,7 +61,7 @@ export default function InstantBugReportPage() {
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Button asChild size="lg" variant="gradient">
                 <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
-                  <ChromeIcon size={15} /> Add to Chrome — free <ArrowRight size={14} />
+                  <Logo name="chrome" size={17} /> Add to Chrome — free <ArrowRight size={14} />
                 </a>
               </Button>
               <Button asChild size="lg" variant="outline">

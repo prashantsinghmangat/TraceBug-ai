@@ -3,7 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { SDK_VERSION } from "@/lib/version";
 import ConsoleEgg from "@/components/ConsoleEgg";
-import SpotlightEffect from "@/components/SpotlightEffect";
+import MascotWalker from "@/components/MascotWalker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
         url: "/api/og",
         width: 1200,
         height: 630,
-        alt: "TraceBug — Automatic Bug Reporting",
+        alt: "TraceBug: your AI can read your code. Can it see your bug?",
       },
     ],
   },
@@ -84,8 +84,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
-    { media: "(prefers-color-scheme: dark)", color: "#0B0B10" },
+    { media: "(prefers-color-scheme: light)", color: "#FBFBFC" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0D14" },
   ],
 };
 
@@ -100,7 +100,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <script
@@ -126,7 +126,7 @@ export default function RootLayout({
       <body className="bg-background text-text-primary antialiased">
         {children}
         <ConsoleEgg />
-        <SpotlightEffect />
+        <MascotWalker />
       </body>
     </html>
   );

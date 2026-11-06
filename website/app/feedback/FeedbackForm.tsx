@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Bug, Lightbulb, MessageCircle, Send, Check, ArrowUpRight } from "lucide-react";
-import Mascot from "@/components/Mascot";
+import PageMascot from "@/components/PageMascot";
 import SectionHeading from "@/components/SectionHeading";
 import { Button } from "@/components/ui/button";
 import { SDK_VERSION } from "@/lib/version";
@@ -62,8 +62,8 @@ export default function FeedbackForm() {
   if (status === "sent") {
     return (
       <div className="rounded-3xl border border-border bg-surface/50 px-8 py-14 text-center">
-        <div className="mb-5 flex justify-center animate-float" aria-hidden="true">
-          <Mascot size={88} />
+        <div className="mb-5 flex justify-center" aria-hidden="true">
+          <PageMascot size={120} />
         </div>
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-text-primary">
           Got it — thank you!
