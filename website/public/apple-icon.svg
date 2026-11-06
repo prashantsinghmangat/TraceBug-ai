@@ -1,16 +1,22 @@
-<svg width="180" height="180" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="ios-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1B1B5A"/>
-      <stop offset="55%" stop-color="#0D0D20"/>
-      <stop offset="100%" stop-color="#071220"/>
-    </linearGradient>
-    <linearGradient id="cursor" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#818CF8"/>
-      <stop offset="100%" stop-color="#4F46E5"/>
-    </linearGradient>
-  </defs>
-  <rect width="100" height="100" fill="url(#ios-bg)"/>
-  <path d="M31 34 L49 50 L31 66" fill="none" stroke="#EAECF3" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="54" y="43" width="15" height="15" rx="4" fill="url(#cursor)"/>
+<svg width="180" height="180" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- TraceBug mark on an ink tile. Source: components/PageMascot.tsx (variant="mark") -->
+  <rect width="120" height="120" fill="#11131A"/>
+  <g transform="translate(18,16) scale(0.72)">
+  <path d="M72 64 L94 46" stroke="#11131A" stroke-width="8" stroke-linecap="round"/>
+  <path d="M8 22 H50 L72 44 V114 H8 Z" fill="#FFFFFF" stroke="#11131A" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M50 22 V44 H72" stroke="#11131A" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="28" cy="60" r="6" fill="#11131A"/>
+  <circle cx="52" cy="60" r="6" fill="#11131A"/>
+  <rect x="22" y="80" width="36" height="9" rx="4.5" fill="#E5484D"/>
+  <rect x="22" y="95" width="24" height="9" rx="4.5" fill="#6366F1"/>
+  <g transform="translate(70,2) scale(0.42)" shape-rendering="crispEdges">
+    <rect x="30" y="0" width="10" height="10" fill="#6366F1"/><rect x="80" y="0" width="10" height="10" fill="#6366F1"/>
+    <rect x="40" y="10" width="10" height="10" fill="#11131A"/><rect x="70" y="10" width="10" height="10" fill="#11131A"/>
+    <rect x="40" y="20" width="40" height="10" fill="#6366F1"/><rect x="30" y="30" width="60" height="50" fill="#6366F1"/>
+    <rect x="40" y="40" width="10" height="20" fill="#11131A"/><rect x="70" y="40" width="10" height="20" fill="#11131A"/>
+    <rect x="10" y="40" width="20" height="10" fill="#11131A"/><rect x="90" y="40" width="20" height="10" fill="#11131A"/>
+    <rect x="10" y="60" width="20" height="10" fill="#11131A"/><rect x="90" y="60" width="20" height="10" fill="#11131A"/>
+    <rect x="50" y="80" width="20" height="10" fill="#6366F1"/>
+  </g>
+  </g>
 </svg>

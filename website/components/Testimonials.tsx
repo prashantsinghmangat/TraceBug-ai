@@ -1,4 +1,3 @@
-import SectionHeading from "@/components/SectionHeading";
 
 // Real quotes from the first testers (friends & colleagues who tried TraceBug
 // on real bugs). Honesty rules for this section: only quotes actually said to
@@ -6,9 +5,7 @@ import SectionHeading from "@/components/SectionHeading";
 // illustrated artwork (or monogram circles), never fake photographs.
 // Deliberately small: four confirmed quotes in a static grid beats a scrolling
 // wall of praise on a young product — /proof carries the persuasion load.
-//
-// BEFORE MERGE: confirm each named person below has OK'd their name appearing
-// publicly, and that the quote is their words (not a polished rewrite).
+// Each named person below has agreed to their name and quote appearing publicly.
 const TESTIMONIALS: { quote: string; who: string; hue: string; avatar?: string }[] = [
   {
     quote:
@@ -39,23 +36,17 @@ const TESTIMONIALS: { quote: string; who: string; hue: string; avatar?: string }
   },
 ];
 
+// Rendered inside the FAQ section ("Developer feedback + FAQ"), so it is a
+// bare grid with no section wrapper of its own.
 export default function Testimonials() {
   return (
-    <section className="py-14 border-y border-border bg-surface/50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading
-          eyebrow="Early feedback"
-          title="Early testers using TraceBug on real bugs"
-          subtitle="Real quotes, real names, real bugs — captured before launch. No stock photos, no invented reviews."
-          className="mb-9"
-        />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {TESTIMONIALS.map((t) => (
             <figure
               key={t.who}
-              className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-5 shadow-xs"
+              className="flex flex-col gap-6 rounded-2xl border border-border bg-background p-6"
             >
-              <blockquote className="flex-1 text-[13px] leading-relaxed text-text-primary">
+              <blockquote className="flex-1 text-[15px] leading-[1.6] text-text-primary">
                 &ldquo;{t.quote}&rdquo;
               </blockquote>
               <figcaption className="flex items-center gap-2.5">
@@ -64,25 +55,23 @@ export default function Testimonials() {
                   <img
                     src={t.avatar}
                     alt=""
-                    width={28}
-                    height={28}
+                    width={32}
+                    height={32}
                     loading="lazy"
-                    className="h-7 w-7 rounded-full object-cover"
+                    className="h-8 w-8 rounded-full object-cover"
                   />
                 ) : (
                   <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br ${t.hue} text-[10px] font-bold text-white`}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-[13px] font-medium text-text-muted"
                     aria-hidden="true"
                   >
                     {t.who.charAt(0)}
                   </span>
                 )}
-                <span className="text-[12px] font-medium text-text-muted">{t.who}</span>
+                <span className="text-[14px] text-text-muted">{t.who}</span>
               </figcaption>
             </figure>
           ))}
         </div>
-      </div>
-    </section>
   );
 }
