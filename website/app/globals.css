@@ -3,58 +3,85 @@
 @tailwind utilities;
 
 /* ───────────────────────────────────────────────────────────────
-   Brand tokens — values are `R G B` channels (consumed via
+   Design tokens — values are `R G B` channels (consumed via
    rgb(var(--x) / <alpha>) in tailwind.config.ts).
    LIGHT is the default theme (:root). DARK is opt-in (.dark).
+
+   Direction (unslop pass, 2026-11): exact, forensic, calm. The world
+   is devtools at night — ink-tinted neutrals, mono timestamps. Chrome
+   stays quiet; colour lives in the report preview (the "moment").
+   One accent (brand indigo, flat — never a gradient), used rarely.
+   Buttons are ink on light / off-white on dark.
    ─────────────────────────────────────────────────────────────── */
 :root {
-  /* "Slate Indigo" — cool zinc neutrals, a single refined indigo brand
-     accent, soft shadows. Light counterpart of the slate dark theme. */
-  --background: 255 255 255;
-  --surface: 250 250 250;       /* #FAFAFA — section alt / cards   */
-  --surface-2: 244 244 245;     /* #F4F4F5 — insets, code chips    */
-  --border: 228 228 231;        /* #E4E4E7 hairline (zinc-200)     */
-  --border-strong: 212 212 216; /* #D4D4D8 (zinc-300)              */
-  --primary: 79 70 229;         /* #4F46E5 — indigo, AA on white   */
-  --primary-soft: 79 70 229;    /* used with /opacity              */
-  --accent: 99 102 241;         /* #6366F1 indigo-500              */
-  --success: 22 163 74;         /* #16A34A                         */
-  --error: 220 38 38;           /* #DC2626                         */
-  --warning: 217 119 6;         /* #D97706                         */
-  --text-primary: 17 17 19;     /* #111113 near-black              */
-  --text-muted: 82 82 91;       /* #52525B (zinc-600)              */
-  --text-subtle: 130 130 140;   /* #82828C                         */
+  --background: 251 251 252;    /* #FBFBFC page                     */
+  --surface: 244 245 248;       /* #F4F5F8 raised / alt section     */
+  --surface-2: 236 238 242;     /* #ECEEF2 insets, code             */
+  --border: 226 228 234;        /* #E2E4EA hairline                 */
+  --border-strong: 208 212 220; /* #D0D4DC                          */
+  --primary: 79 70 229;         /* #4F46E5 indigo — AA on white     */
+  --primary-soft: 79 70 229;
+  --accent: 79 70 229;          /* one accent: same as primary      */
+  --success: 22 163 74;         /* #16A34A                          */
+  --error: 220 38 38;           /* #DC2626                          */
+  --warning: 180 83 9;          /* #B45309                          */
+  --text-primary: 17 19 26;     /* #11131A ink                      */
+  --text-muted: 75 85 101;      /* #4B5565 secondary                */
+  --text-subtle: 103 112 130;   /* #677082 muted (≈4.6:1)           */
 
-  --grad-from: #818CF8;
-  --grad-mid: #6366F1;
+  --grad-from: #4F46E5;
+  --grad-mid: #4F46E5;
   --grad-to: #4F46E5;
-  --shadow-ink: 16 24 40;       /* shadow base, used as rgb(... / a) */
+  --shadow-ink: 16 20 32;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Fixed dark band (the MCP section) — same in both themes. */
+  --band: 11 13 20;             /* #0B0D14 */
+  --band-text: 238 240 245;     /* #EEF0F5 */
+
+  /* ── Type and rhythm: retune the whole site from here ──────────
+     Fonts come from next/font in app/layout.tsx; swap them there
+     and point these two at the new variables. Sizes are fluid
+     (min, preferred, max). Used as text-display / text-h2 / text-h3 /
+     text-lead and py-section / pt-section / pb-section.          */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --text-display: clamp(40px, 5.6vw, 72px);
+  --text-h2: clamp(34px, 3.8vw, 48px);
+  --text-h3: clamp(30px, 3.2vw, 40px);
+  --text-lead: clamp(17px, 1.3vw, 19px);
+  --section-y: 64px;
 
   color-scheme: light;
 }
 
 .dark {
-  --background: 11 11 16;       /* #0B0B10 almost-black, slate-tinted */
-  --surface: 22 22 29;          /* #16161D                         */
-  --surface-2: 30 30 38;        /* #1E1E26                         */
-  --border: 38 38 46;           /* #26262E                         */
-  --border-strong: 42 42 53;    /* #2A2A35 hover border            */
-  --primary: 99 102 241;        /* #6366F1 indigo-500              */
-  --primary-soft: 99 102 241;
-  --accent: 129 140 248;         /* #818CF8                         */
-  --success: 34 197 94;
-  --error: 239 68 68;
-  --warning: 245 158 11;
-  --text-primary: 250 250 250;  /* #FAFAFA                         */
-  --text-muted: 161 161 170;    /* #A1A1AA (zinc-400)              */
-  --text-subtle: 113 113 122;   /* #71717A (zinc-500)              */
+  --background: 11 13 20;       /* #0B0D14 ink page                 */
+  --surface: 17 20 28;          /* #11141C card / alt section       */
+  --surface-2: 26 30 40;        /* #1A1E28 raised, code             */
+  --border: 32 36 48;           /* #202430 hairline                 */
+  --border-strong: 44 49 64;    /* #2C3140                          */
+  --primary: 129 132 248;       /* #8184F8 — readable as ink on dark */
+  --primary-soft: 129 132 248;
+  --accent: 129 132 248;
+  --success: 76 195 138;        /* #4CC38A                          */
+  --error: 229 72 77;           /* #E5484D                          */
+  --warning: 224 160 64;
+  --text-primary: 238 240 245;  /* #EEF0F5                          */
+  --text-muted: 163 169 184;    /* #A3A9B8                          */
+  --text-subtle: 122 130 150;   /* #7A8296                          */
 
-  --grad-from: #818CF8;
-  --grad-mid: #6366F1;
-  --grad-to: #4F46E5;
+  --grad-from: #8184F8;
+  --grad-mid: #8184F8;
+  --grad-to: #8184F8;
   --shadow-ink: 0 0 0;
 
   color-scheme: dark;
+}
+
+@media (min-width: 1024px) {
+  :root { --section-y: 80px; }
 }
 
 * {
@@ -69,19 +96,20 @@ body {
   overflow-x: hidden;
   background-color: rgb(var(--background));
   color: rgb(var(--text-primary));
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-  font-feature-settings: "cv11", "ss01", "ss03";
+  font-family: var(--font-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
   text-rendering: optimizeLegibility;
 }
 
-/* Prevent theme flash: the inline script in <head> sets .dark before paint,
-   and these vars apply instantly. */
-html { transition: background-color 0.3s ease; }
-
 a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -93,204 +121,84 @@ a { color: inherit; text-decoration: none; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--text-subtle)); }
 
 ::selection {
-  background: rgb(var(--primary) / 0.20);
+  background: rgb(var(--primary) / 0.18);
   color: rgb(var(--text-primary));
 }
 
-/* ── Brand utilities ─────────────────────────────────────────── */
+/* ── Shared building blocks ──────────────────────────────────── */
 
-/* Gradient text — used sparingly on headline highlights */
-.gradient-text {
-  background: linear-gradient(120deg, var(--grad-from), var(--grad-mid) 45%, var(--grad-to));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-}
-
-/* Animated gradient text for hero moments */
-.gradient-text-anim {
-  background: linear-gradient(120deg, var(--grad-from), var(--grad-to), var(--grad-from));
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  animation: gradientX 6s ease infinite;
-}
-
-/* Dot-grid background — calmer in light mode */
-.grid-bg {
-  background-image: radial-gradient(circle, rgb(var(--border-strong) / 0.55) 1px, transparent 1px);
-  background-size: 26px 26px;
-}
-
-/* Aurora blobs — the futuristic light behind the hero */
-.aurora {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-
-/* Frosted glass surface */
-.glass {
-  background: rgb(var(--background) / 0.70);
-  backdrop-filter: saturate(180%) blur(14px);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
-}
-
-/* Cursor spotlight — a soft indigo glow that follows the mouse across
-   `.spotlight` cards (position fed by SpotlightEffect.tsx). */
-.spotlight { position: relative; }
-.spotlight::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    260px circle at var(--spot-x, 50%) var(--spot-y, 50%),
-    rgb(var(--primary) / 0.09),
-    transparent 70%
-  );
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  pointer-events: none;
-}
-.spotlight:hover::before { opacity: 1; }
-
-/* Subtle top-light card sheen on hover */
-.card-rise {
-  transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s ease, border-color 0.35s ease;
-}
-.card-rise:hover {
-  transform: translateY(-4px);
-}
-
-/* Gradient hairline border (premium card edge) */
-.gradient-border {
-  position: relative;
-  background-clip: padding-box;
-}
-.gradient-border::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgb(var(--primary) / 0.55), rgb(var(--accent) / 0.35), transparent 70%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Shimmer sweep for CTAs */
-.shimmer {
-  position: relative;
-  overflow: hidden;
-}
-.shimmer::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.35), transparent);
-  transform: translateX(-120%);
-  animation: shimmer 2.8s linear infinite;
+/* Keycap — the signature detail. The real capture shortcut is Alt+B. */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75em;
+  height: 1.75em;
+  padding: 0 0.45em;
+  border-radius: 6px;
+  border: 1px solid rgb(var(--border-strong));
+  border-bottom-width: 2px;
+  background: rgb(var(--surface));
+  color: rgb(var(--text-primary));
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8em;
+  font-weight: 500;
+  line-height: 1;
+  vertical-align: 0.1em;
 }
 
 /* Code block */
 .code-block {
-  background: rgb(var(--surface-2));
+  background: rgb(var(--surface));
   border: 1px solid rgb(var(--border));
   border-radius: 12px;
-  font-family: var(--font-geist-mono), "JetBrains Mono", "Fira Code", monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 13px;
   line-height: 1.6;
 }
 
-.transition-smooth { transition: all 0.2s ease-in-out; }
-
-/* Scroll-triggered reveal */
-.reveal {
-  opacity: 0;
-  transform: translateY(26px);
-  transition: opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1);
-}
-.reveal-visible { opacity: 1; transform: translateY(0); }
-
-/* Brand caret — the logo's cursor block, blinking. A terminal accent that
-   ties the page back to the mark. */
-@keyframes caretBlink { 0%, 48% { opacity: 1; } 50%, 100% { opacity: 0.12; } }
-.brand-caret { animation: caretBlink 1.15s steps(1) infinite; }
-
-/* ── FlowDiagram beams + mascot life ─────────────────────────── */
-
-/* Traveling pulse along the connection beziers: a short dash sweeping the
-   path. Dasharray period (130) must match the offset so the loop is seamless. */
-@keyframes beamDash {
-  to { stroke-dashoffset: -130; }
-}
-.beam-flow {
-  stroke-dasharray: 14 116;
-  animation: beamDash 2.8s linear infinite;
-  opacity: 0.9;
-}
-
-/* Trace blinks… */
-@keyframes mascotBlink {
-  0%, 91%, 100% { transform: scaleY(1); }
-  94%, 96% { transform: scaleY(0.12); }
-}
-.mascot-eye { animation: mascotBlink 4.4s ease-in-out infinite; }
-
-/* …and the antenna tips / tail pixel blip (opacity only — rotation would
-   blur the crispEdges pixels). */
-@keyframes mascotBlip {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-.mascot-blip { animation: mascotBlip 2.2s ease-in-out infinite; }
-
-/* ── Hero: the report assembles itself ───────────────────────────
-   Elements stagger in narrative order (--seq × 0.75s: events stream in
-   → cause concludes → TL;DR) and hold; the Hero component remounts the
-   grid every ~10s so the whole story replays in sync. */
-@keyframes buildIn {
+/* One entrance on load: short fade and rise, small stagger via --i. */
+@keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.build-seq {
-  animation: buildIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--seq, 0) * 0.75s);
-}
-/* "Recording" pulse next to the session timeline label */
-@keyframes recPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.rec-dot { animation: recPulse 1.3s ease-in-out infinite; }
-
-/* Skeleton placeholder that hands off to the real box at its --seq slot */
-@keyframes skelOut { to { opacity: 0; visibility: hidden; } }
-.skel-seq {
-  animation: skelOut 0.35s ease both;
-  animation-delay: calc(var(--seq, 0) * 0.75s + 0.1s);
-}
-@keyframes skelPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.skel-bar {
-  background: rgb(var(--surface-2));
-  border-radius: 6px;
-  animation: skelPulse 1.3s ease-in-out infinite;
+.rise {
+  animation: rise 480ms var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 50ms);
 }
 
-/* Timeline dot pops as its event lands */
-@keyframes dotPop { 0% { transform: scale(0); } 60% { transform: scale(1.8); } 100% { transform: scale(1); } }
-.dot-pop {
-  animation: dotPop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
-  animation-delay: calc(var(--seq, 0) * 0.75s + 0.12s);
+/* ── Retired effects ─────────────────────────────────────────────
+   These class names are still referenced by older pages (docs, blog,
+   pricing, 404…). They are neutralised here so the whole site loses
+   the glow/gradient/shimmer layer at once. Don't use them in new code. */
+.gradient-text,
+.gradient-text-anim {
+  color: inherit;
+  background: none;
+  -webkit-text-fill-color: currentColor;
 }
+.grid-bg { background-image: none; }
+.aurora { display: none; }
+.glass {
+  background: rgb(var(--background) / 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.spotlight { position: relative; }
+.card-rise { transition: border-color 160ms var(--ease), background-color 160ms var(--ease); }
+.gradient-border { position: relative; border: 1px solid rgb(var(--border)); }
+.shimmer { position: relative; }
+.transition-smooth {
+  transition-property: color, background-color, border-color, opacity, transform;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease);
+}
+.reveal { opacity: 1; transform: none; }
+.reveal-visible { opacity: 1; transform: none; }
+.brand-caret, .beam-flow, .mascot-eye, .mascot-blip,
+.rec-dot, .skel-bar, .dot-pop, .build-seq { animation: none; }
+.beam-flow { display: none; }
+.skel-seq { display: none; }
 
 /* Marquee track helper */
 .marquee-mask {
@@ -299,15 +207,148 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reveal { opacity: 1; transform: none; transition: none; }
-  .aurora, .gradient-text-anim, .shimmer::after,
-  .animate-marquee, .animate-marquee-slow, .animate-float, .animate-aurora,
-  .animate-spin-slow, .animate-pulse-ring, .brand-caret,
-  .beam-flow, .mascot-eye, .mascot-blip,
-  .build-seq, .rec-dot, .skel-bar, .dot-pop {
+  .rise, .animate-fade-in, .animate-slide-up,
+  .animate-marquee, .animate-marquee-slow {
     animation: none !important;
   }
-  /* Without animations the skeletons would sit on top of the real content
-     forever — hide them so the static, complete report shows instead. */
-  .skel-seq { display: none !important; }
+}
+
+/* ── Character motion (components/PageMascot.tsx) ───────────────
+   Pivots are in the 160×160 viewBox. Only transforms animate. */
+.pm .pm-leg-l, .pm .pm-leg-r, .pm .pm-arm-l, .pm .pm-hold,
+.pm .pm-trace, .pm .pm-bob { transform-box: view-box; }
+.pm .pm-leg-l { transform-origin: 64px 112px; }
+.pm .pm-leg-r { transform-origin: 96px 112px; }
+.pm .pm-arm-l { transform-origin: 49px 72px; }
+.pm .pm-hold { transform-origin: 111px 68px; }
+.pm .pm-trace { transform-origin: 125px 38px; }
+
+@keyframes pm-leg { 0%, 100% { transform: rotate(16deg); } 50% { transform: rotate(-16deg); } }
+@keyframes pm-arm { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(18deg); } }
+@keyframes pm-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes pm-hold { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(8deg); } }
+@keyframes pm-wiggle {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-2px) rotate(-6deg); }
+  75% { transform: translateY(-1px) rotate(6deg); }
+}
+
+.pm-walk .pm-leg-l { animation: pm-leg 560ms ease-in-out infinite; }
+.pm-walk .pm-leg-r { animation: pm-leg 560ms ease-in-out infinite; animation-delay: -280ms; }
+.pm-walk .pm-arm-l { animation: pm-arm 560ms ease-in-out infinite; animation-delay: -280ms; }
+.pm-walk .pm-bob { animation: pm-bob 280ms ease-in-out infinite; }
+.pm-walk .pm-trace { animation: pm-wiggle 560ms ease-in-out infinite; }
+
+.pm-wave .pm-hold { animation: pm-hold 1.6s var(--ease) infinite; }
+.pm-wave .pm-trace { animation: pm-wiggle 800ms ease-in-out infinite; }
+.pm-wave .pm-arm-l { animation: pm-arm 3.2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-walk *, .pm-wave * { animation: none !important; }
+  .mascot-walker { transition: none !important; }
+}
+
+/* Dark theme: the character's ink limbs and Trace's ink pixels would vanish on
+   the ink page, so they switch to a light neutral. The white page keeps its
+   outline colour (it reads against its own fill). */
+.dark .pm .pm-leg-l, .dark .pm .pm-leg-r,
+.dark .pm .pm-arm-l, .dark .pm .pm-hold > path { stroke: #A3A9B8; }
+.dark .pm .pm-trace rect[fill="#11131A"] { fill: #C9CDD6; }
+
+/* The walking copy floats over light and dark sections alike (e.g. the dark
+   MCP section in light mode), so its limbs and Trace's ink pixels use a mid
+   grey that reads on both. */
+.mascot-walker .pm .pm-leg-l, .mascot-walker .pm .pm-leg-r,
+.mascot-walker .pm .pm-arm-l, .mascot-walker .pm .pm-hold > path { stroke: #7A8296; }
+.mascot-walker .pm .pm-trace rect[fill="#11131A"] { fill: #7A8296; }
+
+/* ── Hero story (components/HeroStory.tsx) ───────────────────────
+   One 10s pass, holding its last frame (the component restarts it after a
+   1s pause): three bugs crawl in and bite the title, the order card and the
+   button → 500 → Alt B → Page walks in → capture (viewfinder snaps, flash,
+   screenshot flies into Page) → Page catches the bugs (one in hand, two into
+   the report) → Claude reads the report → page heals.
+   Coordinates are in the stage's 640×380 viewBox; bugs are 48×40 at scale 1. */
+.hs .hs-bug, .hs .hs-page, .hs .hs-line, .hs .hs-shot, .hs .hs-frame { transform-box: view-box; }
+.hs .hs-bug1  { animation: hs-bug1 10s linear both; }
+.hs .hs-bug2  { animation: hs-bug2 10s linear both; }
+.hs .hs-bug3  { animation: hs-bug3 10s linear both; }
+.hs .hs-bite  { animation: hs-bite 10s linear both; }
+.hs .hs-bite2 { animation: hs-bite2 10s linear both; }
+.hs .hs-bite3 { animation: hs-bite3 10s linear both; }
+.hs .hs-err   { animation: hs-err 10s linear both; }
+.hs .hs-key   { animation: hs-key 10s linear both; }
+.hs .hs-page  { animation: hs-page 10s var(--ease) both; }
+.hs .hs-frame { animation: hs-frame 10s var(--ease) both; transform-origin: 320px 190px; }
+.hs .hs-flash { animation: hs-flash 10s linear both; }
+.hs .hs-shot  { animation: hs-shot 10s var(--ease) both; }
+.hs .pm-trace { animation: hs-catch 10s linear both; }
+.hs .hs-ok    { animation: hs-ok 10s var(--ease) both; }
+.hs .hs-wait  { animation: hs-wait 10s linear both; }
+.hs .hs-line  { animation: 10s var(--ease) both; }
+.hs .hs-l1 { animation-name: hs-l1; } .hs .hs-l2 { animation-name: hs-l2; }
+.hs .hs-l3 { animation-name: hs-l3; } .hs .hs-l4 { animation-name: hs-l4; }
+.hs .hs-l5 { animation-name: hs-l5; } .hs .hs-l6 { animation-name: hs-l6; }
+
+/* bug 1: the button; ends in Page's hand (where Page's own Trace takes over) */
+@keyframes hs-bug1 {
+  0%, 6%   { transform: translate(660px, 282px); opacity: 1; }
+  18%      { transform: translate(214px, 268px); }
+  20%      { transform: translate(208px, 272px); }
+  22%      { transform: translate(214px, 268px); }
+  24%      { transform: translate(208px, 272px); }
+  26%, 56% { transform: translate(214px, 268px); opacity: 1; }
+  64%      { transform: translate(550px, 220px) scale(0.75); opacity: 1; }
+  66%, 100% { transform: translate(550px, 220px) scale(0.75); opacity: 0; }
+}
+/* bug 2: the order card's edge; ends inside the report */
+@keyframes hs-bug2 {
+  0%, 10%  { transform: translate(660px, 190px); opacity: 1; }
+  22%      { transform: translate(346px, 186px); }
+  24%      { transform: translate(342px, 190px); }
+  26%      { transform: translate(346px, 186px); }
+  28%      { transform: translate(342px, 190px); }
+  30%, 57% { transform: translate(346px, 186px); opacity: 1; }
+  64%      { transform: translate(513px, 284px) scale(0.3); opacity: 1; }
+  66%, 100% { transform: translate(513px, 284px) scale(0.3); opacity: 0; }
+}
+/* bug 3: the "Checkout" title; ends inside the report */
+@keyframes hs-bug3 {
+  0%, 14%  { transform: translate(660px, 20px); opacity: 1; }
+  26%      { transform: translate(150px, 26px); }
+  28%      { transform: translate(146px, 30px); }
+  30%      { transform: translate(150px, 26px); }
+  32%      { transform: translate(146px, 30px); }
+  34%, 58% { transform: translate(150px, 26px); opacity: 1; }
+  65%      { transform: translate(513px, 284px) scale(0.3); opacity: 1; }
+  67%, 100% { transform: translate(513px, 284px) scale(0.3); opacity: 0; }
+}
+@keyframes hs-bite  { 0%, 20% { opacity: 0; } 23%, 88% { opacity: 1; } 91%, 100% { opacity: 0; } }
+@keyframes hs-bite2 { 0%, 24% { opacity: 0; } 27%, 88% { opacity: 1; } 91%, 100% { opacity: 0; } }
+@keyframes hs-bite3 { 0%, 28% { opacity: 0; } 31%, 88% { opacity: 1; } 91%, 100% { opacity: 0; } }
+@keyframes hs-err   { 0%, 30% { opacity: 0; } 33%, 88% { opacity: 1; } 91%, 100% { opacity: 0; } }
+@keyframes hs-key   { 0%, 35% { opacity: 0; } 37%, 46% { opacity: 1; } 49%, 100% { opacity: 0; } }
+@keyframes hs-page  { 0%, 37% { opacity: 0; transform: translateX(220px); } 45%, 100% { opacity: 1; transform: translateX(0); } }
+/* the capture */
+@keyframes hs-frame { 0%, 45% { opacity: 0; transform: scale(1.06); } 47%, 52% { opacity: 1; transform: scale(1); } 55%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes hs-flash { 0%, 47% { opacity: 0; } 48% { opacity: 0.85; } 51%, 100% { opacity: 0; } }
+@keyframes hs-shot {
+  0%, 48%  { opacity: 0; transform: translate(220px, 130px) scale(1.1); }
+  50%, 52% { opacity: 1; transform: translate(220px, 130px) scale(1); }
+  59%      { opacity: 1; transform: translate(508px, 280px) scale(0.12); }
+  60%, 100% { opacity: 0; transform: translate(508px, 280px) scale(0.12); }
+}
+@keyframes hs-catch { 0%, 64% { opacity: 0; } 66%, 100% { opacity: 1; } }
+@keyframes hs-ok    { 0%, 90% { opacity: 0; transform: translateY(4px); } 94%, 100% { opacity: 1; transform: translateY(0); } }
+@keyframes hs-wait  { 0%, 66% { opacity: 1; } 68%, 100% { opacity: 0; } }
+@keyframes hs-l1 { 0%, 68% { opacity: 0; transform: translateY(4px); } 71%, 100% { opacity: 1; transform: none; } }
+@keyframes hs-l2 { 0%, 72% { opacity: 0; transform: translateY(4px); } 75%, 100% { opacity: 1; transform: none; } }
+@keyframes hs-l3 { 0%, 76% { opacity: 0; transform: translateY(4px); } 79%, 100% { opacity: 1; transform: none; } }
+@keyframes hs-l4 { 0%, 80% { opacity: 0; transform: translateY(4px); } 83%, 100% { opacity: 1; transform: none; } }
+@keyframes hs-l5 { 0%, 84% { opacity: 0; transform: translateY(4px); } 86%, 100% { opacity: 1; transform: none; } }
+@keyframes hs-l6 { 0%, 87% { opacity: 0; transform: translateY(4px); } 89%, 100% { opacity: 1; transform: none; } }
+
+/* Reduced motion: no story, just the finished frame. */
+@media (prefers-reduced-motion: reduce) {
+  .hs *, .hs .pm-trace { animation-duration: 1ms !important; animation-delay: 0s !important; }
 }

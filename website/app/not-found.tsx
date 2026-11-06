@@ -3,7 +3,7 @@ import { ArrowRight, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import Mascot from "@/components/Mascot";
+import PageMascot from "@/components/PageMascot";
 import { GitHubIcon } from "@/components/ui/brand-icons";
 
 const ISSUES_URL = "https://github.com/prashantsinghmangat/tracebug-ai/issues/new";
@@ -18,8 +18,8 @@ export default function NotFound() {
         <div className="aurora animate-aurora -z-10 top-[15%] left-[25%] h-[300px] w-[340px] bg-[#818CF8]/20" />
         <div className="aurora animate-aurora -z-10 top-[30%] right-[22%] h-[260px] w-[300px] bg-[#4F46E5]/15" style={{ animationDelay: "-7s" }} />
 
-        <div className="animate-float text-text-primary" aria-hidden="true">
-          <Mascot size={140} />
+        <div aria-hidden="true">
+          <PageMascot size={180} />
         </div>
 
         <p className="mt-6 font-mono text-[13px] font-semibold uppercase tracking-[0.2em] text-primary">

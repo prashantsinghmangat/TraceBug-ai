@@ -55,6 +55,30 @@ export function ChromeIcon({ size = 16, colored = false, ...props }: IconProps) 
   );
 }
 
+// Simplified Firefox mark in the same outline style as the monochrome
+// ChromeIcon: the globe, with the fox's tail curling around it.
+export function FirefoxIcon({ size = 16, ...props }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M20.6 8.2A9.5 9.5 0 1 1 6 3.6" />
+      <path d="M6 3.6c-.2 1.6.2 3 1.2 4 .8-1.4 2.3-2.2 4-2.1-1 .9-1.2 2-1 3 1.9-.3 3.8.6 4.6 2.4.9 2.1-.1 4.6-2.3 5.4-2.2.9-4.8-.2-5.7-2.4" />
+      <path d="M20.6 8.2c-.7-1.6-1.9-3-3.3-3.9.5 1 .7 2 .6 3" />
+    </svg>
+  );
+}
+
 export function GitHubIcon({ size = 16, ...props }: IconProps) {
   return (
     <svg
