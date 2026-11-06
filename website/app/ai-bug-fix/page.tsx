@@ -3,7 +3,7 @@ import { ArrowRight, Sparkles, Terminal, CheckCircle2, ShieldCheck } from "lucid
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { ChromeIcon } from "@/components/ui/brand-icons";
+import { Logo } from "@/components/ui/logos";
 
 // Solution landing page for the winnable, low-competition, high-intent cluster:
 // "ai bug fix", "fix bugs with AI", "AI debugging", "best MCP for bug fix",
@@ -66,7 +66,7 @@ export default function AiBugFixPage() {
               </Button>
               <Button asChild size="lg" variant="outline">
                 <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
-                  <ChromeIcon size={15} /> Add to Chrome — free
+                  <Logo name="chrome" size={17} /> Add to Chrome — free
                 </a>
               </Button>
             </div>

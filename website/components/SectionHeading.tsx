@@ -1,7 +1,8 @@
 import { type ReactNode } from "react";
 
-// Shared section header — keeps every section's eyebrow/title/subtitle rhythm
-// identical, which is most of what makes a long page feel designed (not stacked).
+// Shared section header: a small mono label, then the title. `align="left"`
+// (the homepage) puts the subtitle beside the title on wide screens. Sentence case, weight 500,
+// hierarchy from size and colour — not from uppercase tracking or bold.
 export default function SectionHeading({
   eyebrow,
   title,
@@ -15,22 +16,39 @@ export default function SectionHeading({
   align?: "center" | "left";
   className?: string;
 }) {
-  const alignCls = align === "center" ? "text-center mx-auto items-center" : "text-left items-start";
+  if (align === "center") {
+    return (
+      <div className={`mx-auto flex max-w-2xl flex-col items-center text-center ${className}`}>
+        {eyebrow && <Label>{eyebrow}</Label>}
+        <h2 className="text-h3 font-medium text-text-primary">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-4 text-[16px] sm:text-lead text-text-muted">{subtitle}</p>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex flex-col ${alignCls} ${className}`}>
-      {eyebrow && (
-        <span className="inline-flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-primary mb-4">
-          {eyebrow}
-        </span>
-      )}
-      <h2 className="max-w-3xl text-[30px] sm:text-4xl lg:text-[44px] font-semibold tracking-[-0.03em] leading-[1.1] text-text-primary">
-        {title}
-      </h2>
+    <div className={`grid gap-4 lg:grid-cols-12 lg:gap-12 ${className}`}>
+      <div className="lg:col-span-7">
+        {eyebrow && <Label>{eyebrow}</Label>}
+        <h2 className="max-w-2xl text-h3 font-medium text-text-primary">
+          {title}
+        </h2>
+      </div>
       {subtitle && (
-        <p className={`mt-4 max-w-2xl text-text-muted text-base sm:text-lg leading-relaxed ${align === "center" ? "" : ""}`}>
-          {subtitle}
-        </p>
+        <p className="lg:col-span-5 lg:self-end text-[16px] leading-[1.6] text-text-muted">{subtitle}</p>
       )}
     </div>
+  );
+}
+
+function Label({ children }: { children: ReactNode }) {
+  return (
+    <span className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
+      {children}
+    </span>
   );
 }

@@ -1,11 +1,10 @@
+import { LINKS } from "@/lib/site";
 import Link from "next/link";
 import { GitHubIcon, NpmIcon } from "@/components/ui/brand-icons";
 import { LogoMark } from "@/components/Logo";
-import Mascot from "@/components/Mascot";
+import ProductHuntBadge from "@/components/ProductHuntBadge";
 import { YOUTUBE_CHANNEL_URL } from "@/lib/links";
 
-const REPO = "https://github.com/prashantsinghmangat/tracebug-ai";
-const NPM = "https://www.npmjs.com/package/tracebug-sdk";
 
 const COLUMNS: { title: string; links: { label: string; href: string; external?: boolean }[] }[] = [
   {
@@ -30,8 +29,8 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
       { label: "Playwright Reporter", href: "/docs/playwright" },
       { label: "AI Debugger", href: "/docs/ai-debugger" },
       { label: "HAR Export", href: "/docs/har-export" },
-      { label: "GitHub", href: REPO, external: true },
-      { label: "npm package", href: NPM, external: true },
+      { label: "GitHub", href: LINKS.repo, external: true },
+      { label: "npm package", href: LINKS.npm, external: true },
       { label: "Chrome extension", href: "/#install" },
       { label: "Sentry alternative", href: "/compare/sentry-alternative" },
       { label: "Jam alternative", href: "/compare/jam-alternative" },
@@ -43,70 +42,63 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
       { label: "Send feedback", href: "/feedback" },
       { label: "Review us on Product Hunt", href: "https://www.producthunt.com/products/tracebug/reviews", external: true },
       { label: "YouTube", href: YOUTUBE_CHANNEL_URL, external: true },
-      { label: "Issues", href: `${REPO}/issues`, external: true },
-      { label: "Discussions", href: `${REPO}/discussions`, external: true },
-      { label: "Report a bug", href: `${REPO}/issues/new`, external: true },
-      { label: "Contribute", href: `${REPO}/blob/main/CONTRIBUTING.md`, external: true },
+      { label: "Issues", href: `${LINKS.repo}/issues`, external: true },
+      { label: "Discussions", href: `${LINKS.repo}/discussions`, external: true },
+      { label: "Report a bug", href: `${LINKS.repo}/issues/new`, external: true },
+      { label: "Contribute", href: `${LINKS.repo}/blob/main/CONTRIBUTING.md`, external: true },
     ],
   },
   {
     title: "Legal",
     links: [
       { label: "Privacy", href: "/privacy" },
-      { label: "MIT License", href: `${REPO}/blob/main/LICENSE`, external: true },
-      { label: "Open source", href: REPO, external: true },
+      { label: "MIT License", href: `${LINKS.repo}/blob/main/LICENSE`, external: true },
+      { label: "Open source", href: LINKS.repo, external: true },
     ],
   },
 ];
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border bg-surface/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <footer className="border-t border-border">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-10">
           {/* Brand */}
           <div className="col-span-2">
-            <Link href="/" className="flex items-center gap-2.5 mb-4">
-              <LogoMark size={32} idPrefix="footer" />
-              <span className="font-semibold text-[16px] tracking-[-0.02em] text-text-primary">TraceBug</span>
+            <Link href="/" className="flex items-center gap-2 mb-4">
+              <LogoMark size={28} />
+              <span className="font-medium text-[16px] text-text-primary">TraceBug</span>
             </Link>
-            <p className="text-[13.5px] text-text-muted leading-relaxed max-w-xs mb-5">
-              Bug reports your dev can actually open. Local-first, zero backend, completely free —
-              built for developers and QA teams who want faster debugging.
+            <p className="text-[14px] text-text-muted leading-[1.6] max-w-xs">
+              Bug reports a developer or an AI agent can open and fix. Local-first, zero backend, free
+              and open source.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {["Zero backend", "Free forever", "Open source"].map((s) => (
-                <span key={s} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11.5px] text-text-muted">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-r from-primary to-accent" />
-                  {s}
-                </span>
-              ))}
-            </div>
             <div className="flex items-center gap-2 mt-5">
-              <a href={REPO} target="_blank" rel="noopener noreferrer" aria-label="GitHub"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:text-text-primary hover:bg-background transition-colors">
+              <a href={LINKS.repo} target="_blank" rel="noopener noreferrer" aria-label="GitHub"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:text-text-primary hover:bg-surface transition-colors">
                 <GitHubIcon size={16} />
               </a>
-              <a href={NPM} target="_blank" rel="noopener noreferrer" aria-label="npm"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:text-text-primary hover:bg-background transition-colors">
+              <a href={LINKS.npm} target="_blank" rel="noopener noreferrer" aria-label="npm"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted hover:text-text-primary hover:bg-surface transition-colors">
                 <NpmIcon size={16} />
               </a>
             </div>
+            <ProductHuntBadge height={44} className="mt-5" />
           </div>
 
           {COLUMNS.map((col) => (
             <div key={col.title}>
-              <h3 className="text-[12px] font-semibold uppercase tracking-wider text-text-subtle mb-4">{col.title}</h3>
+              <h3 className="text-[14px] font-medium text-text-primary mb-4">{col.title}</h3>
               <ul className="space-y-2.5">
                 {col.links.map((link) => (
                   <li key={link.label}>
                     {link.external ? (
                       <a href={link.href} target="_blank" rel="noopener noreferrer"
-                        className="text-[13.5px] text-text-muted hover:text-primary transition-colors">
+                        className="text-[14px] text-text-muted hover:text-text-primary transition-colors">
                         {link.label}
                       </a>
                     ) : (
-                      <Link href={link.href} className="text-[13.5px] text-text-muted hover:text-primary transition-colors">
+                      <Link href={link.href} className="text-[14px] text-text-muted hover:text-text-primary transition-colors">
                         {link.label}
                       </Link>
                     )}
@@ -118,9 +110,9 @@ export default function Footer() {
         </div>
 
         <div className="mt-14 pt-7 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-[13px] text-text-subtle">© 2026 TraceBug. Open source under the MIT License.</p>
-          <p className="inline-flex items-center gap-1.5 text-[13px] text-text-subtle">
-            Made with <Mascot size={16} animated={false} className="-mt-0.5" /> for developers tired of “cannot reproduce”
+          <p className="text-[13px] text-text-subtle">© 2026 TraceBug. Open source under the MIT License</p>
+          <p className="text-[13px] text-text-subtle">
+            Made for developers tired of “cannot reproduce”
           </p>
         </div>
       </div>

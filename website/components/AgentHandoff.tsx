@@ -1,138 +1,128 @@
 "use client";
 
+import { Logo } from "@/components/ui/logos";
+import { MCP } from "@/lib/site";
 import { useState } from "react";
 import Link from "next/link";
-import SectionHeading from "@/components/SectionHeading";
-import { Check, Copy, FileCode2, TerminalSquare, Wrench, ShieldCheck, ArrowRight } from "lucide-react";
+import { Check, Copy, ArrowRight } from "lucide-react";
 
-// The MCP hand-off is TraceBug's sharpest wedge: a bug report your AI coding
-// agent reads directly and fixes from — no copy-paste, no screenshots-into-chat,
-// nothing uploaded. This section sells that on the homepage; deep docs at /docs/mcp.
+// The MCP hand-off: a report your AI coding agent reads directly — no
+// copy-paste, nothing uploaded. The page's one dark section, so the technical
+// part reads as a different room. Absorbs the MCP tab that used to live in the
+// install section. Deep docs at /docs/mcp.
 
-const MCP_CMD = "claude mcp add tracebug -- npx -y tracebug mcp";
-
-const AGENTS = ["Claude Code", "Cursor", "Windsurf", "VS Code"];
+const SETUPS = [
+  {
+    key: "claude",
+    label: "Claude Code",
+    logos: ["claude"],
+    code: MCP.claudeCode,
+  },
+  {
+    key: "json",
+    label: "Cursor · Windsurf · VS Code",
+    logos: ["cursor", "windsurf", "vscode"],
+    code: `{
+  "mcpServers": {
+    "tracebug": { "command": "npx", "args": ["-y", "tracebug", "mcp"] }
+  }
+}`,
+  },
+] as const;
 
 const STEPS = [
-  {
-    Icon: FileCode2,
-    label: "Export",
-    desc: "Capture the bug and click Export .html — one self-contained report lands in your Downloads.",
-  },
-  {
-    Icon: TerminalSquare,
-    label: "Connect",
-    desc: "Register the local MCP server once (command below). It auto-discovers reports — no path setup.",
-  },
-  {
-    Icon: Wrench,
-    label: "Fix",
-    desc: "Your agent reads the console, network, repro steps, and screenshots — then fixes it in your code.",
-  },
+  { label: "Export", desc: "Capture the bug and click Export .html. The report lands in your Downloads." },
+  { label: "Connect", desc: "Add the local MCP server once. It finds reports in Downloads on its own." },
+  { label: "Investigate", desc: "Ask your agent to debug it. It reads the console, network, steps and screenshots." },
 ];
 
 export default function AgentHandoff() {
+  const [tab, setTab] = useState<(typeof SETUPS)[number]["key"]>("claude");
   const [copied, setCopied] = useState(false);
+  const active = SETUPS.find((s) => s.key === tab)!;
 
   const copy = () => {
-    navigator.clipboard.writeText(MCP_CMD).then(() => {
+    navigator.clipboard.writeText(active.code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
   };
 
   return (
-    <section id="mcp" className="py-20 lg:py-28 border-y border-border bg-surface/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <SectionHeading
-          eyebrow="Model Context Protocol"
-          title="Hand the bug straight to your AI coding agent"
-          subtitle={
-            <>
-              TraceBug exports are <strong className="text-text-primary">agent-ready</strong>. Point Claude
-              Code, Cursor, or any MCP client at the report — it reads the console, network, repro steps, and
-              screenshots, then fixes the bug in your codebase. Fully local; nothing is uploaded.
-            </>
-          }
-          className="mb-12"
-        />
+    <section id="mcp" className="bg-band py-section text-band-text dark:border-y dark:border-white/[0.08]">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
+        <div className="min-w-0 lg:col-span-5">
+          <span className="mb-4 inline-flex font-mono text-[13px] text-[#7A8296]">Model Context Protocol</span>
+          <h2 className="text-h2 font-medium">
+            Give your AI agent the full context
+          </h2>
+          <p className="mt-4 text-lead text-[#A3A9B8]">
+            Claude Code, Cursor and Windsurf read TraceBug reports through a local MCP server. Your agent
+            investigates the real runtime evidence instead of your description of it.
+          </p>
+          <p className="mt-4 text-[14px] leading-[1.6] text-[#7A8296]">
+            Runs on your machine over stdio. Nothing is uploaded.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-[14px]">
+            <Link href="/docs/mcp" className="group inline-flex items-center gap-1.5 font-medium text-[#B9BBFB]">
+              Read the MCP docs
+              <ArrowRight size={16} strokeWidth={1.5} className="transition-transform duration-150 group-hover:translate-x-0.5" />
+            </Link>
+            <a href="/proof" className="text-[#A3A9B8] underline-offset-2 hover:text-white hover:underline">
+              See a real transcript
+            </a>
+          </div>
+        </div>
 
-        {/* The command — the hero of the section */}
-        <div className="max-w-2xl mx-auto mb-14">
-          <div className="relative group gradient-border rounded-2xl">
-            <pre className="code-block overflow-x-auto p-4 pr-12 text-text-primary">
+        <div className="min-w-0 lg:col-span-7">
+          <div className="overflow-hidden rounded-2xl border border-white/[0.1] bg-[#11141C]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] px-2 py-2">
+              <div className="flex flex-wrap gap-1" role="tablist" aria-label="MCP client">
+                {SETUPS.map((s) => (
+                  <button
+                    key={s.key}
+                    role="tab"
+                    aria-selected={tab === s.key}
+                    onClick={() => { setTab(s.key); setCopied(false); }}
+                    className={`inline-flex h-8 items-center gap-2 rounded-md px-3 text-[13px] transition-colors ${
+                      tab === s.key ? "bg-white/[0.08] text-white" : "text-[#A3A9B8] hover:text-white"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1">
+                      {s.logos.map((l) => (
+                        <Logo key={l} name={l} size={14} />
+                      ))}
+                    </span>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={copy}
+                aria-label="Copy setup"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] text-[#EEF0F5] transition-colors hover:bg-white/[0.08]"
+              >
+                {copied ? <Check size={14} className="text-[#4CC38A]" /> : <Copy size={14} strokeWidth={1.5} />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <pre className="overflow-x-auto px-5 py-5 font-mono text-[14px] leading-7 text-[#EEF0F5]">
               <code>
-                <span className="text-text-subtle select-none">$ </span>
-                {MCP_CMD}
+                {tab === "claude" && <span className="select-none text-[#7A8296]">$ </span>}
+                {active.code}
               </code>
             </pre>
-            <button
-              onClick={copy}
-              aria-label="Copy command"
-              className="absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background text-text-subtle hover:text-primary hover:border-primary/40 transition-colors"
-            >
-              {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-            </button>
           </div>
-          <p className="mt-3 text-center text-[12.5px] text-text-subtle">
-            One-time setup. No <code className="font-mono text-text-muted">--dir</code> needed — the server
-            auto-finds reports in your Downloads/Desktop.{" "}
-            <a href="/proof" className="font-medium text-primary hover:underline">
-              See a real transcript →
-            </a>
-          </p>
-        </div>
 
-        {/* Three steps */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-          {STEPS.map(({ Icon, label, desc }, i) => (
-            <div key={label} className="relative">
-              <div className="spotlight group card-rise h-full rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-                    <Icon size={18} />
-                  </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-subtle">
-                    Step {i + 1}
-                  </span>
-                </div>
-                <h3 className="text-[16px] font-semibold text-text-primary mb-1.5">{label}</h3>
-                <p className="text-[13.5px] text-text-muted leading-relaxed">{desc}</p>
-              </div>
-              {i < STEPS.length - 1 && (
-                <span className="hidden md:flex absolute top-1/2 -right-2.5 -translate-y-1/2 z-10 h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-text-subtle">
-                  <ArrowRight size={13} />
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Works-with + privacy + docs link */}
-        <div className="mt-10 flex flex-col items-center gap-5">
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <span className="text-[12.5px] text-text-subtle mr-1">Works with</span>
-            {AGENTS.map((a) => (
-              <span
-                key={a}
-                className="rounded-full border border-border bg-background px-3 py-1 text-[12.5px] font-medium text-text-muted"
-              >
-                {a}
-              </span>
+          <ol className="mt-10 grid gap-8 sm:grid-cols-3">
+            {STEPS.map(({ label, desc }, i) => (
+              <li key={label}>
+                <span className="font-mono text-[13px] text-[#7A8296]">0{i + 1}</span>
+                <h3 className="mt-3 text-[16px] font-medium">{label}</h3>
+                <p className="mt-1 text-[14px] leading-[1.6] text-[#A3A9B8]">{desc}</p>
+              </li>
             ))}
-            <span className="text-[12.5px] text-text-subtle">& any MCP client</span>
-          </div>
-          <div className="inline-flex items-center gap-2 text-[13px] text-text-muted">
-            <ShieldCheck size={15} className="text-success" />
-            Runs on your machine over stdio — zero network calls, nothing uploaded.
-          </div>
-          <Link
-            href="/docs/mcp"
-            className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-primary hover:text-primary/80 transition-colors"
-          >
-            Read the MCP docs
-            <ArrowRight size={14} />
-          </Link>
+          </ol>
         </div>
       </div>
     </section>

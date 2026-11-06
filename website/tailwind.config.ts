@@ -31,17 +31,30 @@ const config: Config = {
         "text-primary": channel("--text-primary"),
         "text-muted": channel("--text-muted"),
         "text-subtle": channel("--text-subtle"),
+        band: channel("--band"),
+        "band-text": channel("--band-text"),
+      },
+      // Type scale and section rhythm: values live in globals.css (:root).
+      fontSize: {
+        display: ["var(--text-display)", { lineHeight: "1.04", letterSpacing: "-0.035em" }],
+        h2: ["var(--text-h2)", { lineHeight: "1.06", letterSpacing: "-0.025em" }],
+        h3: ["var(--text-h3)", { lineHeight: "1.1", letterSpacing: "-0.02em" }],
+        lead: ["var(--text-lead)", { lineHeight: "1.6" }],
+      },
+      spacing: {
+        section: "var(--section-y)",
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "JetBrains Mono", "monospace"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "grid-dot": "radial-gradient(circle, rgb(var(--border-strong) / 0.7) 1px, transparent 1px)",
-        "brand-gradient": "linear-gradient(120deg, #818CF8 0%, #6366F1 45%, #4F46E5 100%)",
+        "grid-dot": "none",
+        // Retired: hue gradients. Kept as a flat colour so old references still render.
+        "brand-gradient": "linear-gradient(rgb(var(--primary)), rgb(var(--primary)))",
       },
       backgroundSize: {
         "grid-dot": "26px 26px",
@@ -50,21 +63,23 @@ const config: Config = {
         "4xl": "2rem",
       },
       animation: {
-        "fade-in": "fadeIn 0.6s ease-in-out both",
-        "slide-up": "slideUp 0.6s cubic-bezier(0.16,1,0.3,1) both",
+        "fade-in": "fadeIn 0.3s cubic-bezier(0.22,1,0.36,1) both",
+        "slide-up": "slideUp 0.48s cubic-bezier(0.22,1,0.36,1) both",
         marquee: "marquee 34s linear infinite",
         "marquee-slow": "marquee 60s linear infinite",
-        aurora: "aurora 18s ease-in-out infinite",
-        float: "float 7s ease-in-out infinite",
-        "gradient-x": "gradientX 6s ease infinite",
-        shimmer: "shimmer 2.4s linear infinite",
-        "spin-slow": "spin 14s linear infinite",
-        "pulse-ring": "pulseRing 2.4s cubic-bezier(0.4,0,0.6,1) infinite",
+        // Retired looping decoration (unslop pass): names kept so old
+        // class references compile, but nothing loops for no reason.
+        aurora: "none",
+        float: "none",
+        "gradient-x": "none",
+        shimmer: "none",
+        "spin-slow": "none",
+        "pulse-ring": "none",
       },
       keyframes: {
         fadeIn: { "0%": { opacity: "0" }, "100%": { opacity: "1" } },
         slideUp: {
-          "0%": { opacity: "0", transform: "translateY(22px)" },
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         marquee: {
@@ -94,15 +109,15 @@ const config: Config = {
         },
       },
       boxShadow: {
-        // Light-mode premium shadows — soft, layered, low-opacity. No harsh blacks.
-        xs: "0 1px 2px rgb(16 24 40 / 0.04)",
-        soft: "0 1px 3px rgb(16 24 40 / 0.05), 0 1px 2px rgb(16 24 40 / 0.04)",
-        card: "0 2px 6px rgb(16 24 40 / 0.04), 0 12px 28px -8px rgb(16 24 40 / 0.10)",
-        "card-hover": "0 4px 10px rgb(16 24 40 / 0.05), 0 22px 48px -12px rgb(16 24 40 / 0.16)",
-        float: "0 24px 60px -16px rgb(11 11 16 / 0.22)",
-        /* Indigo "glow" kept intentionally soft — a subtle tint, not neon. */
-        "glow-primary": "0 0 0 1px rgb(99 102 241 / 0.14), 0 12px 32px -14px rgb(99 102 241 / 0.30)",
-        "glow-sm": "0 4px 14px -6px rgb(99 102 241 / 0.30)",
+        // Neutral, soft, small. Depth on dark comes from surface steps + hairlines.
+        xs: "0 1px 2px rgb(var(--shadow-ink) / 0.05)",
+        soft: "0 1px 2px rgb(var(--shadow-ink) / 0.05)",
+        card: "0 1px 2px rgb(var(--shadow-ink) / 0.04), 0 8px 24px rgb(var(--shadow-ink) / 0.06)",
+        "card-hover": "0 1px 2px rgb(var(--shadow-ink) / 0.04), 0 8px 24px rgb(var(--shadow-ink) / 0.06)",
+        float: "0 1px 2px rgb(var(--shadow-ink) / 0.06), 0 24px 48px -12px rgb(var(--shadow-ink) / 0.18)",
+        // Retired coloured glows — now neutral so old references stay calm.
+        "glow-primary": "0 1px 2px rgb(var(--shadow-ink) / 0.08)",
+        "glow-sm": "0 1px 2px rgb(var(--shadow-ink) / 0.08)",
       },
     },
   },
