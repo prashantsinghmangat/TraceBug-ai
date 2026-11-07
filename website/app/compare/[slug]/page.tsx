@@ -318,7 +318,7 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
             <h3 className="text-2xl font-bold text-text-primary mb-3">Ready to try TraceBug?</h3>
             <p className="text-text-muted mb-6">Free, open source, and takes under 2 minutes to set up.</p>
             <div className="flex gap-4 justify-center">
-              <a href="/docs" className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:brightness-110 transition-colors">
+              <a href="/docs" className="px-6 py-3 bg-primary text-on-primary rounded-lg font-semibold hover:brightness-110 transition-colors">
                 Get Started
               </a>
               <a href="https://github.com/prashantsinghmangat/tracebug-ai" className="px-6 py-3 bg-surface border border-border text-text-primary rounded-lg font-semibold hover:border-primary/50 transition-colors">

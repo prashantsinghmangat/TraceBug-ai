@@ -276,9 +276,9 @@ function Preview({ id }: { id: Id }) {
         <div className="absolute inset-0 bg-band p-6 font-mono text-[12px] leading-[1.9] text-band-text/80">
           <div className="text-band-text/50">Claude Code · via MCP</div>
           <div className="mt-3"><span className="text-band-text">›</span> fix the checkout bug from my last TraceBug report</div>
-          <div className="mt-2 text-[#8184F8]">● get_bug_report</div>
-          <div className="text-[#8184F8]">● get_console_errors</div>
-          <div className="text-[#8184F8]">● get_network_activity</div>
+          <div className="mt-2 text-[#B6F05A]">● get_bug_report</div>
+          <div className="text-[#B6F05A]">● get_console_errors</div>
+          <div className="text-[#B6F05A]">● get_network_activity</div>
           <div className="mt-2 text-band-text">
             POST /api/orders returned 500, then applyCoupon read <span className="text-[#E5484D]">total</span> from an empty
             response.

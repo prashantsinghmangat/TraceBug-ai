@@ -213,7 +213,7 @@ export default function MascotWalker() {
               href={LINKS.chrome}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-text-primary px-3 text-[13px] font-medium text-background transition-colors hover:bg-text-primary/85"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-cta px-3 text-[13px] font-medium text-on-cta transition-colors hover:bg-cta/85"
             >
               <Logo name="chrome" size={14} />
               Add to Chrome, free
