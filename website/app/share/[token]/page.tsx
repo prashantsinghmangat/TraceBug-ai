@@ -114,7 +114,7 @@ function ViewerFooter() {
       </span>
       <a
         href="/"
-        className="px-3 py-1.5 rounded-md bg-primary hover:brightness-110 text-white font-medium text-xs transition-colors"
+        className="px-3 py-1.5 rounded-md bg-primary hover:brightness-110 text-on-primary font-medium text-xs transition-colors"
       >
         Get TraceBug — free
       </a>

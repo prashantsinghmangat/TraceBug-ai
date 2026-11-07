@@ -5,39 +5,47 @@
 /* ───────────────────────────────────────────────────────────────
    Design tokens — values are `R G B` channels (consumed via
    rgb(var(--x) / <alpha>) in tailwind.config.ts).
-   LIGHT is the default theme (:root). DARK is opt-in (.dark).
 
-   Direction (unslop pass, 2026-11): exact, forensic, calm. The world
-   is devtools at night — ink-tinted neutrals, mono timestamps. Chrome
-   stays quiet; colour lives in the report preview (the "moment").
-   One accent (brand indigo, flat — never a gradient), used rarely.
-   Buttons are ink on light / off-white on dark.
+   THEME: "Midnight lime" (2026-11). Dark-first: DARK (.dark) is the
+   default, set on <html> before paint (app/layout.tsx); LIGHT (:root)
+   is the opt-in alternative from the theme toggle.
+   One accent, lime, flat — never a gradient. On dark it is the bright
+   #B6F05A; on light it drops to #4D7C0F so text in it stays readable.
+   Calls to action fill with --cta (lime on dark, ink on light).
+   To retheme the site, edit the values in these two blocks.
    ─────────────────────────────────────────────────────────────── */
 :root {
-  --background: 251 251 252;    /* #FBFBFC page                     */
-  --surface: 244 245 248;       /* #F4F5F8 raised / alt section     */
-  --surface-2: 236 238 242;     /* #ECEEF2 insets, code             */
-  --border: 226 228 234;        /* #E2E4EA hairline                 */
-  --border-strong: 208 212 220; /* #D0D4DC                          */
-  --primary: 79 70 229;         /* #4F46E5 indigo — AA on white     */
-  --primary-soft: 79 70 229;
-  --accent: 79 70 229;          /* one accent: same as primary      */
+  --background: 250 250 248;    /* #FAFAF8 page                     */
+  --surface: 242 243 240;       /* #F2F3F0 raised / alt section     */
+  --surface-2: 232 234 229;     /* #E8EAE5 insets, code             */
+  --border: 223 226 219;        /* #DFE2DB hairline                 */
+  --border-strong: 203 207 197; /* #CBCFC5                          */
+  --primary: 77 124 15;         /* #4D7C0F lime-700 — AA on white   */
+  --primary-soft: 77 124 15;
+  --accent: 77 124 15;          /* one accent: same as primary      */
+  --on-primary: 255 255 255;    /* text on a primary fill           */
+  --cta: 14 17 24;              /* #0E1118 ink buttons on light     */
+  --on-cta: 255 255 255;
   --success: 22 163 74;         /* #16A34A                          */
   --error: 220 38 38;           /* #DC2626                          */
   --warning: 180 83 9;          /* #B45309                          */
-  --text-primary: 17 19 26;     /* #11131A ink                      */
-  --text-muted: 75 85 101;      /* #4B5565 secondary                */
-  --text-subtle: 103 112 130;   /* #677082 muted (≈4.6:1)           */
+  --text-primary: 14 17 24;     /* #0E1118 ink                      */
+  --text-muted: 72 79 92;       /* #484F5C secondary                */
+  --text-subtle: 102 110 125;   /* #666E7D muted (≈4.6:1)           */
 
-  --grad-from: #4F46E5;
-  --grad-mid: #4F46E5;
-  --grad-to: #4F46E5;
+  --grad-from: #4D7C0F;
+  --grad-mid: #4D7C0F;
+  --grad-to: #4D7C0F;
   --shadow-ink: 16 20 32;
+
+  /* Trace, the pixel bug: one lime that reads on paper and on ink. */
+  --trace: #84CC16;
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* Fixed dark band (the MCP section) — same in both themes. */
-  --band: 11 13 20;             /* #0B0D14 */
+  /* Deep band (the MCP section): a step darker than the dark page so
+     it still reads as its own room in both themes. */
+  --band: 6 8 13;               /* #06080D */
   --band-text: 238 240 245;     /* #EEF0F5 */
 
   /* ── Type and rhythm: retune the whole site from here ──────────
@@ -45,8 +53,8 @@
      and point these two at the new variables. Sizes are fluid
      (min, preferred, max). Used as text-display / text-h2 / text-h3 /
      text-lead and py-section / pt-section / pb-section.          */
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-jetbrains-mono);
   --text-display: clamp(40px, 5.6vw, 72px);
   --text-h2: clamp(34px, 3.8vw, 48px);
   --text-h3: clamp(30px, 3.2vw, 40px);
@@ -57,24 +65,27 @@
 }
 
 .dark {
-  --background: 11 13 20;       /* #0B0D14 ink page                 */
-  --surface: 17 20 28;          /* #11141C card / alt section       */
-  --surface-2: 26 30 40;        /* #1A1E28 raised, code             */
-  --border: 32 36 48;           /* #202430 hairline                 */
-  --border-strong: 44 49 64;    /* #2C3140                          */
-  --primary: 129 132 248;       /* #8184F8 — readable as ink on dark */
-  --primary-soft: 129 132 248;
-  --accent: 129 132 248;
+  --background: 11 13 20;       /* #0B0D14 midnight page            */
+  --surface: 20 24 35;          /* #141823 card / alt section       */
+  --surface-2: 27 32 46;        /* #1B202E raised, code             */
+  --border: 37 42 56;           /* #252A38 hairline                 */
+  --border-strong: 51 58 77;    /* #333A4D                          */
+  --primary: 182 240 90;        /* #B6F05A lime                     */
+  --primary-soft: 182 240 90;
+  --accent: 182 240 90;
+  --on-primary: 11 13 20;       /* ink text on lime                 */
+  --cta: 182 240 90;            /* lime buttons                     */
+  --on-cta: 11 13 20;
   --success: 76 195 138;        /* #4CC38A                          */
-  --error: 229 72 77;           /* #E5484D                          */
+  --error: 240 82 87;           /* #F05257                          */
   --warning: 224 160 64;
   --text-primary: 238 240 245;  /* #EEF0F5                          */
-  --text-muted: 163 169 184;    /* #A3A9B8                          */
-  --text-subtle: 122 130 150;   /* #7A8296                          */
+  --text-muted: 168 174 190;    /* #A8AEBE                          */
+  --text-subtle: 138 145 165;   /* #8A91A5                          */
 
-  --grad-from: #8184F8;
-  --grad-mid: #8184F8;
-  --grad-to: #8184F8;
+  --grad-from: #B6F05A;
+  --grad-mid: #B6F05A;
+  --grad-to: #B6F05A;
   --shadow-ink: 0 0 0;
 
   color-scheme: dark;

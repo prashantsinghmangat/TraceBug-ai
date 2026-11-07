@@ -63,7 +63,7 @@ export default function EmailCapture({
         <button
           type="submit"
           disabled={state === "busy"}
-          className="rounded-lg bg-text-primary px-5 py-2.5 text-sm font-medium text-background transition-colors hover:bg-text-primary/85 disabled:opacity-60"
+          className="rounded-lg bg-cta px-5 py-2.5 text-sm font-medium text-on-cta transition-colors hover:bg-cta/85 disabled:opacity-60"
         >
           {state === "busy" ? "Adding…" : "Notify me"}
         </button>
