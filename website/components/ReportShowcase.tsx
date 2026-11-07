@@ -155,7 +155,7 @@ export default function ReportShowcase() {
                       {t.count ? (
                         <span
                           className={`rounded-full px-1.5 text-[11px] tabular-nums ${
-                            tab === t.id ? "bg-primary text-white" : "bg-surface-2 text-text-muted"
+                            tab === t.id ? "bg-primary text-on-primary" : "bg-surface-2 text-text-muted"
                           }`}
                         >
                           {t.count}

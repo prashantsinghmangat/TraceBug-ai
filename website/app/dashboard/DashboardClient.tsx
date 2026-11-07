@@ -179,7 +179,7 @@ export default function DashboardClient({
               className="rounded-md border border-border bg-surface px-3 py-2 text-sm w-64 text-text-primary focus:border-primary focus:outline-none"
             />
             <button
-              className="px-4 py-2 rounded-md bg-primary hover:brightness-110 text-sm font-medium text-white"
+              className="px-4 py-2 rounded-md bg-primary hover:brightness-110 text-sm font-medium text-on-primary"
               onClick={() => alert("Install the TraceBug SDK or Chrome extension on your site, then click 🔗 Share link in the bug ticket modal.")}
             >
               + Create Share

@@ -66,7 +66,7 @@ export default function PricingClient() {
                   href={LINKS.chrome}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-text-primary px-5 text-[15px] font-medium text-background transition-[background-color,transform] duration-150 hover:bg-text-primary/85 active:scale-[0.98]"
+                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-cta px-5 text-[15px] font-medium text-on-cta transition-[background-color,transform] duration-150 hover:bg-cta/85 active:scale-[0.98]"
                 >
                   <Logo name="chrome" size={18} />
                   Add to Chrome, free

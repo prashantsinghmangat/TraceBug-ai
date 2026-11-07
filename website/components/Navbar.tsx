@@ -76,7 +76,7 @@ export default function Navbar() {
               href={LINKS.chrome}
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-text-primary px-4 text-[14px] font-medium text-background transition-colors hover:bg-text-primary/85"
+              className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-cta px-4 text-[14px] font-medium text-on-cta transition-colors hover:bg-cta/85"
             >
               <Logo name="chrome" size={16} />
               Add to Chrome
@@ -115,7 +115,7 @@ export default function Navbar() {
                 href={LINKS.chrome}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-text-primary text-[15px] font-medium text-background"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cta text-[15px] font-medium text-on-cta"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <Logo name="chrome" size={18} />

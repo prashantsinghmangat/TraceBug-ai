@@ -71,7 +71,7 @@ export default function Features() {
               className={`spotlight group card-rise rounded-2xl border border-border bg-background p-6 hover:border-primary/30 hover:shadow-card-hover ${span ?? ""}`}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary group-hover:text-on-primary">
                   <Icon size={20} />
                 </div>
                 <span className="text-[10.5px] font-medium uppercase tracking-wider text-text-subtle bg-surface-2 rounded-full px-2.5 py-1">

@@ -152,7 +152,7 @@ export default function ByeForm() {
                   <span
                     aria-hidden="true"
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                      selected ? "border-primary bg-primary text-white" : "border-border-strong"
+                      selected ? "border-primary bg-primary text-on-primary" : "border-border-strong"
                     }`}
                   >
                     {selected && <Check size={10} strokeWidth={3.5} />}
