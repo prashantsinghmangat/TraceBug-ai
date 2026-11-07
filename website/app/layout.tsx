@@ -1,10 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { SDK_VERSION } from "@/lib/version";
 import ConsoleEgg from "@/components/ConsoleEgg";
 import MascotWalker from "@/components/MascotWalker";
 import "./globals.css";
+
+// Theme fonts (Midnight lime). Self-hosted by next/font at build time, so the
+// page itself makes no request to Google. To change fonts, swap these two and
+// keep the variable names (globals.css reads them as --font-sans / --font-mono).
+const sans = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-space-grotesk", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains-mono", display: "swap" });
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://tracebug.dev"),
@@ -84,15 +89,14 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FBFBFC" },
+    { media: "(prefers-color-scheme: light)", color: "#0B0D14" },
     { media: "(prefers-color-scheme: dark)", color: "#0B0D14" },
   ],
 };
 
-// Applied before paint so the chosen theme never flashes. An explicit choice
-// (localStorage) always wins; with no stored choice we follow the OS
-// preference — our dev audience skews dark, don't fight their system theme.
-const themeInit = `(function(){try{var t=localStorage.getItem('tracebug-theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`;
+// Applied before paint so the theme never flashes. Dark is the default (the
+// <html> tag ships with it); only an explicit "light" choice removes it.
+const themeInit = `(function(){try{if(localStorage.getItem('tracebug-theme')==='light'){document.documentElement.classList.remove('dark');}}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -100,7 +104,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${mono.variable} dark`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <script

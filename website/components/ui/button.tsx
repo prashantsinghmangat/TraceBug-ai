@@ -17,10 +17,10 @@ const buttonVariants = cva(
       variant: {
         // Ink on light, off-white on dark. The accent is kept for the content.
         primary:
-          "bg-text-primary text-background hover:bg-text-primary/85",
+          "bg-cta text-on-cta hover:bg-cta/85",
         // Retired: the hue gradient. Same as primary so old call sites stay calm.
         gradient:
-          "bg-text-primary text-background hover:bg-text-primary/85",
+          "bg-cta text-on-cta hover:bg-cta/85",
         secondary:
           "bg-background text-text-primary border border-border-strong hover:bg-surface",
         ghost:

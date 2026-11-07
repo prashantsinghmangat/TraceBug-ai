@@ -9,7 +9,7 @@ import ProductHuntBadge from "@/components/ProductHuntBadge";
 // One button shape for the whole action row; only the fill changes.
 const BTN =
   "inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-5 text-[15px] font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]";
-const PRIMARY = "bg-text-primary text-background hover:bg-text-primary/85";
+const PRIMARY = "bg-cta text-on-cta hover:bg-cta/85";
 const SECONDARY = "border border-border-strong bg-background text-text-primary hover:bg-surface";
 
 // Trace, the pixel bug, sized to the headline's em. Ink cells use currentColor
