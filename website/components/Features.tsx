@@ -12,14 +12,14 @@ const FEATURES = [
     chip: "Core",
   },
   {
-    Icon: Video, title: "Sentry Mode — rolling video buffer",
-    desc: "Hit Record once, file as many tickets as you want from one screen-share. Timestamped comments, auto-capture on error.",
+    Icon: Video, title: "Sentry Mode — one recording, many tickets",
+    desc: "Hit Record once and file as many tickets as you want from the same session. Add timestamped comments while it runs.",
     chip: "Recording",
   },
   {
-    Icon: ScanLine, title: "Auto-Scanner",
-    desc: "Six in-browser detectors: a11y (axe-core), broken images, mixed content, JS errors, failed APIs, slow APIs — each with Locate + File ticket.",
-    chip: "QA",
+    Icon: ScanLine, title: "Page scanner",
+    desc: "In the npm SDK, TraceBug.scanPage() checks the page for accessibility issues (axe-core), broken images, mixed content, JS errors, and failed or slow APIs. Not part of the browser extension.",
+    chip: "SDK",
   },
   {
     Icon: Camera, title: "Screenshots & annotation",
@@ -38,17 +38,17 @@ const FEATURES = [
   },
   {
     Icon: Users, title: "User ID & bug flagging",
-    desc: "Attribute bugs with setUser(), flag sessions with markAsBug(), get a Slack-ready 2-sentence summary with getCompactReport().",
-    chip: "Workflow",
+    desc: "In the SDK: attribute bugs with setUser(), flag sessions with markAsBug(), get a Slack-ready 2-sentence summary with getCompactReport().",
+    chip: "SDK",
   },
   {
     Icon: Puzzle, title: "Plugins & hooks",
-    desc: "Extend without forking — filter events, enrich reports, fire webhooks. Subscribe to session:start, error:captured, screenshot:taken.",
-    chip: "Extensible",
+    desc: "In the SDK: extend without forking — filter events, enrich reports, fire webhooks. Subscribe to session:start, error:captured, screenshot:taken.",
+    chip: "SDK",
   },
   {
     Icon: ShieldCheck, title: "Local-first & private",
-    desc: "Sensitive fields auto-redacted. Data stays in localStorage — zero backend, no tracking, nothing leaves your machine.",
+    desc: "Passwords, tokens and sensitive fields are masked as they're captured. Reports stay on your device until you export them or send them to a tracker or AI tool you set up. No TraceBug server, no tracking.",
     chip: "Privacy",
   },
 ];
