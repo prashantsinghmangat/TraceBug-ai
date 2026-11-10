@@ -15,8 +15,8 @@ export default function NotFound() {
       <Navbar />
       <section className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-4 pt-28 pb-20 text-center">
         <div className="absolute inset-0 -z-10 grid-bg opacity-50 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,black,transparent)]" />
-        <div className="aurora animate-aurora -z-10 top-[15%] left-[25%] h-[300px] w-[340px] bg-[#B6F05A]/10" />
-        <div className="aurora animate-aurora -z-10 top-[30%] right-[22%] h-[260px] w-[300px] bg-[#84CC16]/10" style={{ animationDelay: "-7s" }} />
+        <div className="aurora animate-aurora -z-10 top-[15%] left-[25%] h-[300px] w-[340px] bg-[#FF5C6C]/10" />
+        <div className="aurora animate-aurora -z-10 top-[30%] right-[22%] h-[260px] w-[300px] bg-[#FF5C6C]/10" style={{ animationDelay: "-7s" }} />
 
         <div aria-hidden="true">
           <PageMascot size={180} />

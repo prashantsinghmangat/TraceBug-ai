@@ -5,7 +5,7 @@ import { MARK_SVG, MASCOT_SVG, src } from '@/lib/og-brand'
 export const runtime = 'edge'
 
 // Social card (1200×630) in the site's current look: midnight page, one
-// lime accent, the hero headline, and the character (Page holding up Trace).
+// coral accent, the hero headline, and the character (Page holding up Trace).
 
 export async function GET() {
   return new ImageResponse(
@@ -31,17 +31,17 @@ export async function GET() {
           </div>
 
           <span style={{ fontSize: 60, fontWeight: 500, color: '#EEF0F5', letterSpacing: -2, lineHeight: 1.05 }}>
-            Your AI can read your code.
+            Capture the bug.
           </span>
           <span style={{ fontSize: 60, fontWeight: 500, color: '#8A91A5', letterSpacing: -2, lineHeight: 1.05 }}>
-            Can it see your bug?
+            Let AI fix it.
           </span>
 
           <span style={{ marginTop: 32, fontSize: 28, lineHeight: 1.4, color: '#A8AEBE', display: 'flex' }}>
             Capture a browser bug into one offline report Claude Code, Cursor or Windsurf can debug.
           </span>
 
-          <span style={{ marginTop: 40, fontSize: 22, color: '#B6F05A', display: 'flex' }}>
+          <span style={{ marginTop: 40, fontSize: 22, color: '#FF5C6C', display: 'flex' }}>
             Free · Open source · Chrome and Firefox · tracebug.dev
           </span>
         </div>
