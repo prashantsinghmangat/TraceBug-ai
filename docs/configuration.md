@@ -33,7 +33,7 @@ TraceBug.init({ projectId: "my-saas-app" });
 
 Maximum number of events stored per session. Oldest events are dropped when the limit is exceeded, and the report says how many were dropped.
 
-- **Default:** `500` (was 200 before 1.12)
+- **Default:** `500` (was 200 before 1.11.6)
 - **Range:** Any positive integer
 
 ```typescript

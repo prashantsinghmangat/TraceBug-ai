@@ -1217,9 +1217,9 @@ const WHATS_NEW = {
   "1.11.6": {
     label: "New in 1.11.6",
     lines: [
+      "Reports flag only real failures and say what they captured and what they missed",
+      "Private by default: URL tokens, hidden fields and cookie values stay out of reports",
       "Simpler AI hand-off: one setup command, and your agent finds reports in Downloads",
-      "The toolbar's Record follows your Tab / Desktop choice — no share picker in Tab mode",
-      "No more old bug titles carried into a new capture",
     ],
   },
   "1.11.5": {

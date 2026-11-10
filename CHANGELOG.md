@@ -2,9 +2,9 @@
 
 All notable changes to TraceBug are documented here.
 
-## [Unreleased]
+## [1.11.6] - 2026-11-10
 
-> 1.12 "Evidence Integrity" (plan: `docs/launch/master-plan.md`).
+> Evidence integrity (plan: `docs/launch/master-plan.md` Part 3, developed as "1.12") and fewer dead ends between a captured bug and an AI fix (`docs/launch/minimum-click-workflow.md`).
 
 ### Added
 
@@ -25,18 +25,6 @@ All notable changes to TraceBug are documented here.
 - **Storage is shown as it was when the bug happened.** The localStorage / sessionStorage / cookie snapshot was read when the report was built, so a saved ticket reopened days later showed that day's storage. It is now taken at the first error (or when the capture stops) and kept with the session.
 - **The report URL is the page the bug happened on.** It was the page the capture started on, so a bug two pages in was reported under the landing page. The URL is now the page of the first failure (or the last page visited), and the Info tab adds "Started on" when they differ.
 - **Page-load requests carry their real time.** Requests from before the capture were all stamped with the moment the capture started; they now keep when they actually ran.
-
-### Changed
-
-- **Private by default, everywhere a report goes.** Before, the page URL kept its query string in local exports and the AI prompt (only the cloud upload masked it), form submits kept hidden fields such as CSRF tokens, a token pasted into a plain field was kept as typed, voice notes were not scrubbed, and the storage snapshot listed the value of every cookie on the host (on `localhost`, other local apps' too). Now: one URL redactor masks sensitive query **and fragment** params (`#access_token=…`) in request URLs, the page URL, link hrefs, form actions and the DOM replay; form submits leave hidden fields out and say how many; typed values, form values and voice notes get the same token-shape scrub as console output; cookies are listed **by name only** unless `captureCookieValues: true`. The Evidence block says "cookie values (names only)", "N hidden form fields" and "HttpOnly cookies and IndexedDB" under Not captured, and counts tokens masked in typed values.
-- **`maxEvents` defaults to 500 (was 200), and dropped events are counted.** The session records how many of its oldest events were evicted (`droppedEvents`), including when full browser storage forces a trim, so a report can say its lead-up is incomplete.
-
-## [1.11.6] - 2026-11-03
-
-> Fewer dead ends between a captured bug and an AI fix. From the minimum-click workflow map (`docs/launch/minimum-click-workflow.md`); no new features.
-
-### Fixed
-
 - **The recommended MCP setup no longer hides your reports.** Every published setup command carried `--dir ./bug-reports`, which turns off the server's search of Downloads and Desktop, so a report just exported from the extension gave `count: 0`. The docs, both READMEs, the website, the exported file's AI tab and the hand-off prompt now use `claude mcp add -s user tracebug -- npx -y tracebug mcp` (`-s user` makes it work in every project; native Windows gets a `cmd /c` note). `--dir` is documented as "limit to one folder".
 - **No more "Restored draft" with the previous bug's title.** The ticket saved its untouched auto-filled title as a draft on close, so the next capture within the hour opened under the old title. Drafts are now saved only when you actually edit, and a successful Export replay or .zip clears them.
 - **The in-page toolbar's Record follows your Tab / Desktop choice.** In the extension it always asked for Desktop, so every toolbar recording opened the share picker even with Tab mode set up. It now uses the popup's stored choice (Desktop on Firefox, which has no tab capture).
@@ -54,6 +42,9 @@ All notable changes to TraceBug are documented here.
 
 ### Changed
 
+- **Private by default, everywhere a report goes.** Before, the page URL kept its query string in local exports and the AI prompt (only the cloud upload masked it), form submits kept hidden fields such as CSRF tokens, a token pasted into a plain field was kept as typed, voice notes were not scrubbed, and the storage snapshot listed the value of every cookie on the host (on `localhost`, other local apps' too). Now: one URL redactor masks sensitive query **and fragment** params (`#access_token=…`) in request URLs, the page URL, link hrefs, form actions and the DOM replay; form submits leave hidden fields out and say how many; typed values, form values and voice notes get the same token-shape scrub as console output; cookies are listed **by name only** unless `captureCookieValues: true`. The Evidence block says "cookie values (names only)", "N hidden form fields" and "HttpOnly cookies and IndexedDB" under Not captured, and counts tokens masked in typed values.
+- **`maxEvents` defaults to 500 (was 200), and dropped events are counted.** The session records how many of its oldest events were evicted (`droppedEvents`), including when full browser storage forces a trim, so a report can say its lead-up is incomplete.
+- **New look.** The in-page toolbar, ticket, settings, player and welcome pages and the popup use a coral accent on a dark theme, and the popup’s Auto theme follows your system setting.
 - **The "Open in your AI agent →" link after an export stays until you dismiss it** (it vanished after 8 s, and with it the only way to the setup card).
 - **`list_bug_reports` returns the newest report first**, so "debug the latest report" means the latest.
 - **Setup card:** the Cursor snippet is now valid JSON you can paste, a Windsurf tab is added, and each tab says where its snippet goes.
