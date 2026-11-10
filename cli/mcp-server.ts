@@ -57,7 +57,7 @@ interface ReportPayload {
     styles?: unknown;
   }>;
   rootCauseHint?: { hint: string; confidence: string };
-  /** What the report captured, didn't capture, masked and dropped (SDK 1.12+). */
+  /** What the report captured, didn't capture, masked and dropped (SDK 1.11.6+). */
   evidence?: { captured: string[]; notCaptured: string[]; redacted: string | null; dropped: string[]; complete: boolean };
   /** Generated failing Playwright spec (exports from SDK v1.9+). */
   playwrightTest?: string;
@@ -388,7 +388,7 @@ export function toolGetBugReport(baseDir: string, args: { file: string }) {
     description: p.description || null,
     rootCause: p.rootCauseHint ?? p.meta.rootCause ?? null,
     // Facts about the capture itself — read before trusting an absence
-    // (no error, no request body) as "it didn't happen". Null for pre-1.12 exports.
+    // (no error, no request body) as "it didn't happen". Null for pre-1.11.6 exports.
     evidence: p.evidence ?? null,
     annotations: p.annotations ?? [],
     // Computed-style receipts for design-QA bugs (selector, typography,

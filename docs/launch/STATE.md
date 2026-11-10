@@ -22,9 +22,17 @@ Open phases: `PLAN.md` 8, 11, 12.
   (`src/evidence-summary.ts` → ticket, .html, AI prompt, MCP), fresh/durable evidence, privacy by default
   (`redactUrl` in `url-hygiene.ts` for every URL incl. fragments; hidden form fields skipped; token scrub on typed
   values and voice notes; cookies names only unless `captureCookieValues`). Gates 1075/1075.
-  **Next (user's order): full testing, then release.** Testing = the report-quality benchmark e2e against the
-  playground (master-plan "Acceptance gate", not built yet), every e2e suite + `e2e/benchmark.mjs` (not run since
-  item 2, which drops successful asset rows from the Network tab), `npm run ext:firefox`, and the manual rows below.
+  **Automated release testing done 2026-11-10 on `2555d31`** (after the coral recolour): `check.mjs --full` green
+  (1081/72, ext:lint 0/12, all surfaces 1.11.6, report quality 84/84), all 24 e2e suites pass, `benchmark.mjs` ran,
+  MCP stdio smoke test passes (see PROGRESS). **Left before release, by hand:** `npm run ext:firefox`, the ticket
+  modal in a real tab in both themes, toolbar Record in Chrome Tab mode, and the manual rows below.
+  **Ships as 1.11.6** (user decision 2026-11-10): the 1.12 items are folded into `[1.11.6] - 2026-11-10` in
+  CHANGELOG (plus a "New look" line), the 1.11.6 `WHATS_NEW` card leads with real failures / privacy / hand-off,
+  and "1.12" references in `docs/configuration.md` and `cli/mcp-server.ts` now say 1.11.6. `check.mjs --full`
+  green after. Uncommitted. Next: commit, the hand checks above, then `docs/RELEASING.md` §2 onward.
+- **Next after the release: Site Audit + verified-fix sprint**, plan approved 2026-11-10:
+  `docs/audit-quality/implementation-plan.md` (extension runs audits, MCP stays file-only with `compare_audits`,
+  no Lighthouse). Start Phase B on a fresh branch from `develop`, not on `website-revamp`.
   **Release:** nothing after 1.11.5 has shipped — 1.11.6 is committed (`b029eb1`) but unreleased, so the next
   release carries 1.11.6 + 1.12 together (version number to decide; CHANGELOG has `[1.11.6]` + `[Unreleased]`).
 - **1.11.5 is live everywhere (verified 2026-11-03)**: CWS (updated 2026-11-02), AMO, npm both packages,
