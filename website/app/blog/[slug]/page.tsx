@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
 import { Button } from "@/components/ui/button";
 import { getAllPosts, getPostBySlug } from "@/lib/blog";
 import { renderMarkdown } from "@/lib/blog-markdown";
@@ -54,7 +55,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
               {post.date} · {post.readMinutes} min
             </span>
           </div>
-          <h1 className="mb-6 text-[34px] font-semibold leading-[1.15] tracking-[-0.03em] text-text-primary">
+          <h1 className="mb-6 text-h3 font-medium text-text-primary">
             {post.title}
           </h1>
 
@@ -95,6 +96,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
           </div>
         </div>
       </article>
+      <FinalCTA />
       <Footer />
       <script
         type="application/ld+json"

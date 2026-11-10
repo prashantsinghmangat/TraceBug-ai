@@ -1,4 +1,5 @@
-import Link from "next/link";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Privacy Policy — TraceBug",
@@ -9,17 +10,12 @@ export const metadata = {
 export default function PrivacyPage() {
   return (
     <main className="min-h-screen bg-background text-text-primary">
-      <div className="max-w-3xl mx-auto px-6 py-20">
-        <Link
-          href="/"
-          className="text-sm text-text-muted hover:text-primary transition-colors mb-8 inline-block"
-        >
-          &larr; Back to home
-        </Link>
+      <Navbar />
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-28 pb-20">
 
-        <h1 className="text-3xl font-bold mb-2">Privacy Policy</h1>
+        <h1 className="mb-2 text-h2 font-medium text-text-primary">Privacy Policy</h1>
         <p className="text-text-muted mb-10">
-          Last updated: October 31, 2026
+          Last updated: November 10, 2026
         </p>
 
         <div className="space-y-8 text-text-muted leading-relaxed">
@@ -222,6 +218,27 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-xl font-semibold text-text-primary mb-3">
+              This Website
+            </h2>
+            <p>
+              tracebug.dev has no analytics and sets no tracking cookies. It
+              stores something only when you send it:
+            </p>
+            <ul className="list-disc pl-6 space-y-1 mt-2">
+              <li>
+                <strong className="text-text-primary">Email list</strong> — your
+                email address, which form you used, and your browser&apos;s user
+                agent and referring page. Used only to send release updates.
+              </li>
+              <li>
+                <strong className="text-text-primary">Feedback and uninstall forms</strong>{" "}
+                — what you type, plus the extension version on the uninstall form.
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-semibold text-text-primary mb-3">
               User Control
             </h2>
             <ul className="list-disc pl-6 space-y-1">
@@ -338,6 +355,7 @@ export default function PrivacyPage() {
           </section>
         </div>
       </div>
+      <Footer />
     </main>
   );
 }

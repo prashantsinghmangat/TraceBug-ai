@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, Terminal, CheckCircle2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
 import { Button } from "@/components/ui/button";
 
 // One dynamic route renders the setup guide for each MCP client. Each page
@@ -35,17 +36,17 @@ const TOOLS: Record<string, ToolGuide> = {
     metaDescription:
       "Connect Claude Code to TraceBug bug reports with one command. The local MCP server gives Claude the session replay, console errors, network log, and repro steps — 100% on your machine.",
     intro:
-      "Claude Code registers MCP servers with a single CLI command — this is the fastest setup of any tool. One line, and Claude can read every TraceBug export on your machine.",
+      "Claude Code registers MCP servers with a single CLI command — this is the fastest setup of any tool. One line, and Claude can read every TraceBug export in your Downloads, Desktop or project folder.",
     steps: [
       {
         title: "Add the server",
-        body: "Run this once, anywhere. The --scope user flag makes it available in every project; drop it to register for the current project only.",
-        code: "claude mcp add tracebug --scope user -- npx -y tracebug mcp",
+        body: "Run this once, anywhere. The -s user flag makes it available in every project; drop it to register for the current project only.",
+        code: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
         codeLabel: "Terminal",
       },
       {
         title: "Capture a bug",
-        body: "Use the TraceBug extension (or SDK) to capture a bug and click Export .html. The server auto-discovers exports in your Downloads and Desktop folders — no paths to configure. To pin a project folder instead, add --dir ./bug-reports to the command above.",
+        body: "Use the TraceBug extension (or SDK) to capture a bug and click Export replay (.html). The server auto-discovers exports in your Downloads and Desktop folders — no paths to configure. To pin a project folder instead, add --dir ./bug-reports to the command above.",
       },
       {
         title: "Ask Claude to investigate",
@@ -57,7 +58,7 @@ const TOOLS: Record<string, ToolGuide> = {
     troubleshooting: [
       { problem: "claude mcp list shows tracebug as failed", fix: "The server needs Node 18+. Check node --version, then remove and re-add the server." },
       { problem: "Claude says it has no bug-report tools", fix: "MCP servers load at session start — exit and start a new session after adding the server." },
-      { problem: "list_bug_reports returns nothing", fix: "The export has to exist first: capture a bug and Export .html, or pass --dir pointing at the folder that holds your exports." },
+      { problem: "list_bug_reports returns nothing", fix: "The export has to exist first: capture a bug and Export replay (.html), or pass --dir pointing at the folder that holds your exports." },
     ],
   },
   cursor: {
@@ -66,7 +67,7 @@ const TOOLS: Record<string, ToolGuide> = {
     metaDescription:
       "Connect Cursor to TraceBug bug reports with one JSON file. The local MCP server gives Cursor's agent the session replay, console errors, network log, and repro steps — 100% on your machine.",
     intro:
-      "Cursor reads MCP servers from a JSON config file — project-level or global. One small file, and the agent can read every TraceBug export on your machine.",
+      "Cursor reads MCP servers from a JSON config file — project-level or global. One small file, and the agent can read every TraceBug export in your Downloads, Desktop or project folder.",
     steps: [
       {
         title: "Create the config file",
@@ -88,7 +89,7 @@ const TOOLS: Record<string, ToolGuide> = {
     troubleshooting: [
       { problem: "Server shows a red/yellow status", fix: "Cursor launches the server with your shell's PATH — make sure npx (Node 18+) resolves. On Windows, fully restart Cursor after creating the file." },
       { problem: "Agent ignores the tools", fix: "MCP tools are used by the Agent mode, not plain chat — make sure you're in agent/composer mode." },
-      { problem: "list_bug_reports returns nothing", fix: "Capture and Export .html first, or point --dir at the folder holding your exports." },
+      { problem: "list_bug_reports returns nothing", fix: "Capture and Export replay (.html) first, or point --dir at the folder holding your exports." },
     ],
   },
   windsurf: {
@@ -97,7 +98,7 @@ const TOOLS: Record<string, ToolGuide> = {
     metaDescription:
       "Connect Windsurf's Cascade to TraceBug bug reports with one JSON file. The local MCP server gives it the session replay, console errors, network log, and repro steps — 100% on your machine.",
     intro:
-      "Windsurf's Cascade agent reads MCP servers from a global config file. One small file, and Cascade can read every TraceBug export on your machine.",
+      "Windsurf's Cascade agent reads MCP servers from a global config file. One small file, and Cascade can read every TraceBug export in your Downloads, Desktop or project folder.",
     steps: [
       {
         title: "Create the config file",
@@ -119,7 +120,7 @@ const TOOLS: Record<string, ToolGuide> = {
     troubleshooting: [
       { problem: "Server never appears after refresh", fix: "Validate the JSON (a trailing comma is the usual culprit) and make sure npx (Node 18+) is on your PATH, then restart Windsurf." },
       { problem: "Tools error on first call", fix: "Windsurf may require you to approve the server's tools once — check the Cascade panel for a pending approval." },
-      { problem: "list_bug_reports returns nothing", fix: "Capture and Export .html first, or point --dir at the folder holding your exports." },
+      { problem: "list_bug_reports returns nothing", fix: "Capture and Export replay (.html) first, or point --dir at the folder holding your exports." },
     ],
   },
 };
@@ -154,11 +155,11 @@ export default function McpToolPage({ params }: { params: { tool: string } }) {
       <div className="pt-28 pb-20">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="mb-10">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-sm text-text-muted">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <Terminal size={13} className="text-primary" />
               Documentation · MCP · {guide.name}
             </div>
-            <h1 className="mb-4 text-4xl font-bold tracking-[-0.02em] text-text-primary">
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
               Debug browser bugs in {guide.name} — from real evidence
             </h1>
             <p className="text-lg leading-relaxed text-text-muted">
@@ -173,7 +174,7 @@ export default function McpToolPage({ params }: { params: { tool: string } }) {
             {guide.steps.map((step, i) => (
               <li key={step.title} className="rounded-2xl border border-border bg-surface/50 p-6">
                 <div className="mb-2 flex items-center gap-3">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[13px] font-bold text-primary">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                     {i + 1}
                   </span>
                   <h2 className="text-[17px] font-semibold text-text-primary">{step.title}</h2>
@@ -221,7 +222,7 @@ export default function McpToolPage({ params }: { params: { tool: string } }) {
           </div>
 
           <p className="mt-8 text-[13.5px] text-text-muted">
-            Full MCP reference — all six tools, the report format, and the FAQ — lives at{" "}
+            Full MCP reference — all nine tools, the report format, and the FAQ — lives at{" "}
             <a href="/docs/mcp" className="text-primary hover:underline">/docs/mcp</a>. Other tools:{" "}
             {Object.entries(TOOLS)
               .filter(([slug]) => slug !== params.tool)
@@ -235,6 +236,7 @@ export default function McpToolPage({ params }: { params: { tool: string } }) {
           </p>
         </div>
       </div>
+      <FinalCTA />
       <Footer />
     </main>
   );

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Terminal, CheckCircle2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
 import SectionHeading from "@/components/SectionHeading";
 import PageMascot from "@/components/PageMascot";
 import { Button } from "@/components/ui/button";
@@ -119,6 +120,7 @@ export default function ProofPage() {
       <article className="pt-32 pb-24">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <SectionHeading
+            as="h1"
             align="left"
             eyebrow="Real transcript · nothing staged"
             title="We gave Claude a TraceBug report. Here's exactly what happened."
@@ -214,6 +216,7 @@ export default function ProofPage() {
           </p>
         </div>
       </article>
+      <FinalCTA />
       <Footer />
     </main>
   );

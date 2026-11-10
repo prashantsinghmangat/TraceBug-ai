@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import EmailCapture from "@/components/EmailCapture";
 import PageMascot from "@/components/PageMascot";
-import { Logo } from "@/components/ui/logos";
+import InstallButtons from "@/components/InstallButtons";
 
 
 // Deliberately one tier. Paid cloud plans (Pro/Team/Enterprise) were removed
@@ -31,7 +31,7 @@ export default function PricingClient() {
         <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 sm:px-6 lg:grid-cols-12 lg:gap-16 lg:px-8">
           <div className="min-w-0 lg:col-span-6">
             <span className="mb-4 inline-flex font-mono text-[13px] text-text-subtle">Pricing</span>
-            <h1 className="text-[40px] sm:text-[56px] font-medium leading-[1.04] tracking-[-0.03em]">
+            <h1 className="text-h2 font-medium">
               Free for local capture.
               <br />
               <span className="text-text-subtle">That&apos;s the whole pricing page.</span>
@@ -62,24 +62,7 @@ export default function PricingClient() {
               </ul>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <a
-                  href={LINKS.chrome}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-cta px-5 text-[15px] font-medium text-on-cta transition-[background-color,transform] duration-150 hover:bg-cta/85 active:scale-[0.98]"
-                >
-                  <Logo name="chrome" size={18} />
-                  Add to Chrome, free
-                </a>
-                <a
-                  href={LINKS.firefox}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-border-strong px-5 text-[15px] font-medium text-text-primary transition-colors hover:bg-surface"
-                >
-                  <Logo name="firefox" size={18} />
-                  Firefox
-                </a>
+                <InstallButtons itemClassName="sm:flex-1" />
               </div>
             </div>
 
