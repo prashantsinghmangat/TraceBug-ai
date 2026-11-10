@@ -13,9 +13,10 @@
   --text-3: #82828C;
   --border: #E4E4E7;
   --border-hover: #D4D4D8;
-  --accent: #4F46E5;
-  --accent-2: #4338CA;
-  --accent-soft: rgba(79, 70, 229, 0.10);
+  --accent: #C81E3C;          /* deep coral, AA with white text */
+  --accent-2: #A3162F;
+  --accent-soft: rgba(200, 30, 60, 0.10);
+  --on-accent: #FFFFFF;
   --success: #16A34A;
   --success-bg: rgba(22, 163, 74, 0.10);
   --error: #DC2626;
@@ -35,9 +36,10 @@
   --text-3: #71717A;
   --border: #26262E;
   --border-hover: #2A2A35;
-  --accent: #6366F1;
-  --accent-2: #818CF8;
-  --accent-soft: rgba(99, 102, 241, 0.14);
+  --accent: #FF5C6C;          /* coral (Midnight coral theme) */
+  --accent-2: #FF8590;
+  --accent-soft: rgba(255, 92, 108, 0.14);
+  --on-accent: #0B0D14;       /* ink on coral: white fails contrast */
   --success: #22C55E;
   --success-bg: rgba(34, 197, 94, 0.14);
   --error: #EF4444;
@@ -163,7 +165,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .seg-wide button:last-child { border-right: none; }
 .seg-wide button:hover[aria-pressed="false"] { background: var(--bg-3); color: var(--text); }
-.seg-wide button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg-wide button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 
 /* ── Inline record options — only exists while video is on ──
    applyVideoUI() in popup.js shows/hides the whole block, so "Events only"
@@ -204,7 +206,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-size: 11px; font-weight: 600; font-family: inherit; cursor: pointer;
 }
 .seg-opt:last-child { border-right: none; }
-.seg-opt[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg-opt[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .seg-opt:disabled { cursor: not-allowed; opacity: 0.5; }
 
 /* ── Switch — shared by the mic button and the blur checkbox ─────────
@@ -367,8 +369,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-avatar {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #6366F1, #818CF8);
-  color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0;
+  background: var(--accent);
+  color: var(--on-accent); font-size: 12px; font-weight: 700; flex-shrink: 0;
 }
 .account-body { flex: 1; min-width: 0; }
 .account-title {
@@ -379,7 +381,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-sep { color: var(--text-3); margin: 0 4px; }
 .account-cta {
   padding: 5px 12px; border-radius: 6px;
-  background: var(--accent); color: #fff; border: none;
+  background: var(--accent); color: var(--on-accent); border: none;
   font-size: 11px; font-weight: 600; cursor: pointer;
   font-family: inherit; flex-shrink: 0;
 }
