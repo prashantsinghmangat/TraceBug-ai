@@ -1,601 +1,382 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import InstallButtons from "@/components/InstallButtons";
+import Shortcut from "@/components/Keycap";
+import { LINKS, MCP } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Documentation — TraceBug",
   description:
-    "How to use TraceBug: the Chrome extension (capture bugs on any site, no code), the MCP server (let AI agents debug your reports), and the SDK. Setup, configuration, and API reference.",
+    "Install TraceBug for Chrome or Firefox, capture your first bug, hand the report to Claude Code, Cursor or Windsurf over MCP, or add the SDK to your app.",
+  alternates: { canonical: "/docs" },
   openGraph: {
     title: "TraceBug Documentation",
     description:
-      "Setup guide, API reference, and framework examples for TraceBug.",
+      "Install, capture a bug, hand it to your AI agent. Extension, MCP server and SDK guides.",
   },
 };
+
+// The docs hub. Extension first (most readers never touch code), then the AI
+// hand-off, then the SDK. The table of contents is built from SECTIONS, so its
+// order always matches the page. Full references stay in the repo's docs/
+// folder — this page links to them instead of keeping a second copy that drifts.
+
+const REPO_DOCS = `${LINKS.repo}/blob/main/docs`;
+
+const SECTIONS = [
+  { id: "install", label: "Install the extension" },
+  { id: "capture", label: "Capture your first bug" },
+  { id: "report", label: "What's in a report" },
+  { id: "share", label: "Share or file it" },
+  { id: "ai-agents", label: "Debug it with an AI agent" },
+  { id: "firefox", label: "Chrome and Firefox differences" },
+  { id: "privacy", label: "Privacy and redaction" },
+  { id: "sdk", label: "Add the SDK to your app" },
+  { id: "api", label: "SDK quick reference" },
+  { id: "guides", label: "More guides" },
+] as const;
+
+const PATHS = [
+  {
+    href: "#install",
+    title: "Use the extension",
+    desc: "QA, PMs, support and developers. Capture a bug on any site, no code.",
+  },
+  {
+    href: "#ai-agents",
+    title: "Hand it to your AI agent",
+    desc: "Claude Code, Cursor, Windsurf or VS Code reads the report over a local MCP server.",
+  },
+  {
+    href: "#sdk",
+    title: "Add the SDK to your app",
+    desc: "A capture toolbar inside your own dev and staging builds. Works with any framework.",
+  },
+];
+
+const BROWSERS: [string, string][] = [
+  ["Chrome, Edge, Brave", "Chrome Web Store"],
+  ["Opera", "Chrome Web Store, after Opera's “Install Chrome Extensions” add-on"],
+  ["Firefox 128 and later", "Firefox Add-ons"],
+  ["Safari", "Not supported. Use the npm SDK in your app instead."],
+];
+
+const CAPTURE_STEPS: ReactNode[] = [
+  <>Open the page with the bug, click the TraceBug icon and choose <b>Capture Bug</b>. No screen-share dialog opens.</>,
+  <>Reproduce the bug: click, type, navigate. TraceBug records your clicks, console, network and a replay of the page, across page loads.</>,
+  <>Click <b>Stop</b> in the floating bar. The ticket opens with a title, summary, repro steps and a root-cause hint already filled in.</>,
+  <>Click <b>Export replay (.html)</b> and send the file, or <b>Fix with AI</b> to copy a ready prompt for your agent.</>,
+];
+
+const REPORT_PARTS: [string, string][] = [
+  ["Repro steps", "Numbered steps generated from your clicks, typing and navigation."],
+  ["Console", "Errors with stack traces, plus the warnings and logs around them."],
+  ["Network", "Every request with method, status and timing; failed responses keep their body."],
+  ["Replay", "An interactive DOM replay of the page. Optional screen video."],
+  ["Screenshots", "Visible area or a cropped region, with drawings and blur."],
+  ["Environment", "Browser, OS, viewport and device."],
+  ["Root-cause hint", "Which action came before the first failure, and what failed."],
+  ["AI tab", "A copy-ready prompt so whoever opens the file can hand it to an agent."],
+];
+
+const SHARE_ROWS: [string, string][] = [
+  ["Export replay (.html)", "One self-contained file: replay, console, network, steps. Opens offline in any browser and is what the MCP server reads."],
+  ["Fix with AI", "Copies a prompt that points your agent at the report."],
+  ["GitHub, Linear, Slack", "Files a real issue or message with your own token, sent straight from your browser. Without a token it opens a prefilled issue or copies the text."],
+  ["Jira", "Copies Jira-formatted ticket text to paste."],
+  ["More", "AI report (small text-only .html for chat), Markdown, HAR."],
+];
+
+const FIREFOX_NOTES: ReactNode[] = [
+  <>Site access is opt-in in Firefox, so the first capture on a site asks for it.</>,
+  <>Screen video uses the browser&apos;s share picker. Chrome can also record the current tab with no picker.</>,
+  <>Firefox can&apos;t record tab audio. Turn on the microphone if you want narration.</>,
+  <>Failed requests from <i>before</i> you started capturing aren&apos;t listed in Firefox (it doesn&apos;t expose their status). Everything during the capture is.</>,
+];
+
+const API: [string, string][] = [
+  ["TraceBug.init(config)", "Start TraceBug. Call once at app startup."],
+  ["TraceBug.quickCapture()", "Open the ticket for the current session."],
+  ["TraceBug.takeScreenshot()", "Capture the visible page."],
+  ["TraceBug.generateReport()", "The full report as an object."],
+  ["TraceBug.getGitHubIssue()", "The report as GitHub issue Markdown."],
+  ["TraceBug.setUser({ id, email, name })", "Attach who reported it."],
+  ["TraceBug.use(plugin)", "Filter events or change reports and exports (onEvent, onReport, onExport)."],
+  ["TraceBug.on(event, handler)", "Subscribe to lifecycle events such as error:captured."],
+  ["TraceBug.destroy()", "Remove TraceBug from the page."],
+];
+
+const GUIDES = [
+  { href: "/docs/mcp", title: "MCP server", desc: "Setup for Claude Code, Cursor, Windsurf and VS Code, and every tool the agent can call." },
+  { href: "/docs/playwright", title: "Playwright reporter", desc: "Every failed test becomes a TraceBug report your agent can read." },
+  { href: "/docs/ai-debugger", title: "AI debugger", desc: "Root-cause analysis with your own Anthropic, OpenAI or Ollama key, from the browser." },
+  { href: "/docs/har-export", title: "HAR export", desc: "Network activity as a standard HAR 1.2 file for DevTools, Charles or Postman." },
+];
+
+function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-24 border-t border-border pt-10 pb-12 first:border-t-0 first:pt-0">
+      <h2 className="mb-4 text-[26px] font-medium tracking-[-0.02em] text-text-primary">{title}</h2>
+      <div className="space-y-4 text-[15px] leading-[1.7] text-text-muted">{children}</div>
+    </section>
+  );
+}
+
+function Code({ children, label }: { children: string; label?: string }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
+      {label && (
+        <div className="border-b border-border px-4 py-2 font-mono text-[12px] text-text-subtle">{label}</div>
+      )}
+      <pre className="overflow-x-auto px-4 py-3 font-mono text-[13px] leading-[1.7] text-text-primary">{children}</pre>
+    </div>
+  );
+}
+
+function Rows({ rows }: { rows: [string, string][] }) {
+  return (
+    <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+      {rows.map(([term, desc]) => (
+        <div key={term} className="grid gap-1 px-4 py-3 sm:grid-cols-[200px_1fr] sm:gap-4">
+          <dt className="text-[14px] font-medium text-text-primary">{term}</dt>
+          <dd className="text-[14px] text-text-muted">{desc}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Steps({ items }: { items: ReactNode[] }) {
+  return (
+    <ol className="space-y-3">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-start gap-3">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
+            {i + 1}
+          </span>
+          <span className="pt-0.5 [&_b]:font-medium [&_b]:text-text-primary">{item}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const ic = "rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[13px] text-text-primary";
+const a = "text-primary underline-offset-4 hover:underline";
 
 export default function DocsPage() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-24 pb-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Page header */}
-          <div className="mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-muted text-sm mb-4">
-              <span className="w-2 h-2 rounded-full bg-accent"></span>
-              Documentation
-            </div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">
-              TraceBug Documentation
-            </h1>
-            <p className="text-text-muted text-lg">
-              Everything you need to integrate TraceBug into your project and
-              start generating developer-ready bug reports.
-            </p>
-          </div>
+      <div className="mx-auto max-w-6xl px-4 pt-28 pb-section sm:px-6 lg:px-8">
+        {/* Header */}
+        <header className="max-w-3xl">
+          <span className="mb-4 inline-flex font-mono text-[13px] text-text-subtle">Documentation</span>
+          <h1 className="text-h2 font-medium text-text-primary">Capture a bug. Hand it to AI.</h1>
+          <p className="mt-4 text-lead text-text-muted">
+            Install the extension, capture your first bug in under a minute, and give the report to your
+            coding agent. Everything runs on your machine.
+          </p>
+        </header>
 
-          {/* Table of Contents */}
-          <div className="bg-surface border border-border rounded-xl p-6 mb-12">
-            <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wider mb-4">
-              On this page
-            </h2>
-            <ul className="space-y-2">
-              {[
-                { href: "#getting-started", label: "Getting Started" },
-                { href: "#chrome-extension", label: "Chrome Extension Usage" },
-                { href: "/docs/mcp", label: "MCP Server — AI Agents Debug Your Reports" },
-                { href: "#sdk-setup", label: "SDK Setup (developers)" },
-                { href: "#configuration", label: "Configuration" },
-                { href: "#user-identification", label: "User Identification" },
-                { href: "#screenshots", label: "Screenshots & Annotations" },
-                { href: "#bug-report-format", label: "Bug Report Format" },
-                { href: "#github-integration", label: "GitHub Integration" },
-                { href: "#plugins-hooks", label: "Plugins & Hooks" },
-                { href: "#api-reference", label: "API Reference" },
-                { href: "/docs/playwright", label: "Playwright Reporter — Bug Reports From Failed Tests" },
-                { href: "/docs/ai-debugger", label: "AI Debugger — BYO-Key LLM Analysis" },
-                { href: "/docs/har-export", label: "HAR Export — Portable Network Captures" },
-              ].map((item) => (
-                <li key={item.href}>
-                  <a
-                    href={item.href}
-                    className="text-accent hover:text-accent/80 transition-colors text-sm"
+        {/* Three ways in */}
+        <div className="mt-10 grid gap-3 sm:grid-cols-3">
+          {PATHS.map((p) => (
+            <a
+              key={p.href}
+              href={p.href}
+              className="group rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong"
+            >
+              <div className="flex items-center justify-between text-[15px] font-medium text-text-primary">
+                {p.title}
+                <ArrowRight size={15} strokeWidth={1.5} className="text-text-subtle transition-transform group-hover:translate-x-0.5" />
+              </div>
+              <p className="mt-2 text-[14px] leading-[1.6] text-text-muted">{p.desc}</p>
+            </a>
+          ))}
+        </div>
+
+        <div className="mt-14 grid gap-10 lg:grid-cols-[220px_1fr] lg:gap-14">
+          {/* Table of contents */}
+          <nav aria-label="On this page" className="hidden lg:block">
+            <div className="sticky top-24">
+              <p className="mb-3 font-mono text-[12px] text-text-subtle">On this page</p>
+              <ul className="space-y-1 border-l border-border">
+                {SECTIONS.map((s) => (
+                  <li key={s.id}>
+                    <a
+                      href={`#${s.id}`}
+                      className="-ml-px block border-l border-transparent py-1 pl-4 text-[14px] text-text-muted transition-colors hover:border-text-primary hover:text-text-primary"
+                    >
+                      {s.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </nav>
+
+          <div className="min-w-0 max-w-3xl">
+            <Section id="install" title="Install the extension">
+              <p>Free, no account. One extension for Chrome and Firefox.</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <InstallButtons />
+              </div>
+              <Rows rows={BROWSERS} />
+              <p>
+                After installing, pin TraceBug to the toolbar so it&apos;s one click away. <Shortcut /> takes an
+                instant screenshot ticket on any tab; change it at <code className={ic}>chrome://extensions/shortcuts</code> in Chrome or{" "}
+                <b className="font-medium text-text-primary">Manage Extension Shortcuts</b> in Firefox&apos;s add-ons page.
+              </p>
+            </Section>
+
+            <Section id="capture" title="Capture your first bug">
+              <Steps items={CAPTURE_STEPS} />
+              <p>
+                Need pixels too? Open the popup&apos;s capture options and turn on <b className="font-medium text-text-primary">Events + Video</b>.
+                For a single frame, use <b className="font-medium text-text-primary">Screenshot</b> or press <Shortcut />; it
+                opens the ticket with a fresh screenshot attached.
+              </p>
+            </Section>
+
+            <Section id="report" title="What's in a report">
+              <p>Every report is one file with all of this, filled in for you:</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {REPORT_PARTS.map(([t, d]) => (
+                  <div key={t} className="rounded-xl border border-border bg-surface p-4">
+                    <h3 className="text-[14px] font-medium text-text-primary">{t}</h3>
+                    <p className="mt-1 text-[14px] leading-[1.6] text-text-muted">{d}</p>
+                  </div>
+                ))}
+              </div>
+            </Section>
+
+            <Section id="share" title="Share or file it">
+              <Rows rows={SHARE_ROWS} />
+              <p>
+                Tokens are set once under <b className="font-medium text-text-primary">More → Configure integrations</b> in the
+                ticket. They stay in your browser; no TraceBug server is involved.{" "}
+                <a href={`${REPO_DOCS}/integrations.md`} target="_blank" rel="noopener noreferrer" className={a}>
+                  Integration details
+                </a>
+              </p>
+            </Section>
+
+            <Section id="ai-agents" title="Debug it with an AI agent">
+              <p>
+                The TraceBug MCP server lets your coding agent open the report and read the console, network, steps and
+                screenshots, then find the fix in your code. It runs locally over stdio and finds reports in your project,
+                Downloads and Desktop, so you don&apos;t pass a path.
+              </p>
+              <Code label="Claude Code">{MCP.claudeCode}</Code>
+              <p>
+                On native Windows, wrap the command: <code className={ic}>-- cmd /c npx -y tracebug mcp</code>. Restart your
+                agent, then ask it to <i>debug the latest TraceBug report</i>, or type{" "}
+                <code className={ic}>/tracebug:debug_bug_report</code> in Claude Code.
+              </p>
+              <Link href="/docs/mcp" className={`inline-flex items-center gap-1 font-medium ${a}`}>
+                Cursor, Windsurf and VS Code setup <ArrowRight size={14} />
+              </Link>
+            </Section>
+
+            <Section id="firefox" title="Chrome and Firefox differences">
+              <p>Capture, reports, export and MCP work the same in both. Firefox differs by platform design in a few places:</p>
+              <ul className="list-disc space-y-2 pl-5 marker:text-text-subtle">
+                {FIREFOX_NOTES.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+            </Section>
+
+            <Section id="privacy" title="Privacy and redaction">
+              <p>
+                Nothing is uploaded to TraceBug. Reports stay on your machine until you share them. Passwords, hidden
+                fields, tokens and cookie values are masked when captured.
+              </p>
+              <p>
+                For your app&apos;s own sensitive fields, open the extension&apos;s options and add field names or regex
+                patterns under <b className="font-medium text-text-primary">Redaction rules</b>. Use <b className="font-medium text-text-primary">Blur</b>{" "}
+                during a capture to hide an element in the replay and video.{" "}
+                <Link href="/privacy" className={a}>Privacy policy</Link>
+              </p>
+            </Section>
+
+            <Section id="sdk" title="Add the SDK to your app">
+              <p>
+                The SDK puts the capture toolbar inside your own app, so testers on your dev or staging build don&apos;t
+                need the extension. It has no runtime dependencies.
+              </p>
+              <Code label="Terminal">{MCP.npmInstall}</Code>
+              <Code label="App entry (main.ts, App.tsx, layout.tsx)">{`import TraceBug from "tracebug-sdk";
+
+TraceBug.init({ projectId: "my-app" });`}</Code>
+              <p>
+                A toolbar appears on the right edge. Click <b className="font-medium text-text-primary">Track session</b>, reproduce
+                the bug, then press <code className={ic}>Ctrl+Shift+B</code> to open the ticket.
+              </p>
+              <Rows
+                rows={[
+                  ["enabled", "\"auto\" (default) runs on localhost and staging hosts only. Also \"development\", \"staging\", \"all\", \"off\" or a list of hostnames."],
+                  ["theme", "\"light\" (default), \"dark\" or \"auto\"."],
+                  ["toolbarPosition", "\"right\" (default), \"left\", \"bottom-right\" or \"bottom-left\"."],
+                  ["captureConsole", "\"all\", \"warnings\", \"errors\" or \"none\"."],
+                  ["redact", "Extra field names and patterns to mask."],
+                ]}
+              />
+              <p>
+                <a href={`${REPO_DOCS}/configuration.md`} target="_blank" rel="noopener noreferrer" className={a}>
+                  All configuration options
+                </a>
+                {" · "}
+                <a href={LINKS.npm} target="_blank" rel="noopener noreferrer" className={a}>
+                  tracebug-sdk on npm
+                </a>
+              </p>
+            </Section>
+
+            <Section id="api" title="SDK quick reference">
+              <dl className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                {API.map(([sig, desc]) => (
+                  <div key={sig} className="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(0,300px)_1fr] sm:gap-4">
+                    <dt className="break-words font-mono text-[13px] text-text-primary">{sig}</dt>
+                    <dd className="text-[14px] text-text-muted">{desc}</dd>
+                  </div>
+                ))}
+              </dl>
+              <a href={`${REPO_DOCS}/api-reference.md`} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-1 font-medium ${a}`}>
+                Full API reference <ArrowRight size={14} />
+              </a>
+            </Section>
+
+            <Section id="guides" title="More guides">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {GUIDES.map((g) => (
+                  <Link
+                    key={g.href}
+                    href={g.href}
+                    className="group rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong"
                   >
-                    → {item.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* MCP promo card — the differentiator, deep-dive on its own page.
-              No "New:" badge: it never expires and reads as recency inflation. */}
-          <a
-            href="/docs/mcp"
-            className="block bg-surface border border-accent/30 rounded-xl p-6 mb-12 hover:border-accent/60 transition-colors"
-          >
-            <div className="flex items-start gap-4">
-              <span className="text-2xl">🤖</span>
-              <div>
-                <h3 className="text-text-primary font-semibold mb-1">
-                  MCP Server — let AI agents debug your bug reports
-                </h3>
-                <p className="text-text-muted text-sm leading-relaxed">
-                  Connect Claude Code, Cursor, or VS Code to your exported .html
-                  reports. The agent reads the console errors, network failures,
-                  and screenshots, then finds the fix in your codebase — fully
-                  local, nothing uploaded.{" "}
-                  <span className="text-accent">Read the guide →</span>
-                </p>
-              </div>
-            </div>
-          </a>
-
-          {/* v1.6 feature cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
-            {[
-              {
-                href: "/docs/playwright",
-                icon: "🎭",
-                title: "Playwright Reporter",
-                desc: "Every failed test becomes a self-contained .html report — upload as a CI artifact, debug with your agent.",
-              },
-              {
-                href: "/docs/ai-debugger",
-                icon: "🧠",
-                title: "AI Debugger",
-                desc: "BYO-key LLM root-cause analysis (Anthropic / OpenAI / Ollama), browser-direct — no backend, key stays local.",
-              },
-              {
-                href: "/docs/har-export",
-                icon: "🌐",
-                title: "HAR Export",
-                desc: "Export captured network activity as a standard HAR 1.2 file — opens in DevTools, Charles, Fiddler, Postman.",
-              },
-            ].map((card) => (
-              <a
-                key={card.href}
-                href={card.href}
-                className="block bg-surface border border-border rounded-xl p-5 hover:border-accent/60 transition-colors"
-              >
-                <span className="text-2xl">{card.icon}</span>
-                <h3 className="text-text-primary font-semibold text-sm mt-3 mb-1">
-                  {card.title}
-                </h3>
-                <p className="text-text-muted text-xs leading-relaxed">{card.desc}</p>
-              </a>
-            ))}
-          </div>
-
-          {/* Getting Started */}
-          <section id="getting-started" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                1
-              </span>
-              Getting Started
-            </h2>
-            <div className="prose prose-invert max-w-none">
-              <p className="text-text-muted mb-6 leading-relaxed">
-                TraceBug is a zero-backend bug reporting tool that works
-                entirely in the browser. All data is stored in localStorage —
-                no servers, no API keys, no external dependencies required.
-              </p>
-              <div className="bg-surface border border-border rounded-xl p-6 mb-6">
-                <h3 className="text-text-primary font-semibold mb-3">
-                  Requirements
-                </h3>
-                <ul className="space-y-2 text-text-muted text-sm">
-                  <li className="flex items-center gap-2">
-                    <span className="text-success">✓</span>
-                    Any frontend framework (React, Vue, Angular, Next.js, Svelte, plain HTML)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-success">✓</span>
-                    Modern browser (Chrome, Edge, Brave, Opera recommended)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="text-success">✓</span>
-                    Node.js 18+ for the npm package
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </section>
-
-          {/* SDK Setup */}
-          <section id="sdk-setup" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                2
-              </span>
-              SDK Setup
-            </h2>
-
-            <div className="space-y-8">
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary mb-3">
-                  Install via npm
-                </h3>
-                <div className="code-block p-4 rounded-xl mb-4">
-                  <div className="flex items-center gap-2 mb-3 text-text-muted text-xs">
-                    <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                    <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                    <span className="ml-2">Terminal</span>
-                  </div>
-                  <pre className="text-text-primary font-mono text-sm">
-                    <span className="text-text-muted">$ </span>
-                    <span className="text-success">npm</span>
-                    <span className="text-text-primary"> install tracebug-sdk</span>
-                  </pre>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary mb-3">
-                  Initialize in your app
-                </h3>
-                <div className="code-block p-4 rounded-xl mb-4">
-                  <div className="flex items-center gap-2 mb-3 text-text-muted text-xs">
-                    <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                    <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                    <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                    <span className="ml-2">app/layout.tsx (Next.js) or index.tsx (React)</span>
-                  </div>
-                  <pre className="text-text-primary font-mono text-sm leading-relaxed">
-                    <span className="text-primary">import</span>
-                    <span className="text-text-primary"> TraceBug </span>
-                    <span className="text-primary">from</span>
-                    <span className="text-warning"> &quot;tracebug-sdk&quot;</span>
-                    <span className="text-text-primary">;</span>
-                    {"\n\n"}
-                    <span className="text-text-muted">{"// Initialize once at app startup"}</span>
-                    {"\n"}
-                    <span className="text-accent">TraceBug</span>
-                    <span className="text-text-primary">.</span>
-                    <span className="text-accent">init</span>
-                    <span className="text-text-primary">{"({"}</span>
-                    {"\n"}
-                    <span className="text-text-primary">{"  "}</span>
-                    <span className="text-text-primary">projectId: </span>
-                    <span className="text-warning">&quot;my-app&quot;</span>
-                    <span className="text-text-muted">,</span>
-                    {"\n"}
-                    <span className="text-text-primary">{"  "}</span>
-                    <span className="text-text-primary">enabled: </span>
-                    <span className="text-warning">&quot;auto&quot;</span>
-                    <span className="text-text-muted">,  </span>
-                    <span className="text-text-muted">{"// auto | development | all | off"}</span>
-                    {"\n"}
-                    <span className="text-text-primary">{"});"}</span>
-                  </pre>
-                </div>
-
-                <div className="bg-surface border border-border rounded-xl p-4">
-                  <p className="text-text-muted text-sm">
-                    <span className="text-accent font-semibold">Note:</span>{" "}
-                    The <code className="text-primary bg-background px-1 rounded">enabled: &quot;auto&quot;</code> option activates TraceBug only
-                    on localhost and staging environments. Use{" "}
-                    <code className="text-primary bg-background px-1 rounded">&quot;all&quot;</code> to enable in
-                    production as well.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-semibold text-text-primary mb-3">
-                  Configuration Options
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left text-text-muted py-3 pr-6">Option</th>
-                        <th className="text-left text-text-muted py-3 pr-6">Type</th>
-                        <th className="text-left text-text-muted py-3 pr-6">Default</th>
-                        <th className="text-left text-text-muted py-3">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-text-muted">
-                      {[
-                        { opt: "projectId", type: "string", def: "required", desc: "Identifies your application" },
-                        { opt: "maxEvents", type: "number", def: "200", desc: "Max events per session" },
-                        { opt: "maxSessions", type: "number", def: "50", desc: "Max sessions in localStorage" },
-                        { opt: "enableDashboard", type: "boolean", def: "true", desc: "Show the floating bug button" },
-                        { opt: "enabled", type: "string | string[]", def: '"auto"', desc: "auto | development | staging | all | off | hostname[]" },
-                      ].map((row) => (
-                        <tr key={row.opt} className="border-b border-border/50">
-                          <td className="py-3 pr-6">
-                            <code className="text-primary">{row.opt}</code>
-                          </td>
-                          <td className="py-3 pr-6 text-warning font-mono text-xs">{row.type}</td>
-                          <td className="py-3 pr-6 font-mono text-xs text-accent">{row.def}</td>
-                          <td className="py-3">{row.desc}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Configuration */}
-          <section id="configuration" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">Configuration</h2>
-            <div className="code-block p-5 rounded-xl overflow-x-auto">
-              <pre className="text-sm font-mono text-text-primary leading-relaxed">
-{`TraceBug.init({
-  projectId: "my-app",        // Required
-  maxEvents: 200,             // Max events per session
-  maxSessions: 50,            // Max sessions in localStorage
-  enableDashboard: true,      // Show toolbar UI
-  enabled: "auto",            // auto | development | staging | all | off
-  theme: "dark",              // dark | light | auto
-  toolbarPosition: "right",   // right | left | bottom-right | bottom-left
-  captureConsole: "errors",   // errors | warnings | all | none
-});`}
-              </pre>
-            </div>
-            <p className="text-text-muted text-sm mt-4">
-              Config is validated at runtime — invalid values fall back to defaults and log a warning. TraceBug never crashes your app due to misconfiguration.
-            </p>
-          </section>
-
-          {/* User Identification */}
-          <section id="user-identification" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">User Identification</h2>
-            <p className="text-text-muted mb-4">
-              Identify users so sessions are attributed. Persisted in localStorage across page loads.
-            </p>
-            <div className="code-block p-5 rounded-xl overflow-x-auto">
-              <pre className="text-sm font-mono text-text-primary leading-relaxed">
-{`// Identify the current user
-TraceBug.setUser({ id: "user_123", email: "dev@co.com", name: "Jane" });
-
-// Get identified user
-const user = TraceBug.getUser();  // { id, email, name } | null
-
-// Clear user
-TraceBug.clearUser();`}
-              </pre>
-            </div>
-          </section>
-
-          {/* Screenshots & Annotations */}
-          <section id="screenshots" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">Screenshots & Annotations</h2>
-            <div className="space-y-4 text-text-muted text-sm">
-              <p><strong className="text-text-primary">Auto-download:</strong> Screenshots from the toolbar camera button auto-download as PNG files to your system.</p>
-              <p><strong className="text-text-primary">Screenshot with annotations:</strong> Open the annotation list panel and click the green &quot;Save&quot; button to capture the page with annotation badges visible.</p>
-              <p><strong className="text-text-primary">Clickable badges:</strong> Numbered badges on annotated elements are clickable — opens a popover showing intent, severity, and comment.</p>
-              <p><strong className="text-text-primary">Chrome Extension:</strong> Uses <code className="text-primary bg-background px-1 rounded text-xs">chrome.tabs.captureVisibleTab</code> for reliable cross-origin screenshots.</p>
-            </div>
-            <div className="code-block p-5 rounded-xl mt-4 overflow-x-auto">
-              <pre className="text-sm font-mono text-text-primary leading-relaxed">
-{`// Clean page screenshot (auto-downloads)
-await TraceBug.takeScreenshot();
-
-// Screenshot with annotation badges visible
-await TraceBug.takeScreenshot({ includeAnnotations: true });`}
-              </pre>
-            </div>
-          </section>
-
-          {/* Chrome Extension */}
-          <section id="chrome-extension" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                3
-              </span>
-              Chrome Extension Usage
-            </h2>
-            <p className="text-text-muted mb-6 leading-relaxed">
-              The Chrome Extension lets QA testers and non-developers use
-              TraceBug on any website without touching code. Also works in Edge, Brave, and Opera.
-            </p>
-            <div className="mb-4">
-              <a href="https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary/20 border border-primary/30 text-primary rounded-lg hover:bg-primary/30 transition-colors text-sm font-semibold">
-                Install from Chrome Web Store
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
-              </a>
-            </div>
-            <div className="space-y-4">
-              {[
-                { step: "1", text: "Install from the Chrome Web Store (link above) — works in Chrome, Edge, Brave, and Opera" },
-                { step: "2", text: "Navigate to any website you want to test" },
-                { step: "3", text: "Click the TraceBug extension icon in your toolbar" },
-                { step: "4", text: "Click \"Enable on this site\" to start recording" },
-                { step: "5", text: "Reproduce the bug — TraceBug captures everything automatically" },
-                { step: "6", text: "Click the TraceBug toolbar to view the session and export a report" },
-              ].map((item) => (
-                <div
-                  key={item.step}
-                  className="flex items-start gap-4 p-4 bg-surface border border-border rounded-lg"
-                >
-                  <span className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold flex-shrink-0 mt-0.5">
-                    {item.step}
-                  </span>
-                  <p className="text-text-muted text-sm leading-relaxed">
-                    {item.text}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Bug Report Format */}
-          <section id="bug-report-format" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                4
-              </span>
-              Bug Report Format
-            </h2>
-            <p className="text-text-muted mb-6 leading-relaxed">
-              Every bug report generated by TraceBug contains the following
-              structured sections:
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { icon: "🔍", title: "Reproduction Steps", desc: "Auto-generated numbered steps from event timeline" },
-                { icon: "💥", title: "Console Errors", desc: "Full error messages with stack traces and source locations" },
-                { icon: "🌐", title: "Network Log", desc: "All API calls with URL, method, status code, duration" },
-                { icon: "📸", title: "Screenshots", desc: "Captured screenshots with annotations and timestamps" },
-                { icon: "🖥️", title: "Environment Info", desc: "Browser, OS, viewport, device type, connection type" },
-                { icon: "📋", title: "Session Timeline", desc: "Color-coded event log with elapsed timestamps" },
-                { icon: "🎤", title: "Voice Notes", desc: "Tester voice descriptions converted to text" },
-                { icon: "⚡", title: "Performance Data", desc: "API response times, slowest calls, success rate" },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="p-4 bg-surface border border-border rounded-lg"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl">{item.icon}</span>
-                    <div>
-                      <h3 className="text-text-primary font-semibold text-sm mb-1">
-                        {item.title}
-                      </h3>
-                      <p className="text-text-muted text-xs leading-relaxed">
-                        {item.desc}
-                      </p>
+                    <div className="flex items-center justify-between text-[15px] font-medium text-text-primary">
+                      {g.title}
+                      <ArrowRight size={15} strokeWidth={1.5} className="text-text-subtle transition-transform group-hover:translate-x-0.5" />
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* GitHub Integration */}
-          <section id="github-integration" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                5
-              </span>
-              GitHub Integration
-            </h2>
-            <p className="text-text-muted mb-6 leading-relaxed">
-              TraceBug generates properly formatted GitHub Issue markdown. One
-              click copies the report to clipboard, ready to paste into a new
-              GitHub Issue.
-            </p>
-            <div className="code-block p-4 rounded-xl mb-6">
-              <div className="flex items-center gap-2 mb-3 text-text-muted text-xs">
-                <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                <span className="ml-2">GitHub Issue — Auto-generated</span>
+                    <p className="mt-2 text-[14px] leading-[1.6] text-text-muted">{g.desc}</p>
+                  </Link>
+                ))}
               </div>
-              <pre className="text-sm font-mono leading-relaxed text-text-muted overflow-x-auto">
-                <span className="text-text-primary">## 🐛 Vendor Update Fails — TypeError</span>{"\n\n"}
-                <span className="text-warning">**Environment:**</span> Chrome 121, Windows 11, 1920x1080{"\n"}
-                <span className="text-warning">**Reported:**</span> 2026-03-12 14:23:01{"\n\n"}
-                <span className="text-text-primary">## Steps to Reproduce</span>{"\n"}
-                1. Navigate to /vendor{"\n"}
-                2. Click {'"Edit"'} button (role=button){"\n"}
-                3. Select {'"Inactive"'} from Status dropdown{"\n"}
-                4. Click {'"Update"'} button{"\n\n"}
-                <span className="text-text-primary">## Console Errors</span>{"\n"}
-                <span className="text-error">```{"\n"}TypeError: Cannot read properties of undefined (reading 'status'){"\n"}  at updateVendor (vendor/page.tsx:42:18){"\n"}```</span>
-              </pre>
-            </div>
-            <div className="bg-surface border border-border rounded-xl p-4">
-              <p className="text-text-muted text-sm">
-                <span className="text-accent font-semibold">Programmatic access:</span>{" "}
-                Call{" "}
-                <code className="text-primary bg-background px-1 rounded">TraceBug.getGitHubIssue()</code>{" "}
-                to get the markdown string, or{" "}
-                <code className="text-primary bg-background px-1 rounded">TraceBug.getJiraTicket()</code>{" "}
-                for Jira markup format.
+              <p>
+                Stuck?{" "}
+                <a href={`${LINKS.repo}/issues/new`} target="_blank" rel="noopener noreferrer" className={a}>
+                  Open an issue
+                </a>{" "}
+                or <Link href="/feedback" className={a}>send feedback</Link>.
               </p>
-            </div>
-          </section>
-
-          {/* Plugins & Hooks */}
-          <section id="plugins-hooks" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">Plugins & Hooks</h2>
-            <p className="text-text-muted mb-4">
-              Extend TraceBug without forking. Plugins can filter events, enrich reports, and transform exports.
-            </p>
-            <div className="code-block p-5 rounded-xl overflow-x-auto">
-              <pre className="text-sm font-mono text-text-primary leading-relaxed">
-{`// Plugin: filter or transform events
-TraceBug.use({
-  name: "my-plugin",
-  onEvent: (event) => {
-    if (event.type === "console_log") return null; // drop
-    return event;
-  },
-  onReport: (report) => {
-    report.title = "[MyApp] " + report.title;
-    return report;
-  },
-});
-
-// Hooks: subscribe to lifecycle events
-TraceBug.on("error:captured", (error) => {
-  console.log("Bug found:", error.data.error.message);
-});
-
-TraceBug.on("session:start", (sessionId) => {
-  console.log("Session started:", sessionId);
-});`}
-              </pre>
-            </div>
-            <div className="mt-4 space-y-2 text-text-muted text-sm">
-              <p><strong className="text-text-primary">Other methods:</strong> <code className="text-primary bg-background px-1 rounded text-xs">markAsBug()</code> flags the session, <code className="text-primary bg-background px-1 rounded text-xs">getCompactReport()</code> returns a Slack-friendly 2-sentence summary.</p>
-            </div>
-          </section>
-
-          {/* API Reference */}
-          <section id="api-reference" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
-                6
-              </span>
-              API Reference
-            </h2>
-            <div className="space-y-6">
-              {[
-                {
-                  category: "Recording Control",
-                  methods: [
-                    { sig: "TraceBug.init(config)", desc: "Initialize and start recording" },
-                    { sig: "TraceBug.pauseRecording()", desc: "Pause event capture" },
-                    { sig: "TraceBug.resumeRecording()", desc: "Resume event capture" },
-                    { sig: "TraceBug.isRecording()", desc: "Returns boolean — is recording active" },
-                    { sig: "TraceBug.getSessionId()", desc: "Returns current session ID string" },
-                  ],
-                },
-                {
-                  category: "Screenshots",
-                  methods: [
-                    { sig: "TraceBug.takeScreenshot()", desc: "Capture screenshot — returns Promise<Screenshot>" },
-                    { sig: "TraceBug.getScreenshots()", desc: "Get all captured screenshots array" },
-                  ],
-                },
-                {
-                  category: "Voice Recording",
-                  methods: [
-                    { sig: "TraceBug.isVoiceSupported()", desc: "Check if Web Speech API is available" },
-                    { sig: "TraceBug.startVoiceRecording({ onUpdate, onStatus })", desc: "Start speech-to-text" },
-                    { sig: "TraceBug.stopVoiceRecording()", desc: "Stop recording — returns VoiceTranscript" },
-                    { sig: "TraceBug.isVoiceRecording()", desc: "Returns boolean — is voice active" },
-                  ],
-                },
-                {
-                  category: "Reports",
-                  methods: [
-                    { sig: "TraceBug.generateReport()", desc: "Generate complete BugReport object" },
-                    { sig: "TraceBug.getGitHubIssue()", desc: "Get GitHub Issue markdown string" },
-                    { sig: "TraceBug.getJiraTicket()", desc: "Get Jira ticket markup string" },
-                    { sig: "TraceBug.getBugTitle()", desc: "Get auto-generated bug title" },
-                    { sig: "TraceBug.downloadPdf()", desc: "Open print dialog for PDF export" },
-                  ],
-                },
-                {
-                  category: "User & Session",
-                  methods: [
-                    { sig: "TraceBug.setUser({ id, email, name })", desc: "Identify current user (persisted in localStorage)" },
-                    { sig: "TraceBug.getUser()", desc: "Get identified user or null" },
-                    { sig: "TraceBug.clearUser()", desc: "Clear identified user" },
-                    { sig: "TraceBug.markAsBug()", desc: "Flag current session as a bug" },
-                    { sig: "TraceBug.getCompactReport()", desc: "Get 2-sentence Slack-friendly summary" },
-                  ],
-                },
-                {
-                  category: "Data Management",
-                  methods: [
-                    { sig: "getAllSessions()", desc: "Get all stored sessions array" },
-                    { sig: "clearAllSessions()", desc: "Delete all sessions from localStorage" },
-                    { sig: "deleteSession(id)", desc: "Delete a specific session by ID" },
-                    { sig: "TraceBug.destroy()", desc: "Tear down TraceBug completely" },
-                  ],
-                },
-              ].map((group) => (
-                <div key={group.category}>
-                  <h3 className="text-text-primary font-semibold mb-3 text-sm uppercase tracking-wider text-text-muted">
-                    {group.category}
-                  </h3>
-                  <div className="space-y-2">
-                    {group.methods.map((method) => (
-                      <div
-                        key={method.sig}
-                        className="flex items-start gap-4 p-3 bg-surface border border-border rounded-lg"
-                      >
-                        <code className="text-primary font-mono text-xs flex-shrink-0 mt-0.5">
-                          {method.sig}
-                        </code>
-                        <p className="text-text-muted text-xs">{method.desc}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+            </Section>
+          </div>
         </div>
       </div>
       <Footer />

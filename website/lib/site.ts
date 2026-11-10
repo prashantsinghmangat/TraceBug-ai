@@ -26,6 +26,6 @@ export const LINKS = {
 } as const;
 
 export const MCP = {
-  claudeCode: "claude mcp add tracebug -- npx -y tracebug mcp",
+  claudeCode: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
   npmInstall: "npm i tracebug-sdk",
 } as const;

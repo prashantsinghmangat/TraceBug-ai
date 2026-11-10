@@ -9,7 +9,7 @@ const FRAMEWORKS = [
 export default function FrameworkMarquee() {
   return (
     <section className="py-12 border-y border-border bg-surface/50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <p className="text-center text-[12.5px] font-medium uppercase tracking-[0.18em] text-text-subtle mb-7">
           Drops into any front-end — 2 lines, zero runtime dependencies
         </p>

@@ -4,7 +4,7 @@
 export const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "What is TraceBug?",
-    a: "TraceBug is a free, open-source bug-capture tool. When a bug happens in the browser, it captures the session replay, console errors, network requests, screenshots, and reproduction steps, and exports everything into one self-contained .html file that a developer — or an AI coding agent — can open and investigate. There's a Chrome extension for any website, and an npm SDK (tracebug-sdk) for your own app.",
+    a: "TraceBug is a free, open-source bug-capture tool. When a bug happens in the browser, it captures the session replay, console errors, network requests, screenshots, and reproduction steps, and exports everything into one self-contained .html file that a developer — or an AI coding agent — can open and investigate. There's a browser extension for any website (Chrome, Edge, Brave, Opera and Firefox 128+), and an npm SDK (tracebug-sdk) for your own app.",
   },
   {
     q: "Is it really free? What's the catch?",
@@ -24,11 +24,11 @@ export const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "Does the person reporting the bug need an account or setup?",
-    a: "No. A QA tester, designer, or client installs the Chrome extension and clicks capture — no account, no configuration. The exported .html file can be shared like any attachment, and it opens in any browser, offline.",
+    a: "No. A QA tester, designer, or client installs the browser extension and clicks capture — no account, no configuration. The exported .html file can be shared like any attachment, and it opens in any browser, offline.",
   },
   {
     q: "Does it work on any website?",
-    a: "The Chrome extension works on any http/https page (Chrome, Edge, Brave, Opera). Browser-internal pages like chrome:// are off-limits by browser policy. For your own app, the npm SDK adds the capture toolbar with two lines of code and stays disabled on production by default.",
+    a: "The extension works on any http/https page in Chrome, Edge, Brave, Opera and Firefox 128+. Browser-internal pages like chrome:// are off-limits by browser policy. For your own app, the npm SDK adds the capture toolbar with two lines of code and stays disabled on production by default.",
   },
   {
     q: "Is TraceBug the same as “Trace Bug”?",

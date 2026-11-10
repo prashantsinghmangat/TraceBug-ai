@@ -1,7 +1,6 @@
-import { LINKS } from "@/lib/site";
+import InstallButtons from "@/components/InstallButtons";
 import { ArrowRight, TerminalSquare } from "lucide-react";
 import { Logo, type LogoName } from "@/components/ui/logos";
-import Shortcut from "@/components/Keycap";
 import HeroStory from "@/components/HeroStory";
 import ProductHuntBadge from "@/components/ProductHuntBadge";
 import HeroBackdrop from "@/components/HeroBackdrop";
@@ -10,7 +9,6 @@ import HeroBackdrop from "@/components/HeroBackdrop";
 // One button shape for the whole action row; only the fill changes.
 const BTN =
   "inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-5 text-[15px] font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]";
-const PRIMARY = "bg-cta text-on-cta hover:bg-cta/85";
 const SECONDARY = "border border-border-strong bg-background text-text-primary hover:bg-surface";
 
 const BROWSERS: [LogoName, string][] = [
@@ -100,7 +98,7 @@ export default function Hero() {
             className="rise mt-5 max-w-2xl text-lead text-text-muted sm:mt-6"
             style={{ "--i": 2 } as React.CSSProperties}
           >
-            Your AI can read your code. Can it see your bug? Press <Shortcut /> when something breaks:
+            Your AI can read your code. Can it see your bug? Click Capture Bug, reproduce it, and
             TraceBug saves the clicks, console errors and failed requests in one offline report Claude
             Code, Cursor or Windsurf can debug.
           </p>
@@ -109,14 +107,7 @@ export default function Hero() {
             className="rise mt-7 grid w-full grid-cols-2 gap-3 sm:mt-9 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-center"
             style={{ "--i": 3 } as React.CSSProperties}
           >
-            <a href={LINKS.chrome} target="_blank" rel="noopener noreferrer" className={`${BTN} col-span-2 ${PRIMARY}`}>
-              <Logo name="chrome" size={18} />
-              Add to Chrome, free
-            </a>
-            <a href={LINKS.firefox} target="_blank" rel="noopener noreferrer" className={`${BTN} col-span-2 ${SECONDARY}`}>
-              <Logo name="firefox" size={18} />
-              Add to Firefox
-            </a>
+            <InstallButtons itemClassName="col-span-2" />
 
             {/* desktop only: on phones these push the story off the first screen */}
             <div className="hidden sm:contents">

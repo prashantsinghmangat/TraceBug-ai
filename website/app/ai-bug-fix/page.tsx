@@ -3,16 +3,13 @@ import { ArrowRight, Sparkles, Terminal, CheckCircle2, ShieldCheck } from "lucid
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/ui/logos";
+import InstallButtons from "@/components/InstallButtons";
 
 // Solution landing page for the winnable, low-competition, high-intent cluster:
 // "ai bug fix", "fix bugs with AI", "AI debugging", "best MCP for bug fix",
 // "Claude Code bug reports". Same honest-content play as /instant-bug-report
 // and /compare/*. Distinct H2s cover the sub-intents so one strong page ranks
 // for the cluster instead of thin pages cannibalizing each other.
-
-const CHROME_URL =
-  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
 export const metadata: Metadata = {
   title: "AI Bug Fix — capture a bug, let your AI agent fix it | TraceBug",
@@ -42,11 +39,11 @@ export default function AiBugFixPage() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-12 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-sm text-text-muted">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <Sparkles size={13} className="text-primary" />
               Capture the bug. Let AI fix it.
             </div>
-            <h1 className="mb-4 text-4xl sm:text-5xl font-bold tracking-[-0.02em] text-text-primary">
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
               AI bug fix: give your agent
               <br />
               everything it needs to fix it
@@ -59,14 +56,10 @@ export default function AiBugFixPage() {
               then reproduces and fixes the bug, with a generated failing test to prove it.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" variant="gradient">
+              <InstallButtons />
+              <Button asChild size="lg" variant="outline">
                 <a href="/proof">
                   <Sparkles size={15} /> Watch AI fix a real bug <ArrowRight size={14} />
-                </a>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
-                  <Logo name="chrome" size={17} /> Add to Chrome — free
                 </a>
               </Button>
             </div>
@@ -79,7 +72,7 @@ export default function AiBugFixPage() {
           <div className="space-y-3">
             {STEPS.map((s) => (
               <div key={s.n} className="flex items-start gap-4 rounded-xl border border-border bg-surface/50 p-4">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[13px] font-bold text-primary">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                   {s.n}
                 </span>
                 <div>

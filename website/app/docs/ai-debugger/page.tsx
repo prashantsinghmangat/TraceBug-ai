@@ -3,13 +3,13 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "AI Debugger — BYO-Key LLM Analysis — TraceBug",
+  title: "AI Debugger — Bring-your-own-key AI analysis — TraceBug",
   description:
     "Run LLM-powered root-cause analysis on a bug report using your own API key — Anthropic, OpenAI, or a local Ollama. The call goes directly from the browser to the provider; TraceBug never sees your key, your prompt, or the response.",
   openGraph: {
     title: "TraceBug AI Debugger — Private, BYO-Key LLM Analysis",
     description:
-      "The privacy-preserving counterpart to cloud AI debuggers. Your key stays in localStorage, the prompt is scrubbed, and the request never touches a TraceBug backend.",
+      "The privacy-preserving counterpart to cloud AI debuggers. Your key stays on your machine, the prompt is scrubbed, and the request never touches a TraceBug backend.",
   },
 };
 
@@ -21,12 +21,12 @@ export default function AiDebuggerDocsPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Page header */}
           <div className="mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-muted text-sm mb-4">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <span className="w-2 h-2 rounded-full bg-accent"></span>
               Documentation · AI Debugger
             </div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">
-              BYO-Key LLM Analysis
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
+              Bring-your-own-key AI analysis
             </h1>
             <p className="text-text-muted text-lg leading-relaxed">
               TraceBug can run LLM-powered root-cause analysis on a bug report
@@ -86,8 +86,8 @@ export default function AiDebuggerDocsPage() {
 
           {/* Setup */}
           <section id="setup" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 1
               </span>
               Setup
@@ -102,7 +102,7 @@ export default function AiDebuggerDocsPage() {
                   key={item.step}
                   className="flex items-start gap-4 p-4 bg-surface border border-border rounded-lg"
                 >
-                  <span className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold flex-shrink-0 mt-0.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted mt-0.5">
                     {item.step}
                   </span>
                   <p className="text-text-muted text-sm leading-relaxed">{item.text}</p>
@@ -110,7 +110,10 @@ export default function AiDebuggerDocsPage() {
               ))}
             </div>
             <p className="text-text-muted text-sm leading-relaxed">
-              The key is stored only in this browser&apos;s{" "}
+              In the extension, the key is saved in the extension&apos;s own storage
+              (TraceBug settings), never in the website&apos;s storage, and the
+              extension makes the provider call. With the npm SDK it is saved in your
+              app&apos;s{" "}
               <code className="text-primary bg-surface px-1 rounded">
                 localStorage
               </code>{" "}
@@ -126,8 +129,8 @@ export default function AiDebuggerDocsPage() {
 
           {/* Providers */}
           <section id="providers" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 2
               </span>
               Providers &amp; models
@@ -169,8 +172,8 @@ export default function AiDebuggerDocsPage() {
 
           {/* What gets sent */}
           <section id="sent" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 3
               </span>
               What gets sent
@@ -204,7 +207,7 @@ export default function AiDebuggerDocsPage() {
 
           {/* Privacy */}
           <section id="privacy" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Privacy properties
             </h2>
             <ul className="space-y-3">
@@ -216,11 +219,8 @@ export default function AiDebuggerDocsPage() {
                 </>,
                 <>
                   <strong className="text-text-primary">Key stays local.</strong>{" "}
-                  It lives in{" "}
-                  <code className="text-primary bg-background px-1 rounded text-xs">
-                    localStorage
-                  </code>
-                  , is sent only in the request to the provider you chose, and is
+                  It lives in the extension&apos;s storage (or your app&apos;s
+                  localStorage with the SDK), is sent only in the request to the provider you chose, and is
                   removable in one click.
                 </>,
                 <>
@@ -242,7 +242,7 @@ export default function AiDebuggerDocsPage() {
 
           {/* SDK */}
           <section id="sdk" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Programmatic use (SDK)
             </h2>
             <div className="code-block p-5 rounded-xl overflow-x-auto mb-4">
@@ -274,7 +274,7 @@ console.log(text); // markdown analysis`}
 
           {/* CTA */}
           <div className="bg-surface border border-border rounded-xl p-8 text-center">
-            <h2 className="text-xl font-bold text-text-primary mb-2">
+            <h2 className="text-xl font-medium text-text-primary mb-2">
               Your key, your provider, your bill
             </h2>
             <p className="text-text-muted text-sm">

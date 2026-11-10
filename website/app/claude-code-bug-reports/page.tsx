@@ -19,11 +19,11 @@ const data: ToolBugReportData = {
   tool: "Claude Code",
   slug: "claude-code",
   agentNote:
-    "Claude Code registers MCP servers with a single command — the fastest setup of any tool. Run it once and Claude can read every TraceBug export on your machine; there's also a built-in prompt, /tracebug:debug_bug_report.",
+    "Claude Code registers MCP servers with a single command — the fastest setup of any tool. Run it once and Claude can read every TraceBug export in your Downloads, Desktop or project folder; there's also a built-in prompt, /tracebug:debug_bug_report.",
   setup: {
     kind: "command",
     label: "Terminal — run once",
-    code: "claude mcp add tracebug --scope user -- npx -y tracebug mcp",
+    code: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
   },
   setupDocPath: "/docs/mcp/claude-code",
 };

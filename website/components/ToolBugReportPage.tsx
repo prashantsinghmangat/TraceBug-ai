@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles, Terminal, CheckCircle2, ShieldCheck, FileCode } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
 import { Button } from "@/components/ui/button";
 
 // Shared template for the per-tool exact-match landing pages
@@ -35,11 +36,11 @@ export function ToolBugReportPage({ data }: { data: ToolBugReportData }) {
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-12 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-sm text-text-muted">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <Sparkles size={13} className="text-primary" />
               {data.tool} + TraceBug (MCP)
             </div>
-            <h1 className="mb-4 text-4xl sm:text-5xl font-bold tracking-[-0.02em] text-text-primary">
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
               {data.tool} bug reports:
               <br />
               capture it, let {data.tool} fix it
@@ -141,6 +142,7 @@ export function ToolBugReportPage({ data }: { data: ToolBugReportData }) {
           </div>
         </div>
       </div>
+      <FinalCTA />
       <Footer />
     </main>
   );

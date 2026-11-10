@@ -1,6 +1,6 @@
 "use client";
 
-import { Logo } from "@/components/ui/logos";
+import InstallButtons, { InstallButton } from "@/components/InstallButtons";
 import { LINKS } from "@/lib/site";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -10,14 +10,14 @@ import { LogoMark } from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 
 
+// Five links: what it does, the AI hand-off, how to use it, cost, writing.
+// Demo is one click from the hero; Feedback and Changelog live in the footer.
 const NAV_LINKS = [
-  { href: "/#demo", label: "Demo" },
-  { href: "/#mcp", label: "AI agents" },
   { href: "/features", label: "Features" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/#mcp", label: "AI agents" },
   { href: "/docs", label: "Docs" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/blog", label: "Blog" },
-  { href: "/feedback", label: "Feedback" },
 ];
 
 // Quiet navigation: logo, the links, one button. A hairline appears once the
@@ -53,7 +53,7 @@ export default function Navbar() {
               <Link
                 key={link.label}
                 href={link.href}
-                className="rounded-md px-3 py-2 text-[14px] text-text-muted transition-colors hover:text-text-primary"
+                className="whitespace-nowrap rounded-md px-3 py-2 text-[14px] text-text-muted transition-colors hover:text-text-primary"
               >
                 {link.label}
               </Link>
@@ -72,15 +72,7 @@ export default function Navbar() {
               <GitHubIcon size={16} />
             </a>
             <ThemeToggle />
-            <a
-              href={LINKS.chrome}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-1 inline-flex h-9 items-center gap-2 rounded-lg bg-cta px-4 text-[14px] font-medium text-on-cta transition-colors hover:bg-cta/85"
-            >
-              <Logo name="chrome" size={16} />
-              Add to Chrome
-            </a>
+            <InstallButton className="ml-1" />
           </div>
 
           <div className="flex md:hidden items-center gap-2">
@@ -110,17 +102,8 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
-            <div className="mt-3 border-t border-border pt-4">
-              <a
-                href={LINKS.chrome}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-cta text-[15px] font-medium text-on-cta"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <Logo name="chrome" size={18} />
-                Add to Chrome
-              </a>
+            <div className="mt-3 grid gap-2 border-t border-border pt-4">
+              <InstallButtons itemClassName="w-full" />
             </div>
           </div>
         </div>

@@ -31,7 +31,7 @@ const SETUPS = [
 ] as const;
 
 const STEPS = [
-  { label: "Export", desc: "Capture the bug and click Export .html. The report lands in your Downloads." },
+  { label: "Export", desc: "Capture the bug and click Export replay (.html). The report lands in your Downloads." },
   { label: "Connect", desc: "Add the local MCP server once. It finds reports in Downloads on its own." },
   { label: "Investigate", desc: "Ask your agent to debug it. It reads the console, network, steps and screenshots." },
 ];

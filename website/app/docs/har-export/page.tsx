@@ -3,13 +3,13 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "HAR Export — Portable Network Captures — TraceBug",
+  title: "HAR Export — Portable network captures — TraceBug",
   description:
     "Export a session's captured network activity as a standard HAR 1.2 (HTTP Archive) file — the interchange format every browser DevTools, Charles, Fiddler, and Postman reads. A capture drops straight into any existing network-debugging workflow.",
   openGraph: {
     title: "TraceBug HAR Export — Your Network Capture Is a File You Own",
     description:
-      "No competitor in the category ships a HAR export. TraceBug already captures the request/response data and runs zero-backend, so exporting it as a portable HAR 1.2 file is a natural fit.",
+      "TraceBug already captures the request/response data and runs zero-backend, so exporting it as a portable HAR 1.2 file is a natural fit.",
   },
 };
 
@@ -21,12 +21,12 @@ export default function HarExportDocsPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Page header */}
           <div className="mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-muted text-sm mb-4">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <span className="w-2 h-2 rounded-full bg-accent"></span>
               Documentation · HAR Export
             </div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">
-              Portable Network Captures
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
+              Portable network captures
             </h1>
             <p className="text-text-muted text-lg leading-relaxed">
               TraceBug can export a session&apos;s captured network activity as a
@@ -43,9 +43,7 @@ export default function HarExportDocsPage() {
               🌐 Your network capture is a standard file you own
             </h3>
             <p className="text-text-muted text-sm leading-relaxed">
-              No competitor in the category ships a HAR export — Jam even markets
-              &quot;everything a HAR offers&quot; without one. Because TraceBug
-              already captures the request/response data and runs zero-backend,
+              Because TraceBug already captures the request/response data and runs zero-backend,
               exporting it as a portable, tool-agnostic file is a natural fit and
               a clean data-ownership story: not a row in someone&apos;s cloud.
             </p>
@@ -76,8 +74,8 @@ export default function HarExportDocsPage() {
 
           {/* How to export */}
           <section id="how" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 1
               </span>
               How to export
@@ -119,8 +117,8 @@ export default function HarExportDocsPage() {
 
           {/* What's in it */}
           <section id="whats-in-it" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 2
               </span>
               What&apos;s in it
@@ -171,7 +169,7 @@ export default function HarExportDocsPage() {
 
           {/* SDK */}
           <section id="sdk" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Programmatic use (SDK)
             </h2>
             <div className="code-block p-5 rounded-xl overflow-x-auto">
@@ -192,7 +190,7 @@ const { filename, entryCount } = exportSessionAsHar(report);`}
 
           {/* CTA */}
           <div className="bg-surface border border-border rounded-xl p-8 text-center">
-            <h2 className="text-xl font-bold text-text-primary mb-2">
+            <h2 className="text-xl font-medium text-text-primary mb-2">
               One click, one portable file
             </h2>
             <p className="text-text-muted text-sm">
