@@ -299,3 +299,16 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   `milestone-ask.e2e.mjs` (try.html loads the SDK only via the in-page demo button since 4a7511d; the card waits for the
   modal to close since 8ef6859). `ext-feature-matrix` static/screen-recording "stops and saves" failed once, passed
   64/64 on re-run (timing). `ext-secret-migration` needs `git worktree add D:/tmp/tb-1101 v1.10.1` (now present) → 25/25.
+
+## Website redesign ready on `website-revamp`, not deployed (2026-11-10)
+
+- Midnight coral theme (#FF5C6C), coral prompt logo on site + extension, hero "Capture the bug. Let AI fix it." with Trace chip and traced-paths backdrop, mobile hero trimmed; Features cards no longer overclaim (`358ce36`). Commits `ad44157` (website), `1127f54` (extension icons/popup/welcome).
+- Verified: `check.mjs --full` green (1081 tests, 84/84 report checks), `next build` 62/62, production smoke test of 25 routes + homepage links (all 200, 404 page correct), screenshots at 360/390/430/1440 in dark and light.
+- Open: the branch also carries unreleased 1.11.6 + 1.12 commits, so merging it to `main` (Netlify deploys `main`) ships the 1.12 script-tag SDK and 1.11.6 docs before the stores. Decide: release first, or cherry-pick the website commits onto `main`.
+
+## Site/extension conversion audit applied on `website-revamp`, uncommitted (2026-11-10)
+
+- Site: shared `InstallButtons` (Firefox visitors get "Add to Firefox" as the filled button; nav, hero, closing CTA, pricing, mascot, /bye); install CTA on 7 dead-end pages; nav cut to 5 links; one header system (`text-h2 font-medium`, sentence case, an `h1` on every page); `/docs` rewritten extension-first; `/features` got a header + install; `/privacy` got nav/footer and a "This website" section. Fixed: dead `#mcp` link on /features, squashed pricing button and clipped MCP commands on phones, faux-bold text (Space Grotesk 600/700 now loaded), changelog hiding `[Unreleased]`. Copy checked against code: Alt+B = screenshot ticket, "Export replay (.html)", nine MCP tools, one `claude mcp add -s user` command, AI key kept in extension storage.
+- Extension: in-page UI (`src/theme.ts`, ~20 files, `tracebug-injected-styles.css` mirror) and options/confirm/player/welcome on Midnight coral; `--tb-on-accent` ink text on coral fills; category colours (replay markers, navigate chip, redesign intent, pen palette) kept; popup "Auto" theme now follows the system; two invalid CSS declarations fixed; tooltip "TraceBug: capture a bug"; `homepage_url` → tracebug.dev.
+- Verified: `check.mjs --full` green (1081 tests, 84/84 report checks, all surfaces on 1.11.6); website `tsc` + `next lint` clean; 9 routes × 375/768/1280 rendered with no overflow or console errors; popup/options/welcome screenshotted light + dark. Not run: `npm run ext:firefox`, `next build`, the in-page modal in a real tab.
+- Open: exported report (`src/exporters/html-template.ts`) still indigo; home-page mobile items left as is (comparison grid scrolls without a hint, integrations orbit crowds at 375, demo poster's play pill overlaps a card at 1280, mascot bubble can cover a heading).

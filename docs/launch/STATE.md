@@ -1,12 +1,21 @@
 # Launch state — read this, not the archives
 
-Engineering state only, verified against code and git. Last updated 2026-11-01. Calendar, channels and
+Engineering state only, verified against code and git. Last updated 2026-11-10. Calendar, channels and
 the 32-item audit tracker are OUTSIDE the repo: `docs-internal/marketing/growth-plan-30day.md` (gitignored; a
 scheduling doc, not a spec — may be stale). History: `PROGRESS{,-archive}.md`, `PLAN-archive.md`.
 Open phases: `PLAN.md` 8, 11, 12.
 
 ## Where things stand
 
+- **Website redesign on `website-revamp` (2026-11-10), not deployed.** Midnight coral, prompt logo, new hero,
+  accurate Features cards; extension icons/popup/welcome recoloured to match (ships with the next extension
+  release). Gates and production build green. The branch also holds the unreleased 1.11.6 + 1.12 commits, so
+  merging it to `main` deploys 1.12's script-tag SDK and 1.11.6 docs ahead of the stores — release first, or
+  cherry-pick only the website commits (`5733ccd`, `a42bab5`, `358ce36`, `ad44157`) onto `main`.
+  **On top, uncommitted (2026-11-10):** the conversion audit (PROGRESS 2026-11-10). Store buttons pick the visitor's
+  browser, `/docs` is rewritten, copy is corrected against the code, and the extension's in-page UI and settings pages
+  are coral. The `src/` changes ship with the next extension release; the website changes are cherry-pickable.
+  Before release: run `npm run ext:firefox` and open the ticket modal in a real tab in both themes.
 - **1.12 "Evidence Integrity": all five items done (2026-11-04), not released.** Plan: `docs/launch/master-plan.md`
   Part 3. Items 1–4 committed (`1ad44b4`); item 5 uncommitted. Real-failure rule (`src/request-status.ts`),
   lead-up kept (`maxEvents` 500, `droppedEvents`, typing flushed before clicks), Evidence block
