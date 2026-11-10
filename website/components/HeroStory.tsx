@@ -23,19 +23,19 @@ const PAUSE_MS = 1000;
 function Bug() {
   return (
     <g shapeRendering="crispEdges">
-      <rect x="30" y="0" width="10" height="10" fill="#84CC16" />
-      <rect x="80" y="0" width="10" height="10" fill="#84CC16" />
+      <rect x="30" y="0" width="10" height="10" fill="#FF5C6C" />
+      <rect x="80" y="0" width="10" height="10" fill="#FF5C6C" />
       <rect x="40" y="10" width="10" height="10" fill="#11131A" />
       <rect x="70" y="10" width="10" height="10" fill="#11131A" />
-      <rect x="40" y="20" width="40" height="10" fill="#84CC16" />
-      <rect x="30" y="30" width="60" height="50" fill="#84CC16" />
+      <rect x="40" y="20" width="40" height="10" fill="#FF5C6C" />
+      <rect x="30" y="30" width="60" height="50" fill="#FF5C6C" />
       <rect x="40" y="40" width="10" height="20" fill="#11131A" />
       <rect x="70" y="40" width="10" height="20" fill="#11131A" />
       <rect x="10" y="40" width="20" height="10" fill="#11131A" />
       <rect x="90" y="40" width="20" height="10" fill="#11131A" />
       <rect x="10" y="60" width="20" height="10" fill="#11131A" />
       <rect x="90" y="60" width="20" height="10" fill="#11131A" />
-      <rect x="50" y="80" width="20" height="10" fill="#84CC16" />
+      <rect x="50" y="80" width="20" height="10" fill="#FF5C6C" />
     </g>
   );
 }
@@ -165,7 +165,7 @@ export default function HeroStory() {
 
             {/* the capture: a viewfinder snaps around the page, a flash, and the
                 screenshot flies into Page (the report) */}
-            <g className="hs-frame" fill="none" stroke="#84CC16" strokeWidth="5" strokeLinecap="round">
+            <g className="hs-frame" fill="none" stroke="#FF5C6C" strokeWidth="5" strokeLinecap="round">
               <path d="M10 40 V10 H40" />
               <path d="M600 10 H630 V40" />
               <path d="M10 340 V370 H40" />
@@ -202,7 +202,7 @@ export default function HeroStory() {
               <div key={i} className={`hs-line ${l.cls}`}>
                 {l.cmd && (
                   <div className="text-[#A3A9B8]">
-                    <span className="text-[#B6F05A]">›</span> {l.cmd}
+                    <span className="text-[#FF5C6C]">›</span> {l.cmd}
                   </div>
                 )}
                 <div className={l.tone ? TONE[l.tone] : "text-[#A3A9B8]"}>

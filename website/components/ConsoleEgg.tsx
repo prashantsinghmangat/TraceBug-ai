@@ -25,8 +25,8 @@ export default function ConsoleEgg() {
       // eslint-disable-next-line no-console
       console.log(
         `%c${SPRITE}\n\n%c👾 Trace here. You opened DevTools — respect.%c\n\nFound a bug on this site? Catch it properly:\nhttps://github.com/prashantsinghmangat/tracebug-ai/issues/new\n\nOr catch bugs everywhere else: https://tracebug.dev`,
-        "color:#84CC16; font-family:monospace; font-weight:bold; line-height:1.15;",
-        "color:#B6F05A; font-size:13px; font-weight:600;",
+        "color:#FF5C6C; font-family:monospace; font-weight:bold; line-height:1.15;",
+        "color:#FF5C6C; font-size:13px; font-weight:600;",
         "color:#71717A; font-size:12px;"
       );
     } catch {

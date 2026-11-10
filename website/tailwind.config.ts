@@ -33,6 +33,7 @@ const config: Config = {
         "text-subtle": channel("--text-subtle"),
         "on-primary": channel("--on-primary"),
         cta: channel("--cta"),
+        highlight: channel("--highlight"),
         "on-cta": channel("--on-cta"),
         band: channel("--band"),
         "band-text": channel("--band-text"),
