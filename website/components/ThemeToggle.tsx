@@ -30,7 +30,7 @@ export default function ThemeToggle({ className = "" }: { className?: string }) 
       onClick={toggle}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       title="Toggle theme"
-      className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted transition-colors hover:text-text-primary hover:bg-surface ${className}`}
+      className={`relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-text-muted transition-[color,background-color,transform] hover:text-text-primary hover:bg-surface active:scale-95 ${className}`}
     >
       {/* Render a stable icon until mounted to avoid hydration mismatch */}
       <Sun
