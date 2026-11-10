@@ -63,35 +63,39 @@ export interface ThemeTokens {
   "--tb-code-text": string;
   // Generic surface for code-ish boxes (stack traces, response bodies).
   "--tb-code-bg": string;
+  // Text/icon colour on an accent fill.
+  "--tb-on-accent": string;
 }
 
-// Brand palette — "Slate Indigo": slate-tinted near-black neutrals with a
-// single refined indigo accent (the brand color). Green stays reserved for
-// success states so semantics remain unambiguous. Premium developer-tool feel
-// (Linear / Vercel); no neon, soft shadows. Aligned 1:1 with website/app/globals.css.
+// Brand palette — "Midnight coral": midnight neutrals with a single coral
+// accent, flat (both gradient stops are the same coral). Aligned 1:1 with
+// website/app/globals.css (.dark). Text on a coral fill is ink
+// (--tb-on-accent): white on #FF5C6C is ~3:1. --tb-intent-redesign stays
+// indigo on purpose — it's a category colour, and coral would read as "fix".
 const DARK_THEME: ThemeTokens = {
-  "--tb-bg-primary": "#0B0B10",
-  "--tb-bg-secondary": "#16161D",
-  "--tb-bg-elevated": "#1E1E26",
-  "--tb-bg-overlay": "#0B0B10f2",
-  "--tb-text-primary": "#FAFAFA",
-  "--tb-text-secondary": "#A1A1AA",
-  "--tb-text-muted": "#71717A",
-  "--tb-accent": "#6366F1",
-  "--tb-accent-hover": "#818CF8",
-  "--tb-accent-subtle": "#6366F11f",
-  "--tb-ring": "rgba(99, 102, 241, 0.5)",
-  "--tb-error": "#EF4444",
-  "--tb-error-bg": "#EF444419",
-  "--tb-warning": "#F59E0B",
-  "--tb-warning-bg": "#F59E0B19",
-  "--tb-success": "#22C55E",
-  "--tb-success-bg": "#22C55E19",
+  "--tb-bg-primary": "#0B0D14",
+  "--tb-bg-secondary": "#141823",
+  "--tb-bg-elevated": "#1B202E",
+  "--tb-bg-overlay": "#0B0D14f2",
+  "--tb-text-primary": "#EEF0F5",
+  "--tb-text-secondary": "#A8AEBE",
+  "--tb-text-muted": "#8A91A5",
+  "--tb-accent": "#FF5C6C",
+  "--tb-accent-hover": "#FF8590",
+  "--tb-on-accent": "#0B0D14",
+  "--tb-accent-subtle": "#FF5C6C1f",
+  "--tb-ring": "rgba(255, 92, 108, 0.5)",
+  "--tb-error": "#F05257",
+  "--tb-error-bg": "#F0525719",
+  "--tb-warning": "#E0A040",
+  "--tb-warning-bg": "#E0A04019",
+  "--tb-success": "#4CC38A",
+  "--tb-success-bg": "#4CC38A19",
   "--tb-info": "#3B82F6",
   "--tb-info-bg": "#3B82F619",
-  "--tb-border": "#26262E",
-  "--tb-border-subtle": "#1E1E24",
-  "--tb-border-hover": "#2A2A35",
+  "--tb-border": "#252A38",
+  "--tb-border-subtle": "#1B202E",
+  "--tb-border-hover": "#333A4D",
   "--tb-radius-sm": "10px",
   "--tb-radius-md": "12px",
   "--tb-radius-lg": "16px",
@@ -100,11 +104,11 @@ const DARK_THEME: ThemeTokens = {
   "--tb-shadow-lg": "0 16px 48px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.3)",
   "--tb-font-family": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   "--tb-font-mono": "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace",
-  "--tb-toolbar-bg": "#16161Dee",
-  "--tb-panel-bg": "#0B0B10",
+  "--tb-toolbar-bg": "#141823ee",
+  "--tb-panel-bg": "#0B0D14",
   "--tb-btn-hover": "#ffffff0d",
-  "--tb-btn-text": "#A1A1AA",
-  "--tb-btn-text-hover": "#FAFAFA",
+  "--tb-btn-text": "#A8AEBE",
+  "--tb-btn-text-hover": "#EEF0F5",
   "--tb-severity-critical": "#EF4444",
   "--tb-severity-major": "#F59E0B",
   "--tb-severity-minor": "#eab308",
@@ -113,34 +117,35 @@ const DARK_THEME: ThemeTokens = {
   "--tb-intent-redesign": "#6366F1",
   "--tb-intent-remove": "#f97316",
   "--tb-intent-question": "#3B82F6",
-  "--tb-highlight": "#6366F1",
-  "--tb-selection": "#6366F1",
-  "--tb-gradient-start": "#818CF8",
-  "--tb-gradient-end": "#4F46E5",
+  "--tb-highlight": "#FF5C6C",
+  "--tb-selection": "#FF5C6C",
+  "--tb-gradient-start": "#FF5C6C",
+  "--tb-gradient-end": "#FF5C6C",
   "--tb-code-tag": "#f472b6",
   "--tb-code-attr-name": "#fcd34d",
   "--tb-code-attr-val": "#86efac",
   "--tb-code-text": "#d4d4d8",
-  "--tb-code-bg": "#14141F",
+  "--tb-code-bg": "#141823",
 };
 
-// Brand light palette — the light counterpart of Slate Indigo:
-// white cards over zinc-50 surfaces, zinc borders, near-black text, and a
-// slightly deeper indigo (#4F46E5) so it stays AA-legible on white.
+// Brand light palette — the light counterpart (website :root): white cards,
+// cool grey surfaces and borders, ink text, and the deeper coral #C81E3C so
+// it stays AA-legible on white (white text on it passes too).
 const LIGHT_THEME: ThemeTokens = {
   "--tb-bg-primary": "#ffffff",
-  "--tb-bg-secondary": "#FAFAFA",
+  "--tb-bg-secondary": "#F4F5F8",
   "--tb-bg-elevated": "#ffffff",
   "--tb-bg-overlay": "#ffffffee",
-  "--tb-text-primary": "#111113",
-  "--tb-text-secondary": "#52525B",
+  "--tb-text-primary": "#0B0D14",
+  "--tb-text-secondary": "#4B5565",
   // #82828C was 3.8:1 on white — fails WCAG AA for normal text. #75757E is
   // 4.56:1, the minimal darkening that clears the 4.5:1 bar.
-  "--tb-text-muted": "#75757E",
-  "--tb-accent": "#4F46E5",
-  "--tb-accent-hover": "#4338CA",
-  "--tb-accent-subtle": "#4F46E514",
-  "--tb-ring": "rgba(79, 70, 229, 0.5)",
+  "--tb-text-muted": "#677082",
+  "--tb-accent": "#C81E3C",
+  "--tb-accent-hover": "#A3162F",
+  "--tb-on-accent": "#ffffff",
+  "--tb-accent-subtle": "#C81E3C14",
+  "--tb-ring": "rgba(200, 30, 60, 0.5)",
   "--tb-error": "#DC2626",
   "--tb-error-bg": "#fef2f2",
   "--tb-warning": "#D97706",
@@ -149,9 +154,9 @@ const LIGHT_THEME: ThemeTokens = {
   "--tb-success-bg": "#ecfdf5",
   "--tb-info": "#2563EB",
   "--tb-info-bg": "#eff6ff",
-  "--tb-border": "#E4E4E7",
-  "--tb-border-subtle": "#F4F4F5",
-  "--tb-border-hover": "#D4D4D8",
+  "--tb-border": "#E2E4EA",
+  "--tb-border-subtle": "#ECEEF2",
+  "--tb-border-hover": "#D0D4DC",
   "--tb-radius-sm": "10px",
   "--tb-radius-md": "12px",
   "--tb-radius-lg": "16px",
@@ -163,8 +168,8 @@ const LIGHT_THEME: ThemeTokens = {
   "--tb-toolbar-bg": "#ffffffee",
   "--tb-panel-bg": "#ffffff",
   "--tb-btn-hover": "#00000008",
-  "--tb-btn-text": "#52525B",
-  "--tb-btn-text-hover": "#111113",
+  "--tb-btn-text": "#4B5565",
+  "--tb-btn-text-hover": "#0B0D14",
   "--tb-severity-critical": "#DC2626",
   "--tb-severity-major": "#D97706",
   "--tb-severity-minor": "#ca8a04",
@@ -173,15 +178,15 @@ const LIGHT_THEME: ThemeTokens = {
   "--tb-intent-redesign": "#4F46E5",
   "--tb-intent-remove": "#ea580c",
   "--tb-intent-question": "#2563EB",
-  "--tb-highlight": "#4F46E5",
-  "--tb-selection": "#4F46E5",
-  "--tb-gradient-start": "#818CF8",
-  "--tb-gradient-end": "#4F46E5",
+  "--tb-highlight": "#C81E3C",
+  "--tb-selection": "#C81E3C",
+  "--tb-gradient-start": "#C81E3C",
+  "--tb-gradient-end": "#C81E3C",
   "--tb-code-tag": "#be185d",
   "--tb-code-attr-name": "#a16207",
   "--tb-code-attr-val": "#15803d",
-  "--tb-code-text": "#26262E",
-  "--tb-code-bg": "#F4F4F5",
+  "--tb-code-text": "#252A38",
+  "--tb-code-bg": "#F4F5F8",
 };
 
 const THEME_STYLE_ID = "tracebug-theme-vars";

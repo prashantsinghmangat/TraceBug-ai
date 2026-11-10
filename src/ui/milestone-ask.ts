@@ -59,7 +59,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
       <input data-act="email" type="email" required placeholder="you@company.com" aria-label="Email address"
         style="flex:1;min-width:0;background:var(--tb-bg-primary,#12121f);border:1px solid var(--tb-border,#2a2a3e);border-radius:8px;padding:8px 10px;font-size:12px;color:inherit;font-family:inherit;outline:none" />
       <button type="submit" data-act="submit"
-        style="background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">Keep me posted</button>
+        style="background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">Keep me posted</button>
     </form>
     <button data-act="no" style="margin-top:8px;background:none;border:none;color:var(--tb-text-muted,#888);font-size:11px;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline">
       No thanks — never ask again
@@ -102,7 +102,7 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
         // Host-page CSP or offline can block the request — degrade honestly
         // to a link instead of a dead button.
         setInnerHTML(card, `<div style="font-size:12px;line-height:1.5">This page blocked the request — you can sign up at
-          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`);
+          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#FF5C6C)">tracebug.dev</a> instead. Sorry!</div>`);
         setTimeout(close, 6000);
       });
   });

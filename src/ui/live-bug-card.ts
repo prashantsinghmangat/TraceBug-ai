@@ -337,7 +337,7 @@ function _injectStyles(): void {
       transition: all 0.12s !important;
     }
     #${CARD_ID} .tb-lbc-primary {
-      background: var(--tb-accent, #6366F1) !important;
+      background: var(--tb-accent, #FF5C6C) !important;
       color: #fff !important;
       border-color: transparent !important;
     }

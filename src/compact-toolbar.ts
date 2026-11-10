@@ -266,7 +266,7 @@ export function mountCompactToolbar(
       badge = document.createElement("span");
       badge.className = "tb-tickets-badge";
       badge.setAttribute("aria-hidden", "true");
-      setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
+      setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
       ticketsBtn.style.position = "relative";
       ticketsBtn.appendChild(badge);
     }
@@ -733,7 +733,7 @@ function _showRecordPreflight(
 
     if (tabBtn && deskBtn) {
       const paintSurface = () => {
-        const on = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
+        const on = ";border-color:var(--tb-accent, #FF5C6C);background:var(--tb-accent-subtle, rgba(255,92,108,0.15));color:var(--tb-text-primary, #fff)";
         setInlineStyle(tabBtn, segBase + (surface === "tab" ? on : ""));
         setInlineStyle(deskBtn, segBase + (surface === "desktop" ? on : ""));
       };
@@ -928,7 +928,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
       setInlineStyle(actions, "display:flex;flex-direction:column;gap:4px;flex-shrink:0");
       const openBtn = document.createElement("button");
       openBtn.textContent = "Open";
-      setInlineStyle(openBtn, "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
+      setInlineStyle(openBtn, "background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
       openBtn.addEventListener("click", () => {
         closePop();
         // Close any open modal first so the _isOpen guard doesn't block reopening.
@@ -1004,7 +1004,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
     const freeBytes = Math.max(0, QUOTA_ESTIMATE_BYTES - usedBytes);
     const meter = document.createElement("div");
     setInlineStyle(meter, "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)");
-    const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
+    const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#FF5C6C)";
     const bar = document.createElement("div");
     setInlineStyle(bar, "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px");
     const fill = document.createElement("div");

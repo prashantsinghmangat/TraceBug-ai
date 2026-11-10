@@ -109,7 +109,7 @@ function buildPdfHtml(report: BugReport): string {
 
   // Smart summary — one-line TL;DR at the top of every report
   if (report.summary) {
-    html += `<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml(report.summary)}</div>\n`;
+    html += `<div style="background:#eef2ff;border-left:4px solid #FF5C6C;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml(report.summary)}</div>\n`;
   }
 
   // Recent actions — plain-English user flow

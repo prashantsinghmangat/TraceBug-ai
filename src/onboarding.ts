@@ -23,8 +23,8 @@ function ensurePulseStyles(): void {
   const style = createStyleTag(STYLE_ID);
   style.textContent = `
     @keyframes tracebug-onboard-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-      50% { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.4); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,108, 0); }
+      50% { box-shadow: 0 0 0 4px rgba(255,92,108, 0.4); }
     }
   `;
   document.head.appendChild(style);

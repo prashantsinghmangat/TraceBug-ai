@@ -6,25 +6,27 @@
   <!-- Extension page: CSP is script-src 'self', so all script is external. -->
   <style>
     :root {
-      --bg: #0B0B10;
-      --panel: #11151A;
-      --text: #FAFAFA;
-      --muted: #A1A1AA;
-      --line: rgba(255, 255, 255, 0.08);
-      --accent: #6366F1;
-      --ok: #22C55E;
-      --warn: #F59E0B;
+      --bg: #0B0D14;
+      --panel: #141823;
+      --text: #EEF0F5;
+      --muted: #A8AEBE;
+      --line: #252A38;
+      --accent: #FF5C6C;
+      --ok: #4CC38A;
+      --warn: #E0A040;
     }
     * { box-sizing: border-box; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      font: 14px/1.5 "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
       padding: 32px 20px 64px;
     }
     .wrap { max-width: 640px; margin: 0 auto; }
-    h1 { font-size: 20px; margin: 0 0 6px; }
+    h1 { font-size: 20px; font-weight: 600; margin: 0 0 6px; }
+    h1.brand { display: flex; align-items: center; gap: 10px; }
     .sub { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
     .card {
       background: var(--panel);
@@ -37,30 +39,30 @@
     /* Marks the card a #hash deep link (e.g. #mic) landed on, so it's
        unmistakable which one matters on a page that otherwise shows every
        setting at once. */
-    .card.deep-link-target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25); }
+    .card.deep-link-target { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255, 92, 108, 0.25); }
     .card p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
     label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
     input, select {
       width: 100%;
       margin-top: 4px;
       padding: 8px 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid #333A4D;
       border-radius: 8px;
       background: var(--bg);
       color: var(--text);
       font: inherit;
       font-size: 13px;
     }
-    input[type="password"] { font-family: ui-monospace, monospace; }
+    input[type="password"] { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
     textarea {
       width: 100%;
       margin-top: 4px;
       padding: 8px 10px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid #333A4D;
       border-radius: 8px;
       background: var(--bg);
       color: var(--text);
-      font: 12px/1.4 ui-monospace, monospace;
+      font: 12px/1.4 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
       resize: vertical;
     }
     .row { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
@@ -70,13 +72,13 @@
       border-radius: 8px;
       cursor: pointer;
       background: var(--accent);
-      color: #fff;
-      font: 600 13px system-ui, -apple-system, sans-serif;
+      color: #0B0D14;
+      font: 600 13px "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     }
     button.ghost {
       background: transparent;
       color: var(--muted);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid #333A4D;
     }
     .status { font-size: 12px; color: var(--muted); min-height: 18px; margin-top: 8px; }
     .status.ok { color: var(--ok); }
@@ -103,12 +105,12 @@
     }
     .notice button { margin-top: 10px; }
     .privacy {
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      background: rgba(99, 102, 241, 0.07);
+      border: 1px solid rgba(255, 92, 108, 0.25);
+      background: rgba(255, 92, 108, 0.08);
       border-radius: 10px;
       padding: 12px 14px;
       font-size: 12.5px;
-      color: #C7D2FE;
+      color: #EEF0F5;
       margin-bottom: 20px;
     }
     .rotate { color: var(--muted); font-size: 12px; margin-top: 6px; }
@@ -122,16 +124,16 @@
     .siterow:last-child { border-bottom: 0; }
     .siteorigin {
       flex: 1 1 auto;
-      font: 12px/1.4 ui-monospace, monospace;
+      font: 12px/1.4 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
       word-break: break-all;
     }
     .siterow button { padding: 5px 10px; font-size: 12px; }
-    a { color: #A5B4FC; }
+    a { color: #FF8590; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>TraceBug settings</h1>
+    <h1 class="brand"><svg width="28" height="28" viewBox="0 0 96 96" fill="none" aria-hidden="true"><rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14"/><rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" stroke-width="1.5"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EEF0F5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C"/></svg>TraceBug settings</h1>
     <p class="sub">Tokens and API keys are stored by the extension, not by the websites you test.</p>
 
     <div class="privacy">

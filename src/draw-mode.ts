@@ -536,7 +536,7 @@ function _createToolbar(_root: HTMLElement): HTMLElement {
     position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #6366F1);
+    border: 1px solid var(--tb-accent, #FF5C6C);
     border-radius: 999px;
     padding: 5px 8px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -813,9 +813,9 @@ function _showCommentInput(
   saveBtn.textContent = "Save";
   saveBtn.dataset.tracebug = "draw-save-btn";
   setInlineStyle(saveBtn, `
-    background: #6366F1; border: none; color: #fff; padding: 8px 14px;
+    background: var(--tb-accent, #FF5C6C); border: none; color:var(--tb-on-accent, #0B0D14); padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
-    font-family: inherit; box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+    font-family: inherit; box-shadow: 0 2px 6px rgba(255,92,108,0.3);
     transition: all 0.15s; white-space: nowrap;
   `);
 
@@ -878,7 +878,7 @@ function _showCommentInput(
 function _toolBtnStyle(active: boolean): string {
   const base = `width:26px;height:26px;padding:0;border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;`;
   if (active) {
-    return base + `background:var(--tb-accent, #6366F1);color:#fff;border:1px solid var(--tb-accent, #6366F1);`;
+    return base + `background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);border:1px solid var(--tb-accent, #FF5C6C);`;
   }
   return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
 }

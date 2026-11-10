@@ -23,7 +23,7 @@ function _ensureToastStyles(): void {
       transform: translateX(-50%) !important;
       background: #0E1117 !important;
       color: #FFFFFF !important;
-      border: 1px solid #6366F1 !important;
+      border: 1px solid #FF5C6C !important;
       border-radius: 10px !important;
       padding: 14px 22px !important;
       font-size: 14px !important;
@@ -31,7 +31,7 @@ function _ensureToastStyles(): void {
       letter-spacing: -0.005em !important;
       font-family: system-ui, -apple-system, sans-serif !important;
       z-index: 2147483647 !important;
-      box-shadow: 0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(99,102,241,0.12) !important;
+      box-shadow: 0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(255,92,108,0.12) !important;
       pointer-events: auto !important;
       max-width: 460px !important;
       text-align: center !important;
@@ -51,7 +51,7 @@ function _ensureToastStyles(): void {
     .bt-toast-dismissing { opacity: 0 !important; transform: translateX(-50%) translateY(8px) !important; transition: all 0.3s ease !important; }
     .bt-toast-action .bt-toast-msg { flex: 1; }
     .bt-toast-action .bt-toast-action-btn {
-      background: var(--tb-accent, #6366F1); color: #fff; border: none; border-radius: 6px;
+      background: var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); border: none; border-radius: 6px;
       padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
     }
     .bt-toast-action .bt-toast-dismiss-btn {

@@ -462,7 +462,7 @@ async function drawClickHighlight(dataUrl: string, bbox: BBox): Promise<string |
   ctx.restore();
 
   // Translucent purple ring around the element.
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.85)";
+  ctx.strokeStyle = "rgba(255,92,108, 0.85)";
   ctx.lineWidth = Math.max(4 * scaleX, 3);
   ctx.beginPath();
   ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
@@ -523,8 +523,8 @@ function drawArrowToBox(
   }
 
   ctx.save();
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.95)";
-  ctx.fillStyle = "rgba(99, 102, 241, 0.95)";
+  ctx.strokeStyle = "rgba(255,92,108, 0.95)";
+  ctx.fillStyle = "rgba(255,92,108, 0.95)";
   ctx.lineWidth = Math.max(3 * scale, 2);
   ctx.lineCap = "round";
 

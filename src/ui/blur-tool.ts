@@ -58,8 +58,8 @@ function _ensureStaticStyles(): void {
     body.${CURSOR_CLASS} { cursor: crosshair !important; }
     #${OUTLINE_ID} {
       position: fixed; display: none; pointer-events: none; z-index: 2147483646;
-      outline: 2px solid #6366F1; outline-offset: 1px; border-radius: 4px;
-      background: rgba(99,102,241,0.08);
+      outline: 2px solid #FF5C6C; outline-offset: 1px; border-radius: 4px;
+      background: rgba(255,92,108,0.08);
     }
     #${HINT_ID} {
       position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 2147483647;

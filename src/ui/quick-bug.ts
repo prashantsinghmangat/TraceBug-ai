@@ -599,7 +599,7 @@ function _openModal(
           <!-- Sibling of the label, NOT inside it: a button nested in a label
                becomes its implicit control, so clicking the word "Title"
                would fire Discard. -->
-          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}
+          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#FF5C6C);background:rgba(255,92,108,0.12);border:1px solid rgba(255,92,108,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}
         </div>
         <input id="tb-qb-title" type="text" value="${escapeHtml(data.title)}" class="tb-qb-input" />
 
@@ -2812,13 +2812,13 @@ function showSettingsPointerModal(root: HTMLElement, title: string, body: string
   overlay.className = "tb-qb-pointer-overlay";
 
   setInnerHTML(overlay, `
-    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml(title)}</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml(body)}</div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
+        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
         <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
     </div>`);
@@ -2864,7 +2864,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
   overlay.className = "tb-qb-pointer-overlay";
 
   setInnerHTML(overlay, `
-    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger — bring your own key</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
@@ -2884,7 +2884,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
         </label>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
         <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
@@ -2963,7 +2963,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   const lbl = "font-size:12px;color:#A1A1AA";
 
   setInnerHTML(overlay, `
-    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations — bring your own token</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
@@ -2992,7 +2992,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
         </div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
         <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
@@ -3191,11 +3191,11 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
     #${MODAL_ID} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
     #${MODAL_ID} .tb-qb-preview { position:relative; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
-    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(255,92,108,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
     #${MODAL_ID} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
     #${MODAL_ID} .tb-qb-primary-edit svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-preview-empty { flex-direction:column; gap:12px; padding:30px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
-    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:var(--tb-on-accent); border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     #${MODAL_ID} .tb-qb-empty-shot:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-empty-shot svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-grab-frame { position:absolute; top:10px; right:10px; z-index:2; display:inline-flex; align-items:center; gap:6px; background:rgba(11,11,15,0.74); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
@@ -3214,14 +3214,14 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-size-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
     #${MODAL_ID} .tb-qb-size-act { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:6px; padding:4px 9px; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer; }
     #${MODAL_ID} .tb-qb-size-act:hover { border-color:var(--tb-accent); color:var(--tb-accent); }
-    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
+    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:var(--tb-on-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
     #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }
     /* Screenshot strip — count header + thumbs with delete + annotate */
     #${MODAL_ID} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
-    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(99,102,241,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(255,92,108,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     /* Only the FIRST trailing button absorbs the free space. Without this the
        second one ("Download") takes a margin-left:auto of its own and the two
        split the gap between them — "Add page shot" ends up stranded mid-row
@@ -3258,7 +3258,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-tab:hover { color:var(--tb-text-primary); }
     #${MODAL_ID} .tb-qb-tab-active { color:var(--tb-text-primary); border-bottom-color:var(--tb-accent); }
     #${MODAL_ID} .tb-qb-tab-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--tb-accent-subtle); color:var(--tb-accent); line-height:1.4; min-width:18px; text-align:center; }
-    #${MODAL_ID} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:#fff; }
+    #${MODAL_ID} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:var(--tb-on-accent); }
     #${MODAL_ID} .tb-qb-tabpanels { flex:1; overflow-y:auto; padding:18px 20px; min-height:0; }
     #${MODAL_ID} .tb-qb-panel { display:none; animation:tracebug-qb-fade-in 0.18s ease; }
     #${MODAL_ID} .tb-qb-panel-active { display:block; }
@@ -3468,8 +3468,8 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn:disabled { pointer-events:none; opacity:0.5; }
     /* Primary variant (shadcn new-york): solid accent, white text, primary glow
        that grows on hover + brightness-110. */
-    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
-    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
+    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(255,92,108,0.42); }
     #${MODAL_ID} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
@@ -3485,18 +3485,18 @@ function _injectStyles(): void {
     /* ONE glowing primary per row (the GitHub action). Fix-with-AI keeps its
        gradient identity but no glow; Save Ticket is a tinted outline. Three
        competing glows meant no button read as "the finish line". */
-    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-btn-ai { background:var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated — white-on-white text in the light theme. */
-    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); filter:brightness(1.08); border-color:transparent; }
     /* Save Ticket — prominent green CTA */
     #${MODAL_ID} .tb-qb-btn-save { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.35); padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
     #${MODAL_ID} .tb-qb-btn-save:hover { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.55); }
     #${MODAL_ID} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
-    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
-    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
+    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(255,92,108,0.42); }
     #${MODAL_ID} .tb-qb-more { position:relative; display:inline-flex; }
     #${MODAL_ID} .tb-qb-more-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:200px; background:var(--tb-bg-elevated); border:1px solid var(--tb-border-hover); border-radius:var(--tb-radius-md); box-shadow:var(--tb-shadow-lg); padding:6px; display:none; flex-direction:column; gap:2px; z-index:6; }
     #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
@@ -3514,7 +3514,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
     #${MODAL_ID} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
-    #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
+    #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:var(--tb-on-accent); letter-spacing:0.4px; }
     #${MODAL_ID} .tb-qb-plan-free { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-bg-secondary); color:var(--tb-text-muted); border:1px solid var(--tb-border); letter-spacing:0.4px; }
 
     /* ── Focus + disabled states ──────────────────── */
@@ -3530,7 +3530,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-help-row:last-of-type { border-bottom:none; }
     #${MODAL_ID} .tb-qb-help-row span { color:var(--tb-text-secondary); flex:1; }
     #${MODAL_ID} .tb-qb-help-row kbd { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:2px 8px; font-family:var(--tb-font-mono); font-size:11px; color:var(--tb-text-primary); margin-right:4px; }
-    #${MODAL_ID} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
+    #${MODAL_ID} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:var(--tb-on-accent); border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
     #${MODAL_ID} .tb-qb-help-close:hover { background:var(--tb-accent-hover); }
 
     /* ── Scrollbar polish ─────────────────────────── */
@@ -3603,7 +3603,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
       .tb-ai-pop-card {
         width: 100%; max-width: 560px; max-height: 80vh;
         background: #11151A;
-        border: 1px solid rgba(99,102,241,0.28);
+        border: 1px solid rgba(255,92,108,0.28);
         border-radius: 14px;
         box-shadow: 0 24px 72px rgba(0,0,0,0.6);
         display: flex; flex-direction: column;
@@ -3746,7 +3746,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   // rejects with "Prompt is too long". So always point chat users at the tiny
   // text-only artifacts instead, regardless of file size.
   const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
-  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
+  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(255,92,108,0.08);border:1px solid rgba(255,92,108,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
          Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} — use <strong>AI report (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;▾</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
 
@@ -3801,7 +3801,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       .tb-ai-pop-card {
         width: 100%; max-width: 560px; max-height: 80vh;
         background: #11151A;
-        border: 1px solid rgba(99,102,241,0.28);
+        border: 1px solid rgba(255,92,108,0.28);
         border-radius: 14px;
         box-shadow: 0 24px 72px rgba(0,0,0,0.6);
         display: flex; flex-direction: column;
@@ -3815,7 +3815,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         background: transparent; color: #A1A1AA;
       }
       .tb-mcp-tool-btn.active {
-        border-color: #6366F1; background: rgba(99,102,241,0.18); color: #A5B4FC;
+        border-color: #FF5C6C; background: rgba(255,92,108,0.18); color: #FF8590;
       }
     `;
     document.head.appendChild(s);
@@ -3878,7 +3878,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       <button data-mcp-action="copy" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
-        background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+        background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy prompt again</button>
       <a href="https://tracebug.dev/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
@@ -3986,7 +3986,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
         .tb-share-consent-card {
           width: 100%; max-width: 460px;
           background: #11151A; color: #FAFAFA;
-          border: 1px solid rgba(99,102,241,0.32);
+          border: 1px solid rgba(255,92,108,0.32);
           border-radius: 14px;
           box-shadow: 0 24px 72px rgba(0,0,0,0.6);
           padding: 22px 24px;
@@ -4025,7 +4025,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
         ">Cancel</button>
         <button data-act="continue" style="
           padding:8px 18px;border-radius:8px;border:0;
-          background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+          background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
         ">I understand — continue</button>
       </div>
     `);
