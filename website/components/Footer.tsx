@@ -43,7 +43,6 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
       { label: "Review us on Product Hunt", href: "https://www.producthunt.com/products/tracebug/reviews", external: true },
       { label: "YouTube", href: YOUTUBE_CHANNEL_URL, external: true },
       { label: "Issues", href: `${LINKS.repo}/issues`, external: true },
-      { label: "Discussions", href: `${LINKS.repo}/discussions`, external: true },
       { label: "Report a bug", href: `${LINKS.repo}/issues/new`, external: true },
       { label: "Contribute", href: `${LINKS.repo}/blob/main/CONTRIBUTING.md`, external: true },
     ],
