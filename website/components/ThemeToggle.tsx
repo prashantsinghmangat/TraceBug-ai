@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 
-// Dark is the default (Midnight lime theme). We persist the user's explicit choice in localStorage
+// Dark is the default (Midnight coral theme). We persist the user's explicit choice in localStorage
 // under `tracebug-theme`; the inline script in app/layout.tsx applies it before
 // paint to avoid a flash. This component only flips the class + storage.
 export default function ThemeToggle({ className = "" }: { className?: string }) {

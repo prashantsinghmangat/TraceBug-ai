@@ -4,14 +4,14 @@
 // - variant="full": arms, legs and evidence lines. For illustrations (hero,
 //   404, feedback, proof). Strokes are tuned for ~96px and up.
 // - variant="mark": the compact logo cut — no legs or left arm, heavier
-//   strokes so it holds up at 16–32px. Used by LogoMark and the favicons
-//   (public/favicon.svg, public/apple-icon.svg, app/icon.svg mirror it).
+//   strokes so it holds up at 16–32px.
+//   (The logo and favicons are the prompt icon now: components/Logo.tsx.)
 //
 // The white page fill keeps the silhouette readable on dark backgrounds,
 // where the ink outline disappears.
 
 const INK = "#11131A";
-const LIME = "#84CC16"; // Trace, the pixel bug (theme accent)
+const CORAL = "#FF5C6C"; // Trace, the pixel bug (theme accent, coral)
 const RED = "#E5484D";
 const GREY = "#D0D4DC";
 const GREEN = "#16A34A";
@@ -27,19 +27,19 @@ const POSES = {
 function Trace({ transform }: { transform: string }) {
   return (
     <g transform={transform} shapeRendering="crispEdges">
-      <rect x="30" y="0" width="10" height="10" fill={LIME} />
-      <rect x="80" y="0" width="10" height="10" fill={LIME} />
+      <rect x="30" y="0" width="10" height="10" fill={CORAL} />
+      <rect x="80" y="0" width="10" height="10" fill={CORAL} />
       <rect x="40" y="10" width="10" height="10" fill={INK} />
       <rect x="70" y="10" width="10" height="10" fill={INK} />
-      <rect x="40" y="20" width="40" height="10" fill={LIME} />
-      <rect x="30" y="30" width="60" height="50" fill={LIME} />
+      <rect x="40" y="20" width="40" height="10" fill={CORAL} />
+      <rect x="30" y="30" width="60" height="50" fill={CORAL} />
       <rect x="40" y="40" width="10" height="20" fill={INK} />
       <rect x="70" y="40" width="10" height="20" fill={INK} />
       <rect x="10" y="40" width="20" height="10" fill={INK} />
       <rect x="90" y="40" width="20" height="10" fill={INK} />
       <rect x="10" y="60" width="20" height="10" fill={INK} />
       <rect x="90" y="60" width="20" height="10" fill={INK} />
-      <rect x="50" y="80" width="20" height="10" fill={LIME} />
+      <rect x="50" y="80" width="20" height="10" fill={CORAL} />
     </g>
   );
 }
@@ -88,7 +88,7 @@ export default function PageMascot({
         <circle cx="28" cy="60" r="6" fill={INK} />
         <circle cx="52" cy="60" r="6" fill={INK} />
         <rect x="22" y="80" width="36" height="9" rx="4.5" fill={RED} />
-        <rect x="22" y="95" width="24" height="9" rx="4.5" fill={LIME} />
+        <rect x="22" y="95" width="24" height="9" rx="4.5" fill={CORAL} />
         {/* Trace, held up */}
         <Trace transform="translate(70,2) scale(0.42)" />
       </svg>
@@ -136,7 +136,7 @@ export default function PageMascot({
           )}
           <rect x="14" y="48" width="30" height="5" rx="2.5" fill={pose === "fixed" ? GREEN : RED} />
           <rect x="14" y="58" width="36" height="5" rx="2.5" fill={GREY} />
-          <rect x="14" y="68" width="24" height="5" rx="2.5" fill={LIME} />
+          <rect x="14" y="68" width="24" height="5" rx="2.5" fill={CORAL} />
         </g>
         {/* right arm holding Trace up; arm and bug move together */}
         <g className="pm-hold">

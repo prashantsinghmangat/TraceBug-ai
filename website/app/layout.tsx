@@ -5,7 +5,7 @@ import ConsoleEgg from "@/components/ConsoleEgg";
 import MascotWalker from "@/components/MascotWalker";
 import "./globals.css";
 
-// Theme fonts (Midnight lime). Self-hosted by next/font at build time, so the
+// Theme fonts (Midnight coral). Self-hosted by next/font at build time, so the
 // page itself makes no request to Google. To change fonts, swap these two and
 // keep the variable names (globals.css reads them as --font-sans / --font-mono).
 const sans = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-space-grotesk", display: "swap" });
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
         url: "/api/og",
         width: 1200,
         height: 630,
-        alt: "TraceBug: your AI can read your code. Can it see your bug?",
+        alt: "TraceBug: capture the bug, let AI fix it.",
       },
     ],
   },

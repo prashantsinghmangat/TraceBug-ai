@@ -1,9 +1,9 @@
-// TraceBug logo mark: the compact cut of the character (Page holding up
-// Trace). See components/PageMascot.tsx. `idPrefix` is kept for call-site
-// compatibility.
+// TraceBug logo mark: a terminal prompt with a coral cursor on a midnight
+// tile. Same art as the extension icons (tracebug-extension/icons) and the
+// favicons (app/icon.svg, public/favicon.svg, public/apple-icon.svg).
+// `idPrefix` is kept for call-site compatibility.
 
 import { SDK_VERSION_TAG } from "@/lib/version";
-import PageMascot from "@/components/PageMascot";
 
 export function LogoMark({
   size = 32,
@@ -13,7 +13,14 @@ export function LogoMark({
   className?: string;
   idPrefix?: string;
 }) {
-  return <PageMascot variant="mark" size={size} className={className} />;
+  return (
+    <svg width={size} height={size} viewBox="0 0 96 96" fill="none" className={className} aria-hidden="true">
+      <rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14" />
+      <rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" strokeWidth="1.5" />
+      <path d="M30 33 L47 48 L30 63" stroke="#EEF0F5" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C" />
+    </svg>
+  );
 }
 
 export function LogoLockup({
