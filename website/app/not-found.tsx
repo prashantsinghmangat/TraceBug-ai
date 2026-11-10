@@ -25,7 +25,7 @@ export default function NotFound() {
         <p className="mt-6 font-mono text-[13px] font-semibold uppercase tracking-[0.2em] text-primary">
           Error 404
         </p>
-        <h1 className="mt-3 max-w-xl text-4xl sm:text-5xl font-semibold tracking-[-0.03em] leading-[1.08] text-text-primary">
+        <h1 className="mt-3 max-w-xl text-h2 font-medium text-text-primary">
           Trace looked everywhere. This page doesn&apos;t exist.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-text-muted text-lg leading-relaxed">

@@ -3,7 +3,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Playwright Reporter — Bug Reports From Failed Tests — TraceBug",
+  title: "Playwright Reporter — Bug reports from failed tests — TraceBug",
   description:
     "Every failed Playwright test becomes a self-contained TraceBug .html bug report — assertion error, step timeline, console, network failures, and screenshot. Upload the folder as a CI artifact and hand any failure straight to your coding agent. No cloud viewer, no account, no upload.",
   openGraph: {
@@ -21,17 +21,17 @@ export default function PlaywrightDocsPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Page header */}
           <div className="mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-muted text-sm mb-4">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <span className="w-2 h-2 rounded-full bg-accent"></span>
               Documentation · Playwright Reporter
             </div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">
-              Bug Reports From Failed Tests
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
+              Bug reports from failed tests
             </h1>
             <p className="text-text-muted text-lg leading-relaxed">
               Every failed Playwright test becomes a self-contained TraceBug{" "}
               <code className="text-primary bg-surface px-1 rounded">.html</code>{" "}
-              bug report — the same artifact the Chrome extension exports,
+              bug report — the same artifact the browser extension exports,
               readable by the same{" "}
               <a
                 href="/docs/mcp"
@@ -106,8 +106,8 @@ export default function PlaywrightDocsPage() {
 
           {/* Setup */}
           <section id="setup" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 1
               </span>
               Setup (two lines)
@@ -141,8 +141,8 @@ export default function PlaywrightDocsPage() {
 
           {/* Richer reports */}
           <section id="richer" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 2
               </span>
               Richer reports: page console + network
@@ -187,8 +187,8 @@ export { expect } from "@playwright/test";`}
 
           {/* CI */}
           <section id="ci" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 3
               </span>
               CI: upload the reports as artifacts
@@ -216,8 +216,8 @@ export { expect } from "@playwright/test";`}
 
           {/* Debug */}
           <section id="debug" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 4
               </span>
               Debug a failure with your coding agent
@@ -267,7 +267,7 @@ export { expect } from "@playwright/test";`}
 
           {/* What ends up in the report */}
           <section id="report" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               What ends up in the report
             </h2>
             <div className="space-y-2">
@@ -295,7 +295,7 @@ export { expect } from "@playwright/test";`}
 
           {/* Options */}
           <section id="options" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Options &amp; behavior
             </h2>
             <div className="bg-surface border border-border rounded-xl p-4 mb-4">
@@ -335,7 +335,7 @@ export { expect } from "@playwright/test";`}
 
           {/* CTA */}
           <div className="bg-surface border border-border rounded-xl p-8 text-center">
-            <h2 className="text-xl font-bold text-text-primary mb-2">
+            <h2 className="text-xl font-medium text-text-primary mb-2">
               A failed test is a bug report waiting to happen
             </h2>
             <p className="text-text-muted text-sm mb-6">

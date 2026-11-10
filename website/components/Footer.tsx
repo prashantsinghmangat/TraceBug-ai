@@ -31,7 +31,7 @@ const COLUMNS: { title: string; links: { label: string; href: string; external?:
       { label: "HAR Export", href: "/docs/har-export" },
       { label: "GitHub", href: LINKS.repo, external: true },
       { label: "npm package", href: LINKS.npm, external: true },
-      { label: "Chrome extension", href: "/#install" },
+      { label: "Browser extension", href: "/#install" },
       { label: "Sentry alternative", href: "/compare/sentry-alternative" },
       { label: "Jam alternative", href: "/compare/jam-alternative" },
     ],

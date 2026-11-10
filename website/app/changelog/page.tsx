@@ -3,7 +3,9 @@ import path from "node:path";
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
 import SectionHeading from "@/components/SectionHeading";
+import { SDK_VERSION } from "@/lib/version";
 
 export const metadata: Metadata = {
   title: "Changelog — TraceBug",
@@ -35,7 +37,8 @@ function escapeHtml(s: string): string {
 function inlineMd(s: string): string {
   return escapeHtml(s)
     .replace(/\*\*(.+?)\*\*/g, "<strong class=\"text-text-primary font-semibold\">$1</strong>")
-    .replace(/`([^`]+)`/g, "<code class=\"font-mono text-[0.9em] text-text-primary bg-surface-2 border border-border rounded px-1 py-0.5\">$1</code>")
+    .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>")
+    .replace(/`([^`]+)`/g, "<code class=\"font-mono text-[0.9em] text-text-primary bg-surface-2 border border-border rounded px-1 py-0.5 [overflow-wrap:anywhere]\">$1</code>")
     .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, "<a class=\"text-primary hover:underline\" href=\"$2\" target=\"_blank\" rel=\"noopener noreferrer\">$1</a>");
 }
 
@@ -93,10 +96,32 @@ function parseChangelog(md: string): Release[] {
   return releases;
 }
 
+// "1.11.10" > "1.11.9"; non-numeric versions ("Unreleased") compare as NaN → false.
+function atOrBelow(version: string, max: string): boolean {
+  const a = version.split(".").map(Number);
+  const b = max.split(".").map(Number);
+  if (a.some(Number.isNaN)) return false;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const d = (a[i] ?? 0) - (b[i] ?? 0);
+    if (d !== 0) return d < 0;
+  }
+  return true;
+}
+
+// The repo's CHANGELOG runs ahead of the stores: committed-but-unreleased
+// versions and [Unreleased] live there too. The site lists only what users
+// can install — up to SDK_VERSION, which is bumped after a release ships —
+// and drops intro lines that point at internal planning docs.
+function released(all: Release[]): Release[] {
+  return all
+    .filter((r) => atOrBelow(r.version, SDK_VERSION))
+    .map((r) => ({ ...r, intro: r.intro.filter((l) => !l.includes("docs/launch/")) }));
+}
+
 function loadChangelog(): Release[] {
   for (const p of [path.join(process.cwd(), "..", "CHANGELOG.md"), path.join(process.cwd(), "CHANGELOG.md")]) {
     try {
-      if (fs.existsSync(p)) return parseChangelog(fs.readFileSync(p, "utf8"));
+      if (fs.existsSync(p)) return released(parseChangelog(fs.readFileSync(p, "utf8")));
     } catch {
       /* fall through */
     }
@@ -113,6 +138,7 @@ export default function ChangelogPage() {
       <section className="pt-32 pb-24">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
           <SectionHeading
+            as="h1"
             align="left"
             eyebrow="Changelog"
             title="What's new in TraceBug"
@@ -148,8 +174,8 @@ export default function ChangelogPage() {
                     />
                   )}
                   <div className="space-y-8">
-                    {rel.sections.map((sec) => (
-                      <div key={sec.name}>
+                    {rel.sections.map((sec, si) => (
+                      <div key={`${si}-${sec.name}`}>
                         <span
                           className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
                             SECTION_STYLE[sec.name] ?? "text-text-muted border-border bg-surface"
@@ -179,6 +205,7 @@ export default function ChangelogPage() {
           </div>
         </div>
       </section>
+      <FinalCTA />
       <Footer />
     </main>
   );

@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
 
 const REPO = "https://github.com/prashantsinghmangat/tracebug-ai";
 
 export const metadata: Metadata = {
-  title: "MCP Server — Let AI Agents Debug Your Bug Reports — TraceBug",
+  title: "MCP Server — Let AI agents debug your bug reports — TraceBug",
   description:
     "TraceBug ships a local Model Context Protocol (MCP) server. Claude Code, Cursor, Windsurf, and VS Code read your exported bug reports — console errors, network failures, repro steps, screenshots — and propose the fix. Fully local, nothing uploaded.",
   openGraph: {
@@ -23,12 +24,12 @@ export default function McpDocsPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Page header */}
           <div className="mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-muted text-sm mb-4">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <span className="w-2 h-2 rounded-full bg-accent"></span>
               Documentation · MCP Server
             </div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">
-              Let AI Agents Debug Your Bug Reports
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
+              Let AI agents debug your bug reports
             </h1>
             <p className="text-text-muted text-lg leading-relaxed">
               TraceBug ships a local{" "}
@@ -51,7 +52,7 @@ export default function McpDocsPage() {
           </div>
 
           {/* Quick start */}
-          <div className="code-block p-4 rounded-xl mb-6">
+          <div className="code-block p-4 rounded-xl mb-6 overflow-x-auto">
             <div className="flex items-center gap-2 mb-3 text-text-muted text-xs">
               <span className="w-3 h-3 rounded-full bg-red-500"></span>
               <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
@@ -122,8 +123,8 @@ export default function McpDocsPage() {
 
           {/* Workflow */}
           <section id="workflow" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 1
               </span>
               The Workflow
@@ -132,7 +133,7 @@ export default function McpDocsPage() {
               {[
                 {
                   step: "1",
-                  text: "A tester captures a bug and exports the report (Quick Bug → Export HTML). That one .html file contains everything: replay, console, network, user actions, screenshots, root-cause hint.",
+                  text: "A tester captures a bug and exports the report (Quick Bug → Export replay (.html)). That one .html file contains everything: replay, console, network, user actions, screenshots, root-cause hint.",
                 },
                 {
                   step: "2",
@@ -151,7 +152,7 @@ export default function McpDocsPage() {
                   key={item.step}
                   className="flex items-start gap-4 p-4 bg-surface border border-border rounded-lg"
                 >
-                  <span className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold flex-shrink-0 mt-0.5">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted mt-0.5">
                     {item.step}
                   </span>
                   <p className="text-text-muted text-sm leading-relaxed">
@@ -164,8 +165,8 @@ export default function McpDocsPage() {
 
           {/* Hand-off prompt */}
           <section id="handoff-prompt" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 2
               </span>
               The Hand-off Prompt
@@ -195,7 +196,7 @@ export default function McpDocsPage() {
               {[
                 {
                   icon: "🧩",
-                  title: "The extension shows it after every Export .html",
+                  title: "The extension shows it after every Export replay (.html)",
                   desc: "Already copied to your clipboard, so the tester can paste it straight into a Slack message next to the file.",
                 },
                 {
@@ -243,8 +244,8 @@ export default function McpDocsPage() {
 
           {/* Setup */}
           <section id="setup" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 3
               </span>
               Setup
@@ -261,7 +262,7 @@ export default function McpDocsPage() {
                   registers it for the current project only). No folder needed: it finds reports in your
                   project and in your Downloads and Desktop folders.
                 </p>
-                <div className="code-block p-4 rounded-xl mb-4">
+                <div className="code-block p-4 rounded-xl mb-4 overflow-x-auto">
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
                     <span className="text-success">claude</span>
@@ -362,7 +363,7 @@ export default function McpDocsPage() {
                 <p className="text-text-muted text-sm mb-3">
                   The server speaks standard MCP over stdio. Point the client at:
                 </p>
-                <div className="code-block p-4 rounded-xl mb-3">
+                <div className="code-block p-4 rounded-xl mb-3 overflow-x-auto">
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
                     <span className="text-success">npx</span>
@@ -384,8 +385,8 @@ export default function McpDocsPage() {
 
           {/* Tools */}
           <section id="tools" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6 flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/20 border border-primary/30 flex items-center justify-center text-primary text-sm font-bold">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6 flex items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-strong font-mono text-[13px] text-text-muted">
                 4
               </span>
               Tools
@@ -473,7 +474,7 @@ export default function McpDocsPage() {
 
           {/* What files */}
           <section id="files" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               What Files Does It Read?
             </h2>
             <p className="text-text-muted mb-4 leading-relaxed">Any TraceBug export:</p>
@@ -506,7 +507,7 @@ export default function McpDocsPage() {
 
           {/* Try it */}
           <section id="try-it" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Try It Right Now
             </h2>
             <p className="text-text-muted mb-4 leading-relaxed">
@@ -547,7 +548,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
 
           {/* Privacy */}
           <section id="privacy" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">Privacy</h2>
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">Privacy</h2>
             <ul className="space-y-3">
               {[
                 <>
@@ -573,7 +574,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
 
           {/* Troubleshooting */}
           <section id="troubleshooting" className="mb-16">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Troubleshooting
             </h2>
             <div className="space-y-2">
@@ -610,13 +611,13 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
 
           {/* CTA */}
           <div className="bg-surface border border-border rounded-xl p-8 text-center">
-            <h2 className="text-xl font-bold text-text-primary mb-2">
+            <h2 className="text-xl font-medium text-text-primary mb-2">
               Bug report → fix, without your data leaving the machine
             </h2>
             <p className="text-text-muted text-sm mb-6">
               One command connects your coding agent to every TraceBug export on disk.
             </p>
-            <div className="code-block p-4 rounded-xl inline-block text-left">
+            <div className="code-block p-4 rounded-xl max-w-full overflow-x-auto text-left">
               <pre className="text-text-primary font-mono text-sm">
                 <span className="text-text-muted">$ </span>
                 <span className="text-success">claude</span>
@@ -626,6 +627,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
           </div>
         </div>
       </div>
+      <FinalCTA />
       <Footer />
     </main>
   );

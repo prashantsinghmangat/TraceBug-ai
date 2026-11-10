@@ -19,7 +19,7 @@ const data: ToolBugReportData = {
   tool: "Cursor",
   slug: "cursor",
   agentNote:
-    "Cursor reads MCP servers from a JSON config — project-level or global. Add the tracebug entry, enable it in Settings → MCP, and Cursor's Agent mode can read every TraceBug export on your machine.",
+    "Cursor reads MCP servers from a JSON config — project-level or global. Add the tracebug entry, enable it in Settings → MCP, and Cursor's Agent mode can read every TraceBug export in your Downloads, Desktop or project folder.",
   setup: {
     kind: "json",
     label: ".cursor/mcp.json (project) or ~/.cursor/mcp.json (global)",
