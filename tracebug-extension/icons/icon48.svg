@@ -1,13 +1,7 @@
 <svg width="48" height="48" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#16163E"/><stop offset="100%" stop-color="#0B0B10"/>
-    </linearGradient>
-    <linearGradient id="cursor" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#818CF8"/><stop offset="100%" stop-color="#4F46E5"/>
-    </linearGradient>
-  </defs>
-  <rect x="3" y="3" width="90" height="90" rx="22" fill="url(#bg)"/>
-  <path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="52" y="41" width="14" height="14" rx="4" fill="url(#cursor)"/>
+  <!-- TraceBug icon, variant A (Midnight coral): white prompt, coral cursor, flat midnight tile -->
+  <rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14"/>
+  <rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" stroke-width="1.5"/>
+  <path d="M30 33 L47 48 L30 63" fill="none" stroke="#EEF0F5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C"/>
 </svg>
