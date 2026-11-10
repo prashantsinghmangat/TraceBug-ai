@@ -5,7 +5,7 @@
   "version": "1.11.6",
   "description": "Record a bug once: replay, console errors and network in one offline file. For QA and devs. Free, no account, no upload.",
   "author": "Prashant Singh Mangat",
-  "homepage_url": "https://github.com/prashantsinghmangat/TraceBug-ai",
+  "homepage_url": "https://tracebug.dev",
   "permissions": [
     "activeTab",
     "storage",
@@ -51,7 +51,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "TraceBug \u2014 QA Bug Reporter"
+    "default_title": "TraceBug: capture a bug"
   },
   "web_accessible_resources": [
     {

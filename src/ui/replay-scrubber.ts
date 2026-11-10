@@ -641,7 +641,7 @@ function _injectStyles(): void {
       border-radius: var(--tb-radius-md, 6px) !important;
       outline: none !important;
     }
-    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #6366F1) !important; }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #FF5C6C) !important; }
     .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
     .tb-rs-empty {
       font-size: 11px; color: var(--tb-text-muted, #888);
@@ -719,7 +719,7 @@ function _injectStyles(): void {
     .tb-rs-fill {
       position: absolute !important; top: 0 !important; left: 0 !important;
       height: 100% !important; width: 0% !important;
-      background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.08)) !important;
+      background: linear-gradient(90deg, rgba(255,92,108,0.18), rgba(255,92,108,0.08)) !important;
       border-radius: 999px !important;
       pointer-events: none !important;
     }
@@ -743,7 +743,7 @@ function _injectStyles(): void {
       transform: translate(-50%, -50%) !important;
       width: 10px !important; height: 10px !important;
       border-radius: 50% !important;
-      background: #6366F1 !important;
+      background: #FF5C6C !important;
       box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
       pointer-events: auto !important;
       cursor: pointer !important;
@@ -771,7 +771,7 @@ function _injectStyles(): void {
       width: 16px !important; height: 16px !important;
       transform: translate(-50%, -50%) !important;
       background: #fff !important;
-      border: 3px solid var(--tb-accent, #6366F1) !important;
+      border: 3px solid var(--tb-accent, #FF5C6C) !important;
       border-radius: 50% !important;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
       pointer-events: none !important;
@@ -799,7 +799,7 @@ function _injectStyles(): void {
     /* Play button + speed selector */
     .tb-rs-play {
       width: 28px !important; height: 28px !important;
-      background: var(--tb-accent, #6366F1) !important;
+      background: var(--tb-accent, #FF5C6C) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;

@@ -174,7 +174,7 @@ export function smallBtnStyle(color: string): string {
 
 export function tabBtnStyle(active: boolean): string {
   return active
-    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #6366F1);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
+    ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #FF5C6C);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`
     : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
 }
 

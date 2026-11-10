@@ -1280,7 +1280,7 @@ var TraceBugExtensionModule = (() => {
     ctx.clip();
     ctx.drawImage(img, 0, 0);
     ctx.restore();
-    ctx.strokeStyle = "rgba(99, 102, 241, 0.85)";
+    ctx.strokeStyle = "rgba(255,92,108, 0.85)";
     ctx.lineWidth = Math.max(4 * scaleX, 3);
     ctx.beginPath();
     ctx.roundRect(ringX, ringY, ringW, ringH, Math.min(12 * scaleX, ringR));
@@ -1324,8 +1324,8 @@ var TraceBugExtensionModule = (() => {
       endY = ry + rh + 6 * scale;
     }
     ctx.save();
-    ctx.strokeStyle = "rgba(99, 102, 241, 0.95)";
-    ctx.fillStyle = "rgba(99, 102, 241, 0.95)";
+    ctx.strokeStyle = "rgba(255,92,108, 0.95)";
+    ctx.fillStyle = "rgba(255,92,108, 0.95)";
     ctx.lineWidth = Math.max(3 * scale, 2);
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -20548,8 +20548,8 @@ var TraceBugExtensionModule = (() => {
     body.${CURSOR_CLASS} { cursor: crosshair !important; }
     #${OUTLINE_ID} {
       position: fixed; display: none; pointer-events: none; z-index: 2147483646;
-      outline: 2px solid #6366F1; outline-offset: 1px; border-radius: 4px;
-      background: rgba(99,102,241,0.08);
+      outline: 2px solid #FF5C6C; outline-offset: 1px; border-radius: 4px;
+      background: rgba(255,92,108,0.08);
     }
     #${HINT_ID} {
       position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 2147483647;
@@ -20937,7 +20937,7 @@ var TraceBugExtensionModule = (() => {
       transform: translateX(-50%) !important;
       background: #0E1117 !important;
       color: #FFFFFF !important;
-      border: 1px solid #6366F1 !important;
+      border: 1px solid #FF5C6C !important;
       border-radius: 10px !important;
       padding: 14px 22px !important;
       font-size: 14px !important;
@@ -20945,7 +20945,7 @@ var TraceBugExtensionModule = (() => {
       letter-spacing: -0.005em !important;
       font-family: system-ui, -apple-system, sans-serif !important;
       z-index: 2147483647 !important;
-      box-shadow: 0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(99,102,241,0.12) !important;
+      box-shadow: 0 14px 44px rgba(0,0,0,0.7), 0 0 0 4px rgba(255,92,108,0.12) !important;
       pointer-events: auto !important;
       max-width: 460px !important;
       text-align: center !important;
@@ -20965,7 +20965,7 @@ var TraceBugExtensionModule = (() => {
     .bt-toast-dismissing { opacity: 0 !important; transform: translateX(-50%) translateY(8px) !important; transition: all 0.3s ease !important; }
     .bt-toast-action .bt-toast-msg { flex: 1; }
     .bt-toast-action .bt-toast-action-btn {
-      background: var(--tb-accent, #6366F1); color: #fff; border: none; border-radius: 6px;
+      background: var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); border: none; border-radius: 6px;
       padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap;
     }
     .bt-toast-action .bt-toast-dismiss-btn {
@@ -24554,7 +24554,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 `;
     }
     if (report.summary) {
-      html += `<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml2(report.summary)}</div>
+      html += `<div style="background:#eef2ff;border-left:4px solid #FF5C6C;padding:12px 16px;margin:14px 0;border-radius:6px;font-size:13px;color:#312e81"><strong>TL;DR:</strong> ${escapeHtml2(report.summary)}</div>
 `;
     }
     if (report.sessionSteps && report.sessionSteps.length > 0) {
@@ -24754,10 +24754,10 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     _modeBanner.dataset.tracebug = "annotate-banner";
     setInlineStyle(_modeBanner, `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-    background: linear-gradient(90deg, var(--tb-gradient-start, #6366F1), var(--tb-gradient-end, #4F46E5)); color: #fff;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #FF5C6C), var(--tb-gradient-end, #FF5C6C)); color:var(--tb-on-accent);
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 12px rgba(255,92,108, 0.3);
     animation: tracebug-slide-down 0.2s ease;
   `);
     setInnerHTML(_modeBanner, `
@@ -24792,7 +24792,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     _highlightOverlay.dataset.tracebug = "element-highlight";
     setInlineStyle(_highlightOverlay, `
     position: fixed; pointer-events: none; z-index: 2147483646;
-    border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(99, 102, 241, 0.08);
+    border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(255,92,108, 0.08);
     border-radius: 3px; transition: all 0.08s ease; display: none;
   `);
     root2.appendChild(_highlightOverlay);
@@ -25177,7 +25177,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#6366F1;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(99,102,241,0.3)">Save Annotation</button>
+      <button id="tracebug-ann-save" style="background:var(--tb-accent, #FF5C6C);border:none;color:var(--tb-on-accent, #0B0D14);padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(255,92,108,0.3)">Save Annotation</button>
     </div>
   `);
     root2.appendChild(popover);
@@ -25294,8 +25294,8 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       _onDeactivate = null;
       _persistentBadges = [];
       _badgeRoot = null;
-      HIGHLIGHT_COLOR = "#6366F1";
-      SELECTION_COLOR = "#4F46E5";
+      HIGHLIGHT_COLOR = "#FF5C6C";
+      SELECTION_COLOR = "#FF5C6C";
     }
   });
 
@@ -25761,7 +25761,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     position: fixed; top: ${topPx}px; left: 50%; transform: translateX(-50%);
     z-index: 2147483647; display: inline-flex; align-items: center; gap: 4px;
     background: var(--tb-bg-secondary, #1a1a2e);
-    border: 1px solid var(--tb-accent, #6366F1);
+    border: 1px solid var(--tb-accent, #FF5C6C);
     border-radius: 999px;
     padding: 5px 8px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -25985,9 +25985,9 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     saveBtn.textContent = "Save";
     saveBtn.dataset.tracebug = "draw-save-btn";
     setInlineStyle(saveBtn, `
-    background: #6366F1; border: none; color: #fff; padding: 8px 14px;
+    background: var(--tb-accent, #FF5C6C); border: none; color:var(--tb-on-accent, #0B0D14); padding: 8px 14px;
     border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600;
-    font-family: inherit; box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+    font-family: inherit; box-shadow: 0 2px 6px rgba(255,92,108,0.3);
     transition: all 0.15s; white-space: nowrap;
   `);
     const skipBtn = document.createElement("button");
@@ -26045,7 +26045,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
   function _toolBtnStyle(active) {
     const base = `width:26px;height:26px;padding:0;border-radius:999px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;`;
     if (active) {
-      return base + `background:var(--tb-accent, #6366F1);color:#fff;border:1px solid var(--tb-accent, #6366F1);`;
+      return base + `background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);border:1px solid var(--tb-accent, #FF5C6C);`;
     }
     return base + `background:transparent;color:var(--tb-text-secondary, #aaa);border:1px solid var(--tb-border, #2a2a3e);`;
   }
@@ -26094,8 +26094,8 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       sel.dataset.tracebug = "region-overlay";
       Object.assign(sel.style, {
         position: "absolute",
-        border: "2px dashed #6366F1",
-        background: "rgba(99,102,241,0.15)",
+        border: "2px dashed #FF5C6C",
+        background: "rgba(255,92,108,0.15)",
         display: "none",
         pointerEvents: "none"
       });
@@ -28609,7 +28609,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       <input data-act="email" type="email" required placeholder="you@company.com" aria-label="Email address"
         style="flex:1;min-width:0;background:var(--tb-bg-primary,#12121f);border:1px solid var(--tb-border,#2a2a3e);border-radius:8px;padding:8px 10px;font-size:12px;color:inherit;font-family:inherit;outline:none" />
       <button type="submit" data-act="submit"
-        style="background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">Keep me posted</button>
+        style="background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">Keep me posted</button>
     </form>
     <button data-act="no" style="margin-top:8px;background:none;border:none;color:var(--tb-text-muted,#888);font-size:11px;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline">
       No thanks \u2014 never ask again
@@ -28651,7 +28651,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         setTimeout(close, 2500);
       }).catch(() => {
         setInnerHTML(card, `<div style="font-size:12px;line-height:1.5">This page blocked the request \u2014 you can sign up at
-          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#6366F1)">tracebug.dev</a> instead. Sorry!</div>`);
+          <a href="https://tracebug.dev/#updates" target="_blank" rel="noopener" style="color:var(--tb-accent,#FF5C6C)">tracebug.dev</a> instead. Sorry!</div>`);
         setTimeout(close, 6e3);
       });
     });
@@ -28751,7 +28751,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     rate.target = "_blank";
     rate.rel = "noopener noreferrer";
     rate.setAttribute("data-act", "rate");
-    setInlineStyle(rate, "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none");
+    setInlineStyle(rate, "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none");
     const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     star.setAttribute("width", "13");
     star.setAttribute("height", "13");
@@ -29364,7 +29364,7 @@ ${issueSignatureSlack()}`;
       border-radius: var(--tb-radius-md, 6px) !important;
       outline: none !important;
     }
-    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #6366F1) !important; }
+    .tb-rs-root:focus-visible { box-shadow: 0 0 0 2px var(--tb-accent, #FF5C6C) !important; }
     .tb-rs-root *, .tb-rs-root *::before, .tb-rs-root *::after { box-sizing: border-box !important; }
     .tb-rs-empty {
       font-size: 11px; color: var(--tb-text-muted, #888);
@@ -29442,7 +29442,7 @@ ${issueSignatureSlack()}`;
     .tb-rs-fill {
       position: absolute !important; top: 0 !important; left: 0 !important;
       height: 100% !important; width: 0% !important;
-      background: linear-gradient(90deg, rgba(99,102,241,0.18), rgba(99,102,241,0.08)) !important;
+      background: linear-gradient(90deg, rgba(255,92,108,0.18), rgba(255,92,108,0.08)) !important;
       border-radius: 999px !important;
       pointer-events: none !important;
     }
@@ -29466,7 +29466,7 @@ ${issueSignatureSlack()}`;
       transform: translate(-50%, -50%) !important;
       width: 10px !important; height: 10px !important;
       border-radius: 50% !important;
-      background: #6366F1 !important;
+      background: #FF5C6C !important;
       box-shadow: 0 0 0 1px rgba(0,0,0,0.4) !important;
       pointer-events: auto !important;
       cursor: pointer !important;
@@ -29494,7 +29494,7 @@ ${issueSignatureSlack()}`;
       width: 16px !important; height: 16px !important;
       transform: translate(-50%, -50%) !important;
       background: #fff !important;
-      border: 3px solid var(--tb-accent, #6366F1) !important;
+      border: 3px solid var(--tb-accent, #FF5C6C) !important;
       border-radius: 50% !important;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
       pointer-events: none !important;
@@ -29522,7 +29522,7 @@ ${issueSignatureSlack()}`;
     /* Play button + speed selector */
     .tb-rs-play {
       width: 28px !important; height: 28px !important;
-      background: var(--tb-accent, #6366F1) !important;
+      background: var(--tb-accent, #FF5C6C) !important;
       color: #fff !important;
       border: none !important;
       border-radius: 50% !important;
@@ -30643,28 +30643,29 @@ ${vars}
       "use strict";
       init_helpers();
       DARK_THEME = {
-        "--tb-bg-primary": "#0B0B10",
-        "--tb-bg-secondary": "#16161D",
-        "--tb-bg-elevated": "#1E1E26",
-        "--tb-bg-overlay": "#0B0B10f2",
-        "--tb-text-primary": "#FAFAFA",
-        "--tb-text-secondary": "#A1A1AA",
-        "--tb-text-muted": "#71717A",
-        "--tb-accent": "#6366F1",
-        "--tb-accent-hover": "#818CF8",
-        "--tb-accent-subtle": "#6366F11f",
-        "--tb-ring": "rgba(99, 102, 241, 0.5)",
-        "--tb-error": "#EF4444",
-        "--tb-error-bg": "#EF444419",
-        "--tb-warning": "#F59E0B",
-        "--tb-warning-bg": "#F59E0B19",
-        "--tb-success": "#22C55E",
-        "--tb-success-bg": "#22C55E19",
+        "--tb-bg-primary": "#0B0D14",
+        "--tb-bg-secondary": "#141823",
+        "--tb-bg-elevated": "#1B202E",
+        "--tb-bg-overlay": "#0B0D14f2",
+        "--tb-text-primary": "#EEF0F5",
+        "--tb-text-secondary": "#A8AEBE",
+        "--tb-text-muted": "#8A91A5",
+        "--tb-accent": "#FF5C6C",
+        "--tb-accent-hover": "#FF8590",
+        "--tb-on-accent": "#0B0D14",
+        "--tb-accent-subtle": "#FF5C6C1f",
+        "--tb-ring": "rgba(255, 92, 108, 0.5)",
+        "--tb-error": "#F05257",
+        "--tb-error-bg": "#F0525719",
+        "--tb-warning": "#E0A040",
+        "--tb-warning-bg": "#E0A04019",
+        "--tb-success": "#4CC38A",
+        "--tb-success-bg": "#4CC38A19",
         "--tb-info": "#3B82F6",
         "--tb-info-bg": "#3B82F619",
-        "--tb-border": "#26262E",
-        "--tb-border-subtle": "#1E1E24",
-        "--tb-border-hover": "#2A2A35",
+        "--tb-border": "#252A38",
+        "--tb-border-subtle": "#1B202E",
+        "--tb-border-hover": "#333A4D",
         "--tb-radius-sm": "10px",
         "--tb-radius-md": "12px",
         "--tb-radius-lg": "16px",
@@ -30673,11 +30674,11 @@ ${vars}
         "--tb-shadow-lg": "0 16px 48px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.3)",
         "--tb-font-family": "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
         "--tb-font-mono": "ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace",
-        "--tb-toolbar-bg": "#16161Dee",
-        "--tb-panel-bg": "#0B0B10",
+        "--tb-toolbar-bg": "#141823ee",
+        "--tb-panel-bg": "#0B0D14",
         "--tb-btn-hover": "#ffffff0d",
-        "--tb-btn-text": "#A1A1AA",
-        "--tb-btn-text-hover": "#FAFAFA",
+        "--tb-btn-text": "#A8AEBE",
+        "--tb-btn-text-hover": "#EEF0F5",
         "--tb-severity-critical": "#EF4444",
         "--tb-severity-major": "#F59E0B",
         "--tb-severity-minor": "#eab308",
@@ -30686,30 +30687,31 @@ ${vars}
         "--tb-intent-redesign": "#6366F1",
         "--tb-intent-remove": "#f97316",
         "--tb-intent-question": "#3B82F6",
-        "--tb-highlight": "#6366F1",
-        "--tb-selection": "#6366F1",
-        "--tb-gradient-start": "#818CF8",
-        "--tb-gradient-end": "#4F46E5",
+        "--tb-highlight": "#FF5C6C",
+        "--tb-selection": "#FF5C6C",
+        "--tb-gradient-start": "#FF5C6C",
+        "--tb-gradient-end": "#FF5C6C",
         "--tb-code-tag": "#f472b6",
         "--tb-code-attr-name": "#fcd34d",
         "--tb-code-attr-val": "#86efac",
         "--tb-code-text": "#d4d4d8",
-        "--tb-code-bg": "#14141F"
+        "--tb-code-bg": "#141823"
       };
       LIGHT_THEME = {
         "--tb-bg-primary": "#ffffff",
-        "--tb-bg-secondary": "#FAFAFA",
+        "--tb-bg-secondary": "#F4F5F8",
         "--tb-bg-elevated": "#ffffff",
         "--tb-bg-overlay": "#ffffffee",
-        "--tb-text-primary": "#111113",
-        "--tb-text-secondary": "#52525B",
+        "--tb-text-primary": "#0B0D14",
+        "--tb-text-secondary": "#4B5565",
         // #82828C was 3.8:1 on white — fails WCAG AA for normal text. #75757E is
         // 4.56:1, the minimal darkening that clears the 4.5:1 bar.
-        "--tb-text-muted": "#75757E",
-        "--tb-accent": "#4F46E5",
-        "--tb-accent-hover": "#4338CA",
-        "--tb-accent-subtle": "#4F46E514",
-        "--tb-ring": "rgba(79, 70, 229, 0.5)",
+        "--tb-text-muted": "#677082",
+        "--tb-accent": "#C81E3C",
+        "--tb-accent-hover": "#A3162F",
+        "--tb-on-accent": "#ffffff",
+        "--tb-accent-subtle": "#C81E3C14",
+        "--tb-ring": "rgba(200, 30, 60, 0.5)",
         "--tb-error": "#DC2626",
         "--tb-error-bg": "#fef2f2",
         "--tb-warning": "#D97706",
@@ -30718,9 +30720,9 @@ ${vars}
         "--tb-success-bg": "#ecfdf5",
         "--tb-info": "#2563EB",
         "--tb-info-bg": "#eff6ff",
-        "--tb-border": "#E4E4E7",
-        "--tb-border-subtle": "#F4F4F5",
-        "--tb-border-hover": "#D4D4D8",
+        "--tb-border": "#E2E4EA",
+        "--tb-border-subtle": "#ECEEF2",
+        "--tb-border-hover": "#D0D4DC",
         "--tb-radius-sm": "10px",
         "--tb-radius-md": "12px",
         "--tb-radius-lg": "16px",
@@ -30732,8 +30734,8 @@ ${vars}
         "--tb-toolbar-bg": "#ffffffee",
         "--tb-panel-bg": "#ffffff",
         "--tb-btn-hover": "#00000008",
-        "--tb-btn-text": "#52525B",
-        "--tb-btn-text-hover": "#111113",
+        "--tb-btn-text": "#4B5565",
+        "--tb-btn-text-hover": "#0B0D14",
         "--tb-severity-critical": "#DC2626",
         "--tb-severity-major": "#D97706",
         "--tb-severity-minor": "#ca8a04",
@@ -30742,15 +30744,15 @@ ${vars}
         "--tb-intent-redesign": "#4F46E5",
         "--tb-intent-remove": "#ea580c",
         "--tb-intent-question": "#2563EB",
-        "--tb-highlight": "#4F46E5",
-        "--tb-selection": "#4F46E5",
-        "--tb-gradient-start": "#818CF8",
-        "--tb-gradient-end": "#4F46E5",
+        "--tb-highlight": "#C81E3C",
+        "--tb-selection": "#C81E3C",
+        "--tb-gradient-start": "#C81E3C",
+        "--tb-gradient-end": "#C81E3C",
         "--tb-code-tag": "#be185d",
         "--tb-code-attr-name": "#a16207",
         "--tb-code-attr-val": "#15803d",
-        "--tb-code-text": "#26262E",
-        "--tb-code-bg": "#F4F4F5"
+        "--tb-code-text": "#252A38",
+        "--tb-code-bg": "#F4F5F8"
       };
       THEME_STYLE_ID = "tracebug-theme-vars";
       _currentMode = "light";
@@ -31392,7 +31394,7 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
           <!-- Sibling of the label, NOT inside it: a button nested in a label
                becomes its implicit control, so clicking the word "Title"
                would fire Discard. -->
-          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft \xB7 Discard</button>` : ""}
+          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#FF5C6C);background:rgba(255,92,108,0.12);border:1px solid rgba(255,92,108,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft \xB7 Discard</button>` : ""}
         </div>
         <input id="tb-qb-title" type="text" value="${escapeHtml(data.title)}" class="tb-qb-input" />
 
@@ -33213,13 +33215,13 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     overlay.id = "tb-ext-settings-pointer";
     overlay.className = "tb-qb-pointer-overlay";
     setInnerHTML(overlay, `
-    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml(title)}</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml(body)}</div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
+        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
         <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
       </div>
     </div>`);
@@ -33258,7 +33260,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     overlay.id = "tb-ai-config";
     overlay.className = "tb-qb-pointer-overlay";
     setInnerHTML(overlay, `
-    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger \u2014 bring your own key</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider \u2014 TraceBug never sees it.</div>
@@ -33278,7 +33280,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         </label>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
         <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
       </div>
@@ -33350,7 +33352,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const fld = "width:100%;margin-top:4px;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0B0B10;color:#FAFAFA;font:inherit;font-size:13px";
     const lbl = "font-size:12px;color:#A1A1AA";
     setInnerHTML(overlay, `
-    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations \u2014 bring your own token</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser \u2014 TraceBug has no backend in the path. Fill in only the providers you use.</div>
@@ -33379,7 +33381,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         </div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
         <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">\u2715</button>
       </div>
@@ -33588,11 +33590,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
     #${MODAL_ID} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
     #${MODAL_ID} .tb-qb-preview { position:relative; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
-    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(255,92,108,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
     #${MODAL_ID} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
     #${MODAL_ID} .tb-qb-primary-edit svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-preview-empty { flex-direction:column; gap:12px; padding:30px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
-    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:var(--tb-on-accent); border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     #${MODAL_ID} .tb-qb-empty-shot:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-empty-shot svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-grab-frame { position:absolute; top:10px; right:10px; z-index:2; display:inline-flex; align-items:center; gap:6px; background:rgba(11,11,15,0.74); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
@@ -33611,14 +33613,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-size-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
     #${MODAL_ID} .tb-qb-size-act { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:6px; padding:4px 9px; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer; }
     #${MODAL_ID} .tb-qb-size-act:hover { border-color:var(--tb-accent); color:var(--tb-accent); }
-    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
+    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:var(--tb-on-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
     #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }
     /* Screenshot strip \u2014 count header + thumbs with delete + annotate */
     #${MODAL_ID} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
-    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(99,102,241,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(255,92,108,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     /* Only the FIRST trailing button absorbs the free space. Without this the
        second one ("Download") takes a margin-left:auto of its own and the two
        split the gap between them \u2014 "Add page shot" ends up stranded mid-row
@@ -33655,7 +33657,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-tab:hover { color:var(--tb-text-primary); }
     #${MODAL_ID} .tb-qb-tab-active { color:var(--tb-text-primary); border-bottom-color:var(--tb-accent); }
     #${MODAL_ID} .tb-qb-tab-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--tb-accent-subtle); color:var(--tb-accent); line-height:1.4; min-width:18px; text-align:center; }
-    #${MODAL_ID} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:#fff; }
+    #${MODAL_ID} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:var(--tb-on-accent); }
     #${MODAL_ID} .tb-qb-tabpanels { flex:1; overflow-y:auto; padding:18px 20px; min-height:0; }
     #${MODAL_ID} .tb-qb-panel { display:none; animation:tracebug-qb-fade-in 0.18s ease; }
     #${MODAL_ID} .tb-qb-panel-active { display:block; }
@@ -33865,8 +33867,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-btn:disabled { pointer-events:none; opacity:0.5; }
     /* Primary variant (shadcn new-york): solid accent, white text, primary glow
        that grows on hover + brightness-110. */
-    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
-    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
+    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(255,92,108,0.42); }
     #${MODAL_ID} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
@@ -33882,18 +33884,18 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     /* ONE glowing primary per row (the GitHub action). Fix-with-AI keeps its
        gradient identity but no glow; Save Ticket is a tinted outline. Three
        competing glows meant no button read as "the finish line". */
-    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-btn-ai { background:var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated \u2014 white-on-white text in the light theme. */
-    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); filter:brightness(1.08); border-color:transparent; }
     /* Save Ticket \u2014 prominent green CTA */
     #${MODAL_ID} .tb-qb-btn-save { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.35); padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
     #${MODAL_ID} .tb-qb-btn-save:hover { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.55); }
     #${MODAL_ID} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
-    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
-    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
+    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(255,92,108,0.42); }
     #${MODAL_ID} .tb-qb-more { position:relative; display:inline-flex; }
     #${MODAL_ID} .tb-qb-more-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:200px; background:var(--tb-bg-elevated); border:1px solid var(--tb-border-hover); border-radius:var(--tb-radius-md); box-shadow:var(--tb-shadow-lg); padding:6px; display:none; flex-direction:column; gap:2px; z-index:6; }
     #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
@@ -33911,7 +33913,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
     #${MODAL_ID} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
-    #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
+    #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:var(--tb-on-accent); letter-spacing:0.4px; }
     #${MODAL_ID} .tb-qb-plan-free { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-bg-secondary); color:var(--tb-text-muted); border:1px solid var(--tb-border); letter-spacing:0.4px; }
 
     /* \u2500\u2500 Focus + disabled states \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
@@ -33927,7 +33929,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #${MODAL_ID} .tb-qb-help-row:last-of-type { border-bottom:none; }
     #${MODAL_ID} .tb-qb-help-row span { color:var(--tb-text-secondary); flex:1; }
     #${MODAL_ID} .tb-qb-help-row kbd { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:2px 8px; font-family:var(--tb-font-mono); font-size:11px; color:var(--tb-text-primary); margin-right:4px; }
-    #${MODAL_ID} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
+    #${MODAL_ID} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:var(--tb-on-accent); border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
     #${MODAL_ID} .tb-qb-help-close:hover { background:var(--tb-accent-hover); }
 
     /* \u2500\u2500 Scrollbar polish \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
@@ -33971,7 +33973,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       .tb-ai-pop-card {
         width: 100%; max-width: 560px; max-height: 80vh;
         background: #11151A;
-        border: 1px solid rgba(99,102,241,0.28);
+        border: 1px solid rgba(255,92,108,0.28);
         border-radius: 14px;
         box-shadow: 0 24px 72px rgba(0,0,0,0.6);
         display: flex; flex-direction: column;
@@ -34092,7 +34094,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     });
     const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
-    const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
+    const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(255,92,108,0.08);border:1px solid rgba(255,92,108,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
          Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} \u2014 use <strong>AI report (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;\u25BE</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
     const MCP_JSON = '{"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}';
@@ -34135,7 +34137,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       .tb-ai-pop-card {
         width: 100%; max-width: 560px; max-height: 80vh;
         background: #11151A;
-        border: 1px solid rgba(99,102,241,0.28);
+        border: 1px solid rgba(255,92,108,0.28);
         border-radius: 14px;
         box-shadow: 0 24px 72px rgba(0,0,0,0.6);
         display: flex; flex-direction: column;
@@ -34149,7 +34151,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         background: transparent; color: #A1A1AA;
       }
       .tb-mcp-tool-btn.active {
-        border-color: #6366F1; background: rgba(99,102,241,0.18); color: #A5B4FC;
+        border-color: #FF5C6C; background: rgba(255,92,108,0.18); color: #FF8590;
       }
     `;
       document.head.appendChild(s2);
@@ -34207,7 +34209,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       <button data-mcp-action="copy" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
-        background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+        background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy prompt again</button>
       <a href="https://tracebug.dev/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
@@ -34428,7 +34430,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         transition: background 0.12s ease !important;
       }
       #${HUD_ID} .tb-hud-btn:hover { background: rgba(255,255,255,0.08) !important; }
-      #${HUD_ID} .tb-hud-btn[data-active="1"] { background: rgba(99,102,241,0.22) !important; color: #c5b8ff !important; }
+      #${HUD_ID} .tb-hud-btn[data-active="1"] { background: rgba(255,92,108,0.22) !important; color: #FF8590 !important; }
       #${HUD_ID} .tb-hud-btn[data-muted="1"] { color: rgba(239,68,68,0.95) !important; }
       #${HUD_ID} .tb-hud-stop {
         background: #ef4444 !important; color: #fff !important;
@@ -34650,7 +34652,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (!_hud) return;
     const prev = _hud.style.boxShadow;
     _hud.style.transition = "box-shadow 0.3s";
-    _hud.style.boxShadow = "0 0 0 4px var(--tb-accent, #6366F1)66, 0 12px 40px rgba(0,0,0,0.55)";
+    _hud.style.boxShadow = "0 0 0 4px rgba(255,92,108,0.4), 0 12px 40px rgba(0,0,0,0.55)";
     setTimeout(() => {
       if (_hud) _hud.style.boxShadow = prev;
     }, 400);
@@ -34906,7 +34908,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         badge = document.createElement("span");
         badge.className = "tb-tickets-badge";
         badge.setAttribute("aria-hidden", "true");
-        setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
+        setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
         ticketsBtn.style.position = "relative";
         ticketsBtn.appendChild(badge);
       }
@@ -35258,7 +35260,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const startEl = pop.querySelector('[data-tb-pre="start"]');
       if (tabBtn && deskBtn) {
         const paintSurface = () => {
-          const on2 = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
+          const on2 = ";border-color:var(--tb-accent, #FF5C6C);background:var(--tb-accent-subtle, rgba(255,92,108,0.15));color:var(--tb-text-primary, #fff)";
           setInlineStyle(tabBtn, segBase + (surface === "tab" ? on2 : ""));
           setInlineStyle(deskBtn, segBase + (surface === "desktop" ? on2 : ""));
         };
@@ -35437,7 +35439,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         setInlineStyle(actions, "display:flex;flex-direction:column;gap:4px;flex-shrink:0");
         const openBtn = document.createElement("button");
         openBtn.textContent = "Open";
-        setInlineStyle(openBtn, "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
+        setInlineStyle(openBtn, "background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
         openBtn.addEventListener("click", () => {
           closePop();
           const tbModal = document.getElementById("tracebug-quick-bug-modal");
@@ -35501,7 +35503,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       const freeBytes = Math.max(0, QUOTA_ESTIMATE_BYTES - usedBytes);
       const meter = document.createElement("div");
       setInlineStyle(meter, "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)");
-      const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
+      const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#FF5C6C)";
       const bar = document.createElement("div");
       setInlineStyle(bar, "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px");
       const fill = document.createElement("div");
@@ -35762,8 +35764,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     const style = createStyleTag(STYLE_ID3);
     style.textContent = `
     @keyframes tracebug-onboard-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-      50% { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.4); }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,108, 0); }
+      50% { box-shadow: 0 0 0 4px rgba(255,92,108, 0.4); }
     }
   `;
     document.head.appendChild(style);
@@ -35870,7 +35872,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #tracebug-root select:focus-visible,
     #tracebug-root textarea:focus-visible,
     #tracebug-root [tabindex]:focus-visible {
-      outline: 2px solid var(--tb-accent, #6366F1) !important;
+      outline: 2px solid var(--tb-accent, #FF5C6C) !important;
       outline-offset: 2px !important;
     }
     #tracebug-root *:focus:not(:focus-visible) {
@@ -35959,7 +35961,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div style="padding:16px 20px;border-bottom:1px solid var(--tb-border, #2a2a3e);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div>
         <div style="display:flex;align-items:center;gap:8px">
-          <a href="https://tracebug.dev" target="_blank" rel="noopener noreferrer" title="Open tracebug.dev" style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;text-decoration:none;cursor:pointer"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4F46E5"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</a>
+          <a href="https://tracebug.dev" target="_blank" rel="noopener noreferrer" title="Open tracebug.dev" style="font-size:16px;font-weight:700;color:var(--tb-text-primary, #fff);font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;text-decoration:none;cursor:pointer"><svg width="18" height="18" viewBox="0 0 96 96" fill="none"><defs><linearGradient id="th-p" x1="0" y1="0" x2="96" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FF5C6C"/><stop offset="1" stop-color="#FF5C6C"/></linearGradient></defs><rect x="4" y="4" width="88" height="88" rx="24" fill="#0B0B10"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EAECF3" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="url(#th-p)"/></svg>TraceBug</a>
           <div id="bt-rec-indicator" style="width:8px;height:8px;border-radius:50%;background:${_isRecording ? "var(--tb-success, #22c55e)" : "var(--tb-error, #ef4444)"};animation:${_isRecording ? "bt-pulse 2s infinite" : "none"}" title="${_isRecording ? "Recording" : "Paused"}"></div>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #666);margin-top:2px">${errorSessions.length} error${errorSessions.length !== 1 ? "s" : ""} \xB7 ${allSessions.length} session${allSessions.length !== 1 ? "s" : ""}</div>
@@ -36115,7 +36117,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     <div style="color:var(--tb-text-muted, ${hasError ? "#f87171" : "#888"});font-size:11px;margin-top:6px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml4(preview)}</div>
     <div style="color:var(--tb-text-muted, #555);font-size:10px;margin-top:4px">${session.events.length} events \xB7 ${pages.length} page${pages.length !== 1 ? "s" : ""}</div>
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button data-tracebug="view-ticket" style="${smallBtnStyle("#6366F1")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
+      <button data-tracebug="view-ticket" style="${smallBtnStyle("#FF5C6C")}font-size:10px;flex:1">\u{1F4CB} View Ticket</button>
       <button data-tracebug="open-detail" style="${smallBtnStyle("#3b82f6")}font-size:10px">Details</button>
     </div>
   `);
@@ -37257,7 +37259,7 @@ ${"-".repeat(40)}
     return `background:${color}22;color:${color};border:1px solid ${color}44;border-radius:var(--tb-radius-sm, 4px);padding:4px 10px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);`;
   }
   function _tabBtnStyle(active) {
-    return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #6366F1);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
+    return active ? `background:transparent;border:none;border-bottom:2px solid var(--tb-accent, #FF5C6C);color:var(--tb-text-primary, #fff);padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;` : `background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tb-text-muted, #666);padding:8px 14px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--tb-font-family, system-ui,sans-serif);white-space:nowrap;`;
   }
   function renderAnnotationList(panel) {
     var _a2, _b, _c, _d;
@@ -37349,7 +37351,7 @@ ${"-".repeat(40)}
         </svg>
         <div style="font-family:var(--tb-font-family, system-ui,sans-serif);font-size:14px;font-weight:600;color:var(--tb-text-muted, #888);margin-bottom:6px">Ready to annotate</div>
         <div style="font-size:12px;line-height:1.5;color:var(--tb-text-muted, #555);max-width:260px;margin:0 auto">
-          Use <strong style="color:#6366F1">Annotate</strong> to click elements or <strong style="color:#6366F1">Draw</strong> to mark regions on the page.
+          Use <strong style="color:#FF5C6C">Annotate</strong> to click elements or <strong style="color:#FF5C6C">Draw</strong> to mark regions on the page.
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #444);margin-top:12px">
           Keyboard: <span style="background:#1e1e32;padding:2px 6px;border-radius:3px;font-family:monospace">Ctrl+Shift+A</span>
@@ -37361,7 +37363,7 @@ ${"-".repeat(40)}
     }
     let html = "";
     if (elAnnotations.length > 0) {
-      html += `<div style="font-size:11px;color:#6366F1;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #6366F1;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
+      html += `<div style="font-size:11px;color:#FF5C6C;font-weight:700;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #FF5C6C;padding-left:8px">ELEMENT ANNOTATIONS (${elAnnotations.length})</div>`;
       for (let i2 = 0; i2 < elAnnotations.length; i2++) {
         const a2 = elAnnotations[i2];
         const intentColor = _getIntentColor(a2.intent);
@@ -37384,7 +37386,7 @@ ${"-".repeat(40)}
       }
     }
     if (drawRegions.length > 0) {
-      html += `<div style="font-size:11px;color:#4F46E5;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #4F46E5;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
+      html += `<div style="font-size:11px;color:#FF5C6C;font-weight:700;margin-top:14px;margin-bottom:10px;font-family:var(--tb-font-family, system-ui,sans-serif);display:flex;align-items:center;gap:6px;border-left:3px solid #FF5C6C;padding-left:8px">DRAW REGIONS (${drawRegions.length})</div>`;
       for (let i2 = 0; i2 < drawRegions.length; i2++) {
         const r2 = drawRegions[i2];
         const shapeLabel = r2.shape === "rect" ? "Rectangle" : "Ellipse";
@@ -37588,7 +37590,7 @@ ${"-".repeat(40)}
       </button>
 
       <!-- Save \u2014 primary accent -->
-      <button id="bt-ann-save" style="background:var(--tb-accent, #6366F1);color:#fff;border:none;border-radius:8px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);white-space:nowrap;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(99,102,241,0.35);transition:all 0.15s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+      <button id="bt-ann-save" style="background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:8px;padding:7px 18px;cursor:pointer;font-size:13px;font-weight:600;font-family:var(--tb-font-family, inherit);white-space:nowrap;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(255,92,108,0.35);transition:all 0.15s" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         Save Annotated
       </button>
@@ -37868,7 +37870,7 @@ ${"-".repeat(40)}
   }
   function annToolBtnStyle(active) {
     if (active) {
-      return "background:#6366F1;color:#fff;border:1px solid #6366F1;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 8px rgba(99,102,241,0.4);display:inline-flex;align-items:center;";
+      return "background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);border:1px solid #FF5C6C;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;font-family:var(--tb-font-family, inherit);box-shadow:0 2px 8px rgba(255,92,108,0.4);display:inline-flex;align-items:center;";
     }
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
@@ -38911,7 +38913,7 @@ First element: \`${exampleSnippet}\``,
       transition: all 0.12s !important;
     }
     #${CARD_ID3} .tb-lbc-primary {
-      background: var(--tb-accent, #6366F1) !important;
+      background: var(--tb-accent, #FF5C6C) !important;
       color: #fff !important;
       border-color: transparent !important;
     }
@@ -38970,8 +38972,8 @@ First element: \`${exampleSnippet}\``,
     const style = createStyleTag(STYLE_ID5);
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.0); outline: 2px solid transparent; }
-      30% { box-shadow: 0 0 0 6px rgba(99,102,241,0.5); outline: 2px solid #6366F1; }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,108,0.0); outline: 2px solid transparent; }
+      30% { box-shadow: 0 0 0 6px rgba(255,92,108,0.5); outline: 2px solid #FF5C6C; }
     }
     #${PANEL_ID3}-overlay {
       position: fixed !important;
@@ -39049,7 +39051,7 @@ First element: \`${exampleSnippet}\``,
       color: var(--tb-text-primary, #fff);
     }
     #${PANEL_ID3} .tb-issue-actions button[data-action="file"] {
-      background: var(--tb-accent, #6366F1);
+      background: var(--tb-accent, #FF5C6C);
       color: #fff;
       border-color: transparent;
     }
@@ -39184,7 +39186,7 @@ First element: \`${exampleSnippet}\``,
           <span style="font-size:13px;color:var(--tb-text-primary, #e0e0e0);font-weight:500">${escapeHtml(issue.title)}</span>
         </div>
         <div style="font-size:11px;color:var(--tb-text-muted, #888);line-height:1.5;white-space:pre-wrap">${escapeHtml(desc)}</div>
-        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #6366F1);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
+        ${issue.helpUrl ? `<a href="${issue.helpUrl}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--tb-accent, #FF5C6C);margin-top:4px;display:inline-block">Learn more \u2192</a>` : ""}
         ${samplesHtml}
       </div>
       <div class="tb-issue-actions">
@@ -39212,8 +39214,8 @@ First element: \`${exampleSnippet}\``,
     const prevOutline = htmlEl.style.outline;
     const prevTransition = htmlEl.style.transition;
     htmlEl.style.transition = "outline 0.2s, box-shadow 0.2s";
-    htmlEl.style.outline = "3px solid #6366F1";
-    htmlEl.style.boxShadow = "0 0 0 6px rgba(99,102,241,0.35)";
+    htmlEl.style.outline = "3px solid #FF5C6C";
+    htmlEl.style.boxShadow = "0 0 0 6px rgba(255,92,108,0.35)";
     setTimeout(() => {
       htmlEl.style.outline = prevOutline;
       htmlEl.style.boxShadow = "";
@@ -40011,7 +40013,7 @@ First element: \`${exampleSnippet}\``,
     setInnerHTML(layer, `
     <div data-tb-i="margin" style="position:fixed;background:rgba(246,178,107,0.25);pointer-events:none;display:none"></div>
     <div data-tb-i="padding" style="position:fixed;background:rgba(147,196,125,0.30);pointer-events:none;display:none"></div>
-    <div data-tb-i="content" style="position:fixed;background:rgba(111,168,220,0.30);outline:1.5px solid #6366F1;pointer-events:none;display:none"></div>
+    <div data-tb-i="content" style="position:fixed;background:rgba(111,168,220,0.30);outline:1.5px solid #FF5C6C;pointer-events:none;display:none"></div>
     <div data-tb-i="tip" style="position:fixed;display:none;max-width:340px;background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:8px;padding:8px 10px;font:11px/1.5 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none;white-space:pre-wrap;word-break:break-word"></div>
     <div data-tb-i="hint" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:7px 16px;font:12px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none">\u{1F3AF} Inspect \u2014 click an element to attach its style evidence \xB7 Esc to exit</div>
   `);

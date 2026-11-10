@@ -134,7 +134,7 @@ export function showReviewAsk(root: HTMLElement): void {
   rate.target = "_blank";
   rate.rel = "noopener noreferrer";
   rate.setAttribute("data-act", "rate");
-  setInlineStyle(rate, "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#6366F1);color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none");
+  setInlineStyle(rate, "display:inline-flex;align-items:center;gap:6px;background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;text-decoration:none");
   const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   star.setAttribute("width", "13");
   star.setAttribute("height", "13");

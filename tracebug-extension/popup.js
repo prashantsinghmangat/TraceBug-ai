@@ -1118,13 +1118,13 @@ function showToastAction(msg, actionLabel, onAction, steps) {
   if (onAction) {
     const act = document.createElement("button");
     act.textContent = actionLabel;
-    act.style.cssText = "background:var(--error);color:#fff;border:0;border-radius:6px;padding:5px 10px;font:600 11.5px inherit;cursor:pointer";
+    act.style.cssText = "background:var(--error);color:#fff;border:0;border-radius:6px;padding:5px 10px;font-weight:600;font-size:11.5px;font-family:inherit;cursor:pointer";
     act.addEventListener("click", onAction);
     row.appendChild(act);
   }
   const dismiss = document.createElement("button");
   dismiss.textContent = "Dismiss";
-  dismiss.style.cssText = "background:none;border:0;color:inherit;opacity:0.75;font:600 11.5px inherit;cursor:pointer;padding:5px 2px";
+  dismiss.style.cssText = "background:none;border:0;color:inherit;opacity:0.75;font-weight:600;font-size:11.5px;font-family:inherit;cursor:pointer;padding:5px 2px";
   dismiss.addEventListener("click", () => { t.style.display = "none"; });
   row.appendChild(dismiss);
   t.appendChild(row);
