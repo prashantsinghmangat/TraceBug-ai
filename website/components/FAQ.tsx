@@ -41,15 +41,15 @@ export default function FAQ() {
                 type="button"
                 onClick={() => setOpen(open === i ? null : i)}
                 aria-expanded={open === i}
-                className="flex w-full items-center justify-between gap-4 py-5 text-left"
+                className="group flex w-full items-center justify-between gap-4 py-5 text-left transition-opacity active:opacity-70"
               >
-                <span className="text-[16px] font-medium text-text-primary">
+                <span className="text-[16px] font-medium text-text-primary transition-colors group-hover:text-primary">
                   {item.q}
                 </span>
                 <ChevronDown
                   size={18}
                   strokeWidth={1.5}
-                  className={`shrink-0 text-text-subtle transition-transform duration-200 ${
+                  className={`shrink-0 text-text-subtle transition-[transform,color] duration-200 group-hover:text-text-primary ${
                     open === i ? "rotate-180" : ""
                   }`}
                 />
