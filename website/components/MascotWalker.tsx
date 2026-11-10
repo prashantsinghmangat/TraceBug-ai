@@ -1,11 +1,10 @@
 "use client";
 
-import { LINKS } from "@/lib/site";
-import { Logo } from "@/components/ui/logos";
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import PageMascot from "@/components/PageMascot";
+import { InstallButton } from "@/components/InstallButtons";
 
 const DISMISS_KEY = "tracebug-walker-dismissed";
 const SIZE = 132;
@@ -197,7 +196,7 @@ export default function MascotWalker() {
             onRight ? "right-0" : "left-0"
           } ${bubbleBelow ? "top-[140px]" : "bottom-[116px]"} ${walking && !free ? "opacity-0" : "opacity-100"}`}
           role="complementary"
-          aria-label="TraceBug Chrome extension"
+          aria-label="TraceBug browser extension"
         >
           <button
             type="button"
@@ -209,15 +208,7 @@ export default function MascotWalker() {
           </button>
           <p className="pr-6 text-[14px] leading-[1.45] text-text-primary">{bubbleText}</p>
           <div className="mt-3 flex items-center gap-3">
-            <a
-              href={LINKS.chrome}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-cta px-3 text-[13px] font-medium text-on-cta transition-colors hover:bg-cta/85"
-            >
-              <Logo name="chrome" size={14} />
-              Add to Chrome, free
-            </a>
+            <InstallButton className="!h-8 !rounded-md !px-3 !text-[13px]" />
             {free && (
               <button
                 type="button"

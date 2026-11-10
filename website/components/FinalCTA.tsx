@@ -1,14 +1,12 @@
-import { LINKS } from "@/lib/site";
 import { TerminalSquare } from "lucide-react";
-import { Logo } from "@/components/ui/logos";
+import InstallButtons from "@/components/InstallButtons";
 import Shortcut from "@/components/Keycap";
 import PageMascot from "@/components/PageMascot";
 
 
-// Same button shape as the hero's action row.
+// Same button shape as the hero's action row (store buttons: InstallButtons).
 const BTN =
   "inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] px-5 text-[15px] font-medium transition-[background-color,transform] duration-150 active:scale-[0.98]";
-const PRIMARY = "bg-cta text-on-cta hover:bg-cta/85";
 const SECONDARY = "border border-border-strong bg-background text-text-primary hover:bg-surface";
 
 // Closing call to action: the character celebrating the fix beside the promise,
@@ -27,15 +25,8 @@ export default function FinalCTA() {
             Free, no account. Works with any front-end framework. Your data stays on your machine.
           </p>
           <div className="mt-8 grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:items-center">
-            <a href={LINKS.chrome} target="_blank" rel="noopener noreferrer" className={`${BTN} ${PRIMARY}`}>
-              <Logo name="chrome" size={18} />
-              Add to Chrome, free
-            </a>
-            <a href={LINKS.firefox} target="_blank" rel="noopener noreferrer" className={`${BTN} ${SECONDARY}`}>
-              <Logo name="firefox" size={18} />
-              Add to Firefox
-            </a>
-            <a href="#mcp" className={`${BTN} ${SECONDARY}`}>
+            <InstallButtons />
+            <a href="/#mcp" className={`${BTN} ${SECONDARY}`}>
               <TerminalSquare size={16} strokeWidth={1.5} />
               MCP setup
             </a>

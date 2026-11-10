@@ -18,7 +18,7 @@ const FEATURES: { id: Id; Icon: LucideIcon; title: string; body: React.ReactNode
     id: "capture",
     Icon: Camera,
     title: "Capture in one keypress",
-    body: <>Press <Shortcut /> on any page. Screenshot, steps and environment land in one report.</>,
+    body: <>Click Capture Bug and reproduce it: clicks, console and network are recorded. Or press <Shortcut /> for an instant screenshot ticket.</>,
   },
   {
     id: "annotate",
@@ -42,7 +42,7 @@ const FEATURES: { id: Id; Icon: LucideIcon; title: string; body: React.ReactNode
     id: "private",
     Icon: ShieldCheck,
     title: "Private by design",
-    body: "Passwords, tokens and hidden fields are masked. Nothing is uploaded; there's no server to upload to.",
+    body: "Passwords and tokens in typed fields are masked. Nothing is uploaded; there's no server to upload to.",
   },
   {
     id: "ai",

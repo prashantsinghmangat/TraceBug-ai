@@ -5,11 +5,12 @@ import Features from "@/components/Features";
 import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
 import Reveal from "@/components/Reveal";
+import InstallButtons from "@/components/InstallButtons";
 
 export const metadata: Metadata = {
   title: "Features — TraceBug",
   description:
-    "The full TraceBug feature surface: instant 2-click capture, rolling video buffer, auto-scanner, screenshots & annotation, voice descriptions, one-click GitHub & Jira export, plugins & hooks, and a local-first privacy model. Works with every major front-end framework.",
+    "Everything in a TraceBug report: one-click capture, screenshots with drawing and blur, console and network logs, a DOM replay, optional video and voice, GitHub, Linear, Slack and Jira export, and an MCP hand-off to your AI agent. Local-first, any front-end framework.",
   alternates: { canonical: "/features" },
 };
 
@@ -20,7 +21,17 @@ export default function FeaturesPage() {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-      <div className="pt-20">
+      <div className="pt-28">
+        <header className="mx-auto max-w-6xl px-4 pb-12 sm:px-6 lg:px-8 lg:pb-16">
+          <h1 className="max-w-3xl text-h2 font-medium text-text-primary">Everything in one bug report</h1>
+          <p className="mt-4 max-w-2xl text-lead text-text-muted">
+            Capture, annotate and redact a bug, then file it or hand it to your AI agent. Free, local-first, any
+            front-end framework.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <InstallButtons />
+          </div>
+        </header>
         <FrameworkMarquee />
         <Reveal><Features /></Reveal>
         <Reveal><FinalCTA /></Reveal>

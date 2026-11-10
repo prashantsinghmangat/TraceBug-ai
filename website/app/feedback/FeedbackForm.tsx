@@ -15,7 +15,7 @@ const TYPES = [
 ] as const;
 
 const AREAS = [
-  { key: "extension", label: "Chrome extension" },
+  { key: "extension", label: "Browser extension" },
   { key: "npm-sdk", label: "npm SDK" },
   { key: "website", label: "Website" },
   { key: "mcp", label: "MCP / AI agents" },
@@ -82,6 +82,7 @@ export default function FeedbackForm() {
   return (
     <>
       <SectionHeading
+        as="h1"
         align="left"
         eyebrow="Feedback"
         title="Found a bug in the bug-catcher?"

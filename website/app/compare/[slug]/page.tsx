@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import FinalCTA from "@/components/FinalCTA";
+import InstallButtons from "@/components/InstallButtons";
 import { notFound } from "next/navigation";
 
 // Programmatic SEO: generates pages like /compare/sentry-alternative, /compare/logrocket-alternative
@@ -43,7 +45,7 @@ const comparisons: Record<string, {
       "DOM session replay (rrweb) inside a single offline .html — no per-session cloud pricing, no retention limits",
       "AI-agent ready — Claude Code or Cursor reads the report over a local MCP server and starts fixing; LogRocket's replay is built for human eyes",
       "Nothing leaves the browser — LogRocket streams every session to their servers; TraceBug captures only the bug you choose to export",
-      "Every report embeds a generated failing Playwright test — red until the bug is fixed",
+      "Reports with captured actions embed a generated failing Playwright test — red until the bug is fixed",
       "Instant setup — npm install + 2 lines, or just the extension. No account",
       "Free and open source (MIT) — no per-seat, per-session, or retention pricing",
     ],
@@ -81,7 +83,7 @@ const comparisons: Record<string, {
     tagline: "Jam sends the bug to a dashboard. TraceBug sends it to your AI agent.",
     advantages: [
       "AI-agent ready — a local MCP server hands the report to Claude Code, Cursor, or Windsurf to fix; Jam is built for a human dashboard",
-      "Every report embeds a generated failing test the agent runs to verify the fix",
+      "Reports with captured actions embed a generated failing test the agent runs to verify the fix",
       "Local-first, zero backend — the report is one self-contained .html file, nothing is uploaded",
       "Free and open source (MIT) — Jam is a paid cloud product",
       "Works offline — open the report file with no network, no login",
@@ -260,30 +262,23 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
       <div className="pt-24 pb-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-muted text-sm mb-4">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <span className="w-2 h-2 rounded-full bg-accent"></span>
               Comparison
             </div>
-            <h1 className="text-4xl font-bold text-text-primary mb-4">{data.title}</h1>
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">{data.title}</h1>
             <p className="text-xl text-text-muted">{data.tagline}</p>
           </div>
 
-          {/* Quick install CTA */}
-          <div className="bg-surface border border-border rounded-xl p-6 mb-12">
-            <p className="text-text-muted text-sm mb-3">Try TraceBug in 30 seconds:</p>
-            <div className="code-block p-4 rounded-lg font-mono text-sm">
-              <div className="text-text-muted">$ npm install tracebug-sdk</div>
-              <div className="text-success mt-2">
-                {`import TraceBug from "tracebug-sdk";`}
-                <br />
-                {`TraceBug.init({ projectId: "my-app" });`}
-              </div>
-            </div>
+          {/* Quick install CTA: the extension first (what the compared tools are), the SDK as the alternative */}
+          <div className="mb-12 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <InstallButtons />
+            <span className="font-mono text-[13px] text-text-subtle sm:ml-2">or npm i tracebug-sdk</span>
           </div>
 
           {/* Advantages */}
           <div className="mb-12">
-            <h2 className="text-2xl font-bold text-text-primary mb-6">
+            <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
               Why developers choose TraceBug over {data.competitor}
             </h2>
             <div className="space-y-4">
@@ -299,7 +294,7 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
           {/* Honest disadvantages */}
           {data.disadvantages.length > 0 && (
             <div className="mb-12">
-              <h2 className="text-2xl font-bold text-text-primary mb-6">
+              <h2 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-6">
                 When {data.competitor} might be a better fit
               </h2>
               <div className="space-y-3">
@@ -315,7 +310,7 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
 
           {/* Final CTA */}
           <div className="bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-xl p-8 text-center">
-            <h3 className="text-2xl font-bold text-text-primary mb-3">Ready to try TraceBug?</h3>
+            <h3 className="text-[26px] font-medium tracking-[-0.02em] text-text-primary mb-3">Ready to try TraceBug?</h3>
             <p className="text-text-muted mb-6">Free, open source, and takes under 2 minutes to set up.</p>
             <div className="flex gap-4 justify-center">
               <a href="/docs" className="px-6 py-3 bg-primary text-on-primary rounded-lg font-semibold hover:brightness-110 transition-colors">
@@ -328,6 +323,7 @@ export default function ComparePage({ params }: { params: { slug: string } }) {
           </div>
         </div>
       </div>
+      <FinalCTA />
       <Footer />
     </main>
   );

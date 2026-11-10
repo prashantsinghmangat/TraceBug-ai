@@ -8,7 +8,7 @@ import "./globals.css";
 // Theme fonts (Midnight coral). Self-hosted by next/font at build time, so the
 // page itself makes no request to Google. To change fonts, swap these two and
 // keep the variable names (globals.css reads them as --font-sans / --font-mono).
-const sans = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-space-grotesk", display: "swap" });
+const sans = Space_Grotesk({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-space-grotesk", display: "swap" });
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-jetbrains-mono", display: "swap" });
 
 export const metadata: Metadata = {

@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Check, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LINKS } from "@/lib/site";
+import { useVisitorStore } from "@/components/InstallButtons";
 
 // Seven reasons, and every one of them is a thing that can actually be fixed or
 // learned from. No "I don't like it" catch-all masquerading as a reason, and
@@ -21,11 +23,10 @@ const REASONS = [
 ] as const;
 
 const ISSUES_URL = "https://github.com/prashantsinghmangat/tracebug-ai/issues/new/choose";
-// The real listing id, same one as docs/chrome-extension.md and src/links.ts.
-const STORE_URL =
-  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj?utm_source=bye";
 
 export default function ByeForm() {
+  // Firefox uninstalls land here too (setUninstallURL), so reinstall from the right store.
+  const store = useVisitorStore();
   // The extension appends ?v=<version>, and that is the ONLY thing it sends.
   // Validated rather than trusted: this value is rendered and submitted, and it
   // arrives from a URL anyone can edit.
@@ -77,7 +78,7 @@ export default function ByeForm() {
             <ArrowUpRight size={14} className="text-text-subtle" />
           </a>
           <a
-            href={STORE_URL}
+            href={`${LINKS[store]}?utm_source=bye`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[13.5px] font-medium text-text-muted underline-offset-4 hover:text-text-primary hover:underline"

@@ -3,14 +3,11 @@ import { ArrowRight, Zap, FileText, MousePointerClick, ShieldCheck } from "lucid
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/ui/logos";
+import InstallButtons from "@/components/InstallButtons";
 
 // Exact-match landing page for the primary keyword "instant bug report".
 // Same programmatic-SEO play as /compare/* — real, honest content that
 // answers the query, then funnels to sandbox → extension → /proof.
-
-const CHROME_URL =
-  "https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj";
 
 export const metadata: Metadata = {
   title: "Instant Bug Report — one click, one file, zero forms | TraceBug",
@@ -43,11 +40,11 @@ export default function InstantBugReportPage() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-12 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-sm text-text-muted">
+            <div className="mb-4 inline-flex items-center gap-2 font-mono text-[13px] text-text-subtle">
               <Zap size={13} className="text-primary" />
               Two clicks. No forms. No account.
             </div>
-            <h1 className="mb-4 text-4xl sm:text-5xl font-bold tracking-[-0.02em] text-text-primary">
+            <h1 className="mb-4 text-h2 font-medium text-text-primary">
               Instant bug report:
               <br />
               one click, one file, zero forms
@@ -59,11 +56,7 @@ export default function InstantBugReportPage() {
               — free, open source, and nothing ever leaves your machine.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg" variant="gradient">
-                <a href={CHROME_URL} target="_blank" rel="noopener noreferrer">
-                  <Logo name="chrome" size={17} /> Add to Chrome — free <ArrowRight size={14} />
-                </a>
-              </Button>
+              <InstallButtons />
               <Button asChild size="lg" variant="outline">
                 <a href="/try.html" target="_blank" rel="noopener noreferrer">
                   Try it on a live bug <ArrowRight size={14} />

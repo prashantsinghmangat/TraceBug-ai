@@ -23,6 +23,7 @@ export default async function BlogIndex() {
       <section className="pt-32 pb-24">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <SectionHeading
+            as="h1"
             align="left"
             eyebrow="Blog"
             title="Notes from building the bug hand-off layer"

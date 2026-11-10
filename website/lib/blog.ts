@@ -75,7 +75,7 @@ When you're done, export it as **one self-contained .html file** that opens offl
 
 ## Try it
 
-1. Install TraceBug for [Chrome](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) (free, MIT open source, no account).
+1. Install TraceBug for [Chrome](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) or [Firefox](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/) (free, MIT open source, no account).
 2. Open the page with the bug and click the TraceBug icon.
 3. **Capture Bug** → **Events + Video** → **Tab**, turn on the mic if you want to talk it through, and start.
 4. Reproduce the bug, press Stop, export.
@@ -230,7 +230,7 @@ There's no daemon, no port, no account, and — worth saying explicitly — no n
 
 ## The tools the agent gets
 
-Six read-only tools. \`list_bug_reports\` finds every export and returns titles and summaries. \`get_bug_report\` returns one report's full evidence along with a prioritized investigation guide — which errors to look at first, which requests failed. Then \`get_console_errors\`, \`get_network_activity\`, \`get_repro_steps\`, and \`get_screenshot\` let it drill into each stream. Read-only matters: the agent can investigate anything and break nothing.
+Nine read-only tools. \`list_bug_reports\` finds every export and returns titles and summaries. \`get_bug_report\` returns one report's full evidence along with a prioritized investigation guide — which errors to look at first, which requests failed. Then \`get_console_errors\`, \`get_network_activity\`, \`get_repro_steps\`, \`get_screenshot\`, \`resolve_stack\` and \`get_fix_context\` let it drill into each stream, and \`get_playwright_test\` hands it a failing test to verify the fix. Read-only matters: the agent can investigate anything and break nothing.
 
 ## What it looks like in practice
 
@@ -261,11 +261,11 @@ The fix isn't a smarter prompt. It's better evidence. Here's the two-minute setu
 
 ## Step 1 — Capture the bug (2 clicks)
 
-Install the [TraceBug extension](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) (free, no account) or add \`tracebug-sdk\` to your app. When a bug happens: start a capture, reproduce it, click capture. TraceBug records the DOM session, console, and network locally — nothing is uploaded anywhere.
+Install the TraceBug extension for [Chrome](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) or [Firefox](https://addons.mozilla.org/firefox/addon/tracebug-bug-reports-for-ai/) (free, no account) or add \`tracebug-sdk\` to your app. When a bug happens: start a capture, reproduce it, click capture. TraceBug records the DOM session, console, and network locally — nothing is uploaded anywhere.
 
 ## Step 2 — Export one file
 
-Click **Export .html**. You get a single self-contained file — replay, errors, requests, timeline, environment — that opens offline in any browser. Typically under a megabyte thanks to gzip-compressed DOM events.
+Click **Export replay (.html)**. You get a single self-contained file — replay, errors, requests, timeline, environment — that opens offline in any browser. Typically under a megabyte thanks to gzip-compressed DOM events.
 
 ## Step 3 — Register the MCP server (once, ever)
 
@@ -277,7 +277,7 @@ That's the whole setup. The server runs locally and auto-discovers exports in yo
 
 ## What the agent can do now
 
-Your agent gets five tools: \`list_bug_reports\`, \`get_bug_report\` (which includes a prioritized investigation guide), \`get_console_errors\`, \`get_network_activity\`, and \`get_repro_steps\`. It reads the evidence, cross-references your codebase, and starts from the actual failing line instead of a guess.
+Your agent gets nine read-only tools, starting with \`list_bug_reports\` and \`get_bug_report\` (which includes a prioritized investigation guide), then \`get_console_errors\`, \`get_network_activity\`, \`get_repro_steps\` and more. It reads the evidence, cross-references your codebase, and starts from the actual failing line instead of a guess.
 
 We ran this exact flow and published the unedited transcript: **five tool calls from crash to root cause**, including the stack trace that named the file and line, and the diagnosis that followed. [Read the real transcript →](/proof)
 
@@ -710,7 +710,7 @@ Export options map to wherever your team lives — GitHub issue, Jira, Linear, o
 
 **The replay file is agent-readable.** The developer's agent reads it over a local MCP server — actual console errors, actual failed requests, your exact steps — instead of a paraphrase. Your capture becomes the agent's evidence, unfiltered.
 
-**Every report embeds a failing Playwright test.** Generated from your captured session, it fails while your bug exists and passes when it's fixed. You've not only reported the bug — you've shipped the verification for it. When the fix lands, the test tells everyone it's real. ([How that works →](/blog/failing-playwright-test-from-bug-report))
+**Reports with captured actions embed a failing Playwright test.** Generated from your captured session, it fails while your bug exists and passes when it's fixed. You've not only reported the bug — you've shipped the verification for it. When the fix lands, the test tells everyone it's real. ([How that works →](/blog/failing-playwright-test-from-bug-report))
 
 The result, on teams that run this loop: QA captures at 4:50pm, the developer's agent reads it at 9am, and the fix — proven green against your captured test — is in review before standup. The bounce-back questions ("what browser? can you get the console?") disappear, because the answers were captured before anyone thought to ask.
 
