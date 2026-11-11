@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     description:
       "The privacy-preserving counterpart to cloud AI debuggers. Your key stays on your machine, the prompt is scrubbed, and the request never touches a TraceBug backend.",
   },
+  alternates: { canonical: "/docs/ai-debugger" },
 };
 
 export default function AiDebuggerDocsPage() {

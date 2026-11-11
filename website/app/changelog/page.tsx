@@ -10,6 +10,7 @@ import { SDK_VERSION } from "@/lib/version";
 export const metadata: Metadata = {
   title: "Changelog — TraceBug",
   description: "Every TraceBug release: new capture features, MCP/agent workflow improvements, and fixes.",
+  alternates: { canonical: "/changelog" },
 };
 
 // Linear-style changelog rendered straight from the repo's CHANGELOG.md at
