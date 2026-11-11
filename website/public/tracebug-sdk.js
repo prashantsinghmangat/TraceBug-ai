@@ -26382,6 +26382,9 @@ ${rrwebCssTag}
 .tb-vrrweb-stage .replayer-wrapper{position:relative;transform-origin:top left}
 .tb-vrrweb-stage iframe{border:0;background:#fff}
 .tb-vrrweb-ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
+.tb-vsurf{display:inline-flex;gap:2px;margin-bottom:8px;padding:2px;border:1px solid var(--tb-border,#252A38);border-radius:8px}
+.tb-vsurf button{background:transparent;color:var(--tb-text-2,#A8AEBE);border:0;border-radius:6px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.tb-vsurf button[aria-pressed="true"]{background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent,#0B0D14)}
 .tb-vrrweb-btn{background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent,#0B0D14);border:0;border-radius:6px;width:36px;height:30px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0}
 .tb-vrrweb-btn:hover{filter:brightness(1.08)}
 .tb-vrrweb-seek{flex:1;accent-color:var(--tb-accent,#FF5C6C);cursor:pointer}
@@ -27484,23 +27487,26 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     }
   }
 
-  if (hasRrweb && data.rrwebEvents && data.rrwebEvents.length) {
-    mountRrwebPlayer();
-  } else if (hasRrweb && data.rrwebEventsGz) {
-    // Compressed stream: inflate off the raw base64, then mount. Cheap
-    // (~10ms for a few hundred KB) so no spinner; on failure fall back.
+  // Mount the DOM replay, inflating the compressed stream first if that is
+  // what was embedded (~10ms for a few hundred KB, so no spinner).
+  var domReplayMounted = false;
+  function startDomReplay(onFail) {
+    if (domReplayMounted) return;
+    domReplayMounted = true;
+    if (data.rrwebEvents && data.rrwebEvents.length) { mountRrwebPlayer(); return; }
     inflateRrweb(data.rrwebEventsGz).then(function (evs) {
       data.rrwebEvents = evs;
       mountRrwebPlayer();
     }).catch(function (e) {
       hasRrweb = false;
       if (typeof console !== "undefined") console.warn("[TraceBug] replay decompress failed:", e && e.message);
-      var pv = document.getElementById("preview-wrap"); if (pv) pv.style.display = "";
-      if (screenshots.length > 0) { img.src = screenshots[0].dataUrl; img.style.display = "block"; buildScreenshotGallery(); }
-      else { img.style.display = "none"; emptyMsg.style.display = "block"; }
+      onFail();
     });
-  } else if (hasVideo) {
-    // Show poster (best screenshot) + Play overlay; defer base64 decode.
+  }
+
+  // Video poster (best screenshot) + Play overlay; the base64 decode waits
+  // for the first play.
+  function showVideoPoster() {
     if (screenshots.length > 0) {
       img.src = screenshots[0].dataUrl;
       img.style.display = "block";
@@ -27515,6 +27521,69 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         playOverlaySub.textContent = [dur, sz].filter(Boolean).join(" \xB7 ");
       }
     }
+  }
+
+  // Both surfaces embedded: a two-way switch above them. The video stays the
+  // default because it is the only one with sound; the DOM replay mounts on
+  // first use.
+  function addSurfaceSwitch() {
+    var pv = document.getElementById("preview-wrap");
+    var rw = document.getElementById("rrweb-wrap");
+    if (!pv || !rw || !pv.parentNode) return;
+    var bar = document.createElement("div");
+    bar.className = "tb-vsurf";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Replay surface");
+    var bVideo = document.createElement("button");
+    var bDom = document.createElement("button");
+    bVideo.type = bDom.type = "button";
+    // The recorders pick an Opus mime only when the stream has an audio track
+    // (video-recorder.ts, offscreen.js), so the codec list says whether it has sound.
+    bVideo.textContent = /opus|mp4a|audio/i.test(data.video.mimeType || "") ? "Video with audio" : "Video";
+    bDom.textContent = "Page replay";
+    bar.appendChild(bVideo); bar.appendChild(bDom);
+    rw.parentNode.insertBefore(bar, rw);
+    function select(dom) {
+      bVideo.setAttribute("aria-pressed", dom ? "false" : "true");
+      bDom.setAttribute("aria-pressed", dom ? "true" : "false");
+    }
+    select(false);
+    bDom.addEventListener("click", function () {
+      try { video.pause(); } catch (_e) {}
+      select(true);
+      if (domReplayMounted) {
+        pv.style.display = "none";
+        rw.style.display = "block";
+        var sc = document.getElementById("scrubber"); if (sc) sc.style.display = "none";
+        return;
+      }
+      startDomReplay(function () {
+        // The replay could not load: back to the video, and drop the switch.
+        pv.style.display = "";
+        if (bar.parentNode) bar.parentNode.removeChild(bar);
+      });
+    });
+    bVideo.addEventListener("click", function () {
+      var rrPlay = document.getElementById("rr-play");
+      if (rrPlay && rrPlay.textContent !== "\u25B6") rrPlay.click();
+      select(false);
+      rw.style.display = "none";
+      pv.style.display = "";
+      var sc = document.getElementById("scrubber"); if (sc) sc.style.display = "";
+    });
+  }
+
+  // A real screen recording comes first: the reporter chose to record it, and
+  // it is the only surface with sound. The DOM replay is then one click away.
+  if (hasVideo) {
+    showVideoPoster();
+    if (hasRrweb) addSurfaceSwitch();
+  } else if (hasRrweb) {
+    startDomReplay(function () {
+      var pv = document.getElementById("preview-wrap"); if (pv) pv.style.display = "";
+      if (screenshots.length > 0) { img.src = screenshots[0].dataUrl; img.style.display = "block"; buildScreenshotGallery(); }
+      else { img.style.display = "none"; emptyMsg.style.display = "block"; }
+    });
   } else if (screenshots.length > 0) {
     img.src = screenshots[0].dataUrl;
     img.style.display = "block";
@@ -28206,7 +28275,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     var _a2, _b, _c, _d, _e, _f, _g, _h;
     const rrwebEvents = (_a2 = report.video) == null ? void 0 : _a2.rrwebEvents;
     const hasRrweb = Array.isArray(rrwebEvents) && rrwebEvents.length > 0;
-    const includeVideo = (_b = options == null ? void 0 : options.includeVideo) != null ? _b : hasRrweb ? false : !!report.video;
+    const hasRealVideo = !!(report.video && (report.video.dataUrl || report.video.url));
+    const includeVideo = (_b = options == null ? void 0 : options.includeVideo) != null ? _b : hasRealVideo;
     const timeline = buildTimeline(report.session.events, { baseUrl: (_c = report.environment) == null ? void 0 : _c.url }).map((t2) => ({
       timestamp: t2.timestamp,
       type: t2.type,
@@ -30624,6 +30694,9 @@ body{margin:0;background:#fff;color:#111113;font:14px/1.6 ui-sans-serif,system-u
       _mediaListener = () => _applyThemeVars();
       _mediaQuery.addEventListener("change", _mediaListener);
     }
+  }
+  function applyThemeToRoot() {
+    _applyThemeVars();
   }
   function removeTheme() {
     const root2 = document.getElementById("tracebug-root");
@@ -35935,6 +36008,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     root2.appendChild(liveRegion);
     root2.appendChild(panel);
     document.documentElement.appendChild(root2);
+    applyThemeToRoot();
     setRenderPanel(renderPanel);
     const cleanupToolbar = mountCompactToolbar(root2, panel, showToast, renderAnnotationList, toolbarPosition, shortcuts);
     showAnnotationBadges(root2);
@@ -37935,6 +38009,7 @@ ${"-".repeat(40)}
       init_quick_bug();
       init_helpers();
       init_video_recorder();
+      init_theme();
       init_plugin_system();
       init_cloud_upload();
       EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
