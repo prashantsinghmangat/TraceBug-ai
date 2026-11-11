@@ -227,6 +227,15 @@ export function injectTheme(mode: ThemeMode): void {
   }
 }
 
+/** Re-apply the current theme to #tracebug-root. init() calls injectTheme()
+ *  before mountDashboard() creates the root, and _applyThemeVars() is a no-op
+ *  without one — so the mount must call this once the root is in the DOM,
+ *  or no token reaches the in-page UI (every var(--tb-…) without a fallback
+ *  resolves to nothing: the ticket's More menu rendered transparent). */
+export function applyThemeToRoot(): void {
+  _applyThemeVars();
+}
+
 /** Remove theme styles and listeners */
 export function removeTheme(): void {
   const root = document.getElementById("tracebug-root");

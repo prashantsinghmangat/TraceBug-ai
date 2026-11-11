@@ -73,7 +73,7 @@ WHAT'S IN A REPORT
 FIX IT WITH YOUR AI AGENT
 ━━━━━━━━━━━━━━━━━━━━
 
-Export the report, then run "npx tracebug mcp". Claude Code, Cursor or any MCP client reads the report locally and works the bug in your codebase. It can also generate a failing Playwright test from the repro steps. Nothing is uploaded.
+Export the report, then connect TraceBug's local MCP server once (Claude Code: "claude mcp add -s user tracebug -- npx -y tracebug mcp"). Claude Code, Cursor or any MCP client reads the report locally and works the bug in your codebase. It can also generate a failing Playwright test from the repro steps. Nothing is uploaded.
 
 ━━━━━━━━━━━━━━━━━━━━
 EXPORT AND SHARE
@@ -191,7 +191,7 @@ Watch the 1-minute demo: https://www.youtube.com/watch?v=-U64GIPfeiQ
 1. Click the TraceBug icon → **Capture Bug** (or press **Alt+B**)
 2. Reproduce the bug — TraceBug records clicks, typing, navigation, console output and network requests
 3. Click **Stop**, review the report → **Export replay (.html)**
-4. Hand the file to a developer, attach it to an issue — or let an AI agent read it through TraceBug's local MCP server (`npx tracebug mcp`) and fix the bug
+4. Hand the file to a developer, attach it to an issue — or let an AI agent read it through TraceBug's local MCP server (`claude mcp add -s user tracebug -- npx -y tracebug mcp`) and fix the bug
 
 **What makes it different**
 - **Local-first** — reports and settings stay on your device; nothing goes to TraceBug.
