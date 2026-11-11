@@ -97,6 +97,29 @@ Size bounds: max 200 findings per run (counted, not silently dropped: `audit.tru
 Read-only always (Phase 11 rule): nothing is clicked, filled or submitted. A category that could not run
 shows N/A and never counts as passed. Never the word "compliant".
 
+## 4a. The scan menu [R] — added 2026-11-11 (user request)
+
+Reference: OverlayQA's toolbar menu, seen on tracebug.dev 2026-11-11 — Auto Review, AI Visual Comparison, Visual
+Comparison, Accessibility Audit, Design Tokens, Components. TraceBug offers the same kind of menu ("Run audit ▾" in
+the popup and the in-page toolbar), with one difference that is the product: **every finding is exported for the
+developer's AI agent and re-checked after the fix.** Each scan below is a detector group feeding the same
+`Issue` shape, export and `compare_audits`; none needs a backend.
+
+| Scan | What it finds | How (all local, deterministic unless noted) | Agent can fix? | Phase |
+|---|---|---|---|---|
+| **Auto Review** | Dead UI and broken states: buttons/links with no handler or `href`, dead clicks, broken images, empty containers, overflow and overlap, clipped text, console errors and failed requests seen on the page | Section 4 "UI" checks + existing `frustration`, `broken-images`, `session-data` detectors, one prioritized list | Yes | Sprint |
+| **Accessibility Audit** | Contrast, labels, names, ARIA, landmarks, keyboard: focusable-but-invisible, positive `tabindex`, missing focus style | axe-core + a small keyboard pass (Tab order read from the DOM; nothing is clicked) | Yes | Sprint |
+| **Performance / SEO** | Section 4 rows | Section 4 | Yes | Sprint |
+| **Design Tokens** | Values that should be tokens: colours, font sizes, spacing and radii used once or off the page's own scale; near-duplicate colours (ΔE small) | Collect computed styles, cluster, flag outliers against the page's CSS custom properties. Reports "12 greys within ΔE 2", never "wrong" | Yes: replace with the nearest token | Next (after sprint gate) |
+| **Components** | Inconsistent, drifted components: buttons/inputs/cards that share a role but differ in height, padding, radius or font | Group elements by role + class signature, diff their computed style, flag minority variants | Yes: align to the majority variant | Next |
+| **Visual Comparison** | Page vs. a design image: the user drops a PNG/Figma export, overlays it with opacity/offset, marks differences | Local file → overlay in the page; pixel diff per region. The image never leaves the machine | Partly: findings are regions + measured offsets | Later |
+| **AI Visual Comparison** | Same, with the differences described in words | Needs a vision model. MCP-first: the export carries page screenshot + design image, the developer's agent compares. Optional BYO-key call from the extension, same pattern as the AI debugger. No TraceBug-hosted model | Yes, by the agent that did the comparison | Later |
+
+Rules for this menu: read-only on every scan; a scan that cannot run says N/A; Design Tokens and Components report
+*inconsistency with the page's own majority*, never a taste judgement; no scan uses the word "compliant".
+The sprint ships the first three rows; the others wait for the day-14 gate, so the verify loop is proven on the
+deterministic scans first. Order after the gate: Design Tokens → Components → Visual Comparison → AI Visual Comparison.
+
 ## 5. MCP tools [R] — added to the existing server, existing naming style
 
 | Tool | Input | Output |
