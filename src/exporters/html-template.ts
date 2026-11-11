@@ -263,8 +263,12 @@ ${rrwebCssTag}
     <div class="tb-vss-meta" id="ssmeta"></div>
     <div id="ss-gallery" class="tb-vss-gallery" style="display:none"></div>
     <div id="desc-wrap" style="display:none">
-      <h2 class="tb-vh2">Description</h2>
-      <pre class="tb-vdesc" id="desc"></pre>
+      <div class="tb-vdesc-head">
+        <h2 class="tb-vh2">Description</h2>
+        <button type="button" class="tb-vdesc-toggle" id="desc-toggle" aria-pressed="false">View markdown</button>
+      </div>
+      <div class="tb-vdesc tb-vdesc-md" id="desc-md"></div>
+      <pre class="tb-vdesc tb-vdesc-raw" id="desc" style="display:none"></pre>
     </div>
     <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
       <img id="hover-thumb-img" alt="" />
@@ -470,7 +474,22 @@ body { min-height: 100vh; }
 .tb-vsummary-box { margin-bottom: 14px; }
 .tb-vsummary { font-size: 13px; line-height: 1.55; padding: 12px 14px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); color: var(--tb-text); }
 .tb-vdesc { font-size: 12px; line-height: 1.6; padding: 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); max-height: 360px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font-family: var(--tb-mono); margin: 0; color: var(--tb-text); }
-.tb-vtabstrip { display: flex; gap: 0; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md) var(--tb-radius-md) 0 0; padding: 0 8px; overflow-x: auto; }
+.tb-vdesc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tb-vdesc-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); border-radius: var(--tb-radius-sm); padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer; margin-top: 4px; }
+.tb-vdesc-toggle:hover { color: var(--tb-text); border-color: var(--tb-text-3); }
+.tb-vdesc-md { font-family: inherit; font-size: 13px; line-height: 1.6; white-space: normal; padding: 14px 16px; }
+.tb-vdesc-md > :first-child { margin-top: 0; }
+.tb-vdesc-md > :last-child { margin-bottom: 0; }
+.tb-vdesc-md p, .tb-vdesc-md ul, .tb-vdesc-md ol, .tb-vdesc-md blockquote, .tb-vdesc-md pre { margin: 0 0 10px; }
+.tb-vdesc-md h3, .tb-vdesc-md h4 { font-size: 13px; font-weight: 700; margin: 14px 0 6px; }
+.tb-vdesc-md ul, .tb-vdesc-md ol { padding-left: 20px; }
+.tb-vdesc-md li { margin: 2px 0; }
+.tb-vdesc-md strong { font-weight: 700; color: var(--tb-text); }
+.tb-vdesc-md em { color: var(--tb-text-2); }
+.tb-vdesc-md code { font-family: var(--tb-mono); font-size: 12px; background: var(--tb-bg-3, rgba(127,127,127,.15)); padding: 1px 5px; border-radius: 4px; }
+.tb-vdesc-md pre { font-family: var(--tb-mono); font-size: 12px; white-space: pre-wrap; word-wrap: break-word; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 8px 10px; }
+.tb-vdesc-md pre code { background: none; padding: 0; }
+.tb-vdesc-md blockquote { border-left: 3px solid var(--tb-accent); background: var(--tb-accent-soft); padding: 8px 12px; border-radius: 0 var(--tb-radius-sm) var(--tb-radius-sm) 0; }.tb-vtabstrip { display: flex; gap: 0; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md) var(--tb-radius-md) 0 0; padding: 0 8px; overflow-x: auto; }
 .tb-vtab { background: transparent; border: none; color: var(--tb-text-3); padding: 11px 13px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; transition: color .15s, border-color .15s; margin-bottom: -1px; letter-spacing: -0.01em; }
 .tb-vtab:hover { color: var(--tb-text); }
 .tb-vtab-active { color: var(--tb-text); border-bottom-color: var(--tb-accent); }
@@ -830,8 +849,77 @@ const REPLAY_RUNTIME = `(function(){
   // ── Summary box + Description (below the replay, mirrors the ticket modal) ──
   document.getElementById("summary").textContent = data.meta.summary || "(no summary)";
   if (data.description) {
-    document.getElementById("desc").textContent = data.description;
+    var descRaw = document.getElementById("desc");
+    var descMd = document.getElementById("desc-md");
+    var descToggle = document.getElementById("desc-toggle");
+    descRaw.textContent = data.description;
+    try { descMd.innerHTML = renderMarkdown(data.description); }
+    catch (_e) { descMd.style.display = "none"; descRaw.style.display = ""; descToggle.style.display = "none"; }
+    descToggle.addEventListener("click", function () {
+      var raw = descRaw.style.display === "none";
+      descRaw.style.display = raw ? "" : "none";
+      descMd.style.display = raw ? "none" : "";
+      descToggle.textContent = raw ? "View formatted" : "View markdown";
+      descToggle.setAttribute("aria-pressed", raw ? "true" : "false");
+    });
     document.getElementById("desc-wrap").style.display = "";
+  }
+
+  // Reading view for the ticket description: the small markdown subset the
+  // ticket builder writes (headings, quotes, lists, fenced code, **bold**,
+  // _italic_, inline code). Text is escaped before any tag is added, so the
+  // reporter's text can never inject markup.
+  function renderMarkdown(src) {
+    var BT = String.fromCharCode(96);
+    var FENCE = BT + BT + BT;
+    function e(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function inline(s) {
+      return String(s).split(BT).map(function (part, i) {
+        if (i % 2 === 1) return "<code>" + e(part) + "</code>";
+        return e(part)
+          .replace(/[*][*]([^*]+)[*][*]/g, "<strong>$1</strong>")
+          .replace(/(^|[^A-Za-z0-9])_([^_]+)_(?=[^A-Za-z0-9]|$)/g, "$1<em>$2</em>");
+      }).join("");
+    }
+    var lines = String(src).replace(/[\\r]/g, "").split("\\n");
+    var out = [], para = [], list = null, quote = [], code = null;
+    function flushPara() { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } }
+    function flushList() { if (list) { out.push("<" + list.tag + ">" + list.items.map(function (t) { return "<li>" + inline(t) + "</li>"; }).join("") + "</" + list.tag + ">"); list = null; } }
+    function flushQuote() { if (quote.length) { out.push("<blockquote>" + quote.map(inline).join("<br>") + "</blockquote>"); quote = []; } }
+    function flushAll() { flushPara(); flushList(); flushQuote(); }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (code) {
+        if (line.trim().indexOf(FENCE) === 0) { out.push("<pre><code>" + e(code.join("\\n")) + "</code></pre>"); code = null; }
+        else code.push(line);
+        continue;
+      }
+      if (line.trim().indexOf(FENCE) === 0) { flushAll(); code = []; continue; }
+      if (!line.trim()) { flushAll(); continue; }
+      var m;
+      if ((m = /^(#{1,6})[ ]+(.*)$/.exec(line))) {
+        flushAll();
+        var tag = m[1].length <= 2 ? "h3" : "h4";
+        out.push("<" + tag + ">" + inline(m[2]) + "</" + tag + ">");
+        continue;
+      }
+      if ((m = /^>[ ]?(.*)$/.exec(line))) { flushPara(); flushList(); quote.push(m[1]); continue; }
+      var ol = /^[ ]*[0-9]+[.)][ ]+(.*)$/.exec(line);
+      var ul = /^[ ]*[-*+][ ]+(.*)$/.exec(line);
+      if (ol || ul) {
+        var want = ol ? "ol" : "ul";
+        flushPara(); flushQuote();
+        if (list && list.tag !== want) flushList();
+        if (!list) list = { tag: want, items: [] };
+        list.items.push((ol || ul)[1]);
+        continue;
+      }
+      flushList(); flushQuote();
+      para.push(line);
+    }
+    if (code) out.push("<pre><code>" + e(code.join("\\n")) + "</code></pre>");
+    flushAll();
+    return out.join("");
   }
 
   // ── Tabs: populate counts + content ─────────────────────
