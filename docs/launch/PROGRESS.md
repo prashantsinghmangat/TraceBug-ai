@@ -319,3 +319,9 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - MCP vs the 2026-07-28 spec (stateless, `server/discover`): our server answers `server/discover` with -32601, which dual-era clients treat as "legacy, fall back to initialize"; fallback init, tools/list (9) and list_bug_reports all work. Modern-only clients would fail — adding `server/discover` is a follow-up, not a blocker.
 - Not run (needs a person): `npm run ext:firefox`, ticket modal in a real tab, toolbar Record in Chrome Tab mode, RELEASE_CHECKLIST manual rows.
 - Also: `docs/audit-quality/implementation-plan.md` (new, uncommitted) — Site Audit + verified-fix sprint plan; four blockers to decide before code.
+
+## Website pre-deploy check + canonical fix (2026-11-11)
+
+- Live tracebug.dev = `main` tip (coral, InstallButtons, no Discussions link); live changelog tops at 1.11.5. 15 pages at 375 px and 7 at 1280 px: no horizontal scroll, broken images or console errors. Headers: HSTS, nosniff, XFO, referrer; no site-wide CSP; `/_next/image` 404; `npm audit` = the deferred Next 14 advisories + build-time postcss.
+- **Fixed:** 17 pages (pricing, blog, docs/mcp, docs/playwright, docs/ai-debugger, docs/har-export, 12 × compare, changelog, privacy) inherited `canonical: "/"` from `app/layout.tsx` (since 2026-06-15), telling Google they duplicate the homepage. Each now sets its own `alternates.canonical`. Verified: tsc + next lint clean; dev server renders the right canonical on all 15 sampled routes, homepage unchanged.
+- Open (minor): descriptions 180–280 chars, ~20 titles > 65 chars, no og:image on docs/compare pages, `/sdk-bridge` still served.
