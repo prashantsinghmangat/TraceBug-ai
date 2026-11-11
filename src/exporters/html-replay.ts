@@ -76,13 +76,16 @@ async function buildReplayPayload(
   report: BugReport,
   options?: HtmlReplayOptions,
 ): Promise<{ blob: Blob; html: string }> {
-  // DOM replay (rrweb) is the preferred, tiny, inspectable replay surface. When
-  // it's present we default the base64 video OFF — that's the whole size win
-  // (KB of DOM events vs tens of MB of WebM). A caller can still force the video
-  // in alongside it with `includeVideo: true`.
+  // A real screen recording is embedded even when the DOM replay (rrweb) is
+  // too. The reporter chose to record video, and it is the only surface with
+  // sound — microphone narration and tab audio were silently lost when the
+  // video was dropped for size. Events-only captures carry a replay-only
+  // `report.video` with an empty url/dataUrl (report-builder.ts), so they stay
+  // video-free and small. A caller can still opt out with `includeVideo: false`.
   const rrwebEvents = report.video?.rrwebEvents;
   const hasRrweb = Array.isArray(rrwebEvents) && rrwebEvents.length > 0;
-  const includeVideo = options?.includeVideo ?? (hasRrweb ? false : !!report.video);
+  const hasRealVideo = !!(report.video && (report.video.dataUrl || report.video.url));
+  const includeVideo = options?.includeVideo ?? hasRealVideo;
 
   // Build a timeline that mirrors the live scrubber's marker logic.
   const timeline = buildTimeline(report.session.events, { baseUrl: report.environment?.url }).map(t => ({

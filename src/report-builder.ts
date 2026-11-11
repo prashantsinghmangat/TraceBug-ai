@@ -65,12 +65,11 @@ export function getSessionVideo(session: StoredSession | null | undefined): Vide
  * field empty. Phase 4 made events-only the popup's default capture, so this
  * is the common case now, not an edge one.
  *
- * Why reuse `report.video` rather than add a field: every export path already
- * prefers the rrweb branch and drops the video when `rrwebEvents` is present
- * (`html-replay.ts` resolves `includeVideo = hasRrweb ? false : !!report.video`),
- * so a replay-only object flows through the existing branches untouched and no
- * `video` key reaches the payload. Consumers that mean *actual video* check
- * `dataUrl`, not the object's presence.
+ * Why reuse `report.video` rather than add a field: the .html exporter embeds
+ * a video only when it has a real `dataUrl`/`url` (`html-replay.ts`,
+ * `hasRealVideo`), so a replay-only object flows through the existing branches
+ * untouched and no `video` key reaches the payload. Consumers that mean
+ * *actual video* check `dataUrl`, not the object's presence.
  *
  * Deliberately NOT stashed into video-recorder's `_lastRecording`: the ticket
  * modal reads `getSessionVideo()` directly and would render a `<video>` with an
