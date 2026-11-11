@@ -130,27 +130,34 @@ function Browser({ children }: { children: React.ReactNode }) {
 }
 
 // The page under test, shared by most previews.
-function Checkout({ masked = false }: { masked?: boolean }) {
+// `annotated` draws the two annotation marks on the elements themselves (a
+// blur over the card number, a box around the button), so they stay aligned
+// however the card lays out.
+function Checkout({ masked = false, annotated = false }: { masked?: boolean; annotated?: boolean }) {
   return (
     <div className="max-w-[340px] rounded-xl border border-border bg-background p-5">
       <div className="text-[16px] font-medium text-text-primary">Checkout</div>
       <div className="mt-4 space-y-2.5 text-[13px]">
         <Field label="Email" value={masked ? "r•••@•••••.com" : "riya@example.com"} />
-        <Field label="Card" value={masked ? "•••• •••• •••• ••••" : "4242 4242 4242 4242"} />
+        <Field label="Card" value={masked ? "•••• •••• •••• ••••" : "4242 4242 4242 4242"} blurred={annotated} />
         <Field label="Coupon" value="SPRING25" />
       </div>
-      <div className="mt-4 inline-flex h-9 items-center rounded-lg bg-text-primary px-4 text-[13px] font-medium text-background">
+      <div className="relative mt-4 inline-flex h-9 items-center rounded-lg bg-text-primary px-4 text-[13px] font-medium text-background">
         Place order
+        {annotated && <span aria-hidden className="pointer-events-none absolute -inset-[7px] rounded-xl border-2 border-error" />}
       </div>
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, blurred = false }: { label: string; value: string; blurred?: boolean }) {
   return (
     <div className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2">
       <span className="text-text-subtle">{label}</span>
-      <span className="font-mono text-[12px] text-text-primary">{value}</span>
+      <span className="relative font-mono text-[12px] text-text-primary">
+        {value}
+        {blurred && <span aria-hidden className="absolute -inset-x-1.5 -inset-y-1 rounded bg-text-subtle/30 backdrop-blur-[3px]" />}
+      </span>
     </div>
   );
 }
@@ -181,12 +188,8 @@ function Preview({ id }: { id: Id }) {
     case "annotate":
       return (
         <>
-          <div className="relative">
-            <Checkout />
-            <span className="absolute left-[14px] top-[180px] h-12 w-[140px] rounded-lg border-2 border-error" />
-            <span className="absolute left-[60px] top-[78px] h-[30px] w-[200px] rounded bg-text-subtle/40 backdrop-blur-sm" />
-          </div>
-          <div className="absolute bottom-[86px] left-[190px] rotate-[-4deg] font-mono text-[14px] font-medium text-error">
+          <Checkout annotated />
+          <div className="absolute left-[172px] top-[226px] rotate-[-4deg] whitespace-nowrap font-mono text-[14px] font-medium text-error">
             ← nothing happens on click
           </div>
           <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-1 rounded-xl border border-border bg-background p-1.5 shadow-float">

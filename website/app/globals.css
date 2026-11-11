@@ -22,12 +22,10 @@
   --border: 226 228 234;        /* #E2E4EA hairline                 */
   --border-strong: 208 212 220; /* #D0D4DC                          */
   --primary: 200 30 60;         /* #C81E3C deep coral — AA on white */
-  --primary-soft: 200 30 60;
   --accent: 200 30 60;          /* one accent: same as primary      */
   --on-primary: 255 255 255;    /* text on a primary fill           */
   --cta: 255 92 108;            /* #FF5C6C coral buttons, ink text  */
   --on-cta: 11 13 20;
-  --highlight: 255 230 233;     /* #FFE6E9 coral wash               */
   --success: 22 163 74;         /* #16A34A                          */
   --error: 220 38 38;           /* #DC2626                          */
   --warning: 180 83 9;          /* #B45309                          */
@@ -35,13 +33,7 @@
   --text-muted: 75 85 101;      /* #4B5565 secondary                */
   --text-subtle: 103 112 130;   /* #677082 muted (≈4.6:1)           */
 
-  --grad-from: #C81E3C;
-  --grad-mid: #C81E3C;
-  --grad-to: #C81E3C;
   --shadow-ink: 16 20 32;
-
-  /* Trace, the pixel bug: one coral that reads on paper and on ink. */
-  --trace: #FF5C6C;
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -73,12 +65,10 @@
   --border: 37 42 56;           /* #252A38 hairline                 */
   --border-strong: 51 58 77;    /* #333A4D                          */
   --primary: 255 92 108;        /* #FF5C6C coral                    */
-  --primary-soft: 255 92 108;
   --accent: 255 92 108;
   --on-primary: 11 13 20;       /* ink text on coral                */
   --cta: 255 92 108;            /* coral buttons                    */
   --on-cta: 11 13 20;
-  --highlight: 58 22 28;        /* #3A161C coral wash on midnight   */
   --success: 76 195 138;        /* #4CC38A                          */
   --error: 240 82 87;           /* #F05257                          */
   --warning: 224 160 64;
@@ -86,9 +76,6 @@
   --text-muted: 168 174 190;    /* #A8AEBE                          */
   --text-subtle: 138 145 165;   /* #8A91A5                          */
 
-  --grad-from: #FF5C6C;
-  --grad-mid: #FF5C6C;
-  --grad-to: #FF5C6C;
   --shadow-ink: 0 0 0;
 
   color-scheme: dark;

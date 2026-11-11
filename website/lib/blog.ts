@@ -20,6 +20,15 @@ export interface BlogPost {
   cover?: string;
   /** Markdown body — the storage format any future backend would use. */
   content: string;
+  /** <title> for search results, 60 characters or fewer. Falls back to "title — TraceBug". */
+  seoTitle?: string;
+  /** Meta description for search results, 160 characters or fewer. Falls back to description. */
+  seoDescription?: string;
+  /** ISO date of the last real content change (dateModified, sitemap lastmod). */
+  updated?: string;
+  /** Questions people search for, answered in two or three sentences each.
+   *  Rendered at the end of the post and emitted as FAQPage structured data. */
+  faq?: Array<{ q: string; a: string }>;
 }
 
 const POSTS: BlogPost[] = [
@@ -92,7 +101,35 @@ No bug handy? The [live sandbox](https://tracebug.dev/try.html) has a checkout p
     readMinutes: 6,
     tag: "Bug reporting",
     cover: "/blog/bug-report-template/hero.png",
+    seoTitle: "How to Write a Bug Report Developers Read (Template)",
+    seoDescription:
+      "A copy-paste bug report template and the five details that let a developer reproduce your bug on the first try: steps, console, network, environment.",
+    updated: "2026-11-11",
+    faq: [
+      {
+        q: "What should a good bug report include?",
+        a: "A specific title, numbered steps from a known starting point, expected versus actual behaviour, the console error as text, the failing network request (method, path, status), the environment (browser, OS, deployment, account type) and how often it happens. Those seven items let a developer reproduce the bug in one attempt.",
+      },
+      {
+        q: "How do I write a good bug report title?",
+        a: "Use the pattern: where, what broke, and the error if you saw one. For example: Checkout, Place order does nothing, TypeError in console. A title like that can be searched, triaged and deduplicated without opening the ticket.",
+      },
+      {
+        q: "How do I report a bug I cannot reproduce every time?",
+        a: "Say exactly how often it happened, for example 1 of 5 tries, and include everything captured from the time it did: the console error, the failing request and when it happened. An intermittent bug with evidence from one occurrence is far easier to chase than one described from memory.",
+      },
+      {
+        q: "Should I attach a screenshot or the console error text?",
+        a: "Both, but the text matters more. A screenshot shows what the page looked like. The console error as text can be pasted into a code search, and it keeps the stack frame that points at the file and line.",
+      },
+      {
+        q: "How long should a bug report be?",
+        a: "Short enough to read in under a minute: a title, four to eight numbered steps, two lines for expected and actual, the pasted error, one line for the failing request and one for the environment. One bug per report.",
+      },
+    ],
     content: `
+**The short version:** a bug report gets fixed fast when a developer can reproduce it on the first try. That takes seven things: a specific title, numbered steps, expected versus actual, the console error as text, the failing request, the environment, and how often it happens. The template below has all seven.
+
 Somewhere right now, a developer is reading a bug report that says "login doesn't work" and quietly moving it to the bottom of the pile. Not because they don't care — because there's nothing in it they can act on. No steps, no error, no environment. Fixing it starts with a round of questions, and the bug sits in limbo until the answers come back.
 
 I've been on both sides of this. I've bounced vague reports back to testers, and I've written a few embarrassing ones myself. The difference between a report that gets fixed today and one that gets fixed next sprint is almost never the severity of the bug. It's whether the developer can **reproduce it on the first try**.
@@ -153,6 +190,12 @@ Everything above is transcription work: you watching a browser and writing down 
 The alternative is capturing instead of describing. [TraceBug](https://tracebug.dev) is a free extension that records what actually happened — the session replay, every console error with its stack trace, every network request, and a millisecond timeline of your clicks — into one \`.html\` file that opens offline. The report above, the one with the coupon and the 404? A real capture of it is [what an AI agent debugged in five tool calls](/proof), no human explanation attached.
 
 Try it on a fake bug first: the [live sandbox](https://tracebug.dev/try.html) has two intentional ones waiting. Total cost of a perfect report: two clicks.
+
+## Keep reading
+
+- [Bug reporting for QA teams whose developers use AI agents](/blog/qa-bug-reporting-ai)
+- [What session replay is, and what it can and cannot show](/blog/what-is-session-replay)
+- [Turn a bug report into a failing Playwright test](/blog/failing-playwright-test-from-bug-report)
 `.trim(),
   },
   {
@@ -270,7 +313,7 @@ Click **Export replay (.html)**. You get a single self-contained file — replay
 ## Step 3 — Register the MCP server (once, ever)
 
 \`\`\`
-claude mcp add tracebug -- npx -y tracebug mcp
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 \`\`\`
 
 That's the whole setup. The server runs locally and auto-discovers exports in your Downloads and Desktop folders — no paths to configure. Cursor and VS Code users: the hand-off card in TraceBug shows the equivalent one-liner for each tool.
@@ -381,7 +424,39 @@ If that last line is you, the fastest way to check is not this article: [try the
     readMinutes: 7,
     tag: "AI debugging",
     cover: "/blog/claude-code-context/hero.jpg",
+    seoTitle: "Give Claude Code Full Browser Context for a Bug",
+    seoDescription:
+      "Claude Code cannot see your browser. The five things an AI coding agent needs to fix a UI bug, and how to capture them in one click over MCP.",
+    updated: "2026-11-11",
+    faq: [
+      {
+        q: "Can Claude Code see my browser?",
+        a: "Not by default. Claude Code reads your code and runs commands, but it does not see the console, the network tab or what you clicked. It needs that evidence handed to it, either pasted in by you or through an MCP server that exposes it.",
+      },
+      {
+        q: "What does an AI coding agent need to fix a browser bug?",
+        a: "Five things: the console error with its stack trace, the failing network request and its response, the exact sequence of user actions, the state of the page when it broke, and the environment (browser, viewport, URL). With those it can trace the failure to a file and line. Without them it guesses.",
+      },
+      {
+        q: "How do I connect TraceBug to Claude Code?",
+        a: "Run claude mcp add -s user tracebug -- npx -y tracebug mcp once in a terminal, then restart Claude Code. The server finds exported reports in your project, Downloads and Desktop folders. On native Windows, put cmd /c before npx.",
+      },
+      {
+        q: "Does TraceBug upload my bug report anywhere?",
+        a: "No. The report is one .html file on your machine, and the MCP server is a local process that reads that file from disk. There is no account and no backend.",
+      },
+      {
+        q: "Does this work with Cursor and Windsurf?",
+        a: "Yes. Both support MCP. Add the tracebug server to their mcpServers config with the command npx and the arguments -y tracebug mcp, and the agent gets the same tools.",
+      },
+      {
+        q: "How is this different from Chrome DevTools MCP or Playwright MCP?",
+        a: "Those give an agent a live browser to drive. TraceBug gives it a recorded report of a bug that already happened, often in someone else's session: a tester, a PM or a customer. They work well together: the report says what went wrong, and the live browser confirms the fix.",
+      },
+    ],
     content: `
+**The short version:** Claude Code cannot see your browser, so it fixes UI bugs from whatever you type. Give it the console error, the failing request, the exact steps, the page state and the environment, and it stops guessing. You can paste those in by hand, or capture them once and let the agent read them over MCP.
+
 Here's a loop every Claude Code and Cursor user knows by heart. A button in your app stops working. You open the agent and type: *"When I click Place Order on checkout, nothing happens. Sometimes there's an error in the console. Can you fix it?"*
 
 The agent — which is genuinely good at code — starts guessing. It greps for the button handler. It asks what the console said. You alt-tab, reproduce the bug, squint at the console, paraphrase the error. It asks about the network tab. Another alt-tab. Fifteen minutes in, you're the world's slowest JSON API between your browser and your agent, and the agent still has a foggy, secondhand picture of what happened.
@@ -424,7 +499,7 @@ This is the exact problem [TraceBug](https://tracebug.dev) exists to solve (disc
 Then the hand-off, which is the part built specifically for agents: TraceBug ships a local MCP server —
 
 \`\`\`
-claude mcp add tracebug -- npx -y tracebug mcp
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 \`\`\`
 
 — and after that, Claude Code reads the report *directly*. Not a summary you typed: the actual console errors, the actual failed request with its response body, the repro steps, resolved stack frames when source maps are available. One MCP tool, \`get_fix_context\`, hands the agent a fix-starter in a single call: the failing request, the user action that triggered it, and the first error with its top frames.
@@ -436,6 +511,12 @@ If you use chat instead of an agent — claude.ai, ChatGPT — don't upload the 
 ## Try the loop in two minutes
 
 The [live sandbox](https://tracebug.dev/try.html) has a checkout page with intentional bugs and the real widget running. Capture one, export it, and hand it to your agent. The first time Claude fixes a bug from evidence it gathered itself — no typing, no alt-tabbing, no paraphrased stack traces — the 300-word bug description era ends on the spot.
+
+## Keep reading
+
+- [Claude Code setup for the TraceBug MCP server](/docs/mcp/claude-code)
+- [Report bugs to Cursor with the evidence attached](/blog/report-bugs-to-cursor)
+- [How to write a bug report developers will actually read](/blog/how-to-write-a-bug-report-developers-actually-read)
 `.trim(),
   },
   {

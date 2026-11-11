@@ -64,11 +64,11 @@ export default function AgentHandoff() {
             Runs on your machine over stdio. Nothing is uploaded.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-[14px]">
-            <Link href="/docs/mcp" className="group inline-flex items-center gap-1.5 font-medium text-[#B9BBFB]">
+            <Link href="/docs/mcp" className="group inline-flex min-h-[28px] items-center gap-1.5 font-medium text-[#B9BBFB]">
               Read the MCP docs
               <ArrowRight size={16} strokeWidth={1.5} className="transition-transform duration-150 group-hover:translate-x-0.5" />
             </Link>
-            <a href="/proof" className="text-[#A3A9B8] underline-offset-2 hover:text-white hover:underline">
+            <a href="/proof" className="inline-flex min-h-[28px] items-center text-[#A3A9B8] underline-offset-2 hover:text-white hover:underline">
               See a real transcript
             </a>
           </div>
