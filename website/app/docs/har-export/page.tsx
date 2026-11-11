@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     description:
       "TraceBug already captures the request/response data and runs zero-backend, so exporting it as a portable HAR 1.2 file is a natural fit.",
   },
+  alternates: { canonical: "/docs/har-export" },
 };
 
 export default function HarExportDocsPage() {

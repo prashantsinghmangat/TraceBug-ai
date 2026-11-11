@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "Blog — TraceBug",
   description:
     "Practical writing on bug reporting, browser debugging, and giving AI coding agents real evidence to work from.",
+  alternates: { canonical: "/blog" },
 };
 
 // Pure renderer over the content layer (lib/blog.ts) — knows nothing about
