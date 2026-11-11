@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     description:
       "The only bug-reporting MCP server that runs locally. Your coding agent reads the .html export from disk — no account, no cloud, no upload.",
   },
+  alternates: { canonical: "/docs/mcp" },
 };
 
 export default function McpDocsPage() {

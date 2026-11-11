@@ -249,6 +249,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     title: data.metaTitle,
     description: data.metaDescription,
     openGraph: { title: data.metaTitle, description: data.metaDescription },
+    alternates: { canonical: `/compare/${params.slug}` },
   };
 }
 

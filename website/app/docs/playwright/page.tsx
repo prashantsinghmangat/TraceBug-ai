@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     description:
       "Two lines in playwright.config.ts turn every failure into a self-contained .html report the MCP server reads. Upload as a CI artifact; debug with Claude Code / Cursor.",
   },
+  alternates: { canonical: "/docs/playwright" },
 };
 
 export default function PlaywrightDocsPage() {

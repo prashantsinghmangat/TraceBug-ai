@@ -5,6 +5,7 @@ export const metadata = {
   title: "Privacy Policy — TraceBug",
   description:
     "TraceBug privacy policy. Nothing goes to TraceBug. You choose what's sent to GitHub, Linear, Slack or your AI provider.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
