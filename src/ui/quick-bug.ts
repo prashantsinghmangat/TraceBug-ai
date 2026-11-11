@@ -28,6 +28,7 @@ import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
 import { exportSessionAsZip } from "../exporters/zip-export";
 import { generatePlaywrightTest, playwrightTestFilename } from "../exporters/playwright-test";
 import { exportSessionAsHar } from "../exporters/har-export";
+import { CLAUDE_MCP_ADD } from "../exporters/agent-workflow";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 // PHASE2-CLOUD: import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT, exportReportAsMarkdown, exportReportAsAiHtml } from "../exporters/ai-prompt";
@@ -887,6 +888,13 @@ function _openModal(
     const descEl = modal.querySelector("#tb-qb-desc") as HTMLTextAreaElement;
     return { title: titleEl?.value || "", description: descEl?.value || "" };
   };
+  // For issue/ticket exports: the description only when the user wrote or
+  // edited it. The untouched prefill is a summary of the same report the
+  // exporter appends below it, so including it printed everything twice.
+  const getFilingDraft = (): { title: string; description: string } => {
+    const d = getDraft();
+    return { title: d.title, description: filingDescription(d.description, data.autoDesc) };
+  };
 
   const saveDraft = () => {
     const { title, description } = getDraft();
@@ -1065,7 +1073,7 @@ function _openModal(
   const openGhBtn = modal.querySelector('[data-action="open-github"]');
   if (openGhBtn && _githubConfigured()) {
     openGhBtn.addEventListener("click", async () => {
-      const { title, description } = getDraft();
+      const { title, description } = getFilingDraft();
       const report = _reportFromDraft(title, description);
       if (!report) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
       // Real API (BYO-token) when configured; otherwise the prefilled-URL flow.
@@ -1095,7 +1103,7 @@ function _openModal(
   // this data-action (unconfigured state), or via the more-menu's own
   // `_githubRepo`-gated "Copy GitHub markdown" item (page/SDK mode only).
   const copyGhBtnHandler = async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     if (hasIntegration("github")) {
       const report = _reportFromDraft(title, description);
       if (report && await _fileViaTracker("github", report, root, screenshots, close)) return;
@@ -1116,7 +1124,7 @@ function _openModal(
   // Jira formatting is local export output — never plan-gated (pricing
   // boundary: local free forever, cloud collaboration paid).
   modal.querySelector('[data-action="jira"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0];
     let text = `Summary: ${title}\n\nDescription:\n${description}`;
@@ -1124,7 +1132,7 @@ function _openModal(
       const report = buildReport(session);
       report.title = title;
       const ticket = generateJiraTicket(report);
-      text = `Summary: ${ticket.summary}\nPriority: ${ticket.priority}\nLabels: ${ticket.labels.join(", ")}\n\n${ticket.description}\n\n---\n${description}`;
+      text = `Summary: ${ticket.summary}\nPriority: ${ticket.priority}\nLabels: ${ticket.labels.join(", ")}\n\n${ticket.description}${description.trim() ? `\n\n---\n${description}` : ""}`;
     }
     const ok = await _copyToClipboard(text);
     const jiraTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
@@ -1699,7 +1707,7 @@ ${report.steps}` : userDesc)
 
   // Linear — open prefilled new-issue URL in a new tab (no API key needed).
   modal.querySelector('[data-action="linear"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     const r = _reportFromDraft(title, description);
     if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
     if (hasIntegration("linear") && await _fileViaTracker("linear", r, root, screenshots, close)) return;
@@ -1718,7 +1726,7 @@ ${report.steps}` : userDesc)
 
   // Slack — copy Slack-formatted bug summary to clipboard.
   modal.querySelector('[data-action="slack"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     const r = _reportFromDraft(title, description);
     if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
     if (hasIntegration("slack") && await _fileViaTracker("slack", r, root, screenshots, close)) return;
@@ -2094,7 +2102,7 @@ function _reportFromDraft(title: string, description: string): BugReport | null 
   if (!session) return null;
   const report = buildReport(session);
   report.title = title;
-  report.steps = `${description}\n\n---\n\n${report.steps}`;
+  if (description.trim()) report.steps = `${description}\n\n---\n\n${report.steps}`;
   return report;
 }
 
@@ -2137,6 +2145,20 @@ async function _fileViaTracker(
   }
 }
 
+/** The description to file with an issue: what the user wrote, or "" when the
+ *  box still holds the untouched auto-generated prefill (a summary of the very
+ *  report the exporter appends, so including it repeats everything). */
+export function filingDescription(description: string, autoDesc: string | undefined): string {
+  return description.trim() === (autoDesc ?? "").trim() ? "" : description;
+}
+
+/** "# title", the user's description (if any) and a rule, then the generated
+ *  issue body without its own heading. */
+export function composeGitHubIssueMarkdown(title: string, description: string, issueMd: string): string {
+  const body = issueMd.replace(/^#[^\n]*\n/, "");
+  return description.trim() ? `# ${title}\n\n${description}\n\n---\n\n${body}` : `# ${title}\n${body}`;
+}
+
 function _buildGitHubMarkdown(title: string, description: string, screenshot: ScreenshotData | null): string {
   const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
   const session = sessions[0];
@@ -2145,8 +2167,7 @@ function _buildGitHubMarkdown(title: string, description: string, screenshot: Sc
     report.title = title;
     // Inject custom description into the report
     const md = generateGitHubIssue(report);
-    // Prefix the user's description above the auto-generated body
-    return `# ${title}\n\n${description}\n\n---\n\n${md.replace(/^#[^\n]*\n/, "")}`;
+    return composeGitHubIssueMarkdown(title, description, md);
   }
   return `# ${title}\n\n${description}${screenshot ? `\n\n_Screenshot attached: ${screenshot.filename}_` : ""}`;
 }
@@ -3759,7 +3780,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   const MCP_SETUP: Record<string, { label: string; cmd: string; where: string }> = {
     claude: {
       label: "Claude Code",
-      cmd: "claude mcp add -s user tracebug -- npx -y tracebug mcp",
+      cmd: CLAUDE_MCP_ADD,
       where: "Run once in a terminal, then restart Claude Code. Native Windows: put cmd /c before npx.",
     },
     cursor: {
