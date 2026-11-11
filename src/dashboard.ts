@@ -24,6 +24,7 @@ import { addLogoPulse, cleanupOnboarding } from "./onboarding";
 import { showQuickBugCapture, isQuickBugOpen } from "./ui/quick-bug";
 import { matchesShortcut, setInnerHTML, createStyleTag, setInlineStyle } from "./ui/helpers";
 import { isExtensionContext } from "./video-recorder";
+import { applyThemeToRoot } from "./theme";
 import { runExportPlugins } from "./plugin-system";
 import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 
@@ -174,6 +175,9 @@ export function mountDashboard(
 
   root.appendChild(panel);
   document.documentElement.appendChild(root);
+  // The theme was applied in init(), before this root existed — re-apply it
+  // now, or none of the --tb-* tokens reach the in-page UI.
+  applyThemeToRoot();
 
   // ── Wire compact toolbar ────────────────────────────────────────────
   setRenderPanel(renderPanel);

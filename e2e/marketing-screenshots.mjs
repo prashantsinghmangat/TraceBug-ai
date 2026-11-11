@@ -557,6 +557,44 @@ await (await must(popup, "#pillEventsVideo", "Events + Video option")).click();
 await popup.waitForTimeout(600);
 await cropEl(popup, ".popup", "popup-record.png", "popup with record options open");
 
+// The same panel as Firefox shows it. The popup decides "Tab mode exists" by
+// whether the manifest declares tabCapture (popup.js TAB_CAPTURE_DECLARED) —
+// the one difference between the two builds — so a manifest without it renders
+// exactly the Firefox layout (Desktop only, no Tab | Desktop switch). The
+// Firefox build itself can't be loaded into Chromium.
+const ffPopup = await extCtx.newPage();
+await ffPopup.setViewportSize({ width: 460, height: 840 });
+await ffPopup.addInitScript((tab) => {
+  // Synchronous first: popup.js reads the manifest at the top level, so the
+  // patch must be in place before any page script runs.
+  if (globalThis.chrome && chrome.runtime && chrome.runtime.getManifest) {
+    const gm = chrome.runtime.getManifest.bind(chrome.runtime);
+    chrome.runtime.getManifest = () => {
+      const m = gm();
+      return { ...m, permissions: (m.permissions || []).filter((p) => p !== "tabCapture" && p !== "offscreen") };
+    };
+  }
+  const wait = setInterval(() => {
+    if (!globalThis.chrome || !chrome.tabs || !chrome.tabs.query || !chrome.runtime) return;
+    clearInterval(wait);
+    const orig = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = (info, cb) => {
+      if (info && info.active && info.currentWindow) {
+        if (cb) { cb([tab]); return undefined; }
+        return Promise.resolve([tab]);
+      }
+      return orig(info, cb);
+    };
+  }, 1);
+}, realTab);
+await ffPopup.goto(`chrome-extension://${extId}/popup.html`, { waitUntil: "load" });
+await ffPopup.waitForTimeout(2500);
+await must(ffPopup, "#mainContent", "Firefox-layout popup main content");
+await (await must(ffPopup, "#captureOptsToggle", "Capture Bug options chevron (Firefox layout)")).click();
+await (await must(ffPopup, "#pillEventsVideo", "Events + Video option (Firefox layout)")).click();
+await ffPopup.waitForTimeout(600);
+await cropEl(ffPopup, ".popup", "popup-record-firefox.png", "popup with record options open, Firefox layout");
+
 } finally {
   console.log("\nStore crops written (" + written.length + "):");
   for (const f of written) console.log("  " + join(OUT, f).replace(/\\/g, "/"));
