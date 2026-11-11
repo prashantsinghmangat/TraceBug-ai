@@ -76,7 +76,7 @@ export default function DemoVideo() {
             href="/try.html"
             target="_blank"
             rel="noopener noreferrer"
-            className="group inline-flex shrink-0 items-center gap-1.5 text-[14px] font-medium text-primary"
+            className="group inline-flex min-h-[28px] shrink-0 items-center gap-1.5 text-[14px] font-medium text-primary"
           >
             Try it on a sandbox with real bugs
             <ArrowUpRight size={16} strokeWidth={1.5} className="transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
