@@ -40,6 +40,12 @@ export const CHAT_WORKFLOW_STEPS: readonly string[] = [
   "If you can edit files, ask for approval before changing anything.",
 ];
 
+/** The one Claude Code setup command shown everywhere (hand-off card, MCP
+ *  prompt, the exported file's AI tab). `-s user` registers it for every
+ *  project; without it Claude Code adds it to the current project only. No
+ *  `--dir`: that turns off the server's search of Downloads and Desktop. */
+export const CLAUDE_MCP_ADD = "claude mcp add -s user tracebug -- npx -y tracebug mcp";
+
 /** "1. …\n2. …" */
 export function numberedSteps(steps: readonly string[]): string {
   return steps.map((s, i) => `${i + 1}. ${s}`).join("\n");

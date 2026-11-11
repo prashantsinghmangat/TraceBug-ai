@@ -1,5 +1,5 @@
 import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
-import { agentWorkflowSteps } from "./agent-workflow";
+import { agentWorkflowSteps, CLAUDE_MCP_ADD } from "./agent-workflow";
 
 // ── HTML Replay Viewer Template ───────────────────────────────────────────
 // A self-contained HTML scaffold + inlined renderer. The bundler embeds the
@@ -221,16 +221,16 @@ ${rrwebCssTag}
 .tb-vrrweb-stage .replayer-wrapper{position:relative;transform-origin:top left}
 .tb-vrrweb-stage iframe{border:0;background:#fff}
 .tb-vrrweb-ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
-.tb-vrrweb-btn{background:var(--tb-accent,#6366F1);color:#fff;border:0;border-radius:6px;width:36px;height:30px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0}
+.tb-vrrweb-btn{background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent,#0B0D14);border:0;border-radius:6px;width:36px;height:30px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0}
 .tb-vrrweb-btn:hover{filter:brightness(1.08)}
-.tb-vrrweb-seek{flex:1;accent-color:var(--tb-accent,#6366F1);cursor:pointer}
+.tb-vrrweb-seek{flex:1;accent-color:var(--tb-accent,#FF5C6C);cursor:pointer}
 .tb-vrrweb-time{font-family:var(--tb-mono);font-size:12px;color:var(--tb-text-3);min-width:92px;text-align:right;flex-shrink:0}
 </style>
 </head>
 <body>
 <header class="tb-vh">
   <div class="tb-vh-row">
-    <span class="tb-vh-logo">🐞</span>
+    <span class="tb-vh-logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 96 96" fill="none"><rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14"/><rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" stroke-width="1.5"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EEF0F5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C"/></svg></span>
     <span class="tb-vh-title" id="title"></span>
     <span class="tb-vh-sev" id="sev"></span>
     <span class="tb-vh-sev tb-vh-prio" id="prio" style="display:none"></span>
@@ -353,18 +353,19 @@ const REPLAY_CSS = `
  * prefers-color-scheme auto-switch was removed in favor of this. */
 :root {
   --tb-bg: #ffffff;
-  --tb-bg-2: #FAFAFA;
-  --tb-bg-3: #F4F4F5;
-  --tb-text: #111113;
-  --tb-text-2: #52525B;
-  --tb-text-3: #82828C;
-  --tb-accent: #4F46E5;
-  --tb-accent-2: #4338CA;
-  --tb-accent-soft: #4F46E514;
-  --tb-ring: rgba(79, 70, 229, 0.5);
-  --tb-border: #E4E4E7;
-  --tb-border-sub: #F4F4F5;
-  --tb-border-hover: #D4D4D8;
+  --tb-bg-2: #F8F9FB;
+  --tb-bg-3: #F4F5F8;
+  --tb-text: #0B0D14;
+  --tb-text-2: #4B5565;
+  --tb-text-3: #677082;
+  --tb-accent: #C81E3C;
+  --tb-accent-2: #A3162F;
+  --tb-accent-soft: #C81E3C14;
+  --tb-on-accent: #ffffff;
+  --tb-ring: rgba(200, 30, 60, 0.5);
+  --tb-border: #E2E4EA;
+  --tb-border-sub: #ECEEF2;
+  --tb-border-hover: #D0D4DC;
   --tb-error: #DC2626;
   --tb-error-bg: #fef2f2;
   --tb-warning: #D97706;
@@ -373,8 +374,8 @@ const REPLAY_CSS = `
   --tb-success-bg: #ecfdf5;
   --tb-info: #2563eb;
   --tb-info-bg: #eff6ff;
-  --tb-code-bg: #F4F4F5;
-  --tb-code-text: #26262E;
+  --tb-code-bg: #F4F5F8;
+  --tb-code-text: #252A38;
   --tb-code-tag: #be185d;
   --tb-code-attr-name: #a16207;
   --tb-code-attr-val: #15803d;
@@ -385,28 +386,29 @@ const REPLAY_CSS = `
   --tb-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace;
 }
 :root[data-theme="dark"], html[data-theme="dark"] body {
-  --tb-bg: #0B0B10;
-  --tb-bg-2: #16161D;
-  --tb-bg-3: #1E1E26;
-  --tb-text: #FAFAFA;
-  --tb-text-2: #A1A1AA;
-  --tb-text-3: #71717A;
-  --tb-accent: #6366F1;
-  --tb-accent-2: #818CF8;
-  --tb-accent-soft: #6366F11f;
-  --tb-ring: rgba(99, 102, 241, 0.5);
-  --tb-border: #26262E;
-  --tb-border-sub: #1E1E24;
-  --tb-border-hover: #2A2A35;
-  --tb-error: #EF4444;
-  --tb-error-bg: #EF444419;
-  --tb-warning: #F59E0B;
-  --tb-warning-bg: #F59E0B1a;
-  --tb-success: #22C55E;
-  --tb-success-bg: #22C55E1a;
+  --tb-bg: #0B0D14;
+  --tb-bg-2: #141823;
+  --tb-bg-3: #1B202E;
+  --tb-text: #EEF0F5;
+  --tb-text-2: #A8AEBE;
+  --tb-text-3: #8A91A5;
+  --tb-accent: #FF5C6C;
+  --tb-accent-2: #FF8590;
+  --tb-accent-soft: #FF5C6C1f;
+  --tb-on-accent: #0B0D14;
+  --tb-ring: rgba(255, 92, 108, 0.5);
+  --tb-border: #252A38;
+  --tb-border-sub: #1B202E;
+  --tb-border-hover: #333A4D;
+  --tb-error: #F05257;
+  --tb-error-bg: #F0525719;
+  --tb-warning: #E0A040;
+  --tb-warning-bg: #E0A04019;
+  --tb-success: #4CC38A;
+  --tb-success-bg: #4CC38A19;
   --tb-info: #3B82F6;
   --tb-info-bg: #3B82F619;
-  --tb-code-bg: #14141F;
+  --tb-code-bg: #141823;
   --tb-code-text: #d4d4d8;
   --tb-code-tag: #f472b6;
   --tb-code-attr-name: #fcd34d;
@@ -434,7 +436,7 @@ body { min-height: 100vh; }
 /* ── Header ───────────────────────────────────────── */
 .tb-vh { padding: 18px 24px; background: var(--tb-bg-2); border-bottom: 1px solid var(--tb-border); position: sticky; top: 0; z-index: 10; }
 .tb-vh-row { display: flex; align-items: center; gap: 12px; max-width: 1400px; margin: 0 auto; }
-.tb-vh-logo { font-size: 20px; }
+.tb-vh-logo { display: inline-flex; flex-shrink: 0; }
 .tb-vh-title { font-size: 15px; font-weight: 600; flex: 1; word-break: break-word; letter-spacing: -0.01em; }
 .tb-vh-sev { font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
 .tb-vh-prio { background: var(--tb-bg-2); color: var(--tb-text-2); border: 1px solid var(--tb-border); }
@@ -470,7 +472,7 @@ body { min-height: 100vh; }
 .tb-vtab:hover { color: var(--tb-text); }
 .tb-vtab-active { color: var(--tb-text); border-bottom-color: var(--tb-accent); }
 .tb-vtab-badge { font-size: 10px; font-weight: 700; background: var(--tb-accent-soft); color: var(--tb-accent); padding: 1px 7px; border-radius: 999px; line-height: 1.4; min-width: 18px; text-align: center; }
-.tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: #fff; }
+.tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: var(--tb-on-accent); }
 .tb-vtab-badge:empty { display: none; }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
@@ -603,7 +605,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vai-body { font-size: 13px; color: var(--tb-text); line-height: 1.6; }
 .tb-vai-empty .tb-vai-body { color: var(--tb-text-2); }
 .tb-vai-prompt { margin: 10px 0 0; padding: 10px 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); font-family: var(--tb-mono); font-size: 11px; line-height: 1.55; color: var(--tb-text-2); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
-.tb-vai-copy { margin-top: 10px; padding: 8px 14px; background: var(--tb-accent); color: #fff; border: 0; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
+.tb-vai-copy { margin-top: 10px; padding: 8px 14px; background: var(--tb-accent); color: var(--tb-on-accent); border: 0; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
 .tb-vai-copy:hover { filter: brightness(1.1); }
 
 /* Actions tab — chips */
@@ -671,7 +673,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-rs-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-2); flex: 1; font-family: var(--tb-mono); }
 .tb-rs-jump { background: transparent; color: var(--tb-error); border: 1px solid var(--tb-error); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; }
 .tb-rs-jump:hover { background: var(--tb-error-bg); }
-.tb-rs-dl { background: var(--tb-accent); color: #fff; border: 1px solid var(--tb-accent); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: filter .15s; display: inline-flex; align-items: center; gap: 5px; }
+.tb-rs-dl { background: var(--tb-accent); color: var(--tb-on-accent); border: 1px solid var(--tb-accent); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: filter .15s; display: inline-flex; align-items: center; gap: 5px; }
 .tb-rs-dl:hover { filter: brightness(1.1); }
 .tb-rs-track { position: relative; height: 30px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: 999px; cursor: pointer; touch-action: none; user-select: none; }
 .tb-rs-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--tb-accent-soft), transparent); border-radius: 999px; pointer-events: none; }
@@ -685,7 +687,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vpreview { position: relative; }
 .tb-vplay-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: rgba(0,0,0,0.55); color: #fff; border: none; cursor: pointer; font-family: inherit; transition: background .15s; border-radius: var(--tb-radius-md); }
 .tb-vplay-overlay:hover { background: rgba(0,0,0,0.7); }
-.tb-vplay-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--tb-accent); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: transform .15s; }
+.tb-vplay-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--tb-accent); color: var(--tb-on-accent); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: transform .15s; }
 .tb-vplay-overlay:hover .tb-vplay-icon { transform: scale(1.06); }
 .tb-vplay-label { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
 .tb-vplay-sub { font-size: 11px; color: rgba(255,255,255,0.7); }
@@ -702,7 +704,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vss-thumb:hover { transform: translateY(-1px); }
 .tb-vss-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tb-vss-thumb span { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.72); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 4px; }
-.tb-vss-thumb.active { border-color: var(--tb-accent, #6366F1); }
+.tb-vss-thumb.active { border-color: var(--tb-accent, #FF5C6C); }
 
 /* ── Hover thumbnail on scrubber ──────────────────── */
 .tb-vhover-thumb { position: fixed; pointer-events: none; z-index: 50; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 4px; box-shadow: var(--tb-shadow-md); }
@@ -717,7 +719,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vhelp-row:last-of-type { border-bottom: none; }
 .tb-vhelp-row span { color: var(--tb-text-2); flex: 1; }
 .tb-vhelp-row kbd { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 2px 8px; font-family: var(--tb-mono); font-size: 11px; color: var(--tb-text); margin-right: 4px; }
-.tb-vhelp-close { margin-top: 14px; width: 100%; padding: 9px; background: var(--tb-accent); color: #fff; border: none; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: background .15s; }
+.tb-vhelp-close { margin-top: 14px; width: 100%; padding: 9px; background: var(--tb-accent); color: var(--tb-on-accent); border: none; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: background .15s; }
 .tb-vhelp-close:hover { background: var(--tb-accent-2); }
 
 /* ── Marker types ─────────────────────────────────── */
@@ -1163,7 +1165,7 @@ const REPLAY_RUNTIME = `(function(){
   var mcpPrompt = 'This is a TraceBug bug report export: ' + mcpFile + '\\n\\n' +
     mcpSteps.map(function(s, i){ return (i + 1) + '. ' + s.split('{FILE}').join(mcpFile); }).join('\\n') + '\\n\\n' +
     'If the tracebug MCP server is not connected yet, register it first. It finds reports in your Downloads and Desktop folders and in this project, so if this file is somewhere else, move it into the project:\\n' +
-    'claude mcp add tracebug -- npx -y tracebug mcp';
+    ${JSON.stringify(CLAUDE_MCP_ADD)};
   aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
     '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
     '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +

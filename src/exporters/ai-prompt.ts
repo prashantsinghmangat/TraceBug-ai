@@ -14,8 +14,8 @@
 // Target output: 2-5K characters. Worst case ~8K (lots of unique errors).
 
 import { BugReport } from "../types";
-import { isNoiseRequest } from "../url-hygiene";
-import { agentWorkflowSteps, CHAT_WORKFLOW_STEPS, numberedSteps } from "./agent-workflow";
+import { isNoiseRequest, isStaticResource } from "../url-hygiene";
+import { agentWorkflowSteps, CHAT_WORKFLOW_STEPS, CLAUDE_MCP_ADD, numberedSteps } from "./agent-workflow";
 import { formatEvidenceMarkdown } from "../evidence-summary";
 import { runExportPlugins } from "../plugin-system";
 
@@ -131,8 +131,10 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
   const noiseOmitted = allFailures.length - realFailures.length;
   const failures = realFailures.slice(0, MAX_NETWORK_FAILURES);
   const allRequests = report.networkRequests || [];
+  // API calls only: a successful script/style/image load is page mechanics
+  // and tells the agent nothing about the bug.
   const recentSuccess = allRequests
-    .filter((r) => r.status >= 200 && r.status < 400)
+    .filter((r) => r.status >= 200 && r.status < 400 && !isStaticResource(r.url))
     .slice(-MAX_NETWORK_CONTEXT);
 
   if (failures.length > 0 || recentSuccess.length > 0) {
@@ -174,7 +176,7 @@ export function generateAIPrompt(report: BugReport, options: AIPromptOptions = {
         `${n} screenshot${n === 1 ? "" : "s"} attached separately as image file${n === 1 ? "" : "s"}${names.length ? ` (${names.join(", ")})` : ""} — look at the attached image${n === 1 ? "" : "s"} for the visual state when the bug was captured.`,
       );
     } else {
-      ctxBits.push(`${n} screenshot${n === 1 ? "" : "s"} captured (not embedded — share the .html or cloud link for visuals)`);
+      ctxBits.push(`${n} screenshot${n === 1 ? "" : "s"} captured, not included in this prompt — they are in the exported .html report`);
     }
   }
   // `report.video` can be a replay-only object (events-only capture: DOM replay,
@@ -237,7 +239,7 @@ export function generateMcpPrompt(filename: string): string {
     numberedSteps(agentWorkflowSteps(filename)),
     ``,
     `If the tracebug MCP server isn't connected yet, register it first — it auto-finds reports in your Downloads/Desktop folders, so no path setup is needed:`,
-    `claude mcp add tracebug -- npx -y tracebug mcp`,
+    CLAUDE_MCP_ADD,
     `(If the report was saved somewhere else, move it into this project; the server also scans the project.)`,
   ].join("\n");
 }
