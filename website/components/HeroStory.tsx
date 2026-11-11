@@ -220,7 +220,7 @@ export default function HeroStory() {
         <button
           type="button"
           onClick={() => setRun((r) => r + 1)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-text-muted transition-colors hover:bg-surface hover:text-text-primary"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[13px] text-text-muted transition-colors hover:bg-surface hover:text-text-primary active:scale-[0.97] active:bg-border"
         >
           <RotateCcw size={14} strokeWidth={1.5} />
           Replay

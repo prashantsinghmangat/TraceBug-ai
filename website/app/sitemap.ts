@@ -22,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Blog posts come from the content layer — future backend posts index automatically.
     ...posts.map((p) => ({
       url: `${baseUrl}/blog/${p.slug}`,
-      lastModified: new Date(p.date),
+      lastModified: new Date(p.updated ?? p.date),
       changeFrequency: 'monthly' as const,
       priority: 0.7,
     })),
