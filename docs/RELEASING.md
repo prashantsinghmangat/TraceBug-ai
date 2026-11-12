@@ -2,7 +2,7 @@
 
 How to ship a version to every surface: Chrome Web Store, Firefox Add-ons (AMO), npm (`tracebug-sdk`
 and the `tracebug` MCP CLI), the official MCP Registry, the website, and the git tag. Last used for
-**1.11.5** (2026-11-01).
+**1.11.6** (npm and MCP Registry 2026-11-12; stores pending).
 
 This file is the mechanics. The other release documents, one job each:
 
@@ -13,6 +13,20 @@ This file is the mechanics. The other release documents, one job each:
 | Store screenshots, promo tiles, banners, icons, demo video (gitignored) | `assets/` — index in `assets/README.md` |
 | Announcement posts per release (gitignored) | `docs-internal/marketing/posts-<x.y.z>.md` |
 | What changed, for users | [CHANGELOG.md](../CHANGELOG.md) |
+| **The copy-and-paste sheet for one release** — every store field, file, command and check, in upload order | `docs/release-sheets/<x.y.z>.md`, written by `node scripts/release-sheet.mjs` |
+
+**The short way to release:** bump the version (§1), write the CHANGELOG section, update the two
+per-release blocks in STORE-LISTINGS.md (Chrome "New in x.y.z", Firefox release notes), then run
+
+```bash
+node scripts/release-sheet.mjs
+```
+
+and work down `docs/release-sheets/<x.y.z>.md`. It carries the title, summary, descriptions, screenshot
+order and captions, permission justifications (new ones flagged against the previous tag), reviewer
+notes, npm / MCP / tag commands with the version filled in, and the GitHub release notes. It refuses to
+run if the versions disagree and warns if the "New in" paragraph is for another version. Regenerate it
+after any change to those sources; never edit the sheet by hand. The sections below explain each step.
 
 ## What ships where
 
@@ -123,6 +137,9 @@ npm publish ./packages/tracebug
   `{ tracebug: 'bin.mjs' }`. If the bin is missing, `npx tracebug mcp` breaks for every user.
 - `npm view <pkg> version` can keep showing the old version for several minutes after "Your package is
   being processed". Check with `npm view <pkg>@<x.y.z> version`, and wait before assuming it failed.
+  Right after publishing, `npm view <pkg>@<x.y.z>` can even answer **`E404 No match found for version`**
+  (seen on 1.11.6). That is the same delay, not a failed publish: `npm view <pkg> dist-tags` shows the
+  new version as `latest` first. Retry after a minute or two.
 
 ## 6. MCP Registry
 
@@ -130,12 +147,36 @@ The official registry lists the server as `io.github.prashantsinghmangat/tracebu
 npm `tracebug` package. Publish **after** the npm `tracebug` version is live, because the registry
 verifies it.
 
-```bash
-cd packages/tracebug
-mcp-publisher login github
-mcp-publisher publish
+PowerShell, on the release machine. `mcp-publisher` is **not on PATH**, so call it with `&` and the full
+path; typing `mcp-publisher …` fails with "not recognized as the name of a cmdlet". Run both commands
+**from `packages\tracebug`**, where `server.json` lives; from the repo root, publish fails with
+"server.json not found" (don't run `mcp-publisher init`, which would write a second, wrong one).
+
+```powershell
+cd D:\Project\TraceBug-ai\packages\tracebug
 ```
+```powershell
+& C:\tools\mcp-publisher.exe login github
+```
+It prints a code: open https://github.com/login/device, enter it, approve with the
+`prashantsinghmangat` account, and **wait for "✓ Successfully logged in"**. Pressing Ctrl+C while it says
+"Waiting for authorization…" leaves you logged out.
+```powershell
+& C:\tools\mcp-publisher.exe publish
+```
+Expect `✓ Successfully published` and `✓ Server io.github.prashantsinghmangat/tracebug version <x.y.z>`.
+```powershell
+cd ..\..
+```
+(Git Bash: same commands without the `&`, from `packages/tracebug`.)
+
+**If publish fails with `401 … Invalid or expired Registry JWT token … token is expired`**, the login
+token is stale (seen on 1.11.6, after an interrupted login). Run `login github` again, approve the new
+code, then `publish` again. Nothing was published by the failed attempt.
+
 - `server.json`'s `description` must be ≤ 100 characters.
+- The registry copies `server.json` as published, including each argument's description; fixing the
+  text in the repo shows on the registry only at the next publish.
 - `mcp-publisher` is the official CLI from the
   [modelcontextprotocol/registry releases](https://github.com/modelcontextprotocol/registry/releases).
   On the release machine it lives at `C:\tools\mcp-publisher.exe` (not on PATH: call it by that path).
@@ -147,9 +188,9 @@ mcp-publisher publish
   `login github` prints a device code; approve it with the `prashantsinghmangat` GitHub account.
   Run `mcp-publisher validate` first if `server.json` changed shape.
 - The query below also lists older versions; the new one should carry `"isLatest": true`.
-- Verify:
-  ```bash
-  curl -s "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.prashantsinghmangat/tracebug"
+- Verify (PowerShell needs `curl.exe`, because `curl` there is an alias for `Invoke-WebRequest`):
+  ```powershell
+  curl.exe -s "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.prashantsinghmangat/tracebug"
   ```
   It should list the new version.
 
