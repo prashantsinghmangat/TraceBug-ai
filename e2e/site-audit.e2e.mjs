@@ -310,6 +310,19 @@ try {
   await tab.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 15000 });
   const scoreTxt = await tab.locator("#tracebug-audit-panel .tb-au-score").innerText();
   check("the panel shows the score", /\b\d{1,3}\b[\s\S]*(Good|Needs work|Poor)/.test(scoreTxt), scoreTxt.slice(0, 120));
+
+  // Drag the panel by its header: it floats where dropped (remembered), and snaps back to an edge.
+  const head = await tab.locator("#tracebug-audit-panel .tb-au-title").boundingBox();
+  await tab.mouse.move(head.x + 40, head.y + 8); await tab.mouse.down();
+  await tab.mouse.move(head.x - 300, head.y + 120, { steps: 8 }); await tab.mouse.up();
+  const free = await tab.evaluate(() => { const p = document.getElementById("tracebug-audit-panel"); const r = p.getBoundingClientRect(); return { dock: p.dataset.dock, left: Math.round(r.left), top: Math.round(r.top), saved: localStorage.getItem("tracebug_audit_dock") }; });
+  check("drag: the panel floats where it was dropped and the spot is remembered", free.dock === "free" && free.top > 60 && /^free:[0-9]+,[0-9]+$/.test(free.saved || ""), JSON.stringify(free));
+  const head2 = await tab.locator("#tracebug-audit-panel .tb-au-title").boundingBox();
+  await tab.mouse.move(head2.x + 40, head2.y + 8); await tab.mouse.down();
+  await tab.mouse.move(2, head2.y + 8, { steps: 8 }); await tab.mouse.up();
+  const snapped = await tab.evaluate(() => ({ dock: document.getElementById("tracebug-audit-panel").dataset.dock, saved: localStorage.getItem("tracebug_audit_dock") }));
+  check("drag: dropping at the left edge docks it to the left", snapped.dock === "left" && snapped.saved === "left", JSON.stringify(snapped));
+  await tab.evaluate(() => localStorage.removeItem("tracebug_audit_dock"));
   const rvReview = await tab.evaluate(() => window.TraceBug.getLastAudit());
   const cc2 = (rvReview.review || []).find((r) => r.ruleId === "color-contrast");
   check("needs review: text over a gradient is listed for a person, not as a finding or in the score",
