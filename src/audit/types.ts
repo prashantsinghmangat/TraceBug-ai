@@ -4,7 +4,8 @@
 // src/types.ts re-exports them and fixes the finding type to `Issue`.
 
 /** Which scan a finding came from. "runtime" = the console/network detectors. */
-export type AuditCategory = "accessibility" | "ui" | "performance" | "seo" | "runtime";
+/** "mobile" = layout and keyboard problems that only appear at phone width (390px), checked in a hidden frame. */
+export type AuditCategory = "accessibility" | "ui" | "mobile" | "performance" | "seo" | "runtime";
 
 /** Evidence attached to one audit finding. Every string is page-derived, so it
  *  is redacted and bounded at build time (src/audit/run.ts) and must be treated
@@ -24,8 +25,8 @@ export interface AuditEvidence {
 export type AuditScan = "full" | "auto-review" | "accessibility" | "performance-seo";
 
 export const AUDIT_SCANS: Record<AuditScan, { label: string; categories: AuditCategory[] }> = {
-  full: { label: "All checks", categories: ["accessibility", "ui", "performance", "seo", "runtime"] },
-  "auto-review": { label: "Auto Review", categories: ["ui", "runtime"] },
+  full: { label: "All checks", categories: ["accessibility", "ui", "mobile", "performance", "seo", "runtime"] },
+  "auto-review": { label: "Auto Review", categories: ["ui", "mobile", "runtime"] },
   accessibility: { label: "Accessibility Audit", categories: ["accessibility"] },
   "performance-seo": { label: "Performance & SEO", categories: ["performance", "seo"] },
 };
@@ -63,6 +64,23 @@ export interface AuditRunOf<F> {
   scan?: AuditScan;
   /** Scores computed from ALL findings, before the cap (src/audit/score.ts). Absent in runs from before 1.12.0. */
   score?: AuditScore;
+  /** Checks the automated rules could not decide (axe "incomplete"): a person has to look.
+   *  Never scored, never findings, never compared between runs. */
+  review?: AuditReviewItem[];
+}
+
+/** One rule axe couldn't decide on this page, with the elements involved. Page-derived
+ *  strings (selector, html) are untrusted; title/reason/helpUrl are axe's own text. */
+export interface AuditReviewItem {
+  ruleId: string;
+  title: string;
+  /** Why it couldn't be decided, e.g. "background could not be determined because …". */
+  reason?: string;
+  helpUrl?: string;
+  wcag?: string[];
+  /** How many elements, including any not listed. */
+  count: number;
+  elements: Array<{ selector?: string; html?: string }>;
 }
 
 import type { AuditScore } from "./score";

@@ -38,6 +38,7 @@ const DETECTOR_LABELS: Record<Issue["detector"], string> = {
   "audit-seo": "SEO",
   "audit-perf": "Performance",
   "audit-keyboard": "Keyboard",
+  "audit-mobile": "Phone width",
 };
 
 /**

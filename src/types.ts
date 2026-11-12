@@ -568,6 +568,7 @@ export type IssueDetector =
   | "frustration-error-correlated"
   /** Site Audit: layout checks (overflow, overlap, clipped text, image sizing). */
   | "audit-ui"
+  | "audit-mobile"
   /** Site Audit: page-level SEO checks (title, description, canonical, h1, robots, viewport). */
   | "audit-seo"
   /** Site Audit: page-load performance (lab timings, page weight, large and render-blocking files). */

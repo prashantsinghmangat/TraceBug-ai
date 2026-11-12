@@ -11,7 +11,7 @@
 // Pure: no DOM access. Detectors gather; this only shapes.
 
 import type { AuditCategory, AuditEvidence, AuditRun, Issue, IssueSeverity } from "../types";
-import type { AuditScan } from "./types";
+import type { AuditReviewItem, AuditScan } from "./types";
 import { redactUrl, redactUrlsInText } from "../url-hygiene";
 import { sanitizeTokenShapes } from "../sanitize/cloud-upload";
 import { auditFallbackFingerprint, auditFingerprint } from "./fingerprint";
@@ -61,6 +61,26 @@ export function boundEvidence(e: AuditEvidence | undefined): AuditEvidence | und
   return out;
 }
 
+/** Redacted, bounded copy of the needs-review list (selectors and HTML are page-derived). */
+export function boundReview(items: AuditReviewItem[]): AuditReviewItem[] {
+  return items.slice(0, 20).map((r) => {
+    const out: AuditReviewItem = {
+      ruleId: bound(r.ruleId, 80) ?? "",
+      title: bound(r.title, 160) ?? "",
+      count: Math.max(0, Math.round(r.count || 0)),
+      elements: (r.elements || []).slice(0, 8).map((e) => ({
+        ...(e.selector ? { selector: bound(e.selector, 300) } : {}),
+        ...(e.html ? { html: bound(e.html, MAX_EVIDENCE_HTML) } : {}),
+      })),
+    };
+    if (r.reason) out.reason = bound(r.reason, 300);
+    if (r.helpUrl && /^https:\/\//.test(r.helpUrl)) out.helpUrl = r.helpUrl;
+    const wcag = cleanWcag(r.wcag);
+    if (wcag) out.wcag = wcag;
+    return out;
+  });
+}
+
 /** Browser family from a user-agent string. Order matters: Edge and Chrome both say "Chrome". */
 export function userAgentFamily(ua: string | undefined): string {
   const s = ua || "";
@@ -81,6 +101,8 @@ export interface AuditRunContext {
   now?: number;
   /** The menu scan this run belongs to (omitted for a custom category list). */
   scan?: AuditScan;
+  /** Rules a person needs to check (axe "incomplete"); bounded and redacted here. */
+  review?: AuditReviewItem[];
   /** For tests: a fixed id. */
   id?: string;
 }
@@ -139,7 +161,7 @@ export function buildAuditRun(findings: Issue[], ctx: AuditRunContext): AuditRun
   );
   const kept = all.slice(0, MAX_AUDIT_FINDINGS);
 
-  const order: AuditCategory[] = ["accessibility", "ui", "performance", "seo", "runtime"];
+  const order: AuditCategory[] = ["accessibility", "ui", "mobile", "performance", "seo", "runtime"];
   const categories = order
     .filter((name) => ctx.categories[name] !== undefined)
     .map((name) => {
@@ -167,5 +189,6 @@ export function buildAuditRun(findings: Issue[], ctx: AuditRunContext): AuditRun
     ...(ctx.scan ? { scan: ctx.scan } : {}),
     // From `all`, not `kept`: the cap must never raise the score.
     score: scoreAudit(categories, all),
+    ...(ctx.review?.length ? { review: boundReview(ctx.review) } : {}),
   };
 }

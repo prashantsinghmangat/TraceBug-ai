@@ -16,10 +16,13 @@ import { coerceSeverity, makeIssueId } from "../../scanner/helpers";
 import { elementEvidence } from "./evidence";
 import { wcagFromAxeTags } from "../wcag";
 import { parseExpectedRatio, suggestTextColor } from "../contrast";
+import type { AuditReviewItem } from "../types";
 
 type AxeLike = { run: (context: unknown, options: unknown) => Promise<AxeResultsLike> };
-type AxeNode = { target?: unknown[]; html?: string; failureSummary?: string; any?: Array<{ id?: string; data?: Record<string, unknown> }> };
-type AxeResultsLike = { passes?: Array<{ id: string }>; violations?: Array<{ id: string; impact?: string | null; help?: string; description?: string; helpUrl?: string; tags?: string[]; nodes?: AxeNode[] }> };
+type AxeCheck = { id?: string; message?: string; data?: Record<string, unknown> };
+type AxeNode = { target?: unknown[]; html?: string; failureSummary?: string; any?: AxeCheck[]; all?: AxeCheck[]; none?: AxeCheck[] };
+type AxeRule = { id: string; help?: string; helpUrl?: string; tags?: string[]; nodes?: AxeNode[] };
+type AxeResultsLike = { passes?: Array<{ id: string }>; incomplete?: AxeRule[]; violations?: Array<{ id: string; impact?: string | null; help?: string; description?: string; helpUrl?: string; tags?: string[]; nodes?: AxeNode[] }> };
 
 export const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 /** WCAG rules axe ships as "experimental" (off by default) that we turn on.
@@ -145,6 +148,8 @@ function metricsFor(node: AxeNode): Record<string, number | string> | undefined 
 }
 
 export interface A11yAuditResult {
+  /** Rules axe couldn't decide here (needs a person). Not findings, not scored. */
+  review?: AuditReviewItem[];
   ran: boolean; limitation: string; findings: Issue[]; transparentText?: number;
   /** axe rules that applied to this page (passed or failed), and how many failed. */
   rulesChecked?: number; rulesFailed?: number;
@@ -163,7 +168,8 @@ export async function detectA11yFindings(): Promise<A11yAuditResult> {
       {
         runOnly: { type: "tag", values: AXE_TAGS },
         rules: Object.fromEntries(AXE_EXTRA_RULES.map((id) => [id, { enabled: true }])),
-        resultTypes: ["violations"],
+        // "incomplete" too: with only "violations", axe keeps one element per undecided rule.
+        resultTypes: ["violations", "incomplete"],
       },
     );
   } catch (err) {
@@ -222,5 +228,45 @@ export async function detectA11yFindings(): Promise<A11yAuditResult> {
   const failed = new Set(findings.map((f) => f.ruleId));
   const applied = new Set([...(results.passes || []).map((p) => p.id), ...failed]);
   const wcagFailed = [...new Set(findings.flatMap((f) => f.wcag || []))].sort();
-  return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText, rulesChecked: applied.size, rulesFailed: failed.size, wcagFailed };
+  return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText, rulesChecked: applied.size, rulesFailed: failed.size, wcagFailed, review: reviewItems(results.incomplete || [], failed) };
+}
+
+export const MAX_REVIEW_RULES = 20;
+export const MAX_REVIEW_ELEMENTS = 8;
+
+/**
+ * axe's "incomplete" results: rules it ran but couldn't decide for some elements
+ * (a background it couldn't compute, an ARIA attribute that may or may not be
+ * announced). Shown to the user as "needs a person to check" — never scored,
+ * never counted as failures. A rule that also failed for other elements is kept
+ * (its undecided elements still need a look).
+ */
+export function reviewItems(incomplete: AxeRule[], _failed?: Set<string | undefined>): AuditReviewItem[] {
+  const out: AuditReviewItem[] = [];
+  for (const r of incomplete) {
+    const nodes = r.nodes || [];
+    if (!nodes.length) continue;
+    // The most common reason across its elements, in axe's own words.
+    const counts = new Map<string, number>();
+    for (const n of nodes) {
+      for (const c of [...(n.any || []), ...(n.all || []), ...(n.none || [])]) {
+        if (c.message) counts.set(c.message, (counts.get(c.message) || 0) + 1);
+      }
+    }
+    const reason = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    const wcag = wcagFromAxeTags(r.tags);
+    out.push({
+      ruleId: r.id,
+      title: r.help || r.id,
+      ...(reason ? { reason } : {}),
+      ...(r.helpUrl ? { helpUrl: r.helpUrl } : {}),
+      ...(wcag.length ? { wcag } : {}),
+      count: nodes.length,
+      elements: nodes.slice(0, MAX_REVIEW_ELEMENTS).map((n) => ({
+        selector: Array.isArray(n.target) ? n.target.map(String).join(" ") : undefined,
+        html: n.html,
+      })),
+    });
+  }
+  return out.sort((a, b) => b.count - a.count).slice(0, MAX_REVIEW_RULES);
 }

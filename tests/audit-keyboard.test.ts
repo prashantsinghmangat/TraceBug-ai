@@ -119,10 +119,10 @@ describe('keyboard pass', () => {
 
 describe('scan menu', () => {
   it('maps each scan to its categories', () => {
-    expect(AUDIT_SCANS['auto-review'].categories).toEqual(['ui', 'runtime']);
+    expect(AUDIT_SCANS['auto-review'].categories).toEqual(['ui', 'mobile', 'runtime']);
     expect(AUDIT_SCANS.accessibility.categories).toEqual(['accessibility']);
     expect(AUDIT_SCANS['performance-seo'].categories).toEqual(['performance', 'seo']);
-    expect(AUDIT_SCANS.full.categories).toHaveLength(5);
+    expect(AUDIT_SCANS.full.categories).toHaveLength(6);
   });
 
   it('only known scan names pass', () => {
