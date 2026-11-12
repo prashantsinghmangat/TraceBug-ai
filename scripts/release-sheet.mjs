@@ -125,13 +125,31 @@ p(`# Release sheet — TraceBug ${V}`, "",
   `| npm \`tracebug\` (MCP CLI) | ${cliPkg.version} |`,
   `| MCP registry | \`${server.name}\` ${server.version} |`, "");
 
+// Release order: stores and npm first, website (= merge to main, Netlify deploys main) after the Chrome Web
+// Store approves, so the site never advertises a version store users can't install yet.
+const branch = git("branch", "--show-current");
+const today = new Date().toISOString().slice(0, 10);
+p("## Release order", "",
+  "1. **Release from `develop`.** Bring the release branch into `develop`, build and upload everything from that commit (§0–4).",
+  "2. **Merge to `main` only after the Chrome Web Store approves** (§5). Netlify deploys the website from `main`, so merging first",
+  "   would advertise features store users can't install yet. npm and the MCP registry can go out the same day as the uploads.",
+  "3. **Tag** when `main` has the release (§5); the tag's tree is the same as the uploaded commit's.", "");
+
+const bringIn = branch && branch !== "develop" && branch !== "main"
+  ? [`1. Bring \`${branch}\` into \`develop\` (fast-forward: \`${branch}\` already contains \`develop\`):`,
+     fence("bash", "git checkout develop"), fence("bash", "git pull"),
+     fence("bash", `git merge --ff-only ${branch}`), fence("bash", "git push origin develop"),
+     "   If the fast-forward is refused, `develop` moved: merge it into the release branch first, re-run the gates, then retry."]
+  : ["1. You are on `" + (branch || "?") + "`; release from `develop`."];
 p("## 0. Before you upload", "",
-  "1. Commit everything, then run the gates and build the packages:",
+  ...(releaseDate && releaseDate !== today ? [`**CHANGELOG date is ${releaseDate}.** If you release on another day, change \`## [${V}] - ${releaseDate}\` to that day, commit it (\`git commit --only CHANGELOG.md -m "chore(release): ${V} date"\`) and regenerate this sheet.`, ""] : []),
+  ...bringIn,
+  "2. Run the gates and build the packages (on `develop`, nothing uncommitted):",
   fence("bash", "node scripts/check.mjs --full"),
   fence("bash", "npm run zip:ext"),
   fence("bash", `git archive --format=zip -o ${sourceZip} HEAD`),
-  "2. Load `tracebug-extension/dist/chrome` unpacked (chrome://extensions) and run `npm run ext:firefox`. Do a capture → export → open the `.html`, plus the `docs/RELEASE_CHECKLIST.md` rows this release touches.",
-  "3. Files:", "",
+  "3. Load `tracebug-extension/dist/chrome` unpacked (chrome://extensions) and run `npm run ext:firefox`. Do a capture → export → open the `.html`, plus the `docs/RELEASE_CHECKLIST.md` rows this release touches.",
+  "4. Files:", "",
   "| File | Status |", "|---|---|",
   `| \`${chromeZip}\` | ${have(chromeZip)} |`,
   `| \`${firefoxZip}\` | ${have(firefoxZip)} |`,
@@ -209,7 +227,21 @@ p("## 4. MCP registry", "",
   fence("powershell", `curl.exe -s "https://registry.modelcontextprotocol.io/v0/servers?search=${server.name}"`), "");
 
 p("## 5. Website and tag — after the Chrome Web Store approves", "",
-  fence("bash", "git checkout main"), fence("bash", "git pull"), fence("bash", "git merge develop"), fence("bash", "git push"),
+  "**1. List what would conflict** (the first line printed is a tree id; the file names follow):",
+  fence("bash", "git fetch origin"),
+  fence("bash", "git merge-tree --write-tree --name-only develop origin/main"),
+  "**2. Safety check.** Website fixes are often made on `main` and copied to `develop`, so the same change has two histories",
+  "and conflicts with itself. Keeping `develop`'s side is safe only for files whose `main` version is already in `develop`'s",
+  "history. Every line must say `on develop`; for any `MAIN ONLY` file, merge that file by hand instead:",
+  fence("bash", `for f in $(git merge-tree --write-tree --name-only develop origin/main | sed -n '2,/^$/p'); do b=$(git rev-parse "origin/main:$f"); git --literal-pathspecs rev-list develop -- "$f" | while read c; do git rev-parse -q --verify "$c:$f"; done | grep -qx "$b" && echo "on develop  $f" || echo "MAIN ONLY  $f"; done`),
+  "**3. Merge, keeping `develop`'s side of any conflict:**",
+  fence("bash", "git checkout main"), fence("bash", "git pull"),
+  fence("bash", `git merge -X theirs develop -m "Merge develop: release ${V}"`),
+  "**4. Verify** — `main` should now be exactly `develop` (prints nothing). If it lists files, those are changes made only on",
+  "`main` that merged cleanly: check each belongs there before pushing (and copy it to `develop` afterwards).",
+  fence("bash", "git diff --stat develop"),
+  "**5. Push** (Netlify deploys the site), bring `develop` level with `main`, tag:",
+  fence("bash", "git push"),
   fence("bash", "git checkout develop"), fence("bash", "git merge --ff-only origin/main"),
   fence("bash", `git tag v${V}`), fence("bash", `git push origin v${V}`),
   "**Check the site serves the new SDK** — the two hashes must match:",
