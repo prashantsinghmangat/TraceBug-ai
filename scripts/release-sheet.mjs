@@ -13,7 +13,7 @@
 // Per release you edit two blocks in STORE-LISTINGS.md (Chrome "New in", Firefox
 // release notes) and the CHANGELOG, then run this.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -232,3 +232,21 @@ mkdirSync(dir, { recursive: true });
 const file = join(dir, `${V}.md`);
 writeFileSync(file, out.join("\n").replace(/\n{3,}/g, "\n\n") + "\n", "utf8");
 console.log(`wrote docs/release-sheets/${V}.md (${out.length} lines)`);
+
+// ── Keep the newest KEEP sheets; delete older ones ─────────────────────────
+// One sheet per release, at most KEEP of them (user decision 2026-11-12): when
+// an 11th version's sheet is written, the oldest version's sheet is removed.
+// Ordered by version number, not file date, so regenerating an old sheet never
+// pushes out a newer one. Only files named <x.y.z>.md are counted or deleted.
+const KEEP = 10;
+const semver = (name) => name.replace(/\.md$/, "").split(".").map(Number);
+const byVersion = (a, b) => {
+  const x = semver(a), y = semver(b);
+  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i];
+  return 0;
+};
+const sheets = readdirSync(dir).filter((n) => /^\d+\.\d+\.\d+\.md$/.test(n)).sort(byVersion);
+for (const old of sheets.slice(0, Math.max(0, sheets.length - KEEP))) {
+  unlinkSync(join(dir, old));
+  console.log(`removed docs/release-sheets/${old} (keeping the newest ${KEEP})`);
+}
