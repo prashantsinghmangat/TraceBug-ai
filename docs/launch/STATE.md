@@ -17,7 +17,8 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   in-page UI (broken since 1.11.3), video + audio kept in exports, description rendered as markdown.
 - **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y/UI fixes, two SEO blog posts with
   FAQ schema are live. `website/public/try.html` coral recolour is on `develop` — cherry-pick it.
-  The 1.11.6 SDK + setup-command pages go live only with the release merge.
+  The 1.11.6 SDK + setup-command pages go live only with the release merge. `website/public/llms.txt` (for
+  Lighthouse "Agentic Browsing") is on `site-audit`: it mentions the Site Audit, so ship it with 1.12.0.
 - **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1217/81, ext:lint 0/22 (baseline 22),
   84/84 report, 74/74 audit, 33/33 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).

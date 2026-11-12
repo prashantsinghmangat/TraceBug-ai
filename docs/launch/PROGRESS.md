@@ -137,3 +137,7 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - New category `mobile`: page reloaded in a hidden same-site 390×844 iframe; ui.ts layout checks (now take a `doc`) + `mobile/scroll-not-focusable`; only what the current width doesn't already report. Not run (with reason) when framing is forbidden (GitHub, MDN) or the window is already phone-sized. Fixed `isRendered`: opacity-0 ancestors (Shopify's closed mega-menu gave 4 false overlaps).
 - Live tracebug.dev from a 1440px window: the two code blocks accessibilitychecker.org reported at mobile. Ten-site study: no other phone-width findings. Gates green (1217/81, 84/84, 74/74 incl. /phone fixture, 33/33).
+
+## Website: llms.txt (2026-11-12, `site-audit`)
+
+- Lighthouse "Agentic Browsing" failed llms.txt: /llms.txt was a 404 whose page took ~3 s, so the fetch timed out. Added `website/public/llms.txt` (H1, summary, Docs/Product/Optional link lists). Verified on the dev server: 200 text/plain in 7 ms; all 18 linked pages 200. Live only after the website deploy.
