@@ -113,11 +113,76 @@ export function isAuditPanelOpen(): boolean {
   return _open;
 }
 
-function getDock(): "left" | "right" {
-  try { return localStorage.getItem(DOCK_KEY) === "left" ? "left" : "right"; } catch { return "right"; }
+type Dock = { side: "left" | "right" | "free"; x?: number; y?: number };
+
+/** "left", "right", or "free:x,y" after the user dragged the panel somewhere. */
+function getDock(): Dock {
+  let v = "";
+  try { v = localStorage.getItem(DOCK_KEY) || ""; } catch { /* storage blocked */ }
+  const m = /^free:(-?\d+),(-?\d+)$/.exec(v);
+  if (m) return { side: "free", x: Number(m[1]), y: Number(m[2]) };
+  return { side: v === "left" ? "left" : "right" };
 }
-function setDock(d: "left" | "right"): void {
-  try { localStorage.setItem(DOCK_KEY, d); } catch { /* storage blocked: session-only */ }
+function setDock(d: Dock): void {
+  try { localStorage.setItem(DOCK_KEY, d.side === "free" ? `free:${Math.round(d.x || 0)},${Math.round(d.y || 0)}` : d.side); } catch { /* storage blocked: session-only */ }
+}
+
+/** Keep a free-floating panel fully reachable: header on screen, never off an edge. */
+function clampFree(panel: HTMLElement, x: number, y: number): { x: number; y: number } {
+  const w = panel.offsetWidth || 420;
+  return {
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - w)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - 120)),
+  };
+}
+
+function applyFree(panel: HTMLElement, x: number, y: number): void {
+  const c = clampFree(panel, x, y);
+  panel.dataset.dock = "free";
+  panel.style.setProperty("--tb-au-x", `${Math.round(c.x)}px`);
+  panel.style.setProperty("--tb-au-y", `${Math.round(c.y)}px`);
+}
+
+const SNAP = 24;
+
+/**
+ * Drag the panel by its header (not by its buttons). Dropped within 24px of the
+ * left or right edge it docks there again; anywhere else it stays where it was
+ * put, and that position is remembered. The dock button still docks it back.
+ */
+function initDrag(panel: HTMLElement): void {
+  const head = panel.querySelector<HTMLElement>(".tb-au-head");
+  if (!head) return;
+  head.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input")) return;
+    const start = panel.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    try { head.setPointerCapture(e.pointerId); } catch { /* old browsers */ }
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return; // a click, not a drag
+      if (!moved) { moved = true; panel.classList.add("tb-au-dragging"); }
+      applyFree(panel, start.left + dx, start.top + dy);
+    };
+    const up = () => {
+      head.removeEventListener("pointermove", move);
+      head.removeEventListener("pointerup", up);
+      head.removeEventListener("pointercancel", up);
+      panel.classList.remove("tb-au-dragging");
+      if (!moved) return;
+      const r = panel.getBoundingClientRect();
+      if (r.left <= SNAP) { panel.dataset.dock = "left"; setDock({ side: "left" }); }
+      else if (r.right >= window.innerWidth - SNAP) { panel.dataset.dock = "right"; setDock({ side: "right" }); }
+      else setDock({ side: "free", x: r.left, y: r.top });
+      syncDockButton();
+      placePanel();
+    };
+    head.addEventListener("pointermove", move);
+    head.addEventListener("pointerup", up);
+    head.addEventListener("pointercancel", up);
+    e.preventDefault();
+  });
 }
 
 /** Open the panel, or close it when it is already open (the toolbar button). */
@@ -258,7 +323,8 @@ function mountShell(root: HTMLElement): void {
   panel.id = PANEL_ID;
   panel.setAttribute("role", "complementary");
   panel.setAttribute("aria-labelledby", `${PANEL_ID}-title`);
-  panel.dataset.dock = getDock();
+  const dock = getDock();
+  panel.dataset.dock = dock.side;
   setInnerHTML(panel, `
     <button type="button" class="tb-au-tab" data-tb-au="restore" aria-label="Show the site audit">
       <span class="tb-au-tab-score" data-tb-au="tab-score">${ICON.audit}</span><span class="tb-au-tab-l">Audit</span>
@@ -266,7 +332,7 @@ function mountShell(root: HTMLElement): void {
     <div class="tb-au-shell">
       <div class="tb-au-head">
         <span class="tb-au-logo">${ICON.audit}</span>
-        <h2 class="tb-au-title" id="${PANEL_ID}-title" tabindex="-1">Site audit</h2>
+        <h2 class="tb-au-title" id="${PANEL_ID}-title" tabindex="-1" title="Drag to move">Site audit</h2>
         <button type="button" class="tb-au-icon" data-tb-au="dock" aria-label="Move panel to the other side" title="Move panel to the other side">${ICON.dockLeft}</button>
         <button type="button" class="tb-au-icon" data-tb-au="minimize" aria-label="Minimise" title="Minimise">${ICON.minimize}</button>
         <button type="button" class="tb-au-icon" data-tb-au="close" aria-label="Close the audit" title="Close (Esc)">${ICON.close}</button>
@@ -280,6 +346,8 @@ function mountShell(root: HTMLElement): void {
       </div>
     </div>`);
   root.appendChild(panel);
+  if (dock.side === "free") applyFree(panel, dock.x || 0, dock.y || 0);
+  initDrag(panel);
   _open = true;
   syncToolbarButton();
   syncDockButton();
@@ -330,6 +398,12 @@ function mountShell(root: HTMLElement): void {
 function placePanel(): void {
   const panel = document.getElementById(PANEL_ID);
   if (!panel) return;
+  if (panel.dataset.dock === "free") {
+    // Window resized: keep the floating panel on screen.
+    const r = panel.getBoundingClientRect();
+    applyFree(panel, r.left, r.top);
+    return;
+  }
   const dock = panel.dataset.dock === "left" ? "left" : "right";
   let offset = 12;
   const tb = document.getElementById(TOOLBAR_ID);
@@ -347,9 +421,10 @@ function placePanel(): void {
 function switchDock(): void {
   const panel = document.getElementById(PANEL_ID);
   if (!panel) return;
-  const next = panel.dataset.dock === "left" ? "right" : "left";
+  // Floating → dock right; docked → the other side.
+  const next = panel.dataset.dock === "right" ? "left" : "right";
   panel.dataset.dock = next;
-  setDock(next);
+  setDock({ side: next });
   syncDockButton();
   placePanel();
 }
@@ -358,9 +433,10 @@ function syncDockButton(): void {
   const panel = document.getElementById(PANEL_ID);
   const btn = panel?.querySelector<HTMLElement>('[data-tb-au="dock"]');
   if (!panel || !btn) return;
-  const toLeft = panel.dataset.dock !== "left";
+  const free = panel.dataset.dock === "free";
+  const toLeft = panel.dataset.dock === "right";
   setInnerHTML(btn, toLeft ? ICON.dockLeft : ICON.dockRight);
-  const label = toLeft ? "Move panel to the left" : "Move panel to the right";
+  const label = free ? "Dock the panel to the right" : toLeft ? "Move panel to the left" : "Move panel to the right";
   btn.setAttribute("aria-label", label);
   btn.title = label;
 }
@@ -829,6 +905,13 @@ function injectStyles(): void {
       animation: tb-au-in .18s ease-out; }
     ${P}[data-dock="right"] { right: var(--tb-au-offset, 12px) !important; left: auto !important; }
     ${P}[data-dock="left"] { left: var(--tb-au-offset, 12px) !important; right: auto !important; }
+    ${P}[data-dock="free"] { left: var(--tb-au-x, 12px) !important; top: var(--tb-au-y, 12px) !important; right: auto !important; bottom: auto !important;
+      height: min(820px, calc(100vh - var(--tb-au-y, 12px) - 12px)) !important; }
+    ${P}.tb-au-min[data-dock="free"] { top: auto !important; bottom: 88px !important; left: auto !important; right: 12px !important; height: auto !important; }
+    ${P} .tb-au-head { cursor: grab; touch-action: none; }
+    ${P} .tb-au-head button { cursor: pointer; }
+    ${P}.tb-au-dragging { transition: none !important; box-shadow: 0 24px 64px rgba(0,0,0,.35) !important; user-select: none !important; }
+    ${P}.tb-au-dragging .tb-au-head { cursor: grabbing; }
     @keyframes tb-au-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { ${P}, ${H}, ${P} * { animation: none !important; transition: none !important; } }
     ${P} *, ${P} *::before, ${P} *::after { box-sizing: border-box !important; }

@@ -938,9 +938,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     await runCombo("TB_INSPECT", "Starting inspect…");
   });
 
-  // ── Secondary: Site Audit — accessibility, layout, SEO and errors ──────
-  // The Audit button opens a menu of scans (plan §4a); each runs the audit
-  // with that scan and opens the panel on the page.
+  // ── Site Audit — the first card ──────────────────────────────────────────
+  // The card's main row runs All checks at once; its chevron (#btnAudit) opens
+  // the menu of scans (plan §4a), each of which runs that scan and opens the
+  // panel on the page.
+  document.getElementById("btnAuditRun")?.addEventListener("click", async () => {
+    await runCombo("TB_RUN_AUDIT", "Checking this page…", { scan: "full" });
+  });
   const auditBtn = document.getElementById("btnAudit");
   const auditMenu = document.getElementById("auditMenu");
   const setAuditMenu = (open) => {
@@ -1038,7 +1042,7 @@ function reportFailure(err) {
 }
 
 function setBusy(busy) {
-  ["btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect", "btnStopCapture"].forEach((id) => {
+  ["btnAuditRun", "btnAudit", "btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect", "btnStopCapture"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });

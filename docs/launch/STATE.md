@@ -25,8 +25,8 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   84/84 report, 74/74 audit, 33/33 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
 - **Site Audit on branch `site-audit`** (from `develop`; plan `docs/audit-quality/implementation-plan.md`), all
-  uncommitted, sprint scans done: popup "Audit ▾" + toolbar **Audit** button → docked side panel (right/left,
-  minimise; Locate keeps it open). Scans: All / Auto Review / Accessibility (axe + keyboard pass incl. 2.4.11) /
+  uncommitted, sprint scans done: popup's first card **Audit this page** (chevron = 4 scans) + toolbar **Audit** button →
+  side panel (docked right/left or dragged free by its header, remembered; minimise; Locate keeps it open). Scans: All / Auto Review / Accessibility (axe + keyboard pass incl. 2.4.11) /
   Performance & SEO. 0–100 score per category + overall (`src/audit/score.ts`: multiplicative shares, pooled, stored in
   `AuditRun.score`), per-finding WCAG + fix (contrast → nearest passing colour); SEO adds social tags, JSON-LD validity, robots.txt
   blocking (reads /robots.txt — the audit's only requests), sitemap; perf adds image oversize/format; axe "incomplete" →
@@ -42,7 +42,7 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   (fix the date on release day), `WHATS_NEW["1.12.0"]`, STORE-LISTINGS (New in, Firefox notes, single purpose, axe
   AMO note), `docs/release-sheets/1.12.0.md`, zips. `package-lock.json` root version **not bumped** (run
   `npm install --package-lock-only`). **Never build or regenerate 1.11.6 from this branch** — do it on `develop`.
-  Chrome description body has no Site Audit section yet. Merge `site-audit` only after 1.11.6 ships.
+  Chrome description body has no Site Audit section yet; store screenshots predate the new popup. Merge `site-audit` only after 1.11.6 ships.
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
 
 ## Open — needs a person

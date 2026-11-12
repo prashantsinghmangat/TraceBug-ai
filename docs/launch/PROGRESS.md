@@ -151,3 +151,8 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - Hero.tsx / DemoVideo.tsx aria-labels start with the visible text; Keycap.tsx drops aria-label on a span; AgentHandoff `pre` and Comparison grid get tabIndex/role=region/aria-label; globals.css `html { scroll-padding-top: 72px }`, light `--error` #D32424 and `--warning` #A84E08 (4.7:1 on their tints); layout.tsx description 232 → 152 chars; HeroStory restarts its CSS animations in place instead of re-mounting (the re-mount made LCP ~12 s).
 - Verified on localhost:3001 at 1707×811, light theme, after two animation loops: full audit 100 in every category, 0 findings, LCP 504 ms, only "needs review" contrast over gradients left; hero loop restarts (clock 9.75 s → 1.4 s). Website tsc + lint clean. Live check after deploy.
+
+## Audit: draggable panel, Audit first in the popup (2026-11-12, `site-audit`)
+
+- audit-panel.ts: header drag (pointer events, 4px threshold, clamped to the window), dock "free:x,y" in localStorage, snap to left/right within 24px, dock button re-docks. popup.html/js/styles.css: "Audit this page" hero card first (main = All checks, chevron #btnAudit = scan menu with icons), then Screenshot, then Capture Bug; dock is Tickets + Inspect; setBusy covers the audit buttons.
+- e2e: real mouse drags (float + snap left), popup order and icons. Gates green (1219/81, 84/84, 76/76, 35/35); ext-sdk-isolation 17/17. Store screenshots need regenerating for the new popup.

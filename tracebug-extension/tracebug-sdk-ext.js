@@ -37914,17 +37914,77 @@ Response: ${match.response.slice(0, 160)}` : "";
     return _open;
   }
   function getDock() {
+    let v2 = "";
     try {
-      return localStorage.getItem(DOCK_KEY) === "left" ? "left" : "right";
+      v2 = localStorage.getItem(DOCK_KEY) || "";
     } catch (e2) {
-      return "right";
     }
+    const m = /^free:(-?\d+),(-?\d+)$/.exec(v2);
+    if (m) return { side: "free", x: Number(m[1]), y: Number(m[2]) };
+    return { side: v2 === "left" ? "left" : "right" };
   }
   function setDock(d) {
     try {
-      localStorage.setItem(DOCK_KEY, d);
+      localStorage.setItem(DOCK_KEY, d.side === "free" ? `free:${Math.round(d.x || 0)},${Math.round(d.y || 0)}` : d.side);
     } catch (e2) {
     }
+  }
+  function clampFree(panel, x, y) {
+    const w = panel.offsetWidth || 420;
+    return {
+      x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - w)),
+      y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - 120))
+    };
+  }
+  function applyFree(panel, x, y) {
+    const c2 = clampFree(panel, x, y);
+    panel.dataset.dock = "free";
+    panel.style.setProperty("--tb-au-x", `${Math.round(c2.x)}px`);
+    panel.style.setProperty("--tb-au-y", `${Math.round(c2.y)}px`);
+  }
+  function initDrag(panel) {
+    const head = panel.querySelector(".tb-au-head");
+    if (!head) return;
+    head.addEventListener("pointerdown", (e2) => {
+      if (e2.button !== 0 || e2.target.closest("button, a, input")) return;
+      const start = panel.getBoundingClientRect();
+      const sx = e2.clientX, sy = e2.clientY;
+      let moved = false;
+      try {
+        head.setPointerCapture(e2.pointerId);
+      } catch (e3) {
+      }
+      const move = (ev) => {
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+        if (!moved) {
+          moved = true;
+          panel.classList.add("tb-au-dragging");
+        }
+        applyFree(panel, start.left + dx, start.top + dy);
+      };
+      const up = () => {
+        head.removeEventListener("pointermove", move);
+        head.removeEventListener("pointerup", up);
+        head.removeEventListener("pointercancel", up);
+        panel.classList.remove("tb-au-dragging");
+        if (!moved) return;
+        const r2 = panel.getBoundingClientRect();
+        if (r2.left <= SNAP) {
+          panel.dataset.dock = "left";
+          setDock({ side: "left" });
+        } else if (r2.right >= window.innerWidth - SNAP) {
+          panel.dataset.dock = "right";
+          setDock({ side: "right" });
+        } else setDock({ side: "free", x: r2.left, y: r2.top });
+        syncDockButton();
+        placePanel();
+      };
+      head.addEventListener("pointermove", move);
+      head.addEventListener("pointerup", up);
+      head.addEventListener("pointercancel", up);
+      e2.preventDefault();
+    });
   }
   async function toggleAuditPanel(root2) {
     if (_open) {
@@ -38067,7 +38127,8 @@ Response: ${match.response.slice(0, 160)}` : "";
     panel.id = PANEL_ID2;
     panel.setAttribute("role", "complementary");
     panel.setAttribute("aria-labelledby", `${PANEL_ID2}-title`);
-    panel.dataset.dock = getDock();
+    const dock = getDock();
+    panel.dataset.dock = dock.side;
     setInnerHTML(panel, `
     <button type="button" class="tb-au-tab" data-tb-au="restore" aria-label="Show the site audit">
       <span class="tb-au-tab-score" data-tb-au="tab-score">${ICON.audit}</span><span class="tb-au-tab-l">Audit</span>
@@ -38075,7 +38136,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     <div class="tb-au-shell">
       <div class="tb-au-head">
         <span class="tb-au-logo">${ICON.audit}</span>
-        <h2 class="tb-au-title" id="${PANEL_ID2}-title" tabindex="-1">Site audit</h2>
+        <h2 class="tb-au-title" id="${PANEL_ID2}-title" tabindex="-1" title="Drag to move">Site audit</h2>
         <button type="button" class="tb-au-icon" data-tb-au="dock" aria-label="Move panel to the other side" title="Move panel to the other side">${ICON.dockLeft}</button>
         <button type="button" class="tb-au-icon" data-tb-au="minimize" aria-label="Minimise" title="Minimise">${ICON.minimize}</button>
         <button type="button" class="tb-au-icon" data-tb-au="close" aria-label="Close the audit" title="Close (Esc)">${ICON.close}</button>
@@ -38088,6 +38149,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       </div>
     </div>`);
     root2.appendChild(panel);
+    if (dock.side === "free") applyFree(panel, dock.x || 0, dock.y || 0);
+    initDrag(panel);
     _open = true;
     syncToolbarButton();
     syncDockButton();
@@ -38145,6 +38208,11 @@ Response: ${match.response.slice(0, 160)}` : "";
   function placePanel() {
     const panel = document.getElementById(PANEL_ID2);
     if (!panel) return;
+    if (panel.dataset.dock === "free") {
+      const r2 = panel.getBoundingClientRect();
+      applyFree(panel, r2.left, r2.top);
+      return;
+    }
     const dock = panel.dataset.dock === "left" ? "left" : "right";
     let offset = 12;
     const tb = document.getElementById(TOOLBAR_ID);
@@ -38161,9 +38229,9 @@ Response: ${match.response.slice(0, 160)}` : "";
   function switchDock() {
     const panel = document.getElementById(PANEL_ID2);
     if (!panel) return;
-    const next = panel.dataset.dock === "left" ? "right" : "left";
+    const next = panel.dataset.dock === "right" ? "left" : "right";
     panel.dataset.dock = next;
-    setDock(next);
+    setDock({ side: next });
     syncDockButton();
     placePanel();
   }
@@ -38171,9 +38239,10 @@ Response: ${match.response.slice(0, 160)}` : "";
     const panel = document.getElementById(PANEL_ID2);
     const btn = panel == null ? void 0 : panel.querySelector('[data-tb-au="dock"]');
     if (!panel || !btn) return;
-    const toLeft = panel.dataset.dock !== "left";
+    const free = panel.dataset.dock === "free";
+    const toLeft = panel.dataset.dock === "right";
     setInnerHTML(btn, toLeft ? ICON.dockLeft : ICON.dockRight);
-    const label = toLeft ? "Move panel to the left" : "Move panel to the right";
+    const label = free ? "Dock the panel to the right" : toLeft ? "Move panel to the left" : "Move panel to the right";
     btn.setAttribute("aria-label", label);
     btn.title = label;
   }
@@ -38608,6 +38677,13 @@ Response: ${match.response.slice(0, 160)}` : "";
       animation: tb-au-in .18s ease-out; }
     ${P}[data-dock="right"] { right: var(--tb-au-offset, 12px) !important; left: auto !important; }
     ${P}[data-dock="left"] { left: var(--tb-au-offset, 12px) !important; right: auto !important; }
+    ${P}[data-dock="free"] { left: var(--tb-au-x, 12px) !important; top: var(--tb-au-y, 12px) !important; right: auto !important; bottom: auto !important;
+      height: min(820px, calc(100vh - var(--tb-au-y, 12px) - 12px)) !important; }
+    ${P}.tb-au-min[data-dock="free"] { top: auto !important; bottom: 88px !important; left: auto !important; right: 12px !important; height: auto !important; }
+    ${P} .tb-au-head { cursor: grab; touch-action: none; }
+    ${P} .tb-au-head button { cursor: pointer; }
+    ${P}.tb-au-dragging { transition: none !important; box-shadow: 0 24px 64px rgba(0,0,0,.35) !important; user-select: none !important; }
+    ${P}.tb-au-dragging .tb-au-head { cursor: grabbing; }
     @keyframes tb-au-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { ${P}, ${H}, ${P} * { animation: none !important; transition: none !important; } }
     ${P} *, ${P} *::before, ${P} *::after { box-sizing: border-box !important; }
@@ -38773,7 +38849,7 @@ Response: ${match.response.slice(0, 160)}` : "";
   `;
     document.head.appendChild(s2);
   }
-  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITIES, SEV_RANK, BAND_LABEL, PRINCIPLE, GROUP_TITLE, svg, ICON, _open, _root2, _scan, _sev, _cat, _minimized, _lastDiff, _expanded, _unselected, _highlightTimer, _highlightRaf, _clock, hex, LABEL;
+  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITIES, SEV_RANK, BAND_LABEL, PRINCIPLE, GROUP_TITLE, svg, ICON, _open, _root2, _scan, _sev, _cat, _minimized, _lastDiff, _expanded, _unselected, _highlightTimer, _highlightRaf, _clock, SNAP, hex, LABEL;
   var init_audit_panel = __esm({
     "src/ui/audit-panel.ts"() {
       "use strict";
@@ -38855,6 +38931,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       _highlightTimer = null;
       _highlightRaf = 0;
       _clock = null;
+      SNAP = 24;
       hex = /^#[0-9a-f]{3,8}$/i;
       LABEL = {
         needed: "Space needed (px)",

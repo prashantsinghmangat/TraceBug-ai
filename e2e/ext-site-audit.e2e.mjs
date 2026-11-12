@@ -190,6 +190,8 @@ try {
   // Scan menu (plan §4a): the popup sends a scan; only its categories run.
   const popupHtml = readFileSync(join(DIST, "popup.html"), "utf8");
   check("popup offers the four scans", ["full", "auto-review", "accessibility", "performance-seo"].every((k) => popupHtml.includes(`data-scan="${k}"`)));
+  check("popup: Audit is the first card, then Screenshot, then Capture Bug", popupHtml.indexOf('id="btnAuditRun"') > 0 && popupHtml.indexOf('id="btnAuditRun"') < popupHtml.indexOf('id="btnScreenshot"') && popupHtml.indexOf('id="btnScreenshot"') < popupHtml.indexOf('id="btnCaptureBug"'));
+  check("popup: every scan has an icon", (popupHtml.match(/class="audit-ic"/g) || []).length === 4);
   await sw.evaluate(async (glob) => {
     const [tab] = await chrome.tabs.query({ url: glob, active: true });
     // eslint-disable-next-line no-undef
