@@ -263,3 +263,24 @@ describe('phone width', () => {
     expect(fixFor('mobile/horizontal-overflow', undefined)).toMatch(/max-width: 100%/);
   });
 });
+
+describe('Copy for AI accuracy (from a real tracebug.dev prompt)', () => {
+  it('LCP: text drawn long after first paint gets render advice, not image advice', async () => {
+    const { describeLcp } = await import('../src/audit/detectors/performance');
+    document.body.innerHTML = '<svg><text id="t">Checkout</text></svg><img id="i" src="/hero.jpg">';
+    const late = describeLcp({ startTime: 12284, element: document.getElementById('t') }, 1272);
+    expect(late.what).toMatch(/SVG text "Checkout", which appears 11\.0 s after the first paint/);
+    expect(late.fix).toMatch(/Compressing images won't change this one/);
+    const img = describeLcp({ startTime: 4200, url: 'https://x.test/hero.jpg', element: document.getElementById('i') }, 900);
+    expect(img.what).toBe('The largest element is the image hero.jpg.');
+    expect(img.fix).toMatch(/fetchpriority="high"/);
+  });
+
+  it('scroll boxes get a label that fits what they hold', async () => {
+    const { scrollBoxLabel } = await import('../src/audit/detectors/mobile');
+    document.body.innerHTML = '<pre id="a">$ npx</pre><div id="b"><div class="grid grid-cols-4">x</div></div><div id="c"><p>x</p></div>';
+    expect(scrollBoxLabel(document.getElementById('a')!)).toBe('Code example');
+    expect(scrollBoxLabel(document.getElementById('b')!)).toBe('Table');
+    expect(scrollBoxLabel(document.getElementById('c')!)).toBe('<what this box contains>');
+  });
+});

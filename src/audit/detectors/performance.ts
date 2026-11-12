@@ -139,8 +139,15 @@ export async function detectPerfFindings(): Promise<PerfAuditResult> {
     if (!sev) continue;
     const shown = key === "cls" ? String(v) : `${(v / 1000).toFixed(2)} s`;
     const extra: Partial<Issue> = { evidence: { metrics: { [key]: v, good: PERF_THRESHOLDS[key][0], poor: PERF_THRESHOLDS[key][1] } } };
-    if (key === "lcpMs" && lcp?.url) extra.url = lcp.url;
-    findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, text.replace("{v}", shown), extra));
+    let description = text.replace("{v}", shown);
+    if (key === "lcpMs" && lcp) {
+      const lcpInfo = describeLcp(lcp, metrics.fcpMs);
+      if (lcp.url) extra.url = lcp.url;
+      if (lcpInfo.el) { extra.selector = buildSelector(lcpInfo.el); extra.evidence = { ...elementEvidence(lcpInfo.el), metrics: { ...extra.evidence!.metrics!, ...(metrics.fcpMs ? { fcpMs: metrics.fcpMs } : {}) } }; }
+      description = `${description} ${lcpInfo.what}`;
+      extra.fix = lcpInfo.fix;
+    }
+    findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, description, extra));
   }
 
   // Resources
@@ -190,6 +197,40 @@ export async function detectPerfFindings(): Promise<PerfAuditResult> {
   findings.push(...imageWeightFindings(samples, window.devicePixelRatio || 1));
 
   return { ran: true, limitation: notes.join(" "), metrics, findings };
+}
+
+/**
+ * What the largest element was and why it was late, so the fix fits: a slow
+ * image needs a smaller/earlier image; text that appears long after the first
+ * paint is a late render or animation, where image advice is wrong (seen on
+ * tracebug.dev: an SVG "Checkout" label drawn by the hero animation at ~12 s).
+ */
+export function describeLcp(lcp: { startTime: number; url?: string; element?: Element | null }, fcpMs?: number): { el: Element | null; what: string; fix: string } {
+  const el = lcp.element && lcp.element.isConnected ? lcp.element : null;
+  const tag = el ? el.tagName.toLowerCase() : "";
+  const text = el ? (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+  const isImage = !!lcp.url || /^(img|image|video|picture)$/.test(tag);
+  const gap = fcpMs ? Math.round(lcp.startTime - fcpMs) : 0;
+  const name = isImage ? `the image ${lcp.url ? fileName(lcp.url) : `<${tag}>`}` : el ? `the ${tag === "text" ? "SVG text" : `<${tag}>`}${text ? ` "${text}"` : ""}` : "an element the browser no longer has";
+  if (!isImage && gap > 2500) {
+    return {
+      el,
+      what: `The largest element is ${name}, which appears ${(gap / 1000).toFixed(1)} s after the first paint — that's a late render or an animation drawing it, not slow loading. Real visitors who scroll or click before then don't count it.`,
+      fix: "Show that element from the start (render it with the page, or start the animation with it already visible), or keep animated content smaller than the main heading so it can't become the largest element. Compressing images won't change this one.",
+    };
+  }
+  if (isImage) {
+    return {
+      el,
+      what: `The largest element is ${name}.`,
+      fix: "Make that image arrive sooner: resize and compress it, serve WebP/AVIF, add fetchpriority=\"high\" (or a preload) and don't lazy-load it.",
+    };
+  }
+  return {
+    el,
+    what: `The largest element is ${name}.`,
+    fix: "Make that element render sooner: cut the server time and render-blocking CSS/JS before it, and make sure its web font doesn't hold it back (font-display: swap).",
+  };
 }
 
 export interface ImageSample { el?: Element; src: string; bytes: number; naturalW: number; naturalH: number; drawnW: number; drawnH: number; contentType?: string }

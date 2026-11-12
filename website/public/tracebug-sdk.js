@@ -69143,6 +69143,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     return Object.keys(out).length ? out : void 0;
   }
   async function detectA11yFindings() {
+    var _a2, _b;
     const axe = await loadAxe();
     if (!axe) return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
     let results;
@@ -69179,10 +69180,12 @@ Response: ${match.response.slice(0, 160)}` : "";
           if (c2.fix) fix = c2.fix;
           if (c2.suggested && metrics) metrics.suggestedFgColor = c2.suggested;
         } else if (v2.id === "label-content-name-mismatch" && el) {
-          const visible = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+          const rendered = ((_b = (_a2 = el.innerText) != null ? _a2 : el.textContent) != null ? _b : "").split(/\n+/).map((l2) => l2.replace(/\s+/g, " ").trim()).filter(Boolean);
+          const visible = (rendered[0] || "").slice(0, 60);
           const name = el.getAttribute("aria-label");
           if (visible) {
-            fix = `The visible text "${visible}" must be part of the accessible name${name ? ` (now "${name.slice(0, 80)}")` : ""}. Start the aria-label with the visible text, or remove aria-label so the visible text becomes the name.`;
+            const suggested = name && !name.toLowerCase().startsWith(visible.toLowerCase()) ? ` For example aria-label="${visible}${rendered.length > 1 ? ` (${rendered.slice(1).join(" ").slice(0, 30)})` : ""}" \u2014 or the visible text followed by the extra detail.` : "";
+            fix = `The visible label "${visible}" must be part of the accessible name${name ? ` (now "${name.slice(0, 80)}")` : ""}. Start the aria-label with the visible text, or remove aria-label so the visible text becomes the name.${suggested}`;
           }
         }
         const evidence = el ? elementEvidence(el, metrics ? { metrics } : void 0) : { html: node2.html || "", ...metrics ? { metrics } : {} };
@@ -69499,6 +69502,12 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (t2 !== null) return Number(t2) >= 0;
     return el.matches(FOCUSABLE);
   }
+  function scrollBoxLabel(el) {
+    if (el.matches("pre, code") || el.querySelector("pre, code")) return "Code example";
+    if (el.matches("table, [role=table], [role=grid]") || el.querySelector("table, [role=table], [role=grid], [class*='grid-cols']")) return "Table";
+    if (el.querySelector("img, picture, video")) return "Image gallery";
+    return "<what this box contains>";
+  }
   function scrollableNotFocusable(doc, limit = 6e3) {
     const out = [];
     const els = doc.body ? doc.body.getElementsByTagName("*") : [];
@@ -69519,10 +69528,11 @@ Response: ${match.response.slice(0, 160)}` : "";
         ruleId: "mobile/scroll-not-focusable",
         severity: "moderate",
         title: `A box scrolls ${dir} but keyboard users can't reach it`,
-        description: `This ${el.tagName.toLowerCase()} scrolls ${dir} (${sx ? `${el.scrollWidth}px of content in ${el.clientWidth}px` : `${el.scrollHeight}px of content in ${el.clientHeight}px`}), but it isn't focusable and has nothing focusable inside, so keyboard users can't scroll it in Safari. Chrome 130+ and Firefox now make such boxes focusable on their own.`,
+        description: `At ${(doc.defaultView || window).innerWidth}px wide, this ${el.tagName.toLowerCase()} scrolls ${dir} (${sx ? `${el.scrollWidth}px of content in ${el.clientWidth}px` : `${el.scrollHeight}px of content in ${el.clientHeight}px`}), but it isn't focusable and has nothing focusable inside, so keyboard users can't scroll it in Safari. Chrome 130+ and Firefox now make such boxes focusable on their own.`,
         selector: buildSelector2(el),
         page: location.href,
         detectedAt: Date.now(),
+        fix: `Add tabindex="0", role="region" and aria-label="${scrollBoxLabel(el)}" to this ${el.tagName.toLowerCase()} so keyboard users can focus and scroll it${sx ? ", or let its content wrap at narrow widths so it doesn't scroll at all" : ""}.`,
         evidence: { ...elementEvidence(el), metrics: sx ? { contentWidth: el.scrollWidth, boxWidth: el.clientWidth } : { contentHeight: el.scrollHeight, boxHeight: el.clientHeight } }
       });
     }
@@ -69994,8 +70004,18 @@ Response: ${match.response.slice(0, 160)}` : "";
       if (!sev) continue;
       const shown = key === "cls" ? String(v2) : `${(v2 / 1e3).toFixed(2)} s`;
       const extra = { evidence: { metrics: { [key]: v2, good: PERF_THRESHOLDS[key][0], poor: PERF_THRESHOLDS[key][1] } } };
-      if (key === "lcpMs" && (lcp == null ? void 0 : lcp.url)) extra.url = lcp.url;
-      findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, text.replace("{v}", shown), extra));
+      let description = text.replace("{v}", shown);
+      if (key === "lcpMs" && lcp) {
+        const lcpInfo = describeLcp(lcp, metrics.fcpMs);
+        if (lcp.url) extra.url = lcp.url;
+        if (lcpInfo.el) {
+          extra.selector = buildSelector2(lcpInfo.el);
+          extra.evidence = { ...elementEvidence(lcpInfo.el), metrics: { ...extra.evidence.metrics, ...metrics.fcpMs ? { fcpMs: metrics.fcpMs } : {} } };
+        }
+        description = `${description} ${lcpInfo.what}`;
+        extra.fix = lcpInfo.fix;
+      }
+      findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, description, extra));
     }
     const resources = performance.getEntriesByType("resource").filter((r2) => !isTraceBugResource(r2.name));
     const total = resources.reduce((t2, r2) => t2 + (r2.transferSize || 0), nav.transferSize || 0);
@@ -70047,6 +70067,33 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     findings.push(...imageWeightFindings(samples, window.devicePixelRatio || 1));
     return { ran: true, limitation: notes.join(" "), metrics, findings };
+  }
+  function describeLcp(lcp, fcpMs) {
+    const el = lcp.element && lcp.element.isConnected ? lcp.element : null;
+    const tag = el ? el.tagName.toLowerCase() : "";
+    const text = el ? (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
+    const isImage = !!lcp.url || /^(img|image|video|picture)$/.test(tag);
+    const gap = fcpMs ? Math.round(lcp.startTime - fcpMs) : 0;
+    const name = isImage ? `the image ${lcp.url ? fileName(lcp.url) : `<${tag}>`}` : el ? `the ${tag === "text" ? "SVG text" : `<${tag}>`}${text ? ` "${text}"` : ""}` : "an element the browser no longer has";
+    if (!isImage && gap > 2500) {
+      return {
+        el,
+        what: `The largest element is ${name}, which appears ${(gap / 1e3).toFixed(1)} s after the first paint \u2014 that's a late render or an animation drawing it, not slow loading. Real visitors who scroll or click before then don't count it.`,
+        fix: "Show that element from the start (render it with the page, or start the animation with it already visible), or keep animated content smaller than the main heading so it can't become the largest element. Compressing images won't change this one."
+      };
+    }
+    if (isImage) {
+      return {
+        el,
+        what: `The largest element is ${name}.`,
+        fix: `Make that image arrive sooner: resize and compress it, serve WebP/AVIF, add fetchpriority="high" (or a preload) and don't lazy-load it.`
+      };
+    }
+    return {
+      el,
+      what: `The largest element is ${name}.`,
+      fix: "Make that element render sooner: cut the server time and render-blocking CSS/JS before it, and make sure its web font doesn't hold it back (font-display: swap)."
+    };
   }
   function imageWeightFindings(samples, dpr = 1) {
     var _a2;
