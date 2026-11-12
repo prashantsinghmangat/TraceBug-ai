@@ -1,8 +1,15 @@
 # Store listings — Chrome Web Store and Firefox Add-ons
 
-The one place for every word and image the two stores show. Current for **1.11.5**. When a release
+The one place for every word and image the two stores show. Current for **1.11.6**. When a release
 changes what a listing says, update this file in the same commit. How to upload a release is in
 [RELEASING.md](RELEASING.md); images live in `assets/` (gitignored, see `assets/README.md`).
+
+**Per release, edit two blocks here** — the Chrome "New in x.y.z" paragraph (§2) and the Firefox
+release notes (§3) — then run `node scripts/release-sheet.mjs`. It writes
+`docs/release-sheets/<version>.md`: every field of both stores, npm, the MCP registry, the website and
+the GitHub release, in upload order, ready to copy and paste. `scripts/release-sheet.mjs` finds the
+blocks by the bold labels further down this file (Description, Single purpose, Release notes, Notes
+to reviewer) — keep those labels as they are.
 
 ## 1. Name and summary (they come from the manifest)
 
@@ -39,7 +46,7 @@ Dashboard → TraceBug → **Store listing**, **Privacy**, **Package**.
 short "New in x.y.z" block at the top (from the CHANGELOG), then take it out.
 
 ```text
-New in 1.11.5: Tab recording just starts — no permission prompt, no "Choose what to share" dialog. Your microphone is recorded together with the tab's sound, and stopping right after starting no longer saves an empty video.
+New in 1.11.6: Reports flag only real failures and say what they captured and what they missed. Tokens in URLs, hidden form fields and cookie values stay out of reports by default. One setup command connects your AI agent, and it finds reports in your Downloads folder. A recording's video and sound now travel inside the exported report. New coral look across the extension and the exported report.
 
 Record a bug once. Get a report a developer can actually reproduce: a replay of what happened, the console errors, the failed requests and the steps, in one file that opens offline.
 
@@ -210,10 +217,16 @@ Privacy policy: https://tracebug.dev/privacy
 ```
 
 **Release notes** (per version): the CHANGELOG section, minus Chrome-only items (Tab mode, `tabCapture`).
-1.11.5:
+Current:
 ```text
-- Stopping a recording in its first few seconds no longer saves an empty video.
-- No more "TrustedHTML" console errors on sites like YouTube.
+- Reports flag only real failures: aborted requests and browser timing rows are no longer reported as errors.
+- Every report says what it captured, what it could not capture, and what it masked.
+- Private by default: tokens in URLs and error stacks, hidden form fields and cookie values stay out of reports.
+- The clicks and typing that lead up to a bug are kept, and typing is recorded before the click that follows it.
+- One setup command connects your AI agent, and it finds exported reports in your Downloads folder.
+- A screen recording, with its sound, is included in the exported report.
+- The in-page panels follow the chosen theme again, and the More menu is no longer see-through.
+- New coral look across the extension and the exported report.
 ```
 
 **Notes to reviewer** (fill in the version):
