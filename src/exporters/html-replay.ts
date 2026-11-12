@@ -6,7 +6,7 @@
 // Inputs reuse what's already in memory: events from the session, screenshots
 // (already base64 dataUrls), the optional video Blob, and the BugReport.
 
-import { BugReport, StoredSession, StorageEntry } from "../types";
+import { AuditRun, BugReport, StoredSession, StorageEntry } from "../types";
 import { buildTimeline } from "../timeline-builder";
 import { buildReplayHtml, BundlePayload } from "./html-template";
 import { priorityLabel } from "../report-builder";
@@ -33,6 +33,10 @@ export interface HtmlReplayOptions {
    *  is usually not the person who made it — which is the whole point, and also
    *  why it has to be removable before the file is sent. */
   showFooter?: boolean;
+  /** A Site Audit run to carry in the file (`payload.audit`). The viewer shows it
+   *  in an Audit tab and the MCP server reads it (get_audit / compare_audits).
+   *  Already redacted and bounded by buildAuditRun. */
+  audit?: AuditRun | null;
 }
 
 export interface ExportedReplay {
@@ -296,6 +300,7 @@ async function buildReplayPayload(
     github: buildGithubPayload(report, options?.githubRepo),
     ...buildPlaywrightPayload(report),
   };
+  if (options?.audit) payload.audit = options.audit;
 
   // Compress the DOM-replay stream. It's repetitive text and gzips ~8–12×, so
   // this is the single biggest lever on the file size (the stream is ~89% of a

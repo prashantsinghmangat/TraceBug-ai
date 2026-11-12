@@ -201,6 +201,17 @@
         }
         break;
 
+      case "audit":
+        // Site Audit (popup → "Audit"). Read-only: checks the page, opens the
+        // results panel; a second click re-runs and shows what changed.
+        if (window.__TraceBugExtension.showAuditPanel) {
+          // showAuditPanel ignores any scan name it doesn't know.
+          window.__TraceBugExtension.showAuditPanel(e.detail && e.detail.scan);
+        } else {
+          showToast("Site audit requires the latest extension build");
+        }
+        break;
+
       case "inspect":
         if (window.__TraceBugExtension.isInspectModeActive && window.__TraceBugExtension.isInspectModeActive()) {
           window.__TraceBugExtension.deactivateInspectMode();

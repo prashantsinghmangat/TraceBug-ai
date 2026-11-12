@@ -430,6 +430,18 @@ export default function McpDocsPage() {
                   sig: "get_fix_context",
                   desc: "One-call fix starter: the failing request (with response snippet), the user action that triggered it, the first error with source-map-resolved top frames, and whether a generated failing test is available.",
                 },
+                {
+                  sig: "get_audit",
+                  desc: "The Site Audit in an audit export: which checks ran (accessibility, layout, performance, SEO, runtime) with their limitations and page metrics, plus the findings. A check that didn't run is never reported as a pass.",
+                },
+                {
+                  sig: "get_finding",
+                  desc: "One audit finding in full: bounded HTML and visible-text evidence, metrics, help link and hints to search your codebase for. Pass searchDir for a literal search.",
+                },
+                {
+                  sig: "compare_audits",
+                  desc: "Two audit exports of the same page, before and after a fix: fixed, still present, new, and regressed. Text from the audited page comes back marked untrusted.",
+                },
               ].map((tool) => (
                 <div
                   key={tool.sig}

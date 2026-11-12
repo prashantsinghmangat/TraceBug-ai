@@ -7,12 +7,12 @@
     "source": "github"
   },
   "websiteUrl": "https://tracebug.dev",
-  "version": "1.11.6",
+  "version": "1.12.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "tracebug",
-      "version": "1.11.6",
+      "version": "1.12.0",
       "transport": {
         "type": "stdio"
       },

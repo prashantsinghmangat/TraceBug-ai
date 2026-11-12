@@ -270,9 +270,9 @@
         </div>
       </div>
 
-      <!-- Tools dock — Tickets / Inspect. Screenshot moved into its own card
-           above (2026-10-27). -->
-      <div class="dock dock-2">
+      <!-- Tools dock — Tickets / Inspect / Audit. Screenshot moved into its own
+           card above (2026-10-27); Audit added for the Site Audit (2026-11-12). -->
+      <div class="dock">
         <button class="dock-btn" id="btnViewTickets">
           <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></span>
           <span class="dock-label">Tickets</span>
@@ -281,6 +281,17 @@
           <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><path d="m17 14 3.5 9-2.6-1-1.4 2.5-1.9-5"/></svg></span>
           <span class="dock-label">Inspect</span>
         </button>
+        <button class="dock-btn" id="btnAudit" aria-haspopup="true" aria-expanded="false" aria-controls="auditMenu" title="Check this page for accessibility, layout, performance, SEO and error problems. Read-only: nothing on the page is clicked or changed.">
+          <span class="dock-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l2 2 4-4"/><path d="M12 22c5.5-2.4 8-6.2 8-11V5l-8-3-8 3v6c0 4.8 2.5 8.6 8 11z"/></svg></span>
+          <span class="dock-label">Audit &#9662;</span>
+        </button>
+      </div>
+      <!-- Site Audit scan menu (docs/audit-quality/implementation-plan.md §4a). -->
+      <div class="audit-menu" id="auditMenu" role="menu" aria-label="Choose an audit" hidden>
+        <button class="audit-item" role="menuitem" data-scan="full"><b>All checks</b><span>Everything below, in one run</span></button>
+        <button class="audit-item" role="menuitem" data-scan="auto-review"><b>Auto Review</b><span>Broken layout and images, errors, failed requests, dead clicks</span></button>
+        <button class="audit-item" role="menuitem" data-scan="accessibility"><b>Accessibility Audit</b><span>WCAG A/AA checks (axe-core) plus a keyboard pass</span></button>
+        <button class="audit-item" role="menuitem" data-scan="performance-seo"><b>Performance &amp; SEO</b><span>This page load's timings and files; page tags</span></button>
       </div>
 
       <!-- Redaction rules moved to options.html (2026-10-27) — freed up popup

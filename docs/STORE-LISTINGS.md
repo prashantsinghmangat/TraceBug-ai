@@ -1,6 +1,6 @@
 # Store listings — Chrome Web Store and Firefox Add-ons
 
-The one place for every word and image the two stores show. Current for **1.11.6**. When a release
+The one place for every word and image the two stores show. Current for **1.12.0**. When a release
 changes what a listing says, update this file in the same commit. How to upload a release is in
 [RELEASING.md](RELEASING.md); images live in `assets/` (gitignored, see `assets/README.md`).
 
@@ -46,7 +46,7 @@ Dashboard → TraceBug → **Store listing**, **Privacy**, **Package**.
 short "New in x.y.z" block at the top (from the CHANGELOG), then take it out.
 
 ```text
-New in 1.11.6: Reports flag only real failures and say what they captured and what they missed. Tokens in URLs, hidden form fields and cookie values stay out of reports by default. One setup command connects your AI agent, and it finds reports in your Downloads folder. A recording's video and sound now travel inside the exported report. New coral look across the extension and the exported report.
+New in 1.12.0: Site Audit. Check the page you are on for accessibility (axe-core), layout, performance and SEO problems and for errors, from the popup's Audit menu. Re-run it to see what you fixed, what is new and what regressed. Export the audit as one offline file and your coding agent reads it with three new MCP tools. Everything still runs on your device.
 
 Record a bug once. Get a report a developer can actually reproduce: a replay of what happened, the console errors, the failed requests and the steps, in one file that opens offline.
 
@@ -121,7 +121,7 @@ LINKS
 
 **Single purpose:**
 ```text
-TraceBug captures a browser bug on the tab where the user starts a capture: a replay of their clicks, inputs and navigation, the console errors, the network requests, and optionally a screen recording with microphone narration. It turns them into one bug report the user can review, save on their device, export as a file, or send to their own issue tracker or AI tool.
+TraceBug captures a browser bug on the tab where the user starts a capture: a replay of their clicks, inputs and navigation, the console errors, the network requests, and optionally a screen recording with microphone narration. It turns them into one bug report the user can review, save on their device, export as a file, or send to their own issue tracker or AI tool. On request it also audits that page for accessibility, layout, performance and SEO problems, so they can be reported and fixed the same way.
 ```
 
 **Permission justifications** — one box per permission the manifest requests. Never justify a
@@ -219,14 +219,10 @@ Privacy policy: https://tracebug.dev/privacy
 **Release notes** (per version): the CHANGELOG section, minus Chrome-only items (Tab mode, `tabCapture`).
 Current:
 ```text
-- Reports flag only real failures: aborted requests and browser timing rows are no longer reported as errors.
-- Every report says what it captured, what it could not capture, and what it masked.
-- Private by default: tokens in URLs and error stacks, hidden form fields and cookie values stay out of reports.
-- The clicks and typing that lead up to a bug are kept, and typing is recorded before the click that follows it.
-- One setup command connects your AI agent, and it finds exported reports in your Downloads folder.
-- A screen recording, with its sound, is included in the exported report.
-- The in-page panels follow the chosen theme again, and the More menu is no longer see-through.
-- New coral look across the extension and the exported report.
+- New: Site Audit. The popup's Audit menu checks the page you are on for accessibility (axe-core 4.11, WCAG 2.0–2.2 A/AA, plus a keyboard pass), layout, performance (lab values from this load), SEO and errors. Each check says what it can't tell you; a check that could not run shows "Not run", never "no issues".
+- Re-run the audit to see what was fixed, what is still there, what is new and what regressed.
+- Export report saves the audit as one offline .html file; the MCP server reads it with three new tools (get_audit, get_finding, compare_audits).
+- axe-core is a separate packaged file, loaded only when you run an audit.
 ```
 
 **Notes to reviewer** (fill in the version):
@@ -236,8 +232,14 @@ Source code: tracebug-source-v<x.y.z>.zip is `git archive` of tag v<x.y.z> from
 https://github.com/prashantsinghmangat/tracebug-ai (public, MIT).
 
 Generated files in the package (not hand-written): tracebug-sdk-ext.js and tracebug-provider-api.js
-are bundled from TypeScript in src/ by tsup (esbuild), not minified. Every other .js file is
-hand-written and appears as-is in tracebug-extension/.
+are bundled from TypeScript in src/ by tsup (esbuild), not minified. Every other .js file except
+vendor/axe.min.js (below) is hand-written and appears as-is in tracebug-extension/.
+
+Third-party library: vendor/axe.min.js is axe-core 4.11.4 (https://github.com/dequelabs/axe-core,
+MPL-2.0), the package's own published axe.min.js, unmodified. build-ext.mjs copies it from
+node_modules/axe-core/axe.min.js. sha256:
+fb83a4378d978ecb7d2dae48a3a3778a84c971ac692f3afd45d714fba89c0f0d
+It is injected only when the user runs a Site Audit from the popup, never on page load.
 
 Build (Node 18+, npm; bsdtar or zip on PATH):
   npm ci

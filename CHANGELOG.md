@@ -2,6 +2,15 @@
 
 All notable changes to TraceBug are documented here.
 
+## [1.12.0] - 2026-11-12
+
+> Site Audit (plan: `docs/audit-quality/implementation-plan.md`): check the page you are on, re-run to see what changed, and hand the audit to a coding agent.
+
+### Added
+
+- **Site Audit.** The popup's **Audit ▾** menu offers All checks, **Auto Review** (broken layout and images, errors, failed requests, dead and rage clicks), **Accessibility Audit** (axe-core plus a keyboard pass: positive `tabindex`, focus landing on invisible elements, CSS that hides the focus outline) and **Performance & SEO**; the panel switches between them. It checks the page you are on for accessibility (axe-core 4.11, WCAG 2.0–2.2 A/AA), layout (sideways scroll and its cause, overlapping or clipped elements, images without size, broken images), performance (this load's TTFB, FCP, LCP, CLS, page weight, large and render-blocking files — lab values, not real-user data), SEO (title, description, canonical, h1, noindex, viewport) and errors seen in the capture. Each check says what it can't tell you, and a check that could not run shows "Not run", never "no issues". **Re-run audit** shows what was fixed, what is still there, what is new and what regressed. axe-core is a separate packaged file loaded only when you run an audit.
+- **Audit reports for coding agents.** **Export report** downloads the audit as the usual self-contained `.html` (it opens on an Audit tab). The MCP server reads it with three new tools: `get_audit`, `get_finding` (evidence and search hints, optionally searched literally in your repo) and `compare_audits` (before/after a fix). Text from the audited page is marked `untrusted` so agents treat it as data. `list_bug_reports` now says whether a file is a bug or an audit.
+
 ## [1.11.6] - 2026-11-10
 
 > Evidence integrity (plan: `docs/launch/master-plan.md` Part 3, developed as "1.12") and fewer dead ends between a captured bug and an AI fix (`docs/launch/minimum-click-workflow.md`).

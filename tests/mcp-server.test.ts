@@ -300,13 +300,14 @@ describe('MCP protocol (handleMessage)', () => {
     expect(res.result.serverInfo.name).toBe('tracebug');
   });
 
-  it('lists all nine tools with schemas', () => {
+  it('lists all twelve tools with schemas', () => {
     const res = handleMessage(tmpDir, { jsonrpc: '2.0', id: 2, method: 'tools/list' }) as Record<string, any>;
-    expect(res.result.tools).toHaveLength(9);
+    expect(res.result.tools).toHaveLength(12);
     expect(TOOL_DEFINITIONS.map((t) => t.name)).toEqual([
       'list_bug_reports', 'get_bug_report', 'get_console_errors',
       'get_network_activity', 'get_repro_steps', 'get_screenshot',
       'get_playwright_test', 'resolve_stack', 'get_fix_context',
+      'get_audit', 'get_finding', 'compare_audits',
     ]);
     for (const t of res.result.tools) expect(t.inputSchema.type).toBe('object');
   });

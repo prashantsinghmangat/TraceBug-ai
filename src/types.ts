@@ -1,3 +1,4 @@
+import type { AuditCategory, AuditEvidence, AuditRunOf } from "./audit/types";
 // ── Configuration ──────────────────────────────────────────────────────────
 
 export interface TraceBugConfig {
@@ -564,10 +565,27 @@ export type IssueDetector =
   /** Frustration: form filled, then route_change before form_submit. */
   | "frustration-abandon"
   /** Frustration: error fired ≤2.5 s after a click — likely the trigger. */
-  | "frustration-error-correlated";
+  | "frustration-error-correlated"
+  /** Site Audit: layout checks (overflow, overlap, clipped text, image sizing). */
+  | "audit-ui"
+  /** Site Audit: page-level SEO checks (title, description, canonical, h1, robots, viewport). */
+  | "audit-seo"
+  /** Site Audit: page-load performance (lab timings, page weight, large and render-blocking files). */
+  | "audit-perf"
+  /** Site Audit: keyboard pass (positive tabindex, invisible focus targets, removed focus outlines). */
+  | "audit-keyboard";
 
 /** Severity buckets, lifted from axe-core's impact ladder for consistency. */
 export type IssueSeverity = "critical" | "serious" | "moderate" | "minor";
+
+// ── Site Audit (docs/audit-quality/implementation-plan.md §3) ──────────────
+
+// Defined dependency-free in src/audit/types.ts (the MCP CLI imports them).
+export type { AuditCategory, AuditEvidence, AuditCategoryResult, AuditRunOf } from "./audit/types";
+
+/** One audit run of one page: what was checked, what was found, and what could
+ *  not be checked. Rides in the exported report as `audit`. */
+export type AuditRun = AuditRunOf<Issue>;
 
 /**
  * One finding from the scanner. Detectors emit Issue[] which the orchestrator
@@ -593,8 +611,19 @@ export interface Issue {
   detectedAt: number;
   /** Set true when the user dismisses — kept in memory only this session. */
   dismissed?: boolean;
-  /** Fingerprint (SHA-1 over errorType+stackTop+page) for grouping identical issues. */
+  /** Groups identical issues. Runtime detectors: SHA-1 over errorType+stackTop+page
+   *  (src/fingerprint.ts). Audit findings: category+ruleId+URL path+normalized
+   *  selector (src/audit/fingerprint.ts) — what `compareAudits` matches runs on. */
   fingerprint?: string;
+  /** Audit only: second match key (category+ruleId+tag+visible text) for when the
+   *  selector changed between runs. */
+  fallbackFingerprint?: string;
+  /** Audit only: which scan produced it. Absent on runtime detector issues. */
+  category?: AuditCategory;
+  /** Audit only: rule id — axe's own ("color-contrast") or ours ("ui/horizontal-overflow"). */
+  ruleId?: string;
+  /** Audit only: bounded, redacted evidence for the agent. */
+  evidence?: AuditEvidence;
   /** When fingerprint dedup grouped multiple events into one issue, this is the count (≥1). */
   occurrences?: number;
   /** First and last timestamps when the underlying signal was seen — populated when occurrences > 1. */

@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -100,6 +101,20 @@ const SHARED_FILES = [
 const SHARED_DIRS = ["icons"];
 
 /**
+ * axe-core for the Site Audit (docs/audit-quality/implementation-plan.md B1).
+ * The injected SDK bundle stubs axe out (tsup.config.ts) to stay small; the
+ * worker injects this file into the page only when the user clicks "Run audit"
+ * (background.js `injectAxe`). It is the library's own published `axe.min.js`,
+ * copied byte for byte — never re-bundled — so store reviewers can match it to
+ * the axe-core release. Also written into tracebug-extension/vendor/ (gitignored)
+ * so the unpacked dev folder and the e2e suites have it.
+ */
+const AXE_SRC = createRequire(join(ROOT_DIR, "package.json")).resolve("axe-core/axe.min.js");
+const AXE_DEST = join("vendor", "axe.min.js");
+mkdirSync(join(EXT_DIR, "vendor"), { recursive: true });
+cpSync(AXE_SRC, join(EXT_DIR, AXE_DEST));
+
+/**
  * Chrome MV3: service-worker background.
  *
  * `offscreen` is requested only while VIDEO_ON — see VIDEO_ENABLED_IN_EXTENSION
@@ -174,6 +189,8 @@ function buildTarget(name, manifest) {
   for (const d of SHARED_DIRS) {
     cpSync(join(EXT_DIR, d), join(outDir, d), { recursive: true });
   }
+  mkdirSync(join(outDir, "vendor"), { recursive: true });
+  cpSync(AXE_SRC, join(outDir, AXE_DEST));
   writeFileSync(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   console.log(`[OK] ${name}: dist/${name}/  (v${version})`);
 }

@@ -34,6 +34,10 @@ const DETECTOR_LABELS: Record<Issue["detector"], string> = {
   "frustration-dead": "Dead click",
   "frustration-abandon": "Form abandoned",
   "frustration-error-correlated": "Click → error",
+  "audit-ui": "Layout",
+  "audit-seo": "SEO",
+  "audit-perf": "Performance",
+  "audit-keyboard": "Keyboard",
 };
 
 /**

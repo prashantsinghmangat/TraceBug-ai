@@ -695,6 +695,13 @@ if (isExtAlive()) {
         sendResponse({ ok: true });
         break;
 
+      // Site Audit: the worker has already injected axe (vendor/axe.min.js)
+      // into the page's MAIN world; the page SDK runs the audit and shows it.
+      case "TB_RUN_AUDIT":
+        dispatchToPage("tracebug-ext-action", { action: "audit", scan: typeof message.scan === "string" ? message.scan : undefined });
+        sendResponse({ ok: true });
+        break;
+
       // ── Health check (Phase 3) ───────────────────────────────────────────
       // The worker pings before dispatching any action. No answer means this
       // tab has no live bridge — never injected, or orphaned by an extension

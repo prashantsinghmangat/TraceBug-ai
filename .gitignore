@@ -42,3 +42,6 @@ docs-internal/
 
 # tsc incremental build cache - a build artifact, not source.
 *.tsbuildinfo
+
+# axe-core copied in by tracebug-extension/build/build-ext.mjs (Site Audit)
+tracebug-extension/vendor/

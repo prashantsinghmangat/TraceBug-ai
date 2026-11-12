@@ -52,7 +52,23 @@ the same step.
   memory; detectors in `detectors/` (`a11y.ts` axe, `broken-images`, `mixed-content`, `session-data`,
   `frustration`). `Issue` type: `src/types.ts` ~L577. UI: `src/ui/issues-panel.ts`. Public API
   `TraceBug.scanPage()` in `index.ts`. **Site Audit plan:** `docs/audit-quality/implementation-plan.md`.
-- **MCP server** `cli/mcp-server.ts` (~900): `ReportPayload` ~L23 · file discovery `collectReports` ~L173 ·
+- **Audit core** `src/audit/` (pure, no DOM): `fingerprint.ts` `auditFingerprint`/`normalizeSelector` · `run.ts`
+  `buildAuditRun` (caps, redaction, `MAX_*` limits) · `compare.ts` `compareAudits` (generic) · `types.ts` audit types,
+  dependency-free because the CLI imports them (`src/types.ts` re-exports, `AuditRun = AuditRunOf<Issue>`).
+  Tests: `tests/audit-core.test.ts`, `tests/audit-seo.test.ts`, `tests/audit-mcp.test.ts`.
+- **Audit engine** `src/audit/index.ts` `runAudit()` (categories, limitations) → detectors in `src/audit/detectors/`:
+  `a11y.ts` (axe, `loadAxe` falls back to `window.axe`) · `ui.ts` (layout) · `performance.ts` (Performance timeline,
+  category `metrics`) · `keyboard.ts` (Tab order + focus styles) · `seo.ts` (page tags) · `evidence.ts`. Scan menu:
+  `AUDIT_SCANS` in `src/audit/types.ts` → `runAudit({ scan })`; panel scan bar `markScan`; popup `#auditMenu`. Export: `src/audit/export.ts` `exportAuditReport` →
+  `HtmlReplayOptions.audit` → `payload.audit`; viewer Audit tab in `html-template.ts` (search "Audit tab").
+  SDK API `runAudit`/`getLastAudit`/`compareAudits` next to `scanPage` in `src/index.ts`. e2e `e2e/site-audit.e2e.mjs`.
+- **Audit in the extension**: popup `btnAudit` → `runCombo("TB_RUN_AUDIT")` → `background.js` `handleComboAction` +
+  `injectAxe` (`vendor/axe.min.js`, copied by `build/build-ext.mjs`) → `content-script.js` → `tracebug-init.js` case
+  "audit" → `showAuditPanel` (`src/ui/audit-panel.ts`). e2e `e2e/ext-site-audit.e2e.mjs`.
+- **MCP audit tools** `cli/audit-tools.ts`: `toolGetAudit` · `toolGetFinding` + `searchHints` · `toolCompareAudits` ·
+  `UNTRUSTED_NOTE`; registered in `TOOL_DEFINITIONS`/`callTool` of `mcp-server.ts`. Manual agent loop:
+  `e2e/audit-agent-loop.mjs` + `e2e/mcp-call.mjs` (call any tool on the built `dist/bin.mjs`).
+- **MCP server** `cli/mcp-server.ts` (~950): `ReportPayload` ~L23 · file discovery `collectReports` ~L173 ·
   tools `toolGetBugReport` … `toolGetFixContext` ~L376–600 · `TOOL_DEFINITIONS` ~L620 · `handleMessage` ~L805.
 - **Agent prompts** `src/exporters/agent-workflow.ts` (all workflow text + `CLAUDE_MCP_ADD`);
   chat/MCP prompts `src/exporters/ai-prompt.ts`.

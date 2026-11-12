@@ -5,9 +5,11 @@
 // been byte-identical for several phases.
 //
 //   node scripts/check.mjs             fast gates: typecheck, lint, test, build
-//   node scripts/check.mjs --full      + build:ext, ext:lint, check:versions, e2e:quality
-//                                      (the report-quality benchmark: real extension, needs
-//                                      `npx playwright install chromium` once)
+//   node scripts/check.mjs --full      + build:ext, ext:lint, check:versions, e2e:quality,
+//                                      e2e:audit, e2e:audit-ext (report-quality benchmark on
+//                                      the real extension; Site Audit engine on a planted-defect
+//                                      page; the Audit action through the packaged extension;
+//                                      all need `npx playwright install chromium` once)
 //   node scripts/check.mjs test lint   only the named gates
 //   node scripts/check.mjs --verbose   print full output even when a gate passes
 //
@@ -25,7 +27,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 
 const FAST = ["typecheck", "lint", "test", "build"];
-const FULL = [...FAST, "build:ext", "ext:lint", "check:versions", "e2e:quality"];
+const FULL = [...FAST, "build:ext", "ext:lint", "check:versions", "e2e:quality", "e2e:audit", "e2e:audit-ext"];
 /** Scripts that never exit on their own, so they can never be gates. */
 const INTERACTIVE = new Set(["ext:firefox", "dev", "test:watch", "ext:run"]);
 
@@ -118,10 +120,11 @@ for (const gate of gates) {
     else if (!ok) note = "version drift — see the output";
   }
 
-  if (gate === "e2e:quality") {
+  if (gate === "e2e:quality" || gate === "e2e:audit" || gate === "e2e:audit-ext") {
     // "ALL CHECKS PASSED — 84/84 checks passed" / "3 CHECK(S) FAILED — 81/84 checks passed"
     const m = out.match(/(\d+)\/(\d+) checks passed/);
-    if (m) note = `${m[1]}/${m[2]} report checks`;
+    const label = gate === "e2e:quality" ? "report" : gate === "e2e:audit" ? "audit" : "extension audit";
+    if (m) note = `${m[1]}/${m[2]} ${label} checks`;
     else { ok = false; note = "no result line — see the output"; }
   }
 
