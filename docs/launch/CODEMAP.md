@@ -46,6 +46,23 @@ the same step.
 - **video-recorder.ts (~1,030)** — `isExtensionContext` ~L163 picks the transport · wire formats ~L59 · sync getters ~L169–264 · `scheduleDurationCap` ~L117 · mic functions (`hasMicrophoneTrack`/`isMicrophoneMuted`/`setMicrophoneMuted`, forward to offscreen via `tb:rec:mic-mute` in extension mode) ~L284–311.
 - **draw-mode.ts (~885)** — `activateDrawMode` ~L56 · `_drawShape` ~L644 · `_redrawAllRegions` ~L705 · `_showCommentInput` ~L774.
 
+## Smaller areas the next work touches (read these files whole; they're short)
+
+- **Scanner** `src/scanner/` (~660 total): `index.ts` `scan()` runs detectors in parallel → `Issue[]` in
+  memory; detectors in `detectors/` (`a11y.ts` axe, `broken-images`, `mixed-content`, `session-data`,
+  `frustration`). `Issue` type: `src/types.ts` ~L577. UI: `src/ui/issues-panel.ts`. Public API
+  `TraceBug.scanPage()` in `index.ts`. **Site Audit plan:** `docs/audit-quality/implementation-plan.md`.
+- **MCP server** `cli/mcp-server.ts` (~900): `ReportPayload` ~L23 · file discovery `collectReports` ~L173 ·
+  tools `toolGetBugReport` … `toolGetFixContext` ~L376–600 · `TOOL_DEFINITIONS` ~L620 · `handleMessage` ~L805.
+- **Agent prompts** `src/exporters/agent-workflow.ts` (all workflow text + `CLAUDE_MCP_ADD`);
+  chat/MCP prompts `src/exporters/ai-prompt.ts`.
+- **Theme** `src/theme.ts`: `DARK_THEME`/`LIGHT_THEME` tokens · `injectTheme` · `applyThemeToRoot`
+  (called by `mountDashboard`). Export viewer has its own tokens in `html-template.ts` `REPLAY_CSS`.
+- **Release** `scripts/release-sheet.mjs` → `docs/release-sheets/<ver>.md` (keeps newest 10) ·
+  `scripts/check.mjs` gates · `scripts/check-versions.mjs` version surfaces.
+- **Marketing images** `e2e/marketing-screenshots.mjs` → `assets/screenshots/product/`; frames and
+  banners under `assets/source/` (index `assets/README.md`).
+
 ## Message verbs — where each one is handled
 
 | Verb family | Sent by | Handled in |
