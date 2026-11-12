@@ -28,6 +28,9 @@ notes, npm / MCP / tag commands with the version filled in, and the GitHub relea
 run if the versions disagree and warns if the "New in" paragraph is for another version. Regenerate it
 after any change to those sources; never edit the sheet by hand. The sections below explain each step.
 
+**Every release gets a sheet, and the newest 10 are kept.** When the script writes an 11th version's
+sheet it deletes the oldest one (by version number, not date). Commit the new sheet with the release.
+
 ## What ships where
 
 | Surface | Artifact | Built by | Published by |
