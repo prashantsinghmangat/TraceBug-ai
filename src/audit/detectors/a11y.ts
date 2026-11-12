@@ -194,10 +194,14 @@ export async function detectA11yFindings(): Promise<A11yAuditResult> {
         if (c.fix) fix = c.fix;
         if (c.suggested && metrics) metrics.suggestedFgColor = c.suggested;
       } else if (v.id === "label-content-name-mismatch" && el) {
-        const visible = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+        // The label is what a person reads first — the first rendered line ("Play demo"), not every
+        // text node glued together ("Play demo0:57").
+        const rendered = ((el as HTMLElement).innerText ?? el.textContent ?? "").split(/\n+/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+        const visible = (rendered[0] || "").slice(0, 60);
         const name = el.getAttribute("aria-label");
         if (visible) {
-          fix = `The visible text "${visible}" must be part of the accessible name${name ? ` (now "${name.slice(0, 80)}")` : ""}. Start the aria-label with the visible text, or remove aria-label so the visible text becomes the name.`;
+          const suggested = name && !name.toLowerCase().startsWith(visible.toLowerCase()) ? ` For example aria-label="${visible}${rendered.length > 1 ? ` (${rendered.slice(1).join(" ").slice(0, 30)})` : ""}" — or the visible text followed by the extra detail.` : "";
+          fix = `The visible label "${visible}" must be part of the accessible name${name ? ` (now "${name.slice(0, 80)}")` : ""}. Start the aria-label with the visible text, or remove aria-label so the visible text becomes the name.${suggested}`;
         }
       }
       const evidence = el ? elementEvidence(el, metrics ? { metrics } : undefined) : { html: node.html || "", ...(metrics ? { metrics } : {}) };

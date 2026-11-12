@@ -39,6 +39,14 @@ function focusable(el: Element): boolean {
   return el.matches(FOCUSABLE);
 }
 
+/** A label that says what the scrolling box holds: code, a table, or else a placeholder to fill in. */
+export function scrollBoxLabel(el: Element): string {
+  if (el.matches("pre, code") || el.querySelector("pre, code")) return "Code example";
+  if (el.matches("table, [role=table], [role=grid]") || el.querySelector("table, [role=table], [role=grid], [class*='grid-cols']")) return "Table";
+  if (el.querySelector("img, picture, video")) return "Image gallery";
+  return "<what this box contains>";
+}
+
 /**
  * A box that scrolls (content wider/taller than the box, overflow auto/scroll)
  * but that a keyboard user can't get into: not focusable and nothing focusable
@@ -61,8 +69,9 @@ export function scrollableNotFocusable(doc: Document, limit = 6000): Issue[] {
     out.push({
       id: makeIssueId("audit-mobile"), detector: "audit-mobile", category: "mobile", ruleId: "mobile/scroll-not-focusable", severity: "moderate",
       title: `A box scrolls ${dir} but keyboard users can't reach it`,
-      description: `This ${el.tagName.toLowerCase()} scrolls ${dir} (${sx ? `${el.scrollWidth}px of content in ${el.clientWidth}px` : `${el.scrollHeight}px of content in ${el.clientHeight}px`}), but it isn't focusable and has nothing focusable inside, so keyboard users can't scroll it in Safari. Chrome 130+ and Firefox now make such boxes focusable on their own.`,
+      description: `At ${(doc.defaultView || window).innerWidth}px wide, this ${el.tagName.toLowerCase()} scrolls ${dir} (${sx ? `${el.scrollWidth}px of content in ${el.clientWidth}px` : `${el.scrollHeight}px of content in ${el.clientHeight}px`}), but it isn't focusable and has nothing focusable inside, so keyboard users can't scroll it in Safari. Chrome 130+ and Firefox now make such boxes focusable on their own.`,
       selector: buildSelector(el), page: location.href, detectedAt: Date.now(),
+      fix: `Add tabindex="0", role="region" and aria-label="${scrollBoxLabel(el)}" to this ${el.tagName.toLowerCase()} so keyboard users can focus and scroll it${sx ? ", or let its content wrap at narrow widths so it doesn't scroll at all" : ""}.`,
       evidence: { ...elementEvidence(el), metrics: sx ? { contentWidth: el.scrollWidth, boxWidth: el.clientWidth } : { contentHeight: el.scrollHeight, boxHeight: el.clientHeight } },
     });
   }

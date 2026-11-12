@@ -141,3 +141,8 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 ## Website: llms.txt (2026-11-12, `site-audit`)
 
 - Lighthouse "Agentic Browsing" failed llms.txt: /llms.txt was a 404 whose page took ~3 s, so the fetch timed out. Added `website/public/llms.txt` (H1, summary, Docs/Product/Optional link lists). Verified on the dev server: 200 text/plain in 7 ms; all 18 linked pages 200. Live only after the website deploy.
+
+## Audit: Copy for AI accuracy from a real tracebug.dev prompt (2026-11-12, `site-audit`)
+
+- LCP finding now names the element and tells late render/animation (tracebug.dev: SVG "Checkout" drawn ~11 s after first paint) from a slow image, with matching fix (`describeLcp`). Label-in-name quotes the first rendered line ("Play demo", not "Play demo0:57") and suggests an aria-label. Scroll-box fix gets a fitting label (`scrollBoxLabel`: Code example / Table / placeholder) and says "At 390px wide".
+- Verified by regenerating the prompt from live tracebug.dev at 1707×811. Gates green (1219/81, 84/84, 74/74, 33/33).
