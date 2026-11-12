@@ -8,8 +8,11 @@ export const generalPatterns: ErrorPattern[] = [
   {
     id: "general-undefined-access",
     pattern: /(cannot read prop|cannot read properties|of undefined|of null)/,
-    hint: "reading a property of undefined/null — usually missing data, async race, or destructuring a missing return",
-    fix: "add a null-check, use optional chaining (`obj?.prop`), or initialize state with a safe default",
+    hint: "reading a property of undefined/null — usually a missing config entry or lookup key, a failed or empty response, an async race, or destructuring a missing return",
+    // Find the cause first: "add `?.`" was the old advice, and agents took it —
+    // silencing the crash (e.g. "SAVE20 applied — NaN% off") instead of fixing
+    // the missing value. A guard is right only where the value can truly be absent.
+    fix: "find out why the value is missing (a lookup key absent from a map/config, a request that failed or returned no data) and fix that; add a guard or a clear user-facing message only where the value can legitimately be absent",
     category: "JS undefined access",
   },
   {

@@ -1,8 +1,9 @@
+import type { AuditCategory, AuditEvidence, AuditRunOf } from "./audit/types";
 // ── Configuration ──────────────────────────────────────────────────────────
 
 export interface TraceBugConfig {
   projectId: string;
-  maxEvents?: number;       // Max events stored per session (default 200)
+  maxEvents?: number;       // Max events stored per session (default 500)
   maxSessions?: number;     // Max sessions kept in localStorage (default 50)
   enableDashboard?: boolean; // Show floating dashboard button (default true)
 
@@ -90,6 +91,14 @@ export interface TraceBugConfig {
    * skip Web Storage capture entirely.
    */
   captureStorage?: boolean;
+
+  /**
+   * Include cookie values in the storage snapshot. Default: false — cookies
+   * are listed by name only, because `document.cookie` holds every
+   * non-HttpOnly cookie of the host (on localhost, other local apps' too).
+   * Sensitive-looking values stay masked even when this is true.
+   */
+  captureCookieValues?: boolean;
 
   /**
    * Optional team/company name for custom branding in exported reports
@@ -220,6 +229,16 @@ export interface StoredSession {
    *  isn't surprised by missing screenshots later. Cleared by a fresh save that
    *  includes screenshots. */
   screenshotsDropped?: boolean;
+  /** How many of this session's oldest events were evicted (the `maxEvents`
+   *  limit, or trimming to fit full browser storage). Reported so a missing
+   *  lead-up is never mistaken for one that didn't happen. */
+  droppedEvents?: number;
+  /** The `captureConsole` level this capture ran with. */
+  consoleLevel?: "errors" | "warnings" | "all" | "none";
+  /** Web Storage as it was at the first error (or at stop), so a report —
+   *  and a saved ticket reopened days later — shows the state the bug ran
+   *  in, not the page's storage at the moment the report was built. */
+  storageSnapshot?: StorageSnapshot;
 }
 
 // ── Annotation (tester notes) ─────────────────────────────────────────────
@@ -314,7 +333,10 @@ export interface EnvironmentInfo {
   language: string;
   timezone: string;
   userAgent: string;
+  /** The page the bug happened on (origin + path) when a report is built. */
   url: string;
+  /** The page the capture started on, when the bug happened elsewhere. */
+  startUrl?: string;
   deviceType: "desktop" | "tablet" | "mobile";
   connectionType: string;
   timestamp: number;
@@ -349,6 +371,12 @@ export interface NetworkRequestEntry {
    *  only kept when it failed or was slow. Lets the report group these under
    *  "Before capture" instead of implying the user triggered them. */
   phase?: "page-load";
+  /** Status 0 here is not a failure: the browser didn't expose the status
+   *  (a Resource Timing record), the app aborted the request, or the response
+   *  was opaque (`no-cors`). See src/request-status.ts. */
+  statusUnknown?: boolean;
+  aborted?: boolean;
+  opaque?: boolean;
 }
 
 /** One attribute on an ActionChip's element preview (rendered as name="value"). */
@@ -439,13 +467,16 @@ export interface StorageEntry {
   value: string;
   /** True when the value was masked because the key/value looked sensitive. */
   redacted?: boolean;
+  /** True when only the name was captured (cookies, unless `captureCookieValues`). */
+  valueOmitted?: boolean;
 }
 
 /** Snapshot of the page's Web Storage at the moment the report was built. */
 export interface StorageSnapshot {
   local: StorageEntry[];
   session: StorageEntry[];
-  /** Non-HttpOnly cookies visible to page JS (sensitive values redacted). */
+  /** Non-HttpOnly cookies visible to page JS — names only unless
+   *  `captureCookieValues` (sensitive values redacted either way). */
   cookies?: StorageEntry[];
   /** Entries dropped to stay under the capture cap (per area), if any. */
   localTruncated?: number;
@@ -496,6 +527,9 @@ export interface BugReport {
   voiceTranscripts: VoiceTranscriptData[];
   /** Optional screen recording — present only when QA hit Record before exporting. */
   video?: VideoRecordingData;
+  /** What this report captured, didn't capture, masked and dropped — see
+   *  src/evidence-summary.ts. Set by buildReport. */
+  evidence?: import("./evidence-summary").EvidenceSummary;
   /** Custom context set via `TraceBug.context({...})` — empty object if none. */
   context: ContextData;
   session: StoredSession;
@@ -531,10 +565,28 @@ export type IssueDetector =
   /** Frustration: form filled, then route_change before form_submit. */
   | "frustration-abandon"
   /** Frustration: error fired ≤2.5 s after a click — likely the trigger. */
-  | "frustration-error-correlated";
+  | "frustration-error-correlated"
+  /** Site Audit: layout checks (overflow, overlap, clipped text, image sizing). */
+  | "audit-ui"
+  | "audit-mobile"
+  /** Site Audit: page-level SEO checks (title, description, canonical, h1, robots, viewport). */
+  | "audit-seo"
+  /** Site Audit: page-load performance (lab timings, page weight, large and render-blocking files). */
+  | "audit-perf"
+  /** Site Audit: keyboard pass (positive tabindex, invisible focus targets, removed focus outlines). */
+  | "audit-keyboard";
 
 /** Severity buckets, lifted from axe-core's impact ladder for consistency. */
 export type IssueSeverity = "critical" | "serious" | "moderate" | "minor";
+
+// ── Site Audit (docs/audit-quality/implementation-plan.md §3) ──────────────
+
+// Defined dependency-free in src/audit/types.ts (the MCP CLI imports them).
+export type { AuditCategory, AuditEvidence, AuditCategoryResult, AuditRunOf } from "./audit/types";
+
+/** One audit run of one page: what was checked, what was found, and what could
+ *  not be checked. Rides in the exported report as `audit`. */
+export type AuditRun = AuditRunOf<Issue>;
 
 /**
  * One finding from the scanner. Detectors emit Issue[] which the orchestrator
@@ -560,8 +612,23 @@ export interface Issue {
   detectedAt: number;
   /** Set true when the user dismisses — kept in memory only this session. */
   dismissed?: boolean;
-  /** Fingerprint (SHA-1 over errorType+stackTop+page) for grouping identical issues. */
+  /** Groups identical issues. Runtime detectors: SHA-1 over errorType+stackTop+page
+   *  (src/fingerprint.ts). Audit findings: category+ruleId+URL path+normalized
+   *  selector (src/audit/fingerprint.ts) — what `compareAudits` matches runs on. */
   fingerprint?: string;
+  /** Audit only: second match key (category+ruleId+tag+visible text) for when the
+   *  selector changed between runs. */
+  fallbackFingerprint?: string;
+  /** Audit only: which scan produced it. Absent on runtime detector issues. */
+  category?: AuditCategory;
+  /** Audit only: rule id — axe's own ("color-contrast") or ours ("ui/horizontal-overflow"). */
+  ruleId?: string;
+  /** Audit only: bounded, redacted evidence for the agent. */
+  evidence?: AuditEvidence;
+  /** Audit only: WCAG success criteria this finding maps to, e.g. ["1.4.3"] (src/audit/wcag.ts). */
+  wcag?: string[];
+  /** Audit only: what to change, in one or two sentences. May quote page values (colours, text). */
+  fix?: string;
   /** When fingerprint dedup grouped multiple events into one issue, this is the count (≥1). */
   occurrences?: number;
   /** First and last timestamps when the underlying signal was seen — populated when occurrences > 1. */

@@ -1,47 +1,79 @@
 /* ── TraceBug Popup — clean, theme-aware ──────────────────────────────────
-   Single hero CTA + two secondary actions. Light/dark via prefers-color-scheme
-   with a manual override (data-theme attr on <html>). */
+   Single hero CTA + two secondary actions. Light/dark follows the system
+   unless the header toggle picks one (data-theme attr on <html>). */
 
-/* Light is the unconditional default. Dark requires an explicit
- * data-theme="dark" attribute, set by the in-header toggle. */
+/* Tokens match the website (website/app/globals.css, "Midnight coral").
+ * Light is :root; dark applies when the toggle says dark, or when it says
+ * auto (no data-theme) and the system is dark. The dark block is repeated
+ * because a media query can't share a selector list with a plain rule. */
 :root {
-  --bg: #ffffff;
-  --bg-2: #FAFAFA;
-  --bg-3: #F4F4F5;
-  --text: #111113;
-  --text-2: #52525B;
-  --text-3: #82828C;
-  --border: #E4E4E7;
-  --border-hover: #D4D4D8;
-  --accent: #4F46E5;
-  --accent-2: #4338CA;
-  --accent-soft: rgba(79, 70, 229, 0.10);
+  --bg: #FBFBFC;
+  --bg-2: #F4F5F8;
+  --bg-3: #ECEEF2;
+  --text: #0B0D14;
+  --text-2: #4B5565;
+  --text-3: #677082;          /* 4.6:1 on --bg */
+  --border: #E2E4EA;
+  --border-hover: #D0D4DC;
+  --accent: #C81E3C;          /* deep coral, AA with white text */
+  --accent-2: #A3162F;
+  --accent-soft: rgba(200, 30, 60, 0.10);
+  --on-accent: #FFFFFF;
   --success: #16A34A;
   --success-bg: rgba(22, 163, 74, 0.10);
   --error: #DC2626;
-  --shadow: 0 4px 20px rgba(16, 24, 40, 0.10);
-  --radius-sm: 10px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --warning: #B45309;
+  --warning-bg: rgba(180, 83, 9, 0.10);
+  --shadow: 0 4px 20px rgba(16, 20, 32, 0.10);
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --font: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 :root[data-theme="dark"] {
-  --bg: #0B0B10;
-  --bg-2: #16161D;
-  --bg-3: #1E1E26;
-  --text: #FAFAFA;
-  --text-2: #A1A1AA;
-  --text-3: #71717A;
-  --border: #26262E;
-  --border-hover: #2A2A35;
-  --accent: #6366F1;
-  --accent-2: #818CF8;
-  --accent-soft: rgba(99, 102, 241, 0.14);
-  --success: #22C55E;
-  --success-bg: rgba(34, 197, 94, 0.14);
-  --error: #EF4444;
+  --bg: #0B0D14;
+  --bg-2: #141823;
+  --bg-3: #1B202E;
+  --text: #EEF0F5;
+  --text-2: #A8AEBE;
+  --text-3: #8A91A5;
+  --border: #252A38;
+  --border-hover: #333A4D;
+  --accent: #FF5C6C;          /* coral */
+  --accent-2: #FF8590;
+  --accent-soft: rgba(255, 92, 108, 0.14);
+  --on-accent: #0B0D14;       /* ink on coral: white fails contrast */
+  --success: #4CC38A;
+  --success-bg: rgba(76, 195, 138, 0.14);
+  --error: #F05257;
+  --warning: #E0A040;
+  --warning-bg: rgba(224, 160, 64, 0.12);
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0B0D14;
+    --bg-2: #141823;
+    --bg-3: #1B202E;
+    --text: #EEF0F5;
+    --text-2: #A8AEBE;
+    --text-3: #8A91A5;
+    --border: #252A38;
+    --border-hover: #333A4D;
+    --accent: #FF5C6C;          /* coral */
+    --accent-2: #FF8590;
+    --accent-soft: rgba(255, 92, 108, 0.14);
+    --on-accent: #0B0D14;       /* ink on coral: white fails contrast */
+    --success: #4CC38A;
+    --success-bg: rgba(76, 195, 138, 0.14);
+    --error: #F05257;
+    --warning: #E0A040;
+    --warning-bg: rgba(224, 160, 64, 0.12);
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -117,11 +149,18 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   color: var(--text-2); cursor: pointer;
 }
 .action-card-chev:hover { background: var(--bg-3); color: var(--text); }
+/* The card's buttons fill it edge to edge: round their outer corners so a
+   hover background never pokes square corners past the card's radius. */
+.action-card-main { border-radius: calc(var(--radius-md) - 1px) 0 0 calc(var(--radius-md) - 1px); }
+.action-card-main:only-child { border-radius: calc(var(--radius-md) - 1px); }
+.action-card-chev { border-radius: 0 calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0; }
 .action-card-chev svg { width: 14px; height: 14px; transition: transform 0.15s; }
 .action-card-chev[aria-expanded="true"] svg { transform: rotate(180deg); }
 .action-card-body {
   display: flex; flex-direction: column; gap: 10px;
-  padding: 12px 14px; margin: -8px 0 8px;
+  /* -20px = .main's 12px flex gap + the card's 8px bottom margin, so the
+     panel sits flush under its card (with -8px it floated 12px below). */
+  padding: 12px 14px; margin: -20px 0 8px;
   background: var(--bg-2);
   border: 1px solid var(--border); border-top: 1px dashed var(--border-hover);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
@@ -163,7 +202,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
 .seg-wide button:last-child { border-right: none; }
 .seg-wide button:hover[aria-pressed="false"] { background: var(--bg-3); color: var(--text); }
-.seg-wide button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg-wide button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 
 /* ── Inline record options — only exists while video is on ──
    applyVideoUI() in popup.js shows/hides the whole block, so "Events only"
@@ -204,7 +243,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   font-size: 11px; font-weight: 600; font-family: inherit; cursor: pointer;
 }
 .seg-opt:last-child { border-right: none; }
-.seg-opt[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg-opt[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
 .seg-opt:disabled { cursor: not-allowed; opacity: 0.5; }
 
 /* ── Switch — shared by the mic button and the blur checkbox ─────────
@@ -251,6 +290,35 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dock-ic { display: inline-flex; color: var(--accent); }
 .dock-ic svg { width: 16px; height: 16px; }
 .dock-label { letter-spacing: -0.005em; }
+/* Site Audit — the headline card (first, larger, accent-tinted). */
+.action-card-hero { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--bg-2)); }
+.action-card-hero .action-card-main { padding: 16px 14px; gap: 14px; }
+.action-card-hero .action-card-icon { width: 38px; height: 38px; align-items: center; justify-content: center; border-radius: 10px; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.action-card-hero .action-card-icon svg { width: 22px; height: 22px; }
+.action-card-hero .action-card-title { font-size: 15px; }
+.action-card-hero .action-card-sub { font-size: 11.5px; color: var(--text-2); }
+/* Hover and open states stay in the card's accent tint (a neutral grey block
+   looked like a separate, disabled control on the pink card). */
+.action-card-hero .action-card-main:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.action-card-hero .action-card-chev { width: 44px; color: var(--accent); border-left-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+.action-card-hero .action-card-chev:hover,
+.action-card-hero .action-card-chev[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.action-card-hero .action-card-chev svg { width: 16px; height: 16px; }
+/* An open card joins its panel: square bottom corners, no shadow seam. */
+.action-card:has(.action-card-chev[aria-expanded="true"]),
+.action-card:has(.action-card-chev[aria-expanded="true"]) .action-card-chev,
+.action-card:has(.action-card-chev[aria-expanded="true"]) .action-card-main { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* Site Audit scan menu, opened by the Audit card's chevron. */
+.audit-menu { display: grid; gap: 2px; margin: -20px 0 8px; padding: 6px; background: var(--bg-2); border: 1px solid var(--border); border-top: 1px dashed var(--border-hover); border-radius: 0 0 var(--radius-md) var(--radius-md); }
+.audit-menu[hidden] { display: none; }
+.audit-item { display: flex; align-items: flex-start; gap: 10px; text-align: left; padding: 8px 10px; background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text); font-size: 12px; cursor: pointer; }
+.audit-ic { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px; background: var(--bg-3); color: var(--accent); }
+.audit-ic svg { width: 16px; height: 16px; }
+.audit-tx { display: grid; gap: 2px; min-width: 0; }
+.audit-item b { font-weight: 600; }
+.audit-tx span { color: var(--text-2); font-size: 11px; }
+.audit-item:hover, .audit-item:focus-visible { background: var(--bg-3); border-color: var(--border-hover); outline: none; }
+.audit-item:hover .audit-ic, .audit-item:focus-visible .audit-ic { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 
 /* ── Screenshot options toggle — collapsed summary + chevron ──────────
    Deliberately a plain text row, not another card: the dock above already
@@ -367,8 +435,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-avatar {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #6366F1, #818CF8);
-  color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0;
+  background: var(--accent);
+  color: var(--on-accent); font-size: 12px; font-weight: 700; flex-shrink: 0;
 }
 .account-body { flex: 1; min-width: 0; }
 .account-title {
@@ -379,7 +447,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .account-sep { color: var(--text-3); margin: 0 4px; }
 .account-cta {
   padding: 5px 12px; border-radius: 6px;
-  background: var(--accent); color: #fff; border: none;
+  background: var(--accent); color: var(--on-accent); border: none;
   font-size: 11px; font-weight: 600; cursor: pointer;
   font-family: inherit; flex-shrink: 0;
 }
@@ -437,11 +505,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .wn-item svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 .wn-warn {
   margin-top: 9px; padding: 7px 9px;
-  background: rgba(180, 83, 9, 0.10);
+  background: var(--warning-bg);
   border-radius: 8px;
-  font-size: 11.5px; line-height: 1.45; color: #B45309;
+  font-size: 11.5px; line-height: 1.45; color: var(--warning);
 }
-:root[data-theme="dark"] .wn-warn { color: #FBBF24; background: rgba(251, 191, 36, 0.12); }
 .wn-foot { display: flex; justify-content: flex-end; margin-top: 8px; }
 .wn-got {
   background: none; border: 0; padding: 2px 2px;
@@ -467,7 +534,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .pg-path {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 13px; color: var(--text-3); margin-top: 1px;
   /* A file:// path or a long query is wider than 340px. Clip the START, so the
      filename — the part that identifies the page — stays visible. */
@@ -493,6 +560,6 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   margin-top: 7px; margin-right: 6px;
   background: var(--error); color: #fff; border: 0;
   border-radius: 6px; padding: 5px 10px;
-  font: 600 11.5px inherit; cursor: pointer;
+  font-weight: 600; font-size: 11.5px; font-family: inherit; cursor: pointer;
 }
 .mic-notice button.ghost { background: none; color: var(--text-2); font-weight: 500; }

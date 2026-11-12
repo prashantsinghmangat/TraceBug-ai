@@ -17,9 +17,9 @@ const FEATURES = [
     chip: "Recording",
   },
   {
-    Icon: ScanLine, title: "Page scanner",
-    desc: "In the npm SDK, TraceBug.scanPage() checks the page for accessibility issues (axe-core), broken images, mixed content, JS errors, and failed or slow APIs. Not part of the browser extension.",
-    chip: "SDK",
+    Icon: ScanLine, title: "Site Audit with fixes",
+    desc: "Audit this page scores accessibility (axe-core, WCAG 2.2 AA), layout, phone width, speed and SEO from 0 to 100. Each finding shows the element, the rule, found vs required, and the fix, ready for your AI agent.",
+    chip: "Audit",
   },
   {
     Icon: Camera, title: "Screenshots & annotation",

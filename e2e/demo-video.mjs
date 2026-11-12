@@ -4,7 +4,7 @@
 // progress bar, and black-dip scene transitions. No mockups.
 //   intro → bug → Ctrl+Shift+B capture → evidence → hand-off → live /proof → outro
 // It also writes marks.json (timestamped narration beats) so demo-audio can lay
-// a synced voiceover under it. Output: D:/tmp/tracebug-video/demo.webm (1280x800).
+// a synced voiceover under it. Output: e2e/output/demo-video/demo.webm (1280x800).
 import { chromium } from "playwright";
 import { readFileSync, existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -12,7 +12,7 @@ import { join, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "website", "public");
-const OUT = "D:/tmp/tracebug-video";
+const OUT = join(dirname(fileURLToPath(import.meta.url)), "output", "demo-video");
 mkdirSync(OUT, { recursive: true });
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".webm": "video/webm", ".png": "image/png", ".svg": "image/svg+xml" };

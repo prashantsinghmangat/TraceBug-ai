@@ -5,7 +5,7 @@
 ```typescript
 TraceBug.init({
   projectId: "my-app",
-  maxEvents: 200,
+  maxEvents: 500,
   maxSessions: 50,
   enableDashboard: true,
   enabled: "auto",
@@ -31,13 +31,13 @@ TraceBug.init({ projectId: "my-saas-app" });
 
 ### `maxEvents`
 
-Maximum number of events stored per session. Oldest events are dropped when the limit is exceeded.
+Maximum number of events stored per session. Oldest events are dropped when the limit is exceeded, and the report says how many were dropped.
 
-- **Default:** `200`
+- **Default:** `500` (was 200 before 1.11.6)
 - **Range:** Any positive integer
 
 ```typescript
-TraceBug.init({ projectId: "my-app", maxEvents: 500 });
+TraceBug.init({ projectId: "my-app", maxEvents: 1000 });
 ```
 
 ### `maxSessions`
@@ -168,6 +168,17 @@ messages are never captured.
 TraceBug.init({ projectId: "my-app", captureConsole: "warnings" });
 ```
 
+### `captureCookieValues`
+
+Include cookie values in the report's storage snapshot. Default `false`: cookies are
+listed **by name only**, because `document.cookie` holds every non-HttpOnly cookie of
+the host (on `localhost`, other local apps' cookies too). Sensitive-looking values stay
+masked even when this is `true`. HttpOnly cookies are never visible to the page.
+
+```typescript
+TraceBug.init({ projectId: "my-app", captureCookieValues: true });
+```
+
 ### `redact`
 
 App-specific redaction rules, applied **at capture time** on top of the
@@ -222,7 +233,7 @@ TraceBug.init({
 TraceBug validates your config at runtime:
 
 - `projectId` must be a non-empty string — if missing, `init()` logs a warning and returns silently
-- `maxEvents` must be a positive number — invalid values fall back to default (200)
+- `maxEvents` must be a positive number — invalid values fall back to default (500)
 - `maxSessions` must be a positive number — invalid values fall back to default (50)
 - If the config object itself is missing or not an object, `init()` warns and does nothing
 

@@ -62,8 +62,8 @@ export default function McpDocsPage() {
             </div>
             <pre className="text-text-primary font-mono text-sm">
               <span className="text-text-muted">$ </span>
-              <span className="text-success">npx</span>
-              <span className="text-text-primary"> -y tracebug mcp --dir ./bug-reports</span>
+              <span className="text-success">claude</span>
+              <span className="text-text-primary"> mcp add -s user tracebug -- npx -y tracebug mcp</span>
             </pre>
           </div>
 
@@ -142,7 +142,7 @@ export default function McpDocsPage() {
                 },
                 {
                   step: "3",
-                  text: "The developer drops it in a folder (e.g. bug-reports/ in the repo) and asks their coding agent: \"Use the tracebug tools to list my bug reports and debug the first one.\"",
+                  text: "The developer leaves it in Downloads (or anywhere in the repo) and asks their coding agent: \"Use the tracebug tools to list my bug reports and debug the first one.\"",
                 },
                 {
                   step: "4",
@@ -258,15 +258,23 @@ export default function McpDocsPage() {
                   Claude Code
                 </h3>
                 <p className="text-text-muted text-sm mb-3">
-                  One-liner (global — works in every project):
+                  One-liner for every project (without{" "}
+                  <code className="text-primary bg-background px-1 rounded">-s user</code>, Claude Code
+                  registers it for the current project only). No folder needed: it finds reports in your
+                  project and in your Downloads and Desktop folders.
                 </p>
                 <div className="code-block p-4 rounded-xl mb-4 overflow-x-auto">
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
                     <span className="text-success">claude</span>
-                    <span className="text-text-primary"> mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports</span>
+                    <span className="text-text-primary"> mcp add -s user tracebug -- npx -y tracebug mcp</span>
                   </pre>
                 </div>
+                <p className="text-text-muted text-sm mb-3">
+                  On native Windows (not WSL), wrap it:{" "}
+                  <code className="text-primary bg-background px-1 rounded">-- cmd /c npx -y tracebug mcp</code>.
+                  Restart Claude Code afterwards.
+                </p>
                 <p className="text-text-muted text-sm mb-3">
                   Or per-project via{" "}
                   <code className="text-primary bg-background px-1 rounded">.mcp.json</code>{" "}
@@ -278,7 +286,7 @@ export default function McpDocsPage() {
   "mcpServers": {
     "tracebug": {
       "command": "npx",
-      "args": ["-y", "tracebug", "mcp", "--dir", "bug-reports"]
+      "args": ["-y", "tracebug", "mcp"]
     }
   }
 }`}
@@ -301,7 +309,7 @@ export default function McpDocsPage() {
                     </li>
                     <li>
                       <span className="text-text-primary font-sans font-semibold">Args:</span>{" "}
-                      -y tracebug mcp --dir ./bug-reports
+                      -y tracebug mcp
                     </li>
                   </ul>
                 </div>
@@ -310,6 +318,19 @@ export default function McpDocsPage() {
                   <code className="text-primary bg-background px-1 rounded">mcpServers</code>{" "}
                   block to{" "}
                   <code className="text-primary bg-background px-1 rounded">.cursor/mcp.json</code>.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-lg font-semibold text-text-primary mb-3">
+                  Windsurf
+                </h3>
+                <p className="text-text-muted text-sm">
+                  Add the same{" "}
+                  <code className="text-primary bg-background px-1 rounded">mcpServers</code>{" "}
+                  block to{" "}
+                  <code className="text-primary bg-background px-1 rounded">~/.codeium/windsurf/mcp_config.json</code>,
+                  then refresh the MCP servers in Cascade.
                 </p>
               </div>
 
@@ -328,7 +349,7 @@ export default function McpDocsPage() {
     "tracebug": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "tracebug", "mcp", "--dir", "bug-reports"]
+      "args": ["-y", "tracebug", "mcp"]
     }
   }
 }`}
@@ -347,16 +368,17 @@ export default function McpDocsPage() {
                   <pre className="text-text-primary font-mono text-sm">
                     <span className="text-text-muted">$ </span>
                     <span className="text-success">npx</span>
-                    <span className="text-text-primary"> -y tracebug mcp [--dir &lt;path&gt;]</span>
+                    <span className="text-text-primary"> -y tracebug mcp</span>
                   </pre>
                 </div>
                 <p className="text-text-muted text-sm">
-                  <code className="text-primary bg-background px-1 rounded">--dir</code>{" "}
-                  sets where bug reports live (default: the current working
-                  directory). The scanner searches up to 3 levels deep and skips{" "}
+                  It lists reports newest first, from the directory it starts in (your project, up to 3
+                  levels deep, skipping{" "}
                   <code className="text-primary bg-background px-1 rounded text-xs">node_modules</code>,{" "}
                   <code className="text-primary bg-background px-1 rounded text-xs">.git</code>,
-                  build output, and dot-directories.
+                  build output and dot-directories) and from your Downloads and Desktop folders.{" "}
+                  <code className="text-primary bg-background px-1 rounded">--dir &lt;path&gt;</code>{" "}
+                  limits it to one folder, which is useful in CI.
                 </p>
               </div>
             </div>
@@ -407,6 +429,18 @@ export default function McpDocsPage() {
                 {
                   sig: "get_fix_context",
                   desc: "One-call fix starter: the failing request (with response snippet), the user action that triggered it, the first error with source-map-resolved top frames, and whether a generated failing test is available.",
+                },
+                {
+                  sig: "get_audit",
+                  desc: "The Site Audit in an audit export: which checks ran (accessibility, layout, performance, SEO, runtime) with their limitations and page metrics, 0–100 scores with their formula, plus the findings. A check that didn't run is never reported as a pass.",
+                },
+                {
+                  sig: "get_finding",
+                  desc: "One audit finding in full: bounded HTML and visible-text evidence, metrics, its WCAG criteria, a suggested fix, help link and hints to search your codebase for. Pass searchDir for a literal search.",
+                },
+                {
+                  sig: "compare_audits",
+                  desc: "Two audit exports of the same page, before and after a fix: fixed, still present, new, and regressed. Text from the audited page comes back marked untrusted.",
                 },
               ].map((tool) => (
                 <div
@@ -479,9 +513,8 @@ export default function McpDocsPage() {
               </div>
             </div>
             <p className="text-text-muted text-sm mt-4 leading-relaxed">
-              Files that aren&apos;t TraceBug exports are ignored — you can point{" "}
-              <code className="text-primary bg-background px-1 rounded">--dir</code>{" "}
-              at your Downloads folder and it will only pick up real reports.
+              Files that aren&apos;t TraceBug exports are ignored, so scanning your Downloads
+              folder only ever picks up real reports.
             </p>
           </section>
 
@@ -561,7 +594,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
               {[
                 {
                   symptom: "list_bug_reports returns count: 0",
-                  fix: "Check --dir points at the folder with the .html exports; the scanner only goes 3 levels deep.",
+                  fix: "If you registered the server with --dir, it only looks in that folder; re-add it without --dir so Downloads is scanned too. Otherwise the report is somewhere it doesn't look (a custom download folder, or deeper than 3 levels in the project): move it into the project, or pass --dir pointing at it.",
                 },
                 {
                   symptom: "Client says the server won't start",
@@ -601,7 +634,7 @@ npx @modelcontextprotocol/inspector node dist/bin.mjs mcp --dir demo-bug-reports
               <pre className="text-text-primary font-mono text-sm">
                 <span className="text-text-muted">$ </span>
                 <span className="text-success">claude</span>
-                <span className="text-text-primary"> mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports</span>
+                <span className="text-text-primary"> mcp add -s user tracebug -- npx -y tracebug mcp</span>
               </pre>
             </div>
           </div>

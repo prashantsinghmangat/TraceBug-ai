@@ -18,12 +18,71 @@
 // under-redacted what the other caught). This regex is the strict union, so
 // neither path ever redacts less than before. Substring, case-insensitive:
 // `key` matches `api_key`/`x-api-key`, `token` matches `access_token`, etc.
+import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
+
 const SENSITIVE_PARAM_RE =
   /token|key|secret|auth|password|passwd|pwd|credential|session|sid|csrf|sig|signature/i;
 
 /** True when a query-param name looks sensitive and its value must be masked. */
 export function isSensitiveParamName(name: string | undefined): boolean {
   return !!name && SENSITIVE_PARAM_RE.test(name);
+}
+
+// `name=value` pairs after `?`, `&` or `#` — the query, an OAuth-style
+// fragment (`#access_token=…`) and a hash route's query (`#/cb?token=…`).
+const URL_PARAM_RE = /([?&#])([^=&#?]+)=([^&#]*)/g;
+
+/**
+ * Mask the values of sensitive params in a URL's query and fragment.
+ * Used for every URL a report keeps — requests, the page URL, link hrefs,
+ * form actions, the DOM replay's page URL — so none is captured unmasked.
+ *
+ *   /api/users?api_key=abc123        → /api/users?api_key=[REDACTED]
+ *   /cb#access_token=xyz&state=1     → /cb#access_token=[REDACTED]&state=1
+ *
+ * Defensive: returns the original URL on any failure.
+ */
+export function redactUrl(url: string): string {
+  if (!url) return url;
+  try {
+    const start = url.search(/[?#]/);
+    if (start === -1) return url;
+    return url.slice(0, start) + url.slice(start).replace(URL_PARAM_RE, (m, sep: string, key: string) =>
+      isSensitiveParamName(key) || isCustomSensitiveKey(key) ? `${sep}${key}=[REDACTED]` : m);
+  } catch {
+    return url;
+  }
+}
+
+// A URL inside free text (a stack frame, a console message). Stops at
+// whitespace, quotes, brackets and parentheses — the delimiters around a URL
+// in a stack frame ("at fn (http://…/app.js?v=1:42:7)").
+const URL_IN_TEXT_RE = /\b(?:https?|wss?):\/\/[^\s"'`<>()[\]{}]+/g;
+// A stack frame's trailing ":line" or ":line:col".
+const LINE_COL_RE = /(:\d+){1,2}$/;
+
+/**
+ * Mask sensitive params of every URL found in a string. An inline script's
+ * stack frames carry the page URL, query and all — `access_token=…` reached
+ * the report, the AI prompt and the exported file through the error stack.
+ * A frame's ":line:col" suffix is kept, not swallowed into the masked value.
+ */
+export function redactUrlsInText(s: string): string {
+  if (!s || s.indexOf("://") === -1) return s;
+  try {
+    return s.replace(URL_IN_TEXT_RE, (m) => {
+      const tail = m.match(LINE_COL_RE)?.[0] || "";
+      return redactUrl(m.slice(0, m.length - tail.length)) + tail;
+    });
+  } catch {
+    return s;
+  }
+}
+
+/** The browser's automatic favicon request (`/favicon.ico` at the site root):
+ *  made by the browser, not the app, so its 404 is never the app's bug. */
+export function isBrowserFavicon(url: string | undefined): boolean {
+  return !!url && /^(?:https?:\/\/[^/]+)?\/favicon\.ico(?:[?#]|$)/i.test(url);
 }
 
 /** Static-asset file extensions — failures here are resource noise, not APIs. */

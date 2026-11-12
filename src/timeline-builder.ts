@@ -4,14 +4,36 @@
 
 import { TraceBugEvent, TimelineEntry } from "./types";
 import { isNoiseRequest, isStaticResource } from "./url-hygiene";
+import { dedupeNetworkRows } from "./network-dedupe";
+import { isFailedRequest, requestStatusLabel } from "./request-status";
 
-export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
+/** The api_request events to show: the Resource Timing copy of a fetch/XHR
+ *  the wrapper already recorded is dropped, as the Network tab already does.
+ *  Without this the timeline listed every request twice, the second without
+ *  a method (" /api/orders → 201"). */
+function keptRequests(events: TraceBugEvent[], baseUrl?: string): Set<TraceBugEvent> {
+  const rows = events
+    .filter((e) => e.type === "api_request")
+    .map((e) => ({
+      ev: e,
+      url: e.data.request?.url || "",
+      duration: e.data.request?.durationMs || 0,
+      timestamp: e.timestamp,
+      source: e.data.request?.source as string | undefined,
+      initiatorType: e.data.request?.initiatorType as string | undefined,
+      startedAt: e.data.request?.startedAt as number | undefined,
+    }));
+  return new Set(dedupeNetworkRows(rows, { baseUrl }).map((r) => r.ev));
+}
+
+export function buildTimeline(events: TraceBugEvent[], opts?: { baseUrl?: string }): TimelineEntry[] {
   if (events.length === 0) return [];
 
   // Process in chronological order. Events are normally appended in order, but
   // restored/merged sessions (e.g. across a reload) can interleave timestamps,
   // which made the replay timeline + scrubber markers appear to run backward.
   const ordered = [...events].sort((a, b) => a.timestamp - b.timestamp);
+  const requests = keptRequests(ordered, opts?.baseUrl ?? (typeof location !== "undefined" ? location.href : undefined));
 
   const startTs = ordered[0].timestamp;
   const timeline: TimelineEntry[] = [];
@@ -20,13 +42,13 @@ export function buildTimeline(events: TraceBugEvent[]): TimelineEntry[] {
   for (const ev of ordered) {
     const elapsed = formatElapsed(ev.timestamp - startTs);
     const isError = ["error", "unhandled_rejection", "console_error"].includes(ev.type);
-    const isApiError = ev.type === "api_request" &&
-      (ev.data.request?.statusCode >= 400 || ev.data.request?.statusCode === 0);
+    const isApiError = ev.type === "api_request" && isFailedRequest(ev.data.request);
 
     // Same story-vs-mechanics rule as the Actions tab: beacons/analytics are
     // skipped, successful asset loads are skipped, failed first-party
     // resources stay. The Network tab remains the complete request log.
     if (ev.type === "api_request") {
+      if (!requests.has(ev)) continue;
       const reqUrl = ev.data.request?.url;
       if (isNoiseRequest(reqUrl)) continue;
       if (!isApiError && isStaticResource(reqUrl)) continue;
@@ -93,7 +115,7 @@ function describeTimelineEvent(ev: TraceBugEvent): string {
       return `${ev.data.from || "/"} → ${ev.data.to || "/"}`;
     case "api_request": {
       const r = ev.data.request;
-      const status = r?.statusCode === 0 ? "NETWORK_ERR" : String(r?.statusCode);
+      const status = r?.statusCode === 0 && isFailedRequest(r) ? "NETWORK_ERR" : requestStatusLabel(r || {});
       return `${r?.method} ${shortenUrl(r?.url)} → ${status} (${r?.durationMs}ms)`;
     }
     case "error":

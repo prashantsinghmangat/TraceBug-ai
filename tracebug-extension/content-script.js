@@ -323,6 +323,17 @@ window.addEventListener("tracebug-request-screenshot", () => safeRun(() => {
   });
 }));
 
+// ── Site Audit: axe on request ──────────────────────────────────────────────
+// The toolbar's Audit button runs in the page, which can't inject extension
+// files. Ask the worker to inject the packaged axe (same as the popup's Audit
+// path), then tell the page it can run. Always answers, even on failure: the
+// audit then reports accessibility as "not run".
+window.addEventListener("tracebug-request-axe", () => safeRun(() => {
+  safeSendMessage({ type: "TB_LOAD_AXE" }, () => {
+    dispatchToPage("tracebug-ext-axe-ready", {});
+  });
+}));
+
 // ── Turn-off bridge ─────────────────────────────────────────────────────────
 // The floating toolbar's ✕ ("Turn off TraceBug") dispatches this; tell the
 // background to stop re-injecting on navigation for this tab.
@@ -692,6 +703,13 @@ if (isExtAlive()) {
 
       case "TB_INSPECT":
         dispatchToPage("tracebug-ext-action", { action: "inspect" });
+        sendResponse({ ok: true });
+        break;
+
+      // Site Audit: the worker has already injected axe (vendor/axe.min.js)
+      // into the page's MAIN world; the page SDK runs the audit and shows it.
+      case "TB_RUN_AUDIT":
+        dispatchToPage("tracebug-ext-action", { action: "audit", scan: typeof message.scan === "string" ? message.scan : undefined });
         sendResponse({ ok: true });
         break;
 

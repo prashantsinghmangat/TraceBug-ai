@@ -68,6 +68,70 @@ describe('generateBugTitle', () => {
     expect(title).toMatch(/Session|Click|Button/);
   });
 
+  it('names the action that led to the error, not the last action of the session', () => {
+    // Playground run 2026-11-03: the coupon crashed, the tester then clicked
+    // Place order, and the title blamed Place order.
+    const events = [
+      ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/cart'),
+      ev('console_error', { error: { message: "TypeError: Cannot read properties of undefined (reading 'discount')" } }, '/cart'),
+      ev('click', { element: { text: 'Place order', tag: 'button' } }, '/cart'),
+      ev('api_request', { request: { method: 'POST', url: '/api/orders', statusCode: 201 } }, '/cart'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).toMatch(/Apply coupon/i);
+    expect(title).not.toMatch(/Place order/i);
+  });
+
+  it('with several actions before the error, uses the one right before it', () => {
+    const events = [
+      ev('click', { element: { text: 'Add to cart', tag: 'button' } }, '/cart'),
+      ev('input', { element: { name: 'coupon', type: 'text', value: 'SAVE20' } }, '/cart'),
+      ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/cart'),
+      ev('error', { error: { message: 'TypeError: x is undefined' } }, '/cart'),
+    ];
+    expect(generateBugTitle(session(events))).toMatch(/Apply coupon/i);
+  });
+
+  it('with no action before the error, falls back to a neutral title (never a later action)', () => {
+    const events = [
+      ev('error', { error: { message: 'TypeError: x is undefined' } }, '/cart'),
+      ev('click', { element: { text: 'Place order', tag: 'button' } }, '/cart'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).not.toMatch(/Place order/i);
+    expect(title).toMatch(/TypeError/i);
+  });
+
+  it('anchors to the FIRST error, even when a later error follows a later action', () => {
+    const events = [
+      ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/cart'),
+      ev('error', { error: { message: 'TypeError: a is undefined' } }, '/cart'),
+      ev('click', { element: { text: 'Track order', tag: 'button' } }, '/cart'),
+      ev('error', { error: { message: 'TypeError: b is undefined' } }, '/cart'),
+    ];
+    expect(generateBugTitle(session(events))).toMatch(/Apply coupon/i);
+  });
+
+  it('a click captured in the same millisecond as its error still counts as "before" it', () => {
+    // The capture-phase click listener runs before the app's handler throws,
+    // so capture order (not equal timestamps) decides.
+    const t = 1_750_000_000_000;
+    const click = { ...ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/cart'), timestamp: t };
+    const err = { ...ev('console_error', { error: { message: 'TypeError: x is undefined' } }, '/cart'), timestamp: t };
+    expect(generateBugTitle(session([click, err]))).toMatch(/Apply coupon/i);
+  });
+
+  it('a failed request is attributed to the action before it, not a later one', () => {
+    const events = [
+      ev('click', { element: { text: 'Place order', tag: 'button' } }, '/cart'),
+      ev('api_request', { request: { method: 'POST', url: '/api/orders', statusCode: 422 } }, '/cart'),
+      ev('click', { element: { text: 'Track order', tag: 'button' } }, '/cart'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).toMatch(/Place order/i);
+    expect(title).not.toMatch(/Track order/i);
+  });
+
   it('names a caught-and-logged console error when nothing threw uncaught', () => {
     const events = [
       ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/checkout'),
@@ -76,6 +140,21 @@ describe('generateBugTitle', () => {
     const title = generateBugTitle(session(events));
     expect(title).toMatch(/Apply coupon/i);
     expect(title).not.toMatch(/^Session:/);
+  });
+
+  it('a session where nothing failed is titled "No errors captured", without repeats', () => {
+    // Playground run: "Session: Click "Apply coupon" → Click "SAVE20 applied…" → Click "SAVE20 applied…"".
+    const events = [
+      ev('input', { element: { name: 'coupon', type: 'text', value: 'SAVE', selector: '#coupon' } }, '/'),
+      ev('input', { element: { name: 'coupon', type: 'text', value: 'SAVE20', selector: '#coupon' } }, '/'),
+      ev('click', { element: { text: 'Apply coupon', tag: 'button' } }, '/'),
+      ev('click', { element: { text: 'SAVE20 applied — 20% off', tag: 'div' } }, '/'),
+      ev('click', { element: { text: 'SAVE20 applied — 20% off', tag: 'div' } }, '/'),
+    ];
+    const title = generateBugTitle(session(events));
+    expect(title).toMatch(/^No errors captured: /);
+    expect(title.match(/SAVE20 applied/g)).toHaveLength(1);
+    expect(title).not.toMatch(/"SAVE"/);
   });
 
   it('returns the empty-session fallback when no events exist', () => {

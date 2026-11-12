@@ -75,8 +75,17 @@ export default function HeroStory() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let timer: ReturnType<typeof setTimeout>;
     const next = () => {
-      if (inView.current && !document.hidden) setRun((n) => n + 1);
-      else timer = setTimeout(next, 500); // hold the final frame until it is visible again
+      if (!inView.current || document.hidden) { timer = setTimeout(next, 500); return; } // hold the final frame until it is visible again
+      // Restart the CSS animations in place. Re-mounting the stage (a new `key`) paints brand-new
+      // elements every loop, and Chrome counts each as a new Largest Contentful Paint candidate —
+      // audits then reported LCP at ~12 s from the second loop's "Checkout" text.
+      const anims = stageRef.current?.getAnimations?.({ subtree: true });
+      if (anims && anims.length) {
+        anims.forEach((a) => { a.cancel(); a.play(); });
+        timer = setTimeout(next, STORY_MS + PAUSE_MS);
+      } else {
+        setRun((n) => n + 1); // no Web Animations API: fall back to re-mounting
+      }
     };
     timer = setTimeout(next, STORY_MS + PAUSE_MS);
     return () => clearTimeout(timer);

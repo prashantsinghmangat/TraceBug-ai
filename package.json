@@ -1,6 +1,6 @@
 {
   "name": "tracebug-sdk",
-  "version": "1.11.5",
+  "version": "1.12.0",
   "description": "Capture a browser bug into one offline .html file your AI coding agent reads over MCP and fixes \u2014 session replay, console, network, repro timeline, and a generated failing test. Local-first, zero backend. Free.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -43,6 +43,9 @@
     "build:example": "npm run gen:rrweb && tsup && cd example-app && npm install && echo [OK] Example app updated",
     "build:ext": "npm run gen:rrweb && tsup && node tracebug-extension/build/build-ext.mjs",
     "check:versions": "node scripts/check-versions.mjs",
+    "e2e:quality": "node e2e/report-quality.e2e.mjs",
+    "e2e:audit": "node e2e/site-audit.e2e.mjs",
+    "e2e:audit-ext": "node e2e/ext-site-audit.e2e.mjs",
     "zip:ext": "npm run check:versions && npm run build:ext && node tracebug-extension/build/zip-ext.mjs",
     "ext:lint": "web-ext lint --source-dir tracebug-extension/dist/firefox --self-hosted",
     "ext:firefox": "web-ext run --source-dir tracebug-extension/dist/firefox",

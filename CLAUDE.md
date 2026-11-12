@@ -14,6 +14,9 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
   `website/public/tracebug-sdk.js` - the only copy.
 - `tests/` - Vitest unit tests (e.g. `tests/storage.test.ts`). `e2e/` - Playwright specs + `.e2e.mjs` scripts; benchmark at `e2e/benchmark.mjs`.
 - `docs/` - user docs; `docs/adr/` - architecture decisions (read the relevant ADR before changing architecture).
+  Releasing: `docs/RELEASING.md` (steps), `docs/RELEASE_CHECKLIST.md` (manual rows), `docs/STORE-LISTINGS.md` (all store text).
+- `assets/` (gitignored) - store screenshots, banners, icons, demo video and their generators; index in `assets/README.md`.
+  `docs-internal/` (gitignored) - marketing posts (`marketing/`) and private business notes.
 - `docs/launch/` - current launch work: `STATE.md` (where things stand - **start here**), `PLAN.md` (what's left), `PROGRESS.md`. The `*-archive.md` files are closed history; don't read them unless you need why.
 
 ## Commands
@@ -43,3 +46,4 @@ Local-first bug-capture tool: MV3 browser extension + npm SDK + stdio MCP CLI. M
 - Use `rg`/grep with paths; read specific line ranges, not whole large files (`docs/api-reference.md`, `ARCHITECTURE.md` and the built bundle are big).
 - Make small diffs. Run only the tests related to the change, then the full suite once at the end of a phase.
 - At the end of each phase, rewrite `docs/launch/STATE.md` and add a <=5 line entry to `docs/launch/PROGRESS.md` (what changed, files, how verified, open issues).
+- Token budget: STATE.md stays under ~80 lines (current facts only — rewrite, never append; it is read every session). PROGRESS.md is append-only and never read whole (`tail` or grep it). When a new area gets busy, add it to CODEMAP.md instead of re-exploring it next session.

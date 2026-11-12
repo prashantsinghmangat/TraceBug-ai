@@ -111,6 +111,40 @@ describe('generateReproSteps', () => {
     expect(r.reproSteps).not.toContain('(coupon = ');
   });
 
+  it('collapses slow typing in one field into a single step with the final value', () => {
+    // Playground run: Type "SA" → "SAV" → "SAVE" → "SAVE2" → "SAVE20".
+    const typing = ['SA', 'SAV', 'SAVE', 'SAVE2', 'SAVE20'].map((v) =>
+      ev('input', { element: { name: 'coupon', type: 'text', value: v, selector: '#coupon' } }));
+    const r = generateReproSteps([...typing, ev('click', { element: { tag: 'button', text: 'Apply coupon' } })], 'x');
+    expect(r.reproSteps.match(/Type /g)).toHaveLength(1);
+    expect(r.reproSteps).toContain('Type "SAVE20" in "coupon" field');
+    expect(r.reproSteps).not.toContain('Type "SAVE2" ');
+  });
+
+  it('keeps separate typing in different fields, and typing on both sides of a click', () => {
+    const r = generateReproSteps([
+      ev('input', { element: { name: 'first', type: 'text', value: 'Ada' } }),
+      ev('input', { element: { name: 'last', type: 'text', value: 'Lovelace' } }),
+      ev('input', { element: { name: 'coupon', type: 'text', value: 'SAVE' } }),
+      ev('click', { element: { tag: 'button', text: 'Apply coupon' } }),
+      ev('input', { element: { name: 'coupon', type: 'text', value: 'SAVE20' } }),
+    ], 'x');
+    expect(r.reproSteps).toContain('Type "Ada"');
+    expect(r.reproSteps).toContain('Type "Lovelace"');
+    expect(r.reproSteps).toContain('Type "SAVE" in');
+    expect(r.reproSteps).toContain('Type "SAVE20" in');
+  });
+
+  it('typing is still collapsed across a background request', () => {
+    const r = generateReproSteps([
+      ev('input', { element: { name: 'q', type: 'text', value: 'ke' } }),
+      ev('api_request', { request: { method: 'GET', url: '/api/suggest', statusCode: 200 } }),
+      ev('input', { element: { name: 'q', type: 'text', value: 'keyboard' } }),
+    ], 'x');
+    expect(r.reproSteps.match(/Type /g)).toHaveLength(1);
+    expect(r.reproSteps).toContain('Type "keyboard"');
+  });
+
   it('omits successful API calls', () => {
     const events = [
       ev('api_request', { request: { method: 'GET', url: '/api/ok', statusCode: 200, durationMs: 50 } }),

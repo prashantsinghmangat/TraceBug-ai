@@ -34,8 +34,8 @@ export function captureRegionScreenshot(): Promise<ScreenshotData | null> {
     const sel = document.createElement("div");
     sel.dataset.tracebug = "region-overlay";
     Object.assign(sel.style, {
-      position: "absolute", border: "2px dashed #6366F1",
-      background: "rgba(99,102,241,0.15)", display: "none",
+      position: "absolute", border: "2px dashed #FF5C6C",
+      background: "rgba(255,92,108,0.15)", display: "none",
       pointerEvents: "none",
     });
     overlay.appendChild(sel);

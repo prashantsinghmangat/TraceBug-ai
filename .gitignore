@@ -26,6 +26,9 @@ src/exporters/rrweb-runtime.generated.ts
 # Local release artifacts (extension zips etc.)
 releases/
 
+# Marketing and store images, video, and their sources (see assets/README.md)
+assets/
+
 # Demo video: raw recordings and everything generated (see marketing/demo-video/README.md)
 marketing/demo-video/clips/
 marketing/demo-video/out/
@@ -39,3 +42,6 @@ docs-internal/
 
 # tsc incremental build cache - a build artifact, not source.
 *.tsbuildinfo
+
+# axe-core copied in by tracebug-extension/build/build-ext.mjs (Site Audit)
+tracebug-extension/vendor/

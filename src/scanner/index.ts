@@ -122,6 +122,11 @@ export function getIssueCountsByDetector(): Record<IssueDetector, number> {
     "frustration-dead": 0,
     "frustration-abandon": 0,
     "frustration-error-correlated": 0,
+    "audit-ui": 0,
+    "audit-seo": 0,
+    "audit-perf": 0,
+    "audit-keyboard": 0,
+    "audit-mobile": 0,
   };
   for (const i of _issues) {
     if (i.dismissed) continue;

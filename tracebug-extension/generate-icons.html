@@ -33,30 +33,27 @@ function drawIcon(canvas) {
   const k = s / 96;
   ctx.clearRect(0, 0, s, s);
 
-  // Deep rounded-square badge
+  // Flat midnight rounded-square badge with a hairline edge (Midnight coral)
   roundRect(ctx, 3 * k, 3 * k, 90 * k, 90 * k, 22 * k);
-  const bg = ctx.createLinearGradient(0, 0, s, s);
-  bg.addColorStop(0, '#16163E');
-  bg.addColorStop(1, '#0B0B10');
-  ctx.fillStyle = bg;
+  ctx.fillStyle = '#0B0D14';
   ctx.fill();
+  ctx.strokeStyle = '#252A38';
+  ctx.lineWidth = 1.5 * k;
+  ctx.stroke();
 
   // Terminal chevron
   ctx.beginPath();
   ctx.moveTo(30 * k, 33 * k);
   ctx.lineTo(47 * k, 48 * k);
   ctx.lineTo(30 * k, 63 * k);
-  ctx.strokeStyle = '#EAECF3';
+  ctx.strokeStyle = '#EEF0F5';
   ctx.lineWidth = 6 * k;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.stroke();
 
-  // Cursor block (gradient)
-  const cg = ctx.createLinearGradient(0, 0, s, s);
-  cg.addColorStop(0, '#818CF8');
-  cg.addColorStop(1, '#4F46E5');
-  ctx.fillStyle = cg;
+  // Cursor block (coral)
+  ctx.fillStyle = '#FF5C6C';
   roundRect(ctx, 52 * k, 41 * k, 14 * k, 14 * k, 4 * k);
   ctx.fill();
 }

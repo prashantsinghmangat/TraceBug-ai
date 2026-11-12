@@ -1,4 +1,8 @@
 import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
+import { agentWorkflowSteps, CLAUDE_MCP_ADD } from "./agent-workflow";
+import type { AuditRunOf } from "../audit/types";
+import { WCAG_CRITERIA } from "../audit/wcag";
+import { SCORE_EXPLANATION } from "../audit/score";
 
 // ── HTML Replay Viewer Template ───────────────────────────────────────────
 // A self-contained HTML scaffold + inlined renderer. The bundler embeds the
@@ -10,6 +14,9 @@ import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
 // (no SDK imports — must be self-contained when run from `file://`).
 
 export interface BundlePayload {
+  /** Site Audit run carried by this export (docs/audit-quality/implementation-plan.md §3).
+   *  Every page-derived string in it is untrusted (escaped in the viewer, labelled in MCP). */
+  audit?: AuditRunOf<object>;
   meta: {
     title: string;
     severity: string;
@@ -99,6 +106,10 @@ export interface BundlePayload {
     duration: number;
     timestamp: number;
     response?: string;
+    /** Status 0 that is not a failure — see src/request-status.ts. */
+    statusUnknown?: boolean;
+    aborted?: boolean;
+    opaque?: boolean;
   }>;
   actions?: string[];
   /** Action chips for the Actions tab. When present, rendered instead of
@@ -138,6 +149,14 @@ export interface BundlePayload {
     styles?: unknown;
   }>;
   rootCauseHint?: { hint: string; confidence: string };
+  /** What the report captured, didn't capture, masked and dropped (src/evidence-summary.ts). */
+  evidence?: {
+    captured: string[];
+    notCaptured: string[];
+    redacted: string | null;
+    dropped: string[];
+    complete: boolean;
+  };
 }
 
 /**
@@ -208,16 +227,19 @@ ${rrwebCssTag}
 .tb-vrrweb-stage .replayer-wrapper{position:relative;transform-origin:top left}
 .tb-vrrweb-stage iframe{border:0;background:#fff}
 .tb-vrrweb-ctrl{display:flex;align-items:center;gap:10px;margin-top:8px}
-.tb-vrrweb-btn{background:var(--tb-accent,#6366F1);color:#fff;border:0;border-radius:6px;width:36px;height:30px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0}
+.tb-vsurf{display:inline-flex;gap:2px;margin-bottom:8px;padding:2px;border:1px solid var(--tb-border,#252A38);border-radius:8px}
+.tb-vsurf button{background:transparent;color:var(--tb-text-2,#A8AEBE);border:0;border-radius:6px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.tb-vsurf button[aria-pressed="true"]{background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent,#0B0D14)}
+.tb-vrrweb-btn{background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent,#0B0D14);border:0;border-radius:6px;width:36px;height:30px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0}
 .tb-vrrweb-btn:hover{filter:brightness(1.08)}
-.tb-vrrweb-seek{flex:1;accent-color:var(--tb-accent,#6366F1);cursor:pointer}
+.tb-vrrweb-seek{flex:1;accent-color:var(--tb-accent,#FF5C6C);cursor:pointer}
 .tb-vrrweb-time{font-family:var(--tb-mono);font-size:12px;color:var(--tb-text-3);min-width:92px;text-align:right;flex-shrink:0}
 </style>
 </head>
 <body>
 <header class="tb-vh">
   <div class="tb-vh-row">
-    <span class="tb-vh-logo">🐞</span>
+    <span class="tb-vh-logo" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 96 96" fill="none"><rect x="3" y="3" width="90" height="90" rx="22" fill="#0B0D14"/><rect x="3.75" y="3.75" width="88.5" height="88.5" rx="21.25" fill="none" stroke="#252A38" stroke-width="1.5"/><path d="M30 33 L47 48 L30 63" fill="none" stroke="#EEF0F5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><rect x="52" y="41" width="14" height="14" rx="4" fill="#FF5C6C"/></svg></span>
     <span class="tb-vh-title" id="title"></span>
     <span class="tb-vh-sev" id="sev"></span>
     <span class="tb-vh-sev tb-vh-prio" id="prio" style="display:none"></span>
@@ -247,8 +269,12 @@ ${rrwebCssTag}
     <div class="tb-vss-meta" id="ssmeta"></div>
     <div id="ss-gallery" class="tb-vss-gallery" style="display:none"></div>
     <div id="desc-wrap" style="display:none">
-      <h2 class="tb-vh2">Description</h2>
-      <pre class="tb-vdesc" id="desc"></pre>
+      <div class="tb-vdesc-head">
+        <h2 class="tb-vh2">Description</h2>
+        <button type="button" class="tb-vdesc-toggle" id="desc-toggle" aria-pressed="false">View markdown</button>
+      </div>
+      <div class="tb-vdesc tb-vdesc-md" id="desc-md"></div>
+      <pre class="tb-vdesc tb-vdesc-raw" id="desc" style="display:none"></pre>
     </div>
     <div id="hover-thumb" class="tb-vhover-thumb" style="display:none">
       <img id="hover-thumb-img" alt="" />
@@ -266,6 +292,7 @@ ${rrwebCssTag}
       <button data-tab="actions" class="tb-vtab" role="tab">Actions <span class="tb-vtab-badge" id="badge-actions"></span></button>
       <button data-tab="ai" class="tb-vtab" role="tab">AI</button>
       <button data-tab="events" class="tb-vtab" role="tab">Events <span class="tb-vtab-badge" id="badge-events"></span></button>
+      <button data-tab="audit" class="tb-vtab" role="tab" hidden>Audit <span class="tb-vtab-badge" id="badge-audit"></span></button>
     </div>
     <div class="tb-vtabpanels">
       <div data-panel="info" class="tb-vpanel tb-vpanel-active" id="panel-info"></div>
@@ -274,6 +301,7 @@ ${rrwebCssTag}
       <div data-panel="actions" class="tb-vpanel" id="panel-actions" hidden></div>
       <div data-panel="ai" class="tb-vpanel" id="panel-ai" hidden></div>
       <div data-panel="events" class="tb-vpanel" id="panel-events"><ol class="tb-vevents" id="events"></ol></div>
+      <div data-panel="audit" class="tb-vpanel" id="panel-audit" hidden></div>
     </div>
   </section>
 </main>
@@ -340,18 +368,19 @@ const REPLAY_CSS = `
  * prefers-color-scheme auto-switch was removed in favor of this. */
 :root {
   --tb-bg: #ffffff;
-  --tb-bg-2: #FAFAFA;
-  --tb-bg-3: #F4F4F5;
-  --tb-text: #111113;
-  --tb-text-2: #52525B;
-  --tb-text-3: #82828C;
-  --tb-accent: #4F46E5;
-  --tb-accent-2: #4338CA;
-  --tb-accent-soft: #4F46E514;
-  --tb-ring: rgba(79, 70, 229, 0.5);
-  --tb-border: #E4E4E7;
-  --tb-border-sub: #F4F4F5;
-  --tb-border-hover: #D4D4D8;
+  --tb-bg-2: #F8F9FB;
+  --tb-bg-3: #F4F5F8;
+  --tb-text: #0B0D14;
+  --tb-text-2: #4B5565;
+  --tb-text-3: #677082;
+  --tb-accent: #C81E3C;
+  --tb-accent-2: #A3162F;
+  --tb-accent-soft: #C81E3C14;
+  --tb-on-accent: #ffffff;
+  --tb-ring: rgba(200, 30, 60, 0.5);
+  --tb-border: #E2E4EA;
+  --tb-border-sub: #ECEEF2;
+  --tb-border-hover: #D0D4DC;
   --tb-error: #DC2626;
   --tb-error-bg: #fef2f2;
   --tb-warning: #D97706;
@@ -360,8 +389,8 @@ const REPLAY_CSS = `
   --tb-success-bg: #ecfdf5;
   --tb-info: #2563eb;
   --tb-info-bg: #eff6ff;
-  --tb-code-bg: #F4F4F5;
-  --tb-code-text: #26262E;
+  --tb-code-bg: #F4F5F8;
+  --tb-code-text: #252A38;
   --tb-code-tag: #be185d;
   --tb-code-attr-name: #a16207;
   --tb-code-attr-val: #15803d;
@@ -372,28 +401,29 @@ const REPLAY_CSS = `
   --tb-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Consolas, monospace;
 }
 :root[data-theme="dark"], html[data-theme="dark"] body {
-  --tb-bg: #0B0B10;
-  --tb-bg-2: #16161D;
-  --tb-bg-3: #1E1E26;
-  --tb-text: #FAFAFA;
-  --tb-text-2: #A1A1AA;
-  --tb-text-3: #71717A;
-  --tb-accent: #6366F1;
-  --tb-accent-2: #818CF8;
-  --tb-accent-soft: #6366F11f;
-  --tb-ring: rgba(99, 102, 241, 0.5);
-  --tb-border: #26262E;
-  --tb-border-sub: #1E1E24;
-  --tb-border-hover: #2A2A35;
-  --tb-error: #EF4444;
-  --tb-error-bg: #EF444419;
-  --tb-warning: #F59E0B;
-  --tb-warning-bg: #F59E0B1a;
-  --tb-success: #22C55E;
-  --tb-success-bg: #22C55E1a;
+  --tb-bg: #0B0D14;
+  --tb-bg-2: #141823;
+  --tb-bg-3: #1B202E;
+  --tb-text: #EEF0F5;
+  --tb-text-2: #A8AEBE;
+  --tb-text-3: #8A91A5;
+  --tb-accent: #FF5C6C;
+  --tb-accent-2: #FF8590;
+  --tb-accent-soft: #FF5C6C1f;
+  --tb-on-accent: #0B0D14;
+  --tb-ring: rgba(255, 92, 108, 0.5);
+  --tb-border: #252A38;
+  --tb-border-sub: #1B202E;
+  --tb-border-hover: #333A4D;
+  --tb-error: #F05257;
+  --tb-error-bg: #F0525719;
+  --tb-warning: #E0A040;
+  --tb-warning-bg: #E0A04019;
+  --tb-success: #4CC38A;
+  --tb-success-bg: #4CC38A19;
   --tb-info: #3B82F6;
   --tb-info-bg: #3B82F619;
-  --tb-code-bg: #14141F;
+  --tb-code-bg: #141823;
   --tb-code-text: #d4d4d8;
   --tb-code-tag: #f472b6;
   --tb-code-attr-name: #fcd34d;
@@ -421,7 +451,7 @@ body { min-height: 100vh; }
 /* ── Header ───────────────────────────────────────── */
 .tb-vh { padding: 18px 24px; background: var(--tb-bg-2); border-bottom: 1px solid var(--tb-border); position: sticky; top: 0; z-index: 10; }
 .tb-vh-row { display: flex; align-items: center; gap: 12px; max-width: 1400px; margin: 0 auto; }
-.tb-vh-logo { font-size: 20px; }
+.tb-vh-logo { display: inline-flex; flex-shrink: 0; }
 .tb-vh-title { font-size: 15px; font-weight: 600; flex: 1; word-break: break-word; letter-spacing: -0.01em; }
 .tb-vh-sev { font-size: 10px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
 .tb-vh-prio { background: var(--tb-bg-2); color: var(--tb-text-2); border: 1px solid var(--tb-border); }
@@ -452,13 +482,53 @@ body { min-height: 100vh; }
 .tb-vsummary-box { margin-bottom: 14px; }
 .tb-vsummary { font-size: 13px; line-height: 1.55; padding: 12px 14px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); color: var(--tb-text); }
 .tb-vdesc { font-size: 12px; line-height: 1.6; padding: 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); max-height: 360px; overflow: auto; white-space: pre-wrap; word-wrap: break-word; font-family: var(--tb-mono); margin: 0; color: var(--tb-text); }
-.tb-vtabstrip { display: flex; gap: 0; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md) var(--tb-radius-md) 0 0; padding: 0 8px; overflow-x: auto; }
+.tb-vdesc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tb-vdesc-toggle { background: transparent; border: 1px solid var(--tb-border); color: var(--tb-text-2); border-radius: var(--tb-radius-sm); padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer; margin-top: 4px; }
+.tb-vdesc-toggle:hover { color: var(--tb-text); border-color: var(--tb-text-3); }
+.tb-vdesc-md { font-family: inherit; font-size: 13px; line-height: 1.6; white-space: normal; padding: 14px 16px; }
+.tb-vdesc-md > :first-child { margin-top: 0; }
+.tb-vdesc-md > :last-child { margin-bottom: 0; }
+.tb-vdesc-md p, .tb-vdesc-md ul, .tb-vdesc-md ol, .tb-vdesc-md blockquote, .tb-vdesc-md pre { margin: 0 0 10px; }
+.tb-vdesc-md h3, .tb-vdesc-md h4 { font-size: 13px; font-weight: 700; margin: 14px 0 6px; }
+.tb-vdesc-md ul, .tb-vdesc-md ol { padding-left: 20px; }
+.tb-vdesc-md li { margin: 2px 0; }
+.tb-vdesc-md strong { font-weight: 700; color: var(--tb-text); }
+.tb-vdesc-md em { color: var(--tb-text-2); }
+.tb-vdesc-md code { font-family: var(--tb-mono); font-size: 12px; background: var(--tb-bg-3, rgba(127,127,127,.15)); padding: 1px 5px; border-radius: 4px; }
+.tb-vdesc-md pre { font-family: var(--tb-mono); font-size: 12px; white-space: pre-wrap; word-wrap: break-word; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 8px 10px; }
+.tb-vdesc-md pre code { background: none; padding: 0; }
+.tb-vdesc-md blockquote { border-left: 3px solid var(--tb-accent); background: var(--tb-accent-soft); padding: 8px 12px; border-radius: 0 var(--tb-radius-sm) var(--tb-radius-sm) 0; }.tb-vtabstrip { display: flex; gap: 0; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md) var(--tb-radius-md) 0 0; padding: 0 8px; overflow-x: auto; }
 .tb-vtab { background: transparent; border: none; color: var(--tb-text-3); padding: 11px 13px; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; transition: color .15s, border-color .15s; margin-bottom: -1px; letter-spacing: -0.01em; }
 .tb-vtab:hover { color: var(--tb-text); }
 .tb-vtab-active { color: var(--tb-text); border-bottom-color: var(--tb-accent); }
 .tb-vtab-badge { font-size: 10px; font-weight: 700; background: var(--tb-accent-soft); color: var(--tb-accent); padding: 1px 7px; border-radius: 999px; line-height: 1.4; min-width: 18px; text-align: center; }
-.tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: #fff; }
+.tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: var(--tb-on-accent); }
 .tb-vtab-badge:empty { display: none; }
+.tb-vtab[hidden] { display: none; }
+.tb-vau-head { font-size: 12px; color: var(--tb-text-3); margin-bottom: 10px; }
+.tb-vau-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.tb-vau-cat { border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); padding: 8px 10px; }
+.tb-vau-off { opacity: .65; border-style: dashed; }
+.tb-vau-cat-h { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.tb-vau-m { margin-top: 4px; font: 600 11px/1.4 ui-monospace, monospace; }
+.tb-vau-l { margin-top: 4px; font-size: 11px; color: var(--tb-text-3); }
+.tb-vau-row { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--tb-border); }
+.tb-vau-sev { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; height: fit-content; background: var(--tb-accent-soft); color: var(--tb-accent); }
+.tb-vau-sev-critical, .tb-vau-sev-serious { background: rgba(255,92,108,.15); color: #FF5C6C; }
+.tb-vau-main { min-width: 0; flex: 1; }
+.tb-vau-t { font-size: 13px; font-weight: 600; }
+.tb-vau-d { font-size: 12px; color: var(--tb-text-2, var(--tb-text)); margin-top: 2px; }
+.tb-vau-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 4px; overflow-wrap: anywhere; }
+.tb-vau-html { font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--tb-surface-2, rgba(127,127,127,.08)); padding: 6px 8px; border-radius: 6px; margin: 6px 0 0; }
+.tb-vau-muted { color: var(--tb-text-3); font-size: 11px; }
+.tb-vau-link { font-size: 11px; color: var(--tb-accent); }
+.tb-vau-score { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.tb-vau-score-n { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 4px solid var(--tb-border); font-size: 18px; font-weight: 800; flex: none; }
+.tb-vau-pill { display: inline-block; min-width: 30px; text-align: center; padding: 0 5px; border-radius: 999px; border: 2px solid var(--tb-border); font-size: 11px; font-weight: 700; }
+.tb-vau-b-good { border-color: #22C55E; } .tb-vau-b-fair { border-color: #F59E0B; } .tb-vau-b-poor { border-color: #EF4444; }
+.tb-vau-how { margin-top: 2px; font-size: 11px; }
+.tb-vau-review { margin-top: 14px; border: 1px dashed var(--tb-border); border-radius: 8px; padding: 8px 10px; font-size: 12px; } .tb-vau-review summary { cursor: pointer; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
+.tb-vau-fix { font-size: 12px; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--tb-surface-2, rgba(127,127,127,.08)); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
 .tb-vpanel-active { display: block; }
@@ -590,7 +660,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vai-body { font-size: 13px; color: var(--tb-text); line-height: 1.6; }
 .tb-vai-empty .tb-vai-body { color: var(--tb-text-2); }
 .tb-vai-prompt { margin: 10px 0 0; padding: 10px 12px; background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); font-family: var(--tb-mono); font-size: 11px; line-height: 1.55; color: var(--tb-text-2); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }
-.tb-vai-copy { margin-top: 10px; padding: 8px 14px; background: var(--tb-accent); color: #fff; border: 0; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
+.tb-vai-copy { margin-top: 10px; padding: 8px 14px; background: var(--tb-accent); color: var(--tb-on-accent); border: 0; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; }
 .tb-vai-copy:hover { filter: brightness(1.1); }
 
 /* Actions tab — chips */
@@ -658,7 +728,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-rs-time { font-size: 11px; font-variant-numeric: tabular-nums; color: var(--tb-text-2); flex: 1; font-family: var(--tb-mono); }
 .tb-rs-jump { background: transparent; color: var(--tb-error); border: 1px solid var(--tb-error); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .15s; }
 .tb-rs-jump:hover { background: var(--tb-error-bg); }
-.tb-rs-dl { background: var(--tb-accent); color: #fff; border: 1px solid var(--tb-accent); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: filter .15s; display: inline-flex; align-items: center; gap: 5px; }
+.tb-rs-dl { background: var(--tb-accent); color: var(--tb-on-accent); border: 1px solid var(--tb-accent); border-radius: var(--tb-radius-sm); padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: inherit; cursor: pointer; transition: filter .15s; display: inline-flex; align-items: center; gap: 5px; }
 .tb-rs-dl:hover { filter: brightness(1.1); }
 .tb-rs-track { position: relative; height: 30px; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: 999px; cursor: pointer; touch-action: none; user-select: none; }
 .tb-rs-fill { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: linear-gradient(90deg, var(--tb-accent-soft), transparent); border-radius: 999px; pointer-events: none; }
@@ -672,7 +742,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vpreview { position: relative; }
 .tb-vplay-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: rgba(0,0,0,0.55); color: #fff; border: none; cursor: pointer; font-family: inherit; transition: background .15s; border-radius: var(--tb-radius-md); }
 .tb-vplay-overlay:hover { background: rgba(0,0,0,0.7); }
-.tb-vplay-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--tb-accent); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: transform .15s; }
+.tb-vplay-icon { width: 64px; height: 64px; border-radius: 50%; background: var(--tb-accent); color: var(--tb-on-accent); display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transition: transform .15s; }
 .tb-vplay-overlay:hover .tb-vplay-icon { transform: scale(1.06); }
 .tb-vplay-label { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
 .tb-vplay-sub { font-size: 11px; color: rgba(255,255,255,0.7); }
@@ -689,7 +759,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vss-thumb:hover { transform: translateY(-1px); }
 .tb-vss-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tb-vss-thumb span { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,0.72); color: #fff; font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 6px; border-radius: 4px; }
-.tb-vss-thumb.active { border-color: var(--tb-accent, #6366F1); }
+.tb-vss-thumb.active { border-color: var(--tb-accent, #FF5C6C); }
 
 /* ── Hover thumbnail on scrubber ──────────────────── */
 .tb-vhover-thumb { position: fixed; pointer-events: none; z-index: 50; background: var(--tb-bg); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 4px; box-shadow: var(--tb-shadow-md); }
@@ -704,7 +774,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 .tb-vhelp-row:last-of-type { border-bottom: none; }
 .tb-vhelp-row span { color: var(--tb-text-2); flex: 1; }
 .tb-vhelp-row kbd { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-radius: var(--tb-radius-sm); padding: 2px 8px; font-family: var(--tb-mono); font-size: 11px; color: var(--tb-text); margin-right: 4px; }
-.tb-vhelp-close { margin-top: 14px; width: 100%; padding: 9px; background: var(--tb-accent); color: #fff; border: none; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: background .15s; }
+.tb-vhelp-close { margin-top: 14px; width: 100%; padding: 9px; background: var(--tb-accent); color: var(--tb-on-accent); border: none; border-radius: var(--tb-radius-sm); cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: background .15s; }
 .tb-vhelp-close:hover { background: var(--tb-accent-2); }
 
 /* ── Marker types ─────────────────────────────────── */
@@ -812,8 +882,77 @@ const REPLAY_RUNTIME = `(function(){
   // ── Summary box + Description (below the replay, mirrors the ticket modal) ──
   document.getElementById("summary").textContent = data.meta.summary || "(no summary)";
   if (data.description) {
-    document.getElementById("desc").textContent = data.description;
+    var descRaw = document.getElementById("desc");
+    var descMd = document.getElementById("desc-md");
+    var descToggle = document.getElementById("desc-toggle");
+    descRaw.textContent = data.description;
+    try { descMd.innerHTML = renderMarkdown(data.description); }
+    catch (_e) { descMd.style.display = "none"; descRaw.style.display = ""; descToggle.style.display = "none"; }
+    descToggle.addEventListener("click", function () {
+      var raw = descRaw.style.display === "none";
+      descRaw.style.display = raw ? "" : "none";
+      descMd.style.display = raw ? "none" : "";
+      descToggle.textContent = raw ? "View formatted" : "View markdown";
+      descToggle.setAttribute("aria-pressed", raw ? "true" : "false");
+    });
     document.getElementById("desc-wrap").style.display = "";
+  }
+
+  // Reading view for the ticket description: the small markdown subset the
+  // ticket builder writes (headings, quotes, lists, fenced code, **bold**,
+  // _italic_, inline code). Text is escaped before any tag is added, so the
+  // reporter's text can never inject markup.
+  function renderMarkdown(src) {
+    var BT = String.fromCharCode(96);
+    var FENCE = BT + BT + BT;
+    function e(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function inline(s) {
+      return String(s).split(BT).map(function (part, i) {
+        if (i % 2 === 1) return "<code>" + e(part) + "</code>";
+        return e(part)
+          .replace(/[*][*]([^*]+)[*][*]/g, "<strong>$1</strong>")
+          .replace(/(^|[^A-Za-z0-9])_([^_]+)_(?=[^A-Za-z0-9]|$)/g, "$1<em>$2</em>");
+      }).join("");
+    }
+    var lines = String(src).replace(/[\\r]/g, "").split("\\n");
+    var out = [], para = [], list = null, quote = [], code = null;
+    function flushPara() { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } }
+    function flushList() { if (list) { out.push("<" + list.tag + ">" + list.items.map(function (t) { return "<li>" + inline(t) + "</li>"; }).join("") + "</" + list.tag + ">"); list = null; } }
+    function flushQuote() { if (quote.length) { out.push("<blockquote>" + quote.map(inline).join("<br>") + "</blockquote>"); quote = []; } }
+    function flushAll() { flushPara(); flushList(); flushQuote(); }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (code) {
+        if (line.trim().indexOf(FENCE) === 0) { out.push("<pre><code>" + e(code.join("\\n")) + "</code></pre>"); code = null; }
+        else code.push(line);
+        continue;
+      }
+      if (line.trim().indexOf(FENCE) === 0) { flushAll(); code = []; continue; }
+      if (!line.trim()) { flushAll(); continue; }
+      var m;
+      if ((m = /^(#{1,6})[ ]+(.*)$/.exec(line))) {
+        flushAll();
+        var tag = m[1].length <= 2 ? "h3" : "h4";
+        out.push("<" + tag + ">" + inline(m[2]) + "</" + tag + ">");
+        continue;
+      }
+      if ((m = /^>[ ]?(.*)$/.exec(line))) { flushPara(); flushList(); quote.push(m[1]); continue; }
+      var ol = /^[ ]*[0-9]+[.)][ ]+(.*)$/.exec(line);
+      var ul = /^[ ]*[-*+][ ]+(.*)$/.exec(line);
+      if (ol || ul) {
+        var want = ol ? "ol" : "ul";
+        flushPara(); flushQuote();
+        if (list && list.tag !== want) flushList();
+        if (!list) list = { tag: want, items: [] };
+        list.items.push((ol || ul)[1]);
+        continue;
+      }
+      flushList(); flushQuote();
+      para.push(line);
+    }
+    if (code) out.push("<pre><code>" + e(code.join("\\n")) + "</code></pre>");
+    flushAll();
+    return out.join("");
   }
 
   // ── Tabs: populate counts + content ─────────────────────
@@ -982,14 +1121,18 @@ const REPLAY_RUNTIME = `(function(){
 
     var rowsHtml = classified.map(function(item, i){
       var n = item.n;
-      var statusTxt = n.status === 0 ? "ERR" : String(n.status);
+      // Status 0 is a failure only when it isn't unknown, aborted or opaque
+      // (same rule as src/request-status.ts — this runtime can't import it).
+      var notFail0 = n.status === 0 && (n.statusUnknown || n.aborted || n.opaque);
+      var statusTxt = n.status !== 0 ? String(n.status) :
+        n.aborted ? "aborted" : n.opaque ? "opaque" : n.statusUnknown ? "—" : "ERR";
       var statusCls =
-        n.status === 0 ? "serr" :
+        n.status === 0 ? (notFail0 ? "" : "serr") :
         n.status >= 500 ? "s5" :
         n.status >= 400 ? "s4" :
         n.status >= 300 ? "s3" :
         n.status >= 200 ? "s2" : "";
-      var isErr = n.status === 0 || n.status >= 400;
+      var isErr = (n.status === 0 && !notFail0) || n.status >= 400;
       var leftPct = ((n.timestamp - minTs) / span) * 100;
       var widthPct = Math.max(0.5, ((n.duration || 0) / span) * 100);
       var hay = (n.method + ' ' + n.url + ' ' + statusTxt + ' ' + item.dom).toLowerCase();
@@ -1104,7 +1247,7 @@ const REPLAY_RUNTIME = `(function(){
       if (c.frustration) {
         var sym = c.frustration === "rage" ? "⚡" : c.frustration === "dead" ? "✕" : "↩";
         var title = c.frustration === "rage" ? "Rage click — multiple rapid clicks on the same element" :
-                    c.frustration === "dead" ? "Dead click — no visible response within 1.5s" :
+                    c.frustration === "dead" ? "Dead click — clicked again a few seconds later, as if nothing happened" :
                     "Form abandoned — filled but never submitted";
         frust = '<span class="tb-vchip-frust tb-vchip-frust-' + esc(c.frustration) + '" title="' + esc(title) + '">' + sym + '</span>';
       }
@@ -1140,12 +1283,13 @@ const REPLAY_RUNTIME = `(function(){
   var mcpFile = "";
   try { mcpFile = decodeURIComponent(location.pathname.split(/[\\\\/]/).pop() || ""); } catch (e) {}
   if (!mcpFile || !/\\.html?$/i.test(mcpFile)) mcpFile = "<this .html export>";
+  // Steps come from src/exporters/agent-workflow.ts (shared with the hand-off
+  // card and the MCP debug prompt); {FILE} is filled in at view time.
+  var mcpSteps = ${JSON.stringify(agentWorkflowSteps("{FILE}"))};
   var mcpPrompt = 'This is a TraceBug bug report export: ' + mcpFile + '\\n\\n' +
-    '1. Call get_bug_report("' + mcpFile + '") to load the report overview and its investigation guide.\\n' +
-    '2. Follow the investigation guide to gather the relevant data (console errors, network failures, repro steps, screenshots).\\n' +
-    '3. Cross-reference the findings with this codebase to identify the root cause and propose a fix.\\n\\n' +
-    'If the tracebug MCP server is not connected yet, register it first (point --dir at the folder containing this file):\\n' +
-    'claude mcp add tracebug -- npx -y tracebug mcp --dir <reports-folder>';
+    mcpSteps.map(function(s, i){ return (i + 1) + '. ' + s.split('{FILE}').join(mcpFile); }).join('\\n') + '\\n\\n' +
+    'If the tracebug MCP server is not connected yet, register it first. It finds reports in your Downloads and Desktop folders and in this project, so if this file is somewhere else, move it into the project:\\n' +
+    ${JSON.stringify(CLAUDE_MCP_ADD)};
   aiHtml += '<div class="tb-vai-card"><div class="tb-vai-head">Debug with a coding agent (MCP)</div>' +
     '<div class="tb-vai-body">Paste this prompt into Claude Code or Cursor opened in the codebase that owns the bug. The agent reads this file through TraceBug\\u2019s local MCP server \\u2014 nothing is uploaded.</div>' +
     '<pre class="tb-vai-prompt">' + esc(mcpPrompt) + '</pre>' +
@@ -1172,6 +1316,88 @@ const REPLAY_RUNTIME = `(function(){
 
   setBadge("badge-events", (data.events || []).length);
 
+  // Audit tab — only when this export carries a Site Audit run (payload.audit).
+  // Every string in it came from the audited page: escaped, never trusted.
+  var audit = data.audit;
+  if (audit && audit.categories) {
+    var CAT = { accessibility: "Accessibility", ui: "Layout", mobile: "Phone width", performance: "Performance", seo: "SEO", runtime: "Runtime" };
+    var SEV = { critical: "Critical", serious: "High", moderate: "Medium", minor: "Low" };
+    var DOT = " \\u00b7 ";
+    var fmtMetrics = function(m){
+      var out = [];
+      var sec = function(v){ return (v / 1000).toFixed(2) + " s"; };
+      if (m.lcpMs != null) out.push("LCP " + sec(m.lcpMs));
+      if (m.fcpMs != null) out.push("FCP " + sec(m.fcpMs));
+      if (m.ttfbMs != null) out.push("TTFB " + sec(m.ttfbMs));
+      if (m.cls != null) out.push("CLS " + m.cls);
+      if (m.transferKb != null) out.push(m.transferKb >= 1024 ? (m.transferKb / 1024).toFixed(1) + " MB" : m.transferKb + " KB");
+      if (m.requests != null) out.push(m.requests + " requests");
+      return out.join(DOT);
+    };
+    var auditFindings = audit.findings || [];
+    var total = auditFindings.length + (audit.truncated || 0);
+    var WCAG_NAMES = ${JSON.stringify(WCAG_CRITERIA)};
+    var SCORE_HOW = ${JSON.stringify(SCORE_EXPLANATION)};
+    var okScore = function(v){ return typeof v === "number" && isFinite(v) && v >= 0 && v <= 100; };
+    var band = function(v){ return v >= 90 ? "good" : v >= 50 ? "fair" : "poor"; };
+    var BAND = { good: "Good", fair: "Needs work", poor: "Poor" };
+    var sc = audit.score || {};
+    var SCAN = { full: "All checks", "auto-review": "Auto Review", accessibility: "Accessibility Audit", "performance-seo": "Performance & SEO" };
+    var headBits = [SCAN[audit.scan || "full"] || "Audit", total + (total === 1 ? " finding" : " findings")];
+    if (audit.viewport) headBits.push(audit.viewport.width + "\\u00d7" + audit.viewport.height);
+    if (audit.userAgentFamily) headBits.push(audit.userAgentFamily);
+    headBits.push(new Date(audit.scannedAt).toLocaleString());
+    var ah = '<div class="tb-vau-head">' + esc(headBits.join(DOT)) + '</div>';
+    if (okScore(sc.overall)) {
+      var ob = band(sc.overall);
+      ah += '<div class="tb-vau-score"><span class="tb-vau-score-n tb-vau-b-' + ob + '">' + esc(Math.round(sc.overall)) + '</span><div><b>' + esc(BAND[ob]) + '</b> <span class="tb-vau-muted">score out of 100, from the checks that ran</span>' +
+        '<details class="tb-vau-how"><summary>How is this calculated?</summary><div class="tb-vau-muted">' + esc(SCORE_HOW) + '</div></details></div></div>';
+    }
+    ah += '<div class="tb-vau-cats">' + audit.categories.map(function(c){
+      var state = !c.ran ? "Not run" : c.count === 0 ? "No findings" : c.count + " found";
+      var cs = sc.categories && sc.categories[c.name];
+      var pill = c.ran && okScore(cs) ? '<span class="tb-vau-pill tb-vau-b-' + band(cs) + '">' + esc(Math.round(cs)) + '</span> ' : '';
+      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + pill + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
+        (c.metrics && fmtMetrics(c.metrics) ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
+        (c.metrics && c.metrics.rulesChecked ? '<div class="tb-vau-l">' + esc(c.metrics.rulesPassed + " of " + c.metrics.rulesChecked + " rules passed") + (c.metrics.wcagCriteriaFailed ? esc(" · WCAG A/AA: " + c.metrics.wcagCriteriaFailed + " criteria fail") : "") + '</div>' : '') +
+        (c.limitation ? '<div class="tb-vau-l">' + esc(c.limitation) + '</div>' : '') + '</div>';
+    }).join("") + '</div>';
+    if (!auditFindings.length) {
+      ah += '<div class="tb-vempty-tab">No problems found in the checks that ran. That is not proof the page is accessible or bug-free.</div>';
+    }
+    auditFindings.forEach(function(f){
+      var ev = f.evidence || {};
+      var meta = [];
+      if (ev.metrics) Object.keys(ev.metrics).forEach(function(k){ meta.push(k + ": " + ev.metrics[k]); });
+      var wcag = (Array.isArray(f.wcag) ? f.wcag : []).filter(function(x){ return typeof x === "string" && WCAG_NAMES[x]; }).map(function(x){ return "WCAG " + x + " " + WCAG_NAMES[x]; }).join(DOT);
+      var help = (typeof f.helpUrl === "string" && f.helpUrl.indexOf("https://") === 0)
+        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">Learn more about this rule</a>' : '';
+      ah += '<div class="tb-vau-row"><span class="tb-vau-sev tb-vau-sev-' + esc(f.severity) + '">' + esc(SEV[f.severity] || f.severity) + '</span><div class="tb-vau-main">' +
+        '<div class="tb-vau-t">' + esc(f.title) + (f.occurrences > 1 ? ' <span class="tb-vau-muted">\\u00d7' + esc(f.occurrences) + '</span>' : '') + '</div>' +
+        '<div class="tb-vau-d">' + esc(f.description || "") + '</div>' +
+        (wcag ? '<div class="tb-vau-meta">' + esc(wcag) + '</div>' : '') +
+        (typeof f.fix === "string" && f.fix ? '<div class="tb-vau-fix"><b>How to fix:</b> ' + esc(f.fix) + '</div>' : '') +
+        (meta.length ? '<div class="tb-vau-meta">' + esc(meta.join(DOT)) + '</div>' : '') +
+        (ev.html ? '<pre class="tb-vau-html">' + esc(ev.html) + '</pre>' : '') +
+        '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
+        help + '</div></div>';
+    });
+    if (Array.isArray(audit.review) && audit.review.length) {
+      ah += '<details class="tb-vau-review"><summary><b>Needs a person to check</b> · ' + esc(audit.review.length) + ' rule(s) the automated checks couldn’t decide. Not failures, not scored.</summary>' +
+        audit.review.map(function(r){
+          var w = (Array.isArray(r.wcag) ? r.wcag : []).filter(function(x){ return typeof x === "string" && WCAG_NAMES[x]; }).map(function(x){ return "WCAG " + x + " " + WCAG_NAMES[x]; }).join(DOT);
+          return '<div class="tb-vau-rvrow"><div class="tb-vau-main"><div class="tb-vau-t">' + esc(r.title) + ' <span class="tb-vau-muted">×' + esc(r.count) + '</span></div>' +
+            (r.reason ? '<div class="tb-vau-d">' + esc(r.reason) + '</div>' : '') + (w ? '<div class="tb-vau-meta">' + esc(w) + '</div>' : '') +
+            '<div class="tb-vau-meta">' + (r.elements || []).map(function(e){ return e.selector ? '<code>' + esc(e.selector) + '</code>' : ''; }).filter(Boolean).join(DOT) + '</div></div></div>';
+        }).join("") + '</details>';
+    }
+    if (audit.truncated > 0) ah += '<div class="tb-vau-muted">' + esc(audit.truncated) + ' more not included (the file keeps the ' + esc(auditFindings.length) + ' most severe).</div>';
+    document.getElementById("panel-audit").innerHTML = ah;
+    var auditBtn = document.querySelector('[data-tab="audit"]');
+    if (auditBtn) auditBtn.removeAttribute("hidden");
+    setBadge("badge-audit", total);
+  }
+
   // Tab switching
   var tabButtons = document.querySelectorAll(".tb-vtab");
   var tabPanels = document.querySelectorAll(".tb-vpanel");
@@ -1189,6 +1415,8 @@ const REPLAY_RUNTIME = `(function(){
       if (d) d.remove();
     });
   });
+  // An audit export opens on its Audit tab.
+  if (data.audit && data.audit.categories) { var auditTab0 = document.querySelector('[data-tab="audit"]'); if (auditTab0) auditTab0.click(); }
 
   // ── Preview wiring ─────────────────────────────────────
   var img = document.getElementById("ssimg");
@@ -1320,23 +1548,26 @@ const REPLAY_RUNTIME = `(function(){
     }
   }
 
-  if (hasRrweb && data.rrwebEvents && data.rrwebEvents.length) {
-    mountRrwebPlayer();
-  } else if (hasRrweb && data.rrwebEventsGz) {
-    // Compressed stream: inflate off the raw base64, then mount. Cheap
-    // (~10ms for a few hundred KB) so no spinner; on failure fall back.
+  // Mount the DOM replay, inflating the compressed stream first if that is
+  // what was embedded (~10ms for a few hundred KB, so no spinner).
+  var domReplayMounted = false;
+  function startDomReplay(onFail) {
+    if (domReplayMounted) return;
+    domReplayMounted = true;
+    if (data.rrwebEvents && data.rrwebEvents.length) { mountRrwebPlayer(); return; }
     inflateRrweb(data.rrwebEventsGz).then(function (evs) {
       data.rrwebEvents = evs;
       mountRrwebPlayer();
     }).catch(function (e) {
       hasRrweb = false;
       if (typeof console !== "undefined") console.warn("[TraceBug] replay decompress failed:", e && e.message);
-      var pv = document.getElementById("preview-wrap"); if (pv) pv.style.display = "";
-      if (screenshots.length > 0) { img.src = screenshots[0].dataUrl; img.style.display = "block"; buildScreenshotGallery(); }
-      else { img.style.display = "none"; emptyMsg.style.display = "block"; }
+      onFail();
     });
-  } else if (hasVideo) {
-    // Show poster (best screenshot) + Play overlay; defer base64 decode.
+  }
+
+  // Video poster (best screenshot) + Play overlay; the base64 decode waits
+  // for the first play.
+  function showVideoPoster() {
     if (screenshots.length > 0) {
       img.src = screenshots[0].dataUrl;
       img.style.display = "block";
@@ -1351,6 +1582,69 @@ const REPLAY_RUNTIME = `(function(){
         playOverlaySub.textContent = [dur, sz].filter(Boolean).join(" · ");
       }
     }
+  }
+
+  // Both surfaces embedded: a two-way switch above them. The video stays the
+  // default because it is the only one with sound; the DOM replay mounts on
+  // first use.
+  function addSurfaceSwitch() {
+    var pv = document.getElementById("preview-wrap");
+    var rw = document.getElementById("rrweb-wrap");
+    if (!pv || !rw || !pv.parentNode) return;
+    var bar = document.createElement("div");
+    bar.className = "tb-vsurf";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Replay surface");
+    var bVideo = document.createElement("button");
+    var bDom = document.createElement("button");
+    bVideo.type = bDom.type = "button";
+    // The recorders pick an Opus mime only when the stream has an audio track
+    // (video-recorder.ts, offscreen.js), so the codec list says whether it has sound.
+    bVideo.textContent = /opus|mp4a|audio/i.test(data.video.mimeType || "") ? "Video with audio" : "Video";
+    bDom.textContent = "Page replay";
+    bar.appendChild(bVideo); bar.appendChild(bDom);
+    rw.parentNode.insertBefore(bar, rw);
+    function select(dom) {
+      bVideo.setAttribute("aria-pressed", dom ? "false" : "true");
+      bDom.setAttribute("aria-pressed", dom ? "true" : "false");
+    }
+    select(false);
+    bDom.addEventListener("click", function () {
+      try { video.pause(); } catch (_e) {}
+      select(true);
+      if (domReplayMounted) {
+        pv.style.display = "none";
+        rw.style.display = "block";
+        var sc = document.getElementById("scrubber"); if (sc) sc.style.display = "none";
+        return;
+      }
+      startDomReplay(function () {
+        // The replay could not load: back to the video, and drop the switch.
+        pv.style.display = "";
+        if (bar.parentNode) bar.parentNode.removeChild(bar);
+      });
+    });
+    bVideo.addEventListener("click", function () {
+      var rrPlay = document.getElementById("rr-play");
+      if (rrPlay && rrPlay.textContent !== "▶") rrPlay.click();
+      select(false);
+      rw.style.display = "none";
+      pv.style.display = "";
+      var sc = document.getElementById("scrubber"); if (sc) sc.style.display = "";
+    });
+  }
+
+  // A real screen recording comes first: the reporter chose to record it, and
+  // it is the only surface with sound. The DOM replay is then one click away.
+  if (hasVideo) {
+    showVideoPoster();
+    if (hasRrweb) addSurfaceSwitch();
+  } else if (hasRrweb) {
+    startDomReplay(function () {
+      var pv = document.getElementById("preview-wrap"); if (pv) pv.style.display = "";
+      if (screenshots.length > 0) { img.src = screenshots[0].dataUrl; img.style.display = "block"; buildScreenshotGallery(); }
+      else { img.style.display = "none"; emptyMsg.style.display = "block"; }
+    });
   } else if (screenshots.length > 0) {
     img.src = screenshots[0].dataUrl;
     img.style.display = "block";
@@ -1726,7 +2020,7 @@ const REPLAY_RUNTIME = `(function(){
     var btn = document.querySelector('[data-tab="' + which + '"]');
     if (btn) btn.click();
   }
-  var TAB_KEYS = ["info","console","network","actions","ai","events"];
+  var TAB_KEYS = ["info","console","network","actions","ai","events","audit"];
 
   document.addEventListener("keydown", function(e) {
     if (isTyping(e.target)) return;

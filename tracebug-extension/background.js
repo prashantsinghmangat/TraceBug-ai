@@ -401,6 +401,27 @@ async function injectStyles(tabId) {
  *  window.TraceBug, so a host page that embeds its own copy of the npm SDK
  *  (tracebug-sdk.js, page mode) never collides with the extension's.
  *  See docs/launch/sdk-isolation-1.11.2.md. */
+// Site Audit: axe-core is NOT in the injected SDK bundle (tsup stubs it, to keep
+// every page injection small). It is packaged as vendor/axe.min.js — the
+// library's own release file, copied unmodified by build-ext.mjs — and
+// injected into the page's MAIN world only when the user runs an audit, so the
+// page SDK finds it as `window.axe`. Same permissions as every other injection
+// (activeTab + scripting); extension-file injection is not subject to page CSP.
+// A failure is not fatal: the audit reports accessibility as "not run".
+async function injectAxe(tabId) {
+  try {
+    const [probe] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => !!(window.axe && typeof window.axe.run === "function"),
+    });
+    if (probe && probe.result) return;
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["vendor/axe.min.js"], world: "MAIN" });
+  } catch (err) {
+    console.warn("[TraceBug] Could not load the accessibility checker:", err && err.message);
+  }
+}
+
 async function injectPageWorld(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
@@ -609,10 +630,13 @@ async function handleComboAction(message, sender) {
     // viewport shot. Meaningless for other action types, same as the fields
     // above already are for theirs.
     crop: !!message.crop,
+    // Site Audit: which menu scan (plan §4a). Whitelisted again in the page.
+    scan: typeof message.scan === "string" ? message.scan : undefined,
   };
   if (!wasAlreadyInjected) {
     await new Promise((r) => setTimeout(r, 250));
   }
+  if (message.type === "TB_RUN_AUDIT") await injectAxe(tabId);
   // A capture now has an owner outside the page. The origin comes from the
   // page itself (tb:capture:started) because `tab.url` is normally undefined
   // without <all_urls> — see STATE.md — and a capture must not depend on a
@@ -988,6 +1012,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // async
   }
 
+  // The toolbar's Audit button (page world) asks for axe via the content script.
+  // Injects only into the sender's own tab, which TraceBug is already running in.
+  if (message.type === "TB_LOAD_AXE") {
+    const tabId = sender?.tab?.id;
+    if (!tabId) { sendResponse({ ok: false }); return true; }
+    injectAxe(tabId).then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
   // User turned TraceBug OFF from the floating toolbar (✕). Forget the tab so
   // it isn't re-injected on the next navigation. Hydration-await inside the
   // async block (sendResponse stays sync-safe via return true).
@@ -1011,7 +1044,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Each one: ensure the site is enabled, inject the SDK if needed, then
   // dispatch the matching action message to the page. Lets the popup
   // express user intent in a single call instead of a 3-step dance.
-  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT" || message.type === "TB_STOP_RECORDING") {
+  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT" || message.type === "TB_RUN_AUDIT" || message.type === "TB_STOP_RECORDING") {
     handleComboAction(message, sender)
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ error: (err && err.message) || String(err) }));
@@ -1365,6 +1398,9 @@ async function handleRecordingMessage(message, sender) {
   // only background.js has a real tab to target chrome.tabCapture.getMediaStreamId
   // at; an offscreen document has none. See docs/audit/capture-flow-1.11.3.md.
   const extraData = {};
+  if (message.type === "tb:rec:start" && message.data?.surfaceMode === "auto") {
+    message = { ...message, data: { ...message.data, surfaceMode: await preferredSurfaceMode() } };
+  }
   if (
     message.type === "tb:rec:start" &&
     message.data?.surfaceMode === "tab" &&
@@ -1956,6 +1992,24 @@ function hasHostAccess(pattern) {
  * All are ordinary fallback cases, not errors — the caller falls back to the
  * getDisplayMedia picker and the page says which reason applied.
  */
+/**
+ * The surface a recording started from the in-page toolbar ("auto") should
+ * use: the popup's stored Tab/Desktop choice, by the same rule as popup.js's
+ * resolveSurface — Tab unless the user picked Desktop, and Desktop wherever
+ * the build doesn't declare `tabCapture` (Firefox). Before this, the toolbar
+ * always asked for Desktop, so every toolbar recording opened the share
+ * picker even with Tab mode set up.
+ */
+async function preferredSurfaceMode() {
+  const tabDeclared = (chrome.runtime.getManifest().permissions || []).includes("tabCapture");
+  if (!tabDeclared) return "desktop";
+  let stored = {};
+  try { stored = (await localGet([RECORD_OPTS_KEY], {}))[RECORD_OPTS_KEY] || {}; } catch {}
+  const chosen = stored.surfaceSetBy === "user" || stored.surfaceMode === "tab";
+  if (!chosen) return "tab";
+  return stored.surfaceMode === "tab" ? "tab" : "desktop";
+}
+
 async function resolveTabCaptureStreamId(tabId) {
   const granted = await new Promise((resolve) => {
     try {

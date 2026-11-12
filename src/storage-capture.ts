@@ -24,6 +24,15 @@ const SENSITIVE_VALUE = /^(eyJ[A-Za-z0-9_-]{10,})|(sk-[A-Za-z0-9]{16,})|(gh[pous
 // They're about the SDK, not the app under test — pure noise in a bug report.
 const INTERNAL_KEY = /^tracebug[_-]/i;
 
+// Cookie values are opt-in (config.captureCookieValues): document.cookie holds
+// every non-HttpOnly cookie of the host, most of them unrelated to the bug.
+let _cookieValues = false;
+
+/** Set from TraceBug.init (captureCookieValues); reset on destroy. */
+export function setCookieValueCapture(on: boolean): void {
+  _cookieValues = on;
+}
+
 function maskValue(raw: string): string {
   if (!raw) return "";
   if (raw.length <= 8) return "[REDACTED]";
@@ -92,6 +101,10 @@ function readCookies(): { entries: StorageEntry[]; truncated: number } {
     if (INTERNAL_KEY.test(key)) continue;
     if (entries.length >= MAX_ENTRIES_PER_AREA) {
       truncated++;
+      continue;
+    }
+    if (!_cookieValues) {
+      entries.push({ key, value: "", valueOmitted: true });
       continue;
     }
     const sensitive = SENSITIVE_KEY.test(key) || SENSITIVE_VALUE.test(value) || isCustomSensitiveKey(key);

@@ -7,12 +7,12 @@
     "source": "github"
   },
   "websiteUrl": "https://tracebug.dev",
-  "version": "1.11.5",
+  "version": "1.12.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "tracebug",
-      "version": "1.11.5",
+      "version": "1.12.0",
       "transport": {
         "type": "stdio"
       },
@@ -26,7 +26,7 @@
         {
           "type": "named",
           "name": "--dir",
-          "description": "Directory containing TraceBug .html bug-report exports (defaults to the current working directory)",
+          "description": "Search only this folder for TraceBug .html exports. Without it, the server searches the project, Downloads and Desktop",
           "isRequired": false,
           "format": "string"
         }

@@ -147,7 +147,8 @@ function selectCommand(el) {
 }
 
 /**
- * Copy `npx tracebug mcp`. The clipboard needs a user gesture, which the click
+ * Copy the MCP setup command (`claude mcp add … tracebug mcp` — a bare
+ * `npx tracebug mcp` only waits on stdin). The clipboard needs a user gesture, which the click
  * is — but an extension page can still be refused it. When that happens the
  * text is selected instead, rather than the button claiming a copy that never
  * happened.

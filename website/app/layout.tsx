@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://tracebug.dev"),
   title: "TraceBug — Capture a browser bug, let AI fix it",
   description:
-    "Capture a browser bug into one offline .html file your AI coding agent reads over MCP and fixes — Claude Code, Cursor, Windsurf. Session replay, console errors, network, and a generated failing test. Free, local-first, zero backend.",
+    "Capture a browser bug in one offline file your AI coding agent reads over MCP and fixes: replay, console errors, network. Free, local-first, no backend.",
   applicationName: "TraceBug",
   // Note: Google ignores meta keywords (since 2009). Kept aligned with the
   // positioning for minor Bing use and self-documentation — the real ranking

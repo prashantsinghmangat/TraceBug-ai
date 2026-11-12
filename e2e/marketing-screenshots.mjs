@@ -1,5 +1,5 @@
 // Run: npm run build:ext && node e2e/marketing-screenshots.mjs
-// Generates real product screenshots into D:/tmp/tracebug-shots/:
+// Generates real product screenshots into assets/screenshots/product/ (gitignored):
 //   Part 1-3  the originals: the exported .html report viewer (replay + each
 //             evidence tab) and try.html with the Quick Bug modal open
 //   Part 4    store-ready ELEMENT CROPS from a real video-recording session —
@@ -14,7 +14,7 @@ import { createServer } from "node:http";
 import { join, extname } from "node:path";
 import { withGrantedHostAccess } from "./ext-host-access.mjs";
 
-const OUT = "D:/tmp/tracebug-shots";
+const OUT = "D:/Project/TraceBug-ai/assets/screenshots/product";
 mkdirSync(OUT, { recursive: true });
 
 const REPORT = "D:/Project/TraceBug-ai/demo-bug-reports/tracebug-replay-93e6615d-2026-07-19T08-07-00.html";
@@ -483,7 +483,7 @@ if (!existsSync(join(EXT_DIR, "manifest.json"))) {
 const EXT_GRANTED = withGrantedHostAccess(EXT_DIR, "marketing");
 server = await servePublic(4173);
 
-const USER_DATA = join(OUT, ".chrome-profile");
+const USER_DATA = "D:/Project/TraceBug-ai/e2e/output/marketing-chrome-profile";
 try { rmSync(USER_DATA, { recursive: true, force: true }); } catch {}
 
 extCtx = await chromium.launchPersistentContext(USER_DATA, {
@@ -556,6 +556,44 @@ await (await must(popup, "#captureOptsToggle", "Capture Bug options chevron")).c
 await (await must(popup, "#pillEventsVideo", "Events + Video option")).click();
 await popup.waitForTimeout(600);
 await cropEl(popup, ".popup", "popup-record.png", "popup with record options open");
+
+// The same panel as Firefox shows it. The popup decides "Tab mode exists" by
+// whether the manifest declares tabCapture (popup.js TAB_CAPTURE_DECLARED) —
+// the one difference between the two builds — so a manifest without it renders
+// exactly the Firefox layout (Desktop only, no Tab | Desktop switch). The
+// Firefox build itself can't be loaded into Chromium.
+const ffPopup = await extCtx.newPage();
+await ffPopup.setViewportSize({ width: 460, height: 840 });
+await ffPopup.addInitScript((tab) => {
+  // Synchronous first: popup.js reads the manifest at the top level, so the
+  // patch must be in place before any page script runs.
+  if (globalThis.chrome && chrome.runtime && chrome.runtime.getManifest) {
+    const gm = chrome.runtime.getManifest.bind(chrome.runtime);
+    chrome.runtime.getManifest = () => {
+      const m = gm();
+      return { ...m, permissions: (m.permissions || []).filter((p) => p !== "tabCapture" && p !== "offscreen") };
+    };
+  }
+  const wait = setInterval(() => {
+    if (!globalThis.chrome || !chrome.tabs || !chrome.tabs.query || !chrome.runtime) return;
+    clearInterval(wait);
+    const orig = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = (info, cb) => {
+      if (info && info.active && info.currentWindow) {
+        if (cb) { cb([tab]); return undefined; }
+        return Promise.resolve([tab]);
+      }
+      return orig(info, cb);
+    };
+  }, 1);
+}, realTab);
+await ffPopup.goto(`chrome-extension://${extId}/popup.html`, { waitUntil: "load" });
+await ffPopup.waitForTimeout(2500);
+await must(ffPopup, "#mainContent", "Firefox-layout popup main content");
+await (await must(ffPopup, "#captureOptsToggle", "Capture Bug options chevron (Firefox layout)")).click();
+await (await must(ffPopup, "#pillEventsVideo", "Events + Video option (Firefox layout)")).click();
+await ffPopup.waitForTimeout(600);
+await cropEl(ffPopup, ".popup", "popup-record-firefox.png", "popup with record options open, Firefox layout");
 
 } finally {
   console.log("\nStore crops written (" + written.length + "):");

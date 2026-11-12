@@ -20,13 +20,15 @@ import { getVoiceTranscripts } from "./voice-recorder";
 import { getLastVideoRecording, type VideoRecording } from "./video-recorder";
 import { getCurrentContext } from "./dev-api";
 import { matchErrorPattern, formatPatternMatch } from "./patterns";
-import { generateBugTitle } from "./title-generator";
+import { generateBugTitle, firstFailureIndex } from "./title-generator";
 import { buildTimeline } from "./timeline-builder";
 import { generateReproSteps } from "./repro-generator";
 import { dedupeNetworkRows } from "./network-dedupe";
+import { isFailedRequest } from "./request-status";
+import { summarizeEvidence } from "./evidence-summary";
 import { getNetworkFailures } from "./collectors";
 import { buildActionChips } from "./action-chips";
-import { isNoiseRequest, shortDisplayPath } from "./url-hygiene";
+import { isNoiseRequest, isBrowserFavicon, shortDisplayPath } from "./url-hygiene";
 import { getElementAnnotations } from "./annotation-store";
 import { getStashedDomReplay } from "./rrweb-recorder";
 import { runReportPlugins } from "./plugin-system";
@@ -63,12 +65,11 @@ export function getSessionVideo(session: StoredSession | null | undefined): Vide
  * field empty. Phase 4 made events-only the popup's default capture, so this
  * is the common case now, not an edge one.
  *
- * Why reuse `report.video` rather than add a field: every export path already
- * prefers the rrweb branch and drops the video when `rrwebEvents` is present
- * (`html-replay.ts` resolves `includeVideo = hasRrweb ? false : !!report.video`),
- * so a replay-only object flows through the existing branches untouched and no
- * `video` key reaches the payload. Consumers that mean *actual video* check
- * `dataUrl`, not the object's presence.
+ * Why reuse `report.video` rather than add a field: the .html exporter embeds
+ * a video only when it has a real `dataUrl`/`url` (`html-replay.ts`,
+ * `hasRealVideo`), so a replay-only object flows through the existing branches
+ * untouched and no `video` key reaches the payload. Consumers that mean
+ * *actual video* check `dataUrl`, not the object's presence.
  *
  * Deliberately NOT stashed into video-recorder's `_lastRecording`: the ticket
  * modal reads `getSessionVideo()` directly and would render a `<video>` with an
@@ -124,7 +125,7 @@ export function buildReport(
   session: StoredSession,
   extraScreenshots?: ScreenshotData[]
 ): BugReport {
-  const environment = session.environment || captureEnvironment();
+  let environment = session.environment || captureEnvironment();
 
   // Anchor the report to the actual capture moment, then drop events from long
   // before it. A session reused after a long idle gap (hours later) would
@@ -141,13 +142,30 @@ export function buildReport(
   );
   const events = trimStaleEvents(session.events, captureTs);
 
-  // Generate repro steps if not already present
-  let steps = session.reproSteps || "";
-  if (!steps && events.length > 0) {
+  // The page the bug happened on, not the one the capture started on: a bug
+  // two navigations in was reported under the landing page's URL. The page of
+  // the first failure, else of the last event; the start page is kept.
+  const _bugIdx = firstFailureIndex(events);
+  const bugPage = (_bugIdx >= 0 ? events[_bugIdx] : events[events.length - 1])?.page;
+  if (bugPage && environment.url) {
+    try {
+      const start = new URL(environment.url);
+      if (start.pathname !== bugPage) {
+        environment = { ...environment, url: start.origin + bugPage, startUrl: environment.url };
+      }
+    } catch { /* unparseable start URL — leave it */ }
+  }
+
+  // Repro steps from this session's events, every time. The copy stored at
+  // the first error was frozen then, and could be built before the newest
+  // events were written — missing the click that caused the bug.
+  let steps = "";
+  if (events.length > 0) {
     const errorMsg = session.errorMessage || "Issue reported by tester";
     const result = generateReproSteps(events, errorMsg, session.errorStack || undefined);
     steps = result.reproSteps;
   }
+  if (!steps) steps = session.reproSteps || "";
 
   // Collect console errors (deduplicated by message). Errors only — used by
   // GitHub/Jira/markdown exports + the root-cause + severity rules.
@@ -216,10 +234,18 @@ export function buildReport(
       source: e.data.request?.source as string | undefined,
       initiatorType: e.data.request?.initiatorType as string | undefined,
       startedAt: e.data.request?.startedAt as number | undefined,
+      ...(e.data.request?.aborted ? { aborted: true } : {}),
+      ...(e.data.request?.opaque ? { opaque: true } : {}),
+      // Persisted failure snippet (attachResponseSnippet) — survives reloads.
+      ...(typeof e.data.request?.response === "string" && e.data.request.response
+        ? { response: e.data.request.response as string } : {}),
     }));
   const pageUrl = session.environment?.url || (typeof location !== "undefined" ? location.href : undefined);
   const networkRequests: import("./types").NetworkRequestEntry[] = dedupeNetworkRows(networkRows, { baseUrl: pageUrl })
-    .map(({ source: _s, initiatorType: _i, startedAt: _st, ...row }) => row);
+    // `source` is dropped here, so a status-0 timing row keeps what it meant:
+    // the status is unknown, not that the request failed (request-status.ts).
+    .map(({ source, initiatorType: _i, startedAt: _st, ...row }) =>
+      source === "resource-timing" && row.status === 0 ? { ...row, statusUnknown: true } : row);
 
   // Enrich failed requests in `networkRequests` with response snippets from the
   // in-memory failure buffer (last 10 only; snippets not persisted).
@@ -229,7 +255,7 @@ export function buildReport(
   const sessionStart = events[0]?.timestamp ?? (captureTs || session.createdAt || 0);
   const buffer = getNetworkFailures().filter(b => b.timestamp >= sessionStart);
   for (const entry of networkRequests) {
-    if (entry.status < 400 && entry.status !== 0) continue;
+    if (!isFailedRequest(entry)) continue;
     const match = buffer.find(
       b =>
         b.url === entry.url &&
@@ -237,7 +263,7 @@ export function buildReport(
         b.status === entry.status &&
         Math.abs(b.timestamp - entry.timestamp) < 5000
     );
-    if (match && match.response) entry.response = match.response;
+    if (match && match.response && !entry.response) entry.response = match.response;
   }
 
   // If an in-memory failure wasn't yet persisted to events (race on async body
@@ -259,15 +285,17 @@ export function buildReport(
   }
 
   // Failure-only subset used by GitHub/Jira/markdown exports + root-cause logic.
+  // The browser's own /favicon.ico request is not the app's: its 404 stays in
+  // the Network tab but is never counted as one of the report's failures.
   const networkErrors: NetworkErrorEntry[] = networkRequests
-    .filter(r => r.status >= 400 || r.status === 0)
+    .filter(r => isFailedRequest(r) && !isBrowserFavicon(r.url))
     .map(r => ({ ...r }));
 
   // Screenshots from memory + any extras
   const screenshots = [...getScreenshots(), ...(extraScreenshots || [])];
 
   // Timeline
-  const timeline = buildTimeline(events);
+  const timeline = buildTimeline(events, { baseUrl: pageUrl });
 
   // Voice transcripts from memory
   const voiceTranscripts = getVoiceTranscripts();
@@ -314,7 +342,9 @@ export function buildReport(
     rootCause: { hint: "", confidence: "low" },
     severity: "low",
     priority: "low",
-    storage: captureStorageSnapshot(),
+    // The snapshot from the first error / stop when there is one; a live read
+    // otherwise (a report built while still capturing).
+    storage: session.storageSnapshot || captureStorageSnapshot(),
     annotations: session.annotations || [],
     // Element-level markup (annotate/inspect) with computed-style evidence.
     elementAnnotations: safeElementAnnotations(),
@@ -330,6 +360,9 @@ export function buildReport(
   };
 
   report.summary = generateSmartSummary(report);
+  // Before the hint: "no errors captured" is only a clean bill when the
+  // capture was complete (nothing evicted, console capture on).
+  report.evidence = summarizeEvidence(report);
   report.rootCause = generateRootCauseHint(report);
   report.severity = determineSeverity(report);
   // Priority is the tester's call; default it from severity when unset.
@@ -511,7 +544,10 @@ function describeStep(ev: TraceBugEvent): string | null {
 // and in downstream export formats (GitHub / Jira).
 
 export function extractClickedElement(events: TraceBugEvent[]): ClickedElementSummary | null {
-  for (let i = events.length - 1; i >= 0; i--) {
+  // The click that led to the first failure, not the session's last click —
+  // the summary and root-cause hint name this element ("thrown when clicking …").
+  const failure = firstFailureIndex(events);
+  for (let i = failure >= 0 ? failure : events.length - 1; i >= 0; i--) {
     const ev = events[i];
     if (ev.type !== "click") continue;
     const el = ev.data.element || {};
@@ -536,6 +572,10 @@ export function extractClickedElement(events: TraceBugEvent[]): ClickedElementSu
 //   LOW    → only a click / fallback
 
 const RC_LABEL_MAX = 40;
+
+/** The root-cause hint's opening when nothing failed — also how the MCP
+ *  investigation guide and the AI prompt recognize a no-failure report. */
+export const NO_FAILURE_HINT = "No errors or failed requests were captured";
 
 /**
  * Produce a best-guess cause for the bug. Runs in O(1) on report fields
@@ -583,27 +623,40 @@ export function generateRootCauseHint(report: BugReport): RootCauseHint {
   }
 
   // ── LOW confidence ── Click with no error / network signal ──────────────
+  // Say what was (not) captured; never guess a cause. "Click on X did not
+  // trigger any observable effect" used to be asserted here without checking
+  // anything — a playground run showed it right after the click visibly placed
+  // an order. No captured error does not mean no bug (a wrong total throws
+  // nothing), so the reader is pointed at the description instead.
+  // An incomplete capture (events evicted, console capture off) can't vouch
+  // for "nothing failed" — say why, so the gap isn't read as a clean session.
+  const caveat = report.evidence && !report.evidence.complete
+    ? ` The capture is incomplete (${incompleteReason(report)}), so an error may have been missed.`
+    : "";
   if (click) {
-    // "Did not trigger any observable effect" is a real diagnosis for a dead
-    // button — but a link click navigates (on MPAs it unloads the page), so
-    // claiming "no effect" there is false. Links get honest phrasing instead.
-    if ((click.tag || "").toLowerCase() === "a") {
-      return {
-        hint: `No errors captured — last action was clicking the link '${clickLabel(click)}' (navigation)`,
-        confidence: "low",
-      };
-    }
+    const what = (click.tag || "").toLowerCase() === "a"
+      ? `clicking the link '${clickLabel(click)}' (navigation)`
+      : `clicking '${clickLabel(click)}'`;
     return {
-      hint: `Click on '${clickLabel(click)}' did not trigger any observable effect`,
+      hint: `${NO_FAILURE_HINT} — last action was ${what}.${caveat} If something looked wrong, the reporter's description says what was expected.`,
       confidence: "low",
     };
   }
 
   // No actionable signal at all
   return {
-    hint: "Not enough signal captured to suggest a likely cause",
+    hint: `${NO_FAILURE_HINT}.${caveat} If something looked wrong, the reporter's description says what was expected.`,
     confidence: "low",
   };
+}
+
+/** Why a capture's evidence is incomplete, in a few words (see EvidenceSummary.complete). */
+export function incompleteReason(report: BugReport): string {
+  const reasons: string[] = [];
+  const evicted = report.session?.droppedEvents || 0;
+  if (evicted > 0) reasons.push(`${evicted} earliest event${evicted === 1 ? "" : "s"} dropped`);
+  if (report.session?.consoleLevel === "none") reasons.push("console capture was off");
+  return reasons.join(", ");
 }
 
 /**

@@ -21,6 +21,9 @@ const MAX_TARGET_LEN = 40;
 const RAGE_WINDOW_MS = 1500;
 const RAGE_MIN_CLICKS = 3;
 const DEAD_RESPONSE_WINDOW_MS = 1500;
+/** A re-click on the same element within this long (and after the response
+ *  window) reads as "that didn't work, try again". */
+const DEAD_RETRY_WINDOW_MS = 8000;
 
 // Attribute priority — top of the list wins inline space. Anything outside
 // this list collapses into `moreCount`.
@@ -216,19 +219,20 @@ function detectFrustration(events: TraceBugEvent[]): FrustrationMap {
     if (count >= RAGE_MIN_CLICKS) map.set(i, "rage");
   }
 
-  // Dead clicks: a click followed by no DOM-changing event within
-  // DEAD_RESPONSE_WINDOW_MS. Lightweight version — counts as "dead" if the
-  // next event is more than the threshold away or doesn't exist, except
-  // for the last event in the session (we can't know if it was responsive
-  // since the session ended).
-  for (let i = 0; i < events.length; i++) {
+  // Dead clicks: the user clicked the same element again shortly after, with
+  // nothing captured in between — the visible sign that the first click
+  // seemed to do nothing. DOM changes are not events here, so a gap before the
+  // NEXT event (the old rule) said nothing about the page: a pause to read a
+  // toast flagged a working button as dead, and the MCP guide then sent the
+  // agent after "where the user got stuck".
+  for (let i = 0; i < events.length - 1; i++) {
     if (events[i].type !== "click") continue;
     if (map.get(i) === "rage") continue; // rage already captured
-    if (i === events.length - 1) continue; // can't judge the last event
+    const sel = events[i].data?.element?.selector || "";
     const next = events[i + 1];
-    if (next.timestamp - events[i].timestamp > DEAD_RESPONSE_WINDOW_MS) {
-      map.set(i, "dead");
-    }
+    if (!sel || next.type !== "click" || (next.data?.element?.selector || "") !== sel) continue;
+    const gap = next.timestamp - events[i].timestamp;
+    if (gap > DEAD_RESPONSE_WINDOW_MS && gap <= DEAD_RETRY_WINDOW_MS) map.set(i, "dead");
   }
 
   // Form abandonment: input event(s) on a form followed by route_change

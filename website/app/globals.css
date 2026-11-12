@@ -27,8 +27,8 @@
   --cta: 255 92 108;            /* #FF5C6C coral buttons, ink text  */
   --on-cta: 11 13 20;
   --success: 22 163 74;         /* #16A34A                          */
-  --error: 220 38 38;           /* #DC2626                          */
-  --warning: 180 83 9;          /* #B45309                          */
+  --error: 211 36 36;           /* #D32424 — 4.7:1 on its own 5% tint (was #DC2626, 4.38) */
+  --warning: 168 78 8;          /* #A84E08 — 4.7:1 on its own 10% tint (was #B45309, 4.24) */
   --text-primary: 11 13 20;     /* #0B0D14 ink (the midnight page)  */
   --text-muted: 75 85 101;      /* #4B5565 secondary                */
   --text-subtle: 103 112 130;   /* #677082 muted (≈4.6:1)           */
@@ -103,6 +103,9 @@ body {
   scroll-behavior: smooth;
   text-rendering: optimizeLegibility;
 }
+
+/* Keep keyboard-focused and #anchor targets clear of the 64px fixed navbar (WCAG 2.4.11). */
+html { scroll-padding-top: 72px; }
 
 a { color: inherit; text-decoration: none; }
 

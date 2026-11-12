@@ -1,0 +1,86 @@
+// ── Evidence from a DOM element ────────────────────────────────────────────
+// What an agent needs to find the element in source: a short HTML snippet, its
+// visible text, and grep-able hints (id, data-testid, aria-label, stable class
+// names, text). buildAuditRun redacts and bounds all of it afterwards; this
+// only gathers, and keeps the raw strings short so huge containers don't
+// allocate megabytes on the way.
+
+import type { AuditEvidence } from "../../types";
+
+const RAW_HTML_LIMIT = 1200;
+
+/** The element's opening tag plus the start of its content — never the whole subtree. */
+export function htmlSnippet(el: Element): string {
+  const outer = el.outerHTML || "";
+  return outer.length > RAW_HTML_LIMIT ? outer.slice(0, RAW_HTML_LIMIT) : outer;
+}
+
+export function visibleText(el: Element): string {
+  const t = (el as HTMLElement).innerText ?? el.textContent ?? "";
+  return t.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
+// Generated class names are useless for grepping source (they don't appear in it).
+const GENERATED = /^(css|sc|jsx|svelte|emotion)-|__[a-z0-9]{4,}$|^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i;
+
+export function elementEvidence(el: Element, extra?: Partial<AuditEvidence>): AuditEvidence {
+  const hints: string[] = [];
+  if (el.id) hints.push("#" + el.id);
+  for (const attr of ["data-testid", "data-test-id", "data-cy", "name", "aria-label"]) {
+    const v = el.getAttribute(attr);
+    if (v) hints.push(`${attr}="${v}"`);
+  }
+  const classes = Array.from(el.classList).filter((c) => !GENERATED.test(c)).slice(0, 3);
+  for (const c of classes) hints.push("." + c);
+  const text = visibleText(el);
+  if (text) hints.push(text.slice(0, 40));
+  return { html: htmlSnippet(el), text, hints, ...extra };
+}
+
+/** Computed style from the element's own window (works for elements in a same-origin frame). */
+export function styleOf(el: Element): CSSStyleDeclaration {
+  return (el.ownerDocument.defaultView || window).getComputedStyle(el);
+}
+
+/** True for TraceBug's own UI, which every audit must ignore. */
+export function isTraceBugUi(el: Element): boolean {
+  return !!el.closest("#tracebug-root, [id^='tracebug-']");
+}
+
+/**
+ * Hidden on purpose for sighted users but kept for screen readers or for focus:
+ * the "sr-only" box (≤ 2px), clip / clip-path, text pushed away with text-indent,
+ * or positioned far off-screen (skip links). Checked on the element and its
+ * nearest ancestors. Findings about how such text LOOKS are noise.
+ */
+export function isVisuallyHidden(el: Element, depth = 6): boolean {
+  let n: Element | null = el;
+  for (let i = 0; n && i < depth && n !== el.ownerDocument.body; i++, n = n.parentElement) {
+    const r = n.getBoundingClientRect();
+    const cs = styleOf(n);
+    if ((r.width <= 2 || r.height <= 2) && (cs.overflow !== "visible" || cs.position === "absolute")) return true;
+    if (cs.clip && cs.clip !== "auto") return true;
+    if (cs.clipPath && /inset\((50|100)%/.test(cs.clipPath)) return true;
+    if (parseFloat(cs.textIndent) <= -999) return true;
+    if (cs.position === "absolute" || cs.position === "fixed") {
+      if (r.right < -100 || r.bottom < -100 || r.left > (n.ownerDocument.defaultView || window).innerWidth + 2000) return true;
+    }
+  }
+  return false;
+}
+
+/** Rendered and on screen in the layout sense: has a box, not display:none / visibility:hidden. */
+export function isRendered(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return false;
+  // Invisible because of an ANCESTOR too: a closed mega-menu is often a container at opacity 0
+  // whose links are still laid out (Shopify). Nobody can see or click those.
+  const check = (el as Element & { checkVisibility?: (o?: Record<string, boolean>) => boolean }).checkVisibility;
+  if (typeof check === "function") return check.call(el, { opacityProperty: true, visibilityProperty: true });
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    const cs = styleOf(n);
+    if (cs.display === "none" || cs.opacity === "0") return false;
+    if (n === el && (cs.visibility === "hidden" || cs.visibility === "collapse")) return false;
+  }
+  return true;
+}
