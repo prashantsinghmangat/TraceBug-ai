@@ -244,8 +244,24 @@ export function mountCompactToolbar(
     }
   } catch {}
 
-  // View saved tickets — opens the offline Saved Tickets popover.
+  // Site Audit — opens the docked audit panel (or closes it). The panel stays
+  // open while the user locates findings on the page, so the list is never
+  // more than a glance away. Loaded on demand.
   toolbar.appendChild(_divider());
+  const auditBtn = _createToolbarBtn(
+    "Site audit — accessibility, layout, performance, SEO",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+    () => {
+      // The panel keeps this button's pressed state in step (audit-panel.ts syncToolbarButton).
+      void import("./ui/audit-panel").then((m) => m.toggleAuditPanel(root))
+        .catch(() => showToast("The audit could not start on this page", root));
+    },
+    "tracebug-toolbar-audit-btn"
+  );
+  auditBtn.setAttribute("aria-pressed", "false");
+  toolbar.appendChild(auditBtn);
+
+  // View saved tickets — opens the offline Saved Tickets popover.
   toolbar.appendChild(_createToolbarBtn(
     "Saved tickets",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,

@@ -98,7 +98,11 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
           limitation += " The keyboard checks failed on this page.";
         }
       }
-      categories.accessibility = { ran: a11y.ran, limitation };
+      const hidden = a11y.transparentText ?? 0;
+      if (a11y.ran && hidden > 0) {
+        limitation += ` ${hidden} piece${hidden === 1 ? "" : "s"} of text ${hidden === 1 ? "was" : "were"} invisible (opacity 0) when checked — usually content that fades in when you scroll — and could not be checked. Scroll through the page, then re-run.`;
+      }
+      categories.accessibility = { ran: a11y.ran, limitation, ...(a11y.ran && hidden > 0 ? { metrics: { transparentText: hidden } } : {}) };
     }
     await guard("ui", detectUiFindings);
     if (wanted.has("performance")) {

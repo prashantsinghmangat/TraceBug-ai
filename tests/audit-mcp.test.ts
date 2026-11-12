@@ -307,3 +307,36 @@ describe('hint search on real evidence', () => {
     expect(r[2].matches).toEqual(['components/Checkout.tsx:3']);
   });
 });
+
+describe('1.12.0: score, WCAG criteria and fix text', () => {
+  it('get_audit returns the stored scores with the formula; categories that did not run have none', () => {
+    const out = parse(callTool(dir, 'get_audit', { file: 'tracebug-audit-before.html' }));
+    // accessibility: serious 10 + critical 20 → 70 · performance: moderate 5 → 95 · seo not run
+    // overall pools both: 100 − 35 = 65
+    expect(out.score).toMatchObject({ overall: 65, band: 'fair', categories: { accessibility: 70, performance: 95 } });
+    expect(out.score.categories.seo).toBeUndefined();
+    expect(out.score.howCalculated).toMatch(/critical 20, serious 10, moderate 5, minor 2/);
+  });
+
+  it('get_finding puts known WCAG criteria outside untrusted and the fix inside it', () => {
+    const withFix = finding({
+      id: 'w1', category: 'accessibility', ruleId: 'color-contrast', selector: '#price',
+      wcag: ['1.4.3', '<b>bogus</b>'] as string[], fix: `Change the text colour from #b45309 to #a54c08. ${INJECTION}`,
+    });
+    const run = buildAuditRun([withFix], { ...CTX, now: 9_000, id: 'wcag' });
+    run.findings[0].wcag = ['1.4.3', '<b>bogus</b>']; // as a tampered export would carry it
+    writeExport('tracebug-audit-wcag.html', run);
+    const out = parse(callTool(dir, 'get_finding', { file: 'tracebug-audit-wcag.html', findingId: run.findings[0].id }));
+    expect(out.wcag).toEqual(['1.4.3 Contrast (Minimum)']);
+    expect(out.untrusted.fix).toContain('#a54c08');
+    const { untrusted: _u, ...outside } = out;
+    expect(JSON.stringify(outside)).not.toContain(INJECTION);
+  });
+
+  it('an export from before 1.12.0 (no score) reports score: null', () => {
+    const old = buildAuditRun([missingAlt], { ...CTX, now: 9_500, id: 'old' });
+    delete (old as { score?: unknown }).score;
+    writeExport('tracebug-audit-old.html', old);
+    expect(parse(callTool(dir, 'get_audit', { file: 'tracebug-audit-old.html' })).score).toBeNull();
+  });
+});

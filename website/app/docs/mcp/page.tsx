@@ -432,11 +432,11 @@ export default function McpDocsPage() {
                 },
                 {
                   sig: "get_audit",
-                  desc: "The Site Audit in an audit export: which checks ran (accessibility, layout, performance, SEO, runtime) with their limitations and page metrics, plus the findings. A check that didn't run is never reported as a pass.",
+                  desc: "The Site Audit in an audit export: which checks ran (accessibility, layout, performance, SEO, runtime) with their limitations and page metrics, 0–100 scores with their formula, plus the findings. A check that didn't run is never reported as a pass.",
                 },
                 {
                   sig: "get_finding",
-                  desc: "One audit finding in full: bounded HTML and visible-text evidence, metrics, help link and hints to search your codebase for. Pass searchDir for a literal search.",
+                  desc: "One audit finding in full: bounded HTML and visible-text evidence, metrics, its WCAG criteria, a suggested fix, help link and hints to search your codebase for. Pass searchDir for a literal search.",
                 },
                 {
                   sig: "compare_audits",

@@ -20609,7 +20609,7 @@ var TraceBugExtensionModule = (() => {
     const i2 = _events2.findIndex((ev) => ev.id === evtId);
     if (i2 >= 0) _events2.splice(i2, 1);
   }
-  function activateBlurMode(_root4, onExit) {
+  function activateBlurMode(_root5, onExit) {
     if (_active) return;
     _active = true;
     _onExit = onExit || null;
@@ -25752,7 +25752,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       _cleanup2 = null;
     }
   }
-  function _createToolbar(_root4) {
+  function _createToolbar(_root5) {
     const bar = document.createElement("div");
     bar.id = "tracebug-draw-toolbar";
     bar.dataset.tracebug = "draw-toolbar";
@@ -26331,6 +26331,133 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
     }
   });
 
+  // src/audit/wcag.ts
+  function wcagFromAxeTags(tags) {
+    const out = [];
+    for (const t2 of tags || []) {
+      const m = /^wcag(\d)(\d)(\d{1,2})$/.exec(t2);
+      if (!m) continue;
+      const sc = `${m[1]}.${m[2]}.${m[3]}`;
+      if (WCAG_CRITERIA[sc] && !out.includes(sc)) out.push(sc);
+    }
+    return out;
+  }
+  function wcagLabel(sc) {
+    return WCAG_CRITERIA[sc] ? `${sc} ${WCAG_CRITERIA[sc]}` : sc;
+  }
+  function cleanWcag(list) {
+    if (!Array.isArray(list)) return void 0;
+    const out = list.filter((s2) => typeof s2 === "string" && Object.prototype.hasOwnProperty.call(WCAG_CRITERIA, s2));
+    return out.length ? [...new Set(out)].slice(0, 4) : void 0;
+  }
+  var WCAG_CRITERIA;
+  var init_wcag = __esm({
+    "src/audit/wcag.ts"() {
+      "use strict";
+      WCAG_CRITERIA = {
+        "1.1.1": "Non-text Content",
+        "1.2.1": "Audio-only and Video-only (Prerecorded)",
+        "1.2.2": "Captions (Prerecorded)",
+        "1.2.3": "Audio Description or Media Alternative (Prerecorded)",
+        "1.2.4": "Captions (Live)",
+        "1.2.5": "Audio Description (Prerecorded)",
+        "1.3.1": "Info and Relationships",
+        "1.3.2": "Meaningful Sequence",
+        "1.3.3": "Sensory Characteristics",
+        "1.3.4": "Orientation",
+        "1.3.5": "Identify Input Purpose",
+        "1.4.1": "Use of Color",
+        "1.4.2": "Audio Control",
+        "1.4.3": "Contrast (Minimum)",
+        "1.4.4": "Resize Text",
+        "1.4.5": "Images of Text",
+        "1.4.10": "Reflow",
+        "1.4.11": "Non-text Contrast",
+        "1.4.12": "Text Spacing",
+        "1.4.13": "Content on Hover or Focus",
+        "2.1.1": "Keyboard",
+        "2.1.2": "No Keyboard Trap",
+        "2.1.4": "Character Key Shortcuts",
+        "2.2.1": "Timing Adjustable",
+        "2.2.2": "Pause, Stop, Hide",
+        "2.3.1": "Three Flashes or Below Threshold",
+        "2.4.1": "Bypass Blocks",
+        "2.4.2": "Page Titled",
+        "2.4.3": "Focus Order",
+        "2.4.4": "Link Purpose (In Context)",
+        "2.4.5": "Multiple Ways",
+        "2.4.6": "Headings and Labels",
+        "2.4.7": "Focus Visible",
+        "2.4.11": "Focus Not Obscured (Minimum)",
+        "2.5.1": "Pointer Gestures",
+        "2.5.2": "Pointer Cancellation",
+        "2.5.3": "Label in Name",
+        "2.5.4": "Motion Actuation",
+        "2.5.7": "Dragging Movements",
+        "2.5.8": "Target Size (Minimum)",
+        "3.1.1": "Language of Page",
+        "3.1.2": "Language of Parts",
+        "3.2.1": "On Focus",
+        "3.2.2": "On Input",
+        "3.2.3": "Consistent Navigation",
+        "3.2.4": "Consistent Identification",
+        "3.2.6": "Consistent Help",
+        "3.3.1": "Error Identification",
+        "3.3.2": "Labels or Instructions",
+        "3.3.3": "Error Suggestion",
+        "3.3.4": "Error Prevention (Legal, Financial, Data)",
+        "3.3.7": "Redundant Entry",
+        "3.3.8": "Accessible Authentication (Minimum)",
+        "4.1.1": "Parsing",
+        "4.1.2": "Name, Role, Value",
+        "4.1.3": "Status Messages"
+      };
+    }
+  });
+
+  // src/audit/score.ts
+  function scoreBand(score) {
+    return score >= 90 ? "good" : score >= 50 ? "fair" : "poor";
+  }
+  function scoreCategory(findings) {
+    var _a2;
+    const byRule = /* @__PURE__ */ new Map();
+    for (const f2 of findings) {
+      const key = f2.ruleId || "unknown";
+      const n2 = Math.max(1, (_a2 = f2.occurrences) != null ? _a2 : 1);
+      const cur = byRule.get(key);
+      if (!cur) byRule.set(key, { sev: f2.severity, elements: n2 });
+      else {
+        cur.elements += n2;
+        if (RANK[f2.severity] < RANK[cur.sev]) cur.sev = f2.severity;
+      }
+    }
+    let penalty = 0;
+    for (const { sev, elements } of byRule.values()) {
+      penalty += SCORE_WEIGHTS[sev] * Math.min(2, 1 + 0.25 * (elements - 1));
+    }
+    return Math.max(0, Math.round(100 - penalty));
+  }
+  function scoreAudit(categories, findings) {
+    const out = { overall: null, categories: {} };
+    const ran = categories.filter((c2) => c2.ran);
+    for (const c2 of ran) out.categories[c2.name] = scoreCategory(findings.filter((f2) => f2.category === c2.name));
+    if (ran.length) {
+      const names = new Set(ran.map((c2) => c2.name));
+      out.overall = scoreCategory(findings.filter((f2) => f2.category && names.has(f2.category)));
+    }
+    return out;
+  }
+  var SCORE_WEIGHTS, SCORE_EXPLANATION, RANK;
+  var init_score = __esm({
+    "src/audit/score.ts"() {
+      "use strict";
+      SCORE_WEIGHTS = { critical: 20, serious: 10, moderate: 5, minor: 2 };
+      SCORE_EXPLANATION = "100 minus points per distinct problem: critical 20, serious 10, moderate 5, minor 2. The same problem on more elements adds a quarter of its weight per extra element, up to double. Each category is scored on its own problems; the overall score counts every problem from the checks that ran. Checks that didn't run are left out. It reflects what the automated checks found \u2014 not WCAG conformance.";
+      RANK = { critical: 0, serious: 1, moderate: 2, minor: 3 };
+    }
+  });
+
   // src/exporters/html-template.ts
   function buildReplayHtml(payload, extras) {
     const dataJson = JSON.stringify(payload).replace(/<\/script>/gi, "<\\/script>");
@@ -26491,6 +26618,8 @@ ${REPLAY_RUNTIME}
       "use strict";
       init_links();
       init_agent_workflow();
+      init_wcag();
+      init_score();
       REPLAY_CSS = `
 /* \u2500\u2500 Theme tokens \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */
 /* Light is the unconditional default. Dark requires an explicit
@@ -26652,6 +26781,12 @@ body { min-height: 100vh; }
 .tb-vau-html { font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--tb-surface-2, rgba(127,127,127,.08)); padding: 6px 8px; border-radius: 6px; margin: 6px 0 0; }
 .tb-vau-muted { color: var(--tb-text-3); font-size: 11px; }
 .tb-vau-link { font-size: 11px; color: var(--tb-accent); }
+.tb-vau-score { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.tb-vau-score-n { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 4px solid var(--tb-border); font-size: 18px; font-weight: 800; flex: none; }
+.tb-vau-pill { display: inline-block; min-width: 30px; text-align: center; padding: 0 5px; border-radius: 999px; border: 2px solid var(--tb-border); font-size: 11px; font-weight: 700; }
+.tb-vau-b-good { border-color: #22C55E; } .tb-vau-b-fair { border-color: #F59E0B; } .tb-vau-b-poor { border-color: #EF4444; }
+.tb-vau-how { margin-top: 2px; font-size: 11px; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
+.tb-vau-fix { font-size: 12px; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--tb-surface-2, rgba(127,127,127,.08)); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
 .tb-vpanel-active { display: block; }
@@ -27454,15 +27589,28 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     };
     var auditFindings = audit.findings || [];
     var total = auditFindings.length + (audit.truncated || 0);
+    var WCAG_NAMES = ${JSON.stringify(WCAG_CRITERIA)};
+    var SCORE_HOW = ${JSON.stringify(SCORE_EXPLANATION)};
+    var okScore = function(v){ return typeof v === "number" && isFinite(v) && v >= 0 && v <= 100; };
+    var band = function(v){ return v >= 90 ? "good" : v >= 50 ? "fair" : "poor"; };
+    var BAND = { good: "Good", fair: "Needs work", poor: "Poor" };
+    var sc = audit.score || {};
     var SCAN = { full: "All checks", "auto-review": "Auto Review", accessibility: "Accessibility Audit", "performance-seo": "Performance & SEO" };
     var headBits = [SCAN[audit.scan || "full"] || "Audit", total + (total === 1 ? " finding" : " findings")];
     if (audit.viewport) headBits.push(audit.viewport.width + "\\u00d7" + audit.viewport.height);
     if (audit.userAgentFamily) headBits.push(audit.userAgentFamily);
     headBits.push(new Date(audit.scannedAt).toLocaleString());
     var ah = '<div class="tb-vau-head">' + esc(headBits.join(DOT)) + '</div>';
+    if (okScore(sc.overall)) {
+      var ob = band(sc.overall);
+      ah += '<div class="tb-vau-score"><span class="tb-vau-score-n tb-vau-b-' + ob + '">' + esc(Math.round(sc.overall)) + '</span><div><b>' + esc(BAND[ob]) + '</b> <span class="tb-vau-muted">score out of 100, from the checks that ran</span>' +
+        '<details class="tb-vau-how"><summary>How is this calculated?</summary><div class="tb-vau-muted">' + esc(SCORE_HOW) + '</div></details></div></div>';
+    }
     ah += '<div class="tb-vau-cats">' + audit.categories.map(function(c){
       var state = !c.ran ? "Not run" : c.count === 0 ? "No findings" : c.count + " found";
-      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
+      var cs = sc.categories && sc.categories[c.name];
+      var pill = c.ran && okScore(cs) ? '<span class="tb-vau-pill tb-vau-b-' + band(cs) + '">' + esc(Math.round(cs)) + '</span> ' : '';
+      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + pill + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
         (c.metrics ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
         (c.limitation ? '<div class="tb-vau-l">' + esc(c.limitation) + '</div>' : '') + '</div>';
     }).join("") + '</div>';
@@ -27473,11 +27621,14 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       var ev = f.evidence || {};
       var meta = [];
       if (ev.metrics) Object.keys(ev.metrics).forEach(function(k){ meta.push(k + ": " + ev.metrics[k]); });
+      var wcag = (Array.isArray(f.wcag) ? f.wcag : []).filter(function(x){ return typeof x === "string" && WCAG_NAMES[x]; }).map(function(x){ return "WCAG " + x + " " + WCAG_NAMES[x]; }).join(DOT);
       var help = (typeof f.helpUrl === "string" && f.helpUrl.indexOf("https://") === 0)
-        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">How to fix</a>' : '';
+        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">Learn more about this rule</a>' : '';
       ah += '<div class="tb-vau-row"><span class="tb-vau-sev tb-vau-sev-' + esc(f.severity) + '">' + esc(SEV[f.severity] || f.severity) + '</span><div class="tb-vau-main">' +
         '<div class="tb-vau-t">' + esc(f.title) + (f.occurrences > 1 ? ' <span class="tb-vau-muted">\\u00d7' + esc(f.occurrences) + '</span>' : '') + '</div>' +
         '<div class="tb-vau-d">' + esc(f.description || "") + '</div>' +
+        (wcag ? '<div class="tb-vau-meta">' + esc(wcag) + '</div>' : '') +
+        (typeof f.fix === "string" && f.fix ? '<div class="tb-vau-fix"><b>How to fix:</b> ' + esc(f.fix) + '</div>' : '') +
         (meta.length ? '<div class="tb-vau-meta">' + esc(meta.join(DOT)) + '</div>' : '') +
         (ev.html ? '<pre class="tb-vau-html">' + esc(ev.html) + '</pre>' : '') +
         '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
@@ -34208,7 +34359,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     }, { passive: false });
   }
-  function showAIPromptPopover(_anchor, prompt, _root4) {
+  function showAIPromptPopover(_anchor, prompt, _root5) {
     var _a2;
     (_a2 = document.getElementById("tb-ai-popover")) == null ? void 0 : _a2.remove();
     const overlay = document.createElement("div");
@@ -35009,6 +35160,2704 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   });
 
+  // src/scanner/helpers.ts
+  function makeIssueId(detector) {
+    _issueCounter += 1;
+    return `${detector}_${Date.now().toString(36)}_${_issueCounter}`;
+  }
+  function buildSelector2(el) {
+    if (!el || el.nodeType !== 1) return "";
+    if (el.id) return `#${cssEscape(el.id)}`;
+    const testId = el.getAttribute("data-testid") || el.getAttribute("data-test-id");
+    if (testId) return `[data-testid="${cssEscape(testId)}"]`;
+    const parts = [];
+    let cur = el;
+    let depth = 0;
+    while (cur && cur.nodeType === 1 && cur.tagName !== "BODY" && depth < 5) {
+      const tag = cur.tagName.toLowerCase();
+      const parent = cur.parentElement;
+      if (!parent) {
+        parts.unshift(tag);
+        break;
+      }
+      const siblings = Array.from(parent.children).filter((c2) => c2.tagName === cur.tagName);
+      if (siblings.length > 1) {
+        const idx = siblings.indexOf(cur) + 1;
+        parts.unshift(`${tag}:nth-of-type(${idx})`);
+      } else {
+        parts.unshift(tag);
+      }
+      cur = parent;
+      depth += 1;
+    }
+    return parts.join(" > ");
+  }
+  function coerceSeverity(impact) {
+    switch ((impact || "").toLowerCase()) {
+      case "critical":
+        return "critical";
+      case "serious":
+        return "serious";
+      case "moderate":
+        return "moderate";
+      case "minor":
+        return "minor";
+      default:
+        return "minor";
+    }
+  }
+  function cssEscape(value) {
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+      return CSS.escape(value);
+    }
+    return value.replace(/[^\w-]/g, (ch) => `\\${ch}`);
+  }
+  var _issueCounter;
+  var init_helpers2 = __esm({
+    "src/scanner/helpers.ts"() {
+      "use strict";
+      _issueCounter = 0;
+    }
+  });
+
+  // src/fingerprint.ts
+  async function computeFingerprint(errorMessage, errorStack, page) {
+    const errorType = extractErrorType(errorMessage);
+    const topFrames = extractTopFrames(errorStack || "", 3);
+    const input2 = `${errorType}|${topFrames.join("\n")}|${page}`;
+    if (typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function") {
+      try {
+        const buf = new TextEncoder().encode(input2);
+        const hash = await crypto.subtle.digest("SHA-1", buf);
+        return bufferToHex(hash).slice(0, 16);
+      } catch (e2) {
+      }
+    }
+    return djb2(input2).toString(16).padStart(8, "0");
+  }
+  function extractErrorType(message) {
+    const m = message.match(/^([A-Z][a-zA-Z]+Error|Error)\b/);
+    return m ? m[1] : "Error";
+  }
+  function extractTopFrames(stack, n2) {
+    const frames = [];
+    const lines = stack.split("\n");
+    for (const line of lines) {
+      const m = line.match(/(https?:\/\/[^):\s]+|[^():\s]+\.[a-z]+):(\d+):(\d+)/i);
+      if (m) {
+        const url = m[1];
+        const path = url.includes("://") ? new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost").pathname : url;
+        frames.push(`${path}:${m[2]}:${m[3]}`);
+        if (frames.length >= n2) break;
+      }
+    }
+    return frames;
+  }
+  function bufferToHex(buf) {
+    const bytes = new Uint8Array(buf);
+    let out = "";
+    for (let i2 = 0; i2 < bytes.length; i2++) out += bytes[i2].toString(16).padStart(2, "0");
+    return out;
+  }
+  function djb2(str) {
+    let hash = 5381;
+    for (let i2 = 0; i2 < str.length; i2++) hash = (hash << 5) + hash + str.charCodeAt(i2) | 0;
+    return hash >>> 0;
+  }
+  var init_fingerprint = __esm({
+    "src/fingerprint.ts"() {
+      "use strict";
+    }
+  });
+
+  // src/scanner/detectors/session-data.ts
+  async function detectConsoleErrors(session) {
+    var _a2, _b, _c;
+    if (!session) return [];
+    const groups = /* @__PURE__ */ new Map();
+    for (let i2 = 0; i2 < session.events.length; i2++) {
+      const e2 = session.events[i2];
+      if (e2.type !== "error" && e2.type !== "unhandled_rejection" && e2.type !== "console_error") continue;
+      const message = ((_a2 = e2.data.error) == null ? void 0 : _a2.message) || e2.data.message || "";
+      if (!message) continue;
+      const stack = ((_b = e2.data.error) == null ? void 0 : _b.stack) || "";
+      const page = e2.page || (typeof window !== "undefined" ? window.location.pathname : "");
+      const fp = await computeFingerprint(message, stack, page);
+      const precedingAction = describePrecedingAction(session.events, i2);
+      const existing = groups.get(fp);
+      if (existing) {
+        existing.issue.occurrences = (existing.issue.occurrences || 1) + 1;
+        existing.issue.lastSeenAt = e2.timestamp;
+        if (existing.samples.length < MAX_CONTEXT_SAMPLES) {
+          existing.samples.push({ timestamp: e2.timestamp, precedingAction });
+        }
+        continue;
+      }
+      const firstFrame = ((_c = stack.split("\n").find((l2) => l2.trim().startsWith("at "))) == null ? void 0 : _c.trim()) || "";
+      const issue = {
+        id: makeIssueId("console-error"),
+        detector: "console-error",
+        severity: classifyErrorSeverity(message),
+        title: `JS error: ${message.slice(0, 70)}${message.length > 70 ? "\u2026" : ""}`,
+        description: firstFrame ? `${message}
+
+First frame: ${firstFrame}` : message,
+        page,
+        detectedAt: e2.timestamp,
+        fingerprint: fp,
+        occurrences: 1,
+        firstSeenAt: e2.timestamp,
+        lastSeenAt: e2.timestamp
+      };
+      groups.set(fp, { issue, samples: [{ timestamp: e2.timestamp, precedingAction }] });
+    }
+    const out = [];
+    for (const g of groups.values()) {
+      const n2 = g.issue.occurrences || 1;
+      if (n2 > 1) {
+        g.issue.title = `${g.issue.title} [\xD7${n2}]`;
+        g.issue.contextSamples = g.samples;
+      }
+      out.push(g.issue);
+    }
+    return out;
+  }
+  function describePrecedingAction(events, i2) {
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    for (let j = i2 - 1; j >= 0; j--) {
+      const e2 = events[j];
+      if (e2.type === "click") {
+        const t2 = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.text) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.ariaLabel) || ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.tag) || "element";
+        return `clicked "${String(t2).slice(0, 40)}"`;
+      }
+      if (e2.type === "input") {
+        const n2 = ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.name) || ((_j = (_i = e2.data) == null ? void 0 : _i.element) == null ? void 0 : _j.id) || "field";
+        return `typed in ${n2}`;
+      }
+      if (e2.type === "select_change") return "selected an option";
+      if (e2.type === "form_submit") return "submitted a form";
+      if (e2.type === "route_change") return `navigated to ${((_k = e2.data) == null ? void 0 : _k.to) || "page"}`;
+    }
+    return void 0;
+  }
+  async function detectFailedRequests(session) {
+    if (!session) return [];
+    const issues = [];
+    const buffer = getNetworkFailures();
+    for (const e2 of session.events) {
+      if (e2.type !== "api_request") continue;
+      const req = e2.data.request;
+      if (!req) continue;
+      const status = req.statusCode || 0;
+      if (status >= 200 && status < 400) continue;
+      if (status === 0 && req.method === "HEAD") continue;
+      const match = buffer.find(
+        (b) => b.url === req.url && b.method === req.method && b.status === status && Math.abs(b.timestamp - e2.timestamp) < 5e3
+      );
+      const snippet = (match == null ? void 0 : match.response) ? `
+
+Response: ${match.response.slice(0, 160)}` : "";
+      issues.push({
+        id: makeIssueId("failed-request"),
+        detector: "failed-request",
+        severity: status >= 500 ? "critical" : status === 0 ? "serious" : "moderate",
+        title: `${req.method} ${truncatePath(req.url)} \u2192 ${status === 0 ? "Network Error" : status}`,
+        description: `Request failed in ${req.durationMs || 0}ms.${snippet}`,
+        url: req.url,
+        page: e2.page || window.location.pathname,
+        detectedAt: e2.timestamp
+      });
+    }
+    return issues;
+  }
+  async function detectSlowApis(session) {
+    if (!session) return [];
+    const issues = [];
+    for (const e2 of session.events) {
+      if (e2.type !== "api_request") continue;
+      const req = e2.data.request;
+      if (!req) continue;
+      const status = req.statusCode || 0;
+      if (status < 200 || status >= 400) continue;
+      const duration = req.durationMs || 0;
+      if (duration < SLOW_API_MS) continue;
+      issues.push({
+        id: makeIssueId("slow-api"),
+        detector: "slow-api",
+        severity: duration > 5e3 ? "serious" : "moderate",
+        title: `Slow API: ${req.method} ${truncatePath(req.url)} (${duration}ms)`,
+        description: `This request took ${(duration / 1e3).toFixed(1)}s \u2014 over the ${SLOW_API_MS / 1e3}s threshold. Slow APIs are a common UX complaint and a leading cause of perceived bugs ("the page is frozen").`,
+        url: req.url,
+        page: e2.page || window.location.pathname,
+        detectedAt: e2.timestamp
+      });
+    }
+    return issues;
+  }
+  function truncatePath(url) {
+    try {
+      const u2 = new URL(url, window.location.origin);
+      const p = u2.pathname.length > 50 ? u2.pathname.slice(0, 47) + "\u2026" : u2.pathname;
+      return p;
+    } catch (e2) {
+      return url.length > 50 ? url.slice(0, 47) + "\u2026" : url;
+    }
+  }
+  function classifyErrorSeverity(message) {
+    if (/TypeError|ReferenceError|SyntaxError/i.test(message)) return "critical";
+    if (/Network|fetch|failed to/i.test(message)) return "serious";
+    return "moderate";
+  }
+  var SLOW_API_MS, MAX_CONTEXT_SAMPLES;
+  var init_session_data = __esm({
+    "src/scanner/detectors/session-data.ts"() {
+      "use strict";
+      init_collectors();
+      init_helpers2();
+      init_fingerprint();
+      SLOW_API_MS = 2e3;
+      MAX_CONTEXT_SAMPLES = 10;
+    }
+  });
+
+  // src/scanner/detectors/mixed-content.ts
+  async function detectMixedContent() {
+    if (typeof window === "undefined" || window.location.protocol !== "https:") {
+      return [];
+    }
+    const issues = [];
+    for (const { tag, attr } of ATTR_TARGETS) {
+      const elements = document.querySelectorAll(`${tag}[${attr}]`);
+      for (const el of Array.from(elements)) {
+        if (el.closest("#tracebug-root")) continue;
+        const value = el.getAttribute(attr) || "";
+        if (!value.startsWith("http://")) continue;
+        if (tag === "link") {
+          const rel = (el.rel || "").toLowerCase();
+          const fetchableRels = ["stylesheet", "preload", "prefetch", "manifest", "icon", "shortcut icon"];
+          if (!fetchableRels.some((r2) => rel.includes(r2))) continue;
+        }
+        issues.push({
+          id: makeIssueId("mixed-content"),
+          detector: "mixed-content",
+          severity: tag === "script" || tag === "iframe" ? "serious" : "moderate",
+          title: `Mixed content: ${tag} loads over HTTP`,
+          description: `<${tag}> on an HTTPS page references \`${value}\`. Browsers block or downgrade this \u2014 the resource usually fails to load and breaks the page's secure-context indicator.`,
+          selector: buildSelector2(el),
+          url: value,
+          page: window.location.pathname,
+          detectedAt: Date.now()
+        });
+      }
+    }
+    return issues;
+  }
+  var ATTR_TARGETS;
+  var init_mixed_content = __esm({
+    "src/scanner/detectors/mixed-content.ts"() {
+      "use strict";
+      init_helpers2();
+      ATTR_TARGETS = [
+        { tag: "img", attr: "src" },
+        { tag: "script", attr: "src" },
+        { tag: "iframe", attr: "src" },
+        { tag: "link", attr: "href" },
+        { tag: "audio", attr: "src" },
+        { tag: "video", attr: "src" },
+        { tag: "source", attr: "src" },
+        { tag: "embed", attr: "src" },
+        { tag: "object", attr: "data" }
+      ];
+    }
+  });
+
+  // src/audit/fingerprint.ts
+  function stableHash(input2) {
+    let h1 = 2166136261;
+    let h2 = 16777619 ^ 1540483477;
+    for (let i2 = 0; i2 < input2.length; i2++) {
+      const c2 = input2.charCodeAt(i2);
+      h1 = Math.imul(h1 ^ c2, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c2, 16777619) >>> 0;
+      h2 = (h2 ^ h2 >>> 13) >>> 0;
+    }
+    return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+  }
+  function urlPath(url) {
+    if (!url) return "";
+    let path;
+    try {
+      path = new URL(url, "http://x").pathname;
+    } catch (e2) {
+      path = url.split(/[?#]/)[0];
+    }
+    return path.length > 1 ? path.replace(/\/+$/, "") : path;
+  }
+  function isGenerated(token) {
+    if (GENERATED_TOKEN.some((re) => re.test(token))) return true;
+    return /^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i.test(token);
+  }
+  function normalizeSelector(selector) {
+    if (!selector) return "";
+    const compounds = selector.trim().split(/\s*([>+~])\s*|\s+/).filter((p) => p !== void 0 && p !== "");
+    return compounds.map((part) => {
+      if (part === ">" || part === "+" || part === "~") return part;
+      const attrs = (part.match(/\[[^\]]*\]/g) || []).map((a2) => a2.replace(/\s+/g, "")).sort();
+      const rest = part.replace(/\[[^\]]*\]/g, "");
+      const tokens = rest.match(/(^[a-zA-Z*][\w-]*)|([#.](?:\\.|[^#.:\\])+)|(:[^#.:]+(?:\([^)]*\))?)/g) || [];
+      const kept = tokens.filter((t2) => {
+        if (t2[0] === "#" || t2[0] === ".") return !isGenerated(t2.slice(1).replace(/\\/g, ""));
+        return true;
+      });
+      const tag = kept.filter((t2) => /^[a-zA-Z*]/.test(t2)).map((t2) => t2.toLowerCase());
+      const ids = kept.filter((t2) => t2[0] === "#");
+      const classes = kept.filter((t2) => t2[0] === ".").sort();
+      const pseudos = kept.filter((t2) => t2[0] === ":");
+      const out = [...tag, ...ids, ...classes, ...attrs, ...pseudos].join("");
+      return out || "*";
+    }).join(" ").replace(/ ([>+~]) /g, "$1").replace(/\s+/g, " ").trim();
+  }
+  function tagFromHtml(html) {
+    const m = (html || "").match(/^\s*<([a-zA-Z][\w-]*)/);
+    return m ? m[1].toLowerCase() : "";
+  }
+  function normalizeText(text) {
+    return (text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
+  }
+  function auditFingerprint(f2) {
+    const anchor = f2.selector ? normalizeSelector(f2.selector) : f2.url ? "url:" + urlPath(f2.url) : "page";
+    return stableHash(["v1", f2.category, f2.ruleId, urlPath(f2.page), anchor].join("|"));
+  }
+  function auditFallbackFingerprint(f2) {
+    const tag = tagFromHtml(f2.html);
+    const text = normalizeText(f2.text);
+    if (!tag && !text) return void 0;
+    return stableHash(["v1-fb", f2.category, f2.ruleId, urlPath(f2.page), tag, text].join("|"));
+  }
+  var GENERATED_TOKEN;
+  var init_fingerprint2 = __esm({
+    "src/audit/fingerprint.ts"() {
+      "use strict";
+      GENERATED_TOKEN = [
+        /^(css|sc|jsx|svelte|emotion|tw|chakra|mui|makestyles)-[a-z0-9_-]{3,}$/i,
+        /__[a-z0-9_-]{4,}$/i,
+        /^_[a-z0-9]{5,}$/i,
+        /:r[0-9a-z]+:/i,
+        /^radix-/i,
+        /^(ember|react-select|headlessui-[a-z-]+)-?\d+/i
+      ];
+    }
+  });
+
+  // src/audit/fixes.ts
+  function fixFor(ruleId, own) {
+    if (own) return own;
+    return ruleId && Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ruleId) ? DEFAULT_FIXES[ruleId] : void 0;
+  }
+  var DEFAULT_FIXES;
+  var init_fixes = __esm({
+    "src/audit/fixes.ts"() {
+      "use strict";
+      DEFAULT_FIXES = {
+        "ui/horizontal-overflow": "Find the element wider than the window (the evidence names it) and give it max-width: 100%, let it wrap, or put wide content such as tables in a container with overflow-x: auto.",
+        "ui/off-screen": "Constrain this element to its container: check fixed widths, negative margins and absolute positioning; use max-width: 100% or let it wrap.",
+        "ui/overlap": "Give each control its own space: fix the positioning or z-index of the element on top, or add spacing so both stay clickable.",
+        "ui/text-clipped": "Let the container grow with its text (remove the fixed height or width, or overflow: hidden), or show the full text another way such as wrapping or a tooltip.",
+        "ui/broken-image": "Check the image URL (the evidence shows it): fix the path, upload the missing file, or remove the image.",
+        "ui/img-no-dimensions": "Add width and height attributes (or a CSS aspect-ratio) matching the image, so the browser reserves its space and the page doesn't jump while it loads.",
+        "seo/missing-title": "Add a <title> to the page's <head> that says what this page is, in about 30\u201360 characters.",
+        "seo/title-length": "Rewrite the <title> to about 30\u201360 characters so search results show it in full.",
+        "seo/missing-description": 'Add <meta name="description" content="\u2026"> to the <head>: one or two sentences, about 70\u2013160 characters, describing this page.',
+        "seo/description-length": "Rewrite the meta description to about 70\u2013160 characters so search results show it without cutting it off.",
+        "seo/missing-canonical": `Add <link rel="canonical" href="\u2026"> to the <head> with this page's preferred URL.`,
+        "seo/multiple-canonical": 'Keep exactly one <link rel="canonical"> in the <head>; remove the others.',
+        "seo/missing-h1": "Add one <h1> that names the page's main topic, usually the visible page heading.",
+        "seo/multiple-h1": "Keep one <h1> for the page's main heading and turn the others into <h2>\u2013<h6> in order.",
+        "seo/noindex": "If this page should appear in search results, remove noindex from the robots meta tag (or the X-Robots-Tag header). If it shouldn't, ignore this.",
+        "seo/missing-viewport": 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to the <head>.',
+        "perf/lcp": `Make the largest element arrive sooner: compress and resize it, serve modern formats (WebP/AVIF), add fetchpriority="high" or a preload for it, and don't lazy-load it.`,
+        "perf/fcp": "Draw something sooner: inline the critical CSS, defer non-critical scripts and styles, and cut the work done before the first paint.",
+        "perf/ttfb": "Speed up the server response: cache the page or its data, use a CDN, and reduce work done before the first byte is sent.",
+        "perf/cls": "Reserve space for content that loads late: set width/height or aspect-ratio on images and embeds, and don't insert banners above existing content.",
+        "perf/page-weight": "Download less: compress and resize images, remove unused JavaScript and CSS, and lazy-load what isn't on the first screen.",
+        "perf/large-resource": "Shrink this file: compress or resize it, split large scripts, or load it only when it's needed.",
+        "perf/render-blocking": "Stop this file blocking the first paint: add defer or async to scripts, inline the critical CSS and load the rest without blocking (media or preload).",
+        "runtime/console-error": "Open the error's stack trace (Export report \u2192 your coding agent can read it) and fix the code that throws.",
+        "runtime/failed-request": "Check the failed request (the evidence names it): the endpoint, its status code and the response body tell you whether the client or the server is wrong.",
+        "runtime/mixed-content": "Load this resource over https://, or remove it.",
+        "runtime/frustration-dead": "This element looks clickable but nothing happened: make it do something, or stop it looking clickable (cursor, styling, role).",
+        "runtime/frustration-rage": "Users clicked here repeatedly: check that it responds, shows progress while busy, and isn't covered by something else."
+      };
+    }
+  });
+
+  // src/audit/run.ts
+  function bound(s2, max) {
+    if (s2 == null) return void 0;
+    const clean2 = sanitizeTokenShapes(redactUrlsInText(String(s2)));
+    return clean2.length > max ? clean2.slice(0, max - 1) + "\u2026" : clean2;
+  }
+  function boundEvidence(e2) {
+    var _a2;
+    if (!e2) return void 0;
+    const out = {};
+    if (e2.html != null) out.html = bound(e2.html, MAX_EVIDENCE_HTML);
+    if (e2.text != null) out.text = bound(e2.text.replace(/\s+/g, " ").trim(), MAX_EVIDENCE_TEXT);
+    if (e2.metrics) {
+      out.metrics = {};
+      for (const [k, v2] of Object.entries(e2.metrics)) {
+        out.metrics[k] = typeof v2 === "number" ? v2 : bound(String(v2), MAX_HINT_LENGTH);
+      }
+    }
+    if ((_a2 = e2.hints) == null ? void 0 : _a2.length) {
+      const seen = /* @__PURE__ */ new Set();
+      out.hints = [];
+      for (const h of e2.hints) {
+        const b = bound(h, MAX_HINT_LENGTH);
+        if (!b || seen.has(b)) continue;
+        seen.add(b);
+        out.hints.push(b);
+        if (out.hints.length >= MAX_HINTS) break;
+      }
+    }
+    return out;
+  }
+  function userAgentFamily(ua) {
+    const s2 = ua || "";
+    if (/\bEdg\//.test(s2)) return "Edge";
+    if (/\bFirefox\//.test(s2)) return "Firefox";
+    if (/\b(?:Headless)?Chrome\//.test(s2) || /\bChromium\//.test(s2)) return "Chrome";
+    if (/\bSafari\//.test(s2)) return "Safari";
+    return "Other";
+  }
+  function buildAuditRun(findings, ctx) {
+    var _a2, _b, _c, _d, _e, _f;
+    const now = (_a2 = ctx.now) != null ? _a2 : Date.now();
+    const page = redactUrl(ctx.url);
+    const byKey = /* @__PURE__ */ new Map();
+    for (const raw of findings) {
+      if (!raw.category || !raw.ruleId) continue;
+      const evidence = boundEvidence(raw.evidence);
+      const fpInput = {
+        category: raw.category,
+        ruleId: raw.ruleId,
+        page: raw.page || page,
+        selector: raw.selector,
+        url: raw.url,
+        html: evidence == null ? void 0 : evidence.html,
+        text: evidence == null ? void 0 : evidence.text
+      };
+      const fingerprint = auditFingerprint(fpInput);
+      const existing = byKey.get(fingerprint);
+      if (existing) {
+        existing.occurrences = ((_b = existing.occurrences) != null ? _b : 1) + ((_c = raw.occurrences) != null ? _c : 1);
+        if (SEVERITY_RANK[raw.severity] < SEVERITY_RANK[existing.severity]) existing.severity = raw.severity;
+        continue;
+      }
+      const shaped = {
+        ...raw,
+        title: (_d = bound(raw.title, 120)) != null ? _d : "",
+        description: (_e = bound(raw.description, 600)) != null ? _e : "",
+        fix: bound(fixFor(raw.ruleId, raw.fix), MAX_FIX),
+        wcag: cleanWcag(raw.wcag),
+        url: raw.url ? redactUrl(raw.url) : void 0,
+        page: raw.page ? redactUrl(raw.page) : page,
+        evidence,
+        fingerprint,
+        fallbackFingerprint: auditFallbackFingerprint(fpInput)
+      };
+      if (shaped.url === void 0) delete shaped.url;
+      if (!shaped.fix) delete shaped.fix;
+      if (!shaped.wcag) delete shaped.wcag;
+      if (shaped.evidence === void 0) delete shaped.evidence;
+      if (shaped.fallbackFingerprint === void 0) delete shaped.fallbackFingerprint;
+      byKey.set(fingerprint, shaped);
+    }
+    const all = [...byKey.values()].sort(
+      (a2, b) => SEVERITY_RANK[a2.severity] - SEVERITY_RANK[b.severity] || (a2.category < b.category ? -1 : a2.category > b.category ? 1 : 0)
+    );
+    const kept = all.slice(0, MAX_AUDIT_FINDINGS);
+    const order = ["accessibility", "ui", "performance", "seo", "runtime"];
+    const categories = order.filter((name) => ctx.categories[name] !== void 0).map((name) => {
+      const c2 = ctx.categories[name];
+      const entry = {
+        name,
+        ran: c2.ran,
+        // Counts every finding in the category, including any the cap left out.
+        count: c2.ran ? all.filter((f2) => f2.category === name).length : 0
+      };
+      if (c2.limitation) entry.limitation = c2.limitation;
+      if (c2.metrics && Object.keys(c2.metrics).length) entry.metrics = { ...c2.metrics };
+      return entry;
+    });
+    return {
+      id: (_f = ctx.id) != null ? _f : `audit-${now.toString(36)}`,
+      url: page,
+      scannedAt: now,
+      viewport: { width: Math.round(ctx.viewport.width), height: Math.round(ctx.viewport.height) },
+      userAgentFamily: userAgentFamily(ctx.userAgent),
+      categories,
+      findings: kept,
+      truncated: all.length - kept.length,
+      ...ctx.scan ? { scan: ctx.scan } : {},
+      // From `all`, not `kept`: the cap must never raise the score.
+      score: scoreAudit(categories, all)
+    };
+  }
+  var MAX_AUDIT_FINDINGS, MAX_FIX, MAX_EVIDENCE_HTML, MAX_EVIDENCE_TEXT, MAX_HINTS, MAX_HINT_LENGTH, SEVERITY_RANK;
+  var init_run = __esm({
+    "src/audit/run.ts"() {
+      "use strict";
+      init_url_hygiene();
+      init_cloud_upload();
+      init_fingerprint2();
+      init_score();
+      init_wcag();
+      init_fixes();
+      MAX_AUDIT_FINDINGS = 200;
+      MAX_FIX = 400;
+      MAX_EVIDENCE_HTML = 600;
+      MAX_EVIDENCE_TEXT = 80;
+      MAX_HINTS = 8;
+      MAX_HINT_LENGTH = 60;
+      SEVERITY_RANK = { critical: 0, serious: 1, moderate: 2, minor: 3 };
+    }
+  });
+
+  // src/audit/detectors/evidence.ts
+  function htmlSnippet(el) {
+    const outer = el.outerHTML || "";
+    return outer.length > RAW_HTML_LIMIT ? outer.slice(0, RAW_HTML_LIMIT) : outer;
+  }
+  function visibleText(el) {
+    var _a2, _b;
+    const t2 = (_b = (_a2 = el.innerText) != null ? _a2 : el.textContent) != null ? _b : "";
+    return t2.replace(/\s+/g, " ").trim().slice(0, 200);
+  }
+  function elementEvidence(el, extra) {
+    const hints = [];
+    if (el.id) hints.push("#" + el.id);
+    for (const attr of ["data-testid", "data-test-id", "data-cy", "name", "aria-label"]) {
+      const v2 = el.getAttribute(attr);
+      if (v2) hints.push(`${attr}="${v2}"`);
+    }
+    const classes = Array.from(el.classList).filter((c2) => !GENERATED.test(c2)).slice(0, 3);
+    for (const c2 of classes) hints.push("." + c2);
+    const text = visibleText(el);
+    if (text) hints.push(text.slice(0, 40));
+    return { html: htmlSnippet(el), text, hints, ...extra };
+  }
+  function isTraceBugUi(el) {
+    return !!el.closest("#tracebug-root, [id^='tracebug-']");
+  }
+  function isRendered(el) {
+    const r2 = el.getBoundingClientRect();
+    if (r2.width === 0 && r2.height === 0) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && cs.visibility !== "collapse" && cs.opacity !== "0";
+  }
+  var RAW_HTML_LIMIT, GENERATED;
+  var init_evidence = __esm({
+    "src/audit/detectors/evidence.ts"() {
+      "use strict";
+      RAW_HTML_LIMIT = 1200;
+      GENERATED = /^(css|sc|jsx|svelte|emotion)-|__[a-z0-9]{4,}$|^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i;
+    }
+  });
+
+  // src/audit/contrast.ts
+  function parseHex(hex) {
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex).trim());
+    if (!m) return null;
+    const h = m[1].length === 3 ? m[1].split("").map((c2) => c2 + c2).join("") : m[1];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  function toHex(c2) {
+    return "#" + c2.map((v2) => Math.max(0, Math.min(255, Math.round(v2))).toString(16).padStart(2, "0")).join("");
+  }
+  function channel(v2) {
+    const s2 = v2 / 255;
+    return s2 <= 0.04045 ? s2 / 12.92 : Math.pow((s2 + 0.055) / 1.055, 2.4);
+  }
+  function luminance(c2) {
+    return 0.2126 * channel(c2[0]) + 0.7152 * channel(c2[1]) + 0.0722 * channel(c2[2]);
+  }
+  function contrastRatio2(a2, b) {
+    const la = luminance(a2), lb = luminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function parseExpectedRatio(v2) {
+    const n2 = typeof v2 === "number" ? v2 : parseFloat(String(v2 != null ? v2 : ""));
+    return Number.isFinite(n2) && n2 > 1 && n2 <= 21 ? n2 : null;
+  }
+  function suggestTextColor(fgHex, bgHex, expected) {
+    const fg = parseHex(fgHex), bg = parseHex(bgHex);
+    if (!fg || !bg || !(expected > 1)) return null;
+    if (contrastRatio2(fg, bg) >= expected) return null;
+    const candidates = [];
+    for (const target of [0, 255]) {
+      if (contrastRatio2(mix(fg, target, 1), bg) < expected) continue;
+      let lo = 0, hi = 1;
+      for (let i2 = 0; i2 < 30; i2++) {
+        const mid = (lo + hi) / 2;
+        if (contrastRatio2(mix(fg, target, mid), bg) >= expected) hi = mid;
+        else lo = mid;
+      }
+      let t2 = hi;
+      let rgb = parseHex(toHex(mix(fg, target, t2)));
+      while (contrastRatio2(rgb, bg) < expected && t2 < 1) {
+        t2 = Math.min(1, t2 + 2e-3);
+        rgb = parseHex(toHex(mix(fg, target, t2)));
+      }
+      const ratio = contrastRatio2(rgb, bg);
+      if (ratio >= expected) candidates.push({ color: toHex(rgb), ratio, t: t2 });
+    }
+    if (!candidates.length) return null;
+    candidates.sort((a2, b) => a2.t - b.t);
+    return { color: candidates[0].color, ratio: Math.floor(candidates[0].ratio * 100) / 100 };
+  }
+  var mix;
+  var init_contrast = __esm({
+    "src/audit/contrast.ts"() {
+      "use strict";
+      mix = (c2, target, t2) => [c2[0] + (target - c2[0]) * t2, c2[1] + (target - c2[1]) * t2, c2[2] + (target - c2[2]) * t2];
+    }
+  });
+
+  // tb-stub-axe:axe-core
+  var axe_core_exports = {};
+  __export(axe_core_exports, {
+    default: () => axe_core_default
+  });
+  var axe_core_default;
+  var init_axe_core = __esm({
+    "tb-stub-axe:axe-core"() {
+      "use strict";
+      axe_core_default = null;
+    }
+  });
+
+  // src/audit/detectors/a11y.ts
+  function cleanFailureSummary(s2) {
+    if (!s2) return void 0;
+    const lines = s2.split(/\n+/).map((l2) => l2.trim()).filter((l2) => l2 && !/^Fix (any|all) of the following:?$/i.test(l2));
+    return lines.length ? lines.join(" ") : void 0;
+  }
+  function contrastFix(metrics) {
+    var _a2, _b;
+    if (!metrics) return {};
+    const fg = String((_a2 = metrics.fgColor) != null ? _a2 : ""), bg = String((_b = metrics.bgColor) != null ? _b : "");
+    const expected = parseExpectedRatio(metrics.expectedContrastRatio);
+    if (!fg || !bg || !expected) return {};
+    const s2 = suggestTextColor(fg, bg, expected);
+    if (!s2) {
+      return { fix: `Text ${fg} on ${bg} needs a contrast ratio of ${expected}:1. No text colour reaches it on this background \u2014 change the background colour instead.` };
+    }
+    return {
+      suggested: s2.color,
+      fix: `Change the text colour from ${fg} to ${s2.color} (${s2.ratio.toFixed(2)}:1 on ${bg}) or further from the background; this text needs ${expected}:1. Or change the background.`
+    };
+  }
+  function countTransparentText(doc = document, limit = 6e3) {
+    let count2 = 0;
+    const els = doc.body ? doc.body.getElementsByTagName("*") : [];
+    for (let i2 = 0; i2 < els.length && i2 < limit; i2++) {
+      const el = els[i2];
+      if (el.closest("#tracebug-root")) continue;
+      let hasText = false;
+      for (const n2 of Array.from(el.childNodes)) {
+        if (n2.nodeType === 3 && (n2.textContent || "").trim()) {
+          hasText = true;
+          break;
+        }
+      }
+      if (!hasText) continue;
+      if (typeof el.checkVisibility === "function") {
+        if (!el.checkVisibility()) continue;
+        if (!el.checkVisibility({ opacityProperty: true })) count2++;
+        continue;
+      }
+      let o2 = 1, shown = true;
+      for (let n2 = el; n2; n2 = n2.parentElement) {
+        const cs = getComputedStyle(n2);
+        if (cs.display === "none") {
+          shown = false;
+          break;
+        }
+        o2 *= parseFloat(cs.opacity || "1");
+      }
+      if (shown && o2 === 0) count2++;
+    }
+    return count2;
+  }
+  async function loadAxe() {
+    const w = globalThis;
+    if (w.axe && typeof w.axe.run === "function") return w.axe;
+    try {
+      const mod = await Promise.resolve().then(() => (init_axe_core(), axe_core_exports));
+      const axe = mod.default && typeof mod.default.run === "function" ? mod.default : mod;
+      if (typeof axe.run === "function") return axe;
+    } catch (e2) {
+    }
+    return w.axe && typeof w.axe.run === "function" ? w.axe : null;
+  }
+  function metricsFor(node2) {
+    var _a2, _b;
+    const data = (_b = (_a2 = node2.any) == null ? void 0 : _a2.find((c2) => c2.data && typeof c2.data === "object")) == null ? void 0 : _b.data;
+    if (!data) return void 0;
+    const out = {};
+    for (const key of ["contrastRatio", "expectedContrastRatio", "fgColor", "bgColor", "fontSize", "fontWeight"]) {
+      const v2 = data[key];
+      if (typeof v2 === "number" || typeof v2 === "string") out[key] = v2;
+    }
+    return Object.keys(out).length ? out : void 0;
+  }
+  async function detectA11yFindings() {
+    const axe = await loadAxe();
+    if (!axe) return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
+    let results;
+    try {
+      results = await axe.run(
+        { exclude: [["#tracebug-root"]] },
+        {
+          runOnly: { type: "tag", values: AXE_TAGS },
+          rules: Object.fromEntries(AXE_EXTRA_RULES.map((id) => [id, { enabled: true }])),
+          resultTypes: ["violations"]
+        }
+      );
+    } catch (err) {
+      console.warn("[TraceBug] axe.run failed:", err);
+      return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
+    }
+    const findings = [];
+    for (const v2 of results.violations || []) {
+      const nodes = (v2.nodes || []).slice(0, MAX_NODES_PER_RULE);
+      for (const node2 of nodes) {
+        const target = Array.isArray(node2.target) ? node2.target.map(String).join(" ") : "";
+        let el = null;
+        try {
+          el = target ? document.querySelector(target) : null;
+        } catch (e2) {
+          el = null;
+        }
+        const metrics = metricsFor(node2);
+        let fix = cleanFailureSummary(node2.failureSummary);
+        if (v2.id === "color-contrast" || v2.id === "color-contrast-enhanced") {
+          const c2 = contrastFix(metrics);
+          if (c2.fix) fix = c2.fix;
+          if (c2.suggested && metrics) metrics.suggestedFgColor = c2.suggested;
+        } else if (v2.id === "label-content-name-mismatch" && el) {
+          const visible = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+          const name = el.getAttribute("aria-label");
+          if (visible) {
+            fix = `The visible text "${visible}" must be part of the accessible name${name ? ` (now "${name.slice(0, 80)}")` : ""}. Start the aria-label with the visible text, or remove aria-label so the visible text becomes the name.`;
+          }
+        }
+        const evidence = el ? elementEvidence(el, metrics ? { metrics } : void 0) : { html: node2.html || "", ...metrics ? { metrics } : {} };
+        if (node2.html && evidence.html !== node2.html) evidence.html = node2.html;
+        const wcag = wcagFromAxeTags(v2.tags);
+        findings.push({
+          ...wcag.length ? { wcag } : {},
+          ...fix ? { fix } : {},
+          id: makeIssueId("axe-a11y"),
+          detector: "axe-a11y",
+          category: "accessibility",
+          ruleId: v2.id,
+          severity: coerceSeverity(v2.impact),
+          title: v2.help || v2.id,
+          description: v2.description || v2.id,
+          selector: target || void 0,
+          helpUrl: v2.helpUrl,
+          page: location.href,
+          detectedAt: Date.now(),
+          evidence
+        });
+      }
+    }
+    let transparentText = 0;
+    try {
+      transparentText = countTransparentText();
+    } catch (e2) {
+    }
+    return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText };
+  }
+  var AXE_TAGS, AXE_EXTRA_RULES, MAX_NODES_PER_RULE, A11Y_LIMITATION, A11Y_UNAVAILABLE;
+  var init_a11y = __esm({
+    "src/audit/detectors/a11y.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      init_wcag();
+      init_contrast();
+      AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+      AXE_EXTRA_RULES = ["label-content-name-mismatch"];
+      MAX_NODES_PER_RULE = 20;
+      A11Y_LIMITATION = "Automated checks cover only part of WCAG. This is not a conformance evaluation: keyboard use, screen-reader meaning and many success criteria need a person.";
+      A11Y_UNAVAILABLE = "The accessibility checker isn't available on this page, so accessibility was not checked.";
+    }
+  });
+
+  // src/audit/detectors/ui.ts
+  function uiFinding(ruleId, severity, title, description, extra = {}) {
+    return {
+      id: makeIssueId("audit-ui"),
+      detector: "audit-ui",
+      category: "ui",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: location.href,
+      detectedAt: Date.now(),
+      ...extra
+    };
+  }
+  function clippedByAncestor(el) {
+    for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+      const ox = getComputedStyle(p).overflowX;
+      if (ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") return true;
+    }
+    return false;
+  }
+  function overflowFindings() {
+    const out = [];
+    const vw = document.documentElement.clientWidth;
+    const sw = document.documentElement.scrollWidth;
+    if (sw <= vw + 1) return out;
+    out.push(uiFinding(
+      "ui/horizontal-overflow",
+      "serious",
+      `Page scrolls sideways by ${sw - vw}px`,
+      `At ${vw}px wide the page is ${sw}px wide, so it scrolls horizontally. Usually one element with a fixed width or a long unbroken string causes it.`,
+      { evidence: { metrics: { viewportWidth: vw, pageWidth: sw } } }
+    ));
+    const culprits = [];
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+      if (culprits.length >= MAX_PER_RULE) break;
+      if (isTraceBugUi(el) || culprits.some((c2) => c2.contains(el))) continue;
+      const r2 = el.getBoundingClientRect();
+      if (r2.right <= vw + 1 || r2.width === 0) continue;
+      if (!isRendered(el) || clippedByAncestor(el)) continue;
+      if (getComputedStyle(el).position === "fixed") continue;
+      culprits.push(el);
+    }
+    for (const el of culprits) {
+      const r2 = el.getBoundingClientRect();
+      out.push(elementFinding(
+        el,
+        "ui/off-screen",
+        "moderate",
+        `Element extends ${Math.round(r2.right - vw)}px past the right edge`,
+        `This ${el.tagName.toLowerCase()} ends at ${Math.round(r2.right)}px; the viewport is ${vw}px. It is a likely cause of the sideways scroll.`,
+        { right: Math.round(r2.right), viewportWidth: vw }
+      ));
+    }
+    return out;
+  }
+  function overlapFindings() {
+    const out = [];
+    const controls = Array.from(document.querySelectorAll(INTERACTIVE)).filter((el) => !isTraceBugUi(el) && isRendered(el)).slice(0, 400);
+    const rects = controls.map((el) => el.getBoundingClientRect());
+    const MIN = 4;
+    for (let i2 = 0; i2 < controls.length && out.length < MAX_PER_RULE; i2++) {
+      for (let j = i2 + 1; j < controls.length && out.length < MAX_PER_RULE; j++) {
+        const a2 = controls[i2], b = controls[j];
+        if (a2.contains(b) || b.contains(a2)) continue;
+        const ra = rects[i2], rb = rects[j];
+        const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+        const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+        if (w < MIN || h < MIN) continue;
+        const cx = Math.max(ra.left, rb.left) + w / 2, cy = Math.max(ra.top, rb.top) + h / 2;
+        const top = document.elementFromPoint(cx, cy);
+        const covered = top && (a2 === top || a2.contains(top)) ? b : a2;
+        out.push(elementFinding(
+          covered,
+          "ui/overlap",
+          "moderate",
+          "Control is covered by another control",
+          `Two clickable elements overlap by ${Math.round(w)}\xD7${Math.round(h)}px. Clicks in that area reach only the one on top (${buildSelector2(covered === a2 ? b : a2)}).`,
+          { overlapWidth: Math.round(w), overlapHeight: Math.round(h) }
+        ));
+      }
+    }
+    return out;
+  }
+  function clippedTextFindings() {
+    const out = [];
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+      if (out.length >= MAX_PER_RULE) break;
+      if (isTraceBugUi(el)) continue;
+      const hasOwnText = Array.from(el.childNodes).some((n2) => n2.nodeType === 3 && (n2.textContent || "").trim().length > 2);
+      if (!hasOwnText) continue;
+      const cs = getComputedStyle(el);
+      if (cs.textOverflow === "ellipsis") continue;
+      const he = el;
+      const clipsX = (cs.overflowX === "hidden" || cs.overflowX === "clip") && he.scrollWidth > he.clientWidth + 1;
+      const clipsY = (cs.overflowY === "hidden" || cs.overflowY === "clip") && he.scrollHeight > he.clientHeight + 2 && cs.webkitLineClamp === "none";
+      if (!clipsX && !clipsY) continue;
+      if (!isRendered(el)) continue;
+      out.push(elementFinding(
+        el,
+        "ui/text-clipped",
+        "moderate",
+        "Text is cut off",
+        `The text needs ${clipsX ? he.scrollWidth + "px of width" : he.scrollHeight + "px of height"} but the box is ${clipsX ? he.clientWidth : he.clientHeight}px with overflow hidden, and there is no ellipsis to show it was cut.`,
+        { needed: clipsX ? he.scrollWidth : he.scrollHeight, available: clipsX ? he.clientWidth : he.clientHeight }
+      ));
+    }
+    return out;
+  }
+  function imageFindings() {
+    const out = [];
+    let noDims = 0, broken = 0;
+    for (const img of Array.from(document.images)) {
+      if (isTraceBugUi(img)) continue;
+      const src = img.currentSrc || img.src;
+      if (img.complete && img.naturalWidth === 0 && src && broken < MAX_PER_RULE) {
+        broken++;
+        out.push(uiFinding(
+          "ui/broken-image",
+          "moderate",
+          "Image failed to load",
+          "The browser tried to load this image and got an error or a non-image response.",
+          { selector: buildSelector2(img), url: src, evidence: elementEvidence(img) }
+        ));
+        continue;
+      }
+      if (noDims >= MAX_PER_RULE) continue;
+      const hasAttrs = img.hasAttribute("width") && img.hasAttribute("height");
+      const cs = getComputedStyle(img);
+      const sizedByCss = cs.aspectRatio !== "auto" || img.style.width !== "" && img.style.height !== "";
+      const r2 = img.getBoundingClientRect();
+      if (hasAttrs || sizedByCss || r2.width < 32 || r2.height < 32 || !isRendered(img)) continue;
+      noDims++;
+      out.push(elementFinding(
+        img,
+        "ui/img-no-dimensions",
+        "minor",
+        "Image has no width and height",
+        "Without width and height (or CSS aspect-ratio), the page reserves no space for the image and content jumps when it loads (layout shift).",
+        { renderedWidth: Math.round(r2.width), renderedHeight: Math.round(r2.height) }
+      ));
+    }
+    return out;
+  }
+  function detectUiFindings() {
+    const runs = [overflowFindings, overlapFindings, clippedTextFindings, imageFindings];
+    const out = [];
+    for (const run of runs) {
+      try {
+        out.push(...run());
+      } catch (err) {
+        console.warn("[TraceBug] UI check failed:", err);
+      }
+    }
+    return out;
+  }
+  var MAX_PER_RULE, INTERACTIVE, elementFinding;
+  var init_ui = __esm({
+    "src/audit/detectors/ui.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      MAX_PER_RULE = 15;
+      INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]:not([tabindex='-1'])";
+      elementFinding = (el, ruleId, severity, title, description, metrics) => uiFinding(ruleId, severity, title, description, { selector: buildSelector2(el), evidence: elementEvidence(el, metrics ? { metrics } : void 0) });
+    }
+  });
+
+  // src/audit/detectors/seo.ts
+  function seoFinding(ruleId, severity, title, description, extra = {}) {
+    return {
+      id: makeIssueId("audit-seo"),
+      detector: "audit-seo",
+      category: "seo",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: typeof location !== "undefined" ? location.href : "",
+      detectedAt: Date.now(),
+      ...extra
+    };
+  }
+  function detectSeoFindings(doc = document) {
+    var _a2;
+    const out = [];
+    const { titleMin, titleMax, descMin, descMax } = SEO_LIMITS;
+    const title = (((_a2 = doc.querySelector("head > title, title")) == null ? void 0 : _a2.textContent) || "").replace(/\s+/g, " ").trim();
+    if (!title) {
+      out.push(seoFinding(
+        "seo/missing-title",
+        "serious",
+        "Page has no <title>",
+        "Search results and browser tabs show the page title. Add a <title> in <head> that names the page."
+      ));
+    } else if (title.length < titleMin || title.length > titleMax) {
+      out.push(seoFinding(
+        "seo/title-length",
+        "minor",
+        `Title is ${title.length} characters`,
+        `Search results show roughly ${titleMax} characters. ${title.length > titleMax ? "The end will be cut off." : "A very short title rarely says what the page is."} Aim for ${titleMin}\u2013${titleMax}.`,
+        { evidence: { text: title, metrics: { length: title.length } } }
+      ));
+    }
+    const desc = metaContent(doc, "description");
+    if (desc === null || desc === "") {
+      out.push(seoFinding(
+        "seo/missing-description",
+        "moderate",
+        "No meta description",
+        'Search engines use <meta name="description"> for the snippet under the title; without it they pick page text themselves.'
+      ));
+    } else if (desc.length < descMin || desc.length > descMax) {
+      out.push(seoFinding(
+        "seo/description-length",
+        "minor",
+        `Meta description is ${desc.length} characters`,
+        `Snippets show roughly ${descMax} characters. Aim for ${descMin}\u2013${descMax}.`,
+        { evidence: { text: desc.slice(0, 200), metrics: { length: desc.length } } }
+      ));
+    }
+    const canonicals = Array.from(doc.querySelectorAll('link[rel~="canonical" i]'));
+    if (canonicals.length === 0) {
+      out.push(seoFinding(
+        "seo/missing-canonical",
+        "minor",
+        "No canonical URL",
+        'Without <link rel="canonical">, the same page reached with different query strings can be indexed as separate pages.'
+      ));
+    } else if (canonicals.length > 1) {
+      out.push(seoFinding(
+        "seo/multiple-canonical",
+        "moderate",
+        `${canonicals.length} canonical links`,
+        "Search engines ignore conflicting canonical links. Keep exactly one.",
+        { evidence: { hints: canonicals.map((c2) => c2.getAttribute("href") || "").filter(Boolean) } }
+      ));
+    }
+    const h1s = Array.from(doc.querySelectorAll("h1")).filter((h) => !h.closest("#tracebug-root"));
+    if (h1s.length === 0) {
+      out.push(seoFinding(
+        "seo/missing-h1",
+        "moderate",
+        "Page has no <h1>",
+        "The main heading tells search engines and screen-reader users what the page is about. Add one <h1>."
+      ));
+    } else if (h1s.length > 1) {
+      out.push(seoFinding(
+        "seo/multiple-h1",
+        "minor",
+        `Page has ${h1s.length} <h1> headings`,
+        "Use one <h1> for the page's main topic and <h2>\u2013<h6> below it.",
+        { selector: "h1", evidence: { ...elementEvidence(h1s[1]), metrics: { count: h1s.length } } }
+      ));
+    }
+    const robots = (metaContent(doc, "robots") || "") + "," + (metaContent(doc, "googlebot") || "");
+    if (/\bnoindex\b/i.test(robots)) {
+      out.push(seoFinding(
+        "seo/noindex",
+        "serious",
+        "Page tells search engines not to index it",
+        'A robots meta tag says "noindex". Correct for staging or private pages; on a public page it keeps it out of search.',
+        { evidence: { text: robots.replace(/^,|,$/g, "") } }
+      ));
+    }
+    if (!doc.querySelector('meta[name="viewport" i]')) {
+      out.push(seoFinding(
+        "seo/missing-viewport",
+        "serious",
+        "No viewport meta tag",
+        'Without <meta name="viewport" content="width=device-width, initial-scale=1">, phones render the page at desktop width, zoomed out.'
+      ));
+    }
+    return out;
+  }
+  var SEO_LIMITS, metaContent;
+  var init_seo = __esm({
+    "src/audit/detectors/seo.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      SEO_LIMITS = { titleMin: 10, titleMax: 60, descMin: 50, descMax: 160 };
+      metaContent = (doc, name) => {
+        const el = doc.querySelector(`meta[name="${name}" i]`);
+        return el ? (el.getAttribute("content") || "").trim() : null;
+      };
+    }
+  });
+
+  // src/audit/detectors/performance.ts
+  function perfFinding(ruleId, severity, title, description, extra = {}) {
+    return {
+      id: makeIssueId("audit-perf"),
+      detector: "audit-perf",
+      category: "performance",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: location.href,
+      detectedAt: Date.now(),
+      ...extra
+    };
+  }
+  function buffered(type) {
+    const supported = PerformanceObserver.supportedEntryTypes || [];
+    if (!supported.includes(type)) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      const got = [];
+      let po = null;
+      const finish = () => {
+        try {
+          got.push(...(po == null ? void 0 : po.takeRecords()) || []);
+          po == null ? void 0 : po.disconnect();
+        } catch (e2) {
+        }
+        resolve(got);
+      };
+      try {
+        po = new PerformanceObserver((list) => {
+          got.push(...list.getEntries());
+        });
+        po.observe({ type, buffered: true });
+      } catch (e2) {
+        resolve([]);
+        return;
+      }
+      setTimeout(finish, 60);
+    });
+  }
+  function isTraceBugResource(url) {
+    if (/^(chrome|moz|safari-web)-extension:/i.test(url)) return true;
+    try {
+      const file = new URL(url).pathname.split("/").pop() || "";
+      return /^tracebug[\w.-]*\.m?js$/i.test(file);
+    } catch (e2) {
+      return false;
+    }
+  }
+  function grade(value, [good, poor]) {
+    if (value > poor) return "serious";
+    if (value > good) return "moderate";
+    return null;
+  }
+  async function detectPerfFindings() {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (!nav) {
+      return { ran: false, limitation: "This browser exposes no page-load timing for this page, so performance was not checked.", metrics: {}, findings: [] };
+    }
+    const findings = [];
+    const metrics = {};
+    const notes = [PERF_LIMITATION];
+    const ttfb = Math.round(nav.responseStart - nav.startTime);
+    if (ttfb > 0) metrics.ttfbMs = ttfb;
+    const fcpEntry = performance.getEntriesByName("first-contentful-paint")[0];
+    if (fcpEntry) metrics.fcpMs = Math.round(fcpEntry.startTime);
+    const lcpEntries = await buffered("largest-contentful-paint");
+    const lcp = lcpEntries[lcpEntries.length - 1];
+    if (lcp) metrics.lcpMs = Math.round(lcp.startTime);
+    const shiftTypeSupported = (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift");
+    if (shiftTypeSupported) {
+      const shifts = await buffered("layout-shift");
+      metrics.cls = Math.round(shifts.filter((s2) => !s2.hadRecentInput).reduce((t2, s2) => t2 + s2.value, 0) * 1e3) / 1e3;
+    } else {
+      notes.push("Layout shift (CLS) is not measured in this browser.");
+    }
+    const thresholds = [
+      ["lcpMs", "perf/lcp", "Largest content paints at", "The largest image or text block appears at {v}. Over 2.5 s feels slow; over 4 s, users leave."],
+      ["fcpMs", "perf/fcp", "First content paints at", "Nothing is drawn until {v}. Over 1.8 s, the page feels stuck."],
+      ["ttfbMs", "perf/ttfb", "Server responds after", "The first byte of the page arrives after {v}. Over 0.8 s, everything after it starts late."],
+      ["cls", "perf/cls", "Layout shift score", "Content moved by {v} while loading (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."]
+    ];
+    for (const [key, ruleId, label, text] of thresholds) {
+      const v2 = metrics[key];
+      if (v2 === void 0) continue;
+      const sev = grade(v2, PERF_THRESHOLDS[key]);
+      if (!sev) continue;
+      const shown = key === "cls" ? String(v2) : `${(v2 / 1e3).toFixed(2)} s`;
+      const extra = { evidence: { metrics: { [key]: v2, good: PERF_THRESHOLDS[key][0], poor: PERF_THRESHOLDS[key][1] } } };
+      if (key === "lcpMs" && (lcp == null ? void 0 : lcp.url)) extra.url = lcp.url;
+      findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, text.replace("{v}", shown), extra));
+    }
+    const resources = performance.getEntriesByType("resource").filter((r2) => !isTraceBugResource(r2.name));
+    const total = resources.reduce((t2, r2) => t2 + (r2.transferSize || 0), nav.transferSize || 0);
+    metrics.transferKb = Math.round(total / 1024);
+    metrics.requests = resources.length + 1;
+    if (metrics.transferKb > PAGE_WEIGHT_KB) {
+      findings.push(perfFinding(
+        "perf/page-weight",
+        "moderate",
+        `Page downloads ${(metrics.transferKb / 1024).toFixed(1)} MB`,
+        `This load transferred ${metrics.transferKb} KB over ${metrics.requests} requests. Above ${PAGE_WEIGHT_KB / 1024} MB is slow on mobile connections.`,
+        { evidence: { metrics: { transferKb: metrics.transferKb, requests: metrics.requests } } }
+      ));
+    }
+    const sizeOf = (r2) => r2.transferSize || r2.encodedBodySize || 0;
+    const large = resources.filter((r2) => sizeOf(r2) >= LARGE_RESOURCE_KB * 1024).sort((a2, b) => sizeOf(b) - sizeOf(a2)).slice(0, MAX_LARGE);
+    for (const r2 of large) {
+      const kb = Math.round(sizeOf(r2) / 1024);
+      findings.push(perfFinding(
+        "perf/large-resource",
+        "minor",
+        `${fileName(r2.name)} is ${kb} KB`,
+        `One of the largest files on this page (${r2.initiatorType || "resource"}). Compress it, split it, or load it later.`,
+        { url: r2.name, evidence: { metrics: { sizeKb: kb, durationMs: Math.round(r2.duration) }, hints: [fileName(r2.name)] } }
+      ));
+    }
+    const blocking = resources.filter((r2) => r2.renderBlockingStatus === "blocking" && r2.duration >= RENDER_BLOCKING_MS).slice(0, MAX_BLOCKING);
+    for (const r2 of blocking) {
+      findings.push(perfFinding(
+        "perf/render-blocking",
+        "minor",
+        `${fileName(r2.name)} blocks the first paint`,
+        `The browser waited ${Math.round(r2.duration)} ms for this ${r2.initiatorType || "file"} before drawing anything. Add defer/async to scripts or load non-critical CSS later.`,
+        { url: r2.name, evidence: { metrics: { durationMs: Math.round(r2.duration) }, hints: [fileName(r2.name)] } }
+      ));
+    }
+    if (!resources.some((r2) => typeof r2.renderBlockingStatus === "string")) {
+      notes.push("Render-blocking files are not reported by this browser.");
+    }
+    return { ran: true, limitation: notes.join(" "), metrics, findings };
+  }
+  var PERF_THRESHOLDS, PAGE_WEIGHT_KB, LARGE_RESOURCE_KB, MAX_LARGE, MAX_BLOCKING, RENDER_BLOCKING_MS, PERF_LIMITATION, fileName;
+  var init_performance = __esm({
+    "src/audit/detectors/performance.ts"() {
+      "use strict";
+      init_helpers2();
+      PERF_THRESHOLDS = {
+        lcpMs: [2500, 4e3],
+        fcpMs: [1800, 3e3],
+        ttfbMs: [800, 1800],
+        cls: [0.1, 0.25]
+      };
+      PAGE_WEIGHT_KB = 3e3;
+      LARGE_RESOURCE_KB = 500;
+      MAX_LARGE = 5;
+      MAX_BLOCKING = 10;
+      RENDER_BLOCKING_MS = 200;
+      PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. INP is not measured. TraceBug's own files are left out.";
+      fileName = (url) => {
+        try {
+          const u2 = new URL(url);
+          return (u2.pathname.split("/").pop() || u2.hostname).slice(0, 80);
+        } catch (e2) {
+          return url.slice(0, 80);
+        }
+      };
+    }
+  });
+
+  // src/audit/detectors/keyboard.ts
+  function kbdFinding(ruleId, severity, title, description, el, extra = {}) {
+    return {
+      id: makeIssueId("audit-keyboard"),
+      detector: "audit-keyboard",
+      category: "accessibility",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: location.href,
+      detectedAt: Date.now(),
+      ...el ? { selector: buildSelector2(el), evidence: elementEvidence(el) } : {},
+      ...extra
+    };
+  }
+  function inTabOrder(el) {
+    const tabindex = el.getAttribute("tabindex");
+    if (tabindex !== null && Number(tabindex) < 0) return false;
+    if (el.disabled) return false;
+    if (el.closest("[inert], [hidden]")) return false;
+    if (getComputedStyle(el).visibility === "hidden") return false;
+    return isRendered2(el);
+  }
+  function isRendered2(el) {
+    const check = el.checkVisibility;
+    if (typeof check === "function") return check.call(el);
+    for (let n2 = el; n2; n2 = n2.parentElement) {
+      if (getComputedStyle(n2).display === "none") return false;
+    }
+    return true;
+  }
+  function detectKeyboardFindings(doc = document) {
+    const findings = [];
+    const els = Array.from(doc.querySelectorAll(TABBABLE)).filter((el) => !isTraceBugUi(el) && inTabOrder(el));
+    let positive = 0;
+    let invisible = 0;
+    for (const el of els) {
+      const tabindex = Number(el.getAttribute("tabindex"));
+      if (tabindex > 0 && positive < MAX_PER_RULE2) {
+        positive++;
+        findings.push(kbdFinding(
+          "kbd/positive-tabindex",
+          "serious",
+          `tabindex="${tabindex}" changes the Tab order`,
+          'Keyboard users reach this element before everything in reading order. Use tabindex="0" (or none) and move the element in the DOM instead.',
+          el,
+          { wcag: ["2.4.3"], fix: `Change tabindex="${tabindex}" to tabindex="0" (or remove it), and move the element to where it belongs in the page's source order.` }
+        ));
+      }
+      if (invisible < MAX_PER_RULE2) {
+        const r2 = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        const zero = r2.width === 0 && r2.height === 0;
+        const transparent = cs.opacity === "0";
+        if ((zero || transparent) && el.tagName !== "IFRAME") {
+          invisible++;
+          findings.push(kbdFinding(
+            "kbd/focusable-invisible",
+            "serious",
+            "Keyboard focus lands on something invisible",
+            `This element is in the Tab order but is drawn ${zero ? "0\xD70" : "fully transparent"}, so a keyboard user's focus disappears. Remove it from the Tab order (tabindex="-1", disabled or hidden) or make it visible when focused.`,
+            el,
+            { wcag: ["2.4.7"], fix: 'Take it out of the Tab order (tabindex="-1", the disabled attribute, or display:none), or give it a visible size and a focus style when it receives focus.' }
+          ));
+        }
+      }
+    }
+    let unreadableSheets = 0;
+    let removed = 0;
+    const visit2 = (rules2) => {
+      for (const rule2 of Array.from(rules2)) {
+        if (removed >= MAX_PER_RULE2) return;
+        const grouping = rule2;
+        if (grouping.cssRules && !rule2.selectorText) {
+          visit2(grouping.cssRules);
+          continue;
+        }
+        const style = rule2;
+        const sel = style.selectorText || "";
+        if (!/:focus(?!-within)/.test(sel)) continue;
+        const st = style.style;
+        const outline = (st.getPropertyValue("outline-style") || st.getPropertyValue("outline") || "").trim();
+        const width = st.getPropertyValue("outline-width").trim();
+        const removesOutline = /^(none|0(px)?)\b/.test(outline) || width === "0" || width === "0px";
+        if (!removesOutline) continue;
+        const replaced = ["box-shadow", "border-color", "border", "border-bottom", "background", "background-color", "text-decoration"].some((p) => {
+          const v2 = st.getPropertyValue(p).trim();
+          return v2 && !/^(none|0|initial|unset|inherit|revert)$/.test(v2);
+        });
+        if (replaced) continue;
+        if (sel.includes("tracebug")) continue;
+        removed++;
+        findings.push(kbdFinding(
+          "kbd/focus-outline-removed",
+          "serious",
+          `"${sel.slice(0, 80)}" hides the focus outline`,
+          "This CSS rule removes the focus outline and draws no other focus indicator, so keyboard users can't see where they are. Keep the outline, or replace it (box-shadow, border or background) \u2014 :focus-visible lets mouse users keep a clean look.",
+          null,
+          { wcag: ["2.4.7"], fix: "Delete the outline rule, or apply it only under :focus-visible with a visible replacement such as box-shadow: 0 0 0 3px <your accent colour>.", evidence: { text: sel.slice(0, 80), hints: [sel.split(",")[0].replace(/:focus.*/, "").trim()].filter(Boolean) } }
+        ));
+      }
+    };
+    for (const sheet of Array.from(doc.styleSheets)) {
+      const owner = sheet.ownerNode;
+      if (owner && isTraceBugUi(owner)) continue;
+      let rules2 = null;
+      try {
+        rules2 = sheet.cssRules;
+      } catch (e2) {
+        unreadableSheets++;
+        continue;
+      }
+      if (rules2) visit2(rules2);
+    }
+    findings.push(...detectFocusObscured(doc));
+    return { findings, unreadableSheets };
+  }
+  function detectFocusObscured(doc = document, limit = 6e3) {
+    const win = doc.defaultView || window;
+    const vw = win.innerWidth, vh = win.innerHeight;
+    const root2 = doc.documentElement;
+    if (!doc.body || !vw || !vh || root2.scrollHeight <= vh + 8) return [];
+    const rootCs = win.getComputedStyle(root2);
+    const pad = (v2) => {
+      const n2 = parseFloat(v2);
+      return Number.isFinite(n2) ? n2 : 0;
+    };
+    const padTop = pad(rootCs.scrollPaddingTop), padBottom = pad(rootCs.scrollPaddingBottom);
+    const out = [];
+    const els = doc.body.getElementsByTagName("*");
+    for (let i2 = 0; i2 < els.length && i2 < limit && out.length < 3; i2++) {
+      const el = els[i2];
+      if (isTraceBugUi(el)) continue;
+      const cs = win.getComputedStyle(el);
+      if (cs.position !== "fixed" && cs.position !== "sticky") continue;
+      if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") continue;
+      const r2 = el.getBoundingClientRect();
+      if (r2.width < vw * 0.5 || r2.height < 24 || r2.height > vh * 0.4) continue;
+      const h = Math.round(r2.height);
+      let edge = null;
+      if (r2.top <= 1 && r2.bottom > 0 && padTop < h - 1) edge = "top";
+      else if (r2.bottom >= vh - 1 && r2.top < vh && padBottom < h - 1) edge = "bottom";
+      if (!edge) continue;
+      const prop = edge === "top" ? "scroll-padding-top" : "scroll-padding-bottom";
+      out.push(kbdFinding(
+        "kbd/focus-obscured",
+        "moderate",
+        `A ${cs.position} ${edge === "top" ? "header" : "bar"} can hide focused elements`,
+        `This ${cs.position}-position element is ${h}px tall at the ${edge} of the window and the page sets ${prop}: ${edge === "top" ? padTop : padBottom}px. When keyboard focus scrolls an element into view, it can end up underneath it.`,
+        el,
+        {
+          wcag: ["2.4.11"],
+          fix: `Add html { ${prop}: ${h}px; } to the page's CSS so elements scrolled into view by keyboard focus stop clear of this ${h}px ${edge === "top" ? "header" : "bar"}.`,
+          evidence: { ...elementEvidence(el), metrics: { position: cs.position, heightPx: h, [prop]: edge === "top" ? padTop : padBottom } }
+        }
+      ));
+    }
+    return out;
+  }
+  var MAX_PER_RULE2, TABBABLE;
+  var init_keyboard = __esm({
+    "src/audit/detectors/keyboard.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      MAX_PER_RULE2 = 20;
+      TABBABLE = "a[href], area[href], button, input:not([type=hidden]), select, textarea, iframe, summary, [tabindex], [contenteditable=''], [contenteditable='true']";
+    }
+  });
+
+  // src/scanner/detectors/frustration.ts
+  async function detectFrustration2(session) {
+    var _a2;
+    if (!session) return [];
+    const events = session.events;
+    if (events.length === 0) return [];
+    const issues = [];
+    const page = ((_a2 = session.events[0]) == null ? void 0 : _a2.page) || window.location.pathname;
+    issues.push(...detectRageClicks(events, page));
+    issues.push(...detectDeadClicks(events, page));
+    issues.push(...detectFormAbandonment(events, page));
+    issues.push(...detectErrorCorrelated(events, page));
+    return issues;
+  }
+  function detectRageClicks(events, page) {
+    var _a2, _b, _c, _d, _e, _f, _g, _h;
+    const out = [];
+    const seenGroups = /* @__PURE__ */ new Set();
+    for (let i2 = 0; i2 < events.length; i2++) {
+      const e2 = events[i2];
+      if (e2.type !== "click") continue;
+      const sel = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.selector) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.testId) || "";
+      if (!sel) continue;
+      const cluster = [e2];
+      let j = i2 + 1;
+      while (j < events.length) {
+        const next = events[j];
+        if (next.timestamp - e2.timestamp > RAGE_WINDOW_MS2) break;
+        if (isResponseEvent(next)) break;
+        if (next.type === "click") {
+          const nextSel = ((_f = (_e = next.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector) || ((_h = (_g = next.data) == null ? void 0 : _g.element) == null ? void 0 : _h.testId) || "";
+          if (nextSel === sel) cluster.push(next);
+        }
+        j++;
+      }
+      if (cluster.length >= RAGE_MIN_CLICKS2) {
+        const key = `${sel}@${e2.timestamp}`;
+        if (seenGroups.has(key)) continue;
+        seenGroups.add(key);
+        const label = clickLabel2(cluster[0]);
+        out.push({
+          id: makeIssueId("frustration-rage"),
+          detector: "frustration-rage",
+          severity: "serious",
+          title: `Rage clicks on ${label} (${cluster.length}\xD7 in ${Math.round(cluster[cluster.length - 1].timestamp - cluster[0].timestamp)}ms)`,
+          description: `User clicked the same element ${cluster.length} times within ${RAGE_WINDOW_MS2}ms with no observable response (no API call, navigation, or DOM update). The element either doesn't respond to clicks or feels broken.`,
+          selector: sel,
+          page,
+          detectedAt: cluster[0].timestamp,
+          firstSeenAt: cluster[0].timestamp,
+          lastSeenAt: cluster[cluster.length - 1].timestamp,
+          occurrences: cluster.length
+        });
+        i2 = j - 1;
+      }
+    }
+    return out;
+  }
+  function detectDeadClicks(events, page) {
+    var _a2, _b;
+    const out = [];
+    const MAX = 5;
+    for (let i2 = 0; i2 < events.length && out.length < MAX; i2++) {
+      const e2 = events[i2];
+      if (e2.type !== "click") continue;
+      let responsive = false;
+      for (let j = i2 + 1; j < events.length; j++) {
+        const next = events[j];
+        if (next.timestamp - e2.timestamp > DEAD_RESPONSE_WINDOW_MS2) break;
+        if (isResponseEvent(next)) {
+          responsive = true;
+          break;
+        }
+      }
+      if (responsive) continue;
+      const sel = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.selector) || "";
+      const label = clickLabel2(e2);
+      out.push({
+        id: makeIssueId("frustration-dead"),
+        detector: "frustration-dead",
+        severity: "moderate",
+        title: `Dead click on ${label}`,
+        description: `Clicked but nothing happened within ${DEAD_RESPONSE_WINDOW_MS2}ms (no API call, navigation, or DOM input). The element may have an unbound handler, a swallowed event, or be visually clickable but disabled.`,
+        selector: sel,
+        page: e2.page || page,
+        detectedAt: e2.timestamp
+      });
+    }
+    return out;
+  }
+  function detectFormAbandonment(events, _page) {
+    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+    const out = [];
+    const formActivity = {};
+    for (const e2 of events) {
+      if (e2.type === "input") {
+        const formId = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.formId) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.formAction) || "_default";
+        if (!formActivity[formId]) {
+          formActivity[formId] = { firstInputAt: e2.timestamp, fieldsSeen: /* @__PURE__ */ new Set(), lastInputAt: e2.timestamp, page: e2.page };
+        }
+        const name = ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.name) || ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.id) || "field";
+        formActivity[formId].fieldsSeen.add(name);
+        formActivity[formId].lastInputAt = e2.timestamp;
+      } else if (e2.type === "form_submit") {
+        const formId = ((_j = (_i = e2.data) == null ? void 0 : _i.form) == null ? void 0 : _j.id) || "_default";
+        delete formActivity[formId];
+      } else if (e2.type === "route_change") {
+        for (const formId of Object.keys(formActivity)) {
+          const a2 = formActivity[formId];
+          if (e2.timestamp - a2.lastInputAt > ABANDON_WINDOW_MS) continue;
+          if (a2.fieldsSeen.size === 0) continue;
+          out.push({
+            id: makeIssueId("frustration-abandon"),
+            detector: "frustration-abandon",
+            severity: "moderate",
+            title: `Form abandoned on ${a2.page} (${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} filled)`,
+            description: `User typed into ${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} (${Array.from(a2.fieldsSeen).slice(0, 5).join(", ")}) and then navigated away without submitting. Likely a UX problem: the submit button is unclear, the form requires too much info, or it's failing silently.`,
+            page: a2.page,
+            detectedAt: a2.lastInputAt,
+            firstSeenAt: a2.firstInputAt,
+            lastSeenAt: a2.lastInputAt
+          });
+          delete formActivity[formId];
+        }
+      }
+    }
+    return out;
+  }
+  function detectErrorCorrelated(events, page) {
+    var _a2, _b, _c, _d, _e, _f;
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (let i2 = 0; i2 < events.length; i2++) {
+      const e2 = events[i2];
+      const isError = e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error";
+      if (!isError) continue;
+      let click = null;
+      for (let j = i2 - 1; j >= 0; j--) {
+        const prev = events[j];
+        if (e2.timestamp - prev.timestamp > ERROR_CORRELATION_WINDOW_MS) break;
+        if (prev.type === "click") {
+          click = prev;
+          break;
+        }
+      }
+      if (!click) continue;
+      const errMsg = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.error) == null ? void 0 : _b.message) || "";
+      if (!errMsg) continue;
+      const key = `${errMsg}::${((_d = (_c = click.data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const label = clickLabel2(click);
+      const truncMsg = errMsg.length > 60 ? errMsg.slice(0, 57) + "\u2026" : errMsg;
+      const delta = Math.round(e2.timestamp - click.timestamp);
+      out.push({
+        id: makeIssueId("frustration-error-correlated"),
+        detector: "frustration-error-correlated",
+        severity: "critical",
+        title: `Click on ${label} triggered: ${truncMsg}`,
+        description: `An error fired ${delta}ms after the user clicked ${label}. This is almost certainly the offending interaction \u2014 the click handler threw, or its async path failed.`,
+        selector: (_f = (_e = click.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector,
+        page: e2.page || page,
+        detectedAt: e2.timestamp
+      });
+    }
+    return out;
+  }
+  function isResponseEvent(e2) {
+    return e2.type === "api_request" || e2.type === "route_change" || e2.type === "input" || e2.type === "form_submit" || e2.type === "select_change";
+  }
+  function clickLabel2(e2) {
+    var _a2;
+    const el = (_a2 = e2.data) == null ? void 0 : _a2.element;
+    const raw = (el == null ? void 0 : el.text) || (el == null ? void 0 : el.ariaLabel) || (el == null ? void 0 : el.testId) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
+    const trimmed = String(raw).replace(/\s+/g, " ").trim();
+    return trimmed.length > 40 ? `"${trimmed.slice(0, 37)}\u2026"` : `"${trimmed}"`;
+  }
+  var RAGE_WINDOW_MS2, RAGE_MIN_CLICKS2, DEAD_RESPONSE_WINDOW_MS2, ABANDON_WINDOW_MS, ERROR_CORRELATION_WINDOW_MS;
+  var init_frustration = __esm({
+    "src/scanner/detectors/frustration.ts"() {
+      "use strict";
+      init_helpers2();
+      RAGE_WINDOW_MS2 = 1500;
+      RAGE_MIN_CLICKS2 = 3;
+      DEAD_RESPONSE_WINDOW_MS2 = 1500;
+      ABANDON_WINDOW_MS = 6e4;
+      ERROR_CORRELATION_WINDOW_MS = 2500;
+    }
+  });
+
+  // src/audit/types.ts
+  function isAuditScan(v2) {
+    return typeof v2 === "string" && Object.prototype.hasOwnProperty.call(AUDIT_SCANS, v2);
+  }
+  var AUDIT_SCANS;
+  var init_types = __esm({
+    "src/audit/types.ts"() {
+      "use strict";
+      AUDIT_SCANS = {
+        full: { label: "All checks", categories: ["accessibility", "ui", "performance", "seo", "runtime"] },
+        "auto-review": { label: "Auto Review", categories: ["ui", "runtime"] },
+        accessibility: { label: "Accessibility Audit", categories: ["accessibility"] },
+        "performance-seo": { label: "Performance & SEO", categories: ["performance", "seo"] }
+      };
+    }
+  });
+
+  // src/audit/index.ts
+  function getLastAuditRun() {
+    return _lastRun;
+  }
+  async function runtimeFindings() {
+    const session = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt)[0] || null;
+    const groups = await Promise.all([
+      detectConsoleErrors(session).catch(() => []),
+      detectFailedRequests(session).catch(() => []),
+      detectMixedContent().catch(() => []),
+      // Dead and rage clicks from the capture: the "dead UI" half of Auto Review.
+      detectFrustration2(session).then((list) => list.filter((i2) => i2.detector === "frustration-dead" || i2.detector === "frustration-rage")).catch(() => [])
+    ]);
+    return groups.flat().map((i2) => ({
+      ...i2,
+      category: "runtime",
+      ruleId: `runtime/${i2.detector}`,
+      page: location.href
+    }));
+  }
+  async function runAudit(options = {}) {
+    var _a2;
+    if (_inFlight) return _inFlight;
+    const scan2 = options.scan && AUDIT_SCANS[options.scan] ? options.scan : "full";
+    const wanted = new Set(((_a2 = options.categories) == null ? void 0 : _a2.length) ? options.categories : AUDIT_SCANS[scan2].categories);
+    _inFlight = (async () => {
+      var _a3, _b;
+      const categories = {};
+      const findings = [];
+      const guard = async (name, fn) => {
+        if (!wanted.has(name)) return;
+        try {
+          findings.push(...await fn());
+          categories[name] = { ran: true, limitation: CATEGORY_LIMITATIONS[name] };
+        } catch (err) {
+          console.warn(`[TraceBug] ${name} audit failed:`, err);
+          categories[name] = { ran: false, limitation: `The ${name} check failed on this page, so it was not run.` };
+        }
+      };
+      if (wanted.has("accessibility")) {
+        const a11y = await detectA11yFindings();
+        findings.push(...a11y.findings);
+        let limitation = a11y.limitation;
+        if (a11y.ran) {
+          try {
+            const kbd = detectKeyboardFindings(document);
+            findings.push(...kbd.findings);
+            limitation += " Keyboard: Tab order and focus styles read from the page, nothing focused" + (kbd.unreadableSheets ? `; ${kbd.unreadableSheets} stylesheet${kbd.unreadableSheets === 1 ? "" : "s"} from another site could not be read.` : ".");
+          } catch (err) {
+            console.warn("[TraceBug] keyboard checks failed:", err);
+            limitation += " The keyboard checks failed on this page.";
+          }
+        }
+        const hidden = (_a3 = a11y.transparentText) != null ? _a3 : 0;
+        if (a11y.ran && hidden > 0) {
+          limitation += ` ${hidden} piece${hidden === 1 ? "" : "s"} of text ${hidden === 1 ? "was" : "were"} invisible (opacity 0) when checked \u2014 usually content that fades in when you scroll \u2014 and could not be checked. Scroll through the page, then re-run.`;
+        }
+        categories.accessibility = { ran: a11y.ran, limitation, ...a11y.ran && hidden > 0 ? { metrics: { transparentText: hidden } } : {} };
+      }
+      await guard("ui", detectUiFindings);
+      if (wanted.has("performance")) {
+        try {
+          const perf = await detectPerfFindings();
+          findings.push(...perf.findings);
+          categories.performance = { ran: perf.ran, limitation: perf.limitation, metrics: perf.metrics };
+        } catch (err) {
+          console.warn("[TraceBug] performance audit failed:", err);
+          categories.performance = { ran: false, limitation: "The performance check failed on this page, so it was not run." };
+        }
+      }
+      await guard("seo", () => detectSeoFindings(document));
+      await guard("runtime", runtimeFindings);
+      const run = buildAuditRun(findings, {
+        url: location.href,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        userAgent: navigator.userAgent,
+        categories,
+        scan: ((_b = options.categories) == null ? void 0 : _b.length) ? void 0 : scan2
+      });
+      _lastRun = run;
+      return run;
+    })();
+    try {
+      return await _inFlight;
+    } finally {
+      _inFlight = null;
+    }
+  }
+  var CATEGORY_LIMITATIONS, _lastRun, _inFlight;
+  var init_audit = __esm({
+    "src/audit/index.ts"() {
+      "use strict";
+      init_storage();
+      init_session_data();
+      init_mixed_content();
+      init_run();
+      init_a11y();
+      init_ui();
+      init_seo();
+      init_performance();
+      init_keyboard();
+      init_frustration();
+      init_types();
+      CATEGORY_LIMITATIONS = {
+        ui: "Checked at the current window size only. No design judgement.",
+        seo: "This page only: no crawl, no ranking claims.",
+        runtime: "Only what happened since TraceBug started capturing on this page: errors, failed requests, mixed content, and rage or dead clicks."
+      };
+      _lastRun = null;
+      _inFlight = null;
+    }
+  });
+
+  // src/audit/compare.ts
+  function ranCategories(run) {
+    return new Set(run.categories.filter((c2) => c2.ran).map((c2) => c2.name));
+  }
+  function compareAudits(before, after) {
+    const empty = {
+      comparable: false,
+      fixed: [],
+      stillPresent: [],
+      new: [],
+      regressed: [],
+      skippedCategories: [],
+      incomplete: false
+    };
+    const pathA = urlPath(before.url);
+    const pathB = urlPath(after.url);
+    if (pathA !== pathB) {
+      return { ...empty, reason: `Different pages: ${pathA || "(none)"} vs ${pathB || "(none)"}. Compare two runs of the same page.` };
+    }
+    const ranA = ranCategories(before);
+    const ranB = ranCategories(after);
+    const both = new Set([...ranA].filter((c2) => ranB.has(c2)));
+    const skipped = [.../* @__PURE__ */ new Set([...ranA, ...ranB])].filter((c2) => !both.has(c2)).sort();
+    const inScope = (f2) => !!f2.category && both.has(f2.category);
+    const left = before.findings.filter(inScope);
+    const right = after.findings.filter(inScope);
+    const usedL = /* @__PURE__ */ new Set();
+    const usedR = /* @__PURE__ */ new Set();
+    const stillPresent = [];
+    const pass = (key, matchedBy) => {
+      const index2 = /* @__PURE__ */ new Map();
+      right.forEach((f2, i2) => {
+        const k = f2[key];
+        if (!k || usedR.has(i2)) return;
+        const list = index2.get(k);
+        if (list) list.push(i2);
+        else index2.set(k, [i2]);
+      });
+      left.forEach((f2, i2) => {
+        const k = f2[key];
+        if (!k || usedL.has(i2)) return;
+        const candidates = index2.get(k);
+        const j = candidates == null ? void 0 : candidates.find((c2) => !usedR.has(c2));
+        if (j === void 0) return;
+        usedL.add(i2);
+        usedR.add(j);
+        stillPresent.push({ before: f2, after: right[j], matchedBy });
+      });
+    };
+    pass("fingerprint", "fingerprint");
+    pass("fallbackFingerprint", "fallback");
+    const fixed = left.filter((_, i2) => !usedL.has(i2));
+    const added = right.filter((_, i2) => !usedR.has(i2));
+    const fixedCategories = new Set(fixed.map((f2) => f2.category));
+    const regressed = added.filter((f2) => fixedCategories.has(f2.category));
+    const fresh = added.filter((f2) => !fixedCategories.has(f2.category));
+    return {
+      comparable: true,
+      fixed,
+      stillPresent,
+      new: fresh,
+      regressed,
+      skippedCategories: skipped,
+      incomplete: before.truncated > 0 || after.truncated > 0
+    };
+  }
+  var init_compare = __esm({
+    "src/audit/compare.ts"() {
+      "use strict";
+      init_fingerprint2();
+    }
+  });
+
+  // src/audit/export.ts
+  var export_exports = {};
+  __export(export_exports, {
+    auditOneLiner: () => auditOneLiner,
+    auditSummaryMarkdown: () => auditSummaryMarkdown,
+    exportAuditReport: () => exportAuditReport
+  });
+  function currentSession() {
+    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const activeId = getActiveSessionId();
+    const found = activeId && sessions.find((s2) => s2.sessionId === activeId) || sessions[0];
+    if (found) return found;
+    const now = Date.now();
+    return {
+      sessionId: `audit-${now.toString(36)}`,
+      projectId: "audit",
+      createdAt: now,
+      updatedAt: now,
+      errorMessage: null,
+      errorStack: null,
+      reproSteps: null,
+      errorSummary: null,
+      events: [],
+      annotations: [],
+      environment: captureEnvironment()
+    };
+  }
+  function auditSummaryMarkdown(run) {
+    const total = run.findings.length + run.truncated;
+    const lines = [
+      `**Site audit** of \`${run.url}\` at ${run.viewport.width}\xD7${run.viewport.height} (${run.userAgentFamily}): ${total} finding${total === 1 ? "" : "s"}.`,
+      "",
+      ...run.categories.map((c2) => `- **${CATEGORY_LABEL[c2.name] || c2.name}**: ${!c2.ran ? "not run" : c2.count === 0 ? "no findings" : `${c2.count} found`}${c2.limitation ? ` \u2014 ${c2.limitation}` : ""}`),
+      "",
+      "Open the **Audit** tab for every finding with its evidence."
+    ];
+    return lines.join("\n");
+  }
+  function auditOneLiner(run) {
+    const total = run.findings.length + run.truncated;
+    const bySev = ["critical", "serious", "moderate", "minor"].map((s2) => [s2, run.findings.filter((f2) => f2.severity === s2).length]).filter(([, n2]) => n2 > 0).map(([s2, n2]) => `${n2} ${s2}`);
+    const notRun = run.categories.filter((c2) => !c2.ran).map((c2) => CATEGORY_LABEL[c2.name] || c2.name);
+    return `Site audit: ${total} finding${total === 1 ? "" : "s"}${bySev.length ? ` (${bySev.join(", ")})` : ""}` + (notRun.length ? `; ${notRun.join(", ")} not run.` : ".");
+  }
+  function filenameFor(run) {
+    let host2 = "page";
+    try {
+      host2 = new URL(run.url).hostname.replace(/[^a-z0-9.-]/gi, "") || "page";
+    } catch (e2) {
+    }
+    const stamp = new Date(run.scannedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    return `tracebug-audit-${host2}-${stamp}.html`;
+  }
+  async function exportAuditReport(run) {
+    var _a2, _b;
+    const session = currentSession();
+    const report = buildReport(session);
+    report.video = void 0;
+    let path = run.url;
+    try {
+      path = new URL(run.url).pathname;
+    } catch (e2) {
+    }
+    report.title = `Site audit: ${path}`;
+    report.summary = auditOneLiner(run);
+    report.rootCause = void 0;
+    report.severity = BUG_SEVERITY[(_b = (_a2 = run.findings[0]) == null ? void 0 : _a2.severity) != null ? _b : "minor"];
+    return exportSessionAsHtml(session, report, {
+      includeVideo: false,
+      audit: run,
+      descriptionOverride: auditSummaryMarkdown(run),
+      filename: filenameFor(run)
+    });
+  }
+  var CATEGORY_LABEL, BUG_SEVERITY;
+  var init_export = __esm({
+    "src/audit/export.ts"() {
+      "use strict";
+      init_storage();
+      init_report_builder();
+      init_environment();
+      init_html_replay();
+      CATEGORY_LABEL = {
+        accessibility: "Accessibility",
+        ui: "Layout",
+        performance: "Performance",
+        seo: "SEO",
+        runtime: "Runtime"
+      };
+      BUG_SEVERITY = { critical: "critical", serious: "high", moderate: "medium", minor: "low" };
+    }
+  });
+
+  // src/ui/audit-panel.ts
+  var audit_panel_exports = {};
+  __export(audit_panel_exports, {
+    closeAuditPanel: () => closeAuditPanel,
+    formatCategoryMetrics: () => formatCategoryMetrics,
+    isAuditPanelOpen: () => isAuditPanelOpen,
+    showAuditPanel: () => showAuditPanel,
+    toggleAuditPanel: () => toggleAuditPanel
+  });
+  function isAuditPanelOpen() {
+    return _open;
+  }
+  function getDock() {
+    try {
+      return localStorage.getItem(DOCK_KEY) === "left" ? "left" : "right";
+    } catch (e2) {
+      return "right";
+    }
+  }
+  function setDock(d) {
+    try {
+      localStorage.setItem(DOCK_KEY, d);
+    } catch (e2) {
+    }
+  }
+  async function toggleAuditPanel(root2) {
+    if (_open) {
+      closeAuditPanel();
+      return;
+    }
+    await showAuditPanel(root2);
+  }
+  async function showAuditPanel(root2, scan2) {
+    var _a2, _b;
+    if (isAuditScan(scan2)) _scan = scan2;
+    _root2 = root2;
+    injectStyles();
+    if (!_open) mountShell(root2);
+    setMinimized(false);
+    markScan();
+    setBody(`<div class="tb-au-empty" role="status"><span class="tb-au-spin" aria-hidden="true"></span>Checking this page\u2026</div>`);
+    setBusy(true);
+    setSubtitle(_scan === "full" ? "Running accessibility, layout, performance, SEO and error checks\u2026" : `Running ${AUDIT_SCANS[_scan].label}\u2026`);
+    const previous = getLastAuditRun();
+    let run;
+    try {
+      if (AUDIT_SCANS[_scan].categories.includes("accessibility")) await ensureAxe();
+      run = await runAudit({ scan: _scan });
+    } catch (err) {
+      console.warn("[TraceBug] Audit failed:", err);
+      setBusy(false);
+      setSubtitle("The audit could not run on this page.");
+      setBody(`<div class="tb-au-empty">Something on this page stopped the audit. Reload and try again.</div>`);
+      return null;
+    }
+    setBusy(false);
+    const diff2 = previous && ((_a2 = previous.scan) != null ? _a2 : "full") === ((_b = run.scan) != null ? _b : "full") ? compareAudits(previous, run) : null;
+    _lastDiff = diff2 && diff2.comparable ? diff2 : null;
+    _expanded = /* @__PURE__ */ new Set();
+    render(run);
+    return run;
+  }
+  async function ensureAxe() {
+    const w = window;
+    if (!isExtensionMode() || w.axe && typeof w.axe.run === "function") return;
+    await new Promise((resolve) => {
+      const done = () => {
+        window.removeEventListener("tracebug-ext-axe-ready", done);
+        clearTimeout(t2);
+        resolve();
+      };
+      const t2 = setTimeout(done, 8e3);
+      window.addEventListener("tracebug-ext-axe-ready", done);
+      window.dispatchEvent(new CustomEvent("tracebug-request-axe"));
+    });
+  }
+  function closeAuditPanel() {
+    var _a2;
+    clearHighlight();
+    (_a2 = document.getElementById(PANEL_ID2)) == null ? void 0 : _a2.remove();
+    document.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("resize", placePanel);
+    _open = false;
+    _minimized = false;
+    syncToolbarButton();
+  }
+  function syncToolbarButton() {
+    const btn = document.getElementById("tracebug-toolbar-audit-btn");
+    if (!btn) return;
+    btn.classList.toggle("tb-active", _open);
+    btn.setAttribute("aria-pressed", String(_open));
+  }
+  async function exportCurrent(btn) {
+    const run = getLastAuditRun();
+    if (!run || !btn) return;
+    const label = btn.querySelector(".tb-au-btn-l");
+    btn.disabled = true;
+    const set = (t2) => {
+      if (label) label.textContent = t2;
+    };
+    set("Exporting\u2026");
+    try {
+      const { exportAuditReport: exportAuditReport2 } = await Promise.resolve().then(() => (init_export(), export_exports));
+      const out = await exportAuditReport2(run);
+      set("Exported");
+      btn.title = out.filename;
+    } catch (err) {
+      console.warn("[TraceBug] Audit export failed:", err);
+      set("Export failed");
+    }
+    setTimeout(() => {
+      set("Export");
+      btn.disabled = false;
+    }, 1800);
+  }
+  function onKey(e2) {
+    if (e2.key !== "Escape" || !_open) return;
+    const panel = document.getElementById(PANEL_ID2);
+    const active = document.activeElement;
+    if (panel && active && active !== document.body && !panel.contains(active)) return;
+    e2.stopPropagation();
+    closeAuditPanel();
+  }
+  function mountShell(root2) {
+    var _a2, _b;
+    (_a2 = document.getElementById(PANEL_ID2)) == null ? void 0 : _a2.remove();
+    const panel = document.createElement("aside");
+    panel.id = PANEL_ID2;
+    panel.setAttribute("role", "complementary");
+    panel.setAttribute("aria-labelledby", `${PANEL_ID2}-title`);
+    panel.dataset.dock = getDock();
+    setInnerHTML(panel, `
+    <button type="button" class="tb-au-tab" data-tb-au="restore" aria-label="Show the site audit">
+      <span class="tb-au-tab-score" data-tb-au="tab-score">${ICON.audit}</span><span class="tb-au-tab-l">Audit</span>
+    </button>
+    <div class="tb-au-shell">
+      <div class="tb-au-head">
+        <span class="tb-au-logo">${ICON.audit}</span>
+        <div class="tb-au-titles">
+          <h2 class="tb-au-title" id="${PANEL_ID2}-title" tabindex="-1">Site audit</h2>
+          <div class="tb-au-sub" data-tb-au="subtitle" aria-live="polite"></div>
+        </div>
+        <button type="button" class="tb-au-icon" data-tb-au="dock" aria-label="Move panel to the other side" title="Move panel to the other side">${ICON.dockLeft}</button>
+        <button type="button" class="tb-au-icon" data-tb-au="minimize" aria-label="Minimise" title="Minimise">${ICON.minimize}</button>
+        <button type="button" class="tb-au-icon" data-tb-au="close" aria-label="Close the audit" title="Close (Esc)">${ICON.close}</button>
+      </div>
+      <div class="tb-au-scans" role="group" aria-label="Which checks to run">${Object.keys(AUDIT_SCANS).map((k) => `<button type="button" class="tb-au-scan" data-tb-au="scan" data-scan="${k}" aria-pressed="false">${escapeHtml(AUDIT_SCANS[k].label)}</button>`).join("")}</div>
+      <div class="tb-au-actions">
+        <button type="button" class="tb-au-btn tb-au-btn-primary" data-tb-au="rerun">${ICON.rerun}<span class="tb-au-btn-l">Re-run audit</span></button>
+        <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read">${ICON.export}<span class="tb-au-btn-l">Export</span></button>
+      </div>
+      <div class="tb-au-body" data-tb-au="body"></div>
+    </div>`);
+    root2.appendChild(panel);
+    _open = true;
+    syncToolbarButton();
+    syncDockButton();
+    placePanel();
+    window.addEventListener("resize", placePanel);
+    panel.addEventListener("click", (e2) => {
+      const t2 = e2.target;
+      const actionEl = t2.closest("[data-tb-au]");
+      const action = actionEl == null ? void 0 : actionEl.dataset.tbAu;
+      if (!action) return;
+      if (action === "close") closeAuditPanel();
+      else if (action === "minimize") setMinimized(true);
+      else if (action === "restore") setMinimized(false);
+      else if (action === "dock") switchDock();
+      else if (action === "rerun") void showAuditPanel(root2);
+      else if (action === "export") void exportCurrent(actionEl);
+      else if (action === "scan") void showAuditPanel(root2, actionEl == null ? void 0 : actionEl.dataset.scan);
+      else if (action === "reveal") void revealAndRerun(root2);
+      else if (action === "filter") {
+        _filter = (actionEl == null ? void 0 : actionEl.dataset.sev) || "all";
+        const r2 = getLastAuditRun();
+        if (r2) render(r2);
+      } else if (action === "toggle") toggleCard(actionEl.closest(".tb-au-card"));
+      else if (action === "locate") locate(actionEl.closest(".tb-au-card"));
+      else if (action === "copy") void copySelector(actionEl);
+    });
+    document.addEventListener("keydown", onKey, true);
+    (_b = panel.querySelector(`#${PANEL_ID2}-title`)) == null ? void 0 : _b.focus({ preventScroll: true });
+  }
+  function placePanel() {
+    const panel = document.getElementById(PANEL_ID2);
+    if (!panel) return;
+    const dock = panel.dataset.dock === "left" ? "left" : "right";
+    let offset = 12;
+    const tb = document.getElementById(TOOLBAR_ID);
+    if (tb) {
+      const r2 = tb.getBoundingClientRect();
+      if (r2.width > 0 && r2.width < 120) {
+        const onRight = r2.left + r2.width / 2 > window.innerWidth / 2;
+        if (dock === "right" && onRight) offset = Math.max(12, window.innerWidth - r2.left + 8);
+        if (dock === "left" && !onRight) offset = Math.max(12, r2.right + 8);
+      }
+    }
+    panel.style.setProperty("--tb-au-offset", `${Math.round(offset)}px`);
+  }
+  function switchDock() {
+    const panel = document.getElementById(PANEL_ID2);
+    if (!panel) return;
+    const next = panel.dataset.dock === "left" ? "right" : "left";
+    panel.dataset.dock = next;
+    setDock(next);
+    syncDockButton();
+    placePanel();
+  }
+  function syncDockButton() {
+    const panel = document.getElementById(PANEL_ID2);
+    const btn = panel == null ? void 0 : panel.querySelector('[data-tb-au="dock"]');
+    if (!panel || !btn) return;
+    const toLeft = panel.dataset.dock !== "left";
+    setInnerHTML(btn, toLeft ? ICON.dockLeft : ICON.dockRight);
+    const label = toLeft ? "Move panel to the left" : "Move panel to the right";
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  }
+  function setMinimized(min) {
+    var _a2;
+    _minimized = min;
+    const panel = document.getElementById(PANEL_ID2);
+    if (!panel) return;
+    panel.classList.toggle("tb-au-min", min);
+    if (min) (_a2 = panel.querySelector('[data-tb-au="restore"]')) == null ? void 0 : _a2.focus({ preventScroll: true });
+  }
+  function setBusy(busy) {
+    const panel = document.getElementById(PANEL_ID2);
+    if (!panel) return;
+    panel.querySelectorAll('[data-tb-au="export"], [data-tb-au="rerun"], [data-tb-au="scan"]').forEach((b) => {
+      b.disabled = busy || b.dataset.tbAu === "export" && !getLastAuditRun();
+    });
+    panel.setAttribute("aria-busy", String(busy));
+  }
+  function markScan() {
+    document.querySelectorAll(`#${PANEL_ID2} [data-tb-au="scan"]`).forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.scan === _scan));
+    });
+  }
+  function setSubtitle(text) {
+    const el = document.querySelector(`#${PANEL_ID2} [data-tb-au="subtitle"]`);
+    if (el) el.textContent = text;
+  }
+  function setBody(html) {
+    const el = document.querySelector(`#${PANEL_ID2} [data-tb-au="body"]`);
+    if (el) setInnerHTML(el, html);
+  }
+  function render(run) {
+    var _a2, _b, _c;
+    const total = run.findings.length + run.truncated;
+    const when = new Date(run.scannedAt).toLocaleTimeString();
+    setSubtitle(`${AUDIT_SCANS[(_a2 = run.scan) != null ? _a2 : "full"].label} \xB7 ${total === 0 ? "No findings" : `${total} finding${total === 1 ? "" : "s"}`} \xB7 ${run.viewport.width}\xD7${run.viewport.height} \xB7 ${when}`);
+    updateTabScore(run);
+    const parts = [];
+    parts.push(scoreCard(run));
+    if (_lastDiff) parts.push(diffHtml(_lastDiff));
+    const a11y = run.categories.find((c2) => c2.name === "accessibility");
+    const hidden = (_c = (_b = a11y == null ? void 0 : a11y.metrics) == null ? void 0 : _b.transparentText) != null ? _c : 0;
+    if (hidden > 0) {
+      parts.push(`<div class="tb-au-notice">${ICON.eye}<div><b>${hidden} piece${hidden === 1 ? "" : "s"} of text ${hidden === 1 ? "was" : "were"} invisible when checked</b>
+      <div class="tb-au-muted">Usually content that fades in when you scroll. It wasn't checked.</div>
+      <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="reveal">Scroll the page and re-run</button></div></div>`);
+    }
+    if (run.findings.length) parts.push(filterBar(run));
+    let shown = 0;
+    for (const c2 of run.categories) {
+      if (!c2.ran) continue;
+      const items = run.findings.filter((f2) => f2.category === c2.name && (_filter === "all" || f2.severity === _filter));
+      if (items.length === 0) continue;
+      shown += items.length;
+      parts.push(`<section class="tb-au-group" aria-label="${escapeHtml(CATEGORY_LABEL2[c2.name])}">
+      <h3 class="tb-au-group-h">${escapeHtml(CATEGORY_LABEL2[c2.name])} <span>${items.length}</span></h3>
+      ${items.map((f2) => findingHtml(f2, run)).join("")}</section>`);
+    }
+    if (run.findings.length && shown === 0) {
+      parts.push(`<div class="tb-au-empty">No ${escapeHtml(SEVERITY_LABEL2[_filter] || "").toLowerCase()} findings.</div>`);
+    }
+    if (run.truncated > 0) {
+      parts.push(`<div class="tb-au-note">${run.truncated} more finding${run.truncated === 1 ? "" : "s"} not listed (the list keeps the ${run.findings.length} most severe). The score counts all of them.</div>`);
+    }
+    if (run.findings.length === 0) {
+      parts.push(`<div class="tb-au-empty">No problems found in the checks that ran. That is not proof the page is accessible or bug-free \u2014 see what each check can't tell you above.</div>`);
+    }
+    setBody(parts.join(""));
+    setBusy(false);
+  }
+  function ring(score, size, stroke) {
+    const r2 = (size - stroke) / 2;
+    const c2 = 2 * Math.PI * r2;
+    const band = score == null ? "none" : scoreBand(score);
+    const dash = score == null ? 0 : c2 * score / 100;
+    return `<svg class="tb-au-ring tb-au-band-${band}" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true" focusable="false">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r2}" fill="none" stroke-width="${stroke}" class="tb-au-ring-bg"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r2}" fill="none" stroke-width="${stroke}" class="tb-au-ring-fg"
+      stroke-dasharray="${dash.toFixed(2)} ${c2.toFixed(2)}" transform="rotate(-90 ${size / 2} ${size / 2})" stroke-linecap="round"/>
+  </svg>`;
+  }
+  function scoreCard(run) {
+    var _a2;
+    const s2 = run.score;
+    const overall = (_a2 = s2 == null ? void 0 : s2.overall) != null ? _a2 : null;
+    const band = overall == null ? null : scoreBand(overall);
+    const head = overall == null ? `<div class="tb-au-score-n">\u2013</div>` : `<div class="tb-au-score-n">${overall}</div>`;
+    const cats = run.categories.map((c2) => {
+      var _a3;
+      const v2 = (_a3 = s2 == null ? void 0 : s2.categories) == null ? void 0 : _a3[c2.name];
+      const pill = !c2.ran ? `<span class="tb-au-pill tb-au-pill-off">Not run</span>` : typeof v2 === "number" ? `<span class="tb-au-pill tb-au-band-${scoreBand(v2)}" title="${BAND_LABEL[scoreBand(v2)]}">${v2}</span>` : `<span class="tb-au-pill tb-au-pill-off">\u2013</span>`;
+      const state = !c2.ran ? "" : c2.count === 0 ? "No findings" : `${c2.count} found`;
+      const metrics = c2.metrics ? formatCategoryMetrics(c2.metrics) : "";
+      return `<li class="tb-au-cat${c2.ran ? "" : " tb-au-cat-off"}">
+      <div class="tb-au-cat-h">${pill}<b>${escapeHtml(CATEGORY_LABEL2[c2.name])}</b><span class="tb-au-cat-n">${escapeHtml(state)}</span></div>
+      ${metrics ? `<div class="tb-au-cat-m">${escapeHtml(metrics)}</div>` : ""}
+      ${!c2.ran && c2.limitation ? `<div class="tb-au-cat-l">${escapeHtml(c2.limitation)}</div>` : ""}
+    </li>`;
+    }).join("");
+    const limits = run.categories.filter((c2) => c2.ran && c2.limitation).map((c2) => `<li><b>${escapeHtml(CATEGORY_LABEL2[c2.name])}:</b> ${escapeHtml(c2.limitation)}</li>`).join("");
+    const label = overall == null ? "No score: no check ran" : `Score ${overall} out of 100, ${BAND_LABEL[band]}`;
+    return `<div class="tb-au-score" role="group" aria-label="${escapeHtml(label)}">
+    <div class="tb-au-score-top">
+      <div class="tb-au-score-ring">${ring(overall, 76, 7)}${head}</div>
+      <div class="tb-au-score-t">
+        <div class="tb-au-score-band ${band ? `tb-au-band-${band}` : ""}">${band ? BAND_LABEL[band] : "No score"}</div>
+        <div class="tb-au-muted">${overall == null ? "Checks that didn't run are never scored." : "Out of 100, from the checks that ran."}</div>
+        <details class="tb-au-how"><summary>${ICON.info}How is this calculated?</summary><p>${escapeHtml(SCORE_EXPLANATION)}</p></details>
+      </div>
+    </div>
+    <ul class="tb-au-cats">${cats}</ul>
+    ${limits ? `<details class="tb-au-how tb-au-limits"><summary>${ICON.info}What these checks can't tell you</summary><ul>${limits}</ul></details>` : ""}
+  </div>`;
+  }
+  function updateTabScore(run) {
+    var _a2;
+    const el = document.querySelector(`#${PANEL_ID2} [data-tb-au="tab-score"]`);
+    const o2 = (_a2 = run.score) == null ? void 0 : _a2.overall;
+    if (!el) return;
+    if (typeof o2 === "number") setInnerHTML(el, `<span class="tb-au-tab-n tb-au-band-${scoreBand(o2)}">${o2}</span>`);
+    else setInnerHTML(el, ICON.audit);
+  }
+  function filterBar(run) {
+    const counts = { all: run.findings.length };
+    for (const f2 of run.findings) counts[f2.severity] = (counts[f2.severity] || 0) + 1;
+    const btn = (key, label) => `<button type="button" class="tb-au-chip" data-tb-au="filter" data-sev="${key}" aria-pressed="${_filter === key}">${key !== "all" ? `<span class="tb-au-dot tb-au-sev-${key}"></span>` : ""}${label} <span>${counts[key] || 0}</span></button>`;
+    return `<div class="tb-au-filter" role="group" aria-label="Show findings by severity">${btn("all", "All")}${SEVERITIES.filter((s2) => counts[s2]).map((s2) => btn(s2, SEVERITY_LABEL2[s2])).join("")}</div>`;
+  }
+  function formatCategoryMetrics(m) {
+    const out = [];
+    const sec = (v2) => `${(v2 / 1e3).toFixed(2)} s`;
+    if (m.lcpMs !== void 0) out.push(`LCP ${sec(m.lcpMs)}`);
+    if (m.fcpMs !== void 0) out.push(`FCP ${sec(m.fcpMs)}`);
+    if (m.ttfbMs !== void 0) out.push(`TTFB ${sec(m.ttfbMs)}`);
+    if (m.cls !== void 0) out.push(`CLS ${m.cls}`);
+    if (m.transferKb !== void 0) out.push(m.transferKb >= 1024 ? `${(m.transferKb / 1024).toFixed(1)} MB` : `${m.transferKb} KB`);
+    if (m.requests !== void 0) out.push(`${m.requests} requests`);
+    return out.join(" \xB7 ");
+  }
+  function diffHtml(d) {
+    const bits = [
+      `<b class="tb-au-good">${d.fixed.length} fixed</b>`,
+      `${d.stillPresent.length} still present`,
+      d.regressed.length ? `<b class="tb-au-bad">${d.regressed.length} regressed</b>` : "",
+      d.new.length ? `${d.new.length} new` : ""
+    ].filter(Boolean).join(" \xB7 ");
+    const skipped = d.skippedCategories.length ? ` <span class="tb-au-muted">(${escapeHtml(d.skippedCategories.map((c2) => CATEGORY_LABEL2[c2]).join(", "))} not compared: not run both times)</span>` : "";
+    return `<div class="tb-au-diff" role="status">Since the last run: ${bits}${skipped}</div>`;
+  }
+  function whereLabel(f2) {
+    var _a2, _b;
+    const t2 = (_b = (_a2 = f2.evidence) == null ? void 0 : _a2.text) == null ? void 0 : _b.trim();
+    return t2 ? `\u201C${t2.length > 48 ? t2.slice(0, 47) + "\u2026" : t2}\u201D` : f2.selector || f2.url || "";
+  }
+  function contrastHtml(m) {
+    var _a2, _b, _c, _d, _e;
+    const fg = String((_a2 = m.fgColor) != null ? _a2 : ""), bg = String((_b = m.bgColor) != null ? _b : ""), sug = String((_c = m.suggestedFgColor) != null ? _c : "");
+    const hex = /^#[0-9a-f]{3,8}$/i;
+    if (!hex.test(fg) || !hex.test(bg)) return "";
+    const sample = (color) => `<span class="tb-au-swatch" style="color:${color};background:${bg}">Aa</span>`;
+    return `<div class="tb-au-contrast">
+    <div class="tb-au-cx">${sample(fg)}<div><b>${escapeHtml(String((_d = m.contrastRatio) != null ? _d : "?"))}:1</b><span class="tb-au-muted">now \xB7 needs ${escapeHtml(String((_e = m.expectedContrastRatio) != null ? _e : ""))}</span><code>${escapeHtml(fg)} on ${escapeHtml(bg)}</code></div></div>
+    ${hex.test(sug) ? `<div class="tb-au-cx tb-au-cx-fix">${sample(sug)}<div><b>Suggested</b><span class="tb-au-muted">passes</span><code>${escapeHtml(sug)} on ${escapeHtml(bg)}</code></div></div>` : ""}
+  </div>`;
+  }
+  function findingHtml(f2, run) {
+    var _a2;
+    const open = _expanded.has(f2.id);
+    const m = (_a2 = f2.evidence) == null ? void 0 : _a2.metrics;
+    const isContrast = !!m && (f2.ruleId === "color-contrast" || f2.ruleId === "color-contrast-enhanced");
+    const contrast = isContrast ? contrastHtml(m) : "";
+    const metricRows = m && !contrast ? `<dl class="tb-au-kv">${Object.entries(m).map(([k, v2]) => `<dt>${escapeHtml(METRIC_LABEL[k] || k)}</dt><dd>${escapeHtml(String(v2))}</dd>`).join("")}</dl>` : "";
+    const more = f2.occurrences && f2.occurrences > 1 ? ` <span class="tb-au-muted">\xD7${f2.occurrences}</span>` : "";
+    const wcag = (f2.wcag || []).map((sc) => `<span class="tb-au-wcag">WCAG ${escapeHtml(wcagLabel(sc))}</span>`).join("");
+    const help = f2.helpUrl && /^https:\/\//.test(f2.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(f2.helpUrl)}" target="_blank" rel="noopener noreferrer">Learn more about this rule${ICON.external}<span class="tb-au-sr"> (opens in a new tab)</span></a>` : "";
+    const fix = f2.fix || "";
+    const where = f2.selector ? `<div class="tb-au-where"><code title="${escapeHtml(f2.selector)}">${escapeHtml(f2.selector)}</code>
+        <div class="tb-au-where-b">
+          <button type="button" class="tb-au-btn tb-au-btn-sm tb-au-btn-primary" data-tb-au="locate">${ICON.locate}<span class="tb-au-btn-l">Locate on page</span></button>
+          <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="copy" aria-label="Copy selector">${ICON.copy}<span class="tb-au-btn-l">Copy</span></button>
+        </div>
+        <div class="tb-au-locmsg" data-tb-au-msg role="status"></div></div>` : f2.url ? `<div class="tb-au-where"><code>${escapeHtml(f2.url)}</code></div>` : `<div class="tb-au-muted">This one is about the whole page, not one element.</div>`;
+    void run;
+    const id = `tb-au-f-${escapeHtml(f2.id)}`;
+    return `<article class="tb-au-card tb-au-card-${f2.severity}${open ? " tb-au-open" : ""}" data-id="${escapeHtml(f2.id)}" data-selector="${escapeHtml(f2.selector || "")}">
+    <button type="button" class="tb-au-card-h" data-tb-au="toggle" aria-expanded="${open}" aria-controls="${id}">
+      <span class="tb-au-sev"><span class="tb-au-dot tb-au-sev-${f2.severity}"></span>${SEVERITY_LABEL2[f2.severity]}</span>
+      <span class="tb-au-card-t">${escapeHtml(f2.title)}${more}</span>
+      <span class="tb-au-card-w">${escapeHtml(whereLabel(f2))}</span>
+      <span class="tb-au-chev">${ICON.chevron}</span>
+    </button>
+    <div class="tb-au-card-b" id="${id}"${open ? "" : " hidden"}>
+      <p class="tb-au-desc">${escapeHtml(f2.description)}</p>
+      ${contrast}${metricRows}
+      ${wcag ? `<div class="tb-au-wcags">${wcag}</div>` : ""}
+      ${fix ? `<div class="tb-au-sect"><div class="tb-au-sect-h">${ICON.wrench}How to fix</div><p>${escapeHtml(fix)}</p></div>` : ""}
+      <div class="tb-au-sect"><div class="tb-au-sect-h">${ICON.pin}Where it is</div>${where}</div>
+      <div class="tb-au-foot"><code class="tb-au-rule">${escapeHtml(f2.ruleId || "")}</code>${help}</div>
+    </div>
+  </article>`;
+  }
+  function toggleCard(card) {
+    var _a2;
+    if (!card) return;
+    const id = card.dataset.id || "";
+    const open = !card.classList.contains("tb-au-open");
+    card.classList.toggle("tb-au-open", open);
+    (_a2 = card.querySelector(".tb-au-card-h")) == null ? void 0 : _a2.setAttribute("aria-expanded", String(open));
+    const body = card.querySelector(".tb-au-card-b");
+    if (body) body.hidden = !open;
+    if (open) _expanded.add(id);
+    else _expanded.delete(id);
+  }
+  async function copySelector(btn) {
+    var _a2;
+    const sel = ((_a2 = btn == null ? void 0 : btn.closest(".tb-au-card")) == null ? void 0 : _a2.dataset.selector) || "";
+    const label = btn == null ? void 0 : btn.querySelector(".tb-au-btn-l");
+    if (!sel || !label) return;
+    try {
+      await navigator.clipboard.writeText(sel);
+      label.textContent = "Copied";
+    } catch (e2) {
+      label.textContent = "Copy failed";
+    }
+    setTimeout(() => {
+      label.textContent = "Copy";
+    }, 1500);
+  }
+  function clearHighlight() {
+    var _a2;
+    if (_highlightTimer) clearTimeout(_highlightTimer);
+    _highlightTimer = null;
+    cancelAnimationFrame(_highlightRaf);
+    (_a2 = document.getElementById(HIGHLIGHT_ID)) == null ? void 0 : _a2.remove();
+    document.querySelectorAll(`#${PANEL_ID2} .tb-au-card.tb-au-active`).forEach((c2) => c2.classList.remove("tb-au-active"));
+  }
+  function locate(card) {
+    if (!card) return;
+    const selector = card.dataset.selector || "";
+    const msg = card.querySelector("[data-tb-au-msg]");
+    const say = (t2) => {
+      if (msg) msg.textContent = t2;
+    };
+    say("");
+    let el = null;
+    try {
+      el = selector ? document.querySelector(selector) : null;
+    } catch (e2) {
+      el = null;
+    }
+    if (!el) {
+      say("Not on the page any more \u2014 it may have been removed or re-rendered. Re-run the audit.");
+      return;
+    }
+    const rect0 = el.getBoundingClientRect();
+    const vis = el.checkVisibility;
+    if (rect0.width === 0 && rect0.height === 0 || typeof vis === "function" && !vis.call(el)) {
+      say("It's on the page but not visible right now (hidden, or inside a closed menu or tab).");
+    }
+    clearHighlight();
+    card.classList.add("tb-au-active");
+    el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    const box2 = document.createElement("div");
+    box2.id = HIGHLIGHT_ID;
+    box2.setAttribute("aria-hidden", "true");
+    const tag = document.createElement("span");
+    tag.className = "tb-au-hl-tag";
+    box2.appendChild(tag);
+    (_root2 || document.body).appendChild(box2);
+    const panel = document.getElementById(PANEL_ID2);
+    let warned = false;
+    const follow = () => {
+      const r2 = el.getBoundingClientRect();
+      box2.style.transform = `translate(${Math.round(r2.left - 4)}px, ${Math.round(r2.top - 4)}px)`;
+      box2.style.width = `${Math.round(r2.width + 8)}px`;
+      box2.style.height = `${Math.round(r2.height + 8)}px`;
+      tag.textContent = `${el.tagName.toLowerCase()} \xB7 ${Math.round(r2.width)}\xD7${Math.round(r2.height)}`;
+      tag.classList.toggle("tb-au-hl-tag-below", r2.top < 28);
+      if (!warned && panel && !_minimized) {
+        const p = panel.getBoundingClientRect();
+        const cx = r2.left + r2.width / 2;
+        if (cx >= p.left && cx <= p.right && r2.bottom > p.top && r2.top < p.bottom) {
+          warned = true;
+          say("It's behind this panel \u2014 move the panel to the other side or minimise it to see it.");
+        }
+      }
+      _highlightRaf = requestAnimationFrame(follow);
+    };
+    follow();
+    _highlightTimer = setTimeout(() => {
+      cancelAnimationFrame(_highlightRaf);
+      box2.classList.add("tb-au-hl-out");
+      setTimeout(() => {
+        box2.remove();
+        card.classList.remove("tb-au-active");
+      }, 400);
+    }, 4e3);
+  }
+  async function revealAndRerun(root2) {
+    const startY = window.scrollY, startX = window.scrollX;
+    setSubtitle("Scrolling through the page so hidden content appears\u2026");
+    const step = Math.max(200, Math.round(window.innerHeight * 0.8));
+    const max = Math.min(document.documentElement.scrollHeight, 6e4);
+    const wait = (ms) => new Promise((r2) => setTimeout(r2, ms));
+    for (let y = 0; y < max; y += step) {
+      window.scrollTo(0, y);
+      await wait(140);
+    }
+    window.scrollTo(0, max);
+    await wait(500);
+    window.scrollTo(startX, startY);
+    await wait(200);
+    await showAuditPanel(root2);
+  }
+  function injectStyles() {
+    if (document.getElementById(STYLE_ID3)) return;
+    const s2 = createStyleTag(STYLE_ID3);
+    const P = `#${PANEL_ID2}`;
+    const H = `#${HIGHLIGHT_ID}`;
+    s2.textContent = `
+    ${P} { position: fixed !important; top: 12px !important; bottom: 12px !important; z-index: 2147483646 !important;
+      width: min(400px, calc(100vw - 24px)) !important; display: flex !important; flex-direction: column !important;
+      background: var(--tb-bg-primary, #0B0D14) !important; color: var(--tb-text-primary, #EEF0F5) !important;
+      border: 1px solid var(--tb-border, #252A38) !important; border-radius: var(--tb-radius-lg, 16px) !important;
+      box-shadow: var(--tb-shadow-lg, 0 16px 48px rgba(0,0,0,.45)) !important; overflow: hidden !important;
+      font: 13px/1.5 var(--tb-font-family, system-ui, -apple-system, "Segoe UI", sans-serif) !important; text-align: left !important;
+      animation: tb-au-in .18s ease-out; }
+    ${P}[data-dock="right"] { right: var(--tb-au-offset, 12px) !important; left: auto !important; }
+    ${P}[data-dock="left"] { left: var(--tb-au-offset, 12px) !important; right: auto !important; }
+    @keyframes tb-au-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { ${P}, ${H} { animation: none !important; transition: none !important; } }
+    ${P} *, ${P} *::before, ${P} *::after { box-sizing: border-box !important; }
+    ${P} h2, ${P} h3, ${P} p, ${P} ul, ${P} dl, ${P} dd { margin: 0; padding: 0; }
+    ${P} .tb-au-shell { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+    ${P}.tb-au-min { top: auto !important; bottom: 88px !important; width: auto !important; border-radius: 12px !important; }
+    ${P}.tb-au-min .tb-au-shell { display: none; }
+    ${P} .tb-au-tab { display: none; }
+    ${P}.tb-au-min .tb-au-tab { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: none; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+    ${P} .tb-au-tab-n { display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 999px; font-weight: 700; font-size: 12px; border: 3px solid currentColor; color: var(--tb-text-primary, #EEF0F5); }
+    ${P} .tb-au-head { display: flex; align-items: center; gap: 6px; padding: 12px 10px 10px 14px; border-bottom: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-logo { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--tb-accent-subtle, rgba(255,92,108,.14)); color: var(--tb-accent, #FF5C6C); flex-shrink: 0; }
+    ${P} .tb-au-titles { flex: 1; min-width: 0; }
+    ${P} .tb-au-title { font-size: 15px; font-weight: 700; line-height: 1.2; outline: none; }
+    ${P} .tb-au-sub, ${P} .tb-au-muted { color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
+    ${P} .tb-au-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    ${P} .tb-au-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: none; border: 0; color: var(--tb-text-secondary, #A8AEBE); cursor: pointer; flex-shrink: 0; }
+    ${P} .tb-au-icon:hover { background: var(--tb-bg-secondary, #141823); color: var(--tb-text-primary, #EEF0F5); }
+    ${P} .tb-au-scans { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; }
+    ${P} .tb-au-scan { background: transparent; color: var(--tb-text-secondary, #A8AEBE); border: 1px solid var(--tb-border, #252A38); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; min-height: 28px; }
+    ${P} .tb-au-scan:hover:not(:disabled) { color: var(--tb-text-primary, #EEF0F5); border-color: var(--tb-border-hover, #333A4D); }
+    ${P} .tb-au-scan[aria-pressed="true"] { background: var(--tb-accent, #FF5C6C); border-color: var(--tb-accent, #FF5C6C); color: var(--tb-on-accent, #0B0D14); font-weight: 600; }
+    ${P} .tb-au-actions { display: flex; gap: 8px; padding: 10px 14px 12px; border-bottom: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-btn { display: inline-flex; align-items: center; gap: 6px; background: var(--tb-bg-secondary, #141823); color: var(--tb-text-primary, #EEF0F5);
+      border: 1px solid var(--tb-border, #252A38); border-radius: var(--tb-radius-sm, 10px); padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; min-height: 32px; }
+    ${P} .tb-au-btn:hover:not(:disabled) { border-color: var(--tb-border-hover, #333A4D); }
+    ${P} .tb-au-btn-primary { background: var(--tb-accent-subtle, rgba(255,92,108,.14)); border-color: transparent; color: var(--tb-text-primary, #EEF0F5); }
+    ${P} .tb-au-btn:disabled, ${P} .tb-au-scan:disabled { opacity: .5; cursor: default; }
+    ${P} .tb-au-btn-sm { padding: 4px 9px; font-size: 11.5px; min-height: 28px; }
+    ${P} button:focus-visible, ${P} a:focus-visible, ${P} summary:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C) !important; outline-offset: 2px; }
+    ${P} .tb-au-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px 18px; overscroll-behavior: contain; }
+    ${P} .tb-au-empty { padding: 28px 8px; text-align: center; color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-spin { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--tb-border, #252A38); border-top-color: var(--tb-accent, #FF5C6C); border-radius: 50%; animation: tb-au-spin .8s linear infinite; }
+    @keyframes tb-au-spin { to { transform: rotate(360deg); } }
+    ${P} .tb-au-note { margin-top: 10px; color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
+    ${P} .tb-au-good { color: var(--tb-success, #4CC38A); } ${P} .tb-au-bad { color: var(--tb-error, #F05257); }
+    ${P} .tb-au-diff { padding: 9px 12px; margin: 12px 0 0; border-radius: var(--tb-radius-sm, 10px); background: var(--tb-bg-secondary, #141823); border: 1px solid var(--tb-border, #252A38); font-size: 12px; }
+    ${P} .tb-au-notice { display: flex; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: var(--tb-radius-sm, 10px); border: 1px solid var(--tb-severity-major, #F59E0B); background: rgba(245,158,11,.08); font-size: 12px; }
+    ${P} .tb-au-notice svg { flex-shrink: 0; margin-top: 2px; color: var(--tb-severity-major, #F59E0B); }
+    ${P} .tb-au-notice .tb-au-btn { margin-top: 8px; }
+    /* Score */
+    ${P} .tb-au-score { border: 1px solid var(--tb-border, #252A38); border-radius: var(--tb-radius-md, 12px); background: var(--tb-bg-secondary, #141823); padding: 12px; }
+    ${P} .tb-au-score-top { display: flex; gap: 14px; align-items: center; }
+    ${P} .tb-au-score-ring { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
+    ${P} .tb-au-score-n { position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+    ${P} .tb-au-ring-bg { stroke: var(--tb-border, #252A38); }
+    ${P} .tb-au-ring-fg { transition: stroke-dasharray .5s ease; }
+    ${P} .tb-au-band-good .tb-au-ring-fg { stroke: var(--tb-success, #22C55E); }
+    ${P} .tb-au-band-fair .tb-au-ring-fg { stroke: #F59E0B; }
+    ${P} .tb-au-band-poor .tb-au-ring-fg { stroke: var(--tb-error, #EF4444); }
+    ${P} .tb-au-score-t { min-width: 0; }
+    ${P} .tb-au-score-band { font-size: 15px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+    ${P} .tb-au-score-band::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--tb-text-muted, #8A91A5); }
+    ${P} .tb-au-score-band.tb-au-band-good::before { background: var(--tb-success, #22C55E); }
+    ${P} .tb-au-score-band.tb-au-band-fair::before { background: #F59E0B; }
+    ${P} .tb-au-score-band.tb-au-band-poor::before { background: var(--tb-error, #EF4444); }
+    ${P} .tb-au-how { margin-top: 4px; font-size: 12px; }
+    ${P} .tb-au-how summary { cursor: pointer; color: var(--tb-text-secondary, #A8AEBE); display: inline-flex; align-items: center; gap: 5px; list-style: none; }
+    ${P} .tb-au-how summary::-webkit-details-marker { display: none; }
+    ${P} .tb-au-how p { margin-top: 6px; color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-limits { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-limits ul { list-style: none; margin-top: 6px; display: grid; gap: 6px; font-size: 11.5px; color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-cats { list-style: none; margin-top: 12px; display: grid; gap: 6px; }
+    ${P} .tb-au-cat { border-top: 1px solid var(--tb-border, #252A38); padding-top: 8px; }
+    ${P} .tb-au-cat-h { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+    ${P} .tb-au-cat-h b { flex: 1; }
+    ${P} .tb-au-cat-n { color: var(--tb-text-secondary, #A8AEBE); font-size: 12px; }
+    ${P} .tb-au-cat-off { opacity: .75; }
+    ${P} .tb-au-cat-m { margin: 3px 0 0 44px; font: 600 11.5px/1.4 var(--tb-font-mono, ui-monospace, monospace); color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-cat-l { margin: 3px 0 0 44px; font-size: 11px; color: var(--tb-text-muted, #8A91A5); }
+    ${P} .tb-au-pill { display: inline-grid; place-items: center; min-width: 36px; height: 22px; padding: 0 6px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+      border: 2px solid var(--tb-border, #252A38); color: var(--tb-text-primary, #EEF0F5); }
+    ${P} .tb-au-pill.tb-au-band-good { border-color: var(--tb-success, #22C55E); }
+    ${P} .tb-au-pill.tb-au-band-fair { border-color: #F59E0B; }
+    ${P} .tb-au-pill.tb-au-band-poor { border-color: var(--tb-error, #EF4444); }
+    ${P} .tb-au-pill-off { font-size: 10px; font-weight: 600; color: var(--tb-text-muted, #8A91A5); border-style: dashed; }
+    ${P} .tb-au-tab-n.tb-au-band-good { border-color: var(--tb-success, #22C55E); }
+    ${P} .tb-au-tab-n.tb-au-band-fair { border-color: #F59E0B; }
+    ${P} .tb-au-tab-n.tb-au-band-poor { border-color: var(--tb-error, #EF4444); }
+    /* Filter + findings */
+    ${P} .tb-au-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    ${P} .tb-au-chip { display: inline-flex; align-items: center; gap: 5px; background: none; border: 1px solid var(--tb-border, #252A38); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; color: var(--tb-text-secondary, #A8AEBE); cursor: pointer; min-height: 26px; }
+    ${P} .tb-au-chip span:last-child { color: var(--tb-text-muted, #8A91A5); }
+    ${P} .tb-au-chip[aria-pressed="true"] { border-color: var(--tb-text-primary, #EEF0F5); color: var(--tb-text-primary, #EEF0F5); }
+    ${P} .tb-au-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    ${P} .tb-au-sev-critical { background: var(--tb-severity-critical, #EF4444); }
+    ${P} .tb-au-sev-serious { background: var(--tb-severity-major, #F59E0B); }
+    ${P} .tb-au-sev-moderate { background: var(--tb-severity-minor, #EAB308); }
+    ${P} .tb-au-sev-minor { background: var(--tb-severity-info, #3B82F6); }
+    ${P} .tb-au-group { margin-top: 14px; }
+    ${P} .tb-au-group-h { font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--tb-text-secondary, #A8AEBE); margin: 0 0 6px; }
+    ${P} .tb-au-group-h span { color: var(--tb-text-muted, #8A91A5); font-weight: 500; }
+    ${P} .tb-au-card { border: 1px solid var(--tb-border, #252A38); border-left-width: 3px; border-radius: var(--tb-radius-sm, 10px); margin-bottom: 8px; background: var(--tb-bg-primary, #0B0D14); }
+    ${P} .tb-au-card-critical { border-left-color: var(--tb-severity-critical, #EF4444); }
+    ${P} .tb-au-card-serious { border-left-color: var(--tb-severity-major, #F59E0B); }
+    ${P} .tb-au-card-moderate { border-left-color: var(--tb-severity-minor, #EAB308); }
+    ${P} .tb-au-card-minor { border-left-color: var(--tb-severity-info, #3B82F6); }
+    ${P} .tb-au-card.tb-au-active { box-shadow: 0 0 0 2px var(--tb-accent, #FF5C6C); }
+    ${P} .tb-au-card-h { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "sev chev" "title chev" "where chev"; gap: 2px 8px; width: 100%;
+      background: none; border: 0; color: inherit; font: inherit; text-align: left; padding: 10px 10px 10px 12px; cursor: pointer; border-radius: var(--tb-radius-sm, 10px); }
+    ${P} .tb-au-card-h:hover { background: var(--tb-bg-secondary, #141823); }
+    ${P} .tb-au-sev { grid-area: sev; display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-card-t { grid-area: title; font-weight: 600; overflow-wrap: anywhere; }
+    ${P} .tb-au-card-w { grid-area: where; font-size: 12px; color: var(--tb-text-muted, #8A91A5); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ${P} .tb-au-chev { grid-area: chev; align-self: center; color: var(--tb-text-muted, #8A91A5); transition: transform .15s; }
+    ${P} .tb-au-open .tb-au-chev { transform: rotate(90deg); }
+    ${P} .tb-au-card-b { padding: 0 12px 12px; display: grid; gap: 10px; }
+    ${P} .tb-au-card-b[hidden] { display: none; }
+    ${P} .tb-au-desc { color: var(--tb-text-secondary, #A8AEBE); overflow-wrap: anywhere; }
+    ${P} .tb-au-contrast { display: grid; gap: 6px; }
+    ${P} .tb-au-cx { display: flex; gap: 10px; align-items: center; padding: 8px; border-radius: 8px; background: var(--tb-bg-secondary, #141823); }
+    ${P} .tb-au-cx > div { display: flex; flex-direction: column; min-width: 0; font-size: 12px; }
+    ${P} .tb-au-cx code { font: 11px var(--tb-font-mono, ui-monospace, monospace); color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-cx-fix { outline: 1px dashed var(--tb-success, #22C55E); outline-offset: -1px; }
+    ${P} .tb-au-swatch { display: grid; place-items: center; width: 44px; height: 36px; border-radius: 6px; font-weight: 700; font-size: 15px; border: 1px solid rgba(127,127,127,.35); flex-shrink: 0; }
+    ${P} .tb-au-kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12px; }
+    ${P} .tb-au-kv dt { color: var(--tb-text-muted, #8A91A5); }
+    ${P} .tb-au-kv dd { font-family: var(--tb-font-mono, ui-monospace, monospace); font-size: 11.5px; overflow-wrap: anywhere; }
+    ${P} .tb-au-wcags { display: flex; flex-wrap: wrap; gap: 6px; }
+    ${P} .tb-au-wcag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--tb-bg-secondary, #141823); border: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-sect-h { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tb-text-secondary, #A8AEBE); margin-bottom: 4px; }
+    ${P} .tb-au-sect p { overflow-wrap: anywhere; }
+    ${P} .tb-au-where code { display: block; font: 11.5px/1.45 var(--tb-font-mono, ui-monospace, monospace); padding: 6px 8px; border-radius: 6px; background: var(--tb-bg-secondary, #141823); overflow-wrap: anywhere; }
+    ${P} .tb-au-where-b { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    ${P} .tb-au-locmsg { font-size: 12px; color: var(--tb-severity-major, #F59E0B); margin-top: 4px; }
+    ${P} .tb-au-locmsg:empty { display: none; }
+    ${P} .tb-au-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    ${P} .tb-au-rule { font: 11px var(--tb-font-mono, ui-monospace, monospace); color: var(--tb-text-muted, #8A91A5); }
+    ${P} .tb-au-link { display: inline-flex; align-items: center; gap: 4px; color: var(--tb-accent, #FF5C6C); font-size: 12px; text-decoration: none; }
+    ${P} .tb-au-link:hover { text-decoration: underline; }
+    ${P} .tb-au-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    /* Locate highlight */
+    ${H} { position: fixed !important; left: 0 !important; top: 0 !important; z-index: 2147483645 !important; pointer-events: none !important;
+      border: 2px solid var(--tb-accent, #FF5C6C) !important; border-radius: 6px !important; background: rgba(255,92,108,.10) !important;
+      box-shadow: 0 0 0 4px rgba(255,92,108,.25), 0 0 0 9999px rgba(0,0,0,.18) !important; transition: opacity .35s !important; box-sizing: border-box !important; }
+    ${H}.tb-au-hl-out { opacity: 0 !important; }
+    ${H} .tb-au-hl-tag { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+      background: var(--tb-accent, #FF5C6C); color: var(--tb-on-accent, #0B0D14); font: 600 11px/1.5 ui-monospace, monospace; }
+    ${H} .tb-au-hl-tag.tb-au-hl-tag-below { bottom: auto; top: 100%; margin: 4px 0 0; }
+    @media (max-width: 520px) { ${P}[data-dock] { top: auto !important; height: 70vh !important; left: 8px !important; right: 8px !important; width: auto !important; } }
+  `;
+    document.head.appendChild(s2);
+  }
+  var PANEL_ID2, STYLE_ID3, HIGHLIGHT_ID, DOCK_KEY, TOOLBAR_ID, CATEGORY_LABEL2, SEVERITY_LABEL2, SEVERITIES, BAND_LABEL, svg, ICON, _open, _root2, _scan, _filter, _minimized, _lastDiff, _expanded, _highlightTimer, _highlightRaf, METRIC_LABEL;
+  var init_audit_panel = __esm({
+    "src/ui/audit-panel.ts"() {
+      "use strict";
+      init_audit();
+      init_compare();
+      init_helpers();
+      init_types();
+      init_score();
+      init_wcag();
+      init_ext_transport();
+      PANEL_ID2 = "tracebug-audit-panel";
+      STYLE_ID3 = "tracebug-audit-panel-styles";
+      HIGHLIGHT_ID = "tracebug-audit-highlight";
+      DOCK_KEY = "tracebug_audit_dock";
+      TOOLBAR_ID = "tracebug-compact-toolbar";
+      CATEGORY_LABEL2 = {
+        accessibility: "Accessibility",
+        ui: "Layout",
+        seo: "SEO",
+        performance: "Performance",
+        runtime: "Errors & requests"
+      };
+      SEVERITY_LABEL2 = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
+      SEVERITIES = ["critical", "serious", "moderate", "minor"];
+      BAND_LABEL = { good: "Good", fair: "Needs work", poor: "Poor" };
+      svg = (d, size = 16) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+      ICON = {
+        audit: svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>'),
+        rerun: svg('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>'),
+        export: svg('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>'),
+        close: svg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+        minimize: svg('<path d="M5 12h14"/>'),
+        dockLeft: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>'),
+        dockRight: svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>'),
+        locate: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>'),
+        copy: svg('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
+        external: svg('<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>', 13),
+        chevron: svg('<path d="m9 18 6-6-6-6"/>', 14),
+        info: svg('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>', 14),
+        wrench: svg('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>', 14),
+        pin: svg('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>', 14),
+        eye: svg('<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>', 14)
+      };
+      _open = false;
+      _root2 = null;
+      _scan = "full";
+      _filter = "all";
+      _minimized = false;
+      _lastDiff = null;
+      _expanded = /* @__PURE__ */ new Set();
+      _highlightTimer = null;
+      _highlightRaf = 0;
+      METRIC_LABEL = {
+        contrastRatio: "Contrast",
+        expectedContrastRatio: "Needs",
+        fgColor: "Text colour",
+        bgColor: "Background",
+        fontSize: "Font size",
+        fontWeight: "Weight",
+        suggestedFgColor: "Suggested text colour"
+      };
+    }
+  });
+
   // src/compact-toolbar.ts
   function setToolbarRecordingState(_isRecording2, _onToggle) {
   }
@@ -35033,7 +37882,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     _position = position;
     _isMobile = window.innerWidth < 768;
     const toolbar = document.createElement("div");
-    toolbar.id = TOOLBAR_ID;
+    toolbar.id = TOOLBAR_ID2;
     toolbar.dataset.tracebug = "compact-toolbar";
     _toolbar = toolbar;
     _applyToolbarPosition(toolbar, position);
@@ -35145,6 +37994,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     } catch (e2) {
     }
     toolbar.appendChild(_divider());
+    const auditBtn = _createToolbarBtn(
+      "Site audit \u2014 accessibility, layout, performance, SEO",
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+      () => {
+        void Promise.resolve().then(() => (init_audit_panel(), audit_panel_exports)).then((m) => m.toggleAuditPanel(root2)).catch(() => showToast3("The audit could not start on this page", root2));
+      },
+      "tracebug-toolbar-audit-btn"
+    );
+    auditBtn.setAttribute("aria-pressed", "false");
+    toolbar.appendChild(auditBtn);
     toolbar.appendChild(_createToolbarBtn(
       "Saved tickets",
       `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
@@ -35794,7 +38653,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     if (document.getElementById(TOOLBAR_BASE_STYLE_ID)) return;
     const style = createStyleTag(TOOLBAR_BASE_STYLE_ID);
     style.textContent = `
-    #${TOOLBAR_ID} {
+    #${TOOLBAR_ID2} {
       position: fixed; z-index: 2147483647;
       display: flex; align-items: center; gap: 3px;
       background: var(--tb-toolbar-bg, #0f0f1aee); border: 1px solid var(--tb-border, #2a2a3e);
@@ -35809,7 +38668,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       style = createStyleTag(TOOLBAR_POS_STYLE_ID);
       document.head.appendChild(style);
     }
-    style.textContent = `#${TOOLBAR_ID} { ${cssDecls} }`;
+    style.textContent = `#${TOOLBAR_ID2} { ${cssDecls} }`;
   }
   function _applyToolbarPosition(toolbar, position) {
     _ensureToolbarBaseStyles();
@@ -35971,7 +38830,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       _panelEl.style.right = _panelOpen ? "0" : "-480px";
     }
   }
-  var TOOLBAR_ID, SETTINGS_ID, DRAG_POS_KEY, TOOLBAR_BASE_STYLE_ID, TOOLBAR_POS_STYLE_ID, _onSessionStart, _onSessionEnd, _onNewCapture, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
+  var TOOLBAR_ID2, SETTINGS_ID, DRAG_POS_KEY, TOOLBAR_BASE_STYLE_ID, TOOLBAR_POS_STYLE_ID, _onSessionStart, _onSessionEnd, _onNewCapture, _panelEl, _panelOpen, _toolbar, _position, _isMobile, _fabExpanded, _isTracking, _trackBtn;
   var init_compact_toolbar = __esm({
     "src/compact-toolbar.ts"() {
       "use strict";
@@ -35990,7 +38849,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       init_video_recorder();
       init_recording_hud();
       init_capture_ownership();
-      TOOLBAR_ID = "tracebug-compact-toolbar";
+      TOOLBAR_ID2 = "tracebug-compact-toolbar";
       SETTINGS_ID = "tracebug-settings-card";
       DRAG_POS_KEY = "tracebug_toolbar_pos";
       TOOLBAR_BASE_STYLE_ID = "tracebug-toolbar-base-style";
@@ -36018,8 +38877,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }
   }
   function ensurePulseStyles() {
-    if (document.getElementById(STYLE_ID3)) return;
-    const style = createStyleTag(STYLE_ID3);
+    if (document.getElementById(STYLE_ID4)) return;
+    const style = createStyleTag(STYLE_ID4);
     style.textContent = `
     @keyframes tracebug-onboard-pulse {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,108, 0); }
@@ -36043,16 +38902,16 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     }, 1e4);
   }
   function cleanupOnboarding() {
-    const style = document.getElementById(STYLE_ID3);
+    const style = document.getElementById(STYLE_ID4);
     if (style) style.remove();
   }
-  var STORAGE_KEY3, STYLE_ID3;
+  var STORAGE_KEY3, STYLE_ID4;
   var init_onboarding = __esm({
     "src/onboarding.ts"() {
       "use strict";
       init_helpers();
       STORAGE_KEY3 = "tracebug_onboarding_complete";
-      STYLE_ID3 = "tracebug-onboarding-styles";
+      STYLE_ID4 = "tracebug-onboarding-styles";
     }
   });
 
@@ -36097,7 +38956,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     #tracebug-root * {
       pointer-events: auto;
     }
-    #${PANEL_ID2} {
+    #${PANEL_ID3} {
       position: fixed !important;
       top: 0 !important;
       width: 470px !important;
@@ -36115,7 +38974,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       box-shadow: var(--tb-shadow-lg, -4px 0 30px rgba(0,0,0,0.6)) !important;
     }
     @media (max-width: 767px) {
-      #${PANEL_ID2} {
+      #${PANEL_ID3} {
         width: 100vw !important;
         height: 80vh !important;
         top: auto !important;
@@ -36149,7 +39008,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       }
     }
     const panel = document.createElement("div");
-    panel.id = PANEL_ID2;
+    panel.id = PANEL_ID3;
     panel.style.right = "-480px";
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-modal", "false");
@@ -36278,10 +39137,10 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     `);
       return;
     }
-    const filterBar = document.createElement("div");
-    filterBar.dataset.tracebug = "filter-bar";
-    setInlineStyle(filterBar, "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap");
-    setInnerHTML(filterBar, `
+    const filterBar2 = document.createElement("div");
+    filterBar2.dataset.tracebug = "filter-bar";
+    setInlineStyle(filterBar2, "margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap");
+    setInnerHTML(filterBar2, `
     <input id="bt-search" type="text" placeholder="Search sessions..." style="
       flex:1;min-width:120px;background:var(--tb-bg-secondary, #1a1a2e);border:1px solid var(--tb-border, #2a2a3e);
       border-radius:var(--tb-radius-md, 6px);color:var(--tb-text-primary, #e0e0e0);padding:6px 10px;
@@ -36298,7 +39157,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
     </select>
   `);
     setInnerHTML(content, "");
-    content.appendChild(filterBar);
+    content.appendChild(filterBar2);
     const sessionsContainer = document.createElement("div");
     sessionsContainer.id = "bt-sessions-list";
     content.appendChild(sessionsContainer);
@@ -38134,13 +40993,13 @@ ${"-".repeat(40)}
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:500;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
   function annColorBtnStyle(color, active) {
-    const ring = active ? `outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px ${color}44;` : "";
-    return `background:${color};border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;${ring}`;
+    const ring2 = active ? `outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px ${color}44;` : "";
+    return `background:${color};border:none;width:24px;height:24px;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;${ring2}`;
   }
   function annActionBtnStyle() {
     return "background:#1e1e30;color:#9ca3af;border:1px solid #2e2e4a;border-radius:7px;padding:5px 11px;cursor:pointer;font-size:11px;font-family:var(--tb-font-family, inherit);display:inline-flex;align-items:center;";
   }
-  var EXTENSION_OWNER_KEY, PANEL_ID2, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
+  var EXTENSION_OWNER_KEY, PANEL_ID3, _isRecording, _onToggleRecording, eventConfig, _annotationEditorOnSave;
   var init_dashboard = __esm({
     "src/dashboard.ts"() {
       "use strict";
@@ -38167,7 +41026,7 @@ ${"-".repeat(40)}
       init_plugin_system();
       init_cloud_upload();
       EXTENSION_OWNER_KEY = "tracebug_ext_owns_ui";
-      PANEL_ID2 = "tracebug-dashboard-panel";
+      PANEL_ID3 = "tracebug-dashboard-panel";
       _isRecording = true;
       _onToggleRecording = null;
       eventConfig = {
@@ -38181,66 +41040,6 @@ ${"-".repeat(40)}
         console_error: { label: "Console Err", icon: "\u26A0\uFE0F", color: "#fb923c", bg: "#2a1505" },
         unhandled_rejection: { label: "Rejection", icon: "\u{1F4A5}", color: "#f87171", bg: "#2a0505" }
       };
-    }
-  });
-
-  // src/scanner/helpers.ts
-  function makeIssueId(detector) {
-    _issueCounter += 1;
-    return `${detector}_${Date.now().toString(36)}_${_issueCounter}`;
-  }
-  function buildSelector2(el) {
-    if (!el || el.nodeType !== 1) return "";
-    if (el.id) return `#${cssEscape(el.id)}`;
-    const testId = el.getAttribute("data-testid") || el.getAttribute("data-test-id");
-    if (testId) return `[data-testid="${cssEscape(testId)}"]`;
-    const parts = [];
-    let cur = el;
-    let depth = 0;
-    while (cur && cur.nodeType === 1 && cur.tagName !== "BODY" && depth < 5) {
-      const tag = cur.tagName.toLowerCase();
-      const parent = cur.parentElement;
-      if (!parent) {
-        parts.unshift(tag);
-        break;
-      }
-      const siblings = Array.from(parent.children).filter((c2) => c2.tagName === cur.tagName);
-      if (siblings.length > 1) {
-        const idx = siblings.indexOf(cur) + 1;
-        parts.unshift(`${tag}:nth-of-type(${idx})`);
-      } else {
-        parts.unshift(tag);
-      }
-      cur = parent;
-      depth += 1;
-    }
-    return parts.join(" > ");
-  }
-  function coerceSeverity(impact) {
-    switch ((impact || "").toLowerCase()) {
-      case "critical":
-        return "critical";
-      case "serious":
-        return "serious";
-      case "moderate":
-        return "moderate";
-      case "minor":
-        return "minor";
-      default:
-        return "minor";
-    }
-  }
-  function cssEscape(value) {
-    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
-      return CSS.escape(value);
-    }
-    return value.replace(/[^\w-]/g, (ch) => `\\${ch}`);
-  }
-  var _issueCounter;
-  var init_helpers2 = __esm({
-    "src/scanner/helpers.ts"() {
-      "use strict";
-      _issueCounter = 0;
     }
   });
 
@@ -38280,272 +41079,8 @@ ${"-".repeat(40)}
     }
   });
 
-  // src/scanner/detectors/mixed-content.ts
-  async function detectMixedContent() {
-    if (typeof window === "undefined" || window.location.protocol !== "https:") {
-      return [];
-    }
-    const issues = [];
-    for (const { tag, attr } of ATTR_TARGETS) {
-      const elements = document.querySelectorAll(`${tag}[${attr}]`);
-      for (const el of Array.from(elements)) {
-        if (el.closest("#tracebug-root")) continue;
-        const value = el.getAttribute(attr) || "";
-        if (!value.startsWith("http://")) continue;
-        if (tag === "link") {
-          const rel = (el.rel || "").toLowerCase();
-          const fetchableRels = ["stylesheet", "preload", "prefetch", "manifest", "icon", "shortcut icon"];
-          if (!fetchableRels.some((r2) => rel.includes(r2))) continue;
-        }
-        issues.push({
-          id: makeIssueId("mixed-content"),
-          detector: "mixed-content",
-          severity: tag === "script" || tag === "iframe" ? "serious" : "moderate",
-          title: `Mixed content: ${tag} loads over HTTP`,
-          description: `<${tag}> on an HTTPS page references \`${value}\`. Browsers block or downgrade this \u2014 the resource usually fails to load and breaks the page's secure-context indicator.`,
-          selector: buildSelector2(el),
-          url: value,
-          page: window.location.pathname,
-          detectedAt: Date.now()
-        });
-      }
-    }
-    return issues;
-  }
-  var ATTR_TARGETS;
-  var init_mixed_content = __esm({
-    "src/scanner/detectors/mixed-content.ts"() {
-      "use strict";
-      init_helpers2();
-      ATTR_TARGETS = [
-        { tag: "img", attr: "src" },
-        { tag: "script", attr: "src" },
-        { tag: "iframe", attr: "src" },
-        { tag: "link", attr: "href" },
-        { tag: "audio", attr: "src" },
-        { tag: "video", attr: "src" },
-        { tag: "source", attr: "src" },
-        { tag: "embed", attr: "src" },
-        { tag: "object", attr: "data" }
-      ];
-    }
-  });
-
-  // src/fingerprint.ts
-  async function computeFingerprint(errorMessage, errorStack, page) {
-    const errorType = extractErrorType(errorMessage);
-    const topFrames = extractTopFrames(errorStack || "", 3);
-    const input2 = `${errorType}|${topFrames.join("\n")}|${page}`;
-    if (typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function") {
-      try {
-        const buf = new TextEncoder().encode(input2);
-        const hash = await crypto.subtle.digest("SHA-1", buf);
-        return bufferToHex(hash).slice(0, 16);
-      } catch (e2) {
-      }
-    }
-    return djb2(input2).toString(16).padStart(8, "0");
-  }
-  function extractErrorType(message) {
-    const m = message.match(/^([A-Z][a-zA-Z]+Error|Error)\b/);
-    return m ? m[1] : "Error";
-  }
-  function extractTopFrames(stack, n2) {
-    const frames = [];
-    const lines = stack.split("\n");
-    for (const line of lines) {
-      const m = line.match(/(https?:\/\/[^):\s]+|[^():\s]+\.[a-z]+):(\d+):(\d+)/i);
-      if (m) {
-        const url = m[1];
-        const path = url.includes("://") ? new URL(url, typeof window !== "undefined" ? window.location.origin : "http://localhost").pathname : url;
-        frames.push(`${path}:${m[2]}:${m[3]}`);
-        if (frames.length >= n2) break;
-      }
-    }
-    return frames;
-  }
-  function bufferToHex(buf) {
-    const bytes = new Uint8Array(buf);
-    let out = "";
-    for (let i2 = 0; i2 < bytes.length; i2++) out += bytes[i2].toString(16).padStart(2, "0");
-    return out;
-  }
-  function djb2(str) {
-    let hash = 5381;
-    for (let i2 = 0; i2 < str.length; i2++) hash = (hash << 5) + hash + str.charCodeAt(i2) | 0;
-    return hash >>> 0;
-  }
-  var init_fingerprint = __esm({
-    "src/fingerprint.ts"() {
-      "use strict";
-    }
-  });
-
-  // src/scanner/detectors/session-data.ts
-  async function detectConsoleErrors(session) {
-    var _a2, _b, _c;
-    if (!session) return [];
-    const groups = /* @__PURE__ */ new Map();
-    for (let i2 = 0; i2 < session.events.length; i2++) {
-      const e2 = session.events[i2];
-      if (e2.type !== "error" && e2.type !== "unhandled_rejection" && e2.type !== "console_error") continue;
-      const message = ((_a2 = e2.data.error) == null ? void 0 : _a2.message) || e2.data.message || "";
-      if (!message) continue;
-      const stack = ((_b = e2.data.error) == null ? void 0 : _b.stack) || "";
-      const page = e2.page || (typeof window !== "undefined" ? window.location.pathname : "");
-      const fp = await computeFingerprint(message, stack, page);
-      const precedingAction = describePrecedingAction(session.events, i2);
-      const existing = groups.get(fp);
-      if (existing) {
-        existing.issue.occurrences = (existing.issue.occurrences || 1) + 1;
-        existing.issue.lastSeenAt = e2.timestamp;
-        if (existing.samples.length < MAX_CONTEXT_SAMPLES) {
-          existing.samples.push({ timestamp: e2.timestamp, precedingAction });
-        }
-        continue;
-      }
-      const firstFrame = ((_c = stack.split("\n").find((l2) => l2.trim().startsWith("at "))) == null ? void 0 : _c.trim()) || "";
-      const issue = {
-        id: makeIssueId("console-error"),
-        detector: "console-error",
-        severity: classifyErrorSeverity(message),
-        title: `JS error: ${message.slice(0, 70)}${message.length > 70 ? "\u2026" : ""}`,
-        description: firstFrame ? `${message}
-
-First frame: ${firstFrame}` : message,
-        page,
-        detectedAt: e2.timestamp,
-        fingerprint: fp,
-        occurrences: 1,
-        firstSeenAt: e2.timestamp,
-        lastSeenAt: e2.timestamp
-      };
-      groups.set(fp, { issue, samples: [{ timestamp: e2.timestamp, precedingAction }] });
-    }
-    const out = [];
-    for (const g of groups.values()) {
-      const n2 = g.issue.occurrences || 1;
-      if (n2 > 1) {
-        g.issue.title = `${g.issue.title} [\xD7${n2}]`;
-        g.issue.contextSamples = g.samples;
-      }
-      out.push(g.issue);
-    }
-    return out;
-  }
-  function describePrecedingAction(events, i2) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
-    for (let j = i2 - 1; j >= 0; j--) {
-      const e2 = events[j];
-      if (e2.type === "click") {
-        const t2 = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.text) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.ariaLabel) || ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.tag) || "element";
-        return `clicked "${String(t2).slice(0, 40)}"`;
-      }
-      if (e2.type === "input") {
-        const n2 = ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.name) || ((_j = (_i = e2.data) == null ? void 0 : _i.element) == null ? void 0 : _j.id) || "field";
-        return `typed in ${n2}`;
-      }
-      if (e2.type === "select_change") return "selected an option";
-      if (e2.type === "form_submit") return "submitted a form";
-      if (e2.type === "route_change") return `navigated to ${((_k = e2.data) == null ? void 0 : _k.to) || "page"}`;
-    }
-    return void 0;
-  }
-  async function detectFailedRequests(session) {
-    if (!session) return [];
-    const issues = [];
-    const buffer = getNetworkFailures();
-    for (const e2 of session.events) {
-      if (e2.type !== "api_request") continue;
-      const req = e2.data.request;
-      if (!req) continue;
-      const status = req.statusCode || 0;
-      if (status >= 200 && status < 400) continue;
-      if (status === 0 && req.method === "HEAD") continue;
-      const match = buffer.find(
-        (b) => b.url === req.url && b.method === req.method && b.status === status && Math.abs(b.timestamp - e2.timestamp) < 5e3
-      );
-      const snippet = (match == null ? void 0 : match.response) ? `
-
-Response: ${match.response.slice(0, 160)}` : "";
-      issues.push({
-        id: makeIssueId("failed-request"),
-        detector: "failed-request",
-        severity: status >= 500 ? "critical" : status === 0 ? "serious" : "moderate",
-        title: `${req.method} ${truncatePath(req.url)} \u2192 ${status === 0 ? "Network Error" : status}`,
-        description: `Request failed in ${req.durationMs || 0}ms.${snippet}`,
-        url: req.url,
-        page: e2.page || window.location.pathname,
-        detectedAt: e2.timestamp
-      });
-    }
-    return issues;
-  }
-  async function detectSlowApis(session) {
-    if (!session) return [];
-    const issues = [];
-    for (const e2 of session.events) {
-      if (e2.type !== "api_request") continue;
-      const req = e2.data.request;
-      if (!req) continue;
-      const status = req.statusCode || 0;
-      if (status < 200 || status >= 400) continue;
-      const duration = req.durationMs || 0;
-      if (duration < SLOW_API_MS) continue;
-      issues.push({
-        id: makeIssueId("slow-api"),
-        detector: "slow-api",
-        severity: duration > 5e3 ? "serious" : "moderate",
-        title: `Slow API: ${req.method} ${truncatePath(req.url)} (${duration}ms)`,
-        description: `This request took ${(duration / 1e3).toFixed(1)}s \u2014 over the ${SLOW_API_MS / 1e3}s threshold. Slow APIs are a common UX complaint and a leading cause of perceived bugs ("the page is frozen").`,
-        url: req.url,
-        page: e2.page || window.location.pathname,
-        detectedAt: e2.timestamp
-      });
-    }
-    return issues;
-  }
-  function truncatePath(url) {
-    try {
-      const u2 = new URL(url, window.location.origin);
-      const p = u2.pathname.length > 50 ? u2.pathname.slice(0, 47) + "\u2026" : u2.pathname;
-      return p;
-    } catch (e2) {
-      return url.length > 50 ? url.slice(0, 47) + "\u2026" : url;
-    }
-  }
-  function classifyErrorSeverity(message) {
-    if (/TypeError|ReferenceError|SyntaxError/i.test(message)) return "critical";
-    if (/Network|fetch|failed to/i.test(message)) return "serious";
-    return "moderate";
-  }
-  var SLOW_API_MS, MAX_CONTEXT_SAMPLES;
-  var init_session_data = __esm({
-    "src/scanner/detectors/session-data.ts"() {
-      "use strict";
-      init_collectors();
-      init_helpers2();
-      init_fingerprint();
-      SLOW_API_MS = 2e3;
-      MAX_CONTEXT_SAMPLES = 10;
-    }
-  });
-
-  // tb-stub-axe:axe-core
-  var axe_core_exports = {};
-  __export(axe_core_exports, {
-    default: () => axe_core_default
-  });
-  var axe_core_default;
-  var init_axe_core = __esm({
-    "tb-stub-axe:axe-core"() {
-      "use strict";
-      axe_core_default = null;
-    }
-  });
-
   // src/scanner/detectors/a11y.ts
-  function loadAxe() {
+  function loadAxe2() {
     if (_axePromise) return _axePromise;
     _axePromise = Promise.resolve().then(() => (init_axe_core(), axe_core_exports)).then((mod) => mod.default || mod).catch((err) => {
       console.warn("[TraceBug] axe-core failed to load:", err);
@@ -38554,7 +41089,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     return _axePromise;
   }
   async function detectA11yViolations() {
-    const axe = await loadAxe();
+    const axe = await loadAxe2();
     if (!axe || typeof axe.run !== "function") return [];
     let results;
     try {
@@ -38596,201 +41131,11 @@ First element: \`${exampleSnippet}\``,
     return issues;
   }
   var _axePromise;
-  var init_a11y = __esm({
+  var init_a11y2 = __esm({
     "src/scanner/detectors/a11y.ts"() {
       "use strict";
       init_helpers2();
       _axePromise = null;
-    }
-  });
-
-  // src/scanner/detectors/frustration.ts
-  async function detectFrustration2(session) {
-    var _a2;
-    if (!session) return [];
-    const events = session.events;
-    if (events.length === 0) return [];
-    const issues = [];
-    const page = ((_a2 = session.events[0]) == null ? void 0 : _a2.page) || window.location.pathname;
-    issues.push(...detectRageClicks(events, page));
-    issues.push(...detectDeadClicks(events, page));
-    issues.push(...detectFormAbandonment(events, page));
-    issues.push(...detectErrorCorrelated(events, page));
-    return issues;
-  }
-  function detectRageClicks(events, page) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h;
-    const out = [];
-    const seenGroups = /* @__PURE__ */ new Set();
-    for (let i2 = 0; i2 < events.length; i2++) {
-      const e2 = events[i2];
-      if (e2.type !== "click") continue;
-      const sel = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.selector) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.testId) || "";
-      if (!sel) continue;
-      const cluster = [e2];
-      let j = i2 + 1;
-      while (j < events.length) {
-        const next = events[j];
-        if (next.timestamp - e2.timestamp > RAGE_WINDOW_MS2) break;
-        if (isResponseEvent(next)) break;
-        if (next.type === "click") {
-          const nextSel = ((_f = (_e = next.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector) || ((_h = (_g = next.data) == null ? void 0 : _g.element) == null ? void 0 : _h.testId) || "";
-          if (nextSel === sel) cluster.push(next);
-        }
-        j++;
-      }
-      if (cluster.length >= RAGE_MIN_CLICKS2) {
-        const key = `${sel}@${e2.timestamp}`;
-        if (seenGroups.has(key)) continue;
-        seenGroups.add(key);
-        const label = clickLabel2(cluster[0]);
-        out.push({
-          id: makeIssueId("frustration-rage"),
-          detector: "frustration-rage",
-          severity: "serious",
-          title: `Rage clicks on ${label} (${cluster.length}\xD7 in ${Math.round(cluster[cluster.length - 1].timestamp - cluster[0].timestamp)}ms)`,
-          description: `User clicked the same element ${cluster.length} times within ${RAGE_WINDOW_MS2}ms with no observable response (no API call, navigation, or DOM update). The element either doesn't respond to clicks or feels broken.`,
-          selector: sel,
-          page,
-          detectedAt: cluster[0].timestamp,
-          firstSeenAt: cluster[0].timestamp,
-          lastSeenAt: cluster[cluster.length - 1].timestamp,
-          occurrences: cluster.length
-        });
-        i2 = j - 1;
-      }
-    }
-    return out;
-  }
-  function detectDeadClicks(events, page) {
-    var _a2, _b;
-    const out = [];
-    const MAX = 5;
-    for (let i2 = 0; i2 < events.length && out.length < MAX; i2++) {
-      const e2 = events[i2];
-      if (e2.type !== "click") continue;
-      let responsive = false;
-      for (let j = i2 + 1; j < events.length; j++) {
-        const next = events[j];
-        if (next.timestamp - e2.timestamp > DEAD_RESPONSE_WINDOW_MS2) break;
-        if (isResponseEvent(next)) {
-          responsive = true;
-          break;
-        }
-      }
-      if (responsive) continue;
-      const sel = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.selector) || "";
-      const label = clickLabel2(e2);
-      out.push({
-        id: makeIssueId("frustration-dead"),
-        detector: "frustration-dead",
-        severity: "moderate",
-        title: `Dead click on ${label}`,
-        description: `Clicked but nothing happened within ${DEAD_RESPONSE_WINDOW_MS2}ms (no API call, navigation, or DOM input). The element may have an unbound handler, a swallowed event, or be visually clickable but disabled.`,
-        selector: sel,
-        page: e2.page || page,
-        detectedAt: e2.timestamp
-      });
-    }
-    return out;
-  }
-  function detectFormAbandonment(events, _page) {
-    var _a2, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-    const out = [];
-    const formActivity = {};
-    for (const e2 of events) {
-      if (e2.type === "input") {
-        const formId = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.element) == null ? void 0 : _b.formId) || ((_d = (_c = e2.data) == null ? void 0 : _c.element) == null ? void 0 : _d.formAction) || "_default";
-        if (!formActivity[formId]) {
-          formActivity[formId] = { firstInputAt: e2.timestamp, fieldsSeen: /* @__PURE__ */ new Set(), lastInputAt: e2.timestamp, page: e2.page };
-        }
-        const name = ((_f = (_e = e2.data) == null ? void 0 : _e.element) == null ? void 0 : _f.name) || ((_h = (_g = e2.data) == null ? void 0 : _g.element) == null ? void 0 : _h.id) || "field";
-        formActivity[formId].fieldsSeen.add(name);
-        formActivity[formId].lastInputAt = e2.timestamp;
-      } else if (e2.type === "form_submit") {
-        const formId = ((_j = (_i = e2.data) == null ? void 0 : _i.form) == null ? void 0 : _j.id) || "_default";
-        delete formActivity[formId];
-      } else if (e2.type === "route_change") {
-        for (const formId of Object.keys(formActivity)) {
-          const a2 = formActivity[formId];
-          if (e2.timestamp - a2.lastInputAt > ABANDON_WINDOW_MS) continue;
-          if (a2.fieldsSeen.size === 0) continue;
-          out.push({
-            id: makeIssueId("frustration-abandon"),
-            detector: "frustration-abandon",
-            severity: "moderate",
-            title: `Form abandoned on ${a2.page} (${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} filled)`,
-            description: `User typed into ${a2.fieldsSeen.size} field${a2.fieldsSeen.size === 1 ? "" : "s"} (${Array.from(a2.fieldsSeen).slice(0, 5).join(", ")}) and then navigated away without submitting. Likely a UX problem: the submit button is unclear, the form requires too much info, or it's failing silently.`,
-            page: a2.page,
-            detectedAt: a2.lastInputAt,
-            firstSeenAt: a2.firstInputAt,
-            lastSeenAt: a2.lastInputAt
-          });
-          delete formActivity[formId];
-        }
-      }
-    }
-    return out;
-  }
-  function detectErrorCorrelated(events, page) {
-    var _a2, _b, _c, _d, _e, _f;
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (let i2 = 0; i2 < events.length; i2++) {
-      const e2 = events[i2];
-      const isError = e2.type === "error" || e2.type === "unhandled_rejection" || e2.type === "console_error";
-      if (!isError) continue;
-      let click = null;
-      for (let j = i2 - 1; j >= 0; j--) {
-        const prev = events[j];
-        if (e2.timestamp - prev.timestamp > ERROR_CORRELATION_WINDOW_MS) break;
-        if (prev.type === "click") {
-          click = prev;
-          break;
-        }
-      }
-      if (!click) continue;
-      const errMsg = ((_b = (_a2 = e2.data) == null ? void 0 : _a2.error) == null ? void 0 : _b.message) || "";
-      if (!errMsg) continue;
-      const key = `${errMsg}::${((_d = (_c = click.data) == null ? void 0 : _c.element) == null ? void 0 : _d.selector) || ""}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const label = clickLabel2(click);
-      const truncMsg = errMsg.length > 60 ? errMsg.slice(0, 57) + "\u2026" : errMsg;
-      const delta = Math.round(e2.timestamp - click.timestamp);
-      out.push({
-        id: makeIssueId("frustration-error-correlated"),
-        detector: "frustration-error-correlated",
-        severity: "critical",
-        title: `Click on ${label} triggered: ${truncMsg}`,
-        description: `An error fired ${delta}ms after the user clicked ${label}. This is almost certainly the offending interaction \u2014 the click handler threw, or its async path failed.`,
-        selector: (_f = (_e = click.data) == null ? void 0 : _e.element) == null ? void 0 : _f.selector,
-        page: e2.page || page,
-        detectedAt: e2.timestamp
-      });
-    }
-    return out;
-  }
-  function isResponseEvent(e2) {
-    return e2.type === "api_request" || e2.type === "route_change" || e2.type === "input" || e2.type === "form_submit" || e2.type === "select_change";
-  }
-  function clickLabel2(e2) {
-    var _a2;
-    const el = (_a2 = e2.data) == null ? void 0 : _a2.element;
-    const raw = (el == null ? void 0 : el.text) || (el == null ? void 0 : el.ariaLabel) || (el == null ? void 0 : el.testId) || (el == null ? void 0 : el.id) || (el == null ? void 0 : el.tag) || "element";
-    const trimmed = String(raw).replace(/\s+/g, " ").trim();
-    return trimmed.length > 40 ? `"${trimmed.slice(0, 37)}\u2026"` : `"${trimmed}"`;
-  }
-  var RAGE_WINDOW_MS2, RAGE_MIN_CLICKS2, DEAD_RESPONSE_WINDOW_MS2, ABANDON_WINDOW_MS, ERROR_CORRELATION_WINDOW_MS;
-  var init_frustration = __esm({
-    "src/scanner/detectors/frustration.ts"() {
-      "use strict";
-      init_helpers2();
-      RAGE_WINDOW_MS2 = 1500;
-      RAGE_MIN_CLICKS2 = 3;
-      DEAD_RESPONSE_WINDOW_MS2 = 1500;
-      ABANDON_WINDOW_MS = 6e4;
-      ERROR_CORRELATION_WINDOW_MS = 2500;
     }
   });
 
@@ -38901,7 +41246,7 @@ First element: \`${exampleSnippet}\``,
       init_broken_images();
       init_mixed_content();
       init_session_data();
-      init_a11y();
+      init_a11y2();
       init_frustration();
       _issues = [];
       _scanInFlight = null;
@@ -38912,1097 +41257,6 @@ First element: \`${exampleSnippet}\``,
         moderate: 2,
         minor: 3
       };
-    }
-  });
-
-  // src/audit/fingerprint.ts
-  function stableHash(input2) {
-    let h1 = 2166136261;
-    let h2 = 16777619 ^ 1540483477;
-    for (let i2 = 0; i2 < input2.length; i2++) {
-      const c2 = input2.charCodeAt(i2);
-      h1 = Math.imul(h1 ^ c2, 16777619) >>> 0;
-      h2 = Math.imul(h2 ^ c2, 16777619) >>> 0;
-      h2 = (h2 ^ h2 >>> 13) >>> 0;
-    }
-    return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
-  }
-  function urlPath(url) {
-    if (!url) return "";
-    let path;
-    try {
-      path = new URL(url, "http://x").pathname;
-    } catch (e2) {
-      path = url.split(/[?#]/)[0];
-    }
-    return path.length > 1 ? path.replace(/\/+$/, "") : path;
-  }
-  function isGenerated(token) {
-    if (GENERATED_TOKEN.some((re) => re.test(token))) return true;
-    return /^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i.test(token);
-  }
-  function normalizeSelector(selector) {
-    if (!selector) return "";
-    const compounds = selector.trim().split(/\s*([>+~])\s*|\s+/).filter((p) => p !== void 0 && p !== "");
-    return compounds.map((part) => {
-      if (part === ">" || part === "+" || part === "~") return part;
-      const attrs = (part.match(/\[[^\]]*\]/g) || []).map((a2) => a2.replace(/\s+/g, "")).sort();
-      const rest = part.replace(/\[[^\]]*\]/g, "");
-      const tokens = rest.match(/(^[a-zA-Z*][\w-]*)|([#.](?:\\.|[^#.:\\])+)|(:[^#.:]+(?:\([^)]*\))?)/g) || [];
-      const kept = tokens.filter((t2) => {
-        if (t2[0] === "#" || t2[0] === ".") return !isGenerated(t2.slice(1).replace(/\\/g, ""));
-        return true;
-      });
-      const tag = kept.filter((t2) => /^[a-zA-Z*]/.test(t2)).map((t2) => t2.toLowerCase());
-      const ids = kept.filter((t2) => t2[0] === "#");
-      const classes = kept.filter((t2) => t2[0] === ".").sort();
-      const pseudos = kept.filter((t2) => t2[0] === ":");
-      const out = [...tag, ...ids, ...classes, ...attrs, ...pseudos].join("");
-      return out || "*";
-    }).join(" ").replace(/ ([>+~]) /g, "$1").replace(/\s+/g, " ").trim();
-  }
-  function tagFromHtml(html) {
-    const m = (html || "").match(/^\s*<([a-zA-Z][\w-]*)/);
-    return m ? m[1].toLowerCase() : "";
-  }
-  function normalizeText(text) {
-    return (text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
-  }
-  function auditFingerprint(f2) {
-    const anchor = f2.selector ? normalizeSelector(f2.selector) : f2.url ? "url:" + urlPath(f2.url) : "page";
-    return stableHash(["v1", f2.category, f2.ruleId, urlPath(f2.page), anchor].join("|"));
-  }
-  function auditFallbackFingerprint(f2) {
-    const tag = tagFromHtml(f2.html);
-    const text = normalizeText(f2.text);
-    if (!tag && !text) return void 0;
-    return stableHash(["v1-fb", f2.category, f2.ruleId, urlPath(f2.page), tag, text].join("|"));
-  }
-  var GENERATED_TOKEN;
-  var init_fingerprint2 = __esm({
-    "src/audit/fingerprint.ts"() {
-      "use strict";
-      GENERATED_TOKEN = [
-        /^(css|sc|jsx|svelte|emotion|tw|chakra|mui|makestyles)-[a-z0-9_-]{3,}$/i,
-        /__[a-z0-9_-]{4,}$/i,
-        /^_[a-z0-9]{5,}$/i,
-        /:r[0-9a-z]+:/i,
-        /^radix-/i,
-        /^(ember|react-select|headlessui-[a-z-]+)-?\d+/i
-      ];
-    }
-  });
-
-  // src/audit/run.ts
-  function bound(s2, max) {
-    if (s2 == null) return void 0;
-    const clean2 = sanitizeTokenShapes(redactUrlsInText(String(s2)));
-    return clean2.length > max ? clean2.slice(0, max - 1) + "\u2026" : clean2;
-  }
-  function boundEvidence(e2) {
-    var _a2;
-    if (!e2) return void 0;
-    const out = {};
-    if (e2.html != null) out.html = bound(e2.html, MAX_EVIDENCE_HTML);
-    if (e2.text != null) out.text = bound(e2.text.replace(/\s+/g, " ").trim(), MAX_EVIDENCE_TEXT);
-    if (e2.metrics) {
-      out.metrics = {};
-      for (const [k, v2] of Object.entries(e2.metrics)) {
-        out.metrics[k] = typeof v2 === "number" ? v2 : bound(String(v2), MAX_HINT_LENGTH);
-      }
-    }
-    if ((_a2 = e2.hints) == null ? void 0 : _a2.length) {
-      const seen = /* @__PURE__ */ new Set();
-      out.hints = [];
-      for (const h of e2.hints) {
-        const b = bound(h, MAX_HINT_LENGTH);
-        if (!b || seen.has(b)) continue;
-        seen.add(b);
-        out.hints.push(b);
-        if (out.hints.length >= MAX_HINTS) break;
-      }
-    }
-    return out;
-  }
-  function userAgentFamily(ua) {
-    const s2 = ua || "";
-    if (/\bEdg\//.test(s2)) return "Edge";
-    if (/\bFirefox\//.test(s2)) return "Firefox";
-    if (/\b(?:Headless)?Chrome\//.test(s2) || /\bChromium\//.test(s2)) return "Chrome";
-    if (/\bSafari\//.test(s2)) return "Safari";
-    return "Other";
-  }
-  function buildAuditRun(findings, ctx) {
-    var _a2, _b, _c, _d, _e, _f;
-    const now = (_a2 = ctx.now) != null ? _a2 : Date.now();
-    const page = redactUrl(ctx.url);
-    const byKey = /* @__PURE__ */ new Map();
-    for (const raw of findings) {
-      if (!raw.category || !raw.ruleId) continue;
-      const evidence = boundEvidence(raw.evidence);
-      const fpInput = {
-        category: raw.category,
-        ruleId: raw.ruleId,
-        page: raw.page || page,
-        selector: raw.selector,
-        url: raw.url,
-        html: evidence == null ? void 0 : evidence.html,
-        text: evidence == null ? void 0 : evidence.text
-      };
-      const fingerprint = auditFingerprint(fpInput);
-      const existing = byKey.get(fingerprint);
-      if (existing) {
-        existing.occurrences = ((_b = existing.occurrences) != null ? _b : 1) + ((_c = raw.occurrences) != null ? _c : 1);
-        if (SEVERITY_RANK[raw.severity] < SEVERITY_RANK[existing.severity]) existing.severity = raw.severity;
-        continue;
-      }
-      const shaped = {
-        ...raw,
-        title: (_d = bound(raw.title, 120)) != null ? _d : "",
-        description: (_e = bound(raw.description, 600)) != null ? _e : "",
-        url: raw.url ? redactUrl(raw.url) : void 0,
-        page: raw.page ? redactUrl(raw.page) : page,
-        evidence,
-        fingerprint,
-        fallbackFingerprint: auditFallbackFingerprint(fpInput)
-      };
-      if (shaped.url === void 0) delete shaped.url;
-      if (shaped.evidence === void 0) delete shaped.evidence;
-      if (shaped.fallbackFingerprint === void 0) delete shaped.fallbackFingerprint;
-      byKey.set(fingerprint, shaped);
-    }
-    const all = [...byKey.values()].sort(
-      (a2, b) => SEVERITY_RANK[a2.severity] - SEVERITY_RANK[b.severity] || (a2.category < b.category ? -1 : a2.category > b.category ? 1 : 0)
-    );
-    const kept = all.slice(0, MAX_AUDIT_FINDINGS);
-    const order = ["accessibility", "ui", "performance", "seo", "runtime"];
-    const categories = order.filter((name) => ctx.categories[name] !== void 0).map((name) => {
-      const c2 = ctx.categories[name];
-      const entry = {
-        name,
-        ran: c2.ran,
-        // Counts every finding in the category, including any the cap left out.
-        count: c2.ran ? all.filter((f2) => f2.category === name).length : 0
-      };
-      if (c2.limitation) entry.limitation = c2.limitation;
-      if (c2.metrics && Object.keys(c2.metrics).length) entry.metrics = { ...c2.metrics };
-      return entry;
-    });
-    return {
-      id: (_f = ctx.id) != null ? _f : `audit-${now.toString(36)}`,
-      url: page,
-      scannedAt: now,
-      viewport: { width: Math.round(ctx.viewport.width), height: Math.round(ctx.viewport.height) },
-      userAgentFamily: userAgentFamily(ctx.userAgent),
-      categories,
-      findings: kept,
-      truncated: all.length - kept.length,
-      ...ctx.scan ? { scan: ctx.scan } : {}
-    };
-  }
-  var MAX_AUDIT_FINDINGS, MAX_EVIDENCE_HTML, MAX_EVIDENCE_TEXT, MAX_HINTS, MAX_HINT_LENGTH, SEVERITY_RANK;
-  var init_run = __esm({
-    "src/audit/run.ts"() {
-      "use strict";
-      init_url_hygiene();
-      init_cloud_upload();
-      init_fingerprint2();
-      MAX_AUDIT_FINDINGS = 200;
-      MAX_EVIDENCE_HTML = 600;
-      MAX_EVIDENCE_TEXT = 80;
-      MAX_HINTS = 8;
-      MAX_HINT_LENGTH = 60;
-      SEVERITY_RANK = { critical: 0, serious: 1, moderate: 2, minor: 3 };
-    }
-  });
-
-  // src/audit/detectors/evidence.ts
-  function htmlSnippet(el) {
-    const outer = el.outerHTML || "";
-    return outer.length > RAW_HTML_LIMIT ? outer.slice(0, RAW_HTML_LIMIT) : outer;
-  }
-  function visibleText(el) {
-    var _a2, _b;
-    const t2 = (_b = (_a2 = el.innerText) != null ? _a2 : el.textContent) != null ? _b : "";
-    return t2.replace(/\s+/g, " ").trim().slice(0, 200);
-  }
-  function elementEvidence(el, extra) {
-    const hints = [];
-    if (el.id) hints.push("#" + el.id);
-    for (const attr of ["data-testid", "data-test-id", "data-cy", "name", "aria-label"]) {
-      const v2 = el.getAttribute(attr);
-      if (v2) hints.push(`${attr}="${v2}"`);
-    }
-    const classes = Array.from(el.classList).filter((c2) => !GENERATED.test(c2)).slice(0, 3);
-    for (const c2 of classes) hints.push("." + c2);
-    const text = visibleText(el);
-    if (text) hints.push(text.slice(0, 40));
-    return { html: htmlSnippet(el), text, hints, ...extra };
-  }
-  function isTraceBugUi(el) {
-    return !!el.closest("#tracebug-root, [id^='tracebug-']");
-  }
-  function isRendered(el) {
-    const r2 = el.getBoundingClientRect();
-    if (r2.width === 0 && r2.height === 0) return false;
-    const cs = getComputedStyle(el);
-    return cs.display !== "none" && cs.visibility !== "hidden" && cs.visibility !== "collapse" && cs.opacity !== "0";
-  }
-  var RAW_HTML_LIMIT, GENERATED;
-  var init_evidence = __esm({
-    "src/audit/detectors/evidence.ts"() {
-      "use strict";
-      RAW_HTML_LIMIT = 1200;
-      GENERATED = /^(css|sc|jsx|svelte|emotion)-|__[a-z0-9]{4,}$|^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i;
-    }
-  });
-
-  // src/audit/detectors/a11y.ts
-  async function loadAxe2() {
-    const w = globalThis;
-    if (w.axe && typeof w.axe.run === "function") return w.axe;
-    try {
-      const mod = await Promise.resolve().then(() => (init_axe_core(), axe_core_exports));
-      const axe = mod.default && typeof mod.default.run === "function" ? mod.default : mod;
-      if (typeof axe.run === "function") return axe;
-    } catch (e2) {
-    }
-    return w.axe && typeof w.axe.run === "function" ? w.axe : null;
-  }
-  function metricsFor(node2) {
-    var _a2, _b;
-    const data = (_b = (_a2 = node2.any) == null ? void 0 : _a2.find((c2) => c2.data && typeof c2.data === "object")) == null ? void 0 : _b.data;
-    if (!data) return void 0;
-    const out = {};
-    for (const key of ["contrastRatio", "expectedContrastRatio", "fgColor", "bgColor", "fontSize", "fontWeight"]) {
-      const v2 = data[key];
-      if (typeof v2 === "number" || typeof v2 === "string") out[key] = v2;
-    }
-    return Object.keys(out).length ? out : void 0;
-  }
-  async function detectA11yFindings() {
-    const axe = await loadAxe2();
-    if (!axe) return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
-    let results;
-    try {
-      results = await axe.run(
-        { exclude: [["#tracebug-root"]] },
-        { runOnly: { type: "tag", values: AXE_TAGS }, resultTypes: ["violations"] }
-      );
-    } catch (err) {
-      console.warn("[TraceBug] axe.run failed:", err);
-      return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
-    }
-    const findings = [];
-    for (const v2 of results.violations || []) {
-      const nodes = (v2.nodes || []).slice(0, MAX_NODES_PER_RULE);
-      for (const node2 of nodes) {
-        const target = Array.isArray(node2.target) ? node2.target.map(String).join(" ") : "";
-        let el = null;
-        try {
-          el = target ? document.querySelector(target) : null;
-        } catch (e2) {
-          el = null;
-        }
-        const metrics = metricsFor(node2);
-        const evidence = el ? elementEvidence(el, metrics ? { metrics } : void 0) : { html: node2.html || "", ...metrics ? { metrics } : {} };
-        if (node2.html && evidence.html !== node2.html) evidence.html = node2.html;
-        findings.push({
-          id: makeIssueId("axe-a11y"),
-          detector: "axe-a11y",
-          category: "accessibility",
-          ruleId: v2.id,
-          severity: coerceSeverity(v2.impact),
-          title: v2.help || v2.id,
-          description: v2.description || v2.id,
-          selector: target || void 0,
-          helpUrl: v2.helpUrl,
-          page: location.href,
-          detectedAt: Date.now(),
-          evidence
-        });
-      }
-    }
-    return { ran: true, limitation: A11Y_LIMITATION, findings };
-  }
-  var AXE_TAGS, MAX_NODES_PER_RULE, A11Y_LIMITATION, A11Y_UNAVAILABLE;
-  var init_a11y2 = __esm({
-    "src/audit/detectors/a11y.ts"() {
-      "use strict";
-      init_helpers2();
-      init_evidence();
-      AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
-      MAX_NODES_PER_RULE = 20;
-      A11Y_LIMITATION = "Automated checks cover only part of WCAG. This is not a conformance evaluation: keyboard use, screen-reader meaning and many success criteria need a person.";
-      A11Y_UNAVAILABLE = "The accessibility checker isn't available on this page, so accessibility was not checked.";
-    }
-  });
-
-  // src/audit/detectors/ui.ts
-  function uiFinding(ruleId, severity, title, description, extra = {}) {
-    return {
-      id: makeIssueId("audit-ui"),
-      detector: "audit-ui",
-      category: "ui",
-      ruleId,
-      severity,
-      title,
-      description,
-      page: location.href,
-      detectedAt: Date.now(),
-      ...extra
-    };
-  }
-  function clippedByAncestor(el) {
-    for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
-      const ox = getComputedStyle(p).overflowX;
-      if (ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") return true;
-    }
-    return false;
-  }
-  function overflowFindings() {
-    const out = [];
-    const vw = document.documentElement.clientWidth;
-    const sw = document.documentElement.scrollWidth;
-    if (sw <= vw + 1) return out;
-    out.push(uiFinding(
-      "ui/horizontal-overflow",
-      "serious",
-      `Page scrolls sideways by ${sw - vw}px`,
-      `At ${vw}px wide the page is ${sw}px wide, so it scrolls horizontally. Usually one element with a fixed width or a long unbroken string causes it.`,
-      { evidence: { metrics: { viewportWidth: vw, pageWidth: sw } } }
-    ));
-    const culprits = [];
-    for (const el of Array.from(document.body.querySelectorAll("*"))) {
-      if (culprits.length >= MAX_PER_RULE) break;
-      if (isTraceBugUi(el) || culprits.some((c2) => c2.contains(el))) continue;
-      const r2 = el.getBoundingClientRect();
-      if (r2.right <= vw + 1 || r2.width === 0) continue;
-      if (!isRendered(el) || clippedByAncestor(el)) continue;
-      if (getComputedStyle(el).position === "fixed") continue;
-      culprits.push(el);
-    }
-    for (const el of culprits) {
-      const r2 = el.getBoundingClientRect();
-      out.push(elementFinding(
-        el,
-        "ui/off-screen",
-        "moderate",
-        `Element extends ${Math.round(r2.right - vw)}px past the right edge`,
-        `This ${el.tagName.toLowerCase()} ends at ${Math.round(r2.right)}px; the viewport is ${vw}px. It is a likely cause of the sideways scroll.`,
-        { right: Math.round(r2.right), viewportWidth: vw }
-      ));
-    }
-    return out;
-  }
-  function overlapFindings() {
-    const out = [];
-    const controls = Array.from(document.querySelectorAll(INTERACTIVE)).filter((el) => !isTraceBugUi(el) && isRendered(el)).slice(0, 400);
-    const rects = controls.map((el) => el.getBoundingClientRect());
-    const MIN = 4;
-    for (let i2 = 0; i2 < controls.length && out.length < MAX_PER_RULE; i2++) {
-      for (let j = i2 + 1; j < controls.length && out.length < MAX_PER_RULE; j++) {
-        const a2 = controls[i2], b = controls[j];
-        if (a2.contains(b) || b.contains(a2)) continue;
-        const ra = rects[i2], rb = rects[j];
-        const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
-        const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
-        if (w < MIN || h < MIN) continue;
-        const cx = Math.max(ra.left, rb.left) + w / 2, cy = Math.max(ra.top, rb.top) + h / 2;
-        const top = document.elementFromPoint(cx, cy);
-        const covered = top && (a2 === top || a2.contains(top)) ? b : a2;
-        out.push(elementFinding(
-          covered,
-          "ui/overlap",
-          "moderate",
-          "Control is covered by another control",
-          `Two clickable elements overlap by ${Math.round(w)}\xD7${Math.round(h)}px. Clicks in that area reach only the one on top (${buildSelector2(covered === a2 ? b : a2)}).`,
-          { overlapWidth: Math.round(w), overlapHeight: Math.round(h) }
-        ));
-      }
-    }
-    return out;
-  }
-  function clippedTextFindings() {
-    const out = [];
-    for (const el of Array.from(document.body.querySelectorAll("*"))) {
-      if (out.length >= MAX_PER_RULE) break;
-      if (isTraceBugUi(el)) continue;
-      const hasOwnText = Array.from(el.childNodes).some((n2) => n2.nodeType === 3 && (n2.textContent || "").trim().length > 2);
-      if (!hasOwnText) continue;
-      const cs = getComputedStyle(el);
-      if (cs.textOverflow === "ellipsis") continue;
-      const he = el;
-      const clipsX = (cs.overflowX === "hidden" || cs.overflowX === "clip") && he.scrollWidth > he.clientWidth + 1;
-      const clipsY = (cs.overflowY === "hidden" || cs.overflowY === "clip") && he.scrollHeight > he.clientHeight + 2 && cs.webkitLineClamp === "none";
-      if (!clipsX && !clipsY) continue;
-      if (!isRendered(el)) continue;
-      out.push(elementFinding(
-        el,
-        "ui/text-clipped",
-        "moderate",
-        "Text is cut off",
-        `The text needs ${clipsX ? he.scrollWidth + "px of width" : he.scrollHeight + "px of height"} but the box is ${clipsX ? he.clientWidth : he.clientHeight}px with overflow hidden, and there is no ellipsis to show it was cut.`,
-        { needed: clipsX ? he.scrollWidth : he.scrollHeight, available: clipsX ? he.clientWidth : he.clientHeight }
-      ));
-    }
-    return out;
-  }
-  function imageFindings() {
-    const out = [];
-    let noDims = 0, broken = 0;
-    for (const img of Array.from(document.images)) {
-      if (isTraceBugUi(img)) continue;
-      const src = img.currentSrc || img.src;
-      if (img.complete && img.naturalWidth === 0 && src && broken < MAX_PER_RULE) {
-        broken++;
-        out.push(uiFinding(
-          "ui/broken-image",
-          "moderate",
-          "Image failed to load",
-          "The browser tried to load this image and got an error or a non-image response.",
-          { selector: buildSelector2(img), url: src, evidence: elementEvidence(img) }
-        ));
-        continue;
-      }
-      if (noDims >= MAX_PER_RULE) continue;
-      const hasAttrs = img.hasAttribute("width") && img.hasAttribute("height");
-      const cs = getComputedStyle(img);
-      const sizedByCss = cs.aspectRatio !== "auto" || img.style.width !== "" && img.style.height !== "";
-      const r2 = img.getBoundingClientRect();
-      if (hasAttrs || sizedByCss || r2.width < 32 || r2.height < 32 || !isRendered(img)) continue;
-      noDims++;
-      out.push(elementFinding(
-        img,
-        "ui/img-no-dimensions",
-        "minor",
-        "Image has no width and height",
-        "Without width and height (or CSS aspect-ratio), the page reserves no space for the image and content jumps when it loads (layout shift).",
-        { renderedWidth: Math.round(r2.width), renderedHeight: Math.round(r2.height) }
-      ));
-    }
-    return out;
-  }
-  function detectUiFindings() {
-    const runs = [overflowFindings, overlapFindings, clippedTextFindings, imageFindings];
-    const out = [];
-    for (const run of runs) {
-      try {
-        out.push(...run());
-      } catch (err) {
-        console.warn("[TraceBug] UI check failed:", err);
-      }
-    }
-    return out;
-  }
-  var MAX_PER_RULE, INTERACTIVE, elementFinding;
-  var init_ui = __esm({
-    "src/audit/detectors/ui.ts"() {
-      "use strict";
-      init_helpers2();
-      init_evidence();
-      MAX_PER_RULE = 15;
-      INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]:not([tabindex='-1'])";
-      elementFinding = (el, ruleId, severity, title, description, metrics) => uiFinding(ruleId, severity, title, description, { selector: buildSelector2(el), evidence: elementEvidence(el, metrics ? { metrics } : void 0) });
-    }
-  });
-
-  // src/audit/detectors/seo.ts
-  function seoFinding(ruleId, severity, title, description, extra = {}) {
-    return {
-      id: makeIssueId("audit-seo"),
-      detector: "audit-seo",
-      category: "seo",
-      ruleId,
-      severity,
-      title,
-      description,
-      page: typeof location !== "undefined" ? location.href : "",
-      detectedAt: Date.now(),
-      ...extra
-    };
-  }
-  function detectSeoFindings(doc = document) {
-    var _a2;
-    const out = [];
-    const { titleMin, titleMax, descMin, descMax } = SEO_LIMITS;
-    const title = (((_a2 = doc.querySelector("head > title, title")) == null ? void 0 : _a2.textContent) || "").replace(/\s+/g, " ").trim();
-    if (!title) {
-      out.push(seoFinding(
-        "seo/missing-title",
-        "serious",
-        "Page has no <title>",
-        "Search results and browser tabs show the page title. Add a <title> in <head> that names the page."
-      ));
-    } else if (title.length < titleMin || title.length > titleMax) {
-      out.push(seoFinding(
-        "seo/title-length",
-        "minor",
-        `Title is ${title.length} characters`,
-        `Search results show roughly ${titleMax} characters. ${title.length > titleMax ? "The end will be cut off." : "A very short title rarely says what the page is."} Aim for ${titleMin}\u2013${titleMax}.`,
-        { evidence: { text: title, metrics: { length: title.length } } }
-      ));
-    }
-    const desc = metaContent(doc, "description");
-    if (desc === null || desc === "") {
-      out.push(seoFinding(
-        "seo/missing-description",
-        "moderate",
-        "No meta description",
-        'Search engines use <meta name="description"> for the snippet under the title; without it they pick page text themselves.'
-      ));
-    } else if (desc.length < descMin || desc.length > descMax) {
-      out.push(seoFinding(
-        "seo/description-length",
-        "minor",
-        `Meta description is ${desc.length} characters`,
-        `Snippets show roughly ${descMax} characters. Aim for ${descMin}\u2013${descMax}.`,
-        { evidence: { text: desc.slice(0, 200), metrics: { length: desc.length } } }
-      ));
-    }
-    const canonicals = Array.from(doc.querySelectorAll('link[rel~="canonical" i]'));
-    if (canonicals.length === 0) {
-      out.push(seoFinding(
-        "seo/missing-canonical",
-        "minor",
-        "No canonical URL",
-        'Without <link rel="canonical">, the same page reached with different query strings can be indexed as separate pages.'
-      ));
-    } else if (canonicals.length > 1) {
-      out.push(seoFinding(
-        "seo/multiple-canonical",
-        "moderate",
-        `${canonicals.length} canonical links`,
-        "Search engines ignore conflicting canonical links. Keep exactly one.",
-        { evidence: { hints: canonicals.map((c2) => c2.getAttribute("href") || "").filter(Boolean) } }
-      ));
-    }
-    const h1s = Array.from(doc.querySelectorAll("h1")).filter((h) => !h.closest("#tracebug-root"));
-    if (h1s.length === 0) {
-      out.push(seoFinding(
-        "seo/missing-h1",
-        "moderate",
-        "Page has no <h1>",
-        "The main heading tells search engines and screen-reader users what the page is about. Add one <h1>."
-      ));
-    } else if (h1s.length > 1) {
-      out.push(seoFinding(
-        "seo/multiple-h1",
-        "minor",
-        `Page has ${h1s.length} <h1> headings`,
-        "Use one <h1> for the page's main topic and <h2>\u2013<h6> below it.",
-        { selector: "h1", evidence: { ...elementEvidence(h1s[1]), metrics: { count: h1s.length } } }
-      ));
-    }
-    const robots = (metaContent(doc, "robots") || "") + "," + (metaContent(doc, "googlebot") || "");
-    if (/\bnoindex\b/i.test(robots)) {
-      out.push(seoFinding(
-        "seo/noindex",
-        "serious",
-        "Page tells search engines not to index it",
-        'A robots meta tag says "noindex". Correct for staging or private pages; on a public page it keeps it out of search.',
-        { evidence: { text: robots.replace(/^,|,$/g, "") } }
-      ));
-    }
-    if (!doc.querySelector('meta[name="viewport" i]')) {
-      out.push(seoFinding(
-        "seo/missing-viewport",
-        "serious",
-        "No viewport meta tag",
-        'Without <meta name="viewport" content="width=device-width, initial-scale=1">, phones render the page at desktop width, zoomed out.'
-      ));
-    }
-    return out;
-  }
-  var SEO_LIMITS, metaContent;
-  var init_seo = __esm({
-    "src/audit/detectors/seo.ts"() {
-      "use strict";
-      init_helpers2();
-      init_evidence();
-      SEO_LIMITS = { titleMin: 10, titleMax: 60, descMin: 50, descMax: 160 };
-      metaContent = (doc, name) => {
-        const el = doc.querySelector(`meta[name="${name}" i]`);
-        return el ? (el.getAttribute("content") || "").trim() : null;
-      };
-    }
-  });
-
-  // src/audit/detectors/performance.ts
-  function perfFinding(ruleId, severity, title, description, extra = {}) {
-    return {
-      id: makeIssueId("audit-perf"),
-      detector: "audit-perf",
-      category: "performance",
-      ruleId,
-      severity,
-      title,
-      description,
-      page: location.href,
-      detectedAt: Date.now(),
-      ...extra
-    };
-  }
-  function buffered(type) {
-    const supported = PerformanceObserver.supportedEntryTypes || [];
-    if (!supported.includes(type)) return Promise.resolve([]);
-    return new Promise((resolve) => {
-      const got = [];
-      let po = null;
-      const finish = () => {
-        try {
-          got.push(...(po == null ? void 0 : po.takeRecords()) || []);
-          po == null ? void 0 : po.disconnect();
-        } catch (e2) {
-        }
-        resolve(got);
-      };
-      try {
-        po = new PerformanceObserver((list) => {
-          got.push(...list.getEntries());
-        });
-        po.observe({ type, buffered: true });
-      } catch (e2) {
-        resolve([]);
-        return;
-      }
-      setTimeout(finish, 60);
-    });
-  }
-  function isTraceBugResource(url) {
-    if (/^(chrome|moz|safari-web)-extension:/i.test(url)) return true;
-    try {
-      const file = new URL(url).pathname.split("/").pop() || "";
-      return /^tracebug[\w.-]*\.m?js$/i.test(file);
-    } catch (e2) {
-      return false;
-    }
-  }
-  function grade(value, [good, poor]) {
-    if (value > poor) return "serious";
-    if (value > good) return "moderate";
-    return null;
-  }
-  async function detectPerfFindings() {
-    const nav = performance.getEntriesByType("navigation")[0];
-    if (!nav) {
-      return { ran: false, limitation: "This browser exposes no page-load timing for this page, so performance was not checked.", metrics: {}, findings: [] };
-    }
-    const findings = [];
-    const metrics = {};
-    const notes = [PERF_LIMITATION];
-    const ttfb = Math.round(nav.responseStart - nav.startTime);
-    if (ttfb > 0) metrics.ttfbMs = ttfb;
-    const fcpEntry = performance.getEntriesByName("first-contentful-paint")[0];
-    if (fcpEntry) metrics.fcpMs = Math.round(fcpEntry.startTime);
-    const lcpEntries = await buffered("largest-contentful-paint");
-    const lcp = lcpEntries[lcpEntries.length - 1];
-    if (lcp) metrics.lcpMs = Math.round(lcp.startTime);
-    const shiftTypeSupported = (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift");
-    if (shiftTypeSupported) {
-      const shifts = await buffered("layout-shift");
-      metrics.cls = Math.round(shifts.filter((s2) => !s2.hadRecentInput).reduce((t2, s2) => t2 + s2.value, 0) * 1e3) / 1e3;
-    } else {
-      notes.push("Layout shift (CLS) is not measured in this browser.");
-    }
-    const thresholds = [
-      ["lcpMs", "perf/lcp", "Largest content paints at", "The largest image or text block appears at {v}. Over 2.5 s feels slow; over 4 s, users leave."],
-      ["fcpMs", "perf/fcp", "First content paints at", "Nothing is drawn until {v}. Over 1.8 s, the page feels stuck."],
-      ["ttfbMs", "perf/ttfb", "Server responds after", "The first byte of the page arrives after {v}. Over 0.8 s, everything after it starts late."],
-      ["cls", "perf/cls", "Layout shift score", "Content moved by {v} while loading (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."]
-    ];
-    for (const [key, ruleId, label, text] of thresholds) {
-      const v2 = metrics[key];
-      if (v2 === void 0) continue;
-      const sev = grade(v2, PERF_THRESHOLDS[key]);
-      if (!sev) continue;
-      const shown = key === "cls" ? String(v2) : `${(v2 / 1e3).toFixed(2)} s`;
-      const extra = { evidence: { metrics: { [key]: v2, good: PERF_THRESHOLDS[key][0], poor: PERF_THRESHOLDS[key][1] } } };
-      if (key === "lcpMs" && (lcp == null ? void 0 : lcp.url)) extra.url = lcp.url;
-      findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, text.replace("{v}", shown), extra));
-    }
-    const resources = performance.getEntriesByType("resource").filter((r2) => !isTraceBugResource(r2.name));
-    const total = resources.reduce((t2, r2) => t2 + (r2.transferSize || 0), nav.transferSize || 0);
-    metrics.transferKb = Math.round(total / 1024);
-    metrics.requests = resources.length + 1;
-    if (metrics.transferKb > PAGE_WEIGHT_KB) {
-      findings.push(perfFinding(
-        "perf/page-weight",
-        "moderate",
-        `Page downloads ${(metrics.transferKb / 1024).toFixed(1)} MB`,
-        `This load transferred ${metrics.transferKb} KB over ${metrics.requests} requests. Above ${PAGE_WEIGHT_KB / 1024} MB is slow on mobile connections.`,
-        { evidence: { metrics: { transferKb: metrics.transferKb, requests: metrics.requests } } }
-      ));
-    }
-    const sizeOf = (r2) => r2.transferSize || r2.encodedBodySize || 0;
-    const large = resources.filter((r2) => sizeOf(r2) >= LARGE_RESOURCE_KB * 1024).sort((a2, b) => sizeOf(b) - sizeOf(a2)).slice(0, MAX_LARGE);
-    for (const r2 of large) {
-      const kb = Math.round(sizeOf(r2) / 1024);
-      findings.push(perfFinding(
-        "perf/large-resource",
-        "minor",
-        `${fileName(r2.name)} is ${kb} KB`,
-        `One of the largest files on this page (${r2.initiatorType || "resource"}). Compress it, split it, or load it later.`,
-        { url: r2.name, evidence: { metrics: { sizeKb: kb, durationMs: Math.round(r2.duration) }, hints: [fileName(r2.name)] } }
-      ));
-    }
-    const blocking = resources.filter((r2) => r2.renderBlockingStatus === "blocking" && r2.duration >= RENDER_BLOCKING_MS).slice(0, MAX_BLOCKING);
-    for (const r2 of blocking) {
-      findings.push(perfFinding(
-        "perf/render-blocking",
-        "minor",
-        `${fileName(r2.name)} blocks the first paint`,
-        `The browser waited ${Math.round(r2.duration)} ms for this ${r2.initiatorType || "file"} before drawing anything. Add defer/async to scripts or load non-critical CSS later.`,
-        { url: r2.name, evidence: { metrics: { durationMs: Math.round(r2.duration) }, hints: [fileName(r2.name)] } }
-      ));
-    }
-    if (!resources.some((r2) => typeof r2.renderBlockingStatus === "string")) {
-      notes.push("Render-blocking files are not reported by this browser.");
-    }
-    return { ran: true, limitation: notes.join(" "), metrics, findings };
-  }
-  var PERF_THRESHOLDS, PAGE_WEIGHT_KB, LARGE_RESOURCE_KB, MAX_LARGE, MAX_BLOCKING, RENDER_BLOCKING_MS, PERF_LIMITATION, fileName;
-  var init_performance = __esm({
-    "src/audit/detectors/performance.ts"() {
-      "use strict";
-      init_helpers2();
-      PERF_THRESHOLDS = {
-        lcpMs: [2500, 4e3],
-        fcpMs: [1800, 3e3],
-        ttfbMs: [800, 1800],
-        cls: [0.1, 0.25]
-      };
-      PAGE_WEIGHT_KB = 3e3;
-      LARGE_RESOURCE_KB = 500;
-      MAX_LARGE = 5;
-      MAX_BLOCKING = 10;
-      RENDER_BLOCKING_MS = 200;
-      PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. INP is not measured. TraceBug's own files are left out.";
-      fileName = (url) => {
-        try {
-          const u2 = new URL(url);
-          return (u2.pathname.split("/").pop() || u2.hostname).slice(0, 80);
-        } catch (e2) {
-          return url.slice(0, 80);
-        }
-      };
-    }
-  });
-
-  // src/audit/detectors/keyboard.ts
-  function kbdFinding(ruleId, severity, title, description, el, extra = {}) {
-    return {
-      id: makeIssueId("audit-keyboard"),
-      detector: "audit-keyboard",
-      category: "accessibility",
-      ruleId,
-      severity,
-      title,
-      description,
-      page: location.href,
-      detectedAt: Date.now(),
-      ...el ? { selector: buildSelector2(el), evidence: elementEvidence(el) } : {},
-      ...extra
-    };
-  }
-  function inTabOrder(el) {
-    const tabindex = el.getAttribute("tabindex");
-    if (tabindex !== null && Number(tabindex) < 0) return false;
-    if (el.disabled) return false;
-    if (el.closest("[inert], [hidden]")) return false;
-    const cs = getComputedStyle(el);
-    return cs.display !== "none" && cs.visibility !== "hidden";
-  }
-  function detectKeyboardFindings(doc = document) {
-    const findings = [];
-    const els = Array.from(doc.querySelectorAll(TABBABLE)).filter((el) => !isTraceBugUi(el) && inTabOrder(el));
-    let positive = 0;
-    let invisible = 0;
-    for (const el of els) {
-      const tabindex = Number(el.getAttribute("tabindex"));
-      if (tabindex > 0 && positive < MAX_PER_RULE2) {
-        positive++;
-        findings.push(kbdFinding(
-          "kbd/positive-tabindex",
-          "serious",
-          `tabindex="${tabindex}" changes the Tab order`,
-          'Keyboard users reach this element before everything in reading order. Use tabindex="0" (or none) and move the element in the DOM instead.',
-          el
-        ));
-      }
-      if (invisible < MAX_PER_RULE2) {
-        const r2 = el.getBoundingClientRect();
-        const cs = getComputedStyle(el);
-        const zero = r2.width === 0 && r2.height === 0;
-        const transparent = cs.opacity === "0";
-        if ((zero || transparent) && el.tagName !== "IFRAME") {
-          invisible++;
-          findings.push(kbdFinding(
-            "kbd/focusable-invisible",
-            "serious",
-            "Keyboard focus lands on something invisible",
-            `This element is in the Tab order but is drawn ${zero ? "0\xD70" : "fully transparent"}, so a keyboard user's focus disappears. Remove it from the Tab order (tabindex="-1", disabled or hidden) or make it visible when focused.`,
-            el
-          ));
-        }
-      }
-    }
-    let unreadableSheets = 0;
-    let removed = 0;
-    const visit2 = (rules2) => {
-      for (const rule2 of Array.from(rules2)) {
-        if (removed >= MAX_PER_RULE2) return;
-        const grouping = rule2;
-        if (grouping.cssRules && !rule2.selectorText) {
-          visit2(grouping.cssRules);
-          continue;
-        }
-        const style = rule2;
-        const sel = style.selectorText || "";
-        if (!/:focus(?!-within)/.test(sel)) continue;
-        const st = style.style;
-        const outline = (st.getPropertyValue("outline-style") || st.getPropertyValue("outline") || "").trim();
-        const width = st.getPropertyValue("outline-width").trim();
-        const removesOutline = /^(none|0(px)?)\b/.test(outline) || width === "0" || width === "0px";
-        if (!removesOutline) continue;
-        const replaced = ["box-shadow", "border-color", "border", "border-bottom", "background", "background-color", "text-decoration"].some((p) => {
-          const v2 = st.getPropertyValue(p).trim();
-          return v2 && !/^(none|0|initial|unset|inherit|revert)$/.test(v2);
-        });
-        if (replaced) continue;
-        if (sel.includes("tracebug")) continue;
-        removed++;
-        findings.push(kbdFinding(
-          "kbd/focus-outline-removed",
-          "serious",
-          `"${sel.slice(0, 80)}" hides the focus outline`,
-          "This CSS rule removes the focus outline and draws no other focus indicator, so keyboard users can't see where they are. Keep the outline, or replace it (box-shadow, border or background) \u2014 :focus-visible lets mouse users keep a clean look.",
-          null,
-          { evidence: { text: sel.slice(0, 80), hints: [sel.split(",")[0].replace(/:focus.*/, "").trim()].filter(Boolean) } }
-        ));
-      }
-    };
-    for (const sheet of Array.from(doc.styleSheets)) {
-      const owner = sheet.ownerNode;
-      if (owner && isTraceBugUi(owner)) continue;
-      let rules2 = null;
-      try {
-        rules2 = sheet.cssRules;
-      } catch (e2) {
-        unreadableSheets++;
-        continue;
-      }
-      if (rules2) visit2(rules2);
-    }
-    return { findings, unreadableSheets };
-  }
-  var MAX_PER_RULE2, TABBABLE;
-  var init_keyboard = __esm({
-    "src/audit/detectors/keyboard.ts"() {
-      "use strict";
-      init_helpers2();
-      init_evidence();
-      MAX_PER_RULE2 = 20;
-      TABBABLE = "a[href], area[href], button, input:not([type=hidden]), select, textarea, iframe, summary, [tabindex], [contenteditable=''], [contenteditable='true']";
-    }
-  });
-
-  // src/audit/types.ts
-  function isAuditScan(v2) {
-    return typeof v2 === "string" && Object.prototype.hasOwnProperty.call(AUDIT_SCANS, v2);
-  }
-  var AUDIT_SCANS;
-  var init_types = __esm({
-    "src/audit/types.ts"() {
-      "use strict";
-      AUDIT_SCANS = {
-        full: { label: "All checks", categories: ["accessibility", "ui", "performance", "seo", "runtime"] },
-        "auto-review": { label: "Auto Review", categories: ["ui", "runtime"] },
-        accessibility: { label: "Accessibility Audit", categories: ["accessibility"] },
-        "performance-seo": { label: "Performance & SEO", categories: ["performance", "seo"] }
-      };
-    }
-  });
-
-  // src/audit/index.ts
-  function getLastAuditRun() {
-    return _lastRun;
-  }
-  async function runtimeFindings() {
-    const session = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt)[0] || null;
-    const groups = await Promise.all([
-      detectConsoleErrors(session).catch(() => []),
-      detectFailedRequests(session).catch(() => []),
-      detectMixedContent().catch(() => []),
-      // Dead and rage clicks from the capture: the "dead UI" half of Auto Review.
-      detectFrustration2(session).then((list) => list.filter((i2) => i2.detector === "frustration-dead" || i2.detector === "frustration-rage")).catch(() => [])
-    ]);
-    return groups.flat().map((i2) => ({
-      ...i2,
-      category: "runtime",
-      ruleId: `runtime/${i2.detector}`,
-      page: location.href
-    }));
-  }
-  async function runAudit(options = {}) {
-    var _a2;
-    if (_inFlight) return _inFlight;
-    const scan2 = options.scan && AUDIT_SCANS[options.scan] ? options.scan : "full";
-    const wanted = new Set(((_a2 = options.categories) == null ? void 0 : _a2.length) ? options.categories : AUDIT_SCANS[scan2].categories);
-    _inFlight = (async () => {
-      var _a3;
-      const categories = {};
-      const findings = [];
-      const guard = async (name, fn) => {
-        if (!wanted.has(name)) return;
-        try {
-          findings.push(...await fn());
-          categories[name] = { ran: true, limitation: CATEGORY_LIMITATIONS[name] };
-        } catch (err) {
-          console.warn(`[TraceBug] ${name} audit failed:`, err);
-          categories[name] = { ran: false, limitation: `The ${name} check failed on this page, so it was not run.` };
-        }
-      };
-      if (wanted.has("accessibility")) {
-        const a11y = await detectA11yFindings();
-        findings.push(...a11y.findings);
-        let limitation = a11y.limitation;
-        if (a11y.ran) {
-          try {
-            const kbd = detectKeyboardFindings(document);
-            findings.push(...kbd.findings);
-            limitation += " Keyboard: Tab order and focus styles read from the page, nothing focused" + (kbd.unreadableSheets ? `; ${kbd.unreadableSheets} stylesheet${kbd.unreadableSheets === 1 ? "" : "s"} from another site could not be read.` : ".");
-          } catch (err) {
-            console.warn("[TraceBug] keyboard checks failed:", err);
-            limitation += " The keyboard checks failed on this page.";
-          }
-        }
-        categories.accessibility = { ran: a11y.ran, limitation };
-      }
-      await guard("ui", detectUiFindings);
-      if (wanted.has("performance")) {
-        try {
-          const perf = await detectPerfFindings();
-          findings.push(...perf.findings);
-          categories.performance = { ran: perf.ran, limitation: perf.limitation, metrics: perf.metrics };
-        } catch (err) {
-          console.warn("[TraceBug] performance audit failed:", err);
-          categories.performance = { ran: false, limitation: "The performance check failed on this page, so it was not run." };
-        }
-      }
-      await guard("seo", () => detectSeoFindings(document));
-      await guard("runtime", runtimeFindings);
-      const run = buildAuditRun(findings, {
-        url: location.href,
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-        userAgent: navigator.userAgent,
-        categories,
-        scan: ((_a3 = options.categories) == null ? void 0 : _a3.length) ? void 0 : scan2
-      });
-      _lastRun = run;
-      return run;
-    })();
-    try {
-      return await _inFlight;
-    } finally {
-      _inFlight = null;
-    }
-  }
-  var CATEGORY_LIMITATIONS, _lastRun, _inFlight;
-  var init_audit = __esm({
-    "src/audit/index.ts"() {
-      "use strict";
-      init_storage();
-      init_session_data();
-      init_mixed_content();
-      init_run();
-      init_a11y2();
-      init_ui();
-      init_seo();
-      init_performance();
-      init_keyboard();
-      init_frustration();
-      init_types();
-      CATEGORY_LIMITATIONS = {
-        ui: "Checked at the current window size only. No design judgement.",
-        seo: "This page only: no crawl, no ranking claims.",
-        runtime: "Only what happened since TraceBug started capturing on this page: errors, failed requests, mixed content, and rage or dead clicks."
-      };
-      _lastRun = null;
-      _inFlight = null;
-    }
-  });
-
-  // src/audit/compare.ts
-  function ranCategories(run) {
-    return new Set(run.categories.filter((c2) => c2.ran).map((c2) => c2.name));
-  }
-  function compareAudits(before, after) {
-    const empty = {
-      comparable: false,
-      fixed: [],
-      stillPresent: [],
-      new: [],
-      regressed: [],
-      skippedCategories: [],
-      incomplete: false
-    };
-    const pathA = urlPath(before.url);
-    const pathB = urlPath(after.url);
-    if (pathA !== pathB) {
-      return { ...empty, reason: `Different pages: ${pathA || "(none)"} vs ${pathB || "(none)"}. Compare two runs of the same page.` };
-    }
-    const ranA = ranCategories(before);
-    const ranB = ranCategories(after);
-    const both = new Set([...ranA].filter((c2) => ranB.has(c2)));
-    const skipped = [.../* @__PURE__ */ new Set([...ranA, ...ranB])].filter((c2) => !both.has(c2)).sort();
-    const inScope = (f2) => !!f2.category && both.has(f2.category);
-    const left = before.findings.filter(inScope);
-    const right = after.findings.filter(inScope);
-    const usedL = /* @__PURE__ */ new Set();
-    const usedR = /* @__PURE__ */ new Set();
-    const stillPresent = [];
-    const pass = (key, matchedBy) => {
-      const index2 = /* @__PURE__ */ new Map();
-      right.forEach((f2, i2) => {
-        const k = f2[key];
-        if (!k || usedR.has(i2)) return;
-        const list = index2.get(k);
-        if (list) list.push(i2);
-        else index2.set(k, [i2]);
-      });
-      left.forEach((f2, i2) => {
-        const k = f2[key];
-        if (!k || usedL.has(i2)) return;
-        const candidates = index2.get(k);
-        const j = candidates == null ? void 0 : candidates.find((c2) => !usedR.has(c2));
-        if (j === void 0) return;
-        usedL.add(i2);
-        usedR.add(j);
-        stillPresent.push({ before: f2, after: right[j], matchedBy });
-      });
-    };
-    pass("fingerprint", "fingerprint");
-    pass("fallbackFingerprint", "fallback");
-    const fixed = left.filter((_, i2) => !usedL.has(i2));
-    const added = right.filter((_, i2) => !usedR.has(i2));
-    const fixedCategories = new Set(fixed.map((f2) => f2.category));
-    const regressed = added.filter((f2) => fixedCategories.has(f2.category));
-    const fresh = added.filter((f2) => !fixedCategories.has(f2.category));
-    return {
-      comparable: true,
-      fixed,
-      stillPresent,
-      new: fresh,
-      regressed,
-      skippedCategories: skipped,
-      incomplete: before.truncated > 0 || after.truncated > 0
-    };
-  }
-  var init_compare = __esm({
-    "src/audit/compare.ts"() {
-      "use strict";
-      init_fingerprint2();
     }
   });
 
@@ -40175,8 +41429,8 @@ First element: \`${exampleSnippet}\``,
     return parts.join("");
   }
   function _injectStyles3() {
-    if (document.getElementById(STYLE_ID4)) return;
-    const style = createStyleTag(STYLE_ID4);
+    if (document.getElementById(STYLE_ID5)) return;
+    const style = createStyleTag(STYLE_ID5);
     style.textContent = `
     @keyframes tb-lbc-in {
       from { transform: translateY(20px); opacity: 0; }
@@ -40289,404 +41543,16 @@ First element: \`${exampleSnippet}\``,
   function escapeHtml5(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
-  var CARD_ID3, STYLE_ID4, _sourceCache, _sourceFetchInflight, _currentRoot;
+  var CARD_ID3, STYLE_ID5, _sourceCache, _sourceFetchInflight, _currentRoot;
   var init_live_bug_card = __esm({
     "src/ui/live-bug-card.ts"() {
       "use strict";
       init_helpers();
       CARD_ID3 = "tracebug-live-bug-card";
-      STYLE_ID4 = "tracebug-live-bug-card-styles";
+      STYLE_ID5 = "tracebug-live-bug-card-styles";
       _sourceCache = /* @__PURE__ */ new Map();
       _sourceFetchInflight = /* @__PURE__ */ new Map();
       _currentRoot = null;
-    }
-  });
-
-  // src/audit/export.ts
-  var export_exports = {};
-  __export(export_exports, {
-    auditOneLiner: () => auditOneLiner,
-    auditSummaryMarkdown: () => auditSummaryMarkdown,
-    exportAuditReport: () => exportAuditReport
-  });
-  function currentSession() {
-    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-    const activeId = getActiveSessionId();
-    const found = activeId && sessions.find((s2) => s2.sessionId === activeId) || sessions[0];
-    if (found) return found;
-    const now = Date.now();
-    return {
-      sessionId: `audit-${now.toString(36)}`,
-      projectId: "audit",
-      createdAt: now,
-      updatedAt: now,
-      errorMessage: null,
-      errorStack: null,
-      reproSteps: null,
-      errorSummary: null,
-      events: [],
-      annotations: [],
-      environment: captureEnvironment()
-    };
-  }
-  function auditSummaryMarkdown(run) {
-    const total = run.findings.length + run.truncated;
-    const lines = [
-      `**Site audit** of \`${run.url}\` at ${run.viewport.width}\xD7${run.viewport.height} (${run.userAgentFamily}): ${total} finding${total === 1 ? "" : "s"}.`,
-      "",
-      ...run.categories.map((c2) => `- **${CATEGORY_LABEL[c2.name] || c2.name}**: ${!c2.ran ? "not run" : c2.count === 0 ? "no findings" : `${c2.count} found`}${c2.limitation ? ` \u2014 ${c2.limitation}` : ""}`),
-      "",
-      "Open the **Audit** tab for every finding with its evidence."
-    ];
-    return lines.join("\n");
-  }
-  function auditOneLiner(run) {
-    const total = run.findings.length + run.truncated;
-    const bySev = ["critical", "serious", "moderate", "minor"].map((s2) => [s2, run.findings.filter((f2) => f2.severity === s2).length]).filter(([, n2]) => n2 > 0).map(([s2, n2]) => `${n2} ${s2}`);
-    const notRun = run.categories.filter((c2) => !c2.ran).map((c2) => CATEGORY_LABEL[c2.name] || c2.name);
-    return `Site audit: ${total} finding${total === 1 ? "" : "s"}${bySev.length ? ` (${bySev.join(", ")})` : ""}` + (notRun.length ? `; ${notRun.join(", ")} not run.` : ".");
-  }
-  function filenameFor(run) {
-    let host2 = "page";
-    try {
-      host2 = new URL(run.url).hostname.replace(/[^a-z0-9.-]/gi, "") || "page";
-    } catch (e2) {
-    }
-    const stamp = new Date(run.scannedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    return `tracebug-audit-${host2}-${stamp}.html`;
-  }
-  async function exportAuditReport(run) {
-    var _a2, _b;
-    const session = currentSession();
-    const report = buildReport(session);
-    report.video = void 0;
-    let path = run.url;
-    try {
-      path = new URL(run.url).pathname;
-    } catch (e2) {
-    }
-    report.title = `Site audit: ${path}`;
-    report.summary = auditOneLiner(run);
-    report.rootCause = void 0;
-    report.severity = BUG_SEVERITY[(_b = (_a2 = run.findings[0]) == null ? void 0 : _a2.severity) != null ? _b : "minor"];
-    return exportSessionAsHtml(session, report, {
-      includeVideo: false,
-      audit: run,
-      descriptionOverride: auditSummaryMarkdown(run),
-      filename: filenameFor(run)
-    });
-  }
-  var CATEGORY_LABEL, BUG_SEVERITY;
-  var init_export = __esm({
-    "src/audit/export.ts"() {
-      "use strict";
-      init_storage();
-      init_report_builder();
-      init_environment();
-      init_html_replay();
-      CATEGORY_LABEL = {
-        accessibility: "Accessibility",
-        ui: "Layout",
-        performance: "Performance",
-        seo: "SEO",
-        runtime: "Runtime"
-      };
-      BUG_SEVERITY = { critical: "critical", serious: "high", moderate: "medium", minor: "low" };
-    }
-  });
-
-  // src/ui/audit-panel.ts
-  var audit_panel_exports = {};
-  __export(audit_panel_exports, {
-    closeAuditPanel: () => closeAuditPanel,
-    formatCategoryMetrics: () => formatCategoryMetrics,
-    isAuditPanelOpen: () => isAuditPanelOpen,
-    showAuditPanel: () => showAuditPanel
-  });
-  function isAuditPanelOpen() {
-    return _open;
-  }
-  async function showAuditPanel(root2, scan2) {
-    var _a2, _b;
-    if (isAuditScan(scan2)) _scan = scan2;
-    injectStyles();
-    if (!_open) mountShell(root2);
-    markScan();
-    setBody(`<div class="tb-au-empty">Checking this page\u2026</div>`);
-    const busyExport = document.querySelector(`#${PANEL_ID3} [data-tb-au="export"]`);
-    if (busyExport) busyExport.disabled = true;
-    setSubtitle(_scan === "full" ? "Running accessibility, layout, performance, SEO and error checks\u2026" : `Running ${AUDIT_SCANS[_scan].label}\u2026`);
-    const previous = getLastAuditRun();
-    let run;
-    try {
-      run = await runAudit({ scan: _scan });
-    } catch (err) {
-      console.warn("[TraceBug] Audit failed:", err);
-      setSubtitle("The audit could not run on this page.");
-      setBody(`<div class="tb-au-empty">Something on this page stopped the audit. Reload and try again.</div>`);
-      return null;
-    }
-    const exportBtn = document.querySelector(`#${PANEL_ID3} [data-tb-au="export"]`);
-    if (exportBtn) exportBtn.disabled = false;
-    const diff2 = previous && ((_a2 = previous.scan) != null ? _a2 : "full") === ((_b = run.scan) != null ? _b : "full") ? compareAudits(previous, run) : null;
-    render(run, diff2 && diff2.comparable ? diff2 : null);
-    return run;
-  }
-  function closeAuditPanel() {
-    var _a2;
-    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
-    document.removeEventListener("keydown", onKey2, true);
-    _open = false;
-  }
-  async function exportCurrent(btn) {
-    const run = getLastAuditRun();
-    if (!run || !btn) return;
-    btn.disabled = true;
-    const label = btn.textContent;
-    btn.textContent = "Exporting\u2026";
-    try {
-      const { exportAuditReport: exportAuditReport2 } = await Promise.resolve().then(() => (init_export(), export_exports));
-      const out = await exportAuditReport2(run);
-      btn.textContent = "Exported \u2713";
-      btn.title = out.filename;
-    } catch (err) {
-      console.warn("[TraceBug] Audit export failed:", err);
-      btn.textContent = "Export failed";
-    }
-    setTimeout(() => {
-      btn.textContent = label;
-      btn.disabled = false;
-    }, 1800);
-  }
-  function onKey2(e2) {
-    if (e2.key === "Escape" && _open) {
-      e2.stopPropagation();
-      closeAuditPanel();
-    }
-  }
-  function mountShell(root2) {
-    var _a2, _b;
-    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
-    const overlay = document.createElement("div");
-    overlay.id = `${PANEL_ID3}-overlay`;
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.setAttribute("aria-labelledby", `${PANEL_ID3}-title`);
-    const panel = document.createElement("div");
-    panel.id = PANEL_ID3;
-    setInnerHTML(panel, `
-    <div class="tb-au-head">
-      <div class="tb-au-titles">
-        <div class="tb-au-title" id="${PANEL_ID3}-title">Site audit</div>
-        <div class="tb-au-sub" data-tb-au="subtitle"></div>
-      </div>
-      <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read">Export report</button>
-      <button type="button" class="tb-au-btn" data-tb-au="rerun">Re-run audit</button>
-      <button type="button" class="tb-au-close" data-tb-au="close" aria-label="Close">&times;</button>
-    </div>
-    <div class="tb-au-scans" role="group" aria-label="Which checks to run">${Object.keys(AUDIT_SCANS).map((k) => `<button type="button" class="tb-au-scan" data-tb-au="scan" data-scan="${k}" aria-pressed="false">${escapeHtml(AUDIT_SCANS[k].label)}</button>`).join("")}</div>
-    <div class="tb-au-body" data-tb-au="body"></div>`);
-    overlay.appendChild(panel);
-    root2.appendChild(overlay);
-    _open = true;
-    overlay.addEventListener("click", (e2) => {
-      var _a3, _b2, _c;
-      const t2 = e2.target;
-      if (t2 === overlay) {
-        closeAuditPanel();
-        return;
-      }
-      const action = (_a3 = t2.closest("[data-tb-au]")) == null ? void 0 : _a3.dataset.tbAu;
-      if (action === "close") closeAuditPanel();
-      else if (action === "rerun") void showAuditPanel(root2);
-      else if (action === "export") void exportCurrent(t2.closest("button"));
-      else if (action === "scan") void showAuditPanel(root2, (_b2 = t2.closest("[data-scan]")) == null ? void 0 : _b2.dataset.scan);
-      else if (action === "locate") locate(((_c = t2.closest("[data-selector]")) == null ? void 0 : _c.dataset.selector) || "");
-    });
-    document.addEventListener("keydown", onKey2, true);
-    (_b = panel.querySelector('[data-tb-au="close"]')) == null ? void 0 : _b.focus();
-  }
-  function markScan() {
-    document.querySelectorAll(`#${PANEL_ID3} [data-tb-au="scan"]`).forEach((b) => {
-      b.setAttribute("aria-pressed", String(b.dataset.scan === _scan));
-    });
-  }
-  function setSubtitle(text) {
-    const el = document.querySelector(`#${PANEL_ID3} [data-tb-au="subtitle"]`);
-    if (el) el.textContent = text;
-  }
-  function setBody(html) {
-    const el = document.querySelector(`#${PANEL_ID3} [data-tb-au="body"]`);
-    if (el) setInnerHTML(el, html);
-  }
-  function render(run, diff2) {
-    var _a2;
-    const total = run.findings.length + run.truncated;
-    const when = new Date(run.scannedAt).toLocaleTimeString();
-    setSubtitle(`${AUDIT_SCANS[(_a2 = run.scan) != null ? _a2 : "full"].label} \xB7 ${total === 0 ? "No findings" : `${total} finding${total === 1 ? "" : "s"}`} \xB7 ${run.viewport.width}\xD7${run.viewport.height} \xB7 ${when}`);
-    const parts = [];
-    if (diff2) parts.push(diffHtml(diff2));
-    parts.push(`<div class="tb-au-cats">${run.categories.map(categoryChip).join("")}</div>`);
-    for (const c2 of run.categories) {
-      if (!c2.ran) continue;
-      const items = run.findings.filter((f2) => f2.category === c2.name);
-      if (items.length === 0) continue;
-      parts.push(`<div class="tb-au-group"><div class="tb-au-group-h">${escapeHtml(CATEGORY_LABEL2[c2.name])} <span>${c2.count}</span></div>${items.map(findingHtml).join("")}</div>`);
-    }
-    if (run.truncated > 0) {
-      parts.push(`<div class="tb-au-note">${run.truncated} more finding${run.truncated === 1 ? "" : "s"} not shown (the list keeps the ${run.findings.length} most severe).</div>`);
-    }
-    if (run.findings.length === 0) {
-      parts.push(`<div class="tb-au-empty">No problems found in the checks that ran. That is not proof the page is accessible or bug-free \u2014 see each check's limits above.</div>`);
-    }
-    setBody(parts.join(""));
-  }
-  function categoryChip(c2) {
-    const state = !c2.ran ? "Not run" : c2.count === 0 ? "No findings" : `${c2.count} found`;
-    return `<div class="tb-au-cat${c2.ran ? "" : " tb-au-cat-off"}">
-    <div class="tb-au-cat-h"><b>${escapeHtml(CATEGORY_LABEL2[c2.name])}</b><span>${state}</span></div>
-    ${c2.metrics ? `<div class="tb-au-cat-m">${escapeHtml(formatCategoryMetrics(c2.metrics))}</div>` : ""}
-    ${c2.limitation ? `<div class="tb-au-cat-l">${escapeHtml(c2.limitation)}</div>` : ""}
-  </div>`;
-  }
-  function formatCategoryMetrics(m) {
-    const out = [];
-    const sec = (v2) => `${(v2 / 1e3).toFixed(2)} s`;
-    if (m.lcpMs !== void 0) out.push(`LCP ${sec(m.lcpMs)}`);
-    if (m.fcpMs !== void 0) out.push(`FCP ${sec(m.fcpMs)}`);
-    if (m.ttfbMs !== void 0) out.push(`TTFB ${sec(m.ttfbMs)}`);
-    if (m.cls !== void 0) out.push(`CLS ${m.cls}`);
-    if (m.transferKb !== void 0) out.push(m.transferKb >= 1024 ? `${(m.transferKb / 1024).toFixed(1)} MB` : `${m.transferKb} KB`);
-    if (m.requests !== void 0) out.push(`${m.requests} requests`);
-    return out.join(" \xB7 ");
-  }
-  function diffHtml(d) {
-    const bits = [
-      `<b class="tb-au-good">${d.fixed.length} fixed</b>`,
-      `${d.stillPresent.length} still present`,
-      d.regressed.length ? `<b class="tb-au-bad">${d.regressed.length} regressed</b>` : "",
-      d.new.length ? `${d.new.length} new` : ""
-    ].filter(Boolean).join(" \xB7 ");
-    const skipped = d.skippedCategories.length ? ` <span class="tb-au-muted">(${escapeHtml(d.skippedCategories.map((c2) => CATEGORY_LABEL2[c2]).join(", "))} not compared: not run both times)</span>` : "";
-    return `<div class="tb-au-diff">Since the last run: ${bits}${skipped}</div>`;
-  }
-  function findingHtml(f2) {
-    var _a2;
-    const metrics = ((_a2 = f2.evidence) == null ? void 0 : _a2.metrics) ? Object.entries(f2.evidence.metrics).map(([k, v2]) => `${escapeHtml(k)}: ${escapeHtml(String(v2))}`).join(" \xB7 ") : "";
-    const more = f2.occurrences && f2.occurrences > 1 ? ` <span class="tb-au-muted">\xD7${f2.occurrences}</span>` : "";
-    const help = f2.helpUrl && /^https:\/\//.test(f2.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(f2.helpUrl)}" target="_blank" rel="noopener noreferrer">How to fix</a>` : "";
-    const locate2 = f2.selector ? `<button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="locate">Locate</button>` : "";
-    return `<div class="tb-au-row" data-selector="${escapeHtml(f2.selector || "")}">
-    <span class="tb-au-sev tb-au-sev-${f2.severity}">${SEVERITY_LABEL2[f2.severity]}</span>
-    <div class="tb-au-main">
-      <div class="tb-au-row-t">${escapeHtml(f2.title)}${more}</div>
-      <div class="tb-au-row-d">${escapeHtml(f2.description)}</div>
-      ${metrics ? `<div class="tb-au-meta">${metrics}</div>` : ""}
-      <div class="tb-au-meta"><code>${escapeHtml(f2.ruleId || "")}</code>${f2.selector ? ` \xB7 <code>${escapeHtml(f2.selector)}</code>` : ""}</div>
-    </div>
-    <div class="tb-au-acts">${locate2}${help}</div>
-  </div>`;
-  }
-  function locate(selector) {
-    if (!selector) return;
-    let el = null;
-    try {
-      el = document.querySelector(selector);
-    } catch (e2) {
-      el = null;
-    }
-    if (!el) return;
-    closeAuditPanel();
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    const prev = el.style.outline;
-    el.style.outline = "3px solid #FF5C6C";
-    el.style.outlineOffset = "2px";
-    setTimeout(() => {
-      el.style.outline = prev;
-    }, 2200);
-  }
-  function injectStyles() {
-    if (document.getElementById(STYLE_ID5)) return;
-    const s2 = createStyleTag(STYLE_ID5);
-    const P = `#${PANEL_ID3}`;
-    s2.textContent = `
-    ${P} .tb-au-cat-m { margin-top: 4px; font: 600 12px/1.4 ui-monospace, monospace; }
-    ${P}-overlay { position: fixed !important; inset: 0 !important; z-index: 2147483647 !important; background: rgba(0,0,0,.6) !important;
-      display: flex !important; align-items: center !important; justify-content: center !important; padding: 20px !important; box-sizing: border-box !important; }
-    ${P} { background: var(--tb-bg-primary, #0B0D14) !important; color: var(--tb-text-primary, #EEF0F5) !important;
-      border: 1px solid var(--tb-border, #252A38) !important; border-radius: var(--tb-radius-lg, 16px) !important;
-      width: 100% !important; max-width: 760px !important; max-height: 88vh !important; display: flex !important; flex-direction: column !important;
-      overflow: hidden !important; box-shadow: var(--tb-shadow-lg, 0 16px 48px rgba(0,0,0,.55)) !important;
-      font: 13px/1.5 var(--tb-font-family, system-ui, sans-serif) !important; text-align: left !important; }
-    ${P} *, ${P} *::before, ${P} *::after { box-sizing: border-box !important; }
-    ${P} .tb-au-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--tb-border, #252A38); }
-    ${P} .tb-au-titles { flex: 1; min-width: 0; }
-    ${P} .tb-au-title { font-size: 15px; font-weight: 700; }
-    ${P} .tb-au-sub, ${P} .tb-au-muted { color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
-    ${P} .tb-au-btn { background: var(--tb-bg-secondary, #141823); color: var(--tb-text-primary, #EEF0F5); border: 1px solid var(--tb-border, #252A38);
-      border-radius: var(--tb-radius-sm, 10px); padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
-    ${P} .tb-au-btn:hover { border-color: var(--tb-border-hover, #333A4D); }
-    ${P} .tb-au-btn:disabled { opacity: .5; cursor: default; }
-    ${P} .tb-au-scans { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 0; }
-    ${P} .tb-au-scan { background: transparent; color: var(--tb-text-secondary, #A6ADBF); border: 1px solid var(--tb-border, #252A38); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; }
-    ${P} .tb-au-scan:hover { color: var(--tb-text-primary, #EEF0F5); }
-    ${P} .tb-au-scan[aria-pressed="true"] { background: var(--tb-accent, #FF5C6C); border-color: var(--tb-accent, #FF5C6C); color: var(--tb-on-accent, #fff); }
-    ${P} .tb-au-scan:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C); outline-offset: 2px; }
-    ${P} .tb-au-btn:focus-visible, ${P} .tb-au-close:focus-visible, ${P} .tb-au-link:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C); outline-offset: 2px; }
-    ${P} .tb-au-btn-sm { padding: 3px 9px; font-size: 11px; }
-    ${P} .tb-au-close { background: none; border: 0; color: var(--tb-text-muted, #8A91A5); font-size: 22px; line-height: 1; padding: 2px 8px; cursor: pointer; border-radius: 8px; }
-    ${P} .tb-au-body { overflow-y: auto; padding: 12px 16px 18px; }
-    ${P} .tb-au-empty { padding: 28px 8px; text-align: center; color: var(--tb-text-secondary, #A8AEBE); }
-    ${P} .tb-au-note { margin-top: 10px; color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
-    ${P} .tb-au-diff { padding: 10px 12px; margin-bottom: 12px; border-radius: var(--tb-radius-sm, 10px); background: var(--tb-accent-subtle, rgba(255,92,108,.12)); }
-    ${P} .tb-au-good { color: var(--tb-success, #4CC38A); } ${P} .tb-au-bad { color: var(--tb-error, #F05257); }
-    ${P} .tb-au-cats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
-    ${P} .tb-au-cat { border: 1px solid var(--tb-border, #252A38); border-radius: var(--tb-radius-sm, 10px); padding: 8px 10px; background: var(--tb-bg-secondary, #141823); }
-    ${P} .tb-au-cat-off { opacity: .7; border-style: dashed; }
-    ${P} .tb-au-cat-h { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
-    ${P} .tb-au-cat-h span { color: var(--tb-text-secondary, #A8AEBE); }
-    ${P} .tb-au-cat-l { margin-top: 4px; font-size: 11px; color: var(--tb-text-muted, #8A91A5); }
-    ${P} .tb-au-group { margin-top: 10px; }
-    ${P} .tb-au-group-h { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--tb-text-secondary, #A8AEBE); margin: 6px 0; }
-    ${P} .tb-au-group-h span { color: var(--tb-text-muted, #8A91A5); font-weight: 500; }
-    ${P} .tb-au-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--tb-border, #252A38); }
-    ${P} .tb-au-main { flex: 1; min-width: 0; }
-    ${P} .tb-au-row-t { font-weight: 600; }
-    ${P} .tb-au-row-d { color: var(--tb-text-secondary, #A8AEBE); margin-top: 2px; overflow-wrap: anywhere; }
-    ${P} .tb-au-meta { color: var(--tb-text-muted, #8A91A5); font-size: 11px; margin-top: 3px; overflow-wrap: anywhere; }
-    ${P} .tb-au-meta code { font-family: var(--tb-font-mono, ui-monospace, monospace); font-size: 11px; }
-    ${P} .tb-au-acts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
-    ${P} .tb-au-link { color: var(--tb-accent, #FF5C6C); font-size: 11px; text-decoration: none; }
-    ${P} .tb-au-link:hover { text-decoration: underline; }
-    ${P} .tb-au-sev { flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px;
-      border-radius: 999px; border: 1px solid currentColor; margin-top: 2px; }
-    ${P} .tb-au-sev-critical { color: var(--tb-severity-critical, #EF4444); }
-    ${P} .tb-au-sev-serious { color: var(--tb-severity-major, #F59E0B); }
-    ${P} .tb-au-sev-moderate { color: var(--tb-severity-minor, #eab308); }
-    ${P} .tb-au-sev-minor { color: var(--tb-severity-info, #3B82F6); }
-  `;
-    document.head.appendChild(s2);
-  }
-  var PANEL_ID3, STYLE_ID5, CATEGORY_LABEL2, SEVERITY_LABEL2, _open, _scan;
-  var init_audit_panel = __esm({
-    "src/ui/audit-panel.ts"() {
-      "use strict";
-      init_audit();
-      init_compare();
-      init_helpers();
-      init_types();
-      PANEL_ID3 = "tracebug-audit-panel";
-      STYLE_ID5 = "tracebug-audit-panel-styles";
-      CATEGORY_LABEL2 = {
-        accessibility: "Accessibility",
-        ui: "Layout",
-        seo: "SEO",
-        performance: "Performance",
-        runtime: "Errors & requests"
-      };
-      SEVERITY_LABEL2 = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
-      _open = false;
-      _scan = "full";
     }
   });
 
@@ -40698,7 +41564,7 @@ First element: \`${exampleSnippet}\``,
   async function showIssuesPanel(root2, options) {
     var _a2;
     if (_isOpen2) return;
-    _root3 = root2;
+    _root4 = root2;
     _injectStyles4();
     _open2(root2, { issues: [], loading: true });
     try {
@@ -40967,7 +41833,7 @@ First element: \`${exampleSnippet}\``,
   }
   function _fileAsBug(issue) {
     var _a2;
-    const root2 = _root3 || document.getElementById("tracebug-root");
+    const root2 = _root4 || document.getElementById("tracebug-root");
     if (!root2) return;
     (_a2 = document.getElementById(`${PANEL_ID4}-overlay`)) == null ? void 0 : _a2.remove();
     _isOpen2 = false;
@@ -40990,7 +41856,7 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID4, STYLE_ID6, _isOpen2, _root3, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID4, STYLE_ID6, _isOpen2, _root4, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
@@ -40999,7 +41865,7 @@ First element: \`${exampleSnippet}\``,
       PANEL_ID4 = "tracebug-issues-panel";
       STYLE_ID6 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
-      _root3 = null;
+      _root4 = null;
       SEVERITY_COLORS = {
         critical: { bg: "#7f1d1d", fg: "#fee2e2", border: "#dc2626" },
         serious: { bg: "#7c2d12", fg: "#fed7aa", border: "#ea580c" },
@@ -41745,7 +42611,7 @@ First element: \`${exampleSnippet}\``,
   init_element_annotate();
   init_dom_helpers();
   var _active5 = false;
-  var _root2 = null;
+  var _root3 = null;
   var _raf = 0;
   var _onChange = null;
   var LAYER_ID = "tracebug-inspect-layer";
@@ -41767,21 +42633,21 @@ First element: \`${exampleSnippet}\``,
     <div data-tb-i="hint" style="position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#0B0B10;color:#EAECF3;border:1px solid #26262E;border-radius:999px;padding:7px 16px;font:12px -apple-system,BlinkMacSystemFont,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.4);pointer-events:none">\u{1F3AF} Inspect \u2014 click an element to attach its style evidence \xB7 Esc to exit</div>
   `);
     document.body.appendChild(layer);
-    _root2 = layer;
+    _root3 = layer;
     document.body.style.cursor = "crosshair";
     document.addEventListener("mousemove", onMove, true);
     document.addEventListener("click", onClick, true);
-    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("keydown", onKey2, true);
   }
   function deactivateInspectMode() {
     if (!_active5) return;
     _active5 = false;
     document.removeEventListener("mousemove", onMove, true);
     document.removeEventListener("click", onClick, true);
-    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("keydown", onKey2, true);
     if (_raf) cancelAnimationFrame(_raf);
-    _root2 == null ? void 0 : _root2.remove();
-    _root2 = null;
+    _root3 == null ? void 0 : _root3.remove();
+    _root3 = null;
     document.body.style.cursor = "";
   }
   function isOurs(el) {
@@ -41789,7 +42655,7 @@ First element: \`${exampleSnippet}\``,
   }
   function box(name) {
     var _a2;
-    return (_a2 = _root2 == null ? void 0 : _root2.querySelector(`[data-tb-i="${name}"]`)) != null ? _a2 : null;
+    return (_a2 = _root3 == null ? void 0 : _root3.querySelector(`[data-tb-i="${name}"]`)) != null ? _a2 : null;
   }
   function hideAll() {
     for (const n2 of ["margin", "padding", "content", "tip"]) {
@@ -41892,7 +42758,7 @@ ${summary}`;
       }
     }
   }
-  function onKey(e2) {
+  function onKey2(e2) {
     if (e2.key === "Escape") {
       e2.preventDefault();
       e2.stopPropagation();

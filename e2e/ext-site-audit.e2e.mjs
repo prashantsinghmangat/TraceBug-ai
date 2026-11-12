@@ -119,7 +119,8 @@ try {
   check("layout finding: sideways scroll", ids.includes("ui/horizontal-overflow"));
   check("nothing from TraceBug's own UI", !(run?.findings || []).some((f) => /tracebug/i.test(f.selector || "")));
 
-  const panelText = await page.locator("#tracebug-audit-panel").innerText();
+  // textContent: the limitations sit in a collapsed "What these checks can't tell you" section.
+  const panelText = await page.locator("#tracebug-audit-panel").evaluate((el) => el.textContent || "");
   check("panel lists every category", ["Accessibility", "Layout", "SEO", "Errors & requests"].every((t) => panelText.includes(t)), panelText.slice(0, 200));
   check("panel shows the honest a11y limitation", /not a conformance evaluation/.test(panelText));
   check("panel shows a finding title", /Buttons must have discernible text/i.test(panelText) || panelText.includes("button-name"));
@@ -148,9 +149,43 @@ try {
   const exportedData = JSON.parse(readFileSync(exported, "utf8").match(/<script id="tb-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);
   check("Export report downloads a tracebug-audit file carrying the run", /^tracebug-audit-/.test(download.suggestedFilename()) && exportedData.audit?.id === after?.id, download.suggestedFilename());
 
+  // 1.12.0: score, docked panel, Locate keeps the panel open.
+  const scoreText = await page.locator("#tracebug-audit-panel .tb-au-score").innerText();
+  check("the panel shows an overall score and a band", /\b\d{1,3}\b/.test(scoreText) && /(Good|Needs work|Poor)/.test(scoreText), scoreText.slice(0, 120));
+  check("the run carries a score per category that ran", typeof after?.score?.overall === "number" && typeof after?.score?.categories?.accessibility === "number", short(after?.score));
+  check("the panel is docked, not a modal over the page", await page.evaluate(() => {
+    const p = document.getElementById("tracebug-audit-panel");
+    return !!p && p.getAttribute("role") === "complementary" && !document.getElementById("tracebug-audit-panel-overlay") && p.getBoundingClientRect().width <= 420;
+  }));
+  const contrastCard = page.locator('#tracebug-audit-panel .tb-au-card[data-selector]:not([data-selector=""])').first();
+  await contrastCard.locator('[data-tb-au="toggle"]').click();
+  check("a finding expands to how-to-fix and where-it-is", /How to fix|Where it is/i.test(await contrastCard.innerText()));
+  await contrastCard.locator('[data-tb-au="locate"]').click();
+  await sleep(300);
+  check("Locate keeps the panel open", (await page.locator("#tracebug-audit-panel").count()) === 1);
+  check("Locate highlights the element on the page", (await page.locator("#tracebug-audit-highlight").count()) === 1);
+  const contrastRow = after?.findings.find((f) => f.ruleId === "color-contrast");
+  check("contrast findings suggest a passing colour and name WCAG 1.4.3",
+    /^#[0-9a-f]{6}$/.test(contrastRow?.evidence?.metrics?.suggestedFgColor || "") && (contrastRow?.wcag || []).includes("1.4.3") && !!contrastRow?.fix,
+    short(contrastRow && { wcag: contrastRow.wcag, fix: contrastRow.fix, m: contrastRow.evidence?.metrics }));
+
+  await page.locator('#tracebug-audit-panel [data-tb-au="close"]').focus();
   await page.keyboard.press("Escape");
   await sleep(200);
   check("Esc closes the panel", (await page.locator("#tracebug-audit-panel").count()) === 0);
+
+  // The floating toolbar's Audit button: loads axe through the worker (TB_LOAD_AXE) and opens the panel.
+  await page.evaluate(() => { delete window.axe; });
+  await page.click("#tracebug-toolbar-audit-btn");
+  await page.waitForSelector("#tracebug-audit-panel .tb-au-cats", { timeout: 20000 });
+  const viaToolbar = await page.evaluate(() => window.__TraceBugExtension.getLastAudit());
+  check("toolbar Audit opens the panel with accessibility run (axe loaded on request)",
+    viaToolbar?.categories.find((c) => c.name === "accessibility")?.ran === true && !!(await page.evaluate(() => window.axe && typeof window.axe.run === "function")),
+    short(viaToolbar?.categories));
+  check("toolbar Audit button shows as pressed while open", (await page.getAttribute("#tracebug-toolbar-audit-btn", "aria-pressed")) === "true");
+  await page.click("#tracebug-toolbar-audit-btn");
+  await sleep(200);
+  check("toolbar Audit button closes the panel again", (await page.locator("#tracebug-audit-panel").count()) === 0);
 
   // Scan menu (plan §4a): the popup sends a scan; only its categories run.
   const popupHtml = readFileSync(join(DIST, "popup.html"), "utf8");

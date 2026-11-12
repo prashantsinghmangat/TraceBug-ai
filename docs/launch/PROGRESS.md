@@ -101,3 +101,13 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - Bumped to 1.12.0 (all `check:versions` surfaces, pinned `npx tracebug@` examples), CHANGELOG `[1.12.0]`, `WHATS_NEW["1.12.0"]`, store "New in" / Firefox notes / single purpose; `tests/whats-new.test.ts` "no copy" case now uses `0.0.0`. Sheet `docs/release-sheets/1.12.0.md`, zips built.
 - Verified: `check.mjs --full` green (1169/80, ext:lint 0/22, 84/84, 58/58, 23/23, all surfaces on 1.12.0); website `tsc` clean; `/docs/mcp` and `/docs/mcp/cursor` checked in the dev server. Not run: `npm run ext:firefox`.
 - Open: `package-lock.json` root version not bumped; CHANGELOG date to fix on release day; Chrome description body has no Site Audit section.
+
+## Audit: keyboard false positive vs OverlayQA (2026-11-12, `site-audit`)
+
+- `kbd/focusable-invisible` flagged buttons inside a `display:none` parent (tracebug.dev's `md:hidden` mobile nav at 1422px). `keyboard.ts` `isRendered()` (checkVisibility, ancestor-walk fallback) + test in `tests/audit-keyboard.test.ts`.
+- Verified: `check.mjs --full` green (1170/80, 58/58, 23/23); on localhost:3001 at 1422px the scan now reports only the 2 real contrast findings. Found: below-the-fold content at opacity 0 (scroll reveal) is skipped by axe without saying so; axe's experimental `label-content-name-mismatch` catches OverlayQA's two WCAG 2.5.3 findings.
+
+## Audit: score, docked panel, five a11y gaps (2026-11-12, `site-audit`)
+
+- Score (`src/audit/score.ts`, stored in `AuditRun.score` from all findings), WCAG criteria (`wcag.ts`), fix text (`fixes.ts`; contrast suggestion `contrast.ts` — `#b45309`→`#ad5009`, same as OverlayQA), axe label-in-name, `kbd/focus-obscured`, transparent-text count + "Scroll the page and re-run". Panel rewritten as a docked side panel (Locate keeps it open), toolbar Audit button + `TB_LOAD_AXE` bridge. MCP `get_audit.score`, `get_finding.wcag`/`untrusted.fix`; viewer shows score/WCAG/fix.
+- Verified: `check.mjs --full` green (1195/81, 84/84, 65/65 incl. a scroll-reveal fixture, 33/33 incl. Locate + toolbar path); headless screenshots on localhost:3001 at 1422×650, light + dark. Not run: `npm run ext:firefox`.

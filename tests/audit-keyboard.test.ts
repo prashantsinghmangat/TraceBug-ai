@@ -35,6 +35,24 @@ describe('keyboard pass', () => {
     expect(rules('<a href="/x" data-zero tabindex="-1"></a><button disabled data-zero></button><div hidden><a href="/y" data-zero></a></div><a data-zero>no href</a>')).toEqual([]);
   });
 
+  it('does not flag focusables inside a display:none container (a hidden mobile menu)', () => {
+    // tracebug.dev at 1422px: the md:hidden nav's buttons were reported as invisible focus targets.
+    expect(rules('<div style="display:none"><div><button data-zero>Theme</button><button data-zero aria-label="Toggle menu"></button></div></div>')).toEqual([]);
+    expect(rules('<div style="visibility:hidden"><a href="/x" data-zero></a></div>')).toEqual([]);
+  });
+
+  it('maps each keyboard rule to a WCAG criterion and says how to fix it', () => {
+    document.head.innerHTML = '<style>button:focus { outline: none; }</style>';
+    document.body.innerHTML = '<button tabindex="2">A</button><a href="/x" data-zero></a>';
+    const out = detectKeyboardFindings(document).findings;
+    const by = (id: string) => out.find((f) => f.ruleId === id)!;
+    expect(by('kbd/positive-tabindex').wcag).toEqual(['2.4.3']);
+    expect(by('kbd/positive-tabindex').fix).toMatch(/tabindex="0"/);
+    expect(by('kbd/focusable-invisible').wcag).toEqual(['2.4.7']);
+    expect(by('kbd/focus-outline-removed').wcag).toEqual(['2.4.7']);
+    expect(out.every((f) => f.fix)).toBe(true);
+  });
+
   it('does not flag a skip link moved off-screen', () => {
     expect(rules('<a href="#main" class="skip" style="position:absolute;left:-9999px">Skip to content</a>')).toEqual([]);
   });
@@ -80,5 +98,50 @@ describe('scan menu', () => {
     expect(isAuditScan('accessibility')).toBe(true);
     expect(isAuditScan('toString')).toBe(false);
     expect(isAuditScan(undefined)).toBe(false);
+  });
+});
+
+describe('focus not obscured (WCAG 2.4.11)', () => {
+  const page = (html: string, scrolls = true) => {
+    document.head.innerHTML = '';
+    document.body.innerHTML = html;
+    Object.defineProperty(document.documentElement, 'scrollHeight', { value: scrolls ? 4000 : 500, configurable: true });
+  };
+  beforeEach(() => {
+    // A full-width 64px bar at the top for [data-bar]; 40×20 elsewhere.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const bar = this.hasAttribute('data-bar');
+      const w = bar ? window.innerWidth : 40, h = bar ? 64 : 20;
+      return { width: w, height: h, top: 0, left: 0, right: w, bottom: h, x: 0, y: 0, toJSON() {} } as DOMRect;
+    });
+  });
+  afterEach(() => { delete (document.documentElement as { scrollHeight?: number }).scrollHeight; });
+
+  it('flags a fixed header on a scrolling page without scroll-padding', async () => {
+    const { detectFocusObscured } = await import('../src/audit/detectors/keyboard');
+    page('<nav data-bar style="position:fixed;top:0">Menu</nav><main>…</main>');
+    const out = detectFocusObscured(document);
+    expect(out.map((f) => f.ruleId)).toEqual(['kbd/focus-obscured']);
+    expect(out[0].wcag).toEqual(['2.4.11']);
+    expect(out[0].severity).toBe('moderate');
+    expect(out[0].fix).toContain('scroll-padding-top: 64px');
+  });
+
+  it('does not flag a page that does not scroll, or a header that is not fixed', async () => {
+    const { detectFocusObscured } = await import('../src/audit/detectors/keyboard');
+    page('<nav data-bar style="position:fixed;top:0">Menu</nav>', false);
+    expect(detectFocusObscured(document)).toEqual([]);
+    page('<nav data-bar>Menu</nav>');
+    expect(detectFocusObscured(document)).toEqual([]);
+  });
+});
+
+describe('transparent text count', () => {
+  it('counts text hidden by opacity 0 (scroll-reveal), not display:none and not TraceBug UI', async () => {
+    const { countTransparentText } = await import('../src/audit/detectors/a11y');
+    document.body.innerHTML = '<section style="opacity:0"><p>Fades in</p><span>Also</span></section><p>Shown</p>' +
+      '<div style="display:none"><p>Gone</p></div><div id="tracebug-root" style="opacity:0"><p>ours</p></div>';
+    // jsdom has no checkVisibility, so this exercises the fallback walk (opacity and display).
+    expect(countTransparentText(document)).toBe(2);
   });
 });

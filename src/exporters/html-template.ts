@@ -1,6 +1,8 @@
 import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
 import { agentWorkflowSteps, CLAUDE_MCP_ADD } from "./agent-workflow";
 import type { AuditRunOf } from "../audit/types";
+import { WCAG_CRITERIA } from "../audit/wcag";
+import { SCORE_EXPLANATION } from "../audit/score";
 
 // ── HTML Replay Viewer Template ───────────────────────────────────────────
 // A self-contained HTML scaffold + inlined renderer. The bundler embeds the
@@ -520,6 +522,12 @@ body { min-height: 100vh; }
 .tb-vau-html { font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--tb-surface-2, rgba(127,127,127,.08)); padding: 6px 8px; border-radius: 6px; margin: 6px 0 0; }
 .tb-vau-muted { color: var(--tb-text-3); font-size: 11px; }
 .tb-vau-link { font-size: 11px; color: var(--tb-accent); }
+.tb-vau-score { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.tb-vau-score-n { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 4px solid var(--tb-border); font-size: 18px; font-weight: 800; flex: none; }
+.tb-vau-pill { display: inline-block; min-width: 30px; text-align: center; padding: 0 5px; border-radius: 999px; border: 2px solid var(--tb-border); font-size: 11px; font-weight: 700; }
+.tb-vau-b-good { border-color: #22C55E; } .tb-vau-b-fair { border-color: #F59E0B; } .tb-vau-b-poor { border-color: #EF4444; }
+.tb-vau-how { margin-top: 2px; font-size: 11px; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
+.tb-vau-fix { font-size: 12px; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--tb-surface-2, rgba(127,127,127,.08)); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
 .tb-vpanel-active { display: block; }
@@ -1327,15 +1335,28 @@ const REPLAY_RUNTIME = `(function(){
     };
     var auditFindings = audit.findings || [];
     var total = auditFindings.length + (audit.truncated || 0);
+    var WCAG_NAMES = ${JSON.stringify(WCAG_CRITERIA)};
+    var SCORE_HOW = ${JSON.stringify(SCORE_EXPLANATION)};
+    var okScore = function(v){ return typeof v === "number" && isFinite(v) && v >= 0 && v <= 100; };
+    var band = function(v){ return v >= 90 ? "good" : v >= 50 ? "fair" : "poor"; };
+    var BAND = { good: "Good", fair: "Needs work", poor: "Poor" };
+    var sc = audit.score || {};
     var SCAN = { full: "All checks", "auto-review": "Auto Review", accessibility: "Accessibility Audit", "performance-seo": "Performance & SEO" };
     var headBits = [SCAN[audit.scan || "full"] || "Audit", total + (total === 1 ? " finding" : " findings")];
     if (audit.viewport) headBits.push(audit.viewport.width + "\\u00d7" + audit.viewport.height);
     if (audit.userAgentFamily) headBits.push(audit.userAgentFamily);
     headBits.push(new Date(audit.scannedAt).toLocaleString());
     var ah = '<div class="tb-vau-head">' + esc(headBits.join(DOT)) + '</div>';
+    if (okScore(sc.overall)) {
+      var ob = band(sc.overall);
+      ah += '<div class="tb-vau-score"><span class="tb-vau-score-n tb-vau-b-' + ob + '">' + esc(Math.round(sc.overall)) + '</span><div><b>' + esc(BAND[ob]) + '</b> <span class="tb-vau-muted">score out of 100, from the checks that ran</span>' +
+        '<details class="tb-vau-how"><summary>How is this calculated?</summary><div class="tb-vau-muted">' + esc(SCORE_HOW) + '</div></details></div></div>';
+    }
     ah += '<div class="tb-vau-cats">' + audit.categories.map(function(c){
       var state = !c.ran ? "Not run" : c.count === 0 ? "No findings" : c.count + " found";
-      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
+      var cs = sc.categories && sc.categories[c.name];
+      var pill = c.ran && okScore(cs) ? '<span class="tb-vau-pill tb-vau-b-' + band(cs) + '">' + esc(Math.round(cs)) + '</span> ' : '';
+      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + pill + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
         (c.metrics ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
         (c.limitation ? '<div class="tb-vau-l">' + esc(c.limitation) + '</div>' : '') + '</div>';
     }).join("") + '</div>';
@@ -1346,11 +1367,14 @@ const REPLAY_RUNTIME = `(function(){
       var ev = f.evidence || {};
       var meta = [];
       if (ev.metrics) Object.keys(ev.metrics).forEach(function(k){ meta.push(k + ": " + ev.metrics[k]); });
+      var wcag = (Array.isArray(f.wcag) ? f.wcag : []).filter(function(x){ return typeof x === "string" && WCAG_NAMES[x]; }).map(function(x){ return "WCAG " + x + " " + WCAG_NAMES[x]; }).join(DOT);
       var help = (typeof f.helpUrl === "string" && f.helpUrl.indexOf("https://") === 0)
-        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">How to fix</a>' : '';
+        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">Learn more about this rule</a>' : '';
       ah += '<div class="tb-vau-row"><span class="tb-vau-sev tb-vau-sev-' + esc(f.severity) + '">' + esc(SEV[f.severity] || f.severity) + '</span><div class="tb-vau-main">' +
         '<div class="tb-vau-t">' + esc(f.title) + (f.occurrences > 1 ? ' <span class="tb-vau-muted">\\u00d7' + esc(f.occurrences) + '</span>' : '') + '</div>' +
         '<div class="tb-vau-d">' + esc(f.description || "") + '</div>' +
+        (wcag ? '<div class="tb-vau-meta">' + esc(wcag) + '</div>' : '') +
+        (typeof f.fix === "string" && f.fix ? '<div class="tb-vau-fix"><b>How to fix:</b> ' + esc(f.fix) + '</div>' : '') +
         (meta.length ? '<div class="tb-vau-meta">' + esc(meta.join(DOT)) + '</div>' : '') +
         (ev.html ? '<pre class="tb-vau-html">' + esc(ev.html) + '</pre>' : '') +
         '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
