@@ -140,6 +140,9 @@ import {
   getIssueById,
   type ScanResult,
 } from "./scanner";
+import { runAudit as _runAudit, getLastAuditRun as _getLastAuditRun, type RunAuditOptions } from "./audit";
+import { compareAudits as _compareAudits } from "./audit/compare";
+import type { AuditRun } from "./types";
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import { activateInspectMode, deactivateInspectMode, isInspectModeActive } from "./inspect-mode";
@@ -255,7 +258,14 @@ export {
   getIssueById,
 } from "./scanner";
 export type { ScanResult } from "./scanner";
-export type { Issue, IssueDetector, IssueSeverity } from "./types";
+export type { Issue, IssueDetector, IssueSeverity, AuditRun, AuditCategory, AuditEvidence } from "./types";
+export type { RunAuditOptions } from "./audit";
+export type { AuditScan } from "./audit/types";
+import type { AuditScan } from "./audit/types";
+import type { AuditComparison as _AuditComparisonOf } from "./audit/compare";
+import type { Issue as _AuditIssue } from "./types";
+/** compareAudits result for SDK runs: fixed / still present / new / regressed findings. */
+export type AuditComparison = _AuditComparisonOf<_AuditIssue>;
 export type { TraceBugPlugin } from "./plugin-system";
 
 class TraceBugSDK {
@@ -2259,6 +2269,47 @@ class TraceBugSDK {
    */
   async scanPage(): Promise<ScanResult> {
     return _scan();
+  }
+
+  /**
+   * Site Audit: check this page for accessibility (axe, WCAG 2.0–2.2 A/AA), layout,
+   * SEO and runtime problems. Read-only. Each category says whether it ran; a
+   * category that could not run is never reported as passing. Findings carry
+   * fingerprints so a later run can be compared with `compareAudits`.
+   */
+  async runAudit(options?: RunAuditOptions): Promise<AuditRun> {
+    return _runAudit(options);
+  }
+
+  /** The last audit run on this page (memory only), or null. */
+  getLastAudit(): AuditRun | null {
+    return _getLastAuditRun();
+  }
+
+  /** Compare two runs of the same page: fixed, still present, new, regressed. */
+  compareAudits(before: AuditRun, after: AuditRun) {
+    return _compareAudits(before, after);
+  }
+
+  /** Download an audit run (default: the last one) as a TraceBug report .html.
+   *  The file opens on its Audit tab and the MCP server reads it with get_audit. */
+  async exportAudit(run?: AuditRun | null): Promise<{ filename: string; sizeBytes: number } | null> {
+    const r = run || _getLastAuditRun();
+    if (!r) return null;
+    const m = await import("./audit/export");
+    const out = await m.exportAuditReport(r);
+    return { filename: out.filename, sizeBytes: out.sizeBytes };
+  }
+
+  /** Run an audit and show it in the Site Audit panel (needs the dashboard). `scan` picks a menu scan
+   *  ("full", "auto-review", "accessibility", "performance-seo"); default: the last one chosen.
+   *  Running it again shows what changed since the previous run. */
+  async showAuditPanel(scan?: AuditScan): Promise<AuditRun | null> {
+    if (!this.config?.enableDashboard) return null;
+    const root = document.getElementById("tracebug-root");
+    if (!root) return null;
+    const m = await import("./ui/audit-panel");
+    return m.showAuditPanel(root, scan);
   }
 
   /**

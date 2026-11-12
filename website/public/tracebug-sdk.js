@@ -20818,11 +20818,11 @@ var TraceBugModule = (() => {
       let cancelled = false;
       let timer;
       const finish = (completed) => {
-        document.removeEventListener("keydown", onKey2, true);
+        document.removeEventListener("keydown", onKey3, true);
         overlay.remove();
         resolve(completed);
       };
-      const onKey2 = (e2) => {
+      const onKey3 = (e2) => {
         if (e2.key !== "Escape") return;
         e2.preventDefault();
         e2.stopPropagation();
@@ -20830,7 +20830,7 @@ var TraceBugModule = (() => {
         clearTimeout(timer);
         finish(false);
       };
-      document.addEventListener("keydown", onKey2, true);
+      document.addEventListener("keydown", onKey3, true);
       let n2 = total;
       const tick = () => {
         if (cancelled) return;
@@ -26151,10 +26151,10 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
         overlay.removeEventListener("mousedown", onDown);
         overlay.removeEventListener("mousemove", onMove2);
         overlay.removeEventListener("mouseup", onUp);
-        document.removeEventListener("keydown", onKey2, true);
+        document.removeEventListener("keydown", onKey3, true);
         overlay.remove();
       };
-      const onKey2 = (e2) => {
+      const onKey3 = (e2) => {
         if (e2.key === "Escape") {
           e2.stopPropagation();
           cleanup();
@@ -26242,7 +26242,7 @@ _Captured with [TraceBug|https://tracebug.dev/?ref=jira] \u2014 free, local-firs
       overlay.addEventListener("mousedown", onDown);
       overlay.addEventListener("mousemove", onMove2);
       overlay.addEventListener("mouseup", onUp);
-      document.addEventListener("keydown", onKey2, true);
+      document.addEventListener("keydown", onKey3, true);
     });
   }
   function cropDataUrl(dataUrl, r2) {
@@ -26447,6 +26447,7 @@ ${rrwebCssTag}
       <button data-tab="actions" class="tb-vtab" role="tab">Actions <span class="tb-vtab-badge" id="badge-actions"></span></button>
       <button data-tab="ai" class="tb-vtab" role="tab">AI</button>
       <button data-tab="events" class="tb-vtab" role="tab">Events <span class="tb-vtab-badge" id="badge-events"></span></button>
+      <button data-tab="audit" class="tb-vtab" role="tab" hidden>Audit <span class="tb-vtab-badge" id="badge-audit"></span></button>
     </div>
     <div class="tb-vtabpanels">
       <div data-panel="info" class="tb-vpanel tb-vpanel-active" id="panel-info"></div>
@@ -26455,6 +26456,7 @@ ${rrwebCssTag}
       <div data-panel="actions" class="tb-vpanel" id="panel-actions" hidden></div>
       <div data-panel="ai" class="tb-vpanel" id="panel-ai" hidden></div>
       <div data-panel="events" class="tb-vpanel" id="panel-events"><ol class="tb-vevents" id="events"></ol></div>
+      <div data-panel="audit" class="tb-vpanel" id="panel-audit" hidden></div>
     </div>
   </section>
 </main>
@@ -26645,6 +26647,24 @@ body { min-height: 100vh; }
 .tb-vtab-badge { font-size: 10px; font-weight: 700; background: var(--tb-accent-soft); color: var(--tb-accent); padding: 1px 7px; border-radius: 999px; line-height: 1.4; min-width: 18px; text-align: center; }
 .tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: var(--tb-on-accent); }
 .tb-vtab-badge:empty { display: none; }
+.tb-vtab[hidden] { display: none; }
+.tb-vau-head { font-size: 12px; color: var(--tb-text-3); margin-bottom: 10px; }
+.tb-vau-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.tb-vau-cat { border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); padding: 8px 10px; }
+.tb-vau-off { opacity: .65; border-style: dashed; }
+.tb-vau-cat-h { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.tb-vau-m { margin-top: 4px; font: 600 11px/1.4 ui-monospace, monospace; }
+.tb-vau-l { margin-top: 4px; font-size: 11px; color: var(--tb-text-3); }
+.tb-vau-row { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--tb-border); }
+.tb-vau-sev { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; height: fit-content; background: var(--tb-accent-soft); color: var(--tb-accent); }
+.tb-vau-sev-critical, .tb-vau-sev-serious { background: rgba(255,92,108,.15); color: #FF5C6C; }
+.tb-vau-main { min-width: 0; flex: 1; }
+.tb-vau-t { font-size: 13px; font-weight: 600; }
+.tb-vau-d { font-size: 12px; color: var(--tb-text-2, var(--tb-text)); margin-top: 2px; }
+.tb-vau-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 4px; overflow-wrap: anywhere; }
+.tb-vau-html { font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--tb-surface-2, rgba(127,127,127,.08)); padding: 6px 8px; border-radius: 6px; margin: 6px 0 0; }
+.tb-vau-muted { color: var(--tb-text-3); font-size: 11px; }
+.tb-vau-link { font-size: 11px; color: var(--tb-accent); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
 .tb-vpanel-active { display: block; }
@@ -27427,6 +27447,62 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
 
   setBadge("badge-events", (data.events || []).length);
 
+  // Audit tab \u2014 only when this export carries a Site Audit run (payload.audit).
+  // Every string in it came from the audited page: escaped, never trusted.
+  var audit = data.audit;
+  if (audit && audit.categories) {
+    var CAT = { accessibility: "Accessibility", ui: "Layout", performance: "Performance", seo: "SEO", runtime: "Runtime" };
+    var SEV = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
+    var DOT = " \\u00b7 ";
+    var fmtMetrics = function(m){
+      var out = [];
+      var sec = function(v){ return (v / 1000).toFixed(2) + " s"; };
+      if (m.lcpMs != null) out.push("LCP " + sec(m.lcpMs));
+      if (m.fcpMs != null) out.push("FCP " + sec(m.fcpMs));
+      if (m.ttfbMs != null) out.push("TTFB " + sec(m.ttfbMs));
+      if (m.cls != null) out.push("CLS " + m.cls);
+      if (m.transferKb != null) out.push(m.transferKb >= 1024 ? (m.transferKb / 1024).toFixed(1) + " MB" : m.transferKb + " KB");
+      if (m.requests != null) out.push(m.requests + " requests");
+      return out.join(DOT);
+    };
+    var auditFindings = audit.findings || [];
+    var total = auditFindings.length + (audit.truncated || 0);
+    var SCAN = { full: "All checks", "auto-review": "Auto Review", accessibility: "Accessibility Audit", "performance-seo": "Performance & SEO" };
+    var headBits = [SCAN[audit.scan || "full"] || "Audit", total + (total === 1 ? " finding" : " findings")];
+    if (audit.viewport) headBits.push(audit.viewport.width + "\\u00d7" + audit.viewport.height);
+    if (audit.userAgentFamily) headBits.push(audit.userAgentFamily);
+    headBits.push(new Date(audit.scannedAt).toLocaleString());
+    var ah = '<div class="tb-vau-head">' + esc(headBits.join(DOT)) + '</div>';
+    ah += '<div class="tb-vau-cats">' + audit.categories.map(function(c){
+      var state = !c.ran ? "Not run" : c.count === 0 ? "No findings" : c.count + " found";
+      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
+        (c.metrics ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
+        (c.limitation ? '<div class="tb-vau-l">' + esc(c.limitation) + '</div>' : '') + '</div>';
+    }).join("") + '</div>';
+    if (!auditFindings.length) {
+      ah += '<div class="tb-vempty-tab">No problems found in the checks that ran. That is not proof the page is accessible or bug-free.</div>';
+    }
+    auditFindings.forEach(function(f){
+      var ev = f.evidence || {};
+      var meta = [];
+      if (ev.metrics) Object.keys(ev.metrics).forEach(function(k){ meta.push(k + ": " + ev.metrics[k]); });
+      var help = (typeof f.helpUrl === "string" && f.helpUrl.indexOf("https://") === 0)
+        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">How to fix</a>' : '';
+      ah += '<div class="tb-vau-row"><span class="tb-vau-sev tb-vau-sev-' + esc(f.severity) + '">' + esc(SEV[f.severity] || f.severity) + '</span><div class="tb-vau-main">' +
+        '<div class="tb-vau-t">' + esc(f.title) + (f.occurrences > 1 ? ' <span class="tb-vau-muted">\\u00d7' + esc(f.occurrences) + '</span>' : '') + '</div>' +
+        '<div class="tb-vau-d">' + esc(f.description || "") + '</div>' +
+        (meta.length ? '<div class="tb-vau-meta">' + esc(meta.join(DOT)) + '</div>' : '') +
+        (ev.html ? '<pre class="tb-vau-html">' + esc(ev.html) + '</pre>' : '') +
+        '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
+        help + '</div></div>';
+    });
+    if (audit.truncated > 0) ah += '<div class="tb-vau-muted">' + esc(audit.truncated) + ' more not included (the file keeps the ' + esc(auditFindings.length) + ' most severe).</div>';
+    document.getElementById("panel-audit").innerHTML = ah;
+    var auditBtn = document.querySelector('[data-tab="audit"]');
+    if (auditBtn) auditBtn.removeAttribute("hidden");
+    setBadge("badge-audit", total);
+  }
+
   // Tab switching
   var tabButtons = document.querySelectorAll(".tb-vtab");
   var tabPanels = document.querySelectorAll(".tb-vpanel");
@@ -27444,6 +27520,8 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       if (d) d.remove();
     });
   });
+  // An audit export opens on its Audit tab.
+  if (data.audit && data.audit.categories) { var auditTab0 = document.querySelector('[data-tab="audit"]'); if (auditTab0) auditTab0.click(); }
 
   // \u2500\u2500 Preview wiring \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   var img = document.getElementById("ssimg");
@@ -28047,7 +28125,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     var btn = document.querySelector('[data-tab="' + which + '"]');
     if (btn) btn.click();
   }
-  var TAB_KEYS = ["info","console","network","actions","ai","events"];
+  var TAB_KEYS = ["info","console","network","actions","ai","events","audit"];
 
   document.addEventListener("keydown", function(e) {
     if (isTyping(e.target)) return;
@@ -28549,6 +28627,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
       github: buildGithubPayload(report, options == null ? void 0 : options.githubRepo),
       ...buildPlaywrightPayload(report)
     };
+    if (options == null ? void 0 : options.audit) payload.audit = options.audit;
     if (hasRrweb && rrwebEvents) {
       payload.rrwebPage = rrwebMetaHref(rrwebEvents);
       const gz = await gzipToBase64(JSON.stringify(rrwebEvents));
@@ -28793,16 +28872,16 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     </p>
   `);
     const close = () => {
-      document.removeEventListener("keydown", onKey2, true);
+      document.removeEventListener("keydown", onKey3, true);
       card.remove();
     };
-    const onKey2 = (e2) => {
+    const onKey3 = (e2) => {
       if (e2.key === "Escape") {
         e2.stopPropagation();
         close();
       }
     };
-    document.addEventListener("keydown", onKey2, true);
+    document.addEventListener("keydown", onKey3, true);
     (_a2 = card.querySelector('[data-act="close"]')) == null ? void 0 : _a2.addEventListener("click", close);
     (_b = card.querySelector('[data-act="no"]')) == null ? void 0 : _b.addEventListener("click", close);
     (_c = card.querySelector('[data-act="form"]')) == null ? void 0 : _c.addEventListener("submit", (e2) => {
@@ -28949,16 +29028,16 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
     row.append(rate, notNow);
     card.append(head, line, row);
     const dismiss = () => {
-      document.removeEventListener("keydown", onKey2, true);
+      document.removeEventListener("keydown", onKey3, true);
       card.remove();
     };
-    const onKey2 = (e2) => {
+    const onKey3 = (e2) => {
       if (e2.key === "Escape") {
         e2.stopPropagation();
         dismiss();
       }
     };
-    document.addEventListener("keydown", onKey2, true);
+    document.addEventListener("keydown", onKey3, true);
     close.addEventListener("click", dismiss);
     notNow.addEventListener("click", dismiss);
     rate.addEventListener("click", () => {
@@ -29406,7 +29485,7 @@ ${issueSignatureSlack()}`;
     track.addEventListener("mouseleave", () => {
       if (hoverEl) hoverEl.style.display = "none";
     });
-    const onKey2 = (e2) => {
+    const onKey3 = (e2) => {
       if (e2.key === " " || e2.code === "Space") {
         e2.preventDefault();
         togglePlay();
@@ -29447,7 +29526,7 @@ ${issueSignatureSlack()}`;
         _toggleHelpOverlay(root2);
       }
     };
-    root2.addEventListener("keydown", onKey2);
+    root2.addEventListener("keydown", onKey3);
     jumpBtn.addEventListener("click", () => {
       if (errorMarkers.length === 0) return;
       seek(errorMarkers[0].timestamp, { snap: true });
@@ -29459,7 +29538,7 @@ ${issueSignatureSlack()}`;
         track.removeEventListener("pointerdown", onPointerDown);
         track.removeEventListener("pointermove", onPointerMove);
         track.removeEventListener("pointerup", onPointerUp);
-        root2.removeEventListener("keydown", onKey2);
+        root2.removeEventListener("keydown", onKey3);
         setInnerHTML(container2, "");
       }
     };
@@ -31400,28 +31479,28 @@ _Reported via [TraceBug](https://github.com/prashantsinghmangat/tracebug-ai)_`;
       });
     }
     const sessions = getCachedSessions().slice().sort((a2, b) => b.updatedAt - a2.updatedAt);
-    const currentSession = (options == null ? void 0 : options.sessionId) ? sessions.find((s2) => s2.sessionId === options.sessionId) || sessions[0] || null : sessions[0] || null;
-    const isHistoricalSession = !!((options == null ? void 0 : options.sessionId) && sessions.length > 1 && sessions[0].sessionId !== (currentSession == null ? void 0 : currentSession.sessionId));
-    const screenshots2 = (options == null ? void 0 : options.sessionId) && ((_a2 = currentSession == null ? void 0 : currentSession.screenshots) == null ? void 0 : _a2.length) ? [...currentSession.screenshots].reverse() : getScreenshots().slice().reverse();
+    const currentSession2 = (options == null ? void 0 : options.sessionId) ? sessions.find((s2) => s2.sessionId === options.sessionId) || sessions[0] || null : sessions[0] || null;
+    const isHistoricalSession = !!((options == null ? void 0 : options.sessionId) && sessions.length > 1 && sessions[0].sessionId !== (currentSession2 == null ? void 0 : currentSession2.sessionId));
+    const screenshots2 = (options == null ? void 0 : options.sessionId) && ((_a2 = currentSession2 == null ? void 0 : currentSession2.screenshots) == null ? void 0 : _a2.length) ? [...currentSession2.screenshots].reverse() : getScreenshots().slice().reverse();
     let report = null;
-    if (currentSession) {
+    if (currentSession2) {
       try {
-        report = buildReport(currentSession);
+        report = buildReport(currentSession2);
       } catch (e2) {
       }
     }
     const draft = _loadDraft();
-    const autoTitle = currentSession ? generateBugTitle(currentSession) : `Bug on ${window.location.pathname}`;
-    const autoDesc = _buildDescription(currentSession, report);
-    const sessionTitle = (options == null ? void 0 : options.sessionId) ? currentSession == null ? void 0 : currentSession.title : void 0;
-    const sessionDesc = (options == null ? void 0 : options.sessionId) ? currentSession == null ? void 0 : currentSession.description : void 0;
+    const autoTitle = currentSession2 ? generateBugTitle(currentSession2) : `Bug on ${window.location.pathname}`;
+    const autoDesc = _buildDescription(currentSession2, report);
+    const sessionTitle = (options == null ? void 0 : options.sessionId) ? currentSession2 == null ? void 0 : currentSession2.title : void 0;
+    const sessionDesc = (options == null ? void 0 : options.sessionId) ? currentSession2 == null ? void 0 : currentSession2.description : void 0;
     const title = (_c = (_b = options == null ? void 0 : options.prefilledTitle) != null ? _b : sessionTitle) != null ? _c : (draft == null ? void 0 : draft.title) || autoTitle;
     const description = (_e = (_d = options == null ? void 0 : options.prefilledDescription) != null ? _d : sessionDesc) != null ? _e : (draft == null ? void 0 : draft.description) || autoDesc;
     const draftRestored = !(options == null ? void 0 : options.prefilledTitle) && !sessionTitle && !!draft && !!(draft.title || draft.description);
     if (report && isHistoricalSession) report.video = void 0;
     const severity = (_f = report == null ? void 0 : report.severity) != null ? _f : "low";
     const timeline = (_g = report == null ? void 0 : report.timeline) != null ? _g : [];
-    _openModal(root2, { title, description, screenshots: screenshots2, severity, timeline, currentSession, report, suppressVideo: isHistoricalSession, draftRestored, autoTitle, autoDesc });
+    _openModal(root2, { title, description, screenshots: screenshots2, severity, timeline, currentSession: currentSession2, report, suppressVideo: isHistoricalSession, draftRestored, autoTitle, autoDesc });
   }
   function _downloadAllScreenshots(screenshots2) {
     screenshots2.forEach((ss, i2) => {
@@ -34264,14 +34343,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       } else if (action === "close" || target === overlay) close();
     });
-    const onKey2 = (e2) => {
+    const onKey3 = (e2) => {
       if (e2.key === "Escape") close();
     };
     function close() {
       overlay.remove();
-      document.removeEventListener("keydown", onKey2);
+      document.removeEventListener("keydown", onKey3);
     }
-    document.addEventListener("keydown", onKey2);
+    document.addEventListener("keydown", onKey3);
   }
   function showMcpHandoffCard(filename, sizeBytes) {
     var _a2;
@@ -34453,14 +34532,14 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         }
       } else if (action === "close" || target === overlay) close();
     });
-    const onKey2 = (e2) => {
+    const onKey3 = (e2) => {
       if (e2.key === "Escape") close();
     };
     function close() {
       overlay.remove();
-      document.removeEventListener("keydown", onKey2);
+      document.removeEventListener("keydown", onKey3);
     }
-    document.addEventListener("keydown", onKey2);
+    document.addEventListener("keydown", onKey3);
   }
   var _githubRepo, MODAL_ID, DRAFT_KEY, EXPORT_FOOTER_KEY, THEME_PREF_KEY, _isOpen, EXPORT_WARN_BYTES, GITHUB_ATTACHMENT_CAP, _draftCleared, _LU, CON_ICONS, _lastActiveFeedTs;
   var init_quick_bug = __esm({
@@ -35471,11 +35550,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         if (settled) return;
         settled = true;
         pop.remove();
-        document.removeEventListener("keydown", onKey2, true);
+        document.removeEventListener("keydown", onKey3, true);
         document.removeEventListener("mousedown", onOutside, true);
         resolve(value);
       };
-      const onKey2 = (e2) => {
+      const onKey3 = (e2) => {
         if (e2.key === "Escape") {
           e2.preventDefault();
           finish(null);
@@ -35490,7 +35569,7 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       };
       cancelEl.addEventListener("click", () => finish(null));
       startEl.addEventListener("click", () => finish({ surface, withMicrophone: micEl.checked }));
-      document.addEventListener("keydown", onKey2, true);
+      document.addEventListener("keydown", onKey3, true);
       setTimeout(() => document.addEventListener("mousedown", onOutside, true), 0);
       setTimeout(() => startEl.focus(), 0);
     });
@@ -36118,8 +36197,8 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
       if (matchesShortcut(e2, screenshotShortcut)) {
         e2.preventDefault();
         const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
-        const currentSession = sessions[0];
-        const lastEvent = (currentSession == null ? void 0 : currentSession.events[currentSession.events.length - 1]) || null;
+        const currentSession2 = sessions[0];
+        const lastEvent = (currentSession2 == null ? void 0 : currentSession2.events[currentSession2.events.length - 1]) || null;
         showToast2("Capturing screenshot...", root2);
         try {
           const ss = await captureScreenshot(lastEvent);
@@ -36517,12 +36596,12 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         const speed = getSpeedLabel(dur);
         const statusClr = getStatusColor(code);
         const isFail = code >= 400 || code === 0;
-        const urlPath = ((r2 == null ? void 0 : r2.url) || "").replace(/https?:\/\/[^/]+/, "").slice(0, 50);
+        const urlPath2 = ((r2 == null ? void 0 : r2.url) || "").replace(/https?:\/\/[^/]+/, "").slice(0, 50);
         html += `<div style="background:${isFail ? "#0f0205" : "#0f0f1a"};border:1px solid ${isFail ? "#7f1d1d44" : "#1e1e32"};border-radius:var(--tb-radius-md, 6px);padding:8px 10px;margin-bottom:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:10px;font-weight:600;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r2 == null ? void 0 : r2.method) || "GET"}</span>
-            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml4(urlPath)}</span>
+            <span style="font-size:10px;color:var(--tb-text-muted, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px">${escapeHtml4(urlPath2)}</span>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:10px;font-weight:700;color:${statusClr}">${code}</span>
@@ -36629,11 +36708,11 @@ _Screenshot attached: ${screenshot.filename}_` : ""}`;
         const code = (r2 == null ? void 0 : r2.statusCode) || 0;
         const dur = (r2 == null ? void 0 : r2.durationMs) || 0;
         const speed = getSpeedLabel(dur);
-        const urlPath = ((r2 == null ? void 0 : r2.url) || "").replace(/https?:\/\/[^/]+/, "");
+        const urlPath2 = ((r2 == null ? void 0 : r2.url) || "").replace(/https?:\/\/[^/]+/, "");
         html += `<div style="margin-top:4px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <span style="font-size:10px;font-weight:700;color:var(--tb-text-primary, #e0e0e0);background:#1e293b;padding:1px 5px;border-radius:3px">${(r2 == null ? void 0 : r2.method) || "GET"}</span>
-            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml4((urlPath == null ? void 0 : urlPath.slice(0, 80)) || "")}</span>
+            <span style="font-size:11px;color:var(--tb-text-secondary, #aaa);word-break:break-all">${escapeHtml4((urlPath2 == null ? void 0 : urlPath2.slice(0, 80)) || "")}</span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
             <div style="display:flex;align-items:center;gap:4px">
@@ -64026,19 +64105,19 @@ Response: ${match.response.slice(0, 160)}` : "";
             var pixelThreshold = options === null || options === void 0 ? void 0 : options.pixelThreshold;
             var occurrenceThreshold = (_options$occurrenceTh = options === null || options === void 0 ? void 0 : options.occurrenceThreshold) !== null && _options$occurrenceTh !== void 0 ? _options$occurrenceTh : options === null || options === void 0 ? void 0 : options.occuranceThreshold;
             var accText = accessible_text_default(node2).toLowerCase();
-            var visibleText = sanitize_default(subtree_text_default(virtualNode, {
+            var visibleText2 = sanitize_default(subtree_text_default(virtualNode, {
               subtreeDescendant: true,
               ignoreIconLigature: true,
               pixelThreshold,
               occurrenceThreshold
             })).toLowerCase();
-            if (!visibleText) {
+            if (!visibleText2) {
               return true;
             }
-            if (is_human_interpretable_default(accText) < 1 || is_human_interpretable_default(visibleText) < 1) {
+            if (is_human_interpretable_default(accText) < 1 || is_human_interpretable_default(visibleText2) < 1) {
               return void 0;
             }
-            return isStringContained(visibleText, accText);
+            return isStringContained(visibleText2, accText);
           }
           var label_content_name_mismatch_evaluate_default = labelContentNameMismatchEvaluate;
           function implicitEvaluate(node2, options, virtualNode) {
@@ -64146,11 +64225,11 @@ Response: ${match.response.slice(0, 160)}` : "";
             if (!parentVNode) {
               return false;
             }
-            var visibleText = visible_virtual_default(parentVNode, true).toLowerCase();
-            if (visibleText === "") {
+            var visibleText2 = visible_virtual_default(parentVNode, true).toLowerCase();
+            if (visibleText2 === "") {
               return false;
             }
-            return visibleText === _accessibleTextVirtual(virtualNode).toLowerCase();
+            return visibleText2 === _accessibleTextVirtual(virtualNode).toLowerCase();
           }
           var duplicate_img_label_evaluate_default = duplicateImgLabelEvaluate;
           function altSpaceValueEvaluate(node2, options, virtualNode) {
@@ -64672,8 +64751,8 @@ Response: ${match.response.slice(0, 160)}` : "";
               });
               return true;
             }
-            var visibleText = visible_virtual_default(virtualNode, false, true);
-            if (ignoreUnicode && textIsEmojis(visibleText)) {
+            var visibleText2 = visible_virtual_default(virtualNode, false, true);
+            if (ignoreUnicode && textIsEmojis(visibleText2)) {
               this.data({
                 messageKey: "nonBmp"
               });
@@ -64753,7 +64832,7 @@ Response: ${match.response.slice(0, 160)}` : "";
               colorParse = incomplete_data_default.get("colorParse");
             }
             var equalRatio = truncatedResult === 1;
-            var shortTextContent = visibleText.length === 1;
+            var shortTextContent = visibleText2.length === 1;
             if (equalRatio) {
               missing = incomplete_data_default.set("bgColor", "equalRatio");
             } else if (!isValid && shortTextContent && !ignoreLength) {
@@ -64814,12 +64893,12 @@ Response: ${match.response.slice(0, 160)}` : "";
             }
             return pseudoWidth.value * pseudoHeight.value;
           });
-          function textIsEmojis(visibleText) {
+          function textIsEmojis(visibleText2) {
             var options = {
               nonBmp: true
             };
-            var hasUnicodeChars = has_unicode_default(visibleText, options);
-            var hasNonUnicodeChars = sanitize_default(remove_unicode_default(visibleText, options)) === "";
+            var hasUnicodeChars = has_unicode_default(visibleText2, options);
+            var hasNonUnicodeChars = sanitize_default(remove_unicode_default(visibleText2, options)) === "";
             return hasUnicodeChars && hasNonUnicodeChars;
           }
           function parseUnit(str2) {
@@ -66126,8 +66205,8 @@ Response: ${match.response.slice(0, 160)}` : "";
             punctuations: true
           };
           function hasRealTextChildren(virtualNode) {
-            var visibleText = visible_virtual_default(virtualNode, false, true);
-            if (visibleText === "" || remove_unicode_default(visibleText, removeUnicodeOptions) === "") {
+            var visibleText2 = visible_virtual_default(virtualNode, false, true);
+            if (visibleText2 === "" || remove_unicode_default(visibleText2, removeUnicodeOptions) === "") {
               return false;
             }
             return virtualNode.children.some(function(vChild) {
@@ -71918,7 +71997,11 @@ First element: \`${exampleSnippet}\``,
       "frustration-rage": 0,
       "frustration-dead": 0,
       "frustration-abandon": 0,
-      "frustration-error-correlated": 0
+      "frustration-error-correlated": 0,
+      "audit-ui": 0,
+      "audit-seo": 0,
+      "audit-perf": 0,
+      "audit-keyboard": 0
     };
     for (const i2 of _issues) {
       if (i2.dismissed) continue;
@@ -71961,6 +72044,1097 @@ First element: \`${exampleSnippet}\``,
         moderate: 2,
         minor: 3
       };
+    }
+  });
+
+  // src/audit/fingerprint.ts
+  function stableHash(input2) {
+    let h1 = 2166136261;
+    let h2 = 16777619 ^ 1540483477;
+    for (let i2 = 0; i2 < input2.length; i2++) {
+      const c2 = input2.charCodeAt(i2);
+      h1 = Math.imul(h1 ^ c2, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c2, 16777619) >>> 0;
+      h2 = (h2 ^ h2 >>> 13) >>> 0;
+    }
+    return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+  }
+  function urlPath(url) {
+    if (!url) return "";
+    let path;
+    try {
+      path = new URL(url, "http://x").pathname;
+    } catch (e2) {
+      path = url.split(/[?#]/)[0];
+    }
+    return path.length > 1 ? path.replace(/\/+$/, "") : path;
+  }
+  function isGenerated(token) {
+    if (GENERATED_TOKEN.some((re) => re.test(token))) return true;
+    return /^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i.test(token);
+  }
+  function normalizeSelector(selector) {
+    if (!selector) return "";
+    const compounds = selector.trim().split(/\s*([>+~])\s*|\s+/).filter((p) => p !== void 0 && p !== "");
+    return compounds.map((part) => {
+      if (part === ">" || part === "+" || part === "~") return part;
+      const attrs = (part.match(/\[[^\]]*\]/g) || []).map((a2) => a2.replace(/\s+/g, "")).sort();
+      const rest = part.replace(/\[[^\]]*\]/g, "");
+      const tokens = rest.match(/(^[a-zA-Z*][\w-]*)|([#.](?:\\.|[^#.:\\])+)|(:[^#.:]+(?:\([^)]*\))?)/g) || [];
+      const kept = tokens.filter((t2) => {
+        if (t2[0] === "#" || t2[0] === ".") return !isGenerated(t2.slice(1).replace(/\\/g, ""));
+        return true;
+      });
+      const tag = kept.filter((t2) => /^[a-zA-Z*]/.test(t2)).map((t2) => t2.toLowerCase());
+      const ids = kept.filter((t2) => t2[0] === "#");
+      const classes = kept.filter((t2) => t2[0] === ".").sort();
+      const pseudos = kept.filter((t2) => t2[0] === ":");
+      const out = [...tag, ...ids, ...classes, ...attrs, ...pseudos].join("");
+      return out || "*";
+    }).join(" ").replace(/ ([>+~]) /g, "$1").replace(/\s+/g, " ").trim();
+  }
+  function tagFromHtml(html) {
+    const m = (html || "").match(/^\s*<([a-zA-Z][\w-]*)/);
+    return m ? m[1].toLowerCase() : "";
+  }
+  function normalizeText(text) {
+    return (text || "").replace(/\s+/g, " ").trim().toLowerCase().slice(0, 80);
+  }
+  function auditFingerprint(f2) {
+    const anchor = f2.selector ? normalizeSelector(f2.selector) : f2.url ? "url:" + urlPath(f2.url) : "page";
+    return stableHash(["v1", f2.category, f2.ruleId, urlPath(f2.page), anchor].join("|"));
+  }
+  function auditFallbackFingerprint(f2) {
+    const tag = tagFromHtml(f2.html);
+    const text = normalizeText(f2.text);
+    if (!tag && !text) return void 0;
+    return stableHash(["v1-fb", f2.category, f2.ruleId, urlPath(f2.page), tag, text].join("|"));
+  }
+  var GENERATED_TOKEN;
+  var init_fingerprint2 = __esm({
+    "src/audit/fingerprint.ts"() {
+      "use strict";
+      GENERATED_TOKEN = [
+        /^(css|sc|jsx|svelte|emotion|tw|chakra|mui|makestyles)-[a-z0-9_-]{3,}$/i,
+        /__[a-z0-9_-]{4,}$/i,
+        /^_[a-z0-9]{5,}$/i,
+        /:r[0-9a-z]+:/i,
+        /^radix-/i,
+        /^(ember|react-select|headlessui-[a-z-]+)-?\d+/i
+      ];
+    }
+  });
+
+  // src/audit/run.ts
+  function bound(s2, max) {
+    if (s2 == null) return void 0;
+    const clean2 = sanitizeTokenShapes(redactUrlsInText(String(s2)));
+    return clean2.length > max ? clean2.slice(0, max - 1) + "\u2026" : clean2;
+  }
+  function boundEvidence(e2) {
+    var _a2;
+    if (!e2) return void 0;
+    const out = {};
+    if (e2.html != null) out.html = bound(e2.html, MAX_EVIDENCE_HTML);
+    if (e2.text != null) out.text = bound(e2.text.replace(/\s+/g, " ").trim(), MAX_EVIDENCE_TEXT);
+    if (e2.metrics) {
+      out.metrics = {};
+      for (const [k, v2] of Object.entries(e2.metrics)) {
+        out.metrics[k] = typeof v2 === "number" ? v2 : bound(String(v2), MAX_HINT_LENGTH);
+      }
+    }
+    if ((_a2 = e2.hints) == null ? void 0 : _a2.length) {
+      const seen = /* @__PURE__ */ new Set();
+      out.hints = [];
+      for (const h of e2.hints) {
+        const b = bound(h, MAX_HINT_LENGTH);
+        if (!b || seen.has(b)) continue;
+        seen.add(b);
+        out.hints.push(b);
+        if (out.hints.length >= MAX_HINTS) break;
+      }
+    }
+    return out;
+  }
+  function userAgentFamily(ua) {
+    const s2 = ua || "";
+    if (/\bEdg\//.test(s2)) return "Edge";
+    if (/\bFirefox\//.test(s2)) return "Firefox";
+    if (/\b(?:Headless)?Chrome\//.test(s2) || /\bChromium\//.test(s2)) return "Chrome";
+    if (/\bSafari\//.test(s2)) return "Safari";
+    return "Other";
+  }
+  function buildAuditRun(findings, ctx) {
+    var _a2, _b, _c, _d, _e, _f;
+    const now = (_a2 = ctx.now) != null ? _a2 : Date.now();
+    const page = redactUrl(ctx.url);
+    const byKey = /* @__PURE__ */ new Map();
+    for (const raw of findings) {
+      if (!raw.category || !raw.ruleId) continue;
+      const evidence = boundEvidence(raw.evidence);
+      const fpInput = {
+        category: raw.category,
+        ruleId: raw.ruleId,
+        page: raw.page || page,
+        selector: raw.selector,
+        url: raw.url,
+        html: evidence == null ? void 0 : evidence.html,
+        text: evidence == null ? void 0 : evidence.text
+      };
+      const fingerprint = auditFingerprint(fpInput);
+      const existing = byKey.get(fingerprint);
+      if (existing) {
+        existing.occurrences = ((_b = existing.occurrences) != null ? _b : 1) + ((_c = raw.occurrences) != null ? _c : 1);
+        if (SEVERITY_RANK[raw.severity] < SEVERITY_RANK[existing.severity]) existing.severity = raw.severity;
+        continue;
+      }
+      const shaped = {
+        ...raw,
+        title: (_d = bound(raw.title, 120)) != null ? _d : "",
+        description: (_e = bound(raw.description, 600)) != null ? _e : "",
+        url: raw.url ? redactUrl(raw.url) : void 0,
+        page: raw.page ? redactUrl(raw.page) : page,
+        evidence,
+        fingerprint,
+        fallbackFingerprint: auditFallbackFingerprint(fpInput)
+      };
+      if (shaped.url === void 0) delete shaped.url;
+      if (shaped.evidence === void 0) delete shaped.evidence;
+      if (shaped.fallbackFingerprint === void 0) delete shaped.fallbackFingerprint;
+      byKey.set(fingerprint, shaped);
+    }
+    const all = [...byKey.values()].sort(
+      (a2, b) => SEVERITY_RANK[a2.severity] - SEVERITY_RANK[b.severity] || (a2.category < b.category ? -1 : a2.category > b.category ? 1 : 0)
+    );
+    const kept = all.slice(0, MAX_AUDIT_FINDINGS);
+    const order = ["accessibility", "ui", "performance", "seo", "runtime"];
+    const categories = order.filter((name) => ctx.categories[name] !== void 0).map((name) => {
+      const c2 = ctx.categories[name];
+      const entry = {
+        name,
+        ran: c2.ran,
+        // Counts every finding in the category, including any the cap left out.
+        count: c2.ran ? all.filter((f2) => f2.category === name).length : 0
+      };
+      if (c2.limitation) entry.limitation = c2.limitation;
+      if (c2.metrics && Object.keys(c2.metrics).length) entry.metrics = { ...c2.metrics };
+      return entry;
+    });
+    return {
+      id: (_f = ctx.id) != null ? _f : `audit-${now.toString(36)}`,
+      url: page,
+      scannedAt: now,
+      viewport: { width: Math.round(ctx.viewport.width), height: Math.round(ctx.viewport.height) },
+      userAgentFamily: userAgentFamily(ctx.userAgent),
+      categories,
+      findings: kept,
+      truncated: all.length - kept.length,
+      ...ctx.scan ? { scan: ctx.scan } : {}
+    };
+  }
+  var MAX_AUDIT_FINDINGS, MAX_EVIDENCE_HTML, MAX_EVIDENCE_TEXT, MAX_HINTS, MAX_HINT_LENGTH, SEVERITY_RANK;
+  var init_run = __esm({
+    "src/audit/run.ts"() {
+      "use strict";
+      init_url_hygiene();
+      init_cloud_upload();
+      init_fingerprint2();
+      MAX_AUDIT_FINDINGS = 200;
+      MAX_EVIDENCE_HTML = 600;
+      MAX_EVIDENCE_TEXT = 80;
+      MAX_HINTS = 8;
+      MAX_HINT_LENGTH = 60;
+      SEVERITY_RANK = { critical: 0, serious: 1, moderate: 2, minor: 3 };
+    }
+  });
+
+  // src/audit/detectors/evidence.ts
+  function htmlSnippet(el) {
+    const outer = el.outerHTML || "";
+    return outer.length > RAW_HTML_LIMIT ? outer.slice(0, RAW_HTML_LIMIT) : outer;
+  }
+  function visibleText(el) {
+    var _a2, _b;
+    const t2 = (_b = (_a2 = el.innerText) != null ? _a2 : el.textContent) != null ? _b : "";
+    return t2.replace(/\s+/g, " ").trim().slice(0, 200);
+  }
+  function elementEvidence(el, extra) {
+    const hints = [];
+    if (el.id) hints.push("#" + el.id);
+    for (const attr of ["data-testid", "data-test-id", "data-cy", "name", "aria-label"]) {
+      const v2 = el.getAttribute(attr);
+      if (v2) hints.push(`${attr}="${v2}"`);
+    }
+    const classes = Array.from(el.classList).filter((c2) => !GENERATED.test(c2)).slice(0, 3);
+    for (const c2 of classes) hints.push("." + c2);
+    const text = visibleText(el);
+    if (text) hints.push(text.slice(0, 40));
+    return { html: htmlSnippet(el), text, hints, ...extra };
+  }
+  function isTraceBugUi(el) {
+    return !!el.closest("#tracebug-root, [id^='tracebug-']");
+  }
+  function isRendered(el) {
+    const r2 = el.getBoundingClientRect();
+    if (r2.width === 0 && r2.height === 0) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && cs.visibility !== "collapse" && cs.opacity !== "0";
+  }
+  var RAW_HTML_LIMIT, GENERATED;
+  var init_evidence = __esm({
+    "src/audit/detectors/evidence.ts"() {
+      "use strict";
+      RAW_HTML_LIMIT = 1200;
+      GENERATED = /^(css|sc|jsx|svelte|emotion)-|__[a-z0-9]{4,}$|^(?=(?:.*\d){2})(?=.*[a-z])[a-z0-9]{6,}$/i;
+    }
+  });
+
+  // src/audit/detectors/a11y.ts
+  async function loadAxe2() {
+    const w = globalThis;
+    if (w.axe && typeof w.axe.run === "function") return w.axe;
+    try {
+      const mod = await Promise.resolve().then(() => __toESM(require_axe(), 1));
+      const axe = mod.default && typeof mod.default.run === "function" ? mod.default : mod;
+      if (typeof axe.run === "function") return axe;
+    } catch (e2) {
+    }
+    return w.axe && typeof w.axe.run === "function" ? w.axe : null;
+  }
+  function metricsFor(node2) {
+    var _a2, _b;
+    const data = (_b = (_a2 = node2.any) == null ? void 0 : _a2.find((c2) => c2.data && typeof c2.data === "object")) == null ? void 0 : _b.data;
+    if (!data) return void 0;
+    const out = {};
+    for (const key of ["contrastRatio", "expectedContrastRatio", "fgColor", "bgColor", "fontSize", "fontWeight"]) {
+      const v2 = data[key];
+      if (typeof v2 === "number" || typeof v2 === "string") out[key] = v2;
+    }
+    return Object.keys(out).length ? out : void 0;
+  }
+  async function detectA11yFindings() {
+    const axe = await loadAxe2();
+    if (!axe) return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
+    let results;
+    try {
+      results = await axe.run(
+        { exclude: [["#tracebug-root"]] },
+        { runOnly: { type: "tag", values: AXE_TAGS }, resultTypes: ["violations"] }
+      );
+    } catch (err) {
+      console.warn("[TraceBug] axe.run failed:", err);
+      return { ran: false, limitation: A11Y_UNAVAILABLE, findings: [] };
+    }
+    const findings = [];
+    for (const v2 of results.violations || []) {
+      const nodes = (v2.nodes || []).slice(0, MAX_NODES_PER_RULE);
+      for (const node2 of nodes) {
+        const target = Array.isArray(node2.target) ? node2.target.map(String).join(" ") : "";
+        let el = null;
+        try {
+          el = target ? document.querySelector(target) : null;
+        } catch (e2) {
+          el = null;
+        }
+        const metrics = metricsFor(node2);
+        const evidence = el ? elementEvidence(el, metrics ? { metrics } : void 0) : { html: node2.html || "", ...metrics ? { metrics } : {} };
+        if (node2.html && evidence.html !== node2.html) evidence.html = node2.html;
+        findings.push({
+          id: makeIssueId("axe-a11y"),
+          detector: "axe-a11y",
+          category: "accessibility",
+          ruleId: v2.id,
+          severity: coerceSeverity(v2.impact),
+          title: v2.help || v2.id,
+          description: v2.description || v2.id,
+          selector: target || void 0,
+          helpUrl: v2.helpUrl,
+          page: location.href,
+          detectedAt: Date.now(),
+          evidence
+        });
+      }
+    }
+    return { ran: true, limitation: A11Y_LIMITATION, findings };
+  }
+  var AXE_TAGS, MAX_NODES_PER_RULE, A11Y_LIMITATION, A11Y_UNAVAILABLE;
+  var init_a11y2 = __esm({
+    "src/audit/detectors/a11y.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
+      MAX_NODES_PER_RULE = 20;
+      A11Y_LIMITATION = "Automated checks cover only part of WCAG. This is not a conformance evaluation: keyboard use, screen-reader meaning and many success criteria need a person.";
+      A11Y_UNAVAILABLE = "The accessibility checker isn't available on this page, so accessibility was not checked.";
+    }
+  });
+
+  // src/audit/detectors/ui.ts
+  function uiFinding(ruleId, severity, title, description, extra = {}) {
+    return {
+      id: makeIssueId("audit-ui"),
+      detector: "audit-ui",
+      category: "ui",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: location.href,
+      detectedAt: Date.now(),
+      ...extra
+    };
+  }
+  function clippedByAncestor(el) {
+    for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+      const ox = getComputedStyle(p).overflowX;
+      if (ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") return true;
+    }
+    return false;
+  }
+  function overflowFindings() {
+    const out = [];
+    const vw = document.documentElement.clientWidth;
+    const sw = document.documentElement.scrollWidth;
+    if (sw <= vw + 1) return out;
+    out.push(uiFinding(
+      "ui/horizontal-overflow",
+      "serious",
+      `Page scrolls sideways by ${sw - vw}px`,
+      `At ${vw}px wide the page is ${sw}px wide, so it scrolls horizontally. Usually one element with a fixed width or a long unbroken string causes it.`,
+      { evidence: { metrics: { viewportWidth: vw, pageWidth: sw } } }
+    ));
+    const culprits = [];
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+      if (culprits.length >= MAX_PER_RULE) break;
+      if (isTraceBugUi(el) || culprits.some((c2) => c2.contains(el))) continue;
+      const r2 = el.getBoundingClientRect();
+      if (r2.right <= vw + 1 || r2.width === 0) continue;
+      if (!isRendered(el) || clippedByAncestor(el)) continue;
+      if (getComputedStyle(el).position === "fixed") continue;
+      culprits.push(el);
+    }
+    for (const el of culprits) {
+      const r2 = el.getBoundingClientRect();
+      out.push(elementFinding(
+        el,
+        "ui/off-screen",
+        "moderate",
+        `Element extends ${Math.round(r2.right - vw)}px past the right edge`,
+        `This ${el.tagName.toLowerCase()} ends at ${Math.round(r2.right)}px; the viewport is ${vw}px. It is a likely cause of the sideways scroll.`,
+        { right: Math.round(r2.right), viewportWidth: vw }
+      ));
+    }
+    return out;
+  }
+  function overlapFindings() {
+    const out = [];
+    const controls = Array.from(document.querySelectorAll(INTERACTIVE)).filter((el) => !isTraceBugUi(el) && isRendered(el)).slice(0, 400);
+    const rects = controls.map((el) => el.getBoundingClientRect());
+    const MIN = 4;
+    for (let i2 = 0; i2 < controls.length && out.length < MAX_PER_RULE; i2++) {
+      for (let j = i2 + 1; j < controls.length && out.length < MAX_PER_RULE; j++) {
+        const a2 = controls[i2], b = controls[j];
+        if (a2.contains(b) || b.contains(a2)) continue;
+        const ra = rects[i2], rb = rects[j];
+        const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+        const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+        if (w < MIN || h < MIN) continue;
+        const cx = Math.max(ra.left, rb.left) + w / 2, cy = Math.max(ra.top, rb.top) + h / 2;
+        const top = document.elementFromPoint(cx, cy);
+        const covered = top && (a2 === top || a2.contains(top)) ? b : a2;
+        out.push(elementFinding(
+          covered,
+          "ui/overlap",
+          "moderate",
+          "Control is covered by another control",
+          `Two clickable elements overlap by ${Math.round(w)}\xD7${Math.round(h)}px. Clicks in that area reach only the one on top (${buildSelector2(covered === a2 ? b : a2)}).`,
+          { overlapWidth: Math.round(w), overlapHeight: Math.round(h) }
+        ));
+      }
+    }
+    return out;
+  }
+  function clippedTextFindings() {
+    const out = [];
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+      if (out.length >= MAX_PER_RULE) break;
+      if (isTraceBugUi(el)) continue;
+      const hasOwnText = Array.from(el.childNodes).some((n2) => n2.nodeType === 3 && (n2.textContent || "").trim().length > 2);
+      if (!hasOwnText) continue;
+      const cs = getComputedStyle(el);
+      if (cs.textOverflow === "ellipsis") continue;
+      const he = el;
+      const clipsX = (cs.overflowX === "hidden" || cs.overflowX === "clip") && he.scrollWidth > he.clientWidth + 1;
+      const clipsY = (cs.overflowY === "hidden" || cs.overflowY === "clip") && he.scrollHeight > he.clientHeight + 2 && cs.webkitLineClamp === "none";
+      if (!clipsX && !clipsY) continue;
+      if (!isRendered(el)) continue;
+      out.push(elementFinding(
+        el,
+        "ui/text-clipped",
+        "moderate",
+        "Text is cut off",
+        `The text needs ${clipsX ? he.scrollWidth + "px of width" : he.scrollHeight + "px of height"} but the box is ${clipsX ? he.clientWidth : he.clientHeight}px with overflow hidden, and there is no ellipsis to show it was cut.`,
+        { needed: clipsX ? he.scrollWidth : he.scrollHeight, available: clipsX ? he.clientWidth : he.clientHeight }
+      ));
+    }
+    return out;
+  }
+  function imageFindings() {
+    const out = [];
+    let noDims = 0, broken = 0;
+    for (const img of Array.from(document.images)) {
+      if (isTraceBugUi(img)) continue;
+      const src = img.currentSrc || img.src;
+      if (img.complete && img.naturalWidth === 0 && src && broken < MAX_PER_RULE) {
+        broken++;
+        out.push(uiFinding(
+          "ui/broken-image",
+          "moderate",
+          "Image failed to load",
+          "The browser tried to load this image and got an error or a non-image response.",
+          { selector: buildSelector2(img), url: src, evidence: elementEvidence(img) }
+        ));
+        continue;
+      }
+      if (noDims >= MAX_PER_RULE) continue;
+      const hasAttrs = img.hasAttribute("width") && img.hasAttribute("height");
+      const cs = getComputedStyle(img);
+      const sizedByCss = cs.aspectRatio !== "auto" || img.style.width !== "" && img.style.height !== "";
+      const r2 = img.getBoundingClientRect();
+      if (hasAttrs || sizedByCss || r2.width < 32 || r2.height < 32 || !isRendered(img)) continue;
+      noDims++;
+      out.push(elementFinding(
+        img,
+        "ui/img-no-dimensions",
+        "minor",
+        "Image has no width and height",
+        "Without width and height (or CSS aspect-ratio), the page reserves no space for the image and content jumps when it loads (layout shift).",
+        { renderedWidth: Math.round(r2.width), renderedHeight: Math.round(r2.height) }
+      ));
+    }
+    return out;
+  }
+  function detectUiFindings() {
+    const runs = [overflowFindings, overlapFindings, clippedTextFindings, imageFindings];
+    const out = [];
+    for (const run of runs) {
+      try {
+        out.push(...run());
+      } catch (err) {
+        console.warn("[TraceBug] UI check failed:", err);
+      }
+    }
+    return out;
+  }
+  var MAX_PER_RULE, INTERACTIVE, elementFinding;
+  var init_ui = __esm({
+    "src/audit/detectors/ui.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      MAX_PER_RULE = 15;
+      INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]:not([tabindex='-1'])";
+      elementFinding = (el, ruleId, severity, title, description, metrics) => uiFinding(ruleId, severity, title, description, { selector: buildSelector2(el), evidence: elementEvidence(el, metrics ? { metrics } : void 0) });
+    }
+  });
+
+  // src/audit/detectors/seo.ts
+  function seoFinding(ruleId, severity, title, description, extra = {}) {
+    return {
+      id: makeIssueId("audit-seo"),
+      detector: "audit-seo",
+      category: "seo",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: typeof location !== "undefined" ? location.href : "",
+      detectedAt: Date.now(),
+      ...extra
+    };
+  }
+  function detectSeoFindings(doc = document) {
+    var _a2;
+    const out = [];
+    const { titleMin, titleMax, descMin, descMax } = SEO_LIMITS;
+    const title = (((_a2 = doc.querySelector("head > title, title")) == null ? void 0 : _a2.textContent) || "").replace(/\s+/g, " ").trim();
+    if (!title) {
+      out.push(seoFinding(
+        "seo/missing-title",
+        "serious",
+        "Page has no <title>",
+        "Search results and browser tabs show the page title. Add a <title> in <head> that names the page."
+      ));
+    } else if (title.length < titleMin || title.length > titleMax) {
+      out.push(seoFinding(
+        "seo/title-length",
+        "minor",
+        `Title is ${title.length} characters`,
+        `Search results show roughly ${titleMax} characters. ${title.length > titleMax ? "The end will be cut off." : "A very short title rarely says what the page is."} Aim for ${titleMin}\u2013${titleMax}.`,
+        { evidence: { text: title, metrics: { length: title.length } } }
+      ));
+    }
+    const desc = metaContent(doc, "description");
+    if (desc === null || desc === "") {
+      out.push(seoFinding(
+        "seo/missing-description",
+        "moderate",
+        "No meta description",
+        'Search engines use <meta name="description"> for the snippet under the title; without it they pick page text themselves.'
+      ));
+    } else if (desc.length < descMin || desc.length > descMax) {
+      out.push(seoFinding(
+        "seo/description-length",
+        "minor",
+        `Meta description is ${desc.length} characters`,
+        `Snippets show roughly ${descMax} characters. Aim for ${descMin}\u2013${descMax}.`,
+        { evidence: { text: desc.slice(0, 200), metrics: { length: desc.length } } }
+      ));
+    }
+    const canonicals = Array.from(doc.querySelectorAll('link[rel~="canonical" i]'));
+    if (canonicals.length === 0) {
+      out.push(seoFinding(
+        "seo/missing-canonical",
+        "minor",
+        "No canonical URL",
+        'Without <link rel="canonical">, the same page reached with different query strings can be indexed as separate pages.'
+      ));
+    } else if (canonicals.length > 1) {
+      out.push(seoFinding(
+        "seo/multiple-canonical",
+        "moderate",
+        `${canonicals.length} canonical links`,
+        "Search engines ignore conflicting canonical links. Keep exactly one.",
+        { evidence: { hints: canonicals.map((c2) => c2.getAttribute("href") || "").filter(Boolean) } }
+      ));
+    }
+    const h1s = Array.from(doc.querySelectorAll("h1")).filter((h) => !h.closest("#tracebug-root"));
+    if (h1s.length === 0) {
+      out.push(seoFinding(
+        "seo/missing-h1",
+        "moderate",
+        "Page has no <h1>",
+        "The main heading tells search engines and screen-reader users what the page is about. Add one <h1>."
+      ));
+    } else if (h1s.length > 1) {
+      out.push(seoFinding(
+        "seo/multiple-h1",
+        "minor",
+        `Page has ${h1s.length} <h1> headings`,
+        "Use one <h1> for the page's main topic and <h2>\u2013<h6> below it.",
+        { selector: "h1", evidence: { ...elementEvidence(h1s[1]), metrics: { count: h1s.length } } }
+      ));
+    }
+    const robots = (metaContent(doc, "robots") || "") + "," + (metaContent(doc, "googlebot") || "");
+    if (/\bnoindex\b/i.test(robots)) {
+      out.push(seoFinding(
+        "seo/noindex",
+        "serious",
+        "Page tells search engines not to index it",
+        'A robots meta tag says "noindex". Correct for staging or private pages; on a public page it keeps it out of search.',
+        { evidence: { text: robots.replace(/^,|,$/g, "") } }
+      ));
+    }
+    if (!doc.querySelector('meta[name="viewport" i]')) {
+      out.push(seoFinding(
+        "seo/missing-viewport",
+        "serious",
+        "No viewport meta tag",
+        'Without <meta name="viewport" content="width=device-width, initial-scale=1">, phones render the page at desktop width, zoomed out.'
+      ));
+    }
+    return out;
+  }
+  var SEO_LIMITS, metaContent;
+  var init_seo = __esm({
+    "src/audit/detectors/seo.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      SEO_LIMITS = { titleMin: 10, titleMax: 60, descMin: 50, descMax: 160 };
+      metaContent = (doc, name) => {
+        const el = doc.querySelector(`meta[name="${name}" i]`);
+        return el ? (el.getAttribute("content") || "").trim() : null;
+      };
+    }
+  });
+
+  // src/audit/detectors/performance.ts
+  function perfFinding(ruleId, severity, title, description, extra = {}) {
+    return {
+      id: makeIssueId("audit-perf"),
+      detector: "audit-perf",
+      category: "performance",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: location.href,
+      detectedAt: Date.now(),
+      ...extra
+    };
+  }
+  function buffered(type) {
+    const supported = PerformanceObserver.supportedEntryTypes || [];
+    if (!supported.includes(type)) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      const got = [];
+      let po = null;
+      const finish = () => {
+        try {
+          got.push(...(po == null ? void 0 : po.takeRecords()) || []);
+          po == null ? void 0 : po.disconnect();
+        } catch (e2) {
+        }
+        resolve(got);
+      };
+      try {
+        po = new PerformanceObserver((list) => {
+          got.push(...list.getEntries());
+        });
+        po.observe({ type, buffered: true });
+      } catch (e2) {
+        resolve([]);
+        return;
+      }
+      setTimeout(finish, 60);
+    });
+  }
+  function isTraceBugResource(url) {
+    if (/^(chrome|moz|safari-web)-extension:/i.test(url)) return true;
+    try {
+      const file = new URL(url).pathname.split("/").pop() || "";
+      return /^tracebug[\w.-]*\.m?js$/i.test(file);
+    } catch (e2) {
+      return false;
+    }
+  }
+  function grade(value, [good, poor]) {
+    if (value > poor) return "serious";
+    if (value > good) return "moderate";
+    return null;
+  }
+  async function detectPerfFindings() {
+    const nav = performance.getEntriesByType("navigation")[0];
+    if (!nav) {
+      return { ran: false, limitation: "This browser exposes no page-load timing for this page, so performance was not checked.", metrics: {}, findings: [] };
+    }
+    const findings = [];
+    const metrics = {};
+    const notes = [PERF_LIMITATION];
+    const ttfb = Math.round(nav.responseStart - nav.startTime);
+    if (ttfb > 0) metrics.ttfbMs = ttfb;
+    const fcpEntry = performance.getEntriesByName("first-contentful-paint")[0];
+    if (fcpEntry) metrics.fcpMs = Math.round(fcpEntry.startTime);
+    const lcpEntries = await buffered("largest-contentful-paint");
+    const lcp = lcpEntries[lcpEntries.length - 1];
+    if (lcp) metrics.lcpMs = Math.round(lcp.startTime);
+    const shiftTypeSupported = (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift");
+    if (shiftTypeSupported) {
+      const shifts = await buffered("layout-shift");
+      metrics.cls = Math.round(shifts.filter((s2) => !s2.hadRecentInput).reduce((t2, s2) => t2 + s2.value, 0) * 1e3) / 1e3;
+    } else {
+      notes.push("Layout shift (CLS) is not measured in this browser.");
+    }
+    const thresholds = [
+      ["lcpMs", "perf/lcp", "Largest content paints at", "The largest image or text block appears at {v}. Over 2.5 s feels slow; over 4 s, users leave."],
+      ["fcpMs", "perf/fcp", "First content paints at", "Nothing is drawn until {v}. Over 1.8 s, the page feels stuck."],
+      ["ttfbMs", "perf/ttfb", "Server responds after", "The first byte of the page arrives after {v}. Over 0.8 s, everything after it starts late."],
+      ["cls", "perf/cls", "Layout shift score", "Content moved by {v} while loading (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."]
+    ];
+    for (const [key, ruleId, label, text] of thresholds) {
+      const v2 = metrics[key];
+      if (v2 === void 0) continue;
+      const sev = grade(v2, PERF_THRESHOLDS[key]);
+      if (!sev) continue;
+      const shown = key === "cls" ? String(v2) : `${(v2 / 1e3).toFixed(2)} s`;
+      const extra = { evidence: { metrics: { [key]: v2, good: PERF_THRESHOLDS[key][0], poor: PERF_THRESHOLDS[key][1] } } };
+      if (key === "lcpMs" && (lcp == null ? void 0 : lcp.url)) extra.url = lcp.url;
+      findings.push(perfFinding(ruleId, sev, `${label} ${shown}`, text.replace("{v}", shown), extra));
+    }
+    const resources = performance.getEntriesByType("resource").filter((r2) => !isTraceBugResource(r2.name));
+    const total = resources.reduce((t2, r2) => t2 + (r2.transferSize || 0), nav.transferSize || 0);
+    metrics.transferKb = Math.round(total / 1024);
+    metrics.requests = resources.length + 1;
+    if (metrics.transferKb > PAGE_WEIGHT_KB) {
+      findings.push(perfFinding(
+        "perf/page-weight",
+        "moderate",
+        `Page downloads ${(metrics.transferKb / 1024).toFixed(1)} MB`,
+        `This load transferred ${metrics.transferKb} KB over ${metrics.requests} requests. Above ${PAGE_WEIGHT_KB / 1024} MB is slow on mobile connections.`,
+        { evidence: { metrics: { transferKb: metrics.transferKb, requests: metrics.requests } } }
+      ));
+    }
+    const sizeOf = (r2) => r2.transferSize || r2.encodedBodySize || 0;
+    const large = resources.filter((r2) => sizeOf(r2) >= LARGE_RESOURCE_KB * 1024).sort((a2, b) => sizeOf(b) - sizeOf(a2)).slice(0, MAX_LARGE);
+    for (const r2 of large) {
+      const kb = Math.round(sizeOf(r2) / 1024);
+      findings.push(perfFinding(
+        "perf/large-resource",
+        "minor",
+        `${fileName(r2.name)} is ${kb} KB`,
+        `One of the largest files on this page (${r2.initiatorType || "resource"}). Compress it, split it, or load it later.`,
+        { url: r2.name, evidence: { metrics: { sizeKb: kb, durationMs: Math.round(r2.duration) }, hints: [fileName(r2.name)] } }
+      ));
+    }
+    const blocking = resources.filter((r2) => r2.renderBlockingStatus === "blocking" && r2.duration >= RENDER_BLOCKING_MS).slice(0, MAX_BLOCKING);
+    for (const r2 of blocking) {
+      findings.push(perfFinding(
+        "perf/render-blocking",
+        "minor",
+        `${fileName(r2.name)} blocks the first paint`,
+        `The browser waited ${Math.round(r2.duration)} ms for this ${r2.initiatorType || "file"} before drawing anything. Add defer/async to scripts or load non-critical CSS later.`,
+        { url: r2.name, evidence: { metrics: { durationMs: Math.round(r2.duration) }, hints: [fileName(r2.name)] } }
+      ));
+    }
+    if (!resources.some((r2) => typeof r2.renderBlockingStatus === "string")) {
+      notes.push("Render-blocking files are not reported by this browser.");
+    }
+    return { ran: true, limitation: notes.join(" "), metrics, findings };
+  }
+  var PERF_THRESHOLDS, PAGE_WEIGHT_KB, LARGE_RESOURCE_KB, MAX_LARGE, MAX_BLOCKING, RENDER_BLOCKING_MS, PERF_LIMITATION, fileName;
+  var init_performance = __esm({
+    "src/audit/detectors/performance.ts"() {
+      "use strict";
+      init_helpers2();
+      PERF_THRESHOLDS = {
+        lcpMs: [2500, 4e3],
+        fcpMs: [1800, 3e3],
+        ttfbMs: [800, 1800],
+        cls: [0.1, 0.25]
+      };
+      PAGE_WEIGHT_KB = 3e3;
+      LARGE_RESOURCE_KB = 500;
+      MAX_LARGE = 5;
+      MAX_BLOCKING = 10;
+      RENDER_BLOCKING_MS = 200;
+      PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. INP is not measured. TraceBug's own files are left out.";
+      fileName = (url) => {
+        try {
+          const u2 = new URL(url);
+          return (u2.pathname.split("/").pop() || u2.hostname).slice(0, 80);
+        } catch (e2) {
+          return url.slice(0, 80);
+        }
+      };
+    }
+  });
+
+  // src/audit/detectors/keyboard.ts
+  function kbdFinding(ruleId, severity, title, description, el, extra = {}) {
+    return {
+      id: makeIssueId("audit-keyboard"),
+      detector: "audit-keyboard",
+      category: "accessibility",
+      ruleId,
+      severity,
+      title,
+      description,
+      page: location.href,
+      detectedAt: Date.now(),
+      ...el ? { selector: buildSelector2(el), evidence: elementEvidence(el) } : {},
+      ...extra
+    };
+  }
+  function inTabOrder(el) {
+    const tabindex = el.getAttribute("tabindex");
+    if (tabindex !== null && Number(tabindex) < 0) return false;
+    if (el.disabled) return false;
+    if (el.closest("[inert], [hidden]")) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden";
+  }
+  function detectKeyboardFindings(doc = document) {
+    const findings = [];
+    const els = Array.from(doc.querySelectorAll(TABBABLE)).filter((el) => !isTraceBugUi(el) && inTabOrder(el));
+    let positive = 0;
+    let invisible = 0;
+    for (const el of els) {
+      const tabindex = Number(el.getAttribute("tabindex"));
+      if (tabindex > 0 && positive < MAX_PER_RULE2) {
+        positive++;
+        findings.push(kbdFinding(
+          "kbd/positive-tabindex",
+          "serious",
+          `tabindex="${tabindex}" changes the Tab order`,
+          'Keyboard users reach this element before everything in reading order. Use tabindex="0" (or none) and move the element in the DOM instead.',
+          el
+        ));
+      }
+      if (invisible < MAX_PER_RULE2) {
+        const r2 = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        const zero = r2.width === 0 && r2.height === 0;
+        const transparent = cs.opacity === "0";
+        if ((zero || transparent) && el.tagName !== "IFRAME") {
+          invisible++;
+          findings.push(kbdFinding(
+            "kbd/focusable-invisible",
+            "serious",
+            "Keyboard focus lands on something invisible",
+            `This element is in the Tab order but is drawn ${zero ? "0\xD70" : "fully transparent"}, so a keyboard user's focus disappears. Remove it from the Tab order (tabindex="-1", disabled or hidden) or make it visible when focused.`,
+            el
+          ));
+        }
+      }
+    }
+    let unreadableSheets = 0;
+    let removed = 0;
+    const visit2 = (rules2) => {
+      for (const rule2 of Array.from(rules2)) {
+        if (removed >= MAX_PER_RULE2) return;
+        const grouping = rule2;
+        if (grouping.cssRules && !rule2.selectorText) {
+          visit2(grouping.cssRules);
+          continue;
+        }
+        const style = rule2;
+        const sel = style.selectorText || "";
+        if (!/:focus(?!-within)/.test(sel)) continue;
+        const st = style.style;
+        const outline = (st.getPropertyValue("outline-style") || st.getPropertyValue("outline") || "").trim();
+        const width = st.getPropertyValue("outline-width").trim();
+        const removesOutline = /^(none|0(px)?)\b/.test(outline) || width === "0" || width === "0px";
+        if (!removesOutline) continue;
+        const replaced = ["box-shadow", "border-color", "border", "border-bottom", "background", "background-color", "text-decoration"].some((p) => {
+          const v2 = st.getPropertyValue(p).trim();
+          return v2 && !/^(none|0|initial|unset|inherit|revert)$/.test(v2);
+        });
+        if (replaced) continue;
+        if (sel.includes("tracebug")) continue;
+        removed++;
+        findings.push(kbdFinding(
+          "kbd/focus-outline-removed",
+          "serious",
+          `"${sel.slice(0, 80)}" hides the focus outline`,
+          "This CSS rule removes the focus outline and draws no other focus indicator, so keyboard users can't see where they are. Keep the outline, or replace it (box-shadow, border or background) \u2014 :focus-visible lets mouse users keep a clean look.",
+          null,
+          { evidence: { text: sel.slice(0, 80), hints: [sel.split(",")[0].replace(/:focus.*/, "").trim()].filter(Boolean) } }
+        ));
+      }
+    };
+    for (const sheet of Array.from(doc.styleSheets)) {
+      const owner = sheet.ownerNode;
+      if (owner && isTraceBugUi(owner)) continue;
+      let rules2 = null;
+      try {
+        rules2 = sheet.cssRules;
+      } catch (e2) {
+        unreadableSheets++;
+        continue;
+      }
+      if (rules2) visit2(rules2);
+    }
+    return { findings, unreadableSheets };
+  }
+  var MAX_PER_RULE2, TABBABLE;
+  var init_keyboard = __esm({
+    "src/audit/detectors/keyboard.ts"() {
+      "use strict";
+      init_helpers2();
+      init_evidence();
+      MAX_PER_RULE2 = 20;
+      TABBABLE = "a[href], area[href], button, input:not([type=hidden]), select, textarea, iframe, summary, [tabindex], [contenteditable=''], [contenteditable='true']";
+    }
+  });
+
+  // src/audit/types.ts
+  function isAuditScan(v2) {
+    return typeof v2 === "string" && Object.prototype.hasOwnProperty.call(AUDIT_SCANS, v2);
+  }
+  var AUDIT_SCANS;
+  var init_types = __esm({
+    "src/audit/types.ts"() {
+      "use strict";
+      AUDIT_SCANS = {
+        full: { label: "All checks", categories: ["accessibility", "ui", "performance", "seo", "runtime"] },
+        "auto-review": { label: "Auto Review", categories: ["ui", "runtime"] },
+        accessibility: { label: "Accessibility Audit", categories: ["accessibility"] },
+        "performance-seo": { label: "Performance & SEO", categories: ["performance", "seo"] }
+      };
+    }
+  });
+
+  // src/audit/index.ts
+  function getLastAuditRun() {
+    return _lastRun;
+  }
+  async function runtimeFindings() {
+    const session = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt)[0] || null;
+    const groups = await Promise.all([
+      detectConsoleErrors(session).catch(() => []),
+      detectFailedRequests(session).catch(() => []),
+      detectMixedContent().catch(() => []),
+      // Dead and rage clicks from the capture: the "dead UI" half of Auto Review.
+      detectFrustration2(session).then((list) => list.filter((i2) => i2.detector === "frustration-dead" || i2.detector === "frustration-rage")).catch(() => [])
+    ]);
+    return groups.flat().map((i2) => ({
+      ...i2,
+      category: "runtime",
+      ruleId: `runtime/${i2.detector}`,
+      page: location.href
+    }));
+  }
+  async function runAudit(options = {}) {
+    var _a2;
+    if (_inFlight) return _inFlight;
+    const scan2 = options.scan && AUDIT_SCANS[options.scan] ? options.scan : "full";
+    const wanted = new Set(((_a2 = options.categories) == null ? void 0 : _a2.length) ? options.categories : AUDIT_SCANS[scan2].categories);
+    _inFlight = (async () => {
+      var _a3;
+      const categories = {};
+      const findings = [];
+      const guard = async (name, fn) => {
+        if (!wanted.has(name)) return;
+        try {
+          findings.push(...await fn());
+          categories[name] = { ran: true, limitation: CATEGORY_LIMITATIONS[name] };
+        } catch (err) {
+          console.warn(`[TraceBug] ${name} audit failed:`, err);
+          categories[name] = { ran: false, limitation: `The ${name} check failed on this page, so it was not run.` };
+        }
+      };
+      if (wanted.has("accessibility")) {
+        const a11y = await detectA11yFindings();
+        findings.push(...a11y.findings);
+        let limitation = a11y.limitation;
+        if (a11y.ran) {
+          try {
+            const kbd = detectKeyboardFindings(document);
+            findings.push(...kbd.findings);
+            limitation += " Keyboard: Tab order and focus styles read from the page, nothing focused" + (kbd.unreadableSheets ? `; ${kbd.unreadableSheets} stylesheet${kbd.unreadableSheets === 1 ? "" : "s"} from another site could not be read.` : ".");
+          } catch (err) {
+            console.warn("[TraceBug] keyboard checks failed:", err);
+            limitation += " The keyboard checks failed on this page.";
+          }
+        }
+        categories.accessibility = { ran: a11y.ran, limitation };
+      }
+      await guard("ui", detectUiFindings);
+      if (wanted.has("performance")) {
+        try {
+          const perf = await detectPerfFindings();
+          findings.push(...perf.findings);
+          categories.performance = { ran: perf.ran, limitation: perf.limitation, metrics: perf.metrics };
+        } catch (err) {
+          console.warn("[TraceBug] performance audit failed:", err);
+          categories.performance = { ran: false, limitation: "The performance check failed on this page, so it was not run." };
+        }
+      }
+      await guard("seo", () => detectSeoFindings(document));
+      await guard("runtime", runtimeFindings);
+      const run = buildAuditRun(findings, {
+        url: location.href,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        userAgent: navigator.userAgent,
+        categories,
+        scan: ((_a3 = options.categories) == null ? void 0 : _a3.length) ? void 0 : scan2
+      });
+      _lastRun = run;
+      return run;
+    })();
+    try {
+      return await _inFlight;
+    } finally {
+      _inFlight = null;
+    }
+  }
+  var CATEGORY_LIMITATIONS, _lastRun, _inFlight;
+  var init_audit = __esm({
+    "src/audit/index.ts"() {
+      "use strict";
+      init_storage();
+      init_session_data();
+      init_mixed_content();
+      init_run();
+      init_a11y2();
+      init_ui();
+      init_seo();
+      init_performance();
+      init_keyboard();
+      init_frustration();
+      init_types();
+      CATEGORY_LIMITATIONS = {
+        ui: "Checked at the current window size only. No design judgement.",
+        seo: "This page only: no crawl, no ranking claims.",
+        runtime: "Only what happened since TraceBug started capturing on this page: errors, failed requests, mixed content, and rage or dead clicks."
+      };
+      _lastRun = null;
+      _inFlight = null;
+    }
+  });
+
+  // src/audit/compare.ts
+  function ranCategories(run) {
+    return new Set(run.categories.filter((c2) => c2.ran).map((c2) => c2.name));
+  }
+  function compareAudits(before, after) {
+    const empty = {
+      comparable: false,
+      fixed: [],
+      stillPresent: [],
+      new: [],
+      regressed: [],
+      skippedCategories: [],
+      incomplete: false
+    };
+    const pathA = urlPath(before.url);
+    const pathB = urlPath(after.url);
+    if (pathA !== pathB) {
+      return { ...empty, reason: `Different pages: ${pathA || "(none)"} vs ${pathB || "(none)"}. Compare two runs of the same page.` };
+    }
+    const ranA = ranCategories(before);
+    const ranB = ranCategories(after);
+    const both = new Set([...ranA].filter((c2) => ranB.has(c2)));
+    const skipped = [.../* @__PURE__ */ new Set([...ranA, ...ranB])].filter((c2) => !both.has(c2)).sort();
+    const inScope = (f2) => !!f2.category && both.has(f2.category);
+    const left = before.findings.filter(inScope);
+    const right = after.findings.filter(inScope);
+    const usedL = /* @__PURE__ */ new Set();
+    const usedR = /* @__PURE__ */ new Set();
+    const stillPresent = [];
+    const pass = (key, matchedBy) => {
+      const index2 = /* @__PURE__ */ new Map();
+      right.forEach((f2, i2) => {
+        const k = f2[key];
+        if (!k || usedR.has(i2)) return;
+        const list = index2.get(k);
+        if (list) list.push(i2);
+        else index2.set(k, [i2]);
+      });
+      left.forEach((f2, i2) => {
+        const k = f2[key];
+        if (!k || usedL.has(i2)) return;
+        const candidates = index2.get(k);
+        const j = candidates == null ? void 0 : candidates.find((c2) => !usedR.has(c2));
+        if (j === void 0) return;
+        usedL.add(i2);
+        usedR.add(j);
+        stillPresent.push({ before: f2, after: right[j], matchedBy });
+      });
+    };
+    pass("fingerprint", "fingerprint");
+    pass("fallbackFingerprint", "fallback");
+    const fixed = left.filter((_, i2) => !usedL.has(i2));
+    const added = right.filter((_, i2) => !usedR.has(i2));
+    const fixedCategories = new Set(fixed.map((f2) => f2.category));
+    const regressed = added.filter((f2) => fixedCategories.has(f2.category));
+    const fresh = added.filter((f2) => !fixedCategories.has(f2.category));
+    return {
+      comparable: true,
+      fixed,
+      stillPresent,
+      new: fresh,
+      regressed,
+      skippedCategories: skipped,
+      incomplete: before.truncated > 0 || after.truncated > 0
+    };
+  }
+  var init_compare = __esm({
+    "src/audit/compare.ts"() {
+      "use strict";
+      init_fingerprint2();
     }
   });
 
@@ -72260,6 +73434,394 @@ First element: \`${exampleSnippet}\``,
     }
   });
 
+  // src/audit/export.ts
+  var export_exports = {};
+  __export(export_exports, {
+    auditOneLiner: () => auditOneLiner,
+    auditSummaryMarkdown: () => auditSummaryMarkdown,
+    exportAuditReport: () => exportAuditReport
+  });
+  function currentSession() {
+    const sessions = getAllSessions().sort((a2, b) => b.updatedAt - a2.updatedAt);
+    const activeId = getActiveSessionId();
+    const found = activeId && sessions.find((s2) => s2.sessionId === activeId) || sessions[0];
+    if (found) return found;
+    const now = Date.now();
+    return {
+      sessionId: `audit-${now.toString(36)}`,
+      projectId: "audit",
+      createdAt: now,
+      updatedAt: now,
+      errorMessage: null,
+      errorStack: null,
+      reproSteps: null,
+      errorSummary: null,
+      events: [],
+      annotations: [],
+      environment: captureEnvironment()
+    };
+  }
+  function auditSummaryMarkdown(run) {
+    const total = run.findings.length + run.truncated;
+    const lines = [
+      `**Site audit** of \`${run.url}\` at ${run.viewport.width}\xD7${run.viewport.height} (${run.userAgentFamily}): ${total} finding${total === 1 ? "" : "s"}.`,
+      "",
+      ...run.categories.map((c2) => `- **${CATEGORY_LABEL[c2.name] || c2.name}**: ${!c2.ran ? "not run" : c2.count === 0 ? "no findings" : `${c2.count} found`}${c2.limitation ? ` \u2014 ${c2.limitation}` : ""}`),
+      "",
+      "Open the **Audit** tab for every finding with its evidence."
+    ];
+    return lines.join("\n");
+  }
+  function auditOneLiner(run) {
+    const total = run.findings.length + run.truncated;
+    const bySev = ["critical", "serious", "moderate", "minor"].map((s2) => [s2, run.findings.filter((f2) => f2.severity === s2).length]).filter(([, n2]) => n2 > 0).map(([s2, n2]) => `${n2} ${s2}`);
+    const notRun = run.categories.filter((c2) => !c2.ran).map((c2) => CATEGORY_LABEL[c2.name] || c2.name);
+    return `Site audit: ${total} finding${total === 1 ? "" : "s"}${bySev.length ? ` (${bySev.join(", ")})` : ""}` + (notRun.length ? `; ${notRun.join(", ")} not run.` : ".");
+  }
+  function filenameFor(run) {
+    let host2 = "page";
+    try {
+      host2 = new URL(run.url).hostname.replace(/[^a-z0-9.-]/gi, "") || "page";
+    } catch (e2) {
+    }
+    const stamp = new Date(run.scannedAt).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    return `tracebug-audit-${host2}-${stamp}.html`;
+  }
+  async function exportAuditReport(run) {
+    var _a2, _b;
+    const session = currentSession();
+    const report = buildReport(session);
+    report.video = void 0;
+    let path = run.url;
+    try {
+      path = new URL(run.url).pathname;
+    } catch (e2) {
+    }
+    report.title = `Site audit: ${path}`;
+    report.summary = auditOneLiner(run);
+    report.rootCause = void 0;
+    report.severity = BUG_SEVERITY[(_b = (_a2 = run.findings[0]) == null ? void 0 : _a2.severity) != null ? _b : "minor"];
+    return exportSessionAsHtml(session, report, {
+      includeVideo: false,
+      audit: run,
+      descriptionOverride: auditSummaryMarkdown(run),
+      filename: filenameFor(run)
+    });
+  }
+  var CATEGORY_LABEL, BUG_SEVERITY;
+  var init_export = __esm({
+    "src/audit/export.ts"() {
+      "use strict";
+      init_storage();
+      init_report_builder();
+      init_environment();
+      init_html_replay();
+      CATEGORY_LABEL = {
+        accessibility: "Accessibility",
+        ui: "Layout",
+        performance: "Performance",
+        seo: "SEO",
+        runtime: "Runtime"
+      };
+      BUG_SEVERITY = { critical: "critical", serious: "high", moderate: "medium", minor: "low" };
+    }
+  });
+
+  // src/ui/audit-panel.ts
+  var audit_panel_exports = {};
+  __export(audit_panel_exports, {
+    closeAuditPanel: () => closeAuditPanel,
+    formatCategoryMetrics: () => formatCategoryMetrics,
+    isAuditPanelOpen: () => isAuditPanelOpen,
+    showAuditPanel: () => showAuditPanel
+  });
+  function isAuditPanelOpen() {
+    return _open;
+  }
+  async function showAuditPanel(root2, scan2) {
+    var _a2, _b;
+    if (isAuditScan(scan2)) _scan = scan2;
+    injectStyles();
+    if (!_open) mountShell(root2);
+    markScan();
+    setBody(`<div class="tb-au-empty">Checking this page\u2026</div>`);
+    const busyExport = document.querySelector(`#${PANEL_ID3} [data-tb-au="export"]`);
+    if (busyExport) busyExport.disabled = true;
+    setSubtitle(_scan === "full" ? "Running accessibility, layout, performance, SEO and error checks\u2026" : `Running ${AUDIT_SCANS[_scan].label}\u2026`);
+    const previous = getLastAuditRun();
+    let run;
+    try {
+      run = await runAudit({ scan: _scan });
+    } catch (err) {
+      console.warn("[TraceBug] Audit failed:", err);
+      setSubtitle("The audit could not run on this page.");
+      setBody(`<div class="tb-au-empty">Something on this page stopped the audit. Reload and try again.</div>`);
+      return null;
+    }
+    const exportBtn = document.querySelector(`#${PANEL_ID3} [data-tb-au="export"]`);
+    if (exportBtn) exportBtn.disabled = false;
+    const diff2 = previous && ((_a2 = previous.scan) != null ? _a2 : "full") === ((_b = run.scan) != null ? _b : "full") ? compareAudits(previous, run) : null;
+    render(run, diff2 && diff2.comparable ? diff2 : null);
+    return run;
+  }
+  function closeAuditPanel() {
+    var _a2;
+    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
+    document.removeEventListener("keydown", onKey2, true);
+    _open = false;
+  }
+  async function exportCurrent(btn) {
+    const run = getLastAuditRun();
+    if (!run || !btn) return;
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Exporting\u2026";
+    try {
+      const { exportAuditReport: exportAuditReport2 } = await Promise.resolve().then(() => (init_export(), export_exports));
+      const out = await exportAuditReport2(run);
+      btn.textContent = "Exported \u2713";
+      btn.title = out.filename;
+    } catch (err) {
+      console.warn("[TraceBug] Audit export failed:", err);
+      btn.textContent = "Export failed";
+    }
+    setTimeout(() => {
+      btn.textContent = label;
+      btn.disabled = false;
+    }, 1800);
+  }
+  function onKey2(e2) {
+    if (e2.key === "Escape" && _open) {
+      e2.stopPropagation();
+      closeAuditPanel();
+    }
+  }
+  function mountShell(root2) {
+    var _a2, _b;
+    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
+    const overlay = document.createElement("div");
+    overlay.id = `${PANEL_ID3}-overlay`;
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-labelledby", `${PANEL_ID3}-title`);
+    const panel = document.createElement("div");
+    panel.id = PANEL_ID3;
+    setInnerHTML(panel, `
+    <div class="tb-au-head">
+      <div class="tb-au-titles">
+        <div class="tb-au-title" id="${PANEL_ID3}-title">Site audit</div>
+        <div class="tb-au-sub" data-tb-au="subtitle"></div>
+      </div>
+      <button type="button" class="tb-au-btn" data-tb-au="export" disabled title="Download this audit as a TraceBug report (.html) your coding agent can read">Export report</button>
+      <button type="button" class="tb-au-btn" data-tb-au="rerun">Re-run audit</button>
+      <button type="button" class="tb-au-close" data-tb-au="close" aria-label="Close">&times;</button>
+    </div>
+    <div class="tb-au-scans" role="group" aria-label="Which checks to run">${Object.keys(AUDIT_SCANS).map((k) => `<button type="button" class="tb-au-scan" data-tb-au="scan" data-scan="${k}" aria-pressed="false">${escapeHtml(AUDIT_SCANS[k].label)}</button>`).join("")}</div>
+    <div class="tb-au-body" data-tb-au="body"></div>`);
+    overlay.appendChild(panel);
+    root2.appendChild(overlay);
+    _open = true;
+    overlay.addEventListener("click", (e2) => {
+      var _a3, _b2, _c;
+      const t2 = e2.target;
+      if (t2 === overlay) {
+        closeAuditPanel();
+        return;
+      }
+      const action = (_a3 = t2.closest("[data-tb-au]")) == null ? void 0 : _a3.dataset.tbAu;
+      if (action === "close") closeAuditPanel();
+      else if (action === "rerun") void showAuditPanel(root2);
+      else if (action === "export") void exportCurrent(t2.closest("button"));
+      else if (action === "scan") void showAuditPanel(root2, (_b2 = t2.closest("[data-scan]")) == null ? void 0 : _b2.dataset.scan);
+      else if (action === "locate") locate(((_c = t2.closest("[data-selector]")) == null ? void 0 : _c.dataset.selector) || "");
+    });
+    document.addEventListener("keydown", onKey2, true);
+    (_b = panel.querySelector('[data-tb-au="close"]')) == null ? void 0 : _b.focus();
+  }
+  function markScan() {
+    document.querySelectorAll(`#${PANEL_ID3} [data-tb-au="scan"]`).forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.scan === _scan));
+    });
+  }
+  function setSubtitle(text) {
+    const el = document.querySelector(`#${PANEL_ID3} [data-tb-au="subtitle"]`);
+    if (el) el.textContent = text;
+  }
+  function setBody(html) {
+    const el = document.querySelector(`#${PANEL_ID3} [data-tb-au="body"]`);
+    if (el) setInnerHTML(el, html);
+  }
+  function render(run, diff2) {
+    var _a2;
+    const total = run.findings.length + run.truncated;
+    const when = new Date(run.scannedAt).toLocaleTimeString();
+    setSubtitle(`${AUDIT_SCANS[(_a2 = run.scan) != null ? _a2 : "full"].label} \xB7 ${total === 0 ? "No findings" : `${total} finding${total === 1 ? "" : "s"}`} \xB7 ${run.viewport.width}\xD7${run.viewport.height} \xB7 ${when}`);
+    const parts = [];
+    if (diff2) parts.push(diffHtml(diff2));
+    parts.push(`<div class="tb-au-cats">${run.categories.map(categoryChip).join("")}</div>`);
+    for (const c2 of run.categories) {
+      if (!c2.ran) continue;
+      const items = run.findings.filter((f2) => f2.category === c2.name);
+      if (items.length === 0) continue;
+      parts.push(`<div class="tb-au-group"><div class="tb-au-group-h">${escapeHtml(CATEGORY_LABEL2[c2.name])} <span>${c2.count}</span></div>${items.map(findingHtml).join("")}</div>`);
+    }
+    if (run.truncated > 0) {
+      parts.push(`<div class="tb-au-note">${run.truncated} more finding${run.truncated === 1 ? "" : "s"} not shown (the list keeps the ${run.findings.length} most severe).</div>`);
+    }
+    if (run.findings.length === 0) {
+      parts.push(`<div class="tb-au-empty">No problems found in the checks that ran. That is not proof the page is accessible or bug-free \u2014 see each check's limits above.</div>`);
+    }
+    setBody(parts.join(""));
+  }
+  function categoryChip(c2) {
+    const state = !c2.ran ? "Not run" : c2.count === 0 ? "No findings" : `${c2.count} found`;
+    return `<div class="tb-au-cat${c2.ran ? "" : " tb-au-cat-off"}">
+    <div class="tb-au-cat-h"><b>${escapeHtml(CATEGORY_LABEL2[c2.name])}</b><span>${state}</span></div>
+    ${c2.metrics ? `<div class="tb-au-cat-m">${escapeHtml(formatCategoryMetrics(c2.metrics))}</div>` : ""}
+    ${c2.limitation ? `<div class="tb-au-cat-l">${escapeHtml(c2.limitation)}</div>` : ""}
+  </div>`;
+  }
+  function formatCategoryMetrics(m) {
+    const out = [];
+    const sec = (v2) => `${(v2 / 1e3).toFixed(2)} s`;
+    if (m.lcpMs !== void 0) out.push(`LCP ${sec(m.lcpMs)}`);
+    if (m.fcpMs !== void 0) out.push(`FCP ${sec(m.fcpMs)}`);
+    if (m.ttfbMs !== void 0) out.push(`TTFB ${sec(m.ttfbMs)}`);
+    if (m.cls !== void 0) out.push(`CLS ${m.cls}`);
+    if (m.transferKb !== void 0) out.push(m.transferKb >= 1024 ? `${(m.transferKb / 1024).toFixed(1)} MB` : `${m.transferKb} KB`);
+    if (m.requests !== void 0) out.push(`${m.requests} requests`);
+    return out.join(" \xB7 ");
+  }
+  function diffHtml(d) {
+    const bits = [
+      `<b class="tb-au-good">${d.fixed.length} fixed</b>`,
+      `${d.stillPresent.length} still present`,
+      d.regressed.length ? `<b class="tb-au-bad">${d.regressed.length} regressed</b>` : "",
+      d.new.length ? `${d.new.length} new` : ""
+    ].filter(Boolean).join(" \xB7 ");
+    const skipped = d.skippedCategories.length ? ` <span class="tb-au-muted">(${escapeHtml(d.skippedCategories.map((c2) => CATEGORY_LABEL2[c2]).join(", "))} not compared: not run both times)</span>` : "";
+    return `<div class="tb-au-diff">Since the last run: ${bits}${skipped}</div>`;
+  }
+  function findingHtml(f2) {
+    var _a2;
+    const metrics = ((_a2 = f2.evidence) == null ? void 0 : _a2.metrics) ? Object.entries(f2.evidence.metrics).map(([k, v2]) => `${escapeHtml(k)}: ${escapeHtml(String(v2))}`).join(" \xB7 ") : "";
+    const more = f2.occurrences && f2.occurrences > 1 ? ` <span class="tb-au-muted">\xD7${f2.occurrences}</span>` : "";
+    const help = f2.helpUrl && /^https:\/\//.test(f2.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(f2.helpUrl)}" target="_blank" rel="noopener noreferrer">How to fix</a>` : "";
+    const locate2 = f2.selector ? `<button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="locate">Locate</button>` : "";
+    return `<div class="tb-au-row" data-selector="${escapeHtml(f2.selector || "")}">
+    <span class="tb-au-sev tb-au-sev-${f2.severity}">${SEVERITY_LABEL2[f2.severity]}</span>
+    <div class="tb-au-main">
+      <div class="tb-au-row-t">${escapeHtml(f2.title)}${more}</div>
+      <div class="tb-au-row-d">${escapeHtml(f2.description)}</div>
+      ${metrics ? `<div class="tb-au-meta">${metrics}</div>` : ""}
+      <div class="tb-au-meta"><code>${escapeHtml(f2.ruleId || "")}</code>${f2.selector ? ` \xB7 <code>${escapeHtml(f2.selector)}</code>` : ""}</div>
+    </div>
+    <div class="tb-au-acts">${locate2}${help}</div>
+  </div>`;
+  }
+  function locate(selector) {
+    if (!selector) return;
+    let el = null;
+    try {
+      el = document.querySelector(selector);
+    } catch (e2) {
+      el = null;
+    }
+    if (!el) return;
+    closeAuditPanel();
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const prev = el.style.outline;
+    el.style.outline = "3px solid #FF5C6C";
+    el.style.outlineOffset = "2px";
+    setTimeout(() => {
+      el.style.outline = prev;
+    }, 2200);
+  }
+  function injectStyles() {
+    if (document.getElementById(STYLE_ID5)) return;
+    const s2 = createStyleTag(STYLE_ID5);
+    const P = `#${PANEL_ID3}`;
+    s2.textContent = `
+    ${P} .tb-au-cat-m { margin-top: 4px; font: 600 12px/1.4 ui-monospace, monospace; }
+    ${P}-overlay { position: fixed !important; inset: 0 !important; z-index: 2147483647 !important; background: rgba(0,0,0,.6) !important;
+      display: flex !important; align-items: center !important; justify-content: center !important; padding: 20px !important; box-sizing: border-box !important; }
+    ${P} { background: var(--tb-bg-primary, #0B0D14) !important; color: var(--tb-text-primary, #EEF0F5) !important;
+      border: 1px solid var(--tb-border, #252A38) !important; border-radius: var(--tb-radius-lg, 16px) !important;
+      width: 100% !important; max-width: 760px !important; max-height: 88vh !important; display: flex !important; flex-direction: column !important;
+      overflow: hidden !important; box-shadow: var(--tb-shadow-lg, 0 16px 48px rgba(0,0,0,.55)) !important;
+      font: 13px/1.5 var(--tb-font-family, system-ui, sans-serif) !important; text-align: left !important; }
+    ${P} *, ${P} *::before, ${P} *::after { box-sizing: border-box !important; }
+    ${P} .tb-au-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-titles { flex: 1; min-width: 0; }
+    ${P} .tb-au-title { font-size: 15px; font-weight: 700; }
+    ${P} .tb-au-sub, ${P} .tb-au-muted { color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
+    ${P} .tb-au-btn { background: var(--tb-bg-secondary, #141823); color: var(--tb-text-primary, #EEF0F5); border: 1px solid var(--tb-border, #252A38);
+      border-radius: var(--tb-radius-sm, 10px); padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+    ${P} .tb-au-btn:hover { border-color: var(--tb-border-hover, #333A4D); }
+    ${P} .tb-au-btn:disabled { opacity: .5; cursor: default; }
+    ${P} .tb-au-scans { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 0; }
+    ${P} .tb-au-scan { background: transparent; color: var(--tb-text-secondary, #A6ADBF); border: 1px solid var(--tb-border, #252A38); border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12px; cursor: pointer; }
+    ${P} .tb-au-scan:hover { color: var(--tb-text-primary, #EEF0F5); }
+    ${P} .tb-au-scan[aria-pressed="true"] { background: var(--tb-accent, #FF5C6C); border-color: var(--tb-accent, #FF5C6C); color: var(--tb-on-accent, #fff); }
+    ${P} .tb-au-scan:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C); outline-offset: 2px; }
+    ${P} .tb-au-btn:focus-visible, ${P} .tb-au-close:focus-visible, ${P} .tb-au-link:focus-visible { outline: 2px solid var(--tb-accent, #FF5C6C); outline-offset: 2px; }
+    ${P} .tb-au-btn-sm { padding: 3px 9px; font-size: 11px; }
+    ${P} .tb-au-close { background: none; border: 0; color: var(--tb-text-muted, #8A91A5); font-size: 22px; line-height: 1; padding: 2px 8px; cursor: pointer; border-radius: 8px; }
+    ${P} .tb-au-body { overflow-y: auto; padding: 12px 16px 18px; }
+    ${P} .tb-au-empty { padding: 28px 8px; text-align: center; color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-note { margin-top: 10px; color: var(--tb-text-muted, #8A91A5); font-size: 12px; }
+    ${P} .tb-au-diff { padding: 10px 12px; margin-bottom: 12px; border-radius: var(--tb-radius-sm, 10px); background: var(--tb-accent-subtle, rgba(255,92,108,.12)); }
+    ${P} .tb-au-good { color: var(--tb-success, #4CC38A); } ${P} .tb-au-bad { color: var(--tb-error, #F05257); }
+    ${P} .tb-au-cats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 14px; }
+    ${P} .tb-au-cat { border: 1px solid var(--tb-border, #252A38); border-radius: var(--tb-radius-sm, 10px); padding: 8px 10px; background: var(--tb-bg-secondary, #141823); }
+    ${P} .tb-au-cat-off { opacity: .7; border-style: dashed; }
+    ${P} .tb-au-cat-h { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+    ${P} .tb-au-cat-h span { color: var(--tb-text-secondary, #A8AEBE); }
+    ${P} .tb-au-cat-l { margin-top: 4px; font-size: 11px; color: var(--tb-text-muted, #8A91A5); }
+    ${P} .tb-au-group { margin-top: 10px; }
+    ${P} .tb-au-group-h { font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--tb-text-secondary, #A8AEBE); margin: 6px 0; }
+    ${P} .tb-au-group-h span { color: var(--tb-text-muted, #8A91A5); font-weight: 500; }
+    ${P} .tb-au-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-main { flex: 1; min-width: 0; }
+    ${P} .tb-au-row-t { font-weight: 600; }
+    ${P} .tb-au-row-d { color: var(--tb-text-secondary, #A8AEBE); margin-top: 2px; overflow-wrap: anywhere; }
+    ${P} .tb-au-meta { color: var(--tb-text-muted, #8A91A5); font-size: 11px; margin-top: 3px; overflow-wrap: anywhere; }
+    ${P} .tb-au-meta code { font-family: var(--tb-font-mono, ui-monospace, monospace); font-size: 11px; }
+    ${P} .tb-au-acts { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+    ${P} .tb-au-link { color: var(--tb-accent, #FF5C6C); font-size: 11px; text-decoration: none; }
+    ${P} .tb-au-link:hover { text-decoration: underline; }
+    ${P} .tb-au-sev { flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px;
+      border-radius: 999px; border: 1px solid currentColor; margin-top: 2px; }
+    ${P} .tb-au-sev-critical { color: var(--tb-severity-critical, #EF4444); }
+    ${P} .tb-au-sev-serious { color: var(--tb-severity-major, #F59E0B); }
+    ${P} .tb-au-sev-moderate { color: var(--tb-severity-minor, #eab308); }
+    ${P} .tb-au-sev-minor { color: var(--tb-severity-info, #3B82F6); }
+  `;
+    document.head.appendChild(s2);
+  }
+  var PANEL_ID3, STYLE_ID5, CATEGORY_LABEL2, SEVERITY_LABEL2, _open, _scan;
+  var init_audit_panel = __esm({
+    "src/ui/audit-panel.ts"() {
+      "use strict";
+      init_audit();
+      init_compare();
+      init_helpers();
+      init_types();
+      PANEL_ID3 = "tracebug-audit-panel";
+      STYLE_ID5 = "tracebug-audit-panel-styles";
+      CATEGORY_LABEL2 = {
+        accessibility: "Accessibility",
+        ui: "Layout",
+        seo: "SEO",
+        performance: "Performance",
+        runtime: "Errors & requests"
+      };
+      SEVERITY_LABEL2 = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
+      _open = false;
+      _scan = "full";
+    }
+  });
+
   // src/ui/issues-panel.ts
   var issues_panel_exports = {};
   __export(issues_panel_exports, {
@@ -72270,7 +73832,7 @@ First element: \`${exampleSnippet}\``,
     if (_isOpen2) return;
     _root3 = root2;
     _injectStyles4();
-    _open(root2, { issues: [], loading: true });
+    _open2(root2, { issues: [], loading: true });
     try {
       if ((_a2 = options == null ? void 0 : options.rescan) != null ? _a2 : true) {
         await scan();
@@ -72281,14 +73843,14 @@ First element: \`${exampleSnippet}\``,
     _renderBody(getIssues());
   }
   function _injectStyles4() {
-    if (document.getElementById(STYLE_ID5)) return;
-    const style = createStyleTag(STYLE_ID5);
+    if (document.getElementById(STYLE_ID6)) return;
+    const style = createStyleTag(STYLE_ID6);
     style.textContent = `
     @keyframes tracebug-issue-locate-flash {
       0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,108,0.0); outline: 2px solid transparent; }
       30% { box-shadow: 0 0 0 6px rgba(255,92,108,0.5); outline: 2px solid #FF5C6C; }
     }
-    #${PANEL_ID3}-overlay {
+    #${PANEL_ID4}-overlay {
       position: fixed !important;
       inset: 0 !important;
       z-index: 2147483647 !important;
@@ -72301,7 +73863,7 @@ First element: \`${exampleSnippet}\``,
       pointer-events: auto !important;
       box-sizing: border-box !important;
     }
-    #${PANEL_ID3} {
+    #${PANEL_ID4} {
       background: var(--tb-bg-secondary, #1a1a2e) !important;
       border: 1px solid var(--tb-border-hover, #3a3a5e) !important;
       border-radius: var(--tb-radius-lg, 12px) !important;
@@ -72316,17 +73878,17 @@ First element: \`${exampleSnippet}\``,
       box-sizing: border-box !important;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5) !important;
     }
-    #${PANEL_ID3} *, #${PANEL_ID3} *::before, #${PANEL_ID3} *::after { box-sizing: border-box !important; }
-    #${PANEL_ID3} button { font-family: inherit !important; cursor: pointer !important; }
-    #${PANEL_ID3} .tb-issue-row {
+    #${PANEL_ID4} *, #${PANEL_ID4} *::before, #${PANEL_ID4} *::after { box-sizing: border-box !important; }
+    #${PANEL_ID4} button { font-family: inherit !important; cursor: pointer !important; }
+    #${PANEL_ID4} .tb-issue-row {
       padding: 12px 14px;
       border-top: 1px solid var(--tb-border, #2a2a3e);
       display: flex;
       gap: 12px;
       align-items: flex-start;
     }
-    #${PANEL_ID3} .tb-issue-row:hover { background: var(--tb-bg-primary, #0f0f1a); }
-    #${PANEL_ID3} .tb-sev-badge {
+    #${PANEL_ID4} .tb-issue-row:hover { background: var(--tb-bg-primary, #0f0f1a); }
+    #${PANEL_ID4} .tb-sev-badge {
       font-size: 10px;
       font-weight: 700;
       padding: 3px 7px;
@@ -72336,7 +73898,7 @@ First element: \`${exampleSnippet}\``,
       flex-shrink: 0;
       border: 1px solid;
     }
-    #${PANEL_ID3} .tb-detector-tag {
+    #${PANEL_ID4} .tb-detector-tag {
       font-size: 10px;
       color: var(--tb-text-muted, #888);
       background: var(--tb-bg-primary, #0f0f1a);
@@ -72345,12 +73907,12 @@ First element: \`${exampleSnippet}\``,
       border-radius: 4px;
       flex-shrink: 0;
     }
-    #${PANEL_ID3} .tb-issue-actions {
+    #${PANEL_ID4} .tb-issue-actions {
       display: flex;
       gap: 6px;
       flex-shrink: 0;
     }
-    #${PANEL_ID3} .tb-issue-actions button {
+    #${PANEL_ID4} .tb-issue-actions button {
       background: transparent;
       color: var(--tb-text-secondary, #aaa);
       border: 1px solid var(--tb-border, #2a2a3e);
@@ -72359,31 +73921,31 @@ First element: \`${exampleSnippet}\``,
       font-size: 11px;
       transition: all 0.15s;
     }
-    #${PANEL_ID3} .tb-issue-actions button:hover {
+    #${PANEL_ID4} .tb-issue-actions button:hover {
       background: var(--tb-btn-hover, #ffffff15);
       color: var(--tb-text-primary, #fff);
     }
-    #${PANEL_ID3} .tb-issue-actions button[data-action="file"] {
+    #${PANEL_ID4} .tb-issue-actions button[data-action="file"] {
       background: var(--tb-accent, #FF5C6C);
       color: #fff;
       border-color: transparent;
     }
-    #${PANEL_ID3} .tb-issue-actions button[data-action="file"]:hover { opacity: 0.9; }
+    #${PANEL_ID4} .tb-issue-actions button[data-action="file"]:hover { opacity: 0.9; }
   `;
     document.head.appendChild(style);
   }
-  function _open(root2, state) {
+  function _open2(root2, state) {
     var _a2;
     _isOpen2 = true;
-    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
+    (_a2 = document.getElementById(`${PANEL_ID4}-overlay`)) == null ? void 0 : _a2.remove();
     const overlay = document.createElement("div");
-    overlay.id = `${PANEL_ID3}-overlay`;
+    overlay.id = `${PANEL_ID4}-overlay`;
     overlay.dataset.tracebug = "issues-panel-overlay";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "Page issues");
     const panel = document.createElement("div");
-    panel.id = PANEL_ID3;
+    panel.id = PANEL_ID4;
     panel.dataset.tracebug = "issues-panel";
     setInnerHTML(panel, _shellHtml(state));
     overlay.appendChild(panel);
@@ -72442,7 +74004,7 @@ First element: \`${exampleSnippet}\``,
     document.addEventListener("keydown", escHandler);
   }
   function _renderBody(issues) {
-    const panel = document.getElementById(PANEL_ID3);
+    const panel = document.getElementById(PANEL_ID4);
     if (!panel) return;
     const body = panel.querySelector('[data-tb-issues="body"]');
     const subtitle = panel.querySelector('[data-tb-issues="subtitle"]');
@@ -72520,7 +74082,7 @@ First element: \`${exampleSnippet}\``,
       el = null;
     }
     if (!el) return;
-    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
+    (_a2 = document.getElementById(`${PANEL_ID4}-overlay`)) == null ? void 0 : _a2.remove();
     _isOpen2 = false;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     const htmlEl = el;
@@ -72539,7 +74101,7 @@ First element: \`${exampleSnippet}\``,
     var _a2;
     const root2 = _root3 || document.getElementById("tracebug-root");
     if (!root2) return;
-    (_a2 = document.getElementById(`${PANEL_ID3}-overlay`)) == null ? void 0 : _a2.remove();
+    (_a2 = document.getElementById(`${PANEL_ID4}-overlay`)) == null ? void 0 : _a2.remove();
     _isOpen2 = false;
     Promise.resolve().then(() => (init_quick_bug(), quick_bug_exports)).then((m) => {
       m.showQuickBugCapture(root2, {
@@ -72560,14 +74122,14 @@ First element: \`${exampleSnippet}\``,
     if (issue.helpUrl) lines.push(`**Reference:** ${issue.helpUrl}`);
     return lines.join("\n");
   }
-  var PANEL_ID3, STYLE_ID5, _isOpen2, _root3, SEVERITY_COLORS, DETECTOR_LABELS;
+  var PANEL_ID4, STYLE_ID6, _isOpen2, _root3, SEVERITY_COLORS, DETECTOR_LABELS;
   var init_issues_panel = __esm({
     "src/ui/issues-panel.ts"() {
       "use strict";
       init_scanner();
       init_helpers();
-      PANEL_ID3 = "tracebug-issues-panel";
-      STYLE_ID5 = "tracebug-issues-panel-styles";
+      PANEL_ID4 = "tracebug-issues-panel";
+      STYLE_ID6 = "tracebug-issues-panel-styles";
       _isOpen2 = false;
       _root3 = null;
       SEVERITY_COLORS = {
@@ -72586,7 +74148,11 @@ First element: \`${exampleSnippet}\``,
         "frustration-rage": "Rage clicks",
         "frustration-dead": "Dead click",
         "frustration-abandon": "Form abandoned",
-        "frustration-error-correlated": "Click \u2192 error"
+        "frustration-error-correlated": "Click \u2192 error",
+        "audit-ui": "Layout",
+        "audit-seo": "SEO",
+        "audit-perf": "Performance",
+        "audit-keyboard": "Keyboard"
       };
     }
   });
@@ -73299,6 +74865,8 @@ First element: \`${exampleSnippet}\``,
   init_video_recorder();
   init_dev_api();
   init_scanner();
+  init_audit();
+  init_compare();
   init_element_annotate();
   init_draw_mode();
 
@@ -75139,6 +76707,43 @@ ${summary}`;
      */
     async scanPage() {
       return scan();
+    }
+    /**
+     * Site Audit: check this page for accessibility (axe, WCAG 2.0–2.2 A/AA), layout,
+     * SEO and runtime problems. Read-only. Each category says whether it ran; a
+     * category that could not run is never reported as passing. Findings carry
+     * fingerprints so a later run can be compared with `compareAudits`.
+     */
+    async runAudit(options) {
+      return runAudit(options);
+    }
+    /** The last audit run on this page (memory only), or null. */
+    getLastAudit() {
+      return getLastAuditRun();
+    }
+    /** Compare two runs of the same page: fixed, still present, new, regressed. */
+    compareAudits(before, after) {
+      return compareAudits(before, after);
+    }
+    /** Download an audit run (default: the last one) as a TraceBug report .html.
+     *  The file opens on its Audit tab and the MCP server reads it with get_audit. */
+    async exportAudit(run) {
+      const r2 = run || getLastAuditRun();
+      if (!r2) return null;
+      const m = await Promise.resolve().then(() => (init_export(), export_exports));
+      const out = await m.exportAuditReport(r2);
+      return { filename: out.filename, sizeBytes: out.sizeBytes };
+    }
+    /** Run an audit and show it in the Site Audit panel (needs the dashboard). `scan` picks a menu scan
+     *  ("full", "auto-review", "accessibility", "performance-seo"); default: the last one chosen.
+     *  Running it again shows what changed since the previous run. */
+    async showAuditPanel(scan2) {
+      var _a2;
+      if (!((_a2 = this.config) == null ? void 0 : _a2.enableDashboard)) return null;
+      const root2 = document.getElementById("tracebug-root");
+      if (!root2) return null;
+      const m = await Promise.resolve().then(() => (init_audit_panel(), audit_panel_exports));
+      return m.showAuditPanel(root2, scan2);
     }
     /**
      * Snapshot of the most recent scan's issues. Pass `{ includeDismissed: true }`

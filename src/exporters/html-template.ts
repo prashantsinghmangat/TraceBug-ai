@@ -1,5 +1,6 @@
 import { storeUrl, EXPORT_FOOTER_TEXT, EXPORT_FOOTER_CTA } from "../links";
 import { agentWorkflowSteps, CLAUDE_MCP_ADD } from "./agent-workflow";
+import type { AuditRunOf } from "../audit/types";
 
 // ── HTML Replay Viewer Template ───────────────────────────────────────────
 // A self-contained HTML scaffold + inlined renderer. The bundler embeds the
@@ -11,6 +12,9 @@ import { agentWorkflowSteps, CLAUDE_MCP_ADD } from "./agent-workflow";
 // (no SDK imports — must be self-contained when run from `file://`).
 
 export interface BundlePayload {
+  /** Site Audit run carried by this export (docs/audit-quality/implementation-plan.md §3).
+   *  Every page-derived string in it is untrusted (escaped in the viewer, labelled in MCP). */
+  audit?: AuditRunOf<object>;
   meta: {
     title: string;
     severity: string;
@@ -286,6 +290,7 @@ ${rrwebCssTag}
       <button data-tab="actions" class="tb-vtab" role="tab">Actions <span class="tb-vtab-badge" id="badge-actions"></span></button>
       <button data-tab="ai" class="tb-vtab" role="tab">AI</button>
       <button data-tab="events" class="tb-vtab" role="tab">Events <span class="tb-vtab-badge" id="badge-events"></span></button>
+      <button data-tab="audit" class="tb-vtab" role="tab" hidden>Audit <span class="tb-vtab-badge" id="badge-audit"></span></button>
     </div>
     <div class="tb-vtabpanels">
       <div data-panel="info" class="tb-vpanel tb-vpanel-active" id="panel-info"></div>
@@ -294,6 +299,7 @@ ${rrwebCssTag}
       <div data-panel="actions" class="tb-vpanel" id="panel-actions" hidden></div>
       <div data-panel="ai" class="tb-vpanel" id="panel-ai" hidden></div>
       <div data-panel="events" class="tb-vpanel" id="panel-events"><ol class="tb-vevents" id="events"></ol></div>
+      <div data-panel="audit" class="tb-vpanel" id="panel-audit" hidden></div>
     </div>
   </section>
 </main>
@@ -496,6 +502,24 @@ body { min-height: 100vh; }
 .tb-vtab-badge { font-size: 10px; font-weight: 700; background: var(--tb-accent-soft); color: var(--tb-accent); padding: 1px 7px; border-radius: 999px; line-height: 1.4; min-width: 18px; text-align: center; }
 .tb-vtab-active .tb-vtab-badge { background: var(--tb-accent); color: var(--tb-on-accent); }
 .tb-vtab-badge:empty { display: none; }
+.tb-vtab[hidden] { display: none; }
+.tb-vau-head { font-size: 12px; color: var(--tb-text-3); margin-bottom: 10px; }
+.tb-vau-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.tb-vau-cat { border: 1px solid var(--tb-border); border-radius: var(--tb-radius-md); padding: 8px 10px; }
+.tb-vau-off { opacity: .65; border-style: dashed; }
+.tb-vau-cat-h { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.tb-vau-m { margin-top: 4px; font: 600 11px/1.4 ui-monospace, monospace; }
+.tb-vau-l { margin-top: 4px; font-size: 11px; color: var(--tb-text-3); }
+.tb-vau-row { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--tb-border); }
+.tb-vau-sev { flex: none; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; height: fit-content; background: var(--tb-accent-soft); color: var(--tb-accent); }
+.tb-vau-sev-critical, .tb-vau-sev-serious { background: rgba(255,92,108,.15); color: #FF5C6C; }
+.tb-vau-main { min-width: 0; flex: 1; }
+.tb-vau-t { font-size: 13px; font-weight: 600; }
+.tb-vau-d { font-size: 12px; color: var(--tb-text-2, var(--tb-text)); margin-top: 2px; }
+.tb-vau-meta { font-size: 11px; color: var(--tb-text-3); margin-top: 4px; overflow-wrap: anywhere; }
+.tb-vau-html { font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--tb-surface-2, rgba(127,127,127,.08)); padding: 6px 8px; border-radius: 6px; margin: 6px 0 0; }
+.tb-vau-muted { color: var(--tb-text-3); font-size: 11px; }
+.tb-vau-link { font-size: 11px; color: var(--tb-accent); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
 .tb-vpanel-active { display: block; }
@@ -1283,6 +1307,62 @@ const REPLAY_RUNTIME = `(function(){
 
   setBadge("badge-events", (data.events || []).length);
 
+  // Audit tab — only when this export carries a Site Audit run (payload.audit).
+  // Every string in it came from the audited page: escaped, never trusted.
+  var audit = data.audit;
+  if (audit && audit.categories) {
+    var CAT = { accessibility: "Accessibility", ui: "Layout", performance: "Performance", seo: "SEO", runtime: "Runtime" };
+    var SEV = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
+    var DOT = " \\u00b7 ";
+    var fmtMetrics = function(m){
+      var out = [];
+      var sec = function(v){ return (v / 1000).toFixed(2) + " s"; };
+      if (m.lcpMs != null) out.push("LCP " + sec(m.lcpMs));
+      if (m.fcpMs != null) out.push("FCP " + sec(m.fcpMs));
+      if (m.ttfbMs != null) out.push("TTFB " + sec(m.ttfbMs));
+      if (m.cls != null) out.push("CLS " + m.cls);
+      if (m.transferKb != null) out.push(m.transferKb >= 1024 ? (m.transferKb / 1024).toFixed(1) + " MB" : m.transferKb + " KB");
+      if (m.requests != null) out.push(m.requests + " requests");
+      return out.join(DOT);
+    };
+    var auditFindings = audit.findings || [];
+    var total = auditFindings.length + (audit.truncated || 0);
+    var SCAN = { full: "All checks", "auto-review": "Auto Review", accessibility: "Accessibility Audit", "performance-seo": "Performance & SEO" };
+    var headBits = [SCAN[audit.scan || "full"] || "Audit", total + (total === 1 ? " finding" : " findings")];
+    if (audit.viewport) headBits.push(audit.viewport.width + "\\u00d7" + audit.viewport.height);
+    if (audit.userAgentFamily) headBits.push(audit.userAgentFamily);
+    headBits.push(new Date(audit.scannedAt).toLocaleString());
+    var ah = '<div class="tb-vau-head">' + esc(headBits.join(DOT)) + '</div>';
+    ah += '<div class="tb-vau-cats">' + audit.categories.map(function(c){
+      var state = !c.ran ? "Not run" : c.count === 0 ? "No findings" : c.count + " found";
+      return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
+        (c.metrics ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
+        (c.limitation ? '<div class="tb-vau-l">' + esc(c.limitation) + '</div>' : '') + '</div>';
+    }).join("") + '</div>';
+    if (!auditFindings.length) {
+      ah += '<div class="tb-vempty-tab">No problems found in the checks that ran. That is not proof the page is accessible or bug-free.</div>';
+    }
+    auditFindings.forEach(function(f){
+      var ev = f.evidence || {};
+      var meta = [];
+      if (ev.metrics) Object.keys(ev.metrics).forEach(function(k){ meta.push(k + ": " + ev.metrics[k]); });
+      var help = (typeof f.helpUrl === "string" && f.helpUrl.indexOf("https://") === 0)
+        ? '<a class="tb-vau-link" target="_blank" rel="noopener noreferrer" href="' + esc(f.helpUrl).replace(/"/g, "&quot;") + '">How to fix</a>' : '';
+      ah += '<div class="tb-vau-row"><span class="tb-vau-sev tb-vau-sev-' + esc(f.severity) + '">' + esc(SEV[f.severity] || f.severity) + '</span><div class="tb-vau-main">' +
+        '<div class="tb-vau-t">' + esc(f.title) + (f.occurrences > 1 ? ' <span class="tb-vau-muted">\\u00d7' + esc(f.occurrences) + '</span>' : '') + '</div>' +
+        '<div class="tb-vau-d">' + esc(f.description || "") + '</div>' +
+        (meta.length ? '<div class="tb-vau-meta">' + esc(meta.join(DOT)) + '</div>' : '') +
+        (ev.html ? '<pre class="tb-vau-html">' + esc(ev.html) + '</pre>' : '') +
+        '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
+        help + '</div></div>';
+    });
+    if (audit.truncated > 0) ah += '<div class="tb-vau-muted">' + esc(audit.truncated) + ' more not included (the file keeps the ' + esc(auditFindings.length) + ' most severe).</div>';
+    document.getElementById("panel-audit").innerHTML = ah;
+    var auditBtn = document.querySelector('[data-tab="audit"]');
+    if (auditBtn) auditBtn.removeAttribute("hidden");
+    setBadge("badge-audit", total);
+  }
+
   // Tab switching
   var tabButtons = document.querySelectorAll(".tb-vtab");
   var tabPanels = document.querySelectorAll(".tb-vpanel");
@@ -1300,6 +1380,8 @@ const REPLAY_RUNTIME = `(function(){
       if (d) d.remove();
     });
   });
+  // An audit export opens on its Audit tab.
+  if (data.audit && data.audit.categories) { var auditTab0 = document.querySelector('[data-tab="audit"]'); if (auditTab0) auditTab0.click(); }
 
   // ── Preview wiring ─────────────────────────────────────
   var img = document.getElementById("ssimg");
@@ -1903,7 +1985,7 @@ const REPLAY_RUNTIME = `(function(){
     var btn = document.querySelector('[data-tab="' + which + '"]');
     if (btn) btn.click();
   }
-  var TAB_KEYS = ["info","console","network","actions","ai","events"];
+  var TAB_KEYS = ["info","console","network","actions","ai","events","audit"];
 
   document.addEventListener("keydown", function(e) {
     if (isTyping(e.target)) return;

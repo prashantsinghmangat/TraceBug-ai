@@ -1,6 +1,6 @@
 # Launch state — read this, not the archives
 
-Current facts only, verified against code and git. Last updated **2026-11-12**. **Keep this file under
+Current facts only, verified against code and git. Last updated **2026-11-12** (Site Audit scan menu). **Keep this file under
 ~80 lines: rewrite it, never append** — history goes in `PROGRESS.md` (append-only, never read whole).
 Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 
@@ -18,12 +18,35 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 - **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y/UI fixes, two SEO blog posts with
   FAQ schema are live. `website/public/try.html` coral recolour is on `develop` — cherry-pick it.
   The 1.11.6 SDK + setup-command pages go live only with the release merge.
-- **Gates** (2026-11-11): `check.mjs --full` 1098/76, ext:lint 0/12, 84/84 report checks; all e2e green
+- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1169/80, ext:lint 0/22 (baseline 22),
+  84/84 report, 58/58 audit, 23/23 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
-- **Next engineering: Site Audit + verified-fix sprint**, plan approved 2026-11-10:
-  `docs/audit-quality/implementation-plan.md` (extension runs audits; MCP stays file-only with
-  `compare_audits`; no Lighthouse; §4a scan menu). Start Phase B on a branch from `develop`
-  (`git checkout -b site-audit develop`) once the uncommitted docs are committed.
+- **Site Audit sprint in progress on branch `site-audit`** (from `develop`; plan
+  `docs/audit-quality/implementation-plan.md`). Done: step 1 (`src/audit/` types, fingerprints, run builder,
+  compare), 2a (a11y/UI/SEO/runtime detectors, `runAudit()` / `compareAudits()`), 2b (popup **Audit** → axe
+  injected on demand from `vendor/axe.min.js` → audit panel with re-run diff; `e2e:audit-ext` 18/18 incl. a
+  strict-CSP page), 3 (performance category from the Performance timeline — lab only, no INP, CLS and
+  render-blocking Chromium-only and said so; **Export report** in the audit panel → `tracebug-audit-*.html` with
+  `payload.audit`, viewer **Audit** tab; MCP `get_audit` / `get_finding` (optional literal `searchDir` search) /
+  `compare_audits`, page text under `untrusted`; `list_bug_reports` `kind`). The MCP server now has **12 tools**;
+  README, `packages/tracebug/README.md`, `docs/mcp.md` and `website/app/docs/mcp` (+ `[tool]`) say so and list the
+  audit tools. Blog posts in `website/lib/blog.ts` still say "nine" (dated posts, left).
+- **1.12.0 (the audit release) is prepared on `site-audit`**, uncommitted: every `check:versions` surface on 1.12.0,
+  CHANGELOG `[1.12.0] - 2026-11-12` (fix the date on release day), `WHATS_NEW["1.12.0"]`, STORE-LISTINGS "New in",
+  Firefox release notes, single-purpose sentence and the axe-core AMO reviewer note; `docs/release-sheets/1.12.0.md`;
+  zips in `releases/`. `package-lock.json` root version **not bumped** (tool access denied; `npm install --package-lock-only`).
+  **Never regenerate the 1.11.6 sheet or zips from this branch** — STORE-LISTINGS and the build are 1.12.0 here;
+  do 1.11.6 from `develop`. The Chrome description body has no Site Audit section yet (only "New in").
+  ext:lint baseline is 22 with the user's approval (the 10 over 12 are axe-core's own code in `vendor/axe.min.js`).
+  **Acceptance test passed** (2026-11-12): a fresh agent with only the export + MCP tools fixed the critical
+  finding, `compare_audits` reported 1 fixed / 0 regressed, and it ignored a planted prompt injection in the page.
+  Rerun: `node e2e/audit-agent-loop.mjs setup|verify <dir>` (manual; `e2e/mcp-call.mjs` calls the built CLI).
+  **Scan menu done (plan §4a, sprint rows):** popup "Audit ▾" and the panel's scan bar offer All checks /
+  Auto Review (layout + runtime incl. dead/rage clicks) / Accessibility Audit (axe + keyboard pass:
+  positive tabindex, invisible focus targets, `:focus` rules that hide the outline) / Performance & SEO.
+  `AuditRun.scan`; Re-run keeps the scan; a diff is shown only between runs of the same scan.
+  Next per plan: the day-14 gate, then Design Tokens → Components → Visual Comparison (§4a later rows).
+  Merge `site-audit` only after 1.11.6 ships.
 
 ## Open — needs a person
 

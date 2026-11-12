@@ -401,6 +401,27 @@ async function injectStyles(tabId) {
  *  window.TraceBug, so a host page that embeds its own copy of the npm SDK
  *  (tracebug-sdk.js, page mode) never collides with the extension's.
  *  See docs/launch/sdk-isolation-1.11.2.md. */
+// Site Audit: axe-core is NOT in the injected SDK bundle (tsup stubs it, to keep
+// every page injection small). It is packaged as vendor/axe.min.js — the
+// library's own release file, copied unmodified by build-ext.mjs — and
+// injected into the page's MAIN world only when the user runs an audit, so the
+// page SDK finds it as `window.axe`. Same permissions as every other injection
+// (activeTab + scripting); extension-file injection is not subject to page CSP.
+// A failure is not fatal: the audit reports accessibility as "not run".
+async function injectAxe(tabId) {
+  try {
+    const [probe] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: () => !!(window.axe && typeof window.axe.run === "function"),
+    });
+    if (probe && probe.result) return;
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["vendor/axe.min.js"], world: "MAIN" });
+  } catch (err) {
+    console.warn("[TraceBug] Could not load the accessibility checker:", err && err.message);
+  }
+}
+
 async function injectPageWorld(tabId) {
   await chrome.scripting.executeScript({
     target: { tabId },
@@ -609,10 +630,13 @@ async function handleComboAction(message, sender) {
     // viewport shot. Meaningless for other action types, same as the fields
     // above already are for theirs.
     crop: !!message.crop,
+    // Site Audit: which menu scan (plan §4a). Whitelisted again in the page.
+    scan: typeof message.scan === "string" ? message.scan : undefined,
   };
   if (!wasAlreadyInjected) {
     await new Promise((r) => setTimeout(r, 250));
   }
+  if (message.type === "TB_RUN_AUDIT") await injectAxe(tabId);
   // A capture now has an owner outside the page. The origin comes from the
   // page itself (tb:capture:started) because `tab.url` is normally undefined
   // without <all_urls> — see STATE.md — and a capture must not depend on a
@@ -1011,7 +1035,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Each one: ensure the site is enabled, inject the SDK if needed, then
   // dispatch the matching action message to the page. Lets the popup
   // express user intent in a single call instead of a 3-step dance.
-  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT" || message.type === "TB_STOP_RECORDING") {
+  if (message.type === "TB_CAPTURE_NOW" || message.type === "TB_START_RECORDING" || message.type === "TB_VIEW_TICKETS" || message.type === "TB_INSPECT" || message.type === "TB_RUN_AUDIT" || message.type === "TB_STOP_RECORDING") {
     handleComboAction(message, sender)
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ error: (err && err.message) || String(err) }));

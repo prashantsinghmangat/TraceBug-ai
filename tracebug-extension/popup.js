@@ -938,6 +938,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     await runCombo("TB_INSPECT", "Starting inspect…");
   });
 
+  // ── Secondary: Site Audit — accessibility, layout, SEO and errors ──────
+  // The Audit button opens a menu of scans (plan §4a); each runs the audit
+  // with that scan and opens the panel on the page.
+  const auditBtn = document.getElementById("btnAudit");
+  const auditMenu = document.getElementById("auditMenu");
+  const setAuditMenu = (open) => {
+    auditMenu.hidden = !open;
+    auditBtn.setAttribute("aria-expanded", String(open));
+    if (open) auditMenu.querySelector(".audit-item")?.focus();
+  };
+  auditBtn.addEventListener("click", () => setAuditMenu(auditMenu.hidden));
+  auditMenu.addEventListener("keydown", (e) => {
+    const items = Array.from(auditMenu.querySelectorAll(".audit-item"));
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); setAuditMenu(false); auditBtn.focus(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+  });
+  auditMenu.querySelectorAll(".audit-item").forEach((item) => {
+    item.addEventListener("click", async () => {
+      setAuditMenu(false);
+      await runCombo("TB_RUN_AUDIT", "Checking this page…", { scan: item.dataset.scan });
+    });
+  });
+
   // ── Stop a capture already running on this tab — shown by
   // applyCapturingUI() instead of the (disabled) hero button. Relays into
   // the page the same way TB_START_RECORDING does; the page decides whether
@@ -1214,6 +1239,14 @@ function showMicNotice(err) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.12.0": {
+    label: "New in 1.12.0",
+    lines: [
+      "Site Audit: check any page for accessibility, layout, performance and SEO issues",
+      "Re-run the audit to see what you fixed, what is new and what regressed",
+      "Export the audit and your coding agent can fix it, with three new MCP tools",
+    ],
+  },
   "1.11.6": {
     label: "New in 1.11.6",
     lines: [
