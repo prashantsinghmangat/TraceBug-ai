@@ -4,7 +4,8 @@ description: Run one phase or step of the TraceBug launch plan. Use when asked t
 ---
 
 1. **Read only these.** `docs/launch/STATE.md` (where things stand, ~1 page) and the named phase's live
-   section in `docs/launch/PLAN.md`. Read `docs/launch/CODEMAP.md` before searching the large files.
+   section in `docs/launch/PLAN.md` — or, for the Site Audit sprint, only the needed sections of
+   `docs/audit-quality/implementation-plan.md`. Read `docs/launch/CODEMAP.md` before searching the large files.
    Do **not** open `PLAN-archive.md`, `PROGRESS-archive.md` or `phase0-findings-archive.md` — they are
    closed history and much of what they say is no longer true. If you do need one to answer *why* a
    finished decision went that way, say so first.
