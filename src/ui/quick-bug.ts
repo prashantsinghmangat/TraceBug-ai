@@ -18,6 +18,7 @@ import { generateBugTitle, generateFlowSummary } from "../title-generator";
 import { summarizeRedactions, formatRedactionSummary } from "../redaction-summary";
 import { formatStyleSummary } from "../style-evidence";
 import { captureEnvironment } from "../environment";
+import { redactUrl } from "../url-hygiene";
 import { ScreenshotData, StoredSession, BugReport } from "../types";
 import { showToast, showActionToast } from "./toast";
 import { escapeHtml, tbIsolationCss, setInnerHTML, createStyleTag } from "./helpers";
@@ -27,6 +28,7 @@ import { exportSessionAsHtml, triggerDownload } from "../exporters/html-replay";
 import { exportSessionAsZip } from "../exporters/zip-export";
 import { generatePlaywrightTest, playwrightTestFilename } from "../exporters/playwright-test";
 import { exportSessionAsHar } from "../exporters/har-export";
+import { CLAUDE_MCP_ADD } from "../exporters/agent-workflow";
 // PHASE2-CLOUD: import { shareSessionAsLink, MAX_SCREENSHOTS_PER_SHARE } from "../exporters/share-link";
 // PHASE2-CLOUD: import { resolveCloudEndpoint, DEFAULT_CLOUD_ENDPOINT } from "../cloud-endpoint";
 import { generateAIPrompt, generateMcpPrompt, openInClaude, openInChatGPT, exportReportAsMarkdown, exportReportAsAiHtml } from "../exporters/ai-prompt";
@@ -46,6 +48,7 @@ import {
 } from "../integrations/tracker-client";
 import { isExtensionMode, getBoundShortcut } from "../ext-transport";
 import { runExportPlugins } from "../plugin-system";
+import { isFailedRequest, requestStatusLabel } from "../request-status";
 import {
   TRACKER_LABELS, type TrackerProvider, type IntegrationsConfig,
 } from "../integrations/tracker-client";
@@ -597,7 +600,7 @@ function _openModal(
           <!-- Sibling of the label, NOT inside it: a button nested in a label
                becomes its implicit control, so clicking the word "Title"
                would fire Discard. -->
-          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#6366F1);background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}
+          <button data-action="discard-draft" title="This title and description were restored from your last unsaved ticket. Discard to start fresh from this capture." style="font:600 10px system-ui,sans-serif;color:var(--tb-accent,#FF5C6C);background:rgba(255,92,108,0.12);border:1px solid rgba(255,92,108,0.3);border-radius:999px;padding:2px 8px;cursor:pointer;text-transform:none;letter-spacing:0">Restored draft · Discard</button>` : ""}
         </div>
         <input id="tb-qb-title" type="text" value="${escapeHtml(data.title)}" class="tb-qb-input" />
 
@@ -885,9 +888,23 @@ function _openModal(
     const descEl = modal.querySelector("#tb-qb-desc") as HTMLTextAreaElement;
     return { title: titleEl?.value || "", description: descEl?.value || "" };
   };
+  // For issue/ticket exports: the description only when the user wrote or
+  // edited it. The untouched prefill is a summary of the same report the
+  // exporter appends below it, so including it printed everything twice.
+  const getFilingDraft = (): { title: string; description: string } => {
+    const d = getDraft();
+    return { title: d.title, description: filingDescription(d.description, data.autoDesc) };
+  };
 
   const saveDraft = () => {
     const { title, description } = getDraft();
+    // Only a real edit is a draft. Saving the untouched auto-fill made the
+    // NEXT capture (within the hour) open with this bug's title under a
+    // "Restored draft" pill.
+    if (title === (data.autoTitle ?? "") && description === (data.autoDesc ?? "")) {
+      _clearDraft();
+      return;
+    }
     _saveDraft({ title, description, timestamp: Date.now() });
   };
 
@@ -1056,7 +1073,7 @@ function _openModal(
   const openGhBtn = modal.querySelector('[data-action="open-github"]');
   if (openGhBtn && _githubConfigured()) {
     openGhBtn.addEventListener("click", async () => {
-      const { title, description } = getDraft();
+      const { title, description } = getFilingDraft();
       const report = _reportFromDraft(title, description);
       if (!report) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
       // Real API (BYO-token) when configured; otherwise the prefilled-URL flow.
@@ -1086,7 +1103,7 @@ function _openModal(
   // this data-action (unconfigured state), or via the more-menu's own
   // `_githubRepo`-gated "Copy GitHub markdown" item (page/SDK mode only).
   const copyGhBtnHandler = async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     if (hasIntegration("github")) {
       const report = _reportFromDraft(title, description);
       if (report && await _fileViaTracker("github", report, root, screenshots, close)) return;
@@ -1107,7 +1124,7 @@ function _openModal(
   // Jira formatting is local export output — never plan-gated (pricing
   // boundary: local free forever, cloud collaboration paid).
   modal.querySelector('[data-action="jira"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
     const session = sessions[0];
     let text = `Summary: ${title}\n\nDescription:\n${description}`;
@@ -1115,7 +1132,7 @@ function _openModal(
       const report = buildReport(session);
       report.title = title;
       const ticket = generateJiraTicket(report);
-      text = `Summary: ${ticket.summary}\nPriority: ${ticket.priority}\nLabels: ${ticket.labels.join(", ")}\n\n${ticket.description}\n\n---\n${description}`;
+      text = `Summary: ${ticket.summary}\nPriority: ${ticket.priority}\nLabels: ${ticket.labels.join(", ")}\n\n${ticket.description}${description.trim() ? `\n\n---\n${description}` : ""}`;
     }
     const ok = await _copyToClipboard(text);
     const jiraTail = ok && screenshots.length ? ` \u00b7 downloading ${screenshots.length} screenshot${screenshots.length === 1 ? "" : "s"}` : "";
@@ -1331,11 +1348,17 @@ ${report.steps}` : userDesc)
       // unasked. The card is exactly what showMcpHandoffCard always rendered;
       // it only opens now if the user clicks through, instead of the export
       // forcing a dismissal every time.
+      // The edits are in the exported file now; a draft would only resurface
+      // them on the next, unrelated capture.
+      _clearDraft();
       showActionToast(
         `\u2713 Replay exported \u00b7 ${sizeMb} MB`,
         "Open in your AI agent \u2192",
         () => showMcpHandoffCard(result.filename, result.sizeBytes),
         root,
+        // Stays until dismissed: an 8 s toast was the only way to the setup
+        // and prompt card, and missing it left no path back.
+        { autoDismissMs: null },
       );
       // Counted only here, after a file actually exists. A review prompt
       // "earned" by a failed export is worse than no prompt.
@@ -1401,6 +1424,7 @@ ${report.steps}` : userDesc)
         showFooter: showExportFooter(),
       });
       const sizeMb = (result.sizeBytes / (1024 * 1024)).toFixed(1);
+      _clearDraft(); // the edits are in the file; see Export replay
       showToast(`✓ .zip exported · ${sizeMb} MB — drag it onto a GitHub issue to attach`, root);
       _maybeAskForReview(root, data.currentSession?.sessionId ?? null);
     } catch (err) {
@@ -1584,7 +1608,14 @@ ${report.steps}` : userDesc)
     }
     try {
       const report = buildReport(data.currentSession);
-      const prompt = generateAIPrompt(report);
+      // The ticket the user is looking at, not the auto-fill underneath it —
+      // Export applies these edits the same way.
+      const draft = getDraft();
+      if (draft.title.trim()) report.title = draft.title.trim();
+      const userDesc = draft.description.trim();
+      const prompt = generateAIPrompt(report, {
+        reporterNotes: userDesc && userDesc !== (data.autoDesc ?? "").trim() ? userDesc : undefined,
+      });
       // Awaited helper — a bare writeText's rejection escapes try/catch and
       // becomes an unhandled error TraceBug's own collectors then report.
       const copied = await _copyToClipboard(prompt);
@@ -1676,7 +1707,7 @@ ${report.steps}` : userDesc)
 
   // Linear — open prefilled new-issue URL in a new tab (no API key needed).
   modal.querySelector('[data-action="linear"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     const r = _reportFromDraft(title, description);
     if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
     if (hasIntegration("linear") && await _fileViaTracker("linear", r, root, screenshots, close)) return;
@@ -1695,7 +1726,7 @@ ${report.steps}` : userDesc)
 
   // Slack — copy Slack-formatted bug summary to clipboard.
   modal.querySelector('[data-action="slack"]')!.addEventListener("click", async () => {
-    const { title, description } = getDraft();
+    const { title, description } = getFilingDraft();
     const r = _reportFromDraft(title, description);
     if (!r) { showToast("Nothing captured yet — take a screenshot or record first", root); return; }
     if (hasIntegration("slack") && await _fileViaTracker("slack", r, root, screenshots, close)) return;
@@ -2071,7 +2102,7 @@ function _reportFromDraft(title: string, description: string): BugReport | null 
   if (!session) return null;
   const report = buildReport(session);
   report.title = title;
-  report.steps = `${description}\n\n---\n\n${report.steps}`;
+  if (description.trim()) report.steps = `${description}\n\n---\n\n${report.steps}`;
   return report;
 }
 
@@ -2114,6 +2145,20 @@ async function _fileViaTracker(
   }
 }
 
+/** The description to file with an issue: what the user wrote, or "" when the
+ *  box still holds the untouched auto-generated prefill (a summary of the very
+ *  report the exporter appends, so including it repeats everything). */
+export function filingDescription(description: string, autoDesc: string | undefined): string {
+  return description.trim() === (autoDesc ?? "").trim() ? "" : description;
+}
+
+/** "# title", the user's description (if any) and a rule, then the generated
+ *  issue body without its own heading. */
+export function composeGitHubIssueMarkdown(title: string, description: string, issueMd: string): string {
+  const body = issueMd.replace(/^#[^\n]*\n/, "");
+  return description.trim() ? `# ${title}\n\n${description}\n\n---\n\n${body}` : `# ${title}\n${body}`;
+}
+
 function _buildGitHubMarkdown(title: string, description: string, screenshot: ScreenshotData | null): string {
   const sessions = getAllSessions().sort((a, b) => b.updatedAt - a.updatedAt);
   const session = sessions[0];
@@ -2122,8 +2167,7 @@ function _buildGitHubMarkdown(title: string, description: string, screenshot: Sc
     report.title = title;
     // Inject custom description into the report
     const md = generateGitHubIssue(report);
-    // Prefix the user's description above the auto-generated body
-    return `# ${title}\n\n${description}\n\n---\n\n${md.replace(/^#[^\n]*\n/, "")}`;
+    return composeGitHubIssueMarkdown(title, description, md);
   }
   return `# ${title}\n\n${description}${screenshot ? `\n\n_Screenshot attached: ${screenshot.filename}_` : ""}`;
 }
@@ -2257,7 +2301,8 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   const ctx = report?.context || {};
   const sevLabel = severityBadge(report?.severity || "low");
   const rows: string[] = [];
-  rows.push(_kvRow("URL", env.url || window.location.href, _ic("link")));
+  rows.push(_kvRow("URL", env.url || redactUrl(window.location.href), _ic("link")));
+  if (env.startUrl) rows.push(_kvRow("Started on", env.startUrl, _ic("link")));
   rows.push(_kvRow("Timestamp", new Date(env.timestamp || Date.now()).toLocaleString(), _ic("clock")));
   rows.push(_kvRow("OS", env.os || "", _osIcon(env.os)));
   rows.push(_kvRow("Browser", `${env.browser || ""} ${env.browserVersion || ""}`.trim(), _browserIcon(env.browser)));
@@ -2272,6 +2317,15 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
   // Priority appears only when the tester explicitly picked one — the
   // report-level fallback (derived from severity) is not their triage call.
   if (session?.priority) rows.push(_kvRow("Priority", priorityLabel(session.priority), _ic("flag")));
+  // Evidence integrity (evidence-summary.ts): what this ticket can and can't show.
+  const evidence = report?.evidence;
+  if (evidence) {
+    rows.push(`<div class="tb-qb-sec-head">Evidence${evidence.complete ? "" : " (incomplete)"}</div>`);
+    rows.push(_kvRow("Captured", evidence.captured.join(" · ")));
+    if (evidence.redacted) rows.push(_kvRow("Masked", evidence.redacted));
+    if (evidence.dropped.length) rows.push(_kvRow("Dropped", `⚠ ${evidence.dropped.join(" · ")}`));
+    rows.push(_kvRow("Not captured", evidence.notCaptured.join(" · ")));
+  }
   const ctxKeys = Object.keys(ctx);
   if (ctxKeys.length > 0) {
     rows.push(`<div class="tb-qb-sec-head">Custom context</div>`);
@@ -2287,7 +2341,7 @@ function _buildInfoTab(report: import("../types").BugReport | null, session: Sto
       rows.push(`<div class="tb-qb-sec-head">${label} (${entries.length}${dropped ? `, +${dropped} not captured` : ""})</div>`);
       const shown = entries.slice(0, 20);
       for (const e of shown) {
-        rows.push(_kvRow(e.key, e.redacted ? `🔒 ${e.value}` : e.value));
+        rows.push(_kvRow(e.key, e.valueOmitted ? "(value not captured)" : e.redacted ? `🔒 ${e.value}` : e.value));
       }
       if (entries.length > shown.length) {
         rows.push(_kvRow("…", `+${entries.length - shown.length} more`));
@@ -2505,14 +2559,17 @@ function _buildNetworkTab(report: import("../types").BugReport | null): string {
   };
 
   const rows = classified.map((n, i) => {
-    const status = n.status === 0 ? "ERR" : String(n.status);
+    // Status 0 is a failure only when it isn't unknown, aborted or opaque.
+    const row = n as import("../types").NetworkRequestEntry;
+    const isErr = isFailedRequest(row);
+    const status = n.status !== 0 ? String(n.status)
+      : isErr ? "ERR" : row.statusUnknown ? "—" : requestStatusLabel(row);
     const statusClass =
-      n.status === 0 ? "tb-qb-net-err" :
+      n.status === 0 ? (isErr ? "tb-qb-net-err" : "") :
       n.status >= 500 ? "tb-qb-net-5xx" :
       n.status >= 400 ? "tb-qb-net-4xx" :
       n.status >= 300 ? "tb-qb-net-3xx" :
       n.status >= 200 ? "tb-qb-net-2xx" : "";
-    const isErr = n.status === 0 || n.status >= 400;
     const leftPct = ((n.timestamp - minTs) / span) * 100;
     const widthPct = Math.max(0.5, ((n.duration || 0) / span) * 100);
     const haystack = `${n.method} ${n.url} ${status} ${n._dom}`.toLowerCase();
@@ -2625,7 +2682,7 @@ function _renderActionChip(chip: import("../types").ActionChip): string {
     : "";
   // Frustration glyph prefix when a heuristic fired on this action.
   const frust = chip.frustration
-    ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click — multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click — no visible response within 1.5s" : "Form abandoned — filled but never submitted"}">${chip.frustration === "rage" ? "⚡" : chip.frustration === "dead" ? "✕" : "↩"}</span>`
+    ? `<span class="tb-qb-chip-frust tb-qb-chip-frust-${chip.frustration}" title="${chip.frustration === "rage" ? "Rage click — multiple rapid clicks on the same element" : chip.frustration === "dead" ? "Dead click — clicked again a few seconds later, as if nothing happened" : "Form abandoned — filled but never submitted"}">${chip.frustration === "rage" ? "⚡" : chip.frustration === "dead" ? "✕" : "↩"}</span>`
     : "";
   const errClass = chip.isError || chip.frustration ? "tb-qb-chip-err" : "";
   return `<div class="tb-qb-chip ${errClass}">
@@ -2672,7 +2729,7 @@ function _buildAITab(report: import("../types").BugReport | null): string {
     <div class="tb-qb-ai-card tb-qb-ai-empty">
       <div class="tb-qb-ai-card-head">AI Debugger \u2014 BYO API key</div>
       <div class="tb-qb-ai-card-body">
-        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys stay in localStorage \u2014 never leave your machine.</p>
+        <p>Add an Anthropic, OpenAI, or local Ollama API key to enable AI-powered root cause analysis. Keys are stored on this device and sent only to the provider you pick.</p>
         <button class="tb-qb-btn tb-qb-btn-ghost" data-action="ai-configure">Configure API key</button>
       </div>
     </div>
@@ -2776,13 +2833,13 @@ function showSettingsPointerModal(root: HTMLElement, title: string, body: string
   overlay.className = "tb-qb-pointer-overlay";
 
   setInnerHTML(overlay, `
-    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+    <div style="width:100%;max-width:420px;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} ${escapeHtml(title)}</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">${escapeHtml(body)}</div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
+        <button data-ext-open-settings style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Open TraceBug settings</button>
         <button data-ext-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
     </div>`);
@@ -2828,7 +2885,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
   overlay.className = "tb-qb-pointer-overlay";
 
   setInnerHTML(overlay, `
-    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
+    <div style="width:100%;max-width:460px;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA;overflow:hidden">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("sparkles")} AI Debugger — bring your own key</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Your key is stored only in this browser's localStorage. The report is scrubbed of secret shapes, then sent straight from your browser to the provider — TraceBug never sees it.</div>
@@ -2848,7 +2905,7 @@ function showAIConfigModal(root: HTMLElement, onSaved: () => void): void {
         </label>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-ai-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-ai-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove key</button>
         <button data-ai-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
@@ -2927,7 +2984,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
   const lbl = "font-size:12px;color:#A1A1AA";
 
   setInnerHTML(overlay, `
-    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(99,102,241,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
+    <div style="width:100%;max-width:480px;max-height:88vh;overflow:auto;background:#11151A;border:1px solid rgba(255,92,108,0.28);border-radius:14px;box-shadow:0 24px 72px rgba(0,0,0,0.6);color:#FAFAFA">
       <div style="padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.06)">
         <div style="font-size:14px;font-weight:600;margin-bottom:4px">${_ic("plug")} Integrations — bring your own token</div>
         <div style="font-size:12px;color:#A1A1AA;line-height:1.45">Tokens are stored only in this browser's localStorage. Issues are created by calling the provider directly from your browser — TraceBug has no backend in the path. Fill in only the providers you use.</div>
@@ -2956,7 +3013,7 @@ function showIntegrationsConfigModal(root: HTMLElement, onSaved: () => void): vo
         </div>
       </div>
       <div style="padding:12px 14px;display:flex;gap:8px;align-items:center;background:#11151A;border-top:1px solid rgba(255,255,255,0.06)">
-        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif">Save</button>
+        <button data-int-save style="flex:1;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif">Save</button>
         <button data-int-clear style="padding:10px 14px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 13px system-ui,-apple-system,sans-serif">Remove all</button>
         <button data-int-close aria-label="Close" style="padding:10px 0;width:38px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 14px system-ui,-apple-system,sans-serif">✕</button>
       </div>
@@ -3155,11 +3212,11 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-input { width:100%; background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); color:var(--tb-text-primary); padding:10px 14px; font-size:14px; font-weight:500; font-family:inherit; margin-bottom:14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; }
     #${MODAL_ID} .tb-qb-input:hover { border-color:var(--tb-border-hover); }
     #${MODAL_ID} .tb-qb-preview { position:relative; border:1px solid var(--tb-border); border-radius:var(--tb-radius-md); overflow:hidden; margin-bottom:8px; background:#000; display:flex; align-items:center; justify-content:center; }
-    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(99,102,241,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
+    #${MODAL_ID} .tb-qb-primary-edit { position:absolute; top:10px; right:10px; display:inline-flex; align-items:center; gap:6px; background:rgba(255,92,108,0.85); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.35); }
     #${MODAL_ID} .tb-qb-primary-edit:hover { filter:brightness(1.1); transform:translateY(-1px); }
     #${MODAL_ID} .tb-qb-primary-edit svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-preview-empty { flex-direction:column; gap:12px; padding:30px 16px; font-size:12px; color:var(--tb-text-muted); background:var(--tb-bg-secondary); border-style:dashed; }
-    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-empty-shot { display:inline-flex; align-items:center; gap:7px; background:var(--tb-accent); color:var(--tb-on-accent); border:none; border-radius:var(--tb-radius-sm); padding:7px 14px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     #${MODAL_ID} .tb-qb-empty-shot:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-empty-shot svg { flex-shrink:0; }
     #${MODAL_ID} .tb-qb-grab-frame { position:absolute; top:10px; right:10px; z-index:2; display:inline-flex; align-items:center; gap:6px; background:rgba(11,11,15,0.74); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:var(--tb-radius-sm); padding:6px 11px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; backdrop-filter:blur(6px); transition:filter 0.15s, transform 0.1s; box-shadow:0 4px 14px rgba(0,0,0,0.4); }
@@ -3178,14 +3235,14 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-size-acts { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
     #${MODAL_ID} .tb-qb-size-act { background:var(--tb-bg-primary); color:var(--tb-text-primary); border:1px solid var(--tb-border); border-radius:6px; padding:4px 9px; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer; }
     #${MODAL_ID} .tb-qb-size-act:hover { border-color:var(--tb-accent); color:var(--tb-accent); }
-    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:#fff; border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
+    #${MODAL_ID} .tb-qb-btn-dl { background:var(--tb-accent); color:var(--tb-on-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:5px 10px; cursor:pointer; font-size:11px; font-weight:600; font-family:inherit; transition:filter 0.15s; display:inline-flex; align-items:center; gap:5px; }
     #${MODAL_ID} .tb-qb-btn-dl:hover { filter:brightness(1.1); }
     #${MODAL_ID} .tb-qb-scrubber-wrap { margin-bottom:14px; }
     /* Screenshot strip — count header + thumbs with delete + annotate */
     #${MODAL_ID} .tb-qb-ss-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:11px; color:var(--tb-text-muted); }
     #${MODAL_ID} .tb-qb-ss-count { font-weight:600; color:var(--tb-text-primary); letter-spacing:-0.01em; }
     #${MODAL_ID} .tb-qb-ss-hint { color:var(--tb-text-muted); }
-    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(99,102,241,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
+    #${MODAL_ID} .tb-qb-ss-add { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:var(--tb-accent-soft, rgba(255,92,108,0.15)); color:var(--tb-accent); border:1px solid var(--tb-accent); border-radius:var(--tb-radius-sm); padding:4px 10px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:filter 0.15s; }
     /* Only the FIRST trailing button absorbs the free space. Without this the
        second one ("Download") takes a margin-left:auto of its own and the two
        split the gap between them — "Add page shot" ends up stranded mid-row
@@ -3222,7 +3279,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-tab:hover { color:var(--tb-text-primary); }
     #${MODAL_ID} .tb-qb-tab-active { color:var(--tb-text-primary); border-bottom-color:var(--tb-accent); }
     #${MODAL_ID} .tb-qb-tab-badge { font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--tb-accent-subtle); color:var(--tb-accent); line-height:1.4; min-width:18px; text-align:center; }
-    #${MODAL_ID} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:#fff; }
+    #${MODAL_ID} .tb-qb-tab-active .tb-qb-tab-badge { background:var(--tb-accent); color:var(--tb-on-accent); }
     #${MODAL_ID} .tb-qb-tabpanels { flex:1; overflow-y:auto; padding:18px 20px; min-height:0; }
     #${MODAL_ID} .tb-qb-panel { display:none; animation:tracebug-qb-fade-in 0.18s ease; }
     #${MODAL_ID} .tb-qb-panel-active { display:block; }
@@ -3432,8 +3489,8 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-btn:disabled { pointer-events:none; opacity:0.5; }
     /* Primary variant (shadcn new-york): solid accent, white text, primary glow
        that grows on hover + brightness-110. */
-    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:#fff; border-color:transparent; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
-    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
+    #${MODAL_ID} .tb-qb-btn-accent { background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-btn-accent:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(255,92,108,0.42); }
     #${MODAL_ID} .tb-qb-btn-linear { background:#5E6AD2; color:#fff; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-linear:hover { background:#4d5ac4; border-color:transparent; }
     #${MODAL_ID} .tb-qb-btn-slack { background:#4A154B; color:#fff; border-color:transparent; }
@@ -3449,18 +3506,18 @@ function _injectStyles(): void {
     /* ONE glowing primary per row (the GitHub action). Fix-with-AI keeps its
        gradient identity but no glow; Save Ticket is a tinted outline. Three
        competing glows meant no button read as "the finish line". */
-    #${MODAL_ID} .tb-qb-btn-ai { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
+    #${MODAL_ID} .tb-qb-btn-ai { background:var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); border-color:transparent; font-weight:600; white-space:nowrap; flex-shrink:0; }
     /* Must re-state the gradient: the generic .tb-qb-btn:hover (same id+class+pseudo
        specificity, matches on hover) would otherwise repaint the background with
        --tb-bg-elevated — white-on-white text in the light theme. */
-    #${MODAL_ID} .tb-qb-btn-ai:hover { background:linear-gradient(135deg,#6366F1,#A855F7); color:#fff; filter:brightness(1.08); border-color:transparent; }
+    #${MODAL_ID} .tb-qb-btn-ai:hover { background:var(--tb-accent, #FF5C6C); color:var(--tb-on-accent, #0B0D14); filter:brightness(1.08); border-color:transparent; }
     /* Save Ticket — prominent green CTA */
     #${MODAL_ID} .tb-qb-btn-save { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.35); padding:10px 16px; font-weight:600; display:inline-flex; align-items:center; gap:6px; flex-shrink:0; }
     #${MODAL_ID} .tb-qb-btn-save:hover { background:rgba(34,197,94,0.2); border-color:rgba(34,197,94,0.55); }
     #${MODAL_ID} .tb-qb-btn-save.tb-qb-btn-saved { background:transparent; color:#22c55e; border:1px solid #22c55e44; box-shadow:none; opacity:0.8; cursor:default; }
     /* Clean footer: one accent primary + a tidy "More" popover for the rest */
-    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:#fff; border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(109,74,255,0.28); }
-    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(109,74,255,0.42); }
+    #${MODAL_ID} .tb-qb-btn-primary { background:var(--tb-accent); color:var(--tb-on-accent); border-color:transparent; padding:10px 16px; box-shadow:0 2px 10px rgba(255,92,108,0.28); }
+    #${MODAL_ID} .tb-qb-btn-primary:hover { background:var(--tb-accent); filter:brightness(1.1); border-color:transparent; box-shadow:0 4px 18px rgba(255,92,108,0.42); }
     #${MODAL_ID} .tb-qb-more { position:relative; display:inline-flex; }
     #${MODAL_ID} .tb-qb-more-menu { position:absolute; bottom:calc(100% + 6px); right:0; min-width:200px; background:var(--tb-bg-elevated); border:1px solid var(--tb-border-hover); border-radius:var(--tb-radius-md); box-shadow:var(--tb-shadow-lg); padding:6px; display:none; flex-direction:column; gap:2px; z-index:6; }
     #${MODAL_ID} .tb-qb-more-menu[data-open="true"] { display:flex; }
@@ -3478,7 +3535,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-fb a:hover { opacity:1; transform:scale(1.15); }
     #${MODAL_ID} .tb-qb-tip kbd { background:var(--tb-bg-secondary); padding:2px 7px; border-radius:var(--tb-radius-sm); border:1px solid var(--tb-border); font-family:var(--tb-font-mono); font-size:10px; color:var(--tb-text-secondary); }
     #${MODAL_ID} .tb-qb-tip-right { display:flex; align-items:center; gap:10px; }
-    #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:#fff; letter-spacing:0.4px; }
+    #${MODAL_ID} .tb-qb-plan-premium { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-accent); color:var(--tb-on-accent); letter-spacing:0.4px; }
     #${MODAL_ID} .tb-qb-plan-free { font-size:9px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--tb-bg-secondary); color:var(--tb-text-muted); border:1px solid var(--tb-border); letter-spacing:0.4px; }
 
     /* ── Focus + disabled states ──────────────────── */
@@ -3494,7 +3551,7 @@ function _injectStyles(): void {
     #${MODAL_ID} .tb-qb-help-row:last-of-type { border-bottom:none; }
     #${MODAL_ID} .tb-qb-help-row span { color:var(--tb-text-secondary); flex:1; }
     #${MODAL_ID} .tb-qb-help-row kbd { background:var(--tb-bg-secondary); border:1px solid var(--tb-border); border-radius:var(--tb-radius-sm); padding:2px 8px; font-family:var(--tb-font-mono); font-size:11px; color:var(--tb-text-primary); margin-right:4px; }
-    #${MODAL_ID} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:#fff; border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
+    #${MODAL_ID} .tb-qb-help-close { margin-top:14px; width:100%; padding:9px; background:var(--tb-accent); color:var(--tb-on-accent); border:none; border-radius:var(--tb-radius-sm); cursor:pointer; font-size:12px; font-weight:600; font-family:inherit; transition:background 0.15s; }
     #${MODAL_ID} .tb-qb-help-close:hover { background:var(--tb-accent-hover); }
 
     /* ── Scrollbar polish ─────────────────────────── */
@@ -3567,7 +3624,7 @@ function showAIPromptPopover(_anchor: HTMLElement, prompt: string, _root: HTMLEl
       .tb-ai-pop-card {
         width: 100%; max-width: 560px; max-height: 80vh;
         background: #11151A;
-        border: 1px solid rgba(99,102,241,0.28);
+        border: 1px solid rgba(255,92,108,0.28);
         border-radius: 14px;
         box-shadow: 0 24px 72px rgba(0,0,0,0.6);
         display: flex; flex-direction: column;
@@ -3710,21 +3767,36 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
   // rejects with "Prompt is too long". So always point chat users at the tiny
   // text-only artifacts instead, regardless of file size.
   const sizeNote = sizeBytes ? ` (this one is <strong>${_formatBytes(sizeBytes)}</strong>)` : "";
-  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
+  const bigFileNote = `<div style="margin-top:10px;padding:9px 11px;border-radius:8px;background:rgba(255,92,108,0.08);border:1px solid rgba(255,92,108,0.18);font-size:11.5px;color:#B7BECB;line-height:1.5">
          Pasting into a <strong>chat</strong> (Claude / ChatGPT) instead? Don't upload this replay file${sizeNote} — use <strong>AI report (.html)</strong> or <strong>Download report (.md)</strong> from the <strong>More&nbsp;▾</strong> menu. Both are a few KB of plain text built for chat.
        </div>`;
 
   // One-time MCP setup per tool — the prompt is identical everywhere; only
   // the "register the server" command differs. Default: Claude Code.
-  const MCP_SETUP: Record<string, { label: string; cmd: string }> = {
-    claude: { label: "Claude Code", cmd: "claude mcp add tracebug -- npx -y tracebug mcp" },
+  // `cmd` is exactly what gets copied, so it must paste as-is: the JSON ones
+  // used to start with "Add to .cursor/mcp.json:", which no file accepts.
+  // `where` says where it goes.
+  const MCP_JSON = '{"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}';
+  const MCP_SETUP: Record<string, { label: string; cmd: string; where: string }> = {
+    claude: {
+      label: "Claude Code",
+      cmd: CLAUDE_MCP_ADD,
+      where: "Run once in a terminal, then restart Claude Code. Native Windows: put cmd /c before npx.",
+    },
     cursor: {
       label: "Cursor",
-      cmd: 'Add to .cursor/mcp.json: {"mcpServers":{"tracebug":{"command":"npx","args":["-y","tracebug","mcp"]}}}',
+      cmd: MCP_JSON,
+      where: "Paste into .cursor/mcp.json in the project (or ~/.cursor/mcp.json for every project).",
+    },
+    windsurf: {
+      label: "Windsurf",
+      cmd: MCP_JSON,
+      where: "Paste into ~/.codeium/windsurf/mcp_config.json, then refresh MCP servers in Cascade.",
     },
     vscode: {
       label: "VS Code",
       cmd: 'code --add-mcp "{\\"name\\":\\"tracebug\\",\\"command\\":\\"npx\\",\\"args\\":[\\"-y\\",\\"tracebug\\",\\"mcp\\"]}"',
+      where: "Run once in a terminal (Copilot agent mode).",
     },
   };
   let mcpTool = "claude";
@@ -3750,7 +3822,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       .tb-ai-pop-card {
         width: 100%; max-width: 560px; max-height: 80vh;
         background: #11151A;
-        border: 1px solid rgba(99,102,241,0.28);
+        border: 1px solid rgba(255,92,108,0.28);
         border-radius: 14px;
         box-shadow: 0 24px 72px rgba(0,0,0,0.6);
         display: flex; flex-direction: column;
@@ -3764,7 +3836,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
         background: transparent; color: #A1A1AA;
       }
       .tb-mcp-tool-btn.active {
-        border-color: #6366F1; background: rgba(99,102,241,0.18); color: #A5B4FC;
+        border-color: #FF5C6C; background: rgba(255,92,108,0.18); color: #FF8590;
       }
     `;
     document.head.appendChild(s);
@@ -3797,6 +3869,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
           <code id="tb-mcp-setup-cmd" style="flex:1;overflow-x:auto;white-space:nowrap;padding:8px 10px;border-radius:8px;background:#0B0B10;border:1px solid rgba(255,255,255,0.08);font:11px ui-monospace,'SF Mono',Consolas,monospace;color:#CBD2DA">${MCP_SETUP.claude.cmd}</code>
           <button data-mcp-action="copy-setup" title="Copy setup command" style="display:inline-flex;align-items:center;padding:0 11px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;cursor:pointer;background:transparent;color:#A1A1AA;font:600 12px system-ui,sans-serif">${_ic("copy")}</button>
         </div>
+        <div id="tb-mcp-setup-where" style="margin-top:6px;font-size:11px;color:#71717A;line-height:1.4">${MCP_SETUP.claude.where}</div>
       </div>
       ${bigFileNote}
     </div>
@@ -3826,7 +3899,7 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       <button data-mcp-action="copy" style="
         flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:6px;
         padding:10px 14px;border:0;border-radius:8px;cursor:pointer;
-        background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;
+        background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif;
       ">${_ic("copy")} Copy prompt again</button>
       <a href="https://tracebug.dev/docs/mcp" target="_blank" rel="noopener" style="
         display:inline-flex;align-items:center;justify-content:center;gap:6px;
@@ -3851,6 +3924,8 @@ function showMcpHandoffCard(filename: string, sizeBytes?: number): void {
       mcpTool = tool;
       const cmdEl = card.querySelector("#tb-mcp-setup-cmd");
       if (cmdEl) cmdEl.textContent = MCP_SETUP[tool].cmd;
+      const whereEl = card.querySelector("#tb-mcp-setup-where");
+      if (whereEl) whereEl.textContent = MCP_SETUP[tool].where;
       card.querySelectorAll("[data-mcp-tool]").forEach((b) => {
         b.classList.toggle("active", b.getAttribute("data-mcp-tool") === tool);
       });
@@ -3932,7 +4007,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
         .tb-share-consent-card {
           width: 100%; max-width: 460px;
           background: #11151A; color: #FAFAFA;
-          border: 1px solid rgba(99,102,241,0.32);
+          border: 1px solid rgba(255,92,108,0.32);
           border-radius: 14px;
           box-shadow: 0 24px 72px rgba(0,0,0,0.6);
           padding: 22px 24px;
@@ -3971,7 +4046,7 @@ function _confirmShareConsent(root: HTMLElement): Promise<boolean> {
         ">Cancel</button>
         <button data-act="continue" style="
           padding:8px 18px;border-radius:8px;border:0;
-          background:#6366F1;color:#fff;font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
+          background:var(--tb-accent, #FF5C6C);color:var(--tb-on-accent, #0B0D14);font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;
         ">I understand — continue</button>
       </div>
     `);

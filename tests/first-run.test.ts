@@ -84,7 +84,8 @@ describe('welcome.html ships nothing remote', () => {
     // A button the CSP silently leaves inert looks exactly like a working one.
     expect(HTML).toContain('id="copyMcp"');
     expect(HTML).toContain('id="mcpCmd"');
-    expect(VISIBLE).toContain('npx tracebug mcp');
+    // The real setup command — a bare `npx tracebug mcp` only waits on stdin.
+    expect(VISIBLE).toContain('claude mcp add -s user tracebug -- npx -y tracebug mcp');
 
     const wire = CODE.slice(CODE.indexOf('function wireCopy'), CODE.indexOf('DOMContentLoaded'));
     expect(wire).toContain('copyMcp');

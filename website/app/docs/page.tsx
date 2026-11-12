@@ -31,6 +31,7 @@ const SECTIONS = [
   { id: "install", label: "Install the extension" },
   { id: "capture", label: "Capture your first bug" },
   { id: "report", label: "What's in a report" },
+  { id: "audit", label: "Audit a page" },
   { id: "share", label: "Share or file it" },
   { id: "ai-agents", label: "Debug it with an AI agent" },
   { id: "firefox", label: "Chrome and Firefox differences" },
@@ -81,6 +82,22 @@ const REPORT_PARTS: [string, string][] = [
   ["Environment", "Browser, OS, viewport and device."],
   ["Root-cause hint", "Which action came before the first failure, and what failed."],
   ["AI tab", "A copy-ready prompt so whoever opens the file can hand it to an agent."],
+];
+
+const AUDIT_STEPS: ReactNode[] = [
+  <>Open the page and choose <b>Audit this page</b>, the first card in the TraceBug popup. The arrow next to it picks one scan: Auto Review, Accessibility Audit, or Performance &amp; SEO.</>,
+  <>The audit panel opens beside the page with a 0–100 score per check. Drag it by its header, or drop it at either edge.</>,
+  <>Each finding names the element, the WCAG rule, what was found and what is required, and how to fix it. <b>Locate</b> scrolls to the element.</>,
+  <>Tick findings and click <b>Copy for AI</b>, or <b>Export report</b> and let your agent read it over MCP. Re-run after the fix to see what changed.</>,
+];
+
+const AUDIT_ROWS: [string, string][] = [
+  ["Accessibility", "axe-core WCAG 2.0–2.2 A/AA, label-in-name, and keyboard checks (focus outline, focus hidden by a sticky header). Contrast findings suggest a passing colour."],
+  ["Layout", "Overflow, off-screen elements, controls covering controls, clipped text, broken images, images without dimensions."],
+  ["Phone width", "The same layout checks at 390px, plus scrolling boxes a keyboard can't reach."],
+  ["Performance", "LCP (which element, and why), FCP, TTFB, main-thread blocking, CLS, render-blocking files, heavy and oversized images."],
+  ["SEO", "Title, description, canonical, h1, viewport, noindex, Open Graph, JSON-LD, robots.txt and sitemap."],
+  ["Errors", "Console errors, failed requests, mixed content, rage and dead clicks on this page."],
 ];
 
 const SHARE_ROWS: [string, string][] = [
@@ -253,6 +270,22 @@ export default function DocsPage() {
                   </div>
                 ))}
               </div>
+            </Section>
+
+            <Section id="audit" title="Audit a page">
+              <p>
+                Site Audit checks the page you are on and tells you what to fix. It is read-only and runs in your
+                browser: nothing is clicked, changed or uploaded.
+              </p>
+              <Steps items={AUDIT_STEPS} />
+              <Rows rows={AUDIT_ROWS} />
+              <p>
+                Scores: 90–100 good, 50–89 fair, below 50 poor. Results the automated checks can&apos;t decide are listed
+                under <b className="font-medium text-text-primary">Needs a person to check</b> and don&apos;t lower the score.{" "}
+                <a href={`${REPO_DOCS}/site-audit.md`} target="_blank" rel="noopener noreferrer" className={a}>
+                  Site Audit guide
+                </a>
+              </p>
             </Section>
 
             <Section id="share" title="Share or file it">

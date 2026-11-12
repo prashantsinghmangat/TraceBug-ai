@@ -2,6 +2,10 @@
 // Uses Web Speech API (SpeechRecognition) for free, browser-native speech-to-text.
 // No external services, no API keys, no audio stored — only text transcripts.
 // Works in Chrome, Edge, Brave, Opera (Chromium-based browsers).
+// Transcripts go through the same token-shape + custom-redaction scrub as
+// console and network text: a spoken API key is still an API key.
+
+import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 
 export interface VoiceTranscript {
   id: string;
@@ -199,7 +203,7 @@ export function stopVoiceRecording(): VoiceTranscript | null {
   const result: VoiceTranscript = {
     id: `voice_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     timestamp: startTime,
-    text: transcript.trim(),
+    text: sanitizeTokenShapes(transcript.trim()),
     duration: Date.now() - startTime,
   };
 

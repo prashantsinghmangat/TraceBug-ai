@@ -29,11 +29,13 @@ clipboard exports, or an AI agent reading the file over MCP.
 
 | Where | What's masked |
 |-------|---------------|
-| **Form & input fields** | Password / credit-card / SSN input types, plus any field whose name matches `password`, `secret`, `token`, `ssn`, `credit` → `[REDACTED]` |
-| **Request URLs** | Query params named `token`, `key`, `secret`, `auth`, `password`, `sig`, `signature`, … → `?api_key=[REDACTED]` |
+| **Form & input fields** | Password / credit-card / SSN input types, plus any field whose name matches `password`, `secret`, `token`, `ssn`, `credit` → `[REDACTED]`; token shapes (below) in any other typed value are masked; hidden fields (CSRF tokens, ids) are left out of form submits |
+| **URLs** (requests, the page URL, links, form actions, the DOM replay) | Query and fragment params named `token`, `key`, `secret`, `auth`, `password`, `sig`, `signature`, … → `?api_key=[REDACTED]`, `#access_token=[REDACTED]` |
 | **Console output & error messages** | Token shapes: JWTs, `Bearer` headers, `sk-` keys, Stripe, GitHub PATs, AWS, Slack, Google API, Twilio, SendGrid, Mailgun, Postmark, Linear, Discord tokens, and labeled high-entropy hex secrets |
 | **Network response snippets** | Same token-shape patterns as console output |
-| **localStorage / sessionStorage / cookies** | Values under sensitive-looking keys (`token`, `jwt`, `session`, `auth`, …) and values that themselves look like tokens → first/last 4 chars kept, middle `[REDACTED]` |
+| **localStorage / sessionStorage** | Values under sensitive-looking keys (`token`, `jwt`, `session`, `auth`, …) and values that themselves look like tokens → first/last 4 chars kept, middle `[REDACTED]` |
+| **Cookies** | Names only by default; values with [`captureCookieValues: true`](configuration.md#capturecookievalues), masked like storage |
+| **Voice notes** | Same token-shape patterns as console output |
 
 When anything was masked, the export modal and the exported report's Info tab
 show a summary line — e.g. `🛡 4 sensitive values auto-masked (2 tokens,

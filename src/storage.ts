@@ -101,6 +101,16 @@ export function getSessionId(): string | null {
 // ── Read / write all sessions ─────────────────────────────────────────────
 
 export function getAllSessions(): StoredSession[] {
+  // Events are batched in memory and written ~1 s later. Reading storage in
+  // that window gave callers (repro steps after an error, a report built right
+  // after a click) a copy missing the newest events — often the click that
+  // caused the bug. Unflushed changes win; a copy keeps callers that sort or
+  // edit the result from touching the cache.
+  if (_dirty && _cachedSessions) {
+    try {
+      return JSON.parse(JSON.stringify(_cachedSessions));
+    } catch { /* fall through to the stored copy */ }
+  }
   try {
     const raw = localStorage.getItem(SESSIONS_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -286,8 +296,10 @@ function saveSessions(sessions: StoredSession[]): boolean {
   //    must leave the in-memory session exactly as the caller passed it.
   if (active && !active.saved && Array.isArray(active.events)) {
     const originalEvents = active.events;
+    const originalDropped = active.droppedEvents;
     while (active.events.length > 1) {
       active.events = active.events.slice(Math.ceil(active.events.length / 2));
+      active.droppedEvents = (originalDropped || 0) + (originalEvents.length - active.events.length);
       if (commit(working)) {
         emitStorageWarning({
           code: "events_trimmed",
@@ -297,6 +309,7 @@ function saveSessions(sessions: StoredSession[]): boolean {
       }
     }
     active.events = originalEvents;
+    active.droppedEvents = originalDropped;
   }
 
   // 3) Cannot persist without touching saved tickets — refuse and surface it.
@@ -420,8 +433,10 @@ export function appendEvent(
   session.events.push(event);
   session.updatedAt = Date.now();
 
-  // Trim events if over limit (keep most recent)
+  // Trim events if over limit (keep most recent) — and count what went, so the
+  // report can say the lead-up is incomplete instead of looking complete.
   if (session.events.length > maxEvents) {
+    session.droppedEvents = (session.droppedEvents || 0) + (session.events.length - maxEvents);
     session.events = session.events.slice(-maxEvents);
   }
 
@@ -505,6 +520,49 @@ export function saveEnvironment(sessionId: string, env: EnvironmentInfo): void {
 
   session.environment = env;
   scheduleFlush();
+}
+
+/** Record which console levels this capture recorded (`captureConsole`), so a
+ *  report can say "console output not captured" instead of implying none. */
+export function saveConsoleLevel(sessionId: string, level: "errors" | "warnings" | "all" | "none"): void {
+  const session = getCachedSessions().find((s) => s.sessionId === sessionId);
+  if (!session) return;
+  session.consoleLevel = level;
+  scheduleFlush();
+}
+
+/** Keep the first Web Storage snapshot taken for a session (first error,
+ *  else stop); later calls are no-ops so the closest-to-the-bug state wins. */
+export function saveStorageSnapshot(sessionId: string, snapshot: import("./types").StorageSnapshot): void {
+  const session = getCachedSessions().find((s) => s.sessionId === sessionId);
+  if (!session || session.storageSnapshot) return;
+  session.storageSnapshot = snapshot;
+  scheduleFlush();
+}
+
+/** Persist a failed request's response snippet on its stored `api_request`
+ *  event (newest unfilled match by method + url + status within 5 s), so it
+ *  survives a reload and is in saved tickets — the collectors' failure buffer
+ *  is memory only. Returns whether an event was updated. */
+export function attachResponseSnippet(
+  sessionId: string,
+  f: { url: string; method: string; status: number; response: string; timestamp: number },
+): boolean {
+  if (!f.response) return false;
+  const session = getCachedSessions().find((s) => s.sessionId === sessionId);
+  if (!session) return false;
+  for (let i = session.events.length - 1; i >= 0; i--) {
+    const e = session.events[i];
+    const r = e.type === "api_request" ? (e.data?.request as Record<string, unknown> | undefined) : undefined;
+    if (!r || r.response || r.source) continue;
+    if (Math.abs(e.timestamp - f.timestamp) >= 5000) continue;
+    if (r.url === f.url && String(r.method).toUpperCase() === f.method && (r.statusCode || 0) === f.status) {
+      r.response = f.response;
+      scheduleFlush();
+      return true;
+    }
+  }
+  return false;
 }
 
 // ── Save tester-assigned priority to session ─────────────────────────────

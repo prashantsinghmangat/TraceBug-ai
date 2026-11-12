@@ -10,6 +10,7 @@
 
 import { BugReport, TraceBugEvent } from "../types";
 import { isNoiseRequest } from "../url-hygiene";
+import { collapseTyping } from "../repro-generator";
 
 /** Escape a value for a single-quoted TS string literal. */
 function q(s: string): string {
@@ -106,7 +107,8 @@ export function generatePlaywrightTest(report: BugReport): string | null {
     lastStep = line;
   };
 
-  for (const ev of events) {
+  // One fill() per typed value, not one per typing pause (see collapseTyping).
+  for (const ev of collapseTyping(events)) {
     const el = (ev.data?.element || {}) as ElementData;
     switch (ev.type) {
       case "click": {

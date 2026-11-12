@@ -162,6 +162,25 @@ describe('scanReportFiles', () => {
 });
 
 describe('tool handlers', () => {
+  it('list_bug_reports puts the newest report first', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-order-'));
+    try {
+      const at = (generatedAt: number, title: string) => {
+        const p = fixturePayload();
+        p.meta.generatedAt = generatedAt;
+        p.meta.title = title;
+        return buildReplayHtml(p);
+      };
+      fs.writeFileSync(path.join(dir, 'a-old.html'), at(1700000000000, 'Old bug'), 'utf8');
+      fs.writeFileSync(path.join(dir, 'b-new.html'), at(1800000000000, 'New bug'), 'utf8');
+      fs.writeFileSync(path.join(dir, 'c-mid.html'), at(1750000000000, 'Mid bug'), 'utf8');
+      const r = toolListBugReports(dir, { dir });
+      expect(r.reports.map((x) => x.title)).toEqual(['New bug', 'Mid bug', 'Old bug']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('list_bug_reports summarizes with counts', () => {
     const r = toolListBugReports(tmpDir, {});
     expect(r.count).toBe(2);
@@ -281,13 +300,14 @@ describe('MCP protocol (handleMessage)', () => {
     expect(res.result.serverInfo.name).toBe('tracebug');
   });
 
-  it('lists all nine tools with schemas', () => {
+  it('lists all twelve tools with schemas', () => {
     const res = handleMessage(tmpDir, { jsonrpc: '2.0', id: 2, method: 'tools/list' }) as Record<string, any>;
-    expect(res.result.tools).toHaveLength(9);
+    expect(res.result.tools).toHaveLength(12);
     expect(TOOL_DEFINITIONS.map((t) => t.name)).toEqual([
       'list_bug_reports', 'get_bug_report', 'get_console_errors',
       'get_network_activity', 'get_repro_steps', 'get_screenshot',
       'get_playwright_test', 'resolve_stack', 'get_fix_context',
+      'get_audit', 'get_finding', 'compare_audits',
     ]);
     for (const t of res.result.tools) expect(t.inputSchema.type).toBe('object');
   });
@@ -374,6 +394,10 @@ describe('fix-loop tools (get_playwright_test / resolve_stack / get_fix_context)
     expect(r.spec).toBe(SPEC);
     expect(r.filename).toBe('vendor-update-fails.spec.ts');
     expect(r.howToUse.join(' ')).toContain('npx playwright test');
+    // The setup an agent can't guess: install, a running dev server, BASE_URL.
+    expect(r.howToUse.join(' ')).toContain('npm i -D @playwright/test');
+    expect(r.howToUse.join(' ')).toContain('BASE_URL');
+    expect(r.howToUse.join(' ')).toMatch(/dev server/);
   });
 
   it('get_playwright_test explains itself for pre-1.9 exports', () => {

@@ -1,5 +1,7 @@
 # TraceBug Documentation
 
+**Sharing TraceBug with another AI agent? Give it [AGENT-BRIEF.md](AGENT-BRIEF.md)** — one page covering every feature, the MCP tools, the rules and where things live.
+
 Index of the docs in this folder. All docs are kept in sync with the code in
 `src/` — see the root [ARCHITECTURE.md](../ARCHITECTURE.md) for the system
 overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
@@ -14,6 +16,7 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [bug-reporting.md](bug-reporting.md) | The Quick Bug modal and Saved Tickets. |
 | [ticket-flow.md](ticket-flow.md) | Capture → review → export, step by step (incl. all export formats). |
 | [annotate-and-draw.md](annotate-and-draw.md) | Inspect mode (style evidence), element annotation, draw mode, and click-to-blur redaction. |
+| [site-audit.md](site-audit.md) | **Site Audit** — score a page for accessibility, layout, phone width, performance, SEO and errors, then fix it with your agent. |
 | [chrome-extension.md](chrome-extension.md) | Using TraceBug as a browser extension. |
 
 ## Exports, agents & integrations
@@ -37,6 +40,8 @@ overview and [CHANGELOG.md](../CHANGELOG.md) for what changed.
 | [compatibility.md](compatibility.md) | Browser matrix, version support policy, and known limitations. |
 | [migrating.md](migrating.md) | Upgrade notes 1.6 → 1.10; API stability guarantees. |
 | [RELEASING.md](RELEASING.md) | Maintainer runbook: shipping a version to Chrome Web Store, AMO, npm, the MCP Registry and the website. |
+| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Manual test rows to run before a release. |
+| [STORE-LISTINGS.md](STORE-LISTINGS.md) | Every word the Chrome Web Store and Firefox Add-ons listings show, including permission justifications. |
 
 > The self-contained offline **HTML replay export** (rrweb DOM replay + gzip),
 > the lean **Export for AI (.html)**, and **event capture surviving navigation**

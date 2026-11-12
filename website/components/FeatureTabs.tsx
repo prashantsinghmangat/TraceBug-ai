@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Camera, PenLine, TerminalSquare, Video, ShieldCheck, Sparkles, type LucideIcon,
+  Camera, Gauge, PenLine, TerminalSquare, Video, ShieldCheck, Sparkles, type LucideIcon,
 } from "lucide-react";
 import Shortcut from "@/components/Keycap";
 
@@ -11,7 +11,7 @@ import Shortcut from "@/components/Keycap";
 // only — nothing auto-advances. Every feature here ships in the extension
 // today; keep it that way.
 
-type Id = "capture" | "annotate" | "logs" | "record" | "private" | "ai";
+type Id = "capture" | "audit" | "annotate" | "logs" | "record" | "private" | "ai";
 
 const FEATURES: { id: Id; Icon: LucideIcon; title: string; body: React.ReactNode }[] = [
   {
@@ -19,6 +19,12 @@ const FEATURES: { id: Id; Icon: LucideIcon; title: string; body: React.ReactNode
     Icon: Camera,
     title: "Capture in one keypress",
     body: <>Click Capture Bug and reproduce it: clicks, console and network are recorded. Or press <Shortcut /> for an instant screenshot ticket.</>,
+  },
+  {
+    id: "audit",
+    Icon: Gauge,
+    title: "Audit the page, get the fixes",
+    body: "One click scores the page for accessibility, layout, phone width, speed and SEO. Every finding says where it is and how to fix it, ready for your AI agent.",
   },
   {
     id: "annotate",
@@ -182,6 +188,45 @@ function Preview({ id }: { id: Id }) {
           </div>
           <div className="absolute bottom-6 right-6 flex items-center gap-2 text-[12px] text-text-subtle">
             <Shortcut /> pressed
+          </div>
+        </>
+      );
+    case "audit":
+      return (
+        <>
+          <Checkout />
+          <div className="absolute right-6 top-6 w-[250px] rounded-xl border border-border bg-background p-4 shadow-float">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-medium text-text-primary">Site Audit</span>
+              <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">Fair</span>
+            </div>
+            <div className="mt-2 flex items-baseline gap-1">
+              <span className="text-[32px] font-semibold leading-none tabular-nums text-warning">61</span>
+              <span className="text-[12px] text-text-subtle">/ 100</span>
+            </div>
+            <ul className="mt-3 space-y-1.5 text-[12px]">
+              {[
+                ["Accessibility", 74, "bg-warning"],
+                ["Layout", 100, "bg-success"],
+                ["Phone width", 88, "bg-warning"],
+                ["Performance", 94, "bg-success"],
+              ].map(([n, v, c]) => (
+                <li key={n as string} className="flex items-center justify-between text-text-muted">
+                  {n}
+                  <span className="flex items-center gap-1.5 tabular-nums text-text-primary">
+                    <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${c}`} />
+                    {v}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="absolute bottom-6 right-6 w-[250px] rounded-xl border border-border bg-background p-3 shadow-float">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-text-primary">
+              <span className="h-2 w-2 rounded-full bg-error" /> Low text contrast · WCAG 1.4.3
+            </div>
+            <div className="mt-1.5 font-mono text-[11px] text-text-muted">Found 3.1:1 · Required 4.5:1</div>
+            <div className="mt-1 text-[11px] text-text-muted">Fix: use <span className="font-mono text-text-primary">#5F6368</span> for this text</div>
           </div>
         </>
       );

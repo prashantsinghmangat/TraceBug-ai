@@ -11,12 +11,14 @@ Zero dependencies. ~24 KB. Node ≥ 18.
 Connect Claude Code, Cursor, Windsurf, or VS Code to the `.html` bug reports the [TraceBug Chrome extension](https://chromewebstore.google.com/detail/fdemmibikigigkfjngclmdheeajhdgaj) exports:
 
 ```bash
-claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 ```
 
-The agent gets nine read tools and a `/tracebug:debug_bug_report` prompt:
+No `--dir` needed: the server finds reports in your project and in your Downloads and Desktop folders, where browser exports land (`--dir` limits it to one folder). On native Windows, use `-- cmd /c npx -y tracebug mcp`. Cursor, Windsurf and VS Code setup: [docs/mcp.md](https://github.com/prashantsinghmangat/tracebug-ai/blob/main/docs/mcp.md).
 
-- `list_bug_reports` — scan a folder and summarize every export
+The agent gets twelve read tools and a `/tracebug:debug_bug_report` prompt:
+
+- `list_bug_reports` — scan a folder and summarize every export (bug report or Site Audit)
 - `get_bug_report` — report overview plus a prioritized investigation guide
 - `get_console_errors` — captured console output with stack traces
 - `get_network_activity` — captured requests, failed ones first, with response snippets
@@ -27,6 +29,14 @@ The agent gets nine read tools and a `/tracebug:debug_bug_report` prompt:
 - `get_fix_context` — one-call fix starter: failing request, triggering user action, source-map-resolved stack, failing-test availability
 
 The last three close the fix loop: pull the failing test, patch, re-run until green.
+
+For Site Audit exports:
+
+- `get_audit` — which checks ran (with what each can't tell you) and the findings
+- `get_finding` — one finding's evidence, help link and codebase search hints
+- `compare_audits` — before/after a fix: fixed, still present, new, regressed
+
+Text taken from the captured page is marked `untrusted`: agents treat it as data, never as instructions.
 
 **Everything stays on your machine.** The server binds to stdio only, opens zero network connections, and reads the report files from your disk. No account, no cloud, no upload.
 

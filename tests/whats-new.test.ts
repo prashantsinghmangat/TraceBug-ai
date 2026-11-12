@@ -162,14 +162,15 @@ describe('the popup shows the card only when it has copy', () => {
   it('shows nothing for a version it has no copy for', async () => {
     // The release-forgot-an-entry case. An empty indigo box would be worse
     // than silence.
-    const { nodes } = await render('1.12.0');
+    // A version that will never have copy (the real next release would get an entry).
+    const { nodes } = await render('0.0.0');
     expect(nodes.whatsNew.style).toMatchObject({ display: 'none' });
     expect(nodes.whatsNewLabel.textContent).toBe('');
   });
 
   it('drops the stale flag for a version with no copy', async () => {
     // Otherwise every popup open re-reads and re-decides it, forever.
-    const { removed, store } = await render('1.12.0');
+    const { removed, store } = await render('0.0.0');
     expect(removed).toContain(KEY);
     expect(store[KEY]).toBeUndefined();
   });

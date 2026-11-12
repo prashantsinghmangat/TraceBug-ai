@@ -63,6 +63,10 @@ That's it. The CLI detects your framework and prints the exact 2-line snippet. P
 ```
 Tester opens the page
   ↓
+Audit the page first (optional):
+  • 🩺 Audit this page — score + accessibility, layout, phone width,
+                        speed, SEO and error findings with fixes
+  ↓
 Arm a session (idle until you act):
   • ⚡ Quick Bug      — Ctrl+Shift+B opens the ticket-review modal
   • 📷 Screenshot / Region
@@ -143,6 +147,17 @@ Safari build — on Safari, use the npm SDK).
 
 ## Features
 
+### 🩺 Site Audit — Score a Page, Then Let Your Agent Fix It (v1.12)
+
+One click (**Audit this page** in the extension popup, or the toolbar's **Audit** button) checks the page you are on for **accessibility** (axe-core, WCAG 2.0–2.2 A/AA, plus keyboard checks), **layout**, **phone width** (390px), **performance** (LCP, CLS, heavy images), **SEO** (tags, structured data, robots.txt, sitemap) and **runtime errors**. Read-only and local: nothing is clicked or uploaded.
+
+- A 0–100 score per category and overall, coloured good / fair / poor, with the formula shown.
+- One finding per real problem, grouped by rule: the WCAG criterion, found vs required values, how to fix it, and every element with **Locate** and **Copy selector**. Contrast findings suggest a passing colour.
+- Results axe can't decide go to **Needs a person to check**, not the score.
+- **Copy for AI** pastes a fix prompt; **Export report** gives an `.html` your agent reads with `get_audit` / `get_finding`, and `compare_audits` confirms the fix after a re-run.
+
+Guide: [docs/site-audit.md](docs/site-audit.md).
+
 ### 🧠 Debugging Assistant (v1.3)
 
 Every report opens with four derived signals that turn "what happened" into "why it likely happened":
@@ -167,14 +182,16 @@ All four signals ship inline in GitHub issues, Jira tickets, PDF reports, and th
 Your coding agent (Claude Code, Cursor, Windsurf, VS Code) reads TraceBug bug reports and fixes the bug — **fully local, nothing uploaded**:
 
 ```bash
-claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports
+claude mcp add -s user tracebug -- npx -y tracebug mcp
 ```
 
-`-y` skips npx's install prompt but does **not** pin a version — it resolves whatever's newest on the npm registry at the time it runs. For a known, audited build instead, pin explicitly: `npx tracebug@1.10.1 mcp --dir ./bug-reports` (bump the version when you deliberately upgrade).
+No `--dir` needed: it finds reports in your project and in your Downloads and Desktop folders, where exports land. On native Windows, use `-- cmd /c npx -y tracebug mcp`. `-y` skips npx's install prompt but does **not** pin a version — it resolves whatever's newest on the npm registry at the time it runs. For a known, audited build instead, pin explicitly: `npx tracebug@1.12.0 mcp` (bump the version when you deliberately upgrade). Setup for Cursor, Windsurf and VS Code: [docs/mcp.md](docs/mcp.md).
 
-The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev drops it in the repo, and the agent gets nine tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, `get_screenshot` (real image content), `get_playwright_test`, `resolve_stack`, and `get_fix_context`. `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
+The server reads the same self-contained `.html` files TraceBug exports. A tester hands a dev the report file, the dev saves it, and the agent gets twelve tools: `list_bug_reports`, `get_bug_report`, `get_console_errors`, `get_network_activity`, `get_repro_steps`, `get_screenshot` (real image content), `get_playwright_test`, `resolve_stack`, and `get_fix_context` for bug reports, plus `get_audit`, `get_finding` and `compare_audits` for Site Audit exports. `get_bug_report` returns a prioritized **investigation guide** computed from what the report contains, so the agent knows exactly which tools to call next. Console stacks + failed-request bodies + repro steps + frustration signals — everything an agent needs to go from bug report to fix.
 
 The last three close the fix loop (v1.9): `get_playwright_test` returns the generated **failing Playwright spec** that replays the session and asserts the captured failure is gone — red until the bug is fixed, green after — so the agent can run it, patch, and re-run until green. `resolve_stack` maps the report's minified stack frames to original source files/lines using `.map` files found in the repo the server runs from. `get_fix_context` is a one-call fix starter: the failing request with response snippet, the user action that triggered it, the source-map-resolved top stack frames, and whether a failing test is available.
+
+The audit tools read an exported Site Audit: `get_audit` lists which checks ran (and what each can't tell you) plus the findings, `get_finding` returns one finding's evidence and codebase search hints, and `compare_audits` diffs two exports of the same page — fixed, still present, new, regressed — so the agent can verify its fix after you re-run the audit. Text taken from the audited page is marked `untrusted`, so agents treat it as data, not instructions.
 
 Kicking off is one paste: the extension shows a ready-made agent prompt after every **Export .html** (auto-copied), the exported file itself carries the same prompt in its **AI** tab, and in Claude Code you can just type `/tracebug:debug_bug_report`.
 
@@ -379,6 +396,16 @@ TraceBug.init({
 
 ## Programmatic API
 
+### Site Audit
+
+```typescript
+const run = await TraceBug.runAudit({ scan: "full" }); // "full" | "auto-review" | "accessibility" | "performance-seo"
+run.score?.overall;                 // 0–100, with per-category scores
+await TraceBug.showAuditPanel("accessibility"); // run and show the panel
+await TraceBug.exportAudit();       // download the last run as .html (read by the MCP server)
+TraceBug.compareAudits(before, after); // fixed / still present / new / regressed
+```
+
 ### Core
 
 ```typescript
@@ -558,6 +585,7 @@ Full documentation is in the [`docs/`](docs/) folder:
 - [Configuration](docs/configuration.md) — All config options explained
 - [Bug Reporting](docs/bug-reporting.md) — Screenshots, notes, voice, export
 - [MCP Server](docs/mcp.md) — Let AI agents (Claude Code, Cursor) debug your reports
+- [Site Audit](docs/site-audit.md) — Score a page and fix what it finds with your agent
 - [Annotate & Draw](docs/annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](docs/chrome-extension.md) — Extension install & usage
 - [Architecture](docs/architecture.md) — How TraceBug works internally
@@ -590,6 +618,7 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 
 ### Extension Features
 
+- **Site Audit** — *Audit this page* is the first popup action: score the page and get fixes for your AI ([guide](docs/site-audit.md))
 - **Per-site toggle** — enable only on sites you're testing
 - **Badge indicator** — shows "ON" in green when active on current tab
 - **Quick actions** — Annotate, Draw, Screenshot, PDF Report, GitHub Issue, Jira Ticket from the popup

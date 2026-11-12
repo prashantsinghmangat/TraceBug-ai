@@ -46,6 +46,45 @@ the same step.
 - **video-recorder.ts (~1,030)** — `isExtensionContext` ~L163 picks the transport · wire formats ~L59 · sync getters ~L169–264 · `scheduleDurationCap` ~L117 · mic functions (`hasMicrophoneTrack`/`isMicrophoneMuted`/`setMicrophoneMuted`, forward to offscreen via `tb:rec:mic-mute` in extension mode) ~L284–311.
 - **draw-mode.ts (~885)** — `activateDrawMode` ~L56 · `_drawShape` ~L644 · `_redrawAllRegions` ~L705 · `_showCommentInput` ~L774.
 
+## Smaller areas the next work touches (read these files whole; they're short)
+
+- **Scanner** `src/scanner/` (~660 total): `index.ts` `scan()` runs detectors in parallel → `Issue[]` in
+  memory; detectors in `detectors/` (`a11y.ts` axe, `broken-images`, `mixed-content`, `session-data`,
+  `frustration`). `Issue` type: `src/types.ts` ~L577. UI: `src/ui/issues-panel.ts`. Public API
+  `TraceBug.scanPage()` in `index.ts`. **Site Audit plan:** `docs/audit-quality/implementation-plan.md`.
+- **Audit core** `src/audit/` (pure, no DOM): `fingerprint.ts` `auditFingerprint`/`normalizeSelector` · `run.ts`
+  `buildAuditRun` (caps, redaction, `MAX_*` limits) · `compare.ts` `compareAudits` (generic) · `types.ts` audit types,
+  dependency-free because the CLI imports them (`src/types.ts` re-exports, `AuditRun = AuditRunOf<Issue>`).
+  `score.ts` (`scoreAudit`, `SCORE_EXPLANATION`; stored by run.ts) · `wcag.ts` (criteria names, `wcagFromAxeTags`) ·
+  `contrast.ts` (`suggestTextColor`) · `fixes.ts` (`DEFAULT_FIXES`, applied in `buildAuditRun`) · `prompt.ts` · seo.ts also `socialTagFindings`, `structuredDataFindings`, `robotsAllows`, `detectCrawlFindings` (fetches /robots.txt, /sitemap.xml) · performance.ts `imageWeightFindings`; `detectors/mobile.ts` (phone width: hidden 390px iframe, `toMobileFindings`, `scrollableNotFocusable`; ui.ts checks take a `doc`);
+  (`buildAuditFixPrompt`, the panel's Copy for AI). Noise filters: `evidence.ts` `isVisuallyHidden`, ui.ts overlap hit-test,
+  keyboard.ts `detectOutlineRemoved` (cross-rule replacement), a11y.ts `labelInNameHolds`, index.ts `isDevHost`.
+  Tests: `tests/audit-core.test.ts`, `audit-score.test.ts`, `audit-keyboard.test.ts`, `audit-seo.test.ts`, `audit-mcp.test.ts`.
+- **Audit engine** `src/audit/index.ts` `runAudit()` (categories, limitations) → detectors in `src/audit/detectors/`:
+  `a11y.ts` (axe, `loadAxe` falls back to `window.axe`) · `ui.ts` (layout) · `performance.ts` (Performance timeline,
+  category `metrics`) · `keyboard.ts` (Tab order + focus styles) · `seo.ts` (page tags) · `evidence.ts`. Scan menu:
+  `AUDIT_SCANS` in `src/audit/types.ts` → `runAudit({ scan })`; panel scan bar `markScan`; popup `#auditMenu`. Export: `src/audit/export.ts` `exportAuditReport` →
+  `HtmlReplayOptions.audit` → `payload.audit`; viewer Audit tab in `html-template.ts` (search "Audit tab").
+  SDK API `runAudit`/`getLastAudit`/`compareAudits` next to `scanPage` in `src/index.ts`. e2e `e2e/site-audit.e2e.mjs`.
+- **Audit in the extension**: popup `btnAudit` → `runCombo("TB_RUN_AUDIT")` → `background.js` `handleComboAction` +
+  `injectAxe` (`vendor/axe.min.js`, copied by `build/build-ext.mjs`) → `content-script.js` → `tracebug-init.js` case
+  "audit" → `showAuditPanel` (`src/ui/audit-panel.ts`: docked panel, `locate` highlight, `placePanel` beside the
+  toolbar). Toolbar `#tracebug-toolbar-audit-btn` (`compact-toolbar.ts`) → `toggleAuditPanel` → `ensureAxe` →
+  `tracebug-request-axe` → content-script → `TB_LOAD_AXE` → `injectAxe`. e2e `e2e/ext-site-audit.e2e.mjs`.
+- **MCP audit tools** `cli/audit-tools.ts`: `toolGetAudit` · `toolGetFinding` + `searchHints` · `toolCompareAudits` ·
+  `UNTRUSTED_NOTE`; registered in `TOOL_DEFINITIONS`/`callTool` of `mcp-server.ts`. Manual agent loop:
+  `e2e/audit-agent-loop.mjs` + `e2e/mcp-call.mjs` (call any tool on the built `dist/bin.mjs`).
+- **MCP server** `cli/mcp-server.ts` (~950): `ReportPayload` ~L23 · file discovery `collectReports` ~L173 ·
+  tools `toolGetBugReport` … `toolGetFixContext` ~L376–600 · `TOOL_DEFINITIONS` ~L620 · `handleMessage` ~L805.
+- **Agent prompts** `src/exporters/agent-workflow.ts` (all workflow text + `CLAUDE_MCP_ADD`);
+  chat/MCP prompts `src/exporters/ai-prompt.ts`.
+- **Theme** `src/theme.ts`: `DARK_THEME`/`LIGHT_THEME` tokens · `injectTheme` · `applyThemeToRoot`
+  (called by `mountDashboard`). Export viewer has its own tokens in `html-template.ts` `REPLAY_CSS`.
+- **Release** `scripts/release-sheet.mjs` → `docs/release-sheets/<ver>.md` (keeps newest 10) ·
+  `scripts/check.mjs` gates · `scripts/check-versions.mjs` version surfaces.
+- **Marketing images** `e2e/marketing-screenshots.mjs` → `assets/screenshots/product/`; frames and
+  banners under `assets/source/` (index `assets/README.md`).
+
 ## Message verbs — where each one is handled
 
 | Verb family | Sent by | Handled in |

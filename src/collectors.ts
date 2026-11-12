@@ -5,7 +5,7 @@
 import { EventType } from "./types";
 import { sanitizeTokenShapes } from "./sanitize/cloud-upload";
 import { isCustomSensitiveKey } from "./sanitize/custom-redaction";
-import { isSensitiveParamName } from "./url-hygiene";
+import { redactUrl } from "./url-hygiene";
 
 type Emit = (type: EventType, data: Record<string, unknown>) => void;
 
@@ -29,14 +29,24 @@ const NETWORK_FAILURE_LIMIT = 10;
 const RESPONSE_SNIPPET_CHARS = 200;
 const _networkFailures: NetworkFailure[] = [];
 
+/** Told about each failure (snippet already scrubbed) so the SDK can persist
+ *  the snippet on the stored request event — the buffer above is memory only
+ *  and was lost on reload and in saved tickets. */
+let _failureListener: ((f: NetworkFailure) => void) | null = null;
+export function onNetworkFailure(fn: (f: NetworkFailure) => void): () => void {
+  _failureListener = fn;
+  return () => { if (_failureListener === fn) _failureListener = null; };
+}
+
 function pushNetworkFailure(failure: NetworkFailure): void {
   try {
     // Scrub token shapes (JWT, sk-, Bearer, cloud keys…) from the response
     // snippet at capture — error bodies like `{"error":"bad key: sk_live_…"}`
     // would otherwise flow verbatim into the modal and the shared .html
     // export (the cloud path re-sanitizes, but local export didn't).
-    if (failure.response) failure.response = sanitizeTokenShapes(failure.response);
+    if (failure.response) failure.response = sanitizeTokenShapes(failure.response).slice(0, RESPONSE_SNIPPET_CHARS);
     _networkFailures.push(failure);
+    if (_failureListener) try { _failureListener({ ...failure }); } catch {}
     if (_networkFailures.length > NETWORK_FAILURE_LIMIT) {
       _networkFailures.splice(0, _networkFailures.length - NETWORK_FAILURE_LIMIT);
     }
@@ -54,43 +64,8 @@ export function clearNetworkFailures(): void {
 }
 
 // ── URL redaction ─────────────────────────────────────────────────────────
-// Strip sensitive query params before URLs are captured into events/reports.
-// The sensitive-name matcher lives in url-hygiene (isSensitiveParamName) so
-// this capture path and the upload sanitizer share one list, no drift.
-
-/**
- * Redact sensitive query-string values in a URL.
- *
- *   /api/users?api_key=abc123   → /api/users?api_key=[REDACTED]
- *   /api/users?q=hi&token=xxx   → /api/users?q=hi&token=[REDACTED]
- *
- * Defensive: wrapped in try/catch, returns the original URL on any failure.
- */
-function sanitizeUrl(url: string): string {
-  if (!url) return url;
-  try {
-    const qIdx = url.indexOf("?");
-    if (qIdx === -1) return url;
-    const base = url.slice(0, qIdx);
-    const afterQ = url.slice(qIdx + 1);
-
-    const hashIdx = afterQ.indexOf("#");
-    const query = hashIdx === -1 ? afterQ : afterQ.slice(0, hashIdx);
-    const hash = hashIdx === -1 ? "" : afterQ.slice(hashIdx);
-
-    const redacted = query.split("&").map(part => {
-      const eqIdx = part.indexOf("=");
-      if (eqIdx === -1) return part;
-      const key = part.slice(0, eqIdx);
-      if (isSensitiveParamName(key) || isCustomSensitiveKey(key)) return `${key}=[REDACTED]`;
-      return part;
-    }).join("&");
-
-    return `${base}?${redacted}${hash}`;
-  } catch {
-    return url;
-  }
-}
+// Sensitive query/fragment params are masked before a URL enters an event.
+// One redactor (url-hygiene redactUrl) for every URL a report keeps.
 
 // ── Safe response body reader ─────────────────────────────────────────────
 // Only invoked on failed responses. Caps memory by streaming and stopping
@@ -214,7 +189,7 @@ export function collectClicks(emit: Emit): () => void {
         className: typeof t.className === "string" ? t.className : "",
       };
       const data: Record<string, unknown> = { element: el };
-      if (tag === "a") el.href = (t as HTMLAnchorElement).href || "";
+      if (tag === "a") el.href = redactUrl((t as HTMLAnchorElement).href || "");
       if (tag === "button" || (t as HTMLButtonElement).type === "submit") {
         el.buttonType = (t as HTMLButtonElement).type || "button";
         el.disabled = (t as HTMLButtonElement).disabled;
@@ -423,7 +398,18 @@ export function fieldLabel(el: HTMLElement): string {
 }
 
 export function collectInputs(emit: Emit): () => void {
-  const timers = new Map<EventTarget, ReturnType<typeof setTimeout>>();
+  // Pending debounced emits, per field. `fire` runs one now.
+  const timers = new Map<EventTarget, { timer: ReturnType<typeof setTimeout>; fire: () => void }>();
+
+  // Emit every pending value immediately. A value is otherwise recorded 300 ms
+  // after the last keystroke, so typing and then clicking within 300 ms put the
+  // click BEFORE the value it acted on, and stopping or leaving the page threw
+  // the value away. Flushed on pointerdown/keydown (both precede the click or
+  // submit they cause), on pagehide, and when capture stops.
+  const flush = () => {
+    for (const { timer, fire } of Array.from(timers.values())) { clearTimeout(timer); fire(); }
+  };
+  const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Enter") flush(); };
 
   const handler = (e: Event) => {
     try {
@@ -437,11 +423,10 @@ export function collectInputs(emit: Emit): () => void {
       if (t.tagName.toLowerCase() === "select") return;
 
       const prev = timers.get(t);
-      if (prev) clearTimeout(prev);
+      if (prev) clearTimeout(prev.timer);
 
-      timers.set(
-        t,
-        setTimeout(() => {
+      const fire = () => {
+          timers.delete(t);
           try {
             const tag = t.tagName.toLowerCase();
             // `contenteditable` is not an input type the DOM knows about; it
@@ -457,7 +442,7 @@ export function collectInputs(emit: Emit): () => void {
             const element: Record<string, unknown> = {
               tag, name, type: inputType,
               valueLength: rawValue.length,
-              value: isSensitive ? "[REDACTED]" : rawValue.slice(0, INPUT_VALUE_MAX),
+              value: isSensitive ? "[REDACTED]" : sanitizeTokenShapes(rawValue.slice(0, INPUT_VALUE_MAX)),
               placeholder: (editable ? (editable.getAttribute("data-placeholder") || editable.getAttribute("placeholder") || "") : t.placeholder) || "",
             };
             if (editable) element.contentEditable = true;
@@ -473,18 +458,24 @@ export function collectInputs(emit: Emit): () => void {
           } catch (err) {
             if (typeof console !== 'undefined') console.warn('[TraceBug] Input capture error:', err);
           }
-          timers.delete(t);
-        }, 300)
-      );
+      };
+      timers.set(t, { timer: setTimeout(fire, 300), fire });
     } catch (err) {
       if (typeof console !== 'undefined') console.warn('[TraceBug] Input capture error:', err);
     }
   };
 
   document.addEventListener("input", handler, { capture: true });
+  document.addEventListener("pointerdown", flush, { capture: true });
+  document.addEventListener("keydown", onKeyDown, { capture: true });
+  window.addEventListener("pagehide", flush);
   return () => {
+    // Flush, don't discard: a value typed just before Stop belongs in the report.
+    flush();
     document.removeEventListener("input", handler, { capture: true });
-    timers.forEach((t) => clearTimeout(t));
+    document.removeEventListener("pointerdown", flush, { capture: true });
+    document.removeEventListener("keydown", onKeyDown, { capture: true });
+    window.removeEventListener("pagehide", flush);
   };
 }
 
@@ -523,17 +514,25 @@ export function collectFormSubmits(emit: Emit): () => void {
       const form = e.target as HTMLFormElement;
       if (!form || form.tagName.toLowerCase() !== "form" || isTraceBugElement(form)) return;
       const formData: Record<string, string> = {};
+      // Hidden fields carry CSRF tokens, ids and state the user never typed;
+      // they are left out and counted, so the report can say so.
+      let hiddenSkipped = 0;
       const elements = form.elements;
       for (let i = 0; i < elements.length; i++) {
         const el = elements[i] as HTMLInputElement;
         if (!el.name) continue;
-        const isSensitive = ["password"].includes(el.type) ||
-          /password|secret|token|ssn|credit/i.test(el.name) || isCustomSensitiveKey(el.name);
-        if (el.type === "submit" || el.type === "button") continue;
-        formData[el.name] = isSensitive ? "[REDACTED]" : (el.value || "").slice(0, 200);
+        if (el.type === "submit" || el.type === "button" || el.type === "file") continue;
+        if (el.type === "hidden") { hiddenSkipped++; continue; }
+        formData[el.name] = isSensitiveField(el.name, el.type)
+          ? "[REDACTED]"
+          : sanitizeTokenShapes((el.value || "").slice(0, INPUT_VALUE_MAX));
       }
       emit("form_submit", {
-        form: { id: form.id || "", action: form.action || "", method: form.method || "GET", fieldCount: elements.length, fields: formData },
+        form: {
+          id: form.id || "", action: redactUrl(form.action || ""), method: form.method || "GET",
+          fieldCount: elements.length, fields: formData,
+          ...(hiddenSkipped ? { hiddenSkipped } : {}),
+        },
       });
     } catch (err) {
       if (typeof console !== 'undefined') console.warn('[TraceBug] Form capture error:', err);
@@ -603,21 +602,26 @@ export function collectApiRequests(emit: Emit): () => void {
     try { if (url && isInternalUrl(url)) return originalFetch.call(window, input, init); } catch {}
 
     // Redact sensitive query params before the URL touches events/reports.
-    const safeUrl = sanitizeUrl(url).slice(0, 500);
+    const safeUrl = redactUrl(url).slice(0, 500);
 
     // ALWAYS call the original fetch — tracking failures must never break user requests
     try {
       const response = await originalFetch.call(window, input, init);
+      // A `no-cors` response is opaque: status 0 by design, not a failure.
+      const opaque = response.type === "opaque";
       try {
         emit("api_request", {
-          request: { url: safeUrl, method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start },
+          request: {
+            url: safeUrl, method: method.toUpperCase(), statusCode: response.status, durationMs: Date.now() - start,
+            ...(opaque ? { opaque: true } : {}),
+          },
         });
       } catch {} // tracking failure — swallow silently
 
       // Async body capture for failed responses — never awaited on the hot path.
       // readResponseBodySafe caps at 10KB and skips binary content types.
       try {
-        if (response.status >= 400 || response.status === 0) {
+        if (!opaque && (response.status >= 400 || response.status === 0)) {
           const clone = response.clone();
           // Fire-and-forget; body read runs after the caller already has the response
           readResponseBodySafe(clone).then((snippet) => {
@@ -642,13 +646,19 @@ export function collectApiRequests(emit: Emit): () => void {
 
       return response;
     } catch (err) {
+      // The app cancelled it (AbortController, a superseded search): status 0,
+      // but not a network failure.
+      const aborted = (err as Error)?.name === "AbortError";
       try {
         emit("api_request", {
-          request: { url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start },
+          request: {
+            url: safeUrl, method: method.toUpperCase(), statusCode: 0, durationMs: Date.now() - start,
+            ...(aborted ? { aborted: true } : {}),
+          },
         });
       } catch {} // tracking failure — swallow silently
 
-      try {
+      if (!aborted) try {
         pushNetworkFailure({
           url: safeUrl,
           method: method.toUpperCase(),
@@ -695,12 +705,22 @@ export function collectXhrRequests(emit: Emit): () => void {
       if (isInternalUrl(url)) return origSend.call(this, body);
 
       // Redact sensitive query params once, reuse for every handler below.
-      const safeUrl = sanitizeUrl(url).slice(0, 500);
+      const safeUrl = redactUrl(url).slice(0, 500);
 
+      // `abort` fires before `loadend`: an aborted XHR is status 0 but not a failure.
+      let aborted = false;
+      xhr.addEventListener("abort", () => { aborted = true; });
       xhr.addEventListener("loadend", function () {
-        try { emit("api_request", { request: { url: safeUrl, method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start } }); } catch {}
         try {
-          if (xhr.status >= 400 || xhr.status === 0) {
+          emit("api_request", {
+            request: {
+              url: safeUrl, method: method.toUpperCase(), statusCode: xhr.status, durationMs: Date.now() - start,
+              ...(aborted ? { aborted: true } : {}),
+            },
+          });
+        } catch {}
+        try {
+          if (!aborted && (xhr.status >= 400 || xhr.status === 0)) {
             // responseText throws for non-text responseTypes — guard it.
             // Also skip binary content-type so we never stringify blobs/PDFs.
             let body = "";
@@ -775,6 +795,9 @@ const GET_ONLY_INITIATORS = new Set([
 /** A pre-capture request slower than this is worth reporting on its own. */
 export const PAGE_LOAD_SLOW_MS = 1000;
 
+/** Initiators the fetch/XHR wrappers already record while a capture runs. */
+const WRAPPED_INITIATORS = new Set(["fetch", "xmlhttprequest"]);
+
 function _emitPerfEntry(
   emit: Emit,
   e: PerformanceResourceTiming,
@@ -802,7 +825,7 @@ function _emitPerfEntry(
   // 0 as "unknown" rather than "error", so it lands in the Network tab
   // without polluting the Errors-only filter.
   const status = ext.responseStatus || 0;
-  const url = sanitizeUrl(e.name).slice(0, 500);
+  const url = redactUrl(e.name).slice(0, 500);
   const timestamp = Math.round(navStart + e.startTime);
   const durationMs = Math.round(e.duration || 0);
 
@@ -824,6 +847,17 @@ function _emitPerfEntry(
     const slow = durationMs > PAGE_LOAD_SLOW_MS;
     if (!failed && !slow) return; // uninteresting page-load noise — and NOT marked seen
     phase = "page-load";
+  } else if (WRAPPED_INITIATORS.has(initiator) ||
+             (status < 400 && durationMs <= PAGE_LOAD_SLOW_MS)) {
+    // ── Requests during the capture ───────────────────────────────────────
+    // Every row here takes a slot in the session's event buffer, and the
+    // oldest events are the ones evicted — so a page's images and fonts used
+    // to push out the clicks that caused the bug. A fetch/XHR is already
+    // recorded by its wrapper (with method and status; this copy was only
+    // ever dropped again by dedupe), and an asset load explains a bug only
+    // when it failed or was slow, the same rule as page load above.
+    _perfSeen.add(key);
+    return;
   }
 
   _perfSeen.add(key);
@@ -951,7 +985,8 @@ export function collectErrors(emit: Emit): () => void {
       emit("error", {
         error: {
           message: sanitizeTokenShapes(capMessage(typeof msg === "string" ? msg : "Unknown error")),
-          stack: error?.stack && sanitizeTokenShapes(capMessage(error.stack)), source, line, column: col,
+          stack: error?.stack && sanitizeTokenShapes(capMessage(error.stack)),
+          source: typeof source === "string" ? redactUrl(source) : source, line, column: col,
         },
       });
     } catch {}
@@ -1014,6 +1049,17 @@ export function collectConsoleErrors(emit: Emit): () => void {
  *  DevTools after the cap, we just stop recording it. */
 const CONSOLE_LEVEL_CAP = 50;
 
+/** Console levels that hit CONSOLE_LEVEL_CAP and stopped being recorded in
+ *  this capture — the report says so (src/evidence-summary.ts). In memory,
+ *  current page only: the counters themselves reset per page. */
+const _consoleCapped = new Set<"warn" | "info" | "log">();
+export function getConsoleCapped(): Array<"warn" | "info" | "log"> {
+  return Array.from(_consoleCapped);
+}
+export function resetConsoleCapped(): void {
+  _consoleCapped.clear();
+}
+
 /**
  * Shared wrapper for console.warn/info/log capture. Skips TraceBug's own
  * "[TraceBug]" diagnostics — with warn captured by default, our own status
@@ -1025,6 +1071,7 @@ function wrapConsoleLevel(method: "warn" | "info" | "log", type: EventType, emit
   let _count = 0;
   console[method] = function (...args: unknown[]) {
     const own = typeof args[0] === "string" && args[0].startsWith("[TraceBug]");
+    if (!_inside && !own && _count >= CONSOLE_LEVEL_CAP) _consoleCapped.add(method);
     if (_inside || own || _count >= CONSOLE_LEVEL_CAP) { orig.apply(console, args); return; }
     _inside = true;
     _count++;

@@ -4,6 +4,7 @@
 
 import { ElementAnnotation, DrawRegion, UIAnnotationReport } from "./types";
 import { setInlineStyle } from "./ui/helpers";
+import { redactUrl } from "./url-hygiene";
 
 let _elementAnnotations: ElementAnnotation[] = [];
 let _drawRegions: DrawRegion[] = [];
@@ -54,7 +55,7 @@ export function exportAsJSON(): string {
 export function exportAsMarkdown(): string {
   const lines: string[] = [];
   lines.push("# UI Annotations Report");
-  lines.push(`**Page:** ${window.location.href}`);
+  lines.push(`**Page:** ${redactUrl(window.location.href)}`);
   lines.push(`**Date:** ${new Date().toISOString()}`);
   lines.push(`**Total:** ${_elementAnnotations.length} element annotations, ${_drawRegions.length} draw regions`);
   lines.push("");

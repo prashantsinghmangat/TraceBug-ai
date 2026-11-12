@@ -59,7 +59,7 @@ Then import `test`/`expect` from `./fixtures` instead of `@playwright/test` in y
 Download the artifact into your repo and:
 
 ```bash
-claude mcp add tracebug -- npx -y tracebug mcp --dir ./bug-reports   # once
+claude mcp add -s user tracebug -- npx -y tracebug mcp   # once; finds bug-reports/ in the project
 ```
 
 Then in Claude Code: **`/tracebug:debug_bug_report`** — the agent reads the failure's console errors, the 500 that preceded it, the step timeline, and the screenshot, then cross-references your code and proposes the fix. Or just open the `.html` in a browser and use the **AI tab → Copy prompt**.

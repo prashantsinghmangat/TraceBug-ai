@@ -244,8 +244,24 @@ export function mountCompactToolbar(
     }
   } catch {}
 
-  // View saved tickets — opens the offline Saved Tickets popover.
+  // Site Audit — opens the docked audit panel (or closes it). The panel stays
+  // open while the user locates findings on the page, so the list is never
+  // more than a glance away. Loaded on demand.
   toolbar.appendChild(_divider());
+  const auditBtn = _createToolbarBtn(
+    "Site audit — accessibility, layout, performance, SEO",
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`,
+    () => {
+      // The panel keeps this button's pressed state in step (audit-panel.ts syncToolbarButton).
+      void import("./ui/audit-panel").then((m) => m.toggleAuditPanel(root))
+        .catch(() => showToast("The audit could not start on this page", root));
+    },
+    "tracebug-toolbar-audit-btn"
+  );
+  auditBtn.setAttribute("aria-pressed", "false");
+  toolbar.appendChild(auditBtn);
+
+  // View saved tickets — opens the offline Saved Tickets popover.
   toolbar.appendChild(_createToolbarBtn(
     "Saved tickets",
     `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
@@ -266,7 +282,7 @@ export function mountCompactToolbar(
       badge = document.createElement("span");
       badge.className = "tb-tickets-badge";
       badge.setAttribute("aria-hidden", "true");
-      setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#6366F1);color:#fff;font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
+      setInlineStyle(badge, "position:absolute;top:-3px;right:-3px;min-width:14px;height:14px;border-radius:999px;background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);font:700 9px/14px system-ui,sans-serif;text-align:center;padding:0 3px;pointer-events:none");
       ticketsBtn.style.position = "relative";
       ticketsBtn.appendChild(badge);
     }
@@ -651,7 +667,7 @@ async function _toggleRecording(
 function _showRecordPreflight(
   root: HTMLElement,
   anchor: HTMLElement,
-): Promise<{ surface: "tab" | "desktop"; withMicrophone: boolean } | null> {
+): Promise<{ surface: "tab" | "desktop" | "auto"; withMicrophone: boolean } | null> {
   return new Promise((resolve) => {
     const prior = root.querySelector('[data-tracebug="record-preflight"]');
     if (prior) prior.remove();
@@ -688,10 +704,9 @@ function _showRecordPreflight(
     //
     // In the npm SDK the caller is the user's own tab, so `preferCurrentTab`
     // works and "This tab" collapses the picker to a one-click confirm. In the
-    // EXTENSION the recorder runs in an offscreen document, which has no tab to
-    // prefer, so both buttons produced the identical picker - a control that
-    // changes nothing, which is what the popup's copy of it was removed for.
-    // See the note in tracebug-extension/offscreen.js.
+    // EXTENSION the choice already lives in the popup's Record options (Tab
+    // mode via chrome.tabCapture, no picker), so the toolbar asks for "auto"
+    // and background.js applies that stored choice — no second control.
     const showSurfaceChoice = !isExtensionMode();
     setInnerHTML(pop, `
       <div style="font-weight:600;margin-bottom:10px;font-size:12.5px">Start recording</div>
@@ -724,9 +739,8 @@ function _showRecordPreflight(
 
     root.appendChild(pop);
 
-    // "desktop" when there is no choice: it is the only honest value, since the
-    // extension always gets the full picker.
-    let surface: "tab" | "desktop" = showSurfaceChoice ? "tab" : "desktop";
+    // "auto" in the extension: follow the popup's Tab/Desktop choice.
+    let surface: "tab" | "desktop" | "auto" = showSurfaceChoice ? "tab" : "auto";
     const tabBtn = pop.querySelector('[data-tb-pre="surface-tab"]') as HTMLButtonElement | null;
     const deskBtn = pop.querySelector('[data-tb-pre="surface-desktop"]') as HTMLButtonElement | null;
     const micEl = pop.querySelector('[data-tb-pre="mic"]') as HTMLInputElement;
@@ -735,7 +749,7 @@ function _showRecordPreflight(
 
     if (tabBtn && deskBtn) {
       const paintSurface = () => {
-        const on = ";border-color:var(--tb-accent, #6366F1);background:var(--tb-accent-subtle, rgba(99,102,241,0.15));color:var(--tb-text-primary, #fff)";
+        const on = ";border-color:var(--tb-accent, #FF5C6C);background:var(--tb-accent-subtle, rgba(255,92,108,0.15));color:var(--tb-text-primary, #fff)";
         setInlineStyle(tabBtn, segBase + (surface === "tab" ? on : ""));
         setInlineStyle(deskBtn, segBase + (surface === "desktop" ? on : ""));
       };
@@ -745,7 +759,7 @@ function _showRecordPreflight(
     }
 
     let settled = false;
-    const finish = (value: { surface: "tab" | "desktop"; withMicrophone: boolean } | null) => {
+    const finish = (value: { surface: "tab" | "desktop" | "auto"; withMicrophone: boolean } | null) => {
       if (settled) return;
       settled = true;
       pop.remove();
@@ -930,7 +944,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
       setInlineStyle(actions, "display:flex;flex-direction:column;gap:4px;flex-shrink:0");
       const openBtn = document.createElement("button");
       openBtn.textContent = "Open";
-      setInlineStyle(openBtn, "background:var(--tb-accent,#6366F1);color:#fff;border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
+      setInlineStyle(openBtn, "background:var(--tb-accent,#FF5C6C);color:var(--tb-on-accent, #0B0D14);border:none;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:10px;font-weight:600;font-family:inherit;white-space:nowrap");
       openBtn.addEventListener("click", () => {
         closePop();
         // Close any open modal first so the _isOpen guard doesn't block reopening.
@@ -1006,7 +1020,7 @@ function _showOfflineTicketList(root: HTMLElement): void {
     const freeBytes = Math.max(0, QUOTA_ESTIMATE_BYTES - usedBytes);
     const meter = document.createElement("div");
     setInlineStyle(meter, "margin-top:10px;padding-top:10px;border-top:1px solid var(--tb-border,#2a2a3e)");
-    const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#6366F1)";
+    const barColor = pct >= 90 ? "var(--tb-error,#ef4444)" : pct >= 70 ? "#f59e0b" : "var(--tb-accent,#FF5C6C)";
     const bar = document.createElement("div");
     setInlineStyle(bar, "height:4px;border-radius:2px;background:var(--tb-bg-primary,#12121f);overflow:hidden;margin-bottom:5px");
     const fill = document.createElement("div");

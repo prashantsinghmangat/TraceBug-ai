@@ -10,7 +10,7 @@
 
 import type { BugReport, ContextData, StorageEntry } from "../types";
 import { isCustomSensitiveKey, applyCustomRedaction } from "./custom-redaction";
-import { isSensitiveParamName } from "../url-hygiene";
+import { isSensitiveParamName, redactUrlsInText } from "../url-hygiene";
 
 const REDACTED = "[REDACTED]";
 
@@ -91,6 +91,9 @@ function sanitizeText(s: string | undefined | null): string | undefined | null {
   if (s == null) return s;
   let out = String(s);
   for (const p of TOKEN_PATTERNS) out = out.replace(p.re, p.replace);
+  // URLs inside the text (stack frames, logged URLs) get the same param
+  // masking as every captured request URL.
+  out = redactUrlsInText(out);
   // User-declared fields/patterns ride the same pipe — every caller of the
   // token-shape scrub (capture-time console/network + upload pass) gets them.
   return applyCustomRedaction(out);

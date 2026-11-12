@@ -21,8 +21,8 @@ let _onDeactivate: (() => void) | null = null;
 let _persistentBadges: HTMLElement[] = [];
 let _badgeRoot: HTMLElement | null = null;
 
-const HIGHLIGHT_COLOR = "#6366F1";
-const SELECTION_COLOR = "#4F46E5";
+const HIGHLIGHT_COLOR = "#FF5C6C";
+const SELECTION_COLOR = "#FF5C6C";
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -49,10 +49,10 @@ export function activateElementAnnotateMode(
   _modeBanner.dataset.tracebug = "annotate-banner";
   setInlineStyle(_modeBanner, `
     position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-    background: linear-gradient(90deg, var(--tb-gradient-start, #6366F1), var(--tb-gradient-end, #4F46E5)); color: #fff;
+    background: linear-gradient(90deg, var(--tb-gradient-start, #FF5C6C), var(--tb-gradient-end, #FF5C6C)); color:var(--tb-on-accent);
     padding: 10px 20px; font-family: var(--tb-font-family, system-ui, -apple-system, sans-serif);
     font-size: 13px; display: flex; align-items: center; justify-content: space-between;
-    box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 2px 12px rgba(255,92,108, 0.3);
     animation: tracebug-slide-down 0.2s ease;
   `);
   setInnerHTML(_modeBanner, `
@@ -92,7 +92,7 @@ export function activateElementAnnotateMode(
   _highlightOverlay.dataset.tracebug = "element-highlight";
   setInlineStyle(_highlightOverlay, `
     position: fixed; pointer-events: none; z-index: 2147483646;
-    border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(99, 102, 241, 0.08);
+    border: 2px solid ${HIGHLIGHT_COLOR}; background: rgba(255,92,108, 0.08);
     border-radius: 3px; transition: all 0.08s ease; display: none;
   `);
   root.appendChild(_highlightOverlay);
@@ -556,7 +556,7 @@ function _showFeedbackPopover(targetEl: HTMLElement, root: HTMLElement): void {
 
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button id="tracebug-ann-cancel" style="background:#ffffff08;border:1px solid var(--tb-border-hover, #3a3a5e);color:var(--tb-text-secondary, #aaa);padding:8px 16px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-family:inherit">Cancel</button>
-      <button id="tracebug-ann-save" style="background:#6366F1;border:none;color:#fff;padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(99,102,241,0.3)">Save Annotation</button>
+      <button id="tracebug-ann-save" style="background:var(--tb-accent, #FF5C6C);border:none;color:var(--tb-on-accent, #0B0D14);padding:8px 18px;border-radius:var(--tb-radius-md, 8px);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;box-shadow:0 2px 8px rgba(255,92,108,0.3)">Save Annotation</button>
     </div>
   `);
 

@@ -43,16 +43,21 @@ export function summarizeRedactions(report: BugReport): RedactionSummary {
 
   // Input events fire per change on the same field — dedupe by field identity
   // so one password box doesn't report as a dozen maskings.
+  // A field that is not wholly masked can still have had a token scrubbed out
+  // of its value — counted once per distinct value, with the other tokens.
   const seenFields = new Set<string>();
+  const scrubbedValues = new Set<string>();
   for (const ev of report.session?.events || []) {
     if (ev.type === "input") {
       const el = ev.data?.element;
       if (el?.value === REDACTED) seenFields.add(`input:${el.name || el.id || "field"}`);
+      else if (typeof el?.value === "string" && el.value.includes(REDACTED)) scrubbedValues.add(el.value);
     } else if (ev.type === "form_submit") {
       const fields = ev.data?.form?.fields;
       if (fields && typeof fields === "object") {
         for (const [name, v] of Object.entries(fields)) {
           if (v === REDACTED) seenFields.add(`form:${name}`);
+          else if (typeof v === "string" && v.includes(REDACTED)) scrubbedValues.add(v);
         }
       }
     }
@@ -74,6 +79,7 @@ export function summarizeRedactions(report: BugReport): RedactionSummary {
     tokens += count(c.message, TOKEN_RE) + count(c.stack, TOKEN_RE);
   }
   for (const r of requests) tokens += count(r.response, TOKEN_RE);
+  for (const v of scrubbedValues) tokens += count(v, TOKEN_RE);
 
   return { urlParams, formFields, storageKeys, tokens, total: urlParams + formFields + storageKeys + tokens };
 }

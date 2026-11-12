@@ -40,11 +40,15 @@ import {
   scheduleFlush,
   addAnnotation,
   saveEnvironment,
+  saveConsoleLevel,
   setSessionPriority,
   flushPendingEvents,
   getStorageStats,
   type StorageStats,
+  attachResponseSnippet,
+  saveStorageSnapshot,
 } from "./storage";
+import { captureStorageSnapshot, setCookieValueCapture } from "./storage-capture";
 import { generateReproSteps } from "./repro-generator";
 import { mountDashboard, setRecordingState, updateRecordingState, setSessionLifecycleHandlers, setNewCaptureHandler } from "./dashboard";
 import {
@@ -63,8 +67,10 @@ import {
   collectConsoleWarnings,
   collectConsoleInfo,
   collectConsoleLogs,
+  resetConsoleCapped,
   getNetworkFailures,
   clearNetworkFailures,
+  onNetworkFailure,
 } from "./collectors";
 import { setRedactRules } from "./sanitize/custom-redaction";
 import { setTransportMode } from "./ext-transport";
@@ -76,6 +82,7 @@ import {
   type CaptureStatus,
 } from "./capture-ownership";
 import { dedupeNetworkRows } from "./network-dedupe";
+import { isFailedRequest } from "./request-status";
 import { captureEnvironment } from "./environment";
 import { captureScreenshot, getScreenshots, clearScreenshots } from "./screenshot";
 import { captureRegionScreenshot } from "./region-screenshot";
@@ -133,6 +140,9 @@ import {
   getIssueById,
   type ScanResult,
 } from "./scanner";
+import { runAudit as _runAudit, getLastAuditRun as _getLastAuditRun, type RunAuditOptions } from "./audit";
+import { compareAudits as _compareAudits } from "./audit/compare";
+import type { AuditRun } from "./types";
 import { activateElementAnnotateMode, deactivateElementAnnotateMode, isElementAnnotateActive } from "./element-annotate";
 import { activateDrawMode, deactivateDrawMode, isDrawModeActive } from "./draw-mode";
 import { activateInspectMode, deactivateInspectMode, isInspectModeActive } from "./inspect-mode";
@@ -248,7 +258,14 @@ export {
   getIssueById,
 } from "./scanner";
 export type { ScanResult } from "./scanner";
-export type { Issue, IssueDetector, IssueSeverity } from "./types";
+export type { Issue, IssueDetector, IssueSeverity, AuditRun, AuditCategory, AuditEvidence } from "./types";
+export type { RunAuditOptions } from "./audit";
+export type { AuditScan } from "./audit/types";
+import type { AuditScan } from "./audit/types";
+import type { AuditComparison as _AuditComparisonOf } from "./audit/compare";
+import type { Issue as _AuditIssue } from "./types";
+/** compareAudits result for SDK runs: fixed / still present / new / regressed findings. */
+export type AuditComparison = _AuditComparisonOf<_AuditIssue>;
 export type { TraceBugPlugin } from "./plugin-system";
 
 class TraceBugSDK {
@@ -295,7 +312,7 @@ class TraceBugSDK {
    *
    * Options:
    *  - projectId:       Required. Identifies your app.
-   *  - maxEvents:       Max events per session in storage (default 200).
+   *  - maxEvents:       Max events per session in storage (default 500).
    *  - maxSessions:     Max sessions kept in localStorage (default 50).
    *  - enableDashboard: Show the floating bug button (default true).
    *  - enabled:         Control when SDK is active (default "auto").
@@ -310,7 +327,10 @@ class TraceBugSDK {
 
     try {
       this.config = {
-        maxEvents: 200,
+        // 500, not 200: the oldest events are evicted first, and those are the
+        // clicks that lead up to the bug. A few hundred small events cost far
+        // less storage than one screenshot.
+        maxEvents: 500,
         maxSessions: 50,
         enableDashboard: true,
         theme: "light",
@@ -328,6 +348,7 @@ class TraceBugSDK {
       // Install app-specific redaction rules before any collector attaches —
       // rules must be live for the first captured event.
       setRedactRules(this.config.redact);
+      setCookieValueCapture(this.config.captureCookieValues === true);
 
       this.initialized = true;
       // Restore the active session ID if a recording survived a reload.
@@ -401,8 +422,8 @@ class TraceBugSDK {
       return false;
     }
     if (config.maxEvents !== undefined && (typeof config.maxEvents !== "number" || config.maxEvents < 1)) {
-      console.warn("[TraceBug] maxEvents must be a positive number. Using default (200).");
-      config.maxEvents = 200;
+      console.warn("[TraceBug] maxEvents must be a positive number. Using default (500).");
+      config.maxEvents = 500;
     }
     if (config.maxSessions !== undefined && (typeof config.maxSessions !== "number" || config.maxSessions < 1)) {
       console.warn("[TraceBug] maxSessions must be a positive number. Using default (50).");
@@ -454,7 +475,10 @@ class TraceBugSDK {
           projectId: this.config!.projectId,
           type,
           page: window.location.pathname,
-          timestamp: Date.now(),
+          // A Resource Timing row carries when the request really started
+          // (`_ts`); without it, page-load rows drained at capture start were
+          // all stamped "now", after requests that ran before them.
+          timestamp: typeof data._ts === "number" && data._ts > 0 ? data._ts : Date.now(),
           data,
         };
 
@@ -484,6 +508,10 @@ class TraceBugSDK {
     this.cleanups.push(collectRouteChanges(emit));
     this.cleanups.push(collectApiRequests(emit));
     this.cleanups.push(collectXhrRequests(emit));
+    // Persist each failure's response snippet on its stored request event.
+    this.cleanups.push(onNetworkFailure((f) => {
+      if (this.sessionId) attachResponseSnippet(this.sessionId, f);
+    }));
     // Backfill: catches requests fired BEFORE our fetch/XHR wraps were
     // installed, plus anything that bypassed them (axios with cached XHR
     // reference, service workers, polyfills). Reads from the browser's
@@ -724,7 +752,9 @@ class TraceBugSDK {
     try {
       const env = captureEnvironment();
       saveEnvironment(id, env);
+      saveConsoleLevel(id, this._consoleLevel);
     } catch {}
+    resetConsoleCapped();
     try {
       const storedUser = localStorage.getItem("tracebug_user");
       if (storedUser) {
@@ -767,6 +797,7 @@ class TraceBugSDK {
         if (sess) sess.screenshots = shots.slice(0, 5);
       }
     } catch {}
+    this._snapshotStorage(id);
     flushPendingEvents();
     clearActiveSessionId();
     this.sessionId = null;
@@ -1053,7 +1084,7 @@ class TraceBugSDK {
     blurFirst?: boolean;
     delaySec?: number;
     withMicrophone?: boolean;
-    surfaceMode?: "tab" | "desktop";
+    surfaceMode?: "tab" | "desktop" | "auto";
     video?: boolean;
   } = {}): void {
     // Mutable: the countdown's mic toggle (below) can change this before go()
@@ -1317,7 +1348,7 @@ class TraceBugSDK {
 
   async startVideoRecording(options?: {
     mode?: "rolling" | "standard";
-    surfaceMode?: "tab" | "desktop";
+    surfaceMode?: "tab" | "desktop" | "auto";
     withMicrophone?: boolean;
     onStatus?: (status: "recording" | "stopped" | "error" | "warning" | "blocked", message?: string) => void;
   }): Promise<boolean> {
@@ -1793,7 +1824,7 @@ class TraceBugSDK {
 
     const flow = actions.length > 0 ? ` after ${actions.join(" \u2192 ")}` : "";
     const failedApis = session.events
-      .filter(e => e.type === "api_request" && (e.data.request?.statusCode >= 400 || e.data.request?.statusCode === 0))
+      .filter(e => e.type === "api_request" && isFailedRequest(e.data.request))
       .slice(0, 1)
       .map(e => `${e.data.request?.method} ${e.data.request?.url?.split("?")[0]?.slice(-40)} returned ${e.data.request?.statusCode}`);
 
@@ -2138,12 +2169,20 @@ class TraceBugSDK {
     }, 200);
   }
 
+  /** Persist Web Storage as it is now (first call per session wins). */
+  private _snapshotStorage(sessionId: string): void {
+    if (this.config?.captureStorage === false) return;
+    try { saveStorageSnapshot(sessionId, captureStorageSnapshot()); } catch {}
+  }
+
   private processError(
     sessionId: string,
     errorMessage?: string,
     errorStack?: string
   ): void {
     if (!errorMessage) return;
+    // Storage as the error happened — before the app or the reporter changes it.
+    this._snapshotStorage(sessionId);
 
     // Small delay so the error event itself is stored first
     setTimeout(() => {
@@ -2198,6 +2237,7 @@ class TraceBugSDK {
     hideRecordingHUD();
     clearNetworkFailures();
     setRedactRules(undefined);
+    setCookieValueCapture(false);
     deactivateElementAnnotateMode();
     deactivateDrawMode();
     deactivateInspectMode();
@@ -2229,6 +2269,47 @@ class TraceBugSDK {
    */
   async scanPage(): Promise<ScanResult> {
     return _scan();
+  }
+
+  /**
+   * Site Audit: check this page for accessibility (axe, WCAG 2.0–2.2 A/AA), layout,
+   * SEO and runtime problems. Read-only. Each category says whether it ran; a
+   * category that could not run is never reported as passing. Findings carry
+   * fingerprints so a later run can be compared with `compareAudits`.
+   */
+  async runAudit(options?: RunAuditOptions): Promise<AuditRun> {
+    return _runAudit(options);
+  }
+
+  /** The last audit run on this page (memory only), or null. */
+  getLastAudit(): AuditRun | null {
+    return _getLastAuditRun();
+  }
+
+  /** Compare two runs of the same page: fixed, still present, new, regressed. */
+  compareAudits(before: AuditRun, after: AuditRun) {
+    return _compareAudits(before, after);
+  }
+
+  /** Download an audit run (default: the last one) as a TraceBug report .html.
+   *  The file opens on its Audit tab and the MCP server reads it with get_audit. */
+  async exportAudit(run?: AuditRun | null): Promise<{ filename: string; sizeBytes: number } | null> {
+    const r = run || _getLastAuditRun();
+    if (!r) return null;
+    const m = await import("./audit/export");
+    const out = await m.exportAuditReport(r);
+    return { filename: out.filename, sizeBytes: out.sizeBytes };
+  }
+
+  /** Run an audit and show it in the Site Audit panel (needs the dashboard). `scan` picks a menu scan
+   *  ("full", "auto-review", "accessibility", "performance-seo"); default: the last one chosen.
+   *  Running it again shows what changed since the previous run. */
+  async showAuditPanel(scan?: AuditScan): Promise<AuditRun | null> {
+    if (!this.config?.enableDashboard) return null;
+    const root = document.getElementById("tracebug-root");
+    if (!root) return null;
+    const m = await import("./ui/audit-panel");
+    return m.showAuditPanel(root, scan);
   }
 
   /**

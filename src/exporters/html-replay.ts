@@ -6,7 +6,7 @@
 // Inputs reuse what's already in memory: events from the session, screenshots
 // (already base64 dataUrls), the optional video Blob, and the BugReport.
 
-import { BugReport, StoredSession, StorageEntry } from "../types";
+import { AuditRun, BugReport, StoredSession, StorageEntry } from "../types";
 import { buildTimeline } from "../timeline-builder";
 import { buildReplayHtml, BundlePayload } from "./html-template";
 import { priorityLabel } from "../report-builder";
@@ -33,6 +33,10 @@ export interface HtmlReplayOptions {
    *  is usually not the person who made it — which is the whole point, and also
    *  why it has to be removable before the file is sent. */
   showFooter?: boolean;
+  /** A Site Audit run to carry in the file (`payload.audit`). The viewer shows it
+   *  in an Audit tab and the MCP server reads it (get_audit / compare_audits).
+   *  Already redacted and bounded by buildAuditRun. */
+  audit?: AuditRun | null;
 }
 
 export interface ExportedReplay {
@@ -76,16 +80,19 @@ async function buildReplayPayload(
   report: BugReport,
   options?: HtmlReplayOptions,
 ): Promise<{ blob: Blob; html: string }> {
-  // DOM replay (rrweb) is the preferred, tiny, inspectable replay surface. When
-  // it's present we default the base64 video OFF — that's the whole size win
-  // (KB of DOM events vs tens of MB of WebM). A caller can still force the video
-  // in alongside it with `includeVideo: true`.
+  // A real screen recording is embedded even when the DOM replay (rrweb) is
+  // too. The reporter chose to record video, and it is the only surface with
+  // sound — microphone narration and tab audio were silently lost when the
+  // video was dropped for size. Events-only captures carry a replay-only
+  // `report.video` with an empty url/dataUrl (report-builder.ts), so they stay
+  // video-free and small. A caller can still opt out with `includeVideo: false`.
   const rrwebEvents = report.video?.rrwebEvents;
   const hasRrweb = Array.isArray(rrwebEvents) && rrwebEvents.length > 0;
-  const includeVideo = options?.includeVideo ?? (hasRrweb ? false : !!report.video);
+  const hasRealVideo = !!(report.video && (report.video.dataUrl || report.video.url));
+  const includeVideo = options?.includeVideo ?? hasRealVideo;
 
   // Build a timeline that mirrors the live scrubber's marker logic.
-  const timeline = buildTimeline(report.session.events).map(t => ({
+  const timeline = buildTimeline(report.session.events, { baseUrl: report.environment?.url }).map(t => ({
     timestamp: t.timestamp,
     type: t.type,
     description: t.description,
@@ -172,6 +179,7 @@ async function buildReplayPayload(
   }
   const info: Array<{ k: string; v: string; i?: string }> = [
     { k: "URL", v: env.url, i: ic("link") },
+    ...(env.startUrl ? [{ k: "Started on", v: env.startUrl, i: ic("link") }] : []),
     { k: "Timestamp", v: new Date(env.timestamp || report.generatedAt).toLocaleString(), i: ic("clock") },
     { k: "OS", v: env.os, i: osIcon(env.os) },
     { k: "Browser", v: `${env.browser} ${env.browserVersion}`.trim(), i: browserIcon(env.browser) },
@@ -199,6 +207,14 @@ async function buildReplayPayload(
   const redactionLine = formatRedactionSummary(summarizeRedactions(report));
   if (redactionLine) info.push({ k: "Privacy", v: `🛡 ${redactionLine}`, i: "" });
 
+  // Evidence integrity: what this file can and can't show (evidence-summary.ts).
+  const evidence = report.evidence;
+  if (evidence) {
+    info.push({ k: "Captured", v: evidence.captured.join(" · "), i: "" });
+    if (evidence.dropped.length) info.push({ k: "Dropped", v: `⚠ ${evidence.dropped.join(" · ")}`, i: "" });
+    info.push({ k: "Not captured", v: evidence.notCaptured.join(" · "), i: "" });
+  }
+
   // Web Storage snapshot — each entry as its own kv row (capped for display).
   // Values are already redacted at capture for sensitive keys.
   const STORAGE_DISPLAY_CAP = 20;
@@ -206,7 +222,7 @@ async function buildReplayPayload(
     if (!entries || entries.length === 0) return;
     const shown = entries.slice(0, STORAGE_DISPLAY_CAP);
     for (const e of shown) {
-      info.push({ k: `${label} · ${e.key}`, v: e.redacted ? `🔒 ${e.value}` : e.value, i: "" });
+      info.push({ k: `${label} · ${e.key}`, v: e.valueOmitted ? "(value not captured)" : e.redacted ? `🔒 ${e.value}` : e.value, i: "" });
     }
     const hiddenForDisplay = entries.length - shown.length;
     const totalHidden = hiddenForDisplay + (droppedAtCapture || 0);
@@ -275,12 +291,16 @@ async function buildReplayPayload(
       hint: report.rootCause.hint,
       confidence: report.rootCause.confidence,
     } : undefined,
+    // Structured, for the MCP server (get_bug_report) — the Info rows above
+    // are the human-readable copy of the same thing.
+    evidence: report.evidence,
     // Issue-filing helpers for the file's RECIPIENT — precomputed here so
     // the viewer ships zero issue-builder code. Token-free actions only;
     // API-token integrations stay in the exporter's modal.
     github: buildGithubPayload(report, options?.githubRepo),
     ...buildPlaywrightPayload(report),
   };
+  if (options?.audit) payload.audit = options.audit;
 
   // Compress the DOM-replay stream. It's repetitive text and gzips ~8–12×, so
   // this is the single biggest lever on the file size (the stream is ~89% of a

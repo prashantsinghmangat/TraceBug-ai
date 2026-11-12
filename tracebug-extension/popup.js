@@ -783,7 +783,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const sub = document.getElementById("ctaSub");
     if (sub) {
       sub.textContent = on
-        ? "Records the tab · stop when done"
+        ? (surfaceMode === "tab" ? "Records this tab · stop when done" : "Records a window or screen · stop when done")
         : "Console, network & replay · stop when done";
     }
     // Both icons are in popup.html; show one. No innerHTML — see the comment
@@ -827,6 +827,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         surfaceMode = "desktop";
         surfaceSetBy = "user";
         renderSurfaceButtons();
+        // The hero subtitle names the surface; keep it true.
+        if (!stateResponse?.capturing) applyVideoUI(videoCb ? videoCb.checked : false);
         saveRecordOpts();
       });
     }
@@ -835,6 +837,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         surfaceMode = "tab";
         surfaceSetBy = "user";
         renderSurfaceButtons();
+        if (!stateResponse?.capturing) applyVideoUI(videoCb ? videoCb.checked : false);
         saveRecordOpts();
       });
     }
@@ -935,6 +938,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     await runCombo("TB_INSPECT", "Starting inspect…");
   });
 
+  // ── Site Audit — the first card ──────────────────────────────────────────
+  // The card's main row runs All checks at once; its chevron (#btnAudit) opens
+  // the menu of scans (plan §4a), each of which runs that scan and opens the
+  // panel on the page.
+  document.getElementById("btnAuditRun")?.addEventListener("click", async () => {
+    await runCombo("TB_RUN_AUDIT", "Checking this page…", { scan: "full" });
+  });
+  const auditBtn = document.getElementById("btnAudit");
+  const auditMenu = document.getElementById("auditMenu");
+  const setAuditMenu = (open) => {
+    auditMenu.hidden = !open;
+    auditBtn.setAttribute("aria-expanded", String(open));
+    if (open) auditMenu.querySelector(".audit-item")?.focus();
+  };
+  auditBtn.addEventListener("click", () => setAuditMenu(auditMenu.hidden));
+  auditMenu.addEventListener("keydown", (e) => {
+    const items = Array.from(auditMenu.querySelectorAll(".audit-item"));
+    const i = items.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); setAuditMenu(false); auditBtn.focus(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+  });
+  auditMenu.querySelectorAll(".audit-item").forEach((item) => {
+    item.addEventListener("click", async () => {
+      setAuditMenu(false);
+      await runCombo("TB_RUN_AUDIT", "Checking this page…", { scan: item.dataset.scan });
+    });
+  });
+
   // ── Stop a capture already running on this tab — shown by
   // applyCapturingUI() instead of the (disabled) hero button. Relays into
   // the page the same way TB_START_RECORDING does; the page decides whether
@@ -1010,7 +1042,7 @@ function reportFailure(err) {
 }
 
 function setBusy(busy) {
-  ["btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect", "btnStopCapture"].forEach((id) => {
+  ["btnAuditRun", "btnAudit", "btnCaptureBug", "btnScreenshot", "btnViewTickets", "btnInspect", "btnStopCapture"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = busy;
   });
@@ -1050,7 +1082,7 @@ function updateHint(isLoaded) {
   // not a page handler — so the old "once TraceBug is on a page" caveat is
   // gone with it.
   text.textContent = boundShortcut
-    ? `${base} Tip: ${boundShortcut} captures a bug on this tab.`
+    ? `${base} Tip: ${boundShortcut} screenshots this tab and opens a bug ticket.`
     : `${base} No capture shortcut is set.`;
 
   dot.classList.toggle("active", !!isLoaded);
@@ -1115,13 +1147,13 @@ function showToastAction(msg, actionLabel, onAction, steps) {
   if (onAction) {
     const act = document.createElement("button");
     act.textContent = actionLabel;
-    act.style.cssText = "background:var(--error);color:#fff;border:0;border-radius:6px;padding:5px 10px;font:600 11.5px inherit;cursor:pointer";
+    act.style.cssText = "background:var(--error);color:#fff;border:0;border-radius:6px;padding:5px 10px;font-weight:600;font-size:11.5px;font-family:inherit;cursor:pointer";
     act.addEventListener("click", onAction);
     row.appendChild(act);
   }
   const dismiss = document.createElement("button");
   dismiss.textContent = "Dismiss";
-  dismiss.style.cssText = "background:none;border:0;color:inherit;opacity:0.75;font:600 11.5px inherit;cursor:pointer;padding:5px 2px";
+  dismiss.style.cssText = "background:none;border:0;color:inherit;opacity:0.75;font-weight:600;font-size:11.5px;font-family:inherit;cursor:pointer;padding:5px 2px";
   dismiss.addEventListener("click", () => { t.style.display = "none"; });
   row.appendChild(dismiss);
   t.appendChild(row);
@@ -1211,6 +1243,22 @@ function showMicNotice(err) {
 // your screen" would be false for every single person who reads it.
 const WHATS_NEW_KEY = "tb_whats_new";
 const WHATS_NEW = {
+  "1.12.0": {
+    label: "New in 1.12.0",
+    lines: [
+      "Site Audit: score any page for accessibility, layout, performance and SEO",
+      "A side panel stays open while you locate each problem, with how to fix it",
+      "Export the audit and your coding agent can fix it, with three new MCP tools",
+    ],
+  },
+  "1.11.6": {
+    label: "New in 1.11.6",
+    lines: [
+      "Reports flag only real failures and say what they captured and what they missed",
+      "Private by default: URL tokens, hidden fields and cookie values stay out of reports",
+      "Simpler AI hand-off: one setup command, and your agent finds reports in Downloads",
+    ],
+  },
   "1.11.5": {
     label: "New in 1.11.5",
     lines: [

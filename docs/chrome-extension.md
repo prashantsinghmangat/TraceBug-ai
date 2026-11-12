@@ -32,14 +32,19 @@ After code changes, run `npm run build` and click the **reload** icon on the Tra
 
 ## Usage
 
-The extension popup has four actions:
+The extension popup lists its actions in this order:
 
 | Action | What it does |
 |--------|--------------|
-| **Capture Bug** (primary) | Starts an events-only capture — console, network, your clicks and an interactive DOM replay. No screen-share dialog opens. A floating HUD shows the capture timer plus Screenshot, Draw, Blur (droplet icon — click an element to blur it, click again to unblur), and Stop. |
-| **Screenshot** | One-shot capture of the current viewport. Opens the ticket modal directly with the screenshot attached. |
-| **View tickets** | Opens the dashboard panel on the current page. |
-| **Inspect element** | DevTools-style inspection: hover shows a box-model highlight + computed-style tooltip; click attaches the element with its full style evidence (typography, colors as hex, box model, WCAG contrast) to the report as an `inspect` annotation. |
+| **Audit this page** (first, largest) | Runs every Site Audit check on the current page and opens the audit panel docked beside it: a 0–100 score, findings with fixes, Locate, Copy for AI and Export report. The arrow opens the four scans (All checks, Auto Review, Accessibility Audit, Performance & SEO). Read-only. Guide: [site-audit.md](site-audit.md). |
+| **Capture Screenshot** | One-shot capture of the current viewport. Opens the ticket modal directly with the screenshot attached. |
+| **Capture Bug** | Starts an events-only capture — console, network, your clicks and an interactive DOM replay. No screen-share dialog opens. A floating HUD shows the capture timer plus Screenshot, Draw, Blur (droplet icon — click an element to blur it, click again to unblur), and Stop. |
+| **Tickets** | Opens the dashboard panel on the current page. |
+| **Inspect** | DevTools-style inspection: hover shows a box-model highlight + computed-style tooltip; click attaches the element with its full style evidence (typography, colors as hex, box model, WCAG contrast) to the report as an `inspect` annotation. |
+
+The audit's accessibility engine (axe-core) ships inside the extension and is
+injected only into the tab you audit, only when you run an audit. The on-page
+toolbar also has an **Audit** button that opens the same panel.
 
 ### ⚙ Record options
 

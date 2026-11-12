@@ -54,7 +54,11 @@ await page.route("**/api/notify-me", (route) => {
 
 try {
   await page.goto("http://localhost:4179/try.html", { waitUntil: "load" });
-  await page.waitForTimeout(1500);
+  // try.html loads the SDK only when the in-page demo is opted into (4a7511d:
+  // a page-mode init on load raced the extension's own injected copy).
+  await page.click("#inPageDemoBtn");
+  await page.waitForSelector("#tracebug-toolbar-track-btn", { timeout: 10000 });
+  await page.waitForTimeout(500);
 
   // Seed: 5 already-saved tickets, ask not yet shown.
   await page.evaluate(() => {
@@ -79,8 +83,12 @@ try {
   await page.waitForTimeout(800);
   await page.click('#tracebug-quick-bug-modal [data-action="save-ticket"]');
 
-  // Card appears ~1.6s after the save toast.
-  const card = await page.waitForSelector("#tracebug-milestone-ask", { timeout: 5000 }).catch(() => null);
+  // The card waits for the ticket modal to close (8ef6859, T-10: it used to
+  // overlap the modal's corner), then appears ~1.6 s later. Close it the way
+  // a user does after saving.
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Escape");
+  const card = await page.waitForSelector("#tracebug-milestone-ask", { timeout: 6000 }).catch(() => null);
   check("milestone card appears after 5th-ticket save", !!card);
 
   // Once-ever flag set at SHOW time (ignoring counts as answered).

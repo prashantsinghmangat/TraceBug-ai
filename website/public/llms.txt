@@ -1,0 +1,31 @@
+# TraceBug
+
+> TraceBug captures a browser bug — session replay, console errors, failed network requests and repro steps — into one offline .html file that AI coding agents (Claude Code, Cursor, Windsurf) read over a local MCP server and fix. Free, open source (MIT), no account, no backend, nothing uploaded.
+
+TraceBug is a Chrome and Firefox extension plus an npm SDK (`tracebug-sdk`). Testers press Capture Bug, reproduce the problem, and export a self-contained report. Developers run `npx -y tracebug mcp` so their agent can read the report with tools such as `get_bug_report`, `get_fix_context` and `get_playwright_test`. The Site Audit checks a page for accessibility, layout, performance, SEO and phone-width problems and exports them the same way.
+
+## Docs
+- [Getting started](https://tracebug.dev/docs): install the extension or SDK and capture a first bug
+- [Site Audit](https://tracebug.dev/docs#audit): score a page for accessibility, layout, phone width, speed and SEO, with fixes your agent applies
+- [MCP server](https://tracebug.dev/docs/mcp): connect Claude Code, Cursor or Windsurf to TraceBug reports
+- [Claude Code setup](https://tracebug.dev/docs/mcp/claude-code): one-command setup
+- [Cursor setup](https://tracebug.dev/docs/mcp/cursor): MCP config for Cursor
+- [Windsurf setup](https://tracebug.dev/docs/mcp/windsurf): MCP config for Windsurf
+- [AI debugger](https://tracebug.dev/docs/ai-debugger): how the agent investigates a report
+- [Playwright reporter](https://tracebug.dev/docs/playwright): failed tests become bug reports
+- [HAR export](https://tracebug.dev/docs/har-export): export captured network traffic
+
+## Product
+- [Features](https://tracebug.dev/features): everything a report captures
+- [Pricing](https://tracebug.dev/pricing): free and open source
+- [Proof](https://tracebug.dev/proof): real bugs captured and fixed by an AI agent
+- [Claude Code bug reports](https://tracebug.dev/claude-code-bug-reports): hand a captured bug to Claude Code
+- [Cursor bug reports](https://tracebug.dev/cursor-bug-reports): hand a captured bug to Cursor
+- [Source code](https://github.com/prashantsinghmangat/tracebug-ai): MIT licence
+
+## Optional
+- [Blog](https://tracebug.dev/blog)
+- [Changelog](https://tracebug.dev/changelog)
+- [Compare: Jam alternative](https://tracebug.dev/compare/jam-alternative)
+- [Compare: Sentry alternative](https://tracebug.dev/compare/sentry-alternative)
+- [Privacy](https://tracebug.dev/privacy)

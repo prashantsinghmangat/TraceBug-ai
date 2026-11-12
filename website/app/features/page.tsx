@@ -10,7 +10,7 @@ import InstallButtons from "@/components/InstallButtons";
 export const metadata: Metadata = {
   title: "Features — TraceBug",
   description:
-    "Everything in a TraceBug report: one-click capture, screenshots with drawing and blur, console and network logs, a DOM replay, optional video and voice, GitHub, Linear, Slack and Jira export, and an MCP hand-off to your AI agent. Local-first, any front-end framework.",
+    "TraceBug features: one-click bug capture, screenshots, console and network logs, replay, an MCP hand-off to your AI agent, and a Site Audit with fixes.",
   alternates: { canonical: "/features" },
 };
 
