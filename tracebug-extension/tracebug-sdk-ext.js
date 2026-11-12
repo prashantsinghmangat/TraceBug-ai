@@ -35592,6 +35592,7 @@ Response: ${match.response.slice(0, 160)}` : "";
         "perf/lcp": `Make the largest element arrive sooner: compress and resize it, serve modern formats (WebP/AVIF), add fetchpriority="high" or a preload for it, and don't lazy-load it.`,
         "perf/fcp": "Draw something sooner: inline the critical CSS, defer non-critical scripts and styles, and cut the work done before the first paint.",
         "perf/ttfb": "Speed up the server response: cache the page or its data, use a CDN, and reduce work done before the first byte is sent.",
+        "perf/blocking": "Break up long JavaScript tasks: defer or lazy-load scripts not needed for the first screen, remove unused code and heavy third-party tags, and split long work into chunks (yield to the browser, e.g. with scheduler.yield or setTimeout).",
         "perf/cls": "Reserve space for content that loads late: set width/height or aspect-ratio on images and embeds, and don't insert banners above existing content.",
         "perf/page-weight": "Download less: compress and resize images, remove unused JavaScript and CSS, and lazy-load what isn't on the first screen.",
         "perf/large-resource": "Shrink this file: compress or resize it, split large scripts, or load it only when it's needed.",
@@ -36831,13 +36832,38 @@ Response: ${match.response.slice(0, 160)}` : "";
       return false;
     }
   }
+  function clsFromShifts(shifts) {
+    let worst = 0, cur = 0, winStart = -Infinity, last = -Infinity;
+    for (const s2 of [...shifts].filter((s3) => !s3.hadRecentInput).sort((a2, b) => a2.startTime - b.startTime)) {
+      if (s2.startTime - last > 1e3 || s2.startTime - winStart > 5e3) {
+        cur = 0;
+        winStart = s2.startTime;
+      }
+      cur += s2.value;
+      last = s2.startTime;
+      if (cur > worst) worst = cur;
+    }
+    return Math.round(worst * 1e3) / 1e3;
+  }
+  function blockingTime(tasks, fcpMs, until = Infinity, own = -1) {
+    let total = 0, lastEnd = -Infinity;
+    const mine = (t2) => own >= t2.startTime && own <= t2.startTime + t2.duration;
+    for (const t2 of [...tasks].filter((t3) => t3.startTime < until && t3.startTime + t3.duration > fcpMs && !mine(t3)).sort((a2, b) => a2.startTime - b.startTime)) {
+      if (lastEnd > fcpMs && t2.startTime - lastEnd >= 5e3) break;
+      const start = Math.max(t2.startTime, fcpMs);
+      const end = t2.startTime + t2.duration;
+      total += Math.max(0, end - start - 50);
+      lastEnd = end;
+    }
+    return Math.round(total);
+  }
   function grade(value, [good, poor]) {
     if (value > poor) return "serious";
     if (value > good) return "moderate";
     return null;
   }
-  async function detectPerfFindings() {
-    var _a2;
+  async function detectPerfFindings(before = Infinity) {
+    var _a2, _b, _c;
     const nav = performance.getEntriesByType("navigation")[0];
     if (!nav) {
       return { ran: false, limitation: "This browser exposes no page-load timing for this page, so performance was not checked.", metrics: {}, findings: [] };
@@ -36855,15 +36881,24 @@ Response: ${match.response.slice(0, 160)}` : "";
     const shiftTypeSupported = (PerformanceObserver.supportedEntryTypes || []).includes("layout-shift");
     if (shiftTypeSupported) {
       const shifts = await buffered("layout-shift");
-      metrics.cls = Math.round(shifts.filter((s2) => !s2.hadRecentInput).reduce((t2, s2) => t2 + s2.value, 0) * 1e3) / 1e3;
+      metrics.cls = clsFromShifts(shifts);
     } else {
       notes.push("Layout shift (CLS) is not measured in this browser.");
+    }
+    const longTaskSupported = (PerformanceObserver.supportedEntryTypes || []).includes("longtask");
+    if (longTaskSupported && metrics.fcpMs !== void 0) {
+      const firstInput = (_b = (_a2 = (await buffered("first-input"))[0]) == null ? void 0 : _a2.startTime) != null ? _b : Infinity;
+      const loadEnd = nav.loadEventEnd > 0 ? nav.loadEventEnd : performance.now();
+      metrics.tbtMs = blockingTime(await buffered("longtask"), metrics.fcpMs, Math.min(before, firstInput, loadEnd + 5e3), SDK_LOADED_AT);
+    } else if (!longTaskSupported) {
+      notes.push("Main-thread blocking (TBT) is not measured in this browser.");
     }
     const thresholds = [
       ["lcpMs", "perf/lcp", "Largest content paints at", "The largest image or text block appears at {v}. Over 2.5 s feels slow; over 4 s, users leave."],
       ["fcpMs", "perf/fcp", "First content paints at", "Nothing is drawn until {v}. Over 1.8 s, the page feels stuck."],
       ["ttfbMs", "perf/ttfb", "Server responds after", "The first byte of the page arrives after {v}. Over 0.8 s, everything after it starts late."],
-      ["cls", "perf/cls", "Layout shift score", "Content moved by {v} while loading (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."]
+      ["tbtMs", "perf/blocking", "Main thread blocked for", "Scripts kept the page from responding for {v} in total while it loaded (the part of each long task past 50 ms, from first paint until 5 s after load). Over 0.2 s, clicks and typing feel delayed; over 0.6 s, the page feels frozen."],
+      ["cls", "perf/cls", "Layout shift score", "Content moved by {v} in its worst burst of shifts (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."]
     ];
     for (const [key, ruleId, label, text] of thresholds) {
       const v2 = metrics[key];
@@ -36931,7 +36966,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       const entry = src ? byUrl.get(src) : void 0;
       const rect = img.getBoundingClientRect();
       if (!entry || !img.naturalWidth || rect.width < 1) continue;
-      samples.push({ el: img, src, bytes: entry.encodedBodySize || entry.transferSize || 0, naturalW: img.naturalWidth, naturalH: img.naturalHeight, drawnW: rect.width, drawnH: rect.height, contentType: "contentType" in entry ? String((_a2 = entry.contentType) != null ? _a2 : "") : void 0 });
+      samples.push({ el: img, src, bytes: entry.encodedBodySize || entry.transferSize || 0, naturalW: img.naturalWidth, naturalH: img.naturalHeight, drawnW: rect.width, drawnH: rect.height, contentType: "contentType" in entry ? String((_c = entry.contentType) != null ? _c : "") : void 0 });
     }
     findings.push(...imageWeightFindings(samples, window.devicePixelRatio || 1));
     return { ran: true, limitation: notes.join(" "), metrics, findings };
@@ -37002,7 +37037,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return out;
   }
-  var PERF_THRESHOLDS, PAGE_WEIGHT_KB, LARGE_RESOURCE_KB, MAX_LARGE, MAX_BLOCKING, RENDER_BLOCKING_MS, PERF_LIMITATION, fileName, IMAGE_LIMITS;
+  var PERF_THRESHOLDS, PAGE_WEIGHT_KB, LARGE_RESOURCE_KB, MAX_LARGE, MAX_BLOCKING, RENDER_BLOCKING_MS, PERF_LIMITATION, fileName, SDK_LOADED_AT, IMAGE_LIMITS;
   var init_performance = __esm({
     "src/audit/detectors/performance.ts"() {
       "use strict";
@@ -37012,14 +37047,16 @@ Response: ${match.response.slice(0, 160)}` : "";
         lcpMs: [2500, 4e3],
         fcpMs: [1800, 3e3],
         ttfbMs: [800, 1800],
-        cls: [0.1, 0.25]
+        cls: [0.1, 0.25],
+        /** Total Blocking Time, web.dev lab guidance: good under 200 ms, poor over 600 ms. */
+        tbtMs: [200, 600]
       };
       PAGE_WEIGHT_KB = 3e3;
       LARGE_RESOURCE_KB = 500;
       MAX_LARGE = 5;
       MAX_BLOCKING = 10;
       RENDER_BLOCKING_MS = 200;
-      PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. INP is not measured. TraceBug's own files are left out.";
+      PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. Blocking time covers the load only (to 5 s after it, or the first click); INP is not measured. TraceBug's own files and work are left out.";
       fileName = (url) => {
         try {
           const u2 = new URL(url);
@@ -37028,6 +37065,7 @@ Response: ${match.response.slice(0, 160)}` : "";
           return url.slice(0, 80);
         }
       };
+      SDK_LOADED_AT = typeof performance !== "undefined" ? performance.now() : -1;
       IMAGE_LIMITS = { oversizedMinKb: 50, oversizedFactor: 4, formatMinKb: 100 };
     }
   });
@@ -37552,6 +37590,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (_inFlight) return _inFlight;
     const scan2 = options.scan && AUDIT_SCANS[options.scan] ? options.scan : "full";
     const wanted = new Set(((_a2 = options.categories) == null ? void 0 : _a2.length) ? options.categories : AUDIT_SCANS[scan2].categories);
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Infinity;
     _inFlight = (async () => {
       var _a3, _b, _c, _d, _e;
       const categories = {};
@@ -37618,7 +37657,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       }
       if (wanted.has("performance")) {
         try {
-          const perf = await detectPerfFindings();
+          const perf = await detectPerfFindings(startedAt);
           findings.push(...perf.findings);
           const dev = isDevHost(location.hostname);
           if (dev) {

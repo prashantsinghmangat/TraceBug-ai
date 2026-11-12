@@ -28,13 +28,16 @@ for (const url of SITES) {
   const page = await ctx.newPage();
   try {
     await page.goto(url, { waitUntil: "load", timeout: 45000 });
-    await page.waitForTimeout(2500);
-    // Scroll through so scroll-revealed content appears, then back to top.
-    await page.evaluate(async () => {
-      const h = Math.min(document.documentElement.scrollHeight, 30000);
-      for (let y = 0; y < h; y += 700) { scrollTo(0, y); await new Promise((r) => setTimeout(r, 120)); }
-      scrollTo(0, 0); await new Promise((r) => setTimeout(r, 800));
-    });
+    // Past the 5 s after load that blocking time (TBT) covers, so the scroll pass below isn't charged to the load.
+    await page.waitForTimeout(5500);
+    // Scroll through so scroll-revealed content appears, then back to top. Real wheel input,
+    // as a person would: a programmatic scrollTo() is not input, so the browser kept
+    // reporting LCP candidates far down the page (BBC read 5.9 s against Lighthouse's 1.7 s).
+    await page.mouse.move(720, 450);
+    const h = await page.evaluate(() => Math.min(document.documentElement.scrollHeight, 30000));
+    for (let y = 0; y < h; y += 700) { await page.mouse.wheel(0, 700); await page.waitForTimeout(120); }
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForTimeout(800);
     await page.addScriptTag({ path: SDK });
     await page.evaluate(() => window.TraceBug.init({ projectId: "noise", enabled: "all" }));
     await page.waitForTimeout(600);

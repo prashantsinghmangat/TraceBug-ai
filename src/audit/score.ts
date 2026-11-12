@@ -11,7 +11,14 @@
 // So one serious problem takes 12% off; the same problem on 5+ elements takes
 // at most 24%. Each problem takes its share of what is left, so a page with
 // many problems approaches 0 but never sits at an unexplained 0 — checked
-// against ten public sites (gov.uk 94–100, Shopify 79, MDN 76, GitHub 50, Hacker News 24). A category that did not run has no score (never 100), and
+// against ten public sites (overall: gov.uk 98, MDN 76, Shopify 74, GitHub 50, Hacker News 23)
+// and against Lighthouse 12.8 on the same pages (2026-11-12). Same bands and
+// mostly the same axe failures, but accessibility here is deliberately stricter:
+// Lighthouse takes a fixed few points per failed rule whatever the element
+// count, so a page failing five AA rules still reads 84 there; here it reads
+// poor. Performance reads higher than Lighthouse on fast pages because it uses
+// this real load, not Lighthouse's simulated slow network.
+// A category that did not run has no score (never 100), and
 // the overall leaves it out. It is computed from ALL findings, before the
 // 200-finding cap, so truncation never inflates it.
 //
