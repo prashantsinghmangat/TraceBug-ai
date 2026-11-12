@@ -14,7 +14,7 @@
 
 import type { Issue, IssueSeverity } from "../../types";
 import { buildSelector, makeIssueId } from "../../scanner/helpers";
-import { elementEvidence, isRendered, isTraceBugUi } from "./evidence";
+import { elementEvidence, isRendered, isTraceBugUi, isVisuallyHidden } from "./evidence";
 
 const MAX_PER_RULE = 15;
 const INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]:not([tabindex='-1'])";
@@ -63,7 +63,7 @@ function overflowFindings(): Issue[] {
     if (isTraceBugUi(el) || culprits.some((c) => c.contains(el))) continue;
     const r = el.getBoundingClientRect();
     if (r.right <= vw + 1 || r.width === 0) continue;
-    if (!isRendered(el) || clippedByAncestor(el)) continue;
+    if (!isRendered(el) || clippedByAncestor(el) || isVisuallyHidden(el)) continue;
     if (getComputedStyle(el).position === "fixed") continue;
     culprits.push(el);
   }
@@ -76,13 +76,27 @@ function overflowFindings(): Issue[] {
   return out;
 }
 
+/** The element under a point, or null when the point is outside the window (elementFromPoint can't see it). */
+function hitAt(x: number, y: number): Element | null {
+  if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return null;
+  return document.elementFromPoint(x, y);
+}
+
+/**
+ * A control is only reported when another control really takes its clicks:
+ * the overlap covers at least a quarter of it AND, at its own centre, the
+ * topmost element belongs to the other control. A small overlap at an edge,
+ * a stacked card link that still receives clicks, or a skip link parked under
+ * the header is not a bug. Only overlaps inside the window can be checked.
+ */
 function overlapFindings(): Issue[] {
   const out: Issue[] = [];
   const controls = Array.from(document.querySelectorAll(INTERACTIVE))
-    .filter((el) => !isTraceBugUi(el) && isRendered(el))
+    .filter((el) => !isTraceBugUi(el) && isRendered(el) && !isVisuallyHidden(el))
     .slice(0, 400);
   const rects = controls.map((el) => el.getBoundingClientRect());
-  const MIN = 4; // px of overlap in both directions before it counts
+  const MIN = 8;
+  const reported = new Set<Element>();
   for (let i = 0; i < controls.length && out.length < MAX_PER_RULE; i++) {
     for (let j = i + 1; j < controls.length && out.length < MAX_PER_RULE; j++) {
       const a = controls[i], b = controls[j];
@@ -91,17 +105,23 @@ function overlapFindings(): Issue[] {
       const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
       const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
       if (w < MIN || h < MIN) continue;
-      // Which one is on top at the centre of the overlap?
-      const cx = Math.max(ra.left, rb.left) + w / 2, cy = Math.max(ra.top, rb.top) + h / 2;
-      const top = document.elementFromPoint(cx, cy);
-      const covered = top && (a === top || a.contains(top)) ? b : a;
-      out.push(elementFinding(covered, "ui/overlap", "moderate", "Control is covered by another control",
-        `Two clickable elements overlap by ${Math.round(w)}×${Math.round(h)}px. Clicks in that area reach only the one on top (${buildSelector(covered === a ? b : a)}).`,
-        { overlapWidth: Math.round(w), overlapHeight: Math.round(h) }));
+      for (const [covered, coveredRect, other] of [[a, ra, b], [b, rb, a]] as const) {
+        if (reported.has(covered)) continue;
+        if (w * h < 0.25 * coveredRect.width * coveredRect.height) continue;
+        const hit = hitAt(coveredRect.left + coveredRect.width / 2, coveredRect.top + coveredRect.height / 2);
+        if (!hit || covered === hit || covered.contains(hit) || !(other === hit || other.contains(hit))) continue;
+        reported.add(covered);
+        out.push(elementFinding(covered, "ui/overlap", "serious", "A control is covered and can't be clicked",
+          `Another clickable element (${buildSelector(other)}) sits on top of this one: clicking its centre activates the other element. They overlap by ${Math.round(w)}×${Math.round(h)}px.`,
+          { overlapWidth: Math.round(w), overlapHeight: Math.round(h) }));
+        break;
+      }
     }
   }
   return out;
 }
+
+const CONTROL_TEXT = "a, button, label, input, select, textarea, th, td, summary, [role=button], [role=tab], [role=menuitem], h1, h2, h3, h4, h5, h6";
 
 function clippedTextFindings(): Issue[] {
   const out: Issue[] = [];
@@ -112,11 +132,16 @@ function clippedTextFindings(): Issue[] {
     if (!hasOwnText) continue;
     const cs = getComputedStyle(el);
     if (cs.textOverflow === "ellipsis") continue; // truncation on purpose
+    if (cs.webkitLineClamp && cs.webkitLineClamp !== "none") continue; // line clamp: on purpose
     const he = el as HTMLElement;
-    const clipsX = (cs.overflowX === "hidden" || cs.overflowX === "clip") && he.scrollWidth > he.clientWidth + 1;
-    const clipsY = (cs.overflowY === "hidden" || cs.overflowY === "clip") && he.scrollHeight > he.clientHeight + 2 && cs.webkitLineClamp === "none";
+    // A few px of overflow is font metrics, not a cut word.
+    const clipsX = (cs.overflowX === "hidden" || cs.overflowX === "clip") && he.scrollWidth > he.clientWidth + 4;
+    // Vertical clipping of a paragraph is usually a teaser on purpose; for a label,
+    // button, link or heading a cut-off line is a bug.
+    const clipsY = (cs.overflowY === "hidden" || cs.overflowY === "clip") && he.scrollHeight > he.clientHeight + 4 && el.matches(CONTROL_TEXT);
     if (!clipsX && !clipsY) continue;
-    if (!isRendered(el)) continue;
+    if (!isRendered(el) || isVisuallyHidden(el)) continue; // sr-only text, skip links, image replacement
+    if (he.clientWidth < 8 || he.clientHeight < 8) continue;
     out.push(elementFinding(el, "ui/text-clipped", "moderate", "Text is cut off",
       `The text needs ${clipsX ? he.scrollWidth + "px of width" : he.scrollHeight + "px of height"} but the box is ${clipsX ? he.clientWidth : he.clientHeight}px with overflow hidden, and there is no ellipsis to show it was cut.`,
       { needed: clipsX ? he.scrollWidth : he.scrollHeight, available: clipsX ? he.clientWidth : he.clientHeight }));
@@ -124,9 +149,31 @@ function clippedTextFindings(): Issue[] {
   return out;
 }
 
+/** Style rules that set a height or aspect-ratio, flattened once per run. null = some stylesheet
+ *  could not be read (another origin), so "no rule sets a height" can't be proven. */
+function heightRules(): CSSStyleRule[] | null {
+  const out: CSSStyleRule[] = [];
+  let unreadable = false;
+  const visit = (list: CSSRuleList) => {
+    for (const rule of Array.from(list)) {
+      const g = rule as CSSGroupingRule;
+      if (g.cssRules && !(rule as CSSStyleRule).selectorText) { visit(g.cssRules); continue; }
+      const st = (rule as CSSStyleRule).style;
+      if (!st) continue;
+      const h = st.getPropertyValue("height").trim(), ar = st.getPropertyValue("aspect-ratio").trim();
+      if ((h && h !== "auto") || (ar && ar !== "auto")) out.push(rule as CSSStyleRule);
+    }
+  };
+  for (const sheet of Array.from(document.styleSheets)) {
+    try { visit(sheet.cssRules); } catch { unreadable = true; }
+  }
+  return unreadable ? null : out;
+}
+
 function imageFindings(): Issue[] {
   const out: Issue[] = [];
   let noDims = 0, broken = 0;
+  let sized: CSSStyleRule[] | null | undefined;
   for (const img of Array.from(document.images)) {
     if (isTraceBugUi(img)) continue;
     const src = img.currentSrc || img.src;
@@ -143,6 +190,23 @@ function imageFindings(): Issue[] {
     const sizedByCss = cs.aspectRatio !== "auto" || (img.style.width !== "" && img.style.height !== "");
     const r = img.getBoundingClientRect();
     if (hasAttrs || sizedByCss || r.width < 32 || r.height < 32 || !isRendered(img)) continue;
+    // CSS that fixes both width and height (e.g. w-12 h-12, object-fit) reserves the space too. The
+    // tell: the drawn shape differs from the file's shape. Only a box that follows the file's own
+    // proportions moves the page when it loads.
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      const drawn = r.width / r.height, natural = img.naturalWidth / img.naturalHeight;
+      if (Math.abs(drawn - natural) / natural > 0.02) continue;
+    }
+    // Inside a box with a fixed height or aspect-ratio, the image can't push content down.
+    const parent = img.parentElement;
+    if (parent) {
+      const pcs = getComputedStyle(parent);
+      if (pcs.aspectRatio !== "auto" || (pcs.position === "relative" && cs.position === "absolute")) continue;
+    }
+    // Does any stylesheet give it a height? If a sheet can't be read we can't prove it doesn't: skip.
+    if (sized === undefined) sized = heightRules();
+    if (sized === null) continue;
+    if (sized.some((rule) => { try { return img.matches(rule.selectorText); } catch { return false; } })) continue;
     noDims++;
     out.push(elementFinding(img, "ui/img-no-dimensions", "minor", "Image has no width and height",
       "Without width and height (or CSS aspect-ratio), the page reserves no space for the image and content jumps when it loads (layout shift).",

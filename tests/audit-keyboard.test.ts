@@ -59,7 +59,7 @@ describe('keyboard pass', () => {
 
   it('flags a :focus rule that removes the outline with nothing in its place', () => {
     expect(rules('<button>A</button>', 'button:focus { outline: none; }')).toEqual(['kbd/focus-outline-removed']);
-    expect(rules('<button>A</button>', '.btn:focus { outline: 0 }')).toEqual(['kbd/focus-outline-removed']);
+    expect(rules('<button class="btn">A</button>', '.btn:focus { outline: 0 }')).toEqual(['kbd/focus-outline-removed']);
   });
 
   it('accepts a replacement indicator and ignores :focus-within', () => {
@@ -67,8 +67,39 @@ describe('keyboard pass', () => {
     expect(rules('<button>A</button>', 'form:focus-within { outline: none; }')).toEqual([]);
   });
 
+  it('outline removal: real-world patterns that are NOT bugs (from a 10-site noise study)', () => {
+    // Tailwind: focus:outline-none + focus:ring-2 (box-shadow in another rule).
+    expect(rules('<button class="focus:outline-none focus:ring-2">A</button>',
+      '.focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; outline-style: none } .focus\:ring-2:focus { box-shadow: 0 0 0 2px #36f }')).toEqual([]);
+    // :focus-visible replacement in a separate rule.
+    expect(rules('<button class="b">A</button>', '.b:focus { outline: none } .b:focus-visible { box-shadow: 0 0 0 3px #36f }')).toEqual([]);
+    // Mouse-only removal (GitHub, Primer): keyboard focus keeps the ring.
+    expect(rules('<a href="/x">A</a>', 'body a:focus:not(:focus-visible) { outline: none }')).toEqual([]);
+    // Focus drawn on a child (GOV.UK accordion).
+    expect(rules('<button class="acc"><span class="ring">A</span></button>', '.acc:focus { outline: 0 } .acc:focus .ring { background: #fd0 }')).toEqual([]);
+    // Dead CSS: no element on the page uses it.
+    expect(rules('<button>A</button>', '.unused:focus { outline: none }')).toEqual([]);
+  });
+
+  it('a global :focus-visible outline does not rescue a more specific rule that removes it', () => {
+    expect(rules('<button class="b">A</button>', ':focus-visible { outline: 2px solid #36f } .b:focus { outline: none }')).toEqual(['kbd/focus-outline-removed']);
+  });
+
+  it('one finding per removing rule, counting the elements it affects', () => {
+    document.head.innerHTML = '<style>.x:focus { outline: none }</style>';
+    document.body.innerHTML = '<button class="x">A</button><button class="x">B</button><a class="x" href="/c">C</a>';
+    const out = detectKeyboardFindings(document).findings.filter((f) => f.ruleId === 'kbd/focus-outline-removed');
+    expect(out).toHaveLength(1);
+    expect(out[0].occurrences).toBe(3);
+    expect(out[0].title).toMatch(/3 elements/);
+  });
+
+  it('custom checkboxes and skip links are not "invisible focus"', () => {
+    expect(rules('<label>Menu <input type="checkbox" style="opacity:0"></label><a href="#main" data-zero>Skip</a>')).toEqual([]);
+  });
+
   it('reads rules inside @media', () => {
-    expect(rules('<button>A</button>', '@media (min-width: 1px) { a:focus { outline: none } }')).toEqual(['kbd/focus-outline-removed']);
+    expect(rules('<a href="/x">A</a>', '@media (min-width: 1px) { a:focus { outline: none } }')).toEqual(['kbd/focus-outline-removed']);
   });
 
   it('ignores TraceBug\'s own UI and styles', () => {
@@ -141,7 +172,15 @@ describe('transparent text count', () => {
     const { countTransparentText } = await import('../src/audit/detectors/a11y');
     document.body.innerHTML = '<section style="opacity:0"><p>Fades in</p><span>Also</span></section><p>Shown</p>' +
       '<div style="display:none"><p>Gone</p></div><div id="tracebug-root" style="opacity:0"><p>ours</p></div>';
-    // jsdom has no checkVisibility, so this exercises the fallback walk (opacity and display).
+    // Below the first screen, like scroll-reveal content; jsdom has no checkVisibility, so this
+    // exercises the fallback walk (opacity and display).
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width: 40, height: 20, top: 2000, left: 0, right: 40, bottom: 2020, x: 0, y: 2000, toJSON() {} }) as DOMRect);
     expect(countTransparentText(document)).toBe(2);
+    // A popover (absolute) is invisible on purpose, and so is anything on the first screen.
+    document.body.innerHTML = '<div style="position:absolute;opacity:0"><p>Menu item</p></div>';
+    expect(countTransparentText(document)).toBe(0);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width: 40, height: 20, top: 10, left: 0, right: 40, bottom: 30, x: 0, y: 10, toJSON() {} }) as DOMRect);
+    document.body.innerHTML = '<section style="opacity:0"><p>Hero fading in</p></section>';
+    expect(countTransparentText(document)).toBe(0);
   });
 });

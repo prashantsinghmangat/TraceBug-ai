@@ -311,11 +311,11 @@ describe('hint search on real evidence', () => {
 describe('1.12.0: score, WCAG criteria and fix text', () => {
   it('get_audit returns the stored scores with the formula; categories that did not run have none', () => {
     const out = parse(callTool(dir, 'get_audit', { file: 'tracebug-audit-before.html' }));
-    // accessibility: serious 10 + critical 20 → 70 · performance: moderate 5 → 95 · seo not run
-    // overall pools both: 100 − 35 = 65
-    expect(out.score).toMatchObject({ overall: 65, band: 'fair', categories: { accessibility: 70, performance: 95 } });
+    // accessibility: serious + critical · performance: moderate · seo not run
+    // 100 × 0.88 × 0.80 = 70.4 → 70 · 100 × 0.94 = 94 · overall pools both: 70.4 × 0.94 = 66.2 → 66
+    expect(out.score).toMatchObject({ overall: 66, band: 'fair', categories: { accessibility: 70, performance: 94 } });
     expect(out.score.categories.seo).toBeUndefined();
-    expect(out.score.howCalculated).toMatch(/critical 20, serious 10, moderate 5, minor 2/);
+    expect(out.score.howCalculated).toMatch(/critical 20%, serious 12%, moderate 6%, minor 2%/);
   });
 
   it('get_finding puts known WCAG criteria outside untrusted and the fix inside it', () => {

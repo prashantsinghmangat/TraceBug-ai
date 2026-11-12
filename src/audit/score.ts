@@ -2,14 +2,16 @@
 // One number per category, and an overall one, from what the checks found.
 // Deliberately simple so anyone can recompute it by hand:
 //
-//   category score = 100 − Σ over each distinct problem (rule) of
-//                    weight(worst severity) × min(2, 1 + 0.25 × (elements − 1))
-//   weights: critical 20 · serious 10 · moderate 5 · minor 2   (floor 0, rounded)
+//   category score = 100 × Π over each distinct problem (rule) of
+//                    (1 − share(worst severity) × min(2, 1 + 0.25 × (elements − 1)))
+//   shares: critical 20% · serious 12% · moderate 6% · minor 2%   (rounded)
 //   overall = the same formula over every problem in the categories that ran
 //             (a page with one bad category is not "Good" because the rest are fine)
 //
-// So one serious problem costs 10 points; the same problem on 5+ elements
-// costs at most 20. A category that did not run has no score (never 100), and
+// So one serious problem takes 12% off; the same problem on 5+ elements takes
+// at most 24%. Each problem takes its share of what is left, so a page with
+// many problems approaches 0 but never sits at an unexplained 0 — checked
+// against ten public sites (gov.uk 94–100, Shopify 79, MDN 76, GitHub 50, Hacker News 24). A category that did not run has no score (never 100), and
 // the overall leaves it out. It is computed from ALL findings, before the
 // 200-finding cap, so truncation never inflates it.
 //
@@ -21,9 +23,10 @@ import type { AuditCategory } from "./types";
 
 type Sev = "critical" | "serious" | "moderate" | "minor";
 
-export const SCORE_WEIGHTS: Record<Sev, number> = { critical: 20, serious: 10, moderate: 5, minor: 2 };
+/** Share of the remaining score each distinct problem takes, by its worst severity. */
+export const SCORE_WEIGHTS: Record<Sev, number> = { critical: 0.2, serious: 0.12, moderate: 0.06, minor: 0.02 };
 export const SCORE_EXPLANATION =
-  "100 minus points per distinct problem: critical 20, serious 10, moderate 5, minor 2. The same problem on more elements adds a quarter of its weight per extra element, up to double. Each category is scored on its own problems; the overall score counts every problem from the checks that ran. Checks that didn't run are left out. It reflects what the automated checks found — not WCAG conformance.";
+  "Starts at 100. Each distinct problem takes a share of what's left: critical 20%, serious 12%, moderate 6%, minor 2%. The same problem on more elements takes a quarter more per extra element, up to double. Each category is scored on its own problems; the overall score counts every problem from the checks that ran. Checks that didn't run are left out. It reflects what the automated checks found — not WCAG conformance.";
 
 export interface AuditScore {
   /** Every problem from the categories that ran, scored together; null when none ran. */
@@ -53,11 +56,11 @@ export function scoreCategory(findings: ReadonlyArray<{ ruleId?: string; severit
       if (RANK[f.severity] < RANK[cur.sev]) cur.sev = f.severity;
     }
   }
-  let penalty = 0;
+  let score = 100;
   for (const { sev, elements } of byRule.values()) {
-    penalty += SCORE_WEIGHTS[sev] * Math.min(2, 1 + 0.25 * (elements - 1));
+    score *= 1 - SCORE_WEIGHTS[sev] * Math.min(2, 1 + 0.25 * (elements - 1));
   }
-  return Math.max(0, Math.round(100 - penalty));
+  return Math.max(0, Math.round(score));
 }
 
 export function scoreAudit(

@@ -30,7 +30,8 @@ const ROOT = "D:/Project/TraceBug-ai";
 const SDK = join(ROOT, "website/public/tracebug-sdk.js");
 if (!existsSync(SDK)) { console.error("Missing website/public/tracebug-sdk.js — run `npm run build` first."); process.exit(1); }
 const PORT = 4219;
-const ORIGIN = `http://127.0.0.1:${PORT}`;
+// A public-looking host (mapped to 127.0.0.1 below): on localhost the audit skips file-size checks.
+const ORIGIN = `http://shop.example:${PORT}`;
 const SECRET = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2VjcmV0c2lnbmF0dXJlMTIzNDU2";
 
 // ── The page under test ─────────────────────────────────────────────────────
@@ -80,6 +81,11 @@ const server = createServer((req, res) => {
     }, 250);
     return;
   }
+  if (url.pathname === "/robots.txt") {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end(["User-agent: *", "Disallow: /reveal", ""].join("\n"));
+    return;
+  }
   if (url.pathname === "/reveal") {
     // 1.12.0 accessibility additions: a fixed header with no scroll-padding (2.4.11), a link whose
     // aria-label drops its visible text (2.5.3), and low-contrast text that only fades in on scroll.
@@ -117,7 +123,7 @@ const check = (name, ok, extra = "") => {
 const total = () => `${passes}/${passes + failures} checks passed`;
 const short = (v) => JSON.stringify(v)?.slice(0, 300);
 
-const browser = await chromium.launch({ headless: !process.argv.includes("--headful") });
+const browser = await chromium.launch({ headless: !process.argv.includes("--headful"), args: ["--host-resolver-rules=MAP shop.example 127.0.0.1"] });
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const tab = await ctx.newPage();
@@ -224,7 +230,7 @@ try {
       tab.evaluate(() => window.TraceBug.exportAudit()),
     ]);
     const name = download.suggestedFilename();
-    check("export: named tracebug-audit-<host>-…html", /^tracebug-audit-127\.0\.0\.1-.*\.html$/.test(name), name);
+    check("export: named tracebug-audit-<host>-…html", /^tracebug-audit-shop\.example-.*\.html$/.test(name), name);
     const file = join(out, name);
     await download.saveAs(file);
     const html = readFileSync(file, "utf8");
@@ -268,7 +274,16 @@ try {
     has(rv, "kbd/focus-obscured", (f) => (f.fix || "").includes("scroll-padding-top: 64px") && (f.wcag || []).includes("2.4.11")), short(rv.findings.filter((f) => f.ruleId.startsWith("kbd/"))));
   check("text hidden until scroll is not checked — and the run says so",
     !has(rv, "color-contrast") && (rvA?.metrics?.transparentText ?? 0) >= 1 && /invisible \(opacity 0\)/.test(rvA?.limitation || ""), short(rvA));
-  check("score: accessibility = 100 − 10 (label) − 5 (header) = 85", rv.score?.categories?.accessibility === 85 && rv.score?.overall === 85, short(rv.score));
+  check("score: accessibility = 100 × 0.88 (label) × 0.94 (header) = 82.7 → 83", rv.score?.categories?.accessibility === 83 && rv.score?.overall === 83, short(rv.score));
+  const rvM = rvA?.metrics || {};
+  check("coverage: rules checked/passed and failed WCAG criteria are counted",
+    rvM.rulesChecked > 10 && rvM.rulesPassed === rvM.rulesChecked - 2 && rvM.wcagCriteriaFailed === 2, short(rvM));
+
+  const seoRun = await tab.evaluate(() => window.TraceBug.runAudit({ scan: "performance-seo" }));
+  check("seo: robots.txt blocking this page is critical; missing og:image and sitemap reported",
+    has(seoRun, "seo/robots-blocked", (f) => f.severity === "critical" && f.description.includes("Disallow: /reveal")) && has(seoRun, "seo/og-image-missing") && has(seoRun, "seo/no-sitemap"),
+    short(rules(seoRun)));
+  check("seo: the limitation says robots.txt was read", (cat(seoRun, "seo")?.limitation || "").includes("robots.txt"));
 
   // The panel's "Scroll the page and re-run" reveals it; the contrast finding then appears with a passing colour.
   await tab.evaluate(() => window.TraceBug.showAuditPanel("accessibility"));

@@ -56,7 +56,9 @@ the same step.
   `buildAuditRun` (caps, redaction, `MAX_*` limits) · `compare.ts` `compareAudits` (generic) · `types.ts` audit types,
   dependency-free because the CLI imports them (`src/types.ts` re-exports, `AuditRun = AuditRunOf<Issue>`).
   `score.ts` (`scoreAudit`, `SCORE_EXPLANATION`; stored by run.ts) · `wcag.ts` (criteria names, `wcagFromAxeTags`) ·
-  `contrast.ts` (`suggestTextColor`) · `fixes.ts` (`DEFAULT_FIXES`, applied in `buildAuditRun`).
+  `contrast.ts` (`suggestTextColor`) · `fixes.ts` (`DEFAULT_FIXES`, applied in `buildAuditRun`) · `prompt.ts` · seo.ts also `socialTagFindings`, `structuredDataFindings`, `robotsAllows`, `detectCrawlFindings` (fetches /robots.txt, /sitemap.xml) · performance.ts `imageWeightFindings`;
+  (`buildAuditFixPrompt`, the panel's Copy for AI). Noise filters: `evidence.ts` `isVisuallyHidden`, ui.ts overlap hit-test,
+  keyboard.ts `detectOutlineRemoved` (cross-rule replacement), a11y.ts `labelInNameHolds`, index.ts `isDevHost`.
   Tests: `tests/audit-core.test.ts`, `audit-score.test.ts`, `audit-keyboard.test.ts`, `audit-seo.test.ts`, `audit-mcp.test.ts`.
 - **Audit engine** `src/audit/index.ts` `runAudit()` (categories, limitations) → detectors in `src/audit/detectors/`:
   `a11y.ts` (axe, `loadAxe` falls back to `window.axe`) · `ui.ts` (layout) · `performance.ts` (Performance timeline,

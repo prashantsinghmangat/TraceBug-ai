@@ -106,7 +106,7 @@ try {
   }, GLOB);
 
   await runAuditAction();
-  await page.waitForSelector("#tracebug-audit-panel .tb-au-cats", { timeout: 20000 });
+  await page.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 20000 });
   check("the Audit action opens the audit panel", true);
   check("axe was injected on demand", await page.evaluate(() => !!(window.axe && typeof window.axe.run === "function")));
 
@@ -155,7 +155,7 @@ try {
   check("the run carries a score per category that ran", typeof after?.score?.overall === "number" && typeof after?.score?.categories?.accessibility === "number", short(after?.score));
   check("the panel is docked, not a modal over the page", await page.evaluate(() => {
     const p = document.getElementById("tracebug-audit-panel");
-    return !!p && p.getAttribute("role") === "complementary" && !document.getElementById("tracebug-audit-panel-overlay") && p.getBoundingClientRect().width <= 420;
+    return !!p && p.getAttribute("role") === "complementary" && !document.getElementById("tracebug-audit-panel-overlay") && p.getBoundingClientRect().width <= 440 && getComputedStyle(p).position === "fixed";
   }));
   const contrastCard = page.locator('#tracebug-audit-panel .tb-au-card[data-selector]:not([data-selector=""])').first();
   await contrastCard.locator('[data-tb-au="toggle"]').click();
@@ -177,7 +177,7 @@ try {
   // The floating toolbar's Audit button: loads axe through the worker (TB_LOAD_AXE) and opens the panel.
   await page.evaluate(() => { delete window.axe; });
   await page.click("#tracebug-toolbar-audit-btn");
-  await page.waitForSelector("#tracebug-audit-panel .tb-au-cats", { timeout: 20000 });
+  await page.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 20000 });
   const viaToolbar = await page.evaluate(() => window.__TraceBugExtension.getLastAudit());
   check("toolbar Audit opens the panel with accessibility run (axe loaded on request)",
     viaToolbar?.categories.find((c) => c.name === "accessibility")?.ran === true && !!(await page.evaluate(() => window.axe && typeof window.axe.run === "function")),
@@ -196,7 +196,7 @@ try {
     await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id, scan: "accessibility" }, {});
   }, GLOB);
   await page.waitForSelector('#tracebug-audit-panel [data-scan="accessibility"][aria-pressed="true"]', { timeout: 20000 });
-  await page.waitForSelector("#tracebug-audit-panel .tb-au-cats", { timeout: 20000 });
+  await page.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 20000 });
   const a11yOnly = await page.evaluate(() => window.__TraceBugExtension.getLastAudit());
   check("Accessibility Audit runs accessibility only", a11yOnly?.scan === "accessibility" && a11yOnly.categories.map((c) => c.name).join() === "accessibility", short(a11yOnly?.categories.map((c) => c.name)));
   await page.click('#tracebug-audit-panel [data-scan="performance-seo"]');
@@ -216,7 +216,7 @@ try {
     // eslint-disable-next-line no-undef
     await handleComboAction({ type: "TB_RUN_AUDIT", tabId: tab.id }, {});
   }, `${ORIGIN}/strict*`);
-  await strict.waitForSelector("#tracebug-audit-panel .tb-au-cats", { timeout: 20000 });
+  await strict.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 20000 });
   const strictRun = await strict.evaluate(() => window.__TraceBugExtension.getLastAudit());
   check("strict CSP: accessibility still runs", strictRun?.categories.find((c) => c.name === "accessibility")?.ran === true, short(strictRun?.categories));
   check("strict CSP: the unnamed button is found", (strictRun?.findings || []).some((f) => f.ruleId === "button-name"));
