@@ -23,6 +23,7 @@ export const DEFAULT_FIXES: Record<string, string> = {
   "perf/lcp": "Make the largest element arrive sooner: compress and resize it, serve modern formats (WebP/AVIF), add fetchpriority=\"high\" or a preload for it, and don't lazy-load it.",
   "perf/fcp": "Draw something sooner: inline the critical CSS, defer non-critical scripts and styles, and cut the work done before the first paint.",
   "perf/ttfb": "Speed up the server response: cache the page or its data, use a CDN, and reduce work done before the first byte is sent.",
+  "perf/blocking": "Break up long JavaScript tasks: defer or lazy-load scripts not needed for the first screen, remove unused code and heavy third-party tags, and split long work into chunks (yield to the browser, e.g. with scheduler.yield or setTimeout).",
   "perf/cls": "Reserve space for content that loads late: set width/height or aspect-ratio on images and embeds, and don't insert banners above existing content.",
   "perf/page-weight": "Download less: compress and resize images, remove unused JavaScript and CSS, and lazy-load what isn't on the first screen.",
   "perf/large-resource": "Shrink this file: compress or resize it, split large scripts, or load it only when it's needed.",

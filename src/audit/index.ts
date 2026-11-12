@@ -105,6 +105,8 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
   const scan: AuditScan = options.scan && AUDIT_SCANS[options.scan] ? options.scan : "full";
   const wanted = new Set(options.categories?.length ? options.categories : AUDIT_SCANS[scan].categories);
 
+  // Long tasks after this moment are the audit's own work (axe, layout reads), not the page's.
+  const startedAt = typeof performance !== "undefined" ? performance.now() : Infinity;
   _inFlight = (async () => {
     const categories: Partial<Record<AuditCategory, { ran: boolean; limitation?: string; metrics?: Record<string, number> }>> = {};
     const findings: Issue[] = [];
@@ -169,7 +171,7 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
     }
     if (wanted.has("performance")) {
       try {
-        const perf = await detectPerfFindings();
+        const perf = await detectPerfFindings(startedAt);
         findings.push(...perf.findings);
         // A development server serves unminified bundles: "main.js is 1.3 MB" there says nothing
         // about production. Keep the timings, drop file-size findings, and say why.

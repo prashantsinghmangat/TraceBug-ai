@@ -156,3 +156,14 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - audit-panel.ts: header drag (pointer events, 4px threshold, clamped to the window), dock "free:x,y" in localStorage, snap to left/right within 24px, dock button re-docks. popup.html/js/styles.css: "Audit this page" hero card first (main = All checks, chevron #btnAudit = scan menu with icons), then Screenshot, then Capture Bug; dock is Tickets + Inspect; setBusy covers the audit buttons.
 - e2e: real mouse drags (float + snap left), popup order and icons. Gates green (1219/81, 84/84, 76/76, 35/35); ext-sdk-isolation 17/17. Store screenshots need regenerating for the new popup.
+
+## 2026-11-12 — Site Audit docs + agent brief; popup card polish
+- New docs/site-audit.md (user guide) and docs/AGENT-BRIEF.md (one page for other agents: features, 12 MCP tools, rules, map). Site Audit added to README (flow, Features, API, extension, docs list), docs/README index, api-reference, chrome-extension (popup order), architecture (audit module), mcp.md (get_audit: mobile + needsReview), llms.txt.
+- Website: home FeatureTabs "Audit the page" tab (mock score pooled consistently, 61), /docs "Audit a page" section, /features cell replaces the stale "scanner not in extension" text, features description 151 chars.
+- styles.css: Audit card chevron keeps the accent tint + rounded corners; option panels flush (-20px = flex gap + card margin).
+- Verified: check.mjs green (1219/81), check.mjs --full green before the docs pass, website tsc + lint clean, screenshots of the new tab/section. Lighthouse score calibration runs in a separate session.
+
+## 2026-11-12 — Audit scores calibrated against Lighthouse 12.8 (10 public sites)
+- New `perf/blocking` (Total Blocking Time, Lighthouse method; load only: first paint → 5 s after load / first click / audit start; TraceBug's own startup task excluded; Chromium only). `perf/cls` is now the worst session window (web-vitals), not the visit's sum. Files: src/audit/detectors/performance.ts, index.ts, fixes.ts, score.ts (comment), tests/audit-score.test.ts (+7), e2e/audit-noise.mjs (wheel scroll after 5.5 s).
+- Results: TBT verdict matches Lighthouse on 9/10 (MDN missed); Shopify CLS 0.577 → 0, BBC LCP 5.9 s → 0.65 s (study artifact). Accessibility: no false positives; gap is weighting (Lighthouse fixed points per rule) + scroll-revealed content + rules LH skips. No formula change.
+- Verified: check.mjs --full green (1226/81, 76/76 audit, 35/35 ext audit).

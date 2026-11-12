@@ -284,3 +284,47 @@ describe('Copy for AI accuracy (from a real tracebug.dev prompt)', () => {
     expect(scrollBoxLabel(document.getElementById('c')!)).toBe('<what this box contains>');
   });
 });
+
+// Calibrated against Lighthouse 12.8 on ten public sites (2026-11-12): we had
+// no main-thread blocking check (Stripe 847 ms TBT scored 94), and CLS summed
+// every shift of the visit instead of the worst burst (Shopify 0.577 vs 0).
+describe('performance metrics match the web-vitals / Lighthouse definitions', async () => {
+  const { clsFromShifts, blockingTime, PERF_THRESHOLDS } = await import('../src/audit/detectors/performance');
+  const { fixFor } = await import('../src/audit/fixes');
+  const shift = (startTime: number, value: number, hadRecentInput = false) => ({ startTime, value, hadRecentInput });
+
+  it('CLS is the worst session window, not the sum of the visit', () => {
+    // Three bursts 3 s apart, each 0.08: sum 0.24 (poor), worst burst 0.08 (good).
+    expect(clsFromShifts([shift(100, 0.05), shift(300, 0.03), shift(3300, 0.08), shift(6300, 0.04), shift(6500, 0.04)])).toBe(0.08);
+  });
+  it('a window closes after 1 s of quiet or 5 s of length', () => {
+    // Shifts 900 ms apart keep one window until it passes 5 s.
+    const steady = [0, 900, 1800, 2700, 3600, 4500, 5400].map((t) => shift(t, 0.02));
+    expect(clsFromShifts(steady)).toBe(0.12); // 6 shifts fit in 0–4.5 s; the 7th (5.4 s) starts a new window
+  });
+  it('shifts right after input do not count', () => {
+    expect(clsFromShifts([shift(100, 0.3, true), shift(200, 0.01)])).toBe(0.01);
+  });
+  it('TBT counts the part of each long task past 50 ms, from first paint', () => {
+    // 120 ms task → 70; task straddling FCP (900–1100, FCP 1000) → 100 − 50 = 50.
+    expect(blockingTime([{ startTime: 2000, duration: 120 }, { startTime: 900, duration: 200 }], 1000)).toBe(120);
+  });
+  it('TBT ignores tasks before first paint, after 5 s of quiet, and the audit\'s own', () => {
+    const tasks = [
+      { startTime: 100, duration: 300 },   // ends before FCP
+      { startTime: 1200, duration: 150 },  // counts: 100
+      { startTime: 7000, duration: 400 },  // after a 5.65 s quiet gap: page was already interactive
+    ];
+    expect(blockingTime(tasks, 500)).toBe(100);
+    expect(blockingTime([{ startTime: 1200, duration: 150 }, { startTime: 2000, duration: 900 }], 500, 1500)).toBe(100);
+  });
+  it("TBT stops at the load cut-off and skips the task that holds TraceBug's own startup", () => {
+    const tasks = [{ startTime: 1200, duration: 150 }, { startTime: 3000, duration: 500 }, { startTime: 9000, duration: 400 }];
+    expect(blockingTime(tasks, 500, 8000)).toBe(100 + 450);      // the 9 s task is after the cut-off
+    expect(blockingTime(tasks, 500, 8000, 3100)).toBe(100);      // 3000–3500 holds our bundle's run
+  });
+  it('blocking uses web.dev lab thresholds and has a fix', () => {
+    expect(PERF_THRESHOLDS.tbtMs).toEqual([200, 600]);
+    expect(fixFor('perf/blocking')).toMatch(/long JavaScript tasks/);
+  });
+});

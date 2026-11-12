@@ -3,7 +3,8 @@
 // Performance timeline — no Lighthouse, no extra permission, no extra load:
 //
 //   perf/lcp, perf/fcp, perf/ttfb   slow paint / server response (web.dev thresholds)
-//   perf/cls                        layout shift (Chromium only; N/A elsewhere, not "0")
+//   perf/cls                        layout shift, worst burst (Chromium only; N/A elsewhere, not "0")
+//   perf/blocking                   main thread blocked by long tasks (TBT; Chromium only)
 //   perf/page-weight                total transfer size of this load
 //   perf/large-resource             the biggest single files (≥ 500 KB)
 //   perf/render-blocking            files that held up the first paint (Chromium only)
@@ -23,6 +24,8 @@ export const PERF_THRESHOLDS = {
   fcpMs: [1800, 3000],
   ttfbMs: [800, 1800],
   cls: [0.1, 0.25],
+  /** Total Blocking Time, web.dev lab guidance: good under 200 ms, poor over 600 ms. */
+  tbtMs: [200, 600],
 } as const;
 export const PAGE_WEIGHT_KB = 3000;
 export const LARGE_RESOURCE_KB = 500;
@@ -31,7 +34,7 @@ const MAX_BLOCKING = 10;
 /** A render-blocking file is a finding only when it took at least this long. */
 export const RENDER_BLOCKING_MS = 200;
 
-export const PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. INP is not measured. TraceBug's own files are left out.";
+export const PERF_LIMITATION = "Lab values from this single page load in this browser, not real-user data. Blocking time covers the load only (to 5 s after it, or the first click); INP is not measured. TraceBug's own files and work are left out.";
 
 export interface PerfAuditResult {
   ran: boolean;
@@ -89,13 +92,58 @@ export function isTraceBugResource(url: string): boolean {
   }
 }
 
+type Shift = { startTime: number; value: number; hadRecentInput: boolean };
+
+/**
+ * CLS as web-vitals, CrUX and Lighthouse define it: the largest burst of shifts
+ * (a "session window": shifts less than 1 s apart, the window at most 5 s long),
+ * not the sum over the whole visit — a long visit with small shifts would
+ * otherwise read as a badly unstable page. Shifts right after input don't count.
+ */
+export function clsFromShifts(shifts: ReadonlyArray<Shift>): number {
+  let worst = 0, cur = 0, winStart = -Infinity, last = -Infinity;
+  for (const s of [...shifts].filter((s) => !s.hadRecentInput).sort((a, b) => a.startTime - b.startTime)) {
+    if (s.startTime - last > 1000 || s.startTime - winStart > 5000) { cur = 0; winStart = s.startTime; }
+    cur += s.value;
+    last = s.startTime;
+    if (cur > worst) worst = cur;
+  }
+  return Math.round(worst * 1000) / 1000;
+}
+
+/** When this bundle was evaluated: the long task holding that moment is TraceBug's own startup. */
+const SDK_LOADED_AT = typeof performance !== "undefined" ? performance.now() : -1;
+
+/**
+ * Total Blocking Time, as Lighthouse computes it: for each long task after the
+ * first paint, the part beyond 50 ms (a task that starts before first paint
+ * counts only from it), until the page goes quiet (the first 5 s with no long
+ * task). Bounded to the page LOAD, so later work isn't charged to it:
+ *   `until` — 5 s after the load event, the first click/key press, or the
+ *             audit's own start, whichever is first (scrolling and using the
+ *             page cause long tasks that are responsiveness, not loading);
+ *   `own`   — the moment TraceBug's bundle ran; the task holding it is ours.
+ */
+export function blockingTime(tasks: ReadonlyArray<{ startTime: number; duration: number }>, fcpMs: number, until = Infinity, own = -1): number {
+  let total = 0, lastEnd = -Infinity;
+  const mine = (t: { startTime: number; duration: number }) => own >= t.startTime && own <= t.startTime + t.duration;
+  for (const t of [...tasks].filter((t) => t.startTime < until && t.startTime + t.duration > fcpMs && !mine(t)).sort((a, b) => a.startTime - b.startTime)) {
+    if (lastEnd > fcpMs && t.startTime - lastEnd >= 5000) break;
+    const start = Math.max(t.startTime, fcpMs);
+    const end = t.startTime + t.duration;
+    total += Math.max(0, end - start - 50);
+    lastEnd = end;
+  }
+  return Math.round(total);
+}
+
 function grade(value: number, [good, poor]: readonly [number, number]): IssueSeverity | null {
   if (value > poor) return "serious";
   if (value > good) return "moderate";
   return null;
 }
 
-export async function detectPerfFindings(): Promise<PerfAuditResult> {
+export async function detectPerfFindings(before = Infinity): Promise<PerfAuditResult> {
   const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
   if (!nav) {
     return { ran: false, limitation: "This browser exposes no page-load timing for this page, so performance was not checked.", metrics: {}, findings: [] };
@@ -120,17 +168,28 @@ export async function detectPerfFindings(): Promise<PerfAuditResult> {
   // CLS (sum of shifts without recent input; Chromium only)
   const shiftTypeSupported = ((PerformanceObserver as unknown as { supportedEntryTypes?: string[] }).supportedEntryTypes || []).includes("layout-shift");
   if (shiftTypeSupported) {
-    const shifts = (await buffered("layout-shift")) as Array<PerformanceEntry & { value: number; hadRecentInput: boolean }>;
-    metrics.cls = Math.round(shifts.filter((s) => !s.hadRecentInput).reduce((t, s) => t + s.value, 0) * 1000) / 1000;
+    const shifts = (await buffered("layout-shift")) as Array<PerformanceEntry & Shift>;
+    metrics.cls = clsFromShifts(shifts);
   } else {
     notes.push("Layout shift (CLS) is not measured in this browser.");
+  }
+
+  // TBT (long tasks; Chromium only). Needs a first paint to start from.
+  const longTaskSupported = ((PerformanceObserver as unknown as { supportedEntryTypes?: string[] }).supportedEntryTypes || []).includes("longtask");
+  if (longTaskSupported && metrics.fcpMs !== undefined) {
+    const firstInput = (await buffered("first-input"))[0]?.startTime ?? Infinity;
+    const loadEnd = nav.loadEventEnd > 0 ? nav.loadEventEnd : performance.now();
+    metrics.tbtMs = blockingTime(await buffered("longtask"), metrics.fcpMs, Math.min(before, firstInput, loadEnd + 5000), SDK_LOADED_AT);
+  } else if (!longTaskSupported) {
+    notes.push("Main-thread blocking (TBT) is not measured in this browser.");
   }
 
   const thresholds: Array<[keyof typeof PERF_THRESHOLDS, string, string, string]> = [
     ["lcpMs", "perf/lcp", "Largest content paints at", "The largest image or text block appears at {v}. Over 2.5 s feels slow; over 4 s, users leave."],
     ["fcpMs", "perf/fcp", "First content paints at", "Nothing is drawn until {v}. Over 1.8 s, the page feels stuck."],
     ["ttfbMs", "perf/ttfb", "Server responds after", "The first byte of the page arrives after {v}. Over 0.8 s, everything after it starts late."],
-    ["cls", "perf/cls", "Layout shift score", "Content moved by {v} while loading (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."],
+    ["tbtMs", "perf/blocking", "Main thread blocked for", "Scripts kept the page from responding for {v} in total while it loaded (the part of each long task past 50 ms, from first paint until 5 s after load). Over 0.2 s, clicks and typing feel delayed; over 0.6 s, the page feels frozen."],
+    ["cls", "perf/cls", "Layout shift score", "Content moved by {v} in its worst burst of shifts (0.1 or less is good). Usually images or embeds without reserved space, or late-loading banners."],
   ];
   for (const [key, ruleId, label, text] of thresholds) {
     const v = metrics[key];

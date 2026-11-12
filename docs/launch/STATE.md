@@ -21,11 +21,12 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   Lighthouse "Agentic Browsing") is on `site-audit`: it mentions the Site Audit, so ship it with 1.12.0.
   Also on `site-audit`: the website fixes our own audit found (labels, scroll-padding, focusable scroll boxes,
   light-theme --error/--warning, hero loop without re-mount, 152-char description) — local audit 100/100.
-- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1217/81, ext:lint 0/22 (baseline 22),
-  84/84 report, 74/74 audit, 33/33 extension audit; all e2e green
+- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1226/81, ext:lint 0/22 (baseline 22),
+  84/84 report, 76/76 audit, 35/35 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
-- **Site Audit on branch `site-audit`** (from `develop`; plan `docs/audit-quality/implementation-plan.md`), all
-  uncommitted, sprint scans done: popup's first card **Audit this page** (chevron = 4 scans) + toolbar **Audit** button →
+- **Site Audit on branch `site-audit`** (from `develop`; plan `docs/audit-quality/implementation-plan.md`), committed
+  through `f96db4d`; docs pass uncommitted. User guide `docs/site-audit.md`; agent brief `docs/AGENT-BRIEF.md` (update it
+  when a feature or MCP tool changes); website docs `#audit`, home tab, /features cell. Sprint scans done: popup's first card **Audit this page** (chevron = 4 scans) + toolbar **Audit** button →
   side panel (docked right/left or dragged free by its header, remembered; minimise; Locate keeps it open). Scans: All / Auto Review / Accessibility (axe + keyboard pass incl. 2.4.11) /
   Performance & SEO. 0–100 score per category + overall (`src/audit/score.ts`: multiplicative shares, pooled, stored in
   `AuditRun.score`), per-finding WCAG + fix (contrast → nearest passing colour); SEO adds social tags, JSON-LD validity, robots.txt
@@ -33,7 +34,8 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   `AuditRun.review` ("Needs a person to check", unscored); category `mobile` = phone width in a hidden 390px
   same-site iframe (`detectors/mobile.ts`, in All checks + Auto Review; not run where framing is forbidden); panel groups findings by rule,
   Copy for AI (`src/audit/prompt.ts`). Noise study: `node e2e/audit-noise.mjs <dir>` (manual, public sites): findings 260 → 129,
-  gov.uk 94–100 — rerun it before changing a detector's thresholds. Export → `payload.audit` + viewer Audit tab; MCP
+  gov.uk 98 — rerun it before changing a detector's thresholds. Calibrated vs Lighthouse 12.8 (2026-11-12): a11y stricter by
+  design (count-weighted), perf now has `perf/blocking` (TBT, load only) and CLS = worst burst. Export → `payload.audit` + viewer Audit tab; MCP
   `get_audit`/`get_finding`/`compare_audits` (page text under `untrusted`) — **12 tools**, docs say so (blog
   posts in `website/lib/blog.ts` still say "nine"; dated, left). axe is `vendor/axe.min.js`, injected on demand
   (popup: `TB_RUN_AUDIT`; toolbar: `TB_LOAD_AXE`). ext:lint baseline 22, approved (axe's own code).
