@@ -19,6 +19,8 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   FAQ schema are live. `website/public/try.html` coral recolour is on `develop` — cherry-pick it.
   The 1.11.6 SDK + setup-command pages go live only with the release merge. `website/public/llms.txt` (for
   Lighthouse "Agentic Browsing") is on `site-audit`: it mentions the Site Audit, so ship it with 1.12.0.
+  Also on `site-audit`: the website fixes our own audit found (labels, scroll-padding, focusable scroll boxes,
+  light-theme --error/--warning, hero loop without re-mount, 152-char description) — local audit 100/100.
 - **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1217/81, ext:lint 0/22 (baseline 22),
   84/84 report, 74/74 audit, 33/33 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).

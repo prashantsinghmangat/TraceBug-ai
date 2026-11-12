@@ -44,7 +44,7 @@ export default function DemoVideo() {
               type="button"
               onClick={() => setPlaying(true)}
               className="group absolute inset-0 block h-full w-full cursor-pointer"
-              aria-label="Play the 57-second TraceBug demo video"
+              aria-label="Play demo (0:57): TraceBug capturing a bug that Claude Code then fixes"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

@@ -146,3 +146,8 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - LCP finding now names the element and tells late render/animation (tracebug.dev: SVG "Checkout" drawn ~11 s after first paint) from a slow image, with matching fix (`describeLcp`). Label-in-name quotes the first rendered line ("Play demo", not "Play demo0:57") and suggests an aria-label. Scroll-box fix gets a fitting label (`scrollBoxLabel`: Code example / Table / placeholder) and says "At 390px wide".
 - Verified by regenerating the prompt from live tracebug.dev at 1707×811. Gates green (1219/81, 84/84, 74/74, 33/33).
+
+## Website: fixed what our own audit found (2026-11-12, `site-audit`)
+
+- Hero.tsx / DemoVideo.tsx aria-labels start with the visible text; Keycap.tsx drops aria-label on a span; AgentHandoff `pre` and Comparison grid get tabIndex/role=region/aria-label; globals.css `html { scroll-padding-top: 72px }`, light `--error` #D32424 and `--warning` #A84E08 (4.7:1 on their tints); layout.tsx description 232 → 152 chars; HeroStory restarts its CSS animations in place instead of re-mounting (the re-mount made LCP ~12 s).
+- Verified on localhost:3001 at 1707×811, light theme, after two animation loops: full audit 100 in every category, 0 findings, LCP 504 ms, only "needs review" contrast over gradients left; hero loop restarts (clock 9.75 s → 1.4 s). Website tsc + lint clean. Live check after deploy.

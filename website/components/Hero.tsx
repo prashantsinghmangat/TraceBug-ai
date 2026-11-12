@@ -134,7 +134,7 @@ export default function Hero() {
             <span aria-hidden="true">·</span>
             <span>Open source, MIT</span>
             <span aria-hidden="true" className="hidden sm:inline">·</span>
-            <a href="#demo" aria-label="Watch the 57-second TraceBug demo video" className="group inline-flex min-h-[28px] basis-full items-center justify-center gap-1 font-medium text-text-primary sm:basis-auto">
+            <a href="#demo" aria-label="Watch the 57-second demo video of TraceBug" className="group inline-flex min-h-[28px] basis-full items-center justify-center gap-1 font-medium text-text-primary sm:basis-auto">
               Watch the 57-second demo
               <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-150 group-hover:translate-x-0.5" />
             </a>
