@@ -31,17 +31,17 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   posts in `website/lib/blog.ts` still say "nine"; dated, left). axe is `vendor/axe.min.js`, injected on demand
   (popup: `TB_RUN_AUDIT`; toolbar: `TB_LOAD_AXE`). ext:lint baseline 22, approved (axe's own code).
   Agent acceptance test passed; rerun `node e2e/audit-agent-loop.mjs setup|verify <dir>`.
-- **1.12.0 (the audit release) is half-released.** Live: npm `tracebug-sdk` + `tracebug`, MCP registry (`isLatest`),
-  2026-11-12; `develop` = `site-audit`, pushed. **Submitted to Chrome Web Store and AMO 2026-11-13, in review.** 1.11.6
-  skipped the stores (1.12.0 carries it). **After CWS approves:** release sheet §5 — merge `develop` → `main` with
-  `-X theirs` (12 website files conflict with themselves; safety check passed 2026-11-13: all "on develop", merged tree =
-  `develop`), push (Netlify deploys), tag `v1.12.0`, GitHub release (§6), checks (§7), then announce. Registry
-  description still says "bug reports" only — update `server.json` next version.
+- **1.12.0 (the audit release) is live everywhere** (2026-11-13, verified): npm `tracebug-sdk` + `tracebug` 1.12.0, MCP
+  registry `isLatest`, AMO 1.12.0 public, CWS approved (per owner; the CWS page can't be fetched by script), `main` =
+  `develop` = merge `10c7595`, tag `v1.12.0` pushed, tracebug.dev serves the new SDK (hash matches) with the audit pages
+  and `llms.txt`, `npx -y tracebug@1.12.0 mcp --help` works in an empty folder. 1.11.6 skipped the stores.
+  Follow-ups: drop the Chrome "New in 1.12.0" paragraph in a few weeks; registry description still says "bug reports"
+  only (`server.json`, next version); blog/announce posts (RELEASING §8).
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
 
 ## Open — needs a person
 
-1. Watch CWS/AMO review of 1.12.0; on CWS approval run release sheet §5–7 (merge to `main`, tag, GitHub release).
+1. Announce 1.12.0 (RELEASING §8: blog post, posts, dev.to); confirm the GitHub release for `v1.12.0` exists.
 2. `RELEASE_CHECKLIST.md` rows never recorded as run: 1–3, 9, 10, 12b, 13 (best on the real store update), 14 (macOS).
 3. AMO slide/caption say "Record a tab, window or screen" — confirm Firefox's picker offers tabs.
 4. Pricing rule vs. paid pilots (audit plan B4): decide before the sprint's paid-pilot step.
