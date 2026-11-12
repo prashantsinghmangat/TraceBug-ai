@@ -111,3 +111,19 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - Score (`src/audit/score.ts`, stored in `AuditRun.score` from all findings), WCAG criteria (`wcag.ts`), fix text (`fixes.ts`; contrast suggestion `contrast.ts` — `#b45309`→`#ad5009`, same as OverlayQA), axe label-in-name, `kbd/focus-obscured`, transparent-text count + "Scroll the page and re-run". Panel rewritten as a docked side panel (Locate keeps it open), toolbar Audit button + `TB_LOAD_AXE` bridge. MCP `get_audit.score`, `get_finding.wcag`/`untrusted.fix`; viewer shows score/WCAG/fix.
 - Verified: `check.mjs --full` green (1195/81, 84/84, 65/65 incl. a scroll-reveal fixture, 33/33 incl. Locate + toolbar path); headless screenshots on localhost:3001 at 1422×650, light + dark. Not run: `npm run ext:firefox`.
+
+## Audit: noise cut, OverlayQA-style panel, Copy for AI (2026-11-12, `site-audit`)
+
+- Ran the full audit on 10 public sites (tracebug.dev, GitHub, Stripe, Wikipedia, BBC, Vercel, MDN, HN, gov.uk, Shopify): findings 260 → 129. Dropped: sr-only/skip-link "text cut off", custom-checkbox "invisible focus", Tailwind ring + `:focus:not(:focus-visible)` outline false alarms (cross-rule check), card-link label-in-name, overlaps that still get clicks (hit-test; was random off-screen), CSS-sized images, dev-server bundle sizes. Score now multiplicative (gov.uk 94–100, HN 24, never a flat 0). a11y metrics: rules passed/checked, WCAG criteria failed.
+- Panel rewritten (score header, WCAG-failures badge, severity/category filters, grouped findings with Found/Required, footer Export + Copy for AI). `src/audit/prompt.ts`; viewer severities High/Medium/Low. e2e audit fixture served as shop.example (host mapping).
+- Verified: `check.mjs --full` green (1200/81, 84/84, 66/66, 33/33); headless screenshots light/dark. Not run: `npm run ext:firefox`.
+
+## Audit vs OverlayQA on tracebug.dev, finding by finding (2026-11-12, `site-audit`)
+
+- Same: contrast ×2 (light theme), label-in-name ×2, fixed header. Theirs, not ours by design: skip link (axe `bypass` passes — `<main>` satisfies 2.4.1), :hover/:active "design debt" (one was on TraceBug's own toolbar), 11 component "variants" (class-name grouping: `rise`, `tabular-nums`, sections, CTA vs inline links). Our export lacked contrast because the local site was in dark theme — now said in the limitation (`pageColorScheme`).
+- Bug fixed: runtime findings came from the latest session even when it was on another page (a /try.html TypeError and dead click reported on /). `sessionForThisPage` in `src/audit/index.ts` + test. Gates green (1202/81, 66/66, 33/33).
+
+## Audit: four SEO/perf checks from a 4-tool comparison (2026-11-12, `site-audit`)
+
+- Compared Rank Math, Seobility, SEOptimer, DotPlus on tracebug.dev against the live page: all four wrongly flag `alt=""` avatars; DotPlus wrongly reports 10 render-blocking scripts and no HTTP/2. Added: social tags, JSON-LD validity, robots.txt blocking (critical) + sitemap (`detectCrawlFindings`, skipped on dev hosts), image oversize (≥4× pixels at ≥2× density, ≥50 KB) and format (JPEG/PNG ≥100 KB by real content type).
+- Noise study: new findings only where true (HN/BBC/Wikipedia lack og tags; GitHub retina images and Shopify CDN images no longer flagged). Gates green (1212/81, 84/84, 68/68 incl. robots.txt fixture, 33/33).

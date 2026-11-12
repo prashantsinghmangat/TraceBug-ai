@@ -46,7 +46,7 @@ Dashboard → TraceBug → **Store listing**, **Privacy**, **Package**.
 short "New in x.y.z" block at the top (from the CHANGELOG), then take it out.
 
 ```text
-New in 1.12.0: Site Audit. Score the page you are on for accessibility (axe-core), layout, performance, SEO and errors, from the popup or the toolbar's Audit button. A side panel stays open while you locate each problem on the page, and every finding says how to fix it and which WCAG criterion it maps to — for low contrast, the nearest colour that passes. Re-run to see what you fixed. Export the audit and your coding agent reads it with three new MCP tools. Everything still runs on your device.
+New in 1.12.0: Site Audit. Score the page you are on for accessibility (axe-core), layout, performance, SEO and errors, from the popup or the toolbar's Audit button. A side panel stays open while you locate each problem on the page, and every finding says how to fix it and which WCAG criterion it maps to — for low contrast, the nearest colour that passes. Re-run to see what you fixed. Copy the findings straight into your coding agent as a fix prompt, or export the audit for its three new MCP tools. Everything still runs on your device.
 
 Record a bug once. Get a report a developer can actually reproduce: a replay of what happened, the console errors, the failed requests and the steps, in one file that opens offline.
 
@@ -224,6 +224,7 @@ Current:
 - The audit opens in a side panel that stays open: Locate on page highlights each problem without closing the list. The toolbar has an Audit button.
 - Every finding says how to fix it, where it is and which WCAG criterion it maps to; low-contrast text gets the nearest colour that passes.
 - Text that fades in on scroll is no longer silently skipped: the audit says so and can scroll the page and re-run.
+- Copy for AI: tick findings and copy them as one fix prompt for your coding agent.
 - Re-run the audit to see what was fixed, what is still there, what is new and what regressed.
 - Export report saves the audit as one offline .html file; the MCP server reads it with three new tools (get_audit, get_finding, compare_audits).
 - axe-core is a separate packaged file, loaded only when you run an audit.

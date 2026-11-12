@@ -79,7 +79,7 @@ export function detectKeyboardFindings(doc: Document = document): KeyboardAuditR
         "Keyboard users reach this element before everything in reading order. Use tabindex=\"0\" (or none) and move the element in the DOM instead.", el,
         { wcag: ["2.4.3"], fix: `Change tabindex="${tabindex}" to tabindex="0" (or remove it), and move the element to where it belongs in the page's source order.` }));
     }
-    if (invisible < MAX_PER_RULE) {
+    if (invisible < MAX_PER_RULE && !isCustomControlOrSkipLink(el)) {
       const r = el.getBoundingClientRect();
       const cs = getComputedStyle(el);
       const zero = r.width === 0 && r.height === 0;
@@ -93,42 +93,146 @@ export function detectKeyboardFindings(doc: Document = document): KeyboardAuditR
     }
   }
 
-  // :focus rules that remove the outline and draw nothing else.
+  const outline = detectOutlineRemoved(doc, els);
+  findings.push(...outline.findings);
+  findings.push(...detectFocusObscured(doc));
+  return { findings, unreadableSheets: outline.unreadableSheets };
+}
+
+/** Patterns where a 0×0 or transparent focus target is normal and the user still sees focus:
+ *  a native checkbox/radio hidden behind a styled label, and skip links that appear on focus. */
+function isCustomControlOrSkipLink(el: Element): boolean {
+  if (el instanceof HTMLInputElement && ["checkbox", "radio", "range", "file", "color"].includes(el.type)) return true;
+  if (el instanceof HTMLAnchorElement && /^#./.test(el.getAttribute("href") || "")) return true;
+  return false;
+}
+
+// ── Focus outline removed, with nothing in its place ───────────────────────
+// A rule like `.btn:focus { outline: none }` is only a problem when the element
+// gets NO other focus indicator from ANY rule: Tailwind's `focus:outline-none`
+// is nearly always paired with `focus:ring-*` (a box-shadow in another rule),
+// and design systems often style a child on focus. So for each such rule we
+// find the elements it applies to (dead CSS is skipped), and report only the
+// elements no :focus / :focus-visible rule gives a visible replacement.
+
+type FocusRule = { selector: string; part: string; prefix: string; removes: boolean; indicates: boolean; outlineOnly: boolean; specificity: number };
+
+/** Approximate selector specificity as one number (ids·10000 + classes/attributes/pseudo-classes·100 + types). */
+export function specificity(part: string): number {
+  const s = part.replace(/::[\w-]+/g, "").replace(/:not\(([^)]*)\)/g, " $1");
+  const ids = (s.match(/#[\w-]+/g) || []).length;
+  const classes = (s.match(/\.(?:\\.|[\w-])+|\[[^\]]*\]|:[\w-]+/g) || []).length;
+  const rest = s.replace(/#[\w-]+|\.(?:\\.|[\w-])+|\[[^\]]*\]|:[\w-]+(?:\([^)]*\))?/g, " ");
+  const types = (rest.match(/(?:^|[\s>+~])[a-zA-Z][\w-]*/g) || []).length;
+  return ids * 10000 + classes * 100 + types;
+}
+
+const PSEUDO_STRIP = /:not\(\s*:focus-visible\s*\)|:(?:focus-visible|focus|hover|active)\b/g;
+
+/** The selector part up to and including the compound that carries :focus, without state pseudo-classes. */
+function focusPrefix(part: string): string | null {
+  const m = /:focus(?:-visible)?(?![-\w])/.exec(part);
+  if (!m) return null;
+  let end = m.index + m[0].length;
+  let depth = 0;
+  for (; end < part.length; end++) {
+    const c = part[end];
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (depth === 0 && /[\s>+~]/.test(c)) break;
+  }
+  return part.slice(0, end).replace(PSEUDO_STRIP, "").trim() || "*";
+}
+
+function splitSelectorList(sel: string): string[] {
+  const out: string[] = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < sel.length; i++) {
+    const c = sel[i];
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (c === "," && depth === 0) { out.push(sel.slice(start, i).trim()); start = i + 1; }
+  }
+  out.push(sel.slice(start).trim());
+  return out.filter(Boolean);
+}
+
+const NONE = /^(none|0|0px|initial|unset|inherit|revert|transparent|rgba\(0,\s*0,\s*0,\s*0\))$/;
+
+function declares(st: CSSStyleDeclaration, props: string[]): boolean {
+  return props.some((p) => { const v = st.getPropertyValue(p).trim(); return !!v && !NONE.test(v); });
+}
+
+function readFocusRules(doc: Document): { rules: FocusRule[]; unreadableSheets: number } {
+  const rules: FocusRule[] = [];
   let unreadableSheets = 0;
-  let removed = 0;
-  const visit = (rules: CSSRuleList) => {
-    for (const rule of Array.from(rules)) {
-      if (removed >= MAX_PER_RULE) return;
+  const visit = (list: CSSRuleList) => {
+    for (const rule of Array.from(list)) {
       const grouping = rule as CSSGroupingRule;
       if (grouping.cssRules && !(rule as CSSStyleRule).selectorText) { visit(grouping.cssRules); continue; }
       const style = rule as CSSStyleRule;
       const sel = style.selectorText || "";
-      if (!/:focus(?!-within)/.test(sel)) continue;
+      if (!/:focus(?!-within)/.test(sel) || /tracebug/i.test(sel)) continue;
       const st = style.style;
-      const outline = (st.getPropertyValue("outline-style") || st.getPropertyValue("outline") || "").trim();
-      const width = st.getPropertyValue("outline-width").trim();
-      const removesOutline = /^(none|0(px)?)\b/.test(outline) || width === "0" || width === "0px";
-      if (!removesOutline) continue;
-      // outline-color is not a replacement: browsers expand `outline: none` into it.
-      const replaced = ["box-shadow", "border-color", "border", "border-bottom", "background", "background-color", "text-decoration"]
-        .some((p) => { const v = st.getPropertyValue(p).trim(); return v && !/^(none|0|initial|unset|inherit|revert)$/.test(v); });
-      if (replaced) continue;
-      if (sel.includes("tracebug")) continue;
-      removed++;
-      findings.push(kbdFinding("kbd/focus-outline-removed", "serious", `"${sel.slice(0, 80)}" hides the focus outline`,
-        "This CSS rule removes the focus outline and draws no other focus indicator, so keyboard users can't see where they are. Keep the outline, or replace it (box-shadow, border or background) — :focus-visible lets mouse users keep a clean look.",
-        null, { wcag: ["2.4.7"], fix: "Delete the outline rule, or apply it only under :focus-visible with a visible replacement such as box-shadow: 0 0 0 3px <your accent colour>.", evidence: { text: sel.slice(0, 80), hints: [sel.split(",")[0].replace(/:focus.*/, "").trim()].filter(Boolean) } }));
+      const outlineStyle = (st.getPropertyValue("outline-style") || "").trim();
+      const outlineShort = (st.getPropertyValue("outline") || "").trim();
+      const outlineWidth = st.getPropertyValue("outline-width").trim();
+      const removes = /^(none|hidden)$/.test(outlineStyle) || /^(none|0(px)?)\b/.test(outlineShort) || outlineWidth === "0" || outlineWidth === "0px";
+      // outline-color alone is not an indicator: `outline: none` expands into it.
+      const viaOutline = !removes && (/^(solid|dotted|dashed|double|groove|ridge|inset|outset|auto)$/.test(outlineStyle) || /\b(solid|dotted|dashed|double|auto)\b/.test(outlineShort));
+      const viaOther = declares(st, ["box-shadow", "border-color", "border-top-color", "border-bottom-color", "border-left-color", "border-right-color", "border-bottom", "border", "background", "background-color", "text-decoration", "text-decoration-line", "--tw-ring-shadow", "--tw-ring-color"]);
+      const indicates = viaOutline || viaOther;
+      for (const part of splitSelectorList(sel)) {
+        const prefix = focusPrefix(part);
+        // `:focus:not(:focus-visible) { outline: none }` hides the ring for mouse clicks only —
+        // keyboard focus is :focus-visible and keeps it. That is the recommended pattern, not a bug.
+        const mouseOnly = /:not\(\s*:focus-visible\s*\)/.test(part);
+        if (prefix) rules.push({ selector: sel, part, prefix, removes: removes && !mouseOnly, indicates, outlineOnly: viaOutline && !viaOther, specificity: specificity(part) });
+      }
     }
   };
   for (const sheet of Array.from(doc.styleSheets)) {
     const owner = sheet.ownerNode as Element | null;
     if (owner && isTraceBugUi(owner)) continue;
-    let rules: CSSRuleList | null = null;
-    try { rules = sheet.cssRules; } catch { unreadableSheets++; continue; }
-    if (rules) visit(rules);
+    let list: CSSRuleList | null = null;
+    try { list = sheet.cssRules; } catch { unreadableSheets++; continue; }
+    if (list) visit(list);
   }
+  return { rules, unreadableSheets };
+}
 
-  findings.push(...detectFocusObscured(doc));
+const safeMatches = (el: Element, sel: string) => { try { return el.matches(sel); } catch { return false; } };
+
+export function detectOutlineRemoved(doc: Document, tabbables: Element[]): { findings: Issue[]; unreadableSheets: number } {
+  const { rules, unreadableSheets } = readFocusRules(doc);
+  const removing = rules.filter((r) => r.removes);
+  const indicating = rules.filter((r) => r.indicates);
+  const findings: Issue[] = [];
+  const bySelector = new Map<string, Element[]>();
+  for (const el of tabbables) {
+    const rule = removing.find((r) => safeMatches(el, r.prefix));
+    if (!rule) continue;
+    // Another rule draws focus: box-shadow/border/background always shows; an outline only shows
+    // when that rule wins the cascade against the one removing it (approximate specificity).
+    if (indicating.some((r) => safeMatches(el, r.prefix) && (!r.outlineOnly || r.specificity >= rule.specificity))) continue;
+    const list = bySelector.get(rule.part) ?? [];
+    list.push(el);
+    bySelector.set(rule.part, list);
+  }
+  for (const [part, els] of bySelector) {
+    if (findings.length >= MAX_PER_RULE) break;
+    const first = els[0];
+    findings.push(kbdFinding("kbd/focus-outline-removed", "serious",
+      `No visible focus on ${els.length} element${els.length === 1 ? "" : "s"}: "${part.slice(0, 60)}" removes the outline`,
+      `The CSS rule "${part.slice(0, 120)}" removes the focus outline and no other :focus or :focus-visible rule gives ${els.length === 1 ? "this element" : `these ${els.length} elements`} a replacement (box-shadow, border, background or underline), so keyboard users can't see where they are.`,
+      first, {
+        wcag: ["2.4.7"],
+        occurrences: els.length,
+        fix: `Delete the outline rule, or keep it only under :focus-visible and add a visible replacement in the same rule, e.g. ${part.replace(/:focus(?:-visible)?\b/, ":focus-visible").slice(0, 80)} { box-shadow: 0 0 0 3px <your accent colour>; }.`,
+        evidence: { ...elementEvidence(first), metrics: { elements: els.length } },
+      }));
+    findings[findings.length - 1].evidence!.hints = [part.replace(PSEUDO_STRIP, "").trim().slice(0, 60), ...(findings[findings.length - 1].evidence!.hints || [])];
+  }
   return { findings, unreadableSheets };
 }
 

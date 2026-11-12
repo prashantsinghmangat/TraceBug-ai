@@ -1320,7 +1320,7 @@ const REPLAY_RUNTIME = `(function(){
   var audit = data.audit;
   if (audit && audit.categories) {
     var CAT = { accessibility: "Accessibility", ui: "Layout", performance: "Performance", seo: "SEO", runtime: "Runtime" };
-    var SEV = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
+    var SEV = { critical: "Critical", serious: "High", moderate: "Medium", minor: "Low" };
     var DOT = " \\u00b7 ";
     var fmtMetrics = function(m){
       var out = [];
@@ -1357,7 +1357,8 @@ const REPLAY_RUNTIME = `(function(){
       var cs = sc.categories && sc.categories[c.name];
       var pill = c.ran && okScore(cs) ? '<span class="tb-vau-pill tb-vau-b-' + band(cs) + '">' + esc(Math.round(cs)) + '</span> ' : '';
       return '<div class="tb-vau-cat' + (c.ran ? '' : ' tb-vau-off') + '"><div class="tb-vau-cat-h"><b>' + pill + esc(CAT[c.name] || c.name) + '</b><span>' + esc(state) + '</span></div>' +
-        (c.metrics ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
+        (c.metrics && fmtMetrics(c.metrics) ? '<div class="tb-vau-m">' + esc(fmtMetrics(c.metrics)) + '</div>' : '') +
+        (c.metrics && c.metrics.rulesChecked ? '<div class="tb-vau-l">' + esc(c.metrics.rulesPassed + " of " + c.metrics.rulesChecked + " rules passed") + (c.metrics.wcagCriteriaFailed ? esc(" · WCAG A/AA: " + c.metrics.wcagCriteriaFailed + " criteria fail") : "") + '</div>' : '') +
         (c.limitation ? '<div class="tb-vau-l">' + esc(c.limitation) + '</div>' : '') + '</div>';
     }).join("") + '</div>';
     if (!auditFindings.length) {

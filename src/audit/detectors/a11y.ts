@@ -19,7 +19,7 @@ import { parseExpectedRatio, suggestTextColor } from "../contrast";
 
 type AxeLike = { run: (context: unknown, options: unknown) => Promise<AxeResultsLike> };
 type AxeNode = { target?: unknown[]; html?: string; failureSummary?: string; any?: Array<{ id?: string; data?: Record<string, unknown> }> };
-type AxeResultsLike = { violations?: Array<{ id: string; impact?: string | null; help?: string; description?: string; helpUrl?: string; tags?: string[]; nodes?: AxeNode[] }> };
+type AxeResultsLike = { passes?: Array<{ id: string }>; violations?: Array<{ id: string; impact?: string | null; help?: string; description?: string; helpUrl?: string; tags?: string[]; nodes?: AxeNode[] }> };
 
 export const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 /** WCAG rules axe ships as "experimental" (off by default) that we turn on.
@@ -32,6 +32,29 @@ export function cleanFailureSummary(s: string | undefined): string | undefined {
   if (!s) return undefined;
   const lines = s.split(/\n+/).map((l) => l.trim()).filter((l) => l && !/^Fix (any|all) of the following:?$/i.test(l));
   return lines.length ? lines.join(" ") : undefined;
+}
+
+const normName = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/** The aria-label / aria-labelledby name (the part that can differ from the visible text). */
+function authorName(el: Element): string {
+  const ids = (el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean);
+  if (ids.length) return ids.map((id) => el.ownerDocument.getElementById(id)?.textContent || "").join(" ");
+  return el.getAttribute("aria-label") || "";
+}
+
+/**
+ * WCAG 2.5.3 is met when the accessible name contains the visible LABEL. For a
+ * card link the label is its first line (the heading), not every word in it;
+ * case, punctuation and spacing don't count (voice control ignores them).
+ */
+export function labelInNameHolds(el: Element): boolean {
+  const name = normName(authorName(el));
+  if (!name) return false;
+  const text = ((el as HTMLElement).innerText ?? el.textContent ?? "").trim();
+  const firstLine = normName(text.split(/\n+/).map((l) => l.trim()).find(Boolean) || "");
+  if (!firstLine) return true;
+  return name.includes(firstLine) || (` ${name} `).includes(` ${normName(text)} `);
 }
 
 /** Contrast: the measured colours plus the nearest passing text colour. */
@@ -53,6 +76,14 @@ function contrastFix(metrics: Record<string, number | string> | undefined): { fi
 /** Text-bearing elements that are rendered but fully transparent right now —
  *  typically content that fades in on scroll. axe skips them, so the panel says
  *  how many were not checked instead of implying the page was clean. */
+function inPopupLayer(el: Element): boolean {
+  for (let n: Element | null = el; n && n !== el.ownerDocument.body; n = n.parentElement) {
+    const p = getComputedStyle(n).position;
+    if (p === "absolute" || p === "fixed") return true;
+  }
+  return false;
+}
+
 export function countTransparentText(doc: Document = document, limit = 6000): number {
   let count = 0;
   const els = doc.body ? doc.body.getElementsByTagName("*") : [];
@@ -64,6 +95,11 @@ export function countTransparentText(doc: Document = document, limit = 6000): nu
       if (n.nodeType === 3 && (n.textContent || "").trim()) { hasText = true; break; }
     }
     if (!hasText) continue;
+    // Only scroll-reveal content counts: below the first screen and not inside a popover,
+    // menu or tooltip (absolute/fixed), which are invisible on purpose until opened.
+    const rect = el.getBoundingClientRect();
+    if (rect.top + (doc.defaultView?.scrollY ?? 0) < (doc.defaultView?.innerHeight ?? 0)) continue;
+    if (inPopupLayer(el)) continue;
     if (typeof el.checkVisibility === "function") {
       if (!el.checkVisibility()) continue; // display:none etc. — not on the page at all
       if (!el.checkVisibility({ opacityProperty: true })) count++;
@@ -108,7 +144,13 @@ function metricsFor(node: AxeNode): Record<string, number | string> | undefined 
   return Object.keys(out).length ? out : undefined;
 }
 
-export interface A11yAuditResult { ran: boolean; limitation: string; findings: Issue[]; transparentText?: number }
+export interface A11yAuditResult {
+  ran: boolean; limitation: string; findings: Issue[]; transparentText?: number;
+  /** axe rules that applied to this page (passed or failed), and how many failed. */
+  rulesChecked?: number; rulesFailed?: number;
+  /** Distinct WCAG criteria with at least one failure. */
+  wcagFailed?: string[];
+}
 
 export async function detectA11yFindings(): Promise<A11yAuditResult> {
   const axe = await loadAxe();
@@ -136,6 +178,9 @@ export async function detectA11yFindings(): Promise<A11yAuditResult> {
       const target = Array.isArray(node.target) ? node.target.map(String).join(" ") : "";
       let el: Element | null = null;
       try { el = target ? document.querySelector(target) : null; } catch { el = null; }
+      // axe's label-in-name rule is experimental: it flags card links whose name holds the
+      // visible heading but not every line of the card. Keep only real mismatches.
+      if (v.id === "label-content-name-mismatch" && el && labelInNameHolds(el)) continue;
       const metrics = metricsFor(node);
       let fix = cleanFailureSummary(node.failureSummary);
       if (v.id === "color-contrast" || v.id === "color-contrast-enhanced") {
@@ -172,5 +217,10 @@ export async function detectA11yFindings(): Promise<A11yAuditResult> {
   }
   let transparentText = 0;
   try { transparentText = countTransparentText(); } catch { /* best effort */ }
-  return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText };
+  // Coverage, from axe's own lists: rules that applied here (passed + failed), and which failed
+  // after our filtering. Incomplete (needs review) rules are counted as neither.
+  const failed = new Set(findings.map((f) => f.ruleId));
+  const applied = new Set([...(results.passes || []).map((p) => p.id), ...failed]);
+  const wcagFailed = [...new Set(findings.flatMap((f) => f.wcag || []))].sort();
+  return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText, rulesChecked: applied.size, rulesFailed: failed.size, wcagFailed };
 }

@@ -18,14 +18,17 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 - **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y/UI fixes, two SEO blog posts with
   FAQ schema are live. `website/public/try.html` coral recolour is on `develop` — cherry-pick it.
   The 1.11.6 SDK + setup-command pages go live only with the release merge.
-- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1195/81, ext:lint 0/22 (baseline 22),
-  84/84 report, 65/65 audit, 33/33 extension audit; all e2e green
+- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1212/81, ext:lint 0/22 (baseline 22),
+  84/84 report, 68/68 audit, 33/33 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
 - **Site Audit on branch `site-audit`** (from `develop`; plan `docs/audit-quality/implementation-plan.md`), all
   uncommitted, sprint scans done: popup "Audit ▾" + toolbar **Audit** button → docked side panel (right/left,
   minimise; Locate keeps it open). Scans: All / Auto Review / Accessibility (axe + keyboard pass incl. 2.4.11) /
-  Performance & SEO. 0–100 score per category + overall (`src/audit/score.ts`, pooled, stored in `AuditRun.score`),
-  per-finding WCAG + fix (contrast → nearest passing colour). Export → `payload.audit` + viewer Audit tab; MCP
+  Performance & SEO. 0–100 score per category + overall (`src/audit/score.ts`: multiplicative shares, pooled, stored in
+  `AuditRun.score`), per-finding WCAG + fix (contrast → nearest passing colour); SEO adds social tags, JSON-LD validity, robots.txt
+  blocking (reads /robots.txt — the audit's only requests), sitemap; perf adds image oversize/format; panel groups findings by rule,
+  Copy for AI (`src/audit/prompt.ts`). Noise study: `node e2e/audit-noise.mjs <dir>` (manual, public sites): findings 260 → 129,
+  gov.uk 94–100 — rerun it before changing a detector's thresholds. Export → `payload.audit` + viewer Audit tab; MCP
   `get_audit`/`get_finding`/`compare_audits` (page text under `untrusted`) — **12 tools**, docs say so (blog
   posts in `website/lib/blog.ts` still say "nine"; dated, left). axe is `vendor/axe.min.js`, injected on demand
   (popup: `TB_RUN_AUDIT`; toolbar: `TB_LOAD_AXE`). ext:lint baseline 22, approved (axe's own code).

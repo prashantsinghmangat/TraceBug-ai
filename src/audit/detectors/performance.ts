@@ -7,12 +7,15 @@
 //   perf/page-weight                total transfer size of this load
 //   perf/large-resource             the biggest single files (≥ 500 KB)
 //   perf/render-blocking            files that held up the first paint (Chromium only)
+//   perf/image-oversized            an image with ≥ 4× the pixels the screen needs (≥ 50 KB)
+//   perf/image-format               a JPEG/PNG of ≥ 100 KB that WebP/AVIF would shrink
 //
 // Values are from THIS page load in THIS browser: lab data, not real-user
 // (field) data, and INP is not measured — the limitation says so.
 
 import type { Issue, IssueSeverity } from "../../types";
-import { makeIssueId } from "../../scanner/helpers";
+import { buildSelector, makeIssueId } from "../../scanner/helpers";
+import { elementEvidence, isTraceBugUi } from "./evidence";
 
 /** web.dev "needs improvement" / "poor" boundaries. */
 export const PERF_THRESHOLDS = {
@@ -172,5 +175,63 @@ export async function detectPerfFindings(): Promise<PerfAuditResult> {
     notes.push("Render-blocking files are not reported by this browser.");
   }
 
+  // Images: bytes come from the resource entry (0 for another site's image without
+  // Timing-Allow-Origin — those are skipped, never guessed).
+  const byUrl = new Map(resources.map((r) => [r.name, r]));
+  const samples: ImageSample[] = [];
+  for (const img of Array.from(document.images)) {
+    if (isTraceBugUi(img)) continue;
+    const src = img.currentSrc || img.src;
+    const entry = src ? byUrl.get(src) : undefined;
+    const rect = img.getBoundingClientRect();
+    if (!entry || !img.naturalWidth || rect.width < 1) continue;
+    samples.push({ el: img, src, bytes: entry.encodedBodySize || entry.transferSize || 0, naturalW: img.naturalWidth, naturalH: img.naturalHeight, drawnW: rect.width, drawnH: rect.height, contentType: "contentType" in entry ? String((entry as { contentType?: string }).contentType ?? "") : undefined });
+  }
+  findings.push(...imageWeightFindings(samples, window.devicePixelRatio || 1));
+
   return { ran: true, limitation: notes.join(" "), metrics, findings };
+}
+
+export interface ImageSample { el?: Element; src: string; bytes: number; naturalW: number; naturalH: number; drawnW: number; drawnH: number; contentType?: string }
+
+export const IMAGE_LIMITS = { oversizedMinKb: 50, oversizedFactor: 4, formatMinKb: 100 };
+
+/**
+ * Two image problems the other audit tools flag, kept to the ones that cost real bytes:
+ *   perf/image-oversized  the file has ≥ 4× the pixels the screen needs (at this device's
+ *                         pixel ratio) and is ≥ 50 KB — resize it or use srcset
+ *   perf/image-format     a JPEG/PNG of ≥ 100 KB — WebP/AVIF are usually 25–50% smaller
+ * Small images are left alone: the saving would be noise.
+ */
+export function imageWeightFindings(samples: ImageSample[], dpr = 1): Issue[] {
+  const out: Issue[] = [];
+  const seen = new Set<string>();
+  for (const s of samples) {
+    if (!s.bytes || seen.has(s.src)) continue;
+    seen.add(s.src);
+    const kb = Math.round(s.bytes / 1024);
+    const name = fileName(s.src);
+    const extra = (metrics: Record<string, number | string>): Partial<Issue> => ({
+      url: s.src,
+      ...(s.el ? { selector: buildSelector(s.el), evidence: { ...elementEvidence(s.el), metrics } } : { evidence: { metrics, hints: [name] } }),
+    });
+    // Sites rightly ship 2× images for retina screens: never call those oversized on a 1× screen.
+    const density = Math.max(dpr, 2);
+    const needW = Math.ceil(s.drawnW * density), needH = Math.ceil(s.drawnH * density);
+    const factor = (s.naturalW * s.naturalH) / Math.max(1, needW * needH);
+    if (kb >= IMAGE_LIMITS.oversizedMinKb && factor >= IMAGE_LIMITS.oversizedFactor) {
+      out.push(perfFinding("perf/image-oversized", "moderate", `${name} is ${s.naturalW}×${s.naturalH} but shown at ${Math.round(s.drawnW)}×${Math.round(s.drawnH)}`,
+        `The browser downloads ${kb} KB for ${Math.round(factor)}× more pixels than even a high-density (${density}×) screen needs (${needW}×${needH}), then scales it down.`,
+        extra({ sizeKb: kb, file: `${s.naturalW}×${s.naturalH}`, needed: `${needW}×${needH}` })));
+    }
+    // Image CDNs often send WebP/AVIF behind a .jpg URL: trust the real content type when the browser gives it.
+    const type = (s.contentType ?? "").toLowerCase();
+    const isOld = s.contentType === undefined ? /\.(jpe?g|png)(\?|#|$)/i.test(s.src) : /image\/(jpe?g|png)/.test(type);
+    if (isOld && kb >= IMAGE_LIMITS.formatMinKb) {
+      out.push(perfFinding("perf/image-format", "minor", `${name} (${kb} KB) could be WebP or AVIF`,
+        `This ${/png/.test(type) || /\.png/i.test(s.src) ? "PNG" : "JPEG"} is ${kb} KB. The same image as WebP or AVIF is usually 25–50% smaller with no visible difference.`,
+        extra({ sizeKb: kb })));
+    }
+  }
+  return out;
 }

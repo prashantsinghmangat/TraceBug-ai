@@ -42,6 +42,28 @@ export function isTraceBugUi(el: Element): boolean {
   return !!el.closest("#tracebug-root, [id^='tracebug-']");
 }
 
+/**
+ * Hidden on purpose for sighted users but kept for screen readers or for focus:
+ * the "sr-only" box (≤ 2px), clip / clip-path, text pushed away with text-indent,
+ * or positioned far off-screen (skip links). Checked on the element and its
+ * nearest ancestors. Findings about how such text LOOKS are noise.
+ */
+export function isVisuallyHidden(el: Element, depth = 6): boolean {
+  let n: Element | null = el;
+  for (let i = 0; n && i < depth && n !== document.body; i++, n = n.parentElement) {
+    const r = n.getBoundingClientRect();
+    const cs = getComputedStyle(n);
+    if ((r.width <= 2 || r.height <= 2) && (cs.overflow !== "visible" || cs.position === "absolute")) return true;
+    if (cs.clip && cs.clip !== "auto") return true;
+    if (cs.clipPath && /inset\((50|100)%/.test(cs.clipPath)) return true;
+    if (parseFloat(cs.textIndent) <= -999) return true;
+    if (cs.position === "absolute" || cs.position === "fixed") {
+      if (r.right < -100 || r.bottom < -100 || r.left > window.innerWidth + 2000) return true;
+    }
+  }
+  return false;
+}
+
 /** Rendered and on screen in the layout sense: has a box, not display:none / visibility:hidden. */
 export function isRendered(el: Element): boolean {
   const r = el.getBoundingClientRect();
