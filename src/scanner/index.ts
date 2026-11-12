@@ -126,6 +126,7 @@ export function getIssueCountsByDetector(): Record<IssueDetector, number> {
     "audit-seo": 0,
     "audit-perf": 0,
     "audit-keyboard": 0,
+    "audit-mobile": 0,
   };
   for (const i of _issues) {
     if (i.dismissed) continue;

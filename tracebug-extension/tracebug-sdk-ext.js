@@ -26785,7 +26785,8 @@ body { min-height: 100vh; }
 .tb-vau-score-n { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 4px solid var(--tb-border); font-size: 18px; font-weight: 800; flex: none; }
 .tb-vau-pill { display: inline-block; min-width: 30px; text-align: center; padding: 0 5px; border-radius: 999px; border: 2px solid var(--tb-border); font-size: 11px; font-weight: 700; }
 .tb-vau-b-good { border-color: #22C55E; } .tb-vau-b-fair { border-color: #F59E0B; } .tb-vau-b-poor { border-color: #EF4444; }
-.tb-vau-how { margin-top: 2px; font-size: 11px; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
+.tb-vau-how { margin-top: 2px; font-size: 11px; }
+.tb-vau-review { margin-top: 14px; border: 1px dashed var(--tb-border); border-radius: 8px; padding: 8px 10px; font-size: 12px; } .tb-vau-review summary { cursor: pointer; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
 .tb-vau-fix { font-size: 12px; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--tb-surface-2, rgba(127,127,127,.08)); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
@@ -27573,7 +27574,7 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
   // Every string in it came from the audited page: escaped, never trusted.
   var audit = data.audit;
   if (audit && audit.categories) {
-    var CAT = { accessibility: "Accessibility", ui: "Layout", performance: "Performance", seo: "SEO", runtime: "Runtime" };
+    var CAT = { accessibility: "Accessibility", ui: "Layout", mobile: "Phone width", performance: "Performance", seo: "SEO", runtime: "Runtime" };
     var SEV = { critical: "Critical", serious: "High", moderate: "Medium", minor: "Low" };
     var DOT = " \\u00b7 ";
     var fmtMetrics = function(m){
@@ -27635,6 +27636,15 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
         help + '</div></div>';
     });
+    if (Array.isArray(audit.review) && audit.review.length) {
+      ah += '<details class="tb-vau-review"><summary><b>Needs a person to check</b> \xB7 ' + esc(audit.review.length) + ' rule(s) the automated checks couldn\u2019t decide. Not failures, not scored.</summary>' +
+        audit.review.map(function(r){
+          var w = (Array.isArray(r.wcag) ? r.wcag : []).filter(function(x){ return typeof x === "string" && WCAG_NAMES[x]; }).map(function(x){ return "WCAG " + x + " " + WCAG_NAMES[x]; }).join(DOT);
+          return '<div class="tb-vau-rvrow"><div class="tb-vau-main"><div class="tb-vau-t">' + esc(r.title) + ' <span class="tb-vau-muted">\xD7' + esc(r.count) + '</span></div>' +
+            (r.reason ? '<div class="tb-vau-d">' + esc(r.reason) + '</div>' : '') + (w ? '<div class="tb-vau-meta">' + esc(w) + '</div>' : '') +
+            '<div class="tb-vau-meta">' + (r.elements || []).map(function(e){ return e.selector ? '<code>' + esc(e.selector) + '</code>' : ''; }).filter(Boolean).join(DOT) + '</div></div></div>';
+        }).join("") + '</details>';
+    }
     if (audit.truncated > 0) ah += '<div class="tb-vau-muted">' + esc(audit.truncated) + ' more not included (the file keeps the ' + esc(auditFindings.length) + ' most severe).</div>';
     document.getElementById("panel-audit").innerHTML = ah;
     var auditBtn = document.querySelector('[data-tab="audit"]');
@@ -35553,7 +35563,10 @@ Response: ${match.response.slice(0, 160)}` : "";
   // src/audit/fixes.ts
   function fixFor(ruleId, own) {
     if (own) return own;
-    return ruleId && Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ruleId) ? DEFAULT_FIXES[ruleId] : void 0;
+    if (!ruleId) return void 0;
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ruleId)) return DEFAULT_FIXES[ruleId];
+    const ui = ruleId.startsWith("mobile/") ? "ui/" + ruleId.slice(7) : "";
+    return ui && Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ui) ? DEFAULT_FIXES[ui] + " Fix it in the styles for narrow screens (e.g. a max-width media query) and check at 390px." : void 0;
   }
   var DEFAULT_FIXES;
   var init_fixes = __esm({
@@ -35593,6 +35606,8 @@ Response: ${match.response.slice(0, 160)}` : "";
         "seo/no-sitemap": 'Publish /sitemap.xml listing your pages (most frameworks generate one) and add "Sitemap: https://your-site/sitemap.xml" to robots.txt.',
         "perf/image-oversized": "Serve the image at the size it's shown: resize the file, or use srcset/sizes (or your framework's image component) so each screen downloads the right size.",
         "perf/image-format": "Convert the image to WebP or AVIF (or let your image CDN or framework do it) and keep the JPEG/PNG only as a fallback in <picture>.",
+        "mobile/horizontal-overflow": "Find what is wider than the phone screen (the elements listed with it) and let it shrink: max-width: 100%, wrapping long words (overflow-wrap: anywhere), or a container with overflow-x: auto for wide tables and code. Check at 390px wide.",
+        "mobile/scroll-not-focusable": `Make the scrolling box reachable by keyboard: add tabindex="0" plus role="region" and an aria-label naming its content (e.g. aria-label="Code example"), or let it wrap so it doesn't scroll at all.`,
         "runtime/console-error": "Open the error's stack trace (Export report \u2192 your coding agent can read it) and fix the code that throws.",
         "runtime/failed-request": "Check the failed request (the evidence names it): the endpoint, its status code and the response body tell you whether the client or the server is wrong.",
         "runtime/mixed-content": "Load this resource over https://, or remove it.",
@@ -35633,6 +35648,25 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return out;
   }
+  function boundReview(items) {
+    return items.slice(0, 20).map((r2) => {
+      var _a2, _b;
+      const out = {
+        ruleId: (_a2 = bound(r2.ruleId, 80)) != null ? _a2 : "",
+        title: (_b = bound(r2.title, 160)) != null ? _b : "",
+        count: Math.max(0, Math.round(r2.count || 0)),
+        elements: (r2.elements || []).slice(0, 8).map((e2) => ({
+          ...e2.selector ? { selector: bound(e2.selector, 300) } : {},
+          ...e2.html ? { html: bound(e2.html, MAX_EVIDENCE_HTML) } : {}
+        }))
+      };
+      if (r2.reason) out.reason = bound(r2.reason, 300);
+      if (r2.helpUrl && /^https:\/\//.test(r2.helpUrl)) out.helpUrl = r2.helpUrl;
+      const wcag = cleanWcag(r2.wcag);
+      if (wcag) out.wcag = wcag;
+      return out;
+    });
+  }
   function userAgentFamily(ua) {
     const s2 = ua || "";
     if (/\bEdg\//.test(s2)) return "Edge";
@@ -35642,7 +35676,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     return "Other";
   }
   function buildAuditRun(findings, ctx) {
-    var _a2, _b, _c, _d, _e, _f;
+    var _a2, _b, _c, _d, _e, _f, _g;
     const now = (_a2 = ctx.now) != null ? _a2 : Date.now();
     const page = redactUrl(ctx.url);
     const byKey = /* @__PURE__ */ new Map();
@@ -35688,7 +35722,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       (a2, b) => SEVERITY_RANK[a2.severity] - SEVERITY_RANK[b.severity] || (a2.category < b.category ? -1 : a2.category > b.category ? 1 : 0)
     );
     const kept = all.slice(0, MAX_AUDIT_FINDINGS);
-    const order = ["accessibility", "ui", "performance", "seo", "runtime"];
+    const order = ["accessibility", "ui", "mobile", "performance", "seo", "runtime"];
     const categories = order.filter((name) => ctx.categories[name] !== void 0).map((name) => {
       const c2 = ctx.categories[name];
       const entry = {
@@ -35712,7 +35746,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       truncated: all.length - kept.length,
       ...ctx.scan ? { scan: ctx.scan } : {},
       // From `all`, not `kept`: the cap must never raise the score.
-      score: scoreAudit(categories, all)
+      score: scoreAudit(categories, all),
+      ...((_g = ctx.review) == null ? void 0 : _g.length) ? { review: boundReview(ctx.review) } : {}
     };
   }
   var MAX_AUDIT_FINDINGS, MAX_FIX, MAX_EVIDENCE_HTML, MAX_EVIDENCE_TEXT, MAX_HINTS, MAX_HINT_LENGTH, SEVERITY_RANK;
@@ -35758,20 +35793,23 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (text) hints.push(text.slice(0, 40));
     return { html: htmlSnippet(el), text, hints, ...extra };
   }
+  function styleOf(el) {
+    return (el.ownerDocument.defaultView || window).getComputedStyle(el);
+  }
   function isTraceBugUi(el) {
     return !!el.closest("#tracebug-root, [id^='tracebug-']");
   }
   function isVisuallyHidden(el, depth = 6) {
     let n2 = el;
-    for (let i2 = 0; n2 && i2 < depth && n2 !== document.body; i2++, n2 = n2.parentElement) {
+    for (let i2 = 0; n2 && i2 < depth && n2 !== el.ownerDocument.body; i2++, n2 = n2.parentElement) {
       const r2 = n2.getBoundingClientRect();
-      const cs = getComputedStyle(n2);
+      const cs = styleOf(n2);
       if ((r2.width <= 2 || r2.height <= 2) && (cs.overflow !== "visible" || cs.position === "absolute")) return true;
       if (cs.clip && cs.clip !== "auto") return true;
       if (cs.clipPath && /inset\((50|100)%/.test(cs.clipPath)) return true;
       if (parseFloat(cs.textIndent) <= -999) return true;
       if (cs.position === "absolute" || cs.position === "fixed") {
-        if (r2.right < -100 || r2.bottom < -100 || r2.left > window.innerWidth + 2e3) return true;
+        if (r2.right < -100 || r2.bottom < -100 || r2.left > (n2.ownerDocument.defaultView || window).innerWidth + 2e3) return true;
       }
     }
     return false;
@@ -35779,8 +35817,14 @@ Response: ${match.response.slice(0, 160)}` : "";
   function isRendered(el) {
     const r2 = el.getBoundingClientRect();
     if (r2.width === 0 && r2.height === 0) return false;
-    const cs = getComputedStyle(el);
-    return cs.display !== "none" && cs.visibility !== "hidden" && cs.visibility !== "collapse" && cs.opacity !== "0";
+    const check = el.checkVisibility;
+    if (typeof check === "function") return check.call(el, { opacityProperty: true, visibilityProperty: true });
+    for (let n2 = el; n2; n2 = n2.parentElement) {
+      const cs = styleOf(n2);
+      if (cs.display === "none" || cs.opacity === "0") return false;
+      if (n2 === el && (cs.visibility === "hidden" || cs.visibility === "collapse")) return false;
+    }
+    return true;
   }
   var RAW_HTML_LIMIT, GENERATED;
   var init_evidence = __esm({
@@ -35976,7 +36020,8 @@ Response: ${match.response.slice(0, 160)}` : "";
         {
           runOnly: { type: "tag", values: AXE_TAGS },
           rules: Object.fromEntries(AXE_EXTRA_RULES.map((id) => [id, { enabled: true }])),
-          resultTypes: ["violations"]
+          // "incomplete" too: with only "violations", axe keeps one element per undecided rule.
+          resultTypes: ["violations", "incomplete"]
         }
       );
     } catch (err) {
@@ -36037,9 +36082,38 @@ Response: ${match.response.slice(0, 160)}` : "";
     const failed = new Set(findings.map((f2) => f2.ruleId));
     const applied = /* @__PURE__ */ new Set([...(results.passes || []).map((p) => p.id), ...failed]);
     const wcagFailed = [...new Set(findings.flatMap((f2) => f2.wcag || []))].sort();
-    return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText, rulesChecked: applied.size, rulesFailed: failed.size, wcagFailed };
+    return { ran: true, limitation: A11Y_LIMITATION, findings, transparentText, rulesChecked: applied.size, rulesFailed: failed.size, wcagFailed, review: reviewItems(results.incomplete || [], failed) };
   }
-  var AXE_TAGS, AXE_EXTRA_RULES, normName, MAX_NODES_PER_RULE, A11Y_LIMITATION, A11Y_UNAVAILABLE;
+  function reviewItems(incomplete, _failed) {
+    var _a2;
+    const out = [];
+    for (const r2 of incomplete) {
+      const nodes = r2.nodes || [];
+      if (!nodes.length) continue;
+      const counts = /* @__PURE__ */ new Map();
+      for (const n2 of nodes) {
+        for (const c2 of [...n2.any || [], ...n2.all || [], ...n2.none || []]) {
+          if (c2.message) counts.set(c2.message, (counts.get(c2.message) || 0) + 1);
+        }
+      }
+      const reason = (_a2 = [...counts.entries()].sort((a2, b) => b[1] - a2[1])[0]) == null ? void 0 : _a2[0];
+      const wcag = wcagFromAxeTags(r2.tags);
+      out.push({
+        ruleId: r2.id,
+        title: r2.help || r2.id,
+        ...reason ? { reason } : {},
+        ...r2.helpUrl ? { helpUrl: r2.helpUrl } : {},
+        ...wcag.length ? { wcag } : {},
+        count: nodes.length,
+        elements: nodes.slice(0, MAX_REVIEW_ELEMENTS).map((n2) => ({
+          selector: Array.isArray(n2.target) ? n2.target.map(String).join(" ") : void 0,
+          html: n2.html
+        }))
+      });
+    }
+    return out.sort((a2, b) => b.count - a2.count).slice(0, MAX_REVIEW_RULES);
+  }
+  var AXE_TAGS, AXE_EXTRA_RULES, normName, MAX_NODES_PER_RULE, A11Y_LIMITATION, A11Y_UNAVAILABLE, MAX_REVIEW_RULES, MAX_REVIEW_ELEMENTS;
   var init_a11y = __esm({
     "src/audit/detectors/a11y.ts"() {
       "use strict";
@@ -36053,6 +36127,8 @@ Response: ${match.response.slice(0, 160)}` : "";
       MAX_NODES_PER_RULE = 20;
       A11Y_LIMITATION = "Automated checks cover only part of WCAG. This is not a conformance evaluation: keyboard use, screen-reader meaning and many success criteria need a person.";
       A11Y_UNAVAILABLE = "The accessibility checker isn't available on this page, so accessibility was not checked.";
+      MAX_REVIEW_RULES = 20;
+      MAX_REVIEW_ELEMENTS = 8;
     }
   });
 
@@ -36072,16 +36148,17 @@ Response: ${match.response.slice(0, 160)}` : "";
     };
   }
   function clippedByAncestor(el) {
-    for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
-      const ox = getComputedStyle(p).overflowX;
+    const doc = el.ownerDocument;
+    for (let p = el.parentElement; p && p !== doc.body && p !== doc.documentElement; p = p.parentElement) {
+      const ox = styleOf(p).overflowX;
       if (ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") return true;
     }
     return false;
   }
-  function overflowFindings() {
+  function overflowFindings(doc) {
     const out = [];
-    const vw = document.documentElement.clientWidth;
-    const sw = document.documentElement.scrollWidth;
+    const vw = doc.documentElement.clientWidth;
+    const sw = doc.documentElement.scrollWidth;
     if (sw <= vw + 1) return out;
     out.push(uiFinding(
       "ui/horizontal-overflow",
@@ -36091,13 +36168,13 @@ Response: ${match.response.slice(0, 160)}` : "";
       { evidence: { metrics: { viewportWidth: vw, pageWidth: sw } } }
     ));
     const culprits = [];
-    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+    for (const el of Array.from(doc.body.querySelectorAll("*"))) {
       if (culprits.length >= MAX_PER_RULE) break;
       if (isTraceBugUi(el) || culprits.some((c2) => c2.contains(el))) continue;
       const r2 = el.getBoundingClientRect();
       if (r2.right <= vw + 1 || r2.width === 0) continue;
       if (!isRendered(el) || clippedByAncestor(el) || isVisuallyHidden(el)) continue;
-      if (getComputedStyle(el).position === "fixed") continue;
+      if (styleOf(el).position === "fixed") continue;
       culprits.push(el);
     }
     for (const el of culprits) {
@@ -36113,13 +36190,14 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return out;
   }
-  function hitAt(x, y) {
-    if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return null;
-    return document.elementFromPoint(x, y);
+  function hitAt(doc, x, y) {
+    const win = doc.defaultView || window;
+    if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) return null;
+    return doc.elementFromPoint(x, y);
   }
-  function overlapFindings() {
+  function overlapFindings(doc) {
     const out = [];
-    const controls = Array.from(document.querySelectorAll(INTERACTIVE)).filter((el) => !isTraceBugUi(el) && isRendered(el) && !isVisuallyHidden(el)).slice(0, 400);
+    const controls = Array.from(doc.querySelectorAll(INTERACTIVE)).filter((el) => !isTraceBugUi(el) && isRendered(el) && !isVisuallyHidden(el)).slice(0, 400);
     const rects = controls.map((el) => el.getBoundingClientRect());
     const MIN = 8;
     const reported = /* @__PURE__ */ new Set();
@@ -36134,7 +36212,7 @@ Response: ${match.response.slice(0, 160)}` : "";
         for (const [covered, coveredRect, other] of [[a2, ra, b], [b, rb, a2]]) {
           if (reported.has(covered)) continue;
           if (w * h < 0.25 * coveredRect.width * coveredRect.height) continue;
-          const hit = hitAt(coveredRect.left + coveredRect.width / 2, coveredRect.top + coveredRect.height / 2);
+          const hit = hitAt(doc, coveredRect.left + coveredRect.width / 2, coveredRect.top + coveredRect.height / 2);
           if (!hit || covered === hit || covered.contains(hit) || !(other === hit || other.contains(hit))) continue;
           reported.add(covered);
           out.push(elementFinding(
@@ -36151,14 +36229,14 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return out;
   }
-  function clippedTextFindings() {
+  function clippedTextFindings(doc) {
     const out = [];
-    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+    for (const el of Array.from(doc.body.querySelectorAll("*"))) {
       if (out.length >= MAX_PER_RULE) break;
       if (isTraceBugUi(el)) continue;
       const hasOwnText = Array.from(el.childNodes).some((n2) => n2.nodeType === 3 && (n2.textContent || "").trim().length > 2);
       if (!hasOwnText) continue;
-      const cs = getComputedStyle(el);
+      const cs = styleOf(el);
       if (cs.textOverflow === "ellipsis") continue;
       if (cs.webkitLineClamp && cs.webkitLineClamp !== "none") continue;
       const he = el;
@@ -36178,7 +36256,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return out;
   }
-  function heightRules() {
+  function heightRules(doc) {
     const out = [];
     let unreadable = false;
     const visit2 = (list) => {
@@ -36194,7 +36272,7 @@ Response: ${match.response.slice(0, 160)}` : "";
         if (h && h !== "auto" || ar && ar !== "auto") out.push(rule2);
       }
     };
-    for (const sheet of Array.from(document.styleSheets)) {
+    for (const sheet of Array.from(doc.styleSheets)) {
       try {
         visit2(sheet.cssRules);
       } catch (e2) {
@@ -36203,11 +36281,11 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return unreadable ? null : out;
   }
-  function imageFindings() {
+  function imageFindings(doc) {
     const out = [];
     let noDims = 0, broken = 0;
     let sized;
-    for (const img of Array.from(document.images)) {
+    for (const img of Array.from(doc.images)) {
       if (isTraceBugUi(img)) continue;
       const src = img.currentSrc || img.src;
       if (img.complete && img.naturalWidth === 0 && src && broken < MAX_PER_RULE) {
@@ -36223,7 +36301,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       }
       if (noDims >= MAX_PER_RULE) continue;
       const hasAttrs = img.hasAttribute("width") && img.hasAttribute("height");
-      const cs = getComputedStyle(img);
+      const cs = styleOf(img);
       const sizedByCss = cs.aspectRatio !== "auto" || img.style.width !== "" && img.style.height !== "";
       const r2 = img.getBoundingClientRect();
       if (hasAttrs || sizedByCss || r2.width < 32 || r2.height < 32 || !isRendered(img)) continue;
@@ -36233,10 +36311,10 @@ Response: ${match.response.slice(0, 160)}` : "";
       }
       const parent = img.parentElement;
       if (parent) {
-        const pcs = getComputedStyle(parent);
+        const pcs = styleOf(parent);
         if (pcs.aspectRatio !== "auto" || pcs.position === "relative" && cs.position === "absolute") continue;
       }
-      if (sized === void 0) sized = heightRules();
+      if (sized === void 0) sized = heightRules(doc);
       if (sized === null) continue;
       if (sized.some((rule2) => {
         try {
@@ -36257,12 +36335,13 @@ Response: ${match.response.slice(0, 160)}` : "";
     }
     return out;
   }
-  function detectUiFindings() {
-    const runs = [overflowFindings, overlapFindings, clippedTextFindings, imageFindings];
+  function detectUiFindings(doc = document, only) {
+    const runs = { overflow: overflowFindings, overlap: overlapFindings, clipped: clippedTextFindings, images: imageFindings };
     const out = [];
-    for (const run of runs) {
+    for (const [name, run] of Object.entries(runs)) {
+      if (only && !only.includes(name)) continue;
       try {
-        out.push(...run());
+        out.push(...run(doc));
       } catch (err) {
         console.warn("[TraceBug] UI check failed:", err);
       }
@@ -36279,6 +36358,131 @@ Response: ${match.response.slice(0, 160)}` : "";
       INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]:not([tabindex='-1'])";
       elementFinding = (el, ruleId, severity, title, description, metrics) => uiFinding(ruleId, severity, title, description, { selector: buildSelector2(el), evidence: elementEvidence(el, metrics ? { metrics } : void 0) });
       CONTROL_TEXT = "a, button, label, input, select, textarea, th, td, summary, [role=button], [role=tab], [role=menuitem], h1, h2, h3, h4, h5, h6";
+    }
+  });
+
+  // src/audit/detectors/mobile.ts
+  function focusable(el) {
+    const t2 = el.getAttribute("tabindex");
+    if (t2 !== null) return Number(t2) >= 0;
+    return el.matches(FOCUSABLE);
+  }
+  function scrollableNotFocusable(doc, limit = 6e3) {
+    const out = [];
+    const els = doc.body ? doc.body.getElementsByTagName("*") : [];
+    for (let i2 = 0; i2 < els.length && i2 < limit && out.length < 10; i2++) {
+      const el = els[i2];
+      if (isTraceBugUi(el)) continue;
+      const cs = styleOf(el);
+      const sx = (cs.overflowX === "auto" || cs.overflowX === "scroll") && el.scrollWidth > el.clientWidth + 2;
+      const sy = (cs.overflowY === "auto" || cs.overflowY === "scroll") && el.scrollHeight > el.clientHeight + 2 && el.clientHeight > 0;
+      if (!sx && !sy) continue;
+      if (!isRendered(el) || isVisuallyHidden(el)) continue;
+      if (focusable(el) || el.querySelector(FOCUSABLE)) continue;
+      const dir = sx ? "sideways" : "up and down";
+      out.push({
+        id: makeIssueId("audit-mobile"),
+        detector: "audit-mobile",
+        category: "mobile",
+        ruleId: "mobile/scroll-not-focusable",
+        severity: "moderate",
+        title: `A box scrolls ${dir} but keyboard users can't reach it`,
+        description: `This ${el.tagName.toLowerCase()} scrolls ${dir} (${sx ? `${el.scrollWidth}px of content in ${el.clientWidth}px` : `${el.scrollHeight}px of content in ${el.clientHeight}px`}), but it isn't focusable and has nothing focusable inside, so keyboard users can't scroll it in Safari. Chrome 130+ and Firefox now make such boxes focusable on their own.`,
+        selector: buildSelector2(el),
+        page: location.href,
+        detectedAt: Date.now(),
+        evidence: { ...elementEvidence(el), metrics: sx ? { contentWidth: el.scrollWidth, boxWidth: el.clientWidth } : { contentHeight: el.scrollHeight, boxHeight: el.clientHeight } }
+      });
+    }
+    return out;
+  }
+  function toMobileFindings(raw, desktop, width = PHONE.width) {
+    var _a2, _b;
+    const tail = (id) => (id || "").replace(/^(ui|mobile)\//, "");
+    const seen = new Set(desktop.filter((f2) => {
+      var _a3;
+      return (_a3 = f2.ruleId) == null ? void 0 : _a3.startsWith("ui/");
+    }).map((f2) => `${tail(f2.ruleId)}|${f2.selector || ""}`));
+    const desktopOverflow = desktop.some((f2) => f2.ruleId === "ui/horizontal-overflow");
+    const out = [];
+    for (const f2 of raw) {
+      const t2 = tail(f2.ruleId);
+      if (seen.has(`${t2}|${f2.selector || ""}`)) continue;
+      if (t2 === "horizontal-overflow" && desktopOverflow) continue;
+      const ruleId = `mobile/${t2}`;
+      out.push({
+        ...f2,
+        id: makeIssueId("audit-mobile"),
+        detector: "audit-mobile",
+        category: "mobile",
+        ruleId,
+        title: ((_a2 = f2.ruleId) == null ? void 0 : _a2.startsWith("mobile/")) ? f2.title : `At ${width}px: ${f2.title.charAt(0).toLowerCase()}${f2.title.slice(1)}`,
+        description: ((_b = f2.ruleId) == null ? void 0 : _b.startsWith("mobile/")) ? f2.description : `${f2.description} Only at phone width (${width}px); fine at your current window size.`,
+        ...WCAG[ruleId] ? { wcag: WCAG[ruleId] } : {}
+      });
+    }
+    return out;
+  }
+  async function detectMobileFindings(desktop, timeoutMs = 15e3) {
+    var _a2;
+    if (window.innerWidth <= PHONE.width + 90) {
+      return { ran: false, limitation: "Your window is already phone-sized, so the layout checks above already ran at this width.", findings: [] };
+    }
+    const notRun = (why) => ({ ran: false, limitation: why, findings: [] });
+    (_a2 = document.getElementById(FRAME_ID)) == null ? void 0 : _a2.remove();
+    const frame = document.createElement("iframe");
+    frame.id = FRAME_ID;
+    frame.title = "TraceBug phone-width check";
+    frame.setAttribute("aria-hidden", "true");
+    frame.tabIndex = -1;
+    frame.style.cssText = `position:fixed!important;left:-${PHONE.width + 200}px!important;top:0!important;width:${PHONE.width}px!important;height:${PHONE.height}px!important;border:0!important;opacity:0!important;pointer-events:none!important;z-index:-1!important;`;
+    try {
+      const loaded = new Promise((resolve) => {
+        const t2 = setTimeout(() => resolve(false), timeoutMs);
+        frame.addEventListener("load", () => {
+          clearTimeout(t2);
+          resolve(true);
+        }, { once: true });
+      });
+      frame.src = location.href.replace(/#.*$/, "");
+      (document.getElementById("tracebug-root") || document.body).appendChild(frame);
+      if (!await loaded) return notRun("The page took too long to load at phone width, so it wasn't checked.");
+      let doc = null;
+      try {
+        doc = frame.contentDocument;
+      } catch (e2) {
+        doc = null;
+      }
+      if (!doc || !doc.body || doc.location.href === "about:blank") {
+        return notRun("This site doesn't allow itself to be shown in a frame (X-Frame-Options or CSP frame-ancestors), so phone width couldn't be checked here. Resize the window to about 390px wide and run Auto Review.");
+      }
+      await new Promise((r2) => setTimeout(r2, 1200));
+      const width = doc.documentElement.clientWidth;
+      const raw = [...detectUiFindings(doc, ["overflow", "overlap", "clipped"]), ...scrollableNotFocusable(doc)];
+      return { ran: true, limitation: MOBILE_LIMITATION, findings: toMobileFindings(raw, desktop, width || PHONE.width) };
+    } catch (err) {
+      console.warn("[TraceBug] phone-width check failed:", err);
+      return notRun("The phone-width check failed on this page, so it wasn't run.");
+    } finally {
+      frame.remove();
+    }
+  }
+  var PHONE, MOBILE_LIMITATION, FRAME_ID, FOCUSABLE, WCAG;
+  var init_mobile = __esm({
+    "src/audit/detectors/mobile.ts"() {
+      "use strict";
+      init_helpers2();
+      init_ui();
+      init_evidence();
+      PHONE = { width: 390, height: 844 };
+      MOBILE_LIMITATION = `Loads this page once more in a hidden ${PHONE.width}\xD7${PHONE.height} frame (like opening it in another tab, so page scripts and analytics run again) and checks layout and keyboard reach there. Not a real phone: no touch, no mobile browser bars, and sites that choose a mobile layout by device rather than by width aren't covered.`;
+      FRAME_ID = "tracebug-phone-frame";
+      FOCUSABLE = "a[href], area[href], button, input:not([type=hidden]), select, textarea, iframe, summary, [tabindex], [contenteditable=''], [contenteditable='true']";
+      WCAG = {
+        "mobile/horizontal-overflow": ["1.4.10"],
+        "mobile/off-screen": ["1.4.10"],
+        "mobile/scroll-not-focusable": ["2.1.1"]
+      };
     }
   });
 
@@ -37239,8 +37443,8 @@ Response: ${match.response.slice(0, 160)}` : "";
     "src/audit/types.ts"() {
       "use strict";
       AUDIT_SCANS = {
-        full: { label: "All checks", categories: ["accessibility", "ui", "performance", "seo", "runtime"] },
-        "auto-review": { label: "Auto Review", categories: ["ui", "runtime"] },
+        full: { label: "All checks", categories: ["accessibility", "ui", "mobile", "performance", "seo", "runtime"] },
+        "auto-review": { label: "Auto Review", categories: ["ui", "mobile", "runtime"] },
         accessibility: { label: "Accessibility Audit", categories: ["accessibility"] },
         "performance-seo": { label: "Performance & SEO", categories: ["performance", "seo"] }
       };
@@ -37305,6 +37509,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       var _a3, _b, _c, _d, _e;
       const categories = {};
       const findings = [];
+      let review;
       const guard = async (name, fn) => {
         if (!wanted.has(name)) return;
         try {
@@ -37355,9 +37560,15 @@ Response: ${match.response.slice(0, 160)}` : "";
           metrics.wcagCriteriaFailed = wcag.size;
           if (hidden > 0) metrics.transparentText = hidden;
         }
+        review = a11y.review;
         categories.accessibility = { ran: a11y.ran, limitation, ...Object.keys(metrics).length ? { metrics } : {} };
       }
-      await guard("ui", detectUiFindings);
+      await guard("ui", () => detectUiFindings());
+      if (wanted.has("mobile")) {
+        const m = await detectMobileFindings(findings.filter((f2) => f2.category === "ui"));
+        findings.push(...m.findings);
+        categories.mobile = { ran: m.ran, limitation: m.limitation };
+      }
       if (wanted.has("performance")) {
         try {
           const perf = await detectPerfFindings();
@@ -37401,7 +37612,8 @@ Response: ${match.response.slice(0, 160)}` : "";
         viewport: { width: window.innerWidth, height: window.innerHeight },
         userAgent: navigator.userAgent,
         categories,
-        scan: ((_e = options.categories) == null ? void 0 : _e.length) ? void 0 : scan2
+        scan: ((_e = options.categories) == null ? void 0 : _e.length) ? void 0 : scan2,
+        review
       });
       _lastRun = run;
       return run;
@@ -37422,6 +37634,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       init_run();
       init_a11y();
       init_ui();
+      init_mobile();
       init_seo();
       init_performance();
       init_keyboard();
@@ -37631,6 +37844,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       CATEGORY_LABEL = {
         accessibility: "Accessibility",
         ui: "Layout",
+        mobile: "Phone width",
         performance: "Performance",
         seo: "SEO",
         runtime: "Runtime"
@@ -37984,7 +38198,7 @@ Response: ${match.response.slice(0, 160)}` : "";
     if (run && el) el.textContent = `Scanned ${agoText(run.scannedAt)}`;
   }
   function render(run) {
-    var _a2, _b;
+    var _a2, _b, _c;
     updateTabScore(run);
     const all = groups(run);
     const shown = visibleGroups(run);
@@ -38011,6 +38225,7 @@ Response: ${match.response.slice(0, 160)}` : "";
       parts.push(`<div class="tb-au-list">${shown.map((g) => groupHtml(g)).join("")}</div>`);
       if (!shown.length) parts.push(`<div class="tb-au-empty">Nothing matches this filter.</div>`);
     }
+    if ((_c = run.review) == null ? void 0 : _c.length) parts.push(reviewHtml(run.review));
     if (run.truncated > 0) {
       parts.push(`<div class="tb-au-note">${run.truncated} more finding${run.truncated === 1 ? "" : "s"} not listed (the list keeps the ${run.findings.length} most severe). The score counts all of them.</div>`);
     }
@@ -38190,6 +38405,35 @@ Response: ${match.response.slice(0, 160)}` : "";
       ${first.helpUrl && /^https:\/\//.test(first.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(first.helpUrl)}" target="_blank" rel="noopener noreferrer">Learn more about this rule${ICON.external}<span class="tb-au-sr"> (opens in a new tab)</span></a>` : ""}
     </div>
   </article>`;
+  }
+  function reviewHtml(items) {
+    const elements = items.reduce((a2, r2) => a2 + r2.count, 0);
+    const rows = items.map((r2) => {
+      const wcag = (r2.wcag || []).map((sc) => `<span class="tb-au-tag">WCAG ${escapeHtml(wcagLabel(sc))}</span>`).join("");
+      const els = r2.elements.map((e2) => `<li class="tb-au-el" data-selector="${escapeHtml(e2.selector || "")}">
+        ${e2.selector ? `<code class="tb-au-el-sel" title="${escapeHtml(e2.selector)}">${escapeHtml(e2.selector)}</code>` : ""}
+        ${e2.selector ? `<div class="tb-au-el-acts">
+          <button type="button" class="tb-au-btn tb-au-btn-sm tb-au-btn-primary" data-tb-au="locate">${ICON.locate}<span class="tb-au-btn-l">Locate on page</span></button>
+          <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="copy-sel" aria-label="Copy selector">${ICON.copy}<span class="tb-au-btn-l">Copy selector</span></button>
+        </div>` : ""}
+        <div class="tb-au-locmsg" data-tb-au-msg role="status"></div>
+      </li>`).join("");
+      const more = r2.count > r2.elements.length ? `<div class="tb-au-muted">${r2.count - r2.elements.length} more not listed.</div>` : "";
+      return `<details class="tb-au-rv-item">
+      <summary><span class="tb-au-rv-t">${escapeHtml(r2.title)}</span><span class="tb-au-count">${r2.count} element${r2.count === 1 ? "" : "s"}</span>${ICON.chevron}</summary>
+      <div class="tb-au-rv-b">
+        ${r2.reason ? `<p><b>Why it needs a person:</b> ${escapeHtml(r2.reason)}</p>` : ""}
+        ${wcag ? `<div class="tb-au-wcags">${wcag}</div>` : ""}
+        <ul class="tb-au-els">${els}</ul>${more}
+        <div class="tb-au-foot"><code class="tb-au-rule">${escapeHtml(r2.ruleId)}</code>${r2.helpUrl && /^https:\/\//.test(r2.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(r2.helpUrl)}" target="_blank" rel="noopener noreferrer">How to check${ICON.external}<span class="tb-au-sr"> (opens in a new tab)</span></a>` : ""}</div>
+      </div>
+    </details>`;
+    }).join("");
+    return `<details class="tb-au-review">
+    <summary>${ICON.eye}<span><b>Needs a person to check</b> \xB7 ${items.length} rule${items.length === 1 ? "" : "s"}, ${elements} element${elements === 1 ? "" : "s"}</span>${ICON.chevron}</summary>
+    <p class="tb-au-muted tb-au-rv-intro">The automated checks couldn't decide these \u2014 for example a text colour over an image or gradient. They are <b>not failures</b> and don't affect the score. Look at each one and decide.</p>
+    ${rows}
+  </details>`;
   }
   function toggleGroup(card) {
     if (!card) return;
@@ -38458,6 +38702,18 @@ Response: ${match.response.slice(0, 160)}` : "";
     ${P} .tb-au-link { display: inline-flex; align-items: center; gap: 4px; color: var(--tb-accent, #FF5C6C); font-size: 12.5px; text-decoration: none; font-weight: 600; }
     ${P} .tb-au-link:hover { text-decoration: underline; }
     ${P} .tb-au-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    /* Needs review */
+    ${P} .tb-au-review { margin: 14px; border: 1px dashed var(--tb-border-hover, #333A4D); border-radius: 10px; }
+    ${P} .tb-au-review > summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; font-size: 12.5px; }
+    ${P} .tb-au-review > summary::-webkit-details-marker, ${P} .tb-au-rv-item > summary::-webkit-details-marker { display: none; }
+    ${P} .tb-au-review > summary > span { flex: 1; }
+    ${P} .tb-au-review > summary > svg:last-child, ${P} .tb-au-rv-item > summary > svg:last-child { transition: transform .15s; color: var(--tb-text-muted, #8A91A5); flex-shrink: 0; }
+    ${P} .tb-au-review[open] > summary > svg:last-child, ${P} .tb-au-rv-item[open] > summary > svg:last-child { transform: rotate(90deg); }
+    ${P} .tb-au-rv-intro { padding: 0 12px 8px; }
+    ${P} .tb-au-rv-item { border-top: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-rv-item > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; font-size: 12.5px; }
+    ${P} .tb-au-rv-t { flex: 1; font-weight: 600; }
+    ${P} .tb-au-rv-b { padding: 0 12px 12px; display: grid; gap: 8px; font-size: 12.5px; color: var(--tb-text-secondary, #A8AEBE); }
     /* Locate highlight */
     ${H} { position: fixed !important; left: 0 !important; top: 0 !important; z-index: 2147483645 !important; pointer-events: none !important;
       border: 2px solid var(--tb-accent, #FF5C6C) !important; border-radius: 6px !important; background: rgba(255,92,108,.10) !important;
@@ -38492,6 +38748,7 @@ Response: ${match.response.slice(0, 160)}` : "";
         ui: "Layout",
         seo: "SEO",
         performance: "Performance",
+        mobile: "Phone width",
         runtime: "Errors & requests"
       };
       SEVERITIES = ["critical", "serious", "moderate", "minor"];
@@ -38506,6 +38763,9 @@ Response: ${match.response.slice(0, 160)}` : "";
         "kbd/focus-outline-removed": "Focus outline removed with no replacement",
         "kbd/positive-tabindex": "Positive tabindex changes the Tab order",
         "ui/off-screen": "Elements stick out past the right edge",
+        "mobile/off-screen": "At phone width, elements stick out past the screen",
+        "mobile/scroll-not-focusable": "Scrolling boxes keyboard users can't reach",
+        "mobile/text-clipped": "At phone width, text is cut off",
         "ui/broken-image": "Images failed to load",
         "runtime/console-error": "Errors in the console",
         "runtime/failed-request": "Requests failed",
@@ -41925,7 +42185,8 @@ First element: \`${exampleSnippet}\``,
       "audit-ui": 0,
       "audit-seo": 0,
       "audit-perf": 0,
-      "audit-keyboard": 0
+      "audit-keyboard": 0,
+      "audit-mobile": 0
     };
     for (const i2 of _issues) {
       if (i2.dismissed) continue;
@@ -42597,7 +42858,8 @@ First element: \`${exampleSnippet}\``,
         "audit-ui": "Layout",
         "audit-seo": "SEO",
         "audit-perf": "Performance",
-        "audit-keyboard": "Keyboard"
+        "audit-keyboard": "Keyboard",
+        "audit-mobile": "Phone width"
       };
     }
   });

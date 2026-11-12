@@ -40,6 +40,7 @@ const CATEGORY_LABEL: Record<AuditCategory, string> = {
   ui: "Layout",
   seo: "SEO",
   performance: "Performance",
+  mobile: "Phone width",
   runtime: "Errors & requests",
 };
 const SEVERITIES: Issue["severity"][] = ["critical", "serious", "moderate", "minor"];
@@ -56,6 +57,9 @@ const GROUP_TITLE: Record<string, string> = {
   "kbd/focus-outline-removed": "Focus outline removed with no replacement",
   "kbd/positive-tabindex": "Positive tabindex changes the Tab order",
   "ui/off-screen": "Elements stick out past the right edge",
+  "mobile/off-screen": "At phone width, elements stick out past the screen",
+  "mobile/scroll-not-focusable": "Scrolling boxes keyboard users can't reach",
+  "mobile/text-clipped": "At phone width, text is cut off",
   "ui/broken-image": "Images failed to load",
   "runtime/console-error": "Errors in the console",
   "runtime/failed-request": "Requests failed",
@@ -469,6 +473,7 @@ function render(run: AuditRun): void {
     parts.push(`<div class="tb-au-list">${shown.map((g) => groupHtml(g)).join("")}</div>`);
     if (!shown.length) parts.push(`<div class="tb-au-empty">Nothing matches this filter.</div>`);
   }
+  if (run.review?.length) parts.push(reviewHtml(run.review));
   if (run.truncated > 0) {
     parts.push(`<div class="tb-au-note">${run.truncated} more finding${run.truncated === 1 ? "" : "s"} not listed (the list keeps the ${run.findings.length} most severe). The score counts all of them.</div>`);
   }
@@ -676,6 +681,37 @@ function groupHtml(g: Group): string {
       ${first.helpUrl && /^https:\/\//.test(first.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(first.helpUrl)}" target="_blank" rel="noopener noreferrer">Learn more about this rule${ICON.external}<span class="tb-au-sr"> (opens in a new tab)</span></a>` : ""}
     </div>
   </article>`;
+}
+
+/** Rules axe couldn't decide: collapsed, never scored, never in Copy for AI. */
+function reviewHtml(items: NonNullable<AuditRun["review"]>): string {
+  const elements = items.reduce((a, r) => a + r.count, 0);
+  const rows = items.map((r) => {
+    const wcag = (r.wcag || []).map((sc) => `<span class="tb-au-tag">WCAG ${escapeHtml(wcagLabel(sc))}</span>`).join("");
+    const els = r.elements.map((e) => `<li class="tb-au-el" data-selector="${escapeHtml(e.selector || "")}">
+        ${e.selector ? `<code class="tb-au-el-sel" title="${escapeHtml(e.selector)}">${escapeHtml(e.selector)}</code>` : ""}
+        ${e.selector ? `<div class="tb-au-el-acts">
+          <button type="button" class="tb-au-btn tb-au-btn-sm tb-au-btn-primary" data-tb-au="locate">${ICON.locate}<span class="tb-au-btn-l">Locate on page</span></button>
+          <button type="button" class="tb-au-btn tb-au-btn-sm" data-tb-au="copy-sel" aria-label="Copy selector">${ICON.copy}<span class="tb-au-btn-l">Copy selector</span></button>
+        </div>` : ""}
+        <div class="tb-au-locmsg" data-tb-au-msg role="status"></div>
+      </li>`).join("");
+    const more = r.count > r.elements.length ? `<div class="tb-au-muted">${r.count - r.elements.length} more not listed.</div>` : "";
+    return `<details class="tb-au-rv-item">
+      <summary><span class="tb-au-rv-t">${escapeHtml(r.title)}</span><span class="tb-au-count">${r.count} element${r.count === 1 ? "" : "s"}</span>${ICON.chevron}</summary>
+      <div class="tb-au-rv-b">
+        ${r.reason ? `<p><b>Why it needs a person:</b> ${escapeHtml(r.reason)}</p>` : ""}
+        ${wcag ? `<div class="tb-au-wcags">${wcag}</div>` : ""}
+        <ul class="tb-au-els">${els}</ul>${more}
+        <div class="tb-au-foot"><code class="tb-au-rule">${escapeHtml(r.ruleId)}</code>${r.helpUrl && /^https:\/\//.test(r.helpUrl) ? `<a class="tb-au-link" href="${escapeHtml(r.helpUrl)}" target="_blank" rel="noopener noreferrer">How to check${ICON.external}<span class="tb-au-sr"> (opens in a new tab)</span></a>` : ""}</div>
+      </div>
+    </details>`;
+  }).join("");
+  return `<details class="tb-au-review">
+    <summary>${ICON.eye}<span><b>Needs a person to check</b> · ${items.length} rule${items.length === 1 ? "" : "s"}, ${elements} element${elements === 1 ? "" : "s"}</span>${ICON.chevron}</summary>
+    <p class="tb-au-muted tb-au-rv-intro">The automated checks couldn't decide these — for example a text colour over an image or gradient. They are <b>not failures</b> and don't affect the score. Look at each one and decide.</p>
+    ${rows}
+  </details>`;
 }
 
 function toggleGroup(card: HTMLElement | null): void {
@@ -934,6 +970,18 @@ function injectStyles(): void {
     ${P} .tb-au-link { display: inline-flex; align-items: center; gap: 4px; color: var(--tb-accent, #FF5C6C); font-size: 12.5px; text-decoration: none; font-weight: 600; }
     ${P} .tb-au-link:hover { text-decoration: underline; }
     ${P} .tb-au-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    /* Needs review */
+    ${P} .tb-au-review { margin: 14px; border: 1px dashed var(--tb-border-hover, #333A4D); border-radius: 10px; }
+    ${P} .tb-au-review > summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; font-size: 12.5px; }
+    ${P} .tb-au-review > summary::-webkit-details-marker, ${P} .tb-au-rv-item > summary::-webkit-details-marker { display: none; }
+    ${P} .tb-au-review > summary > span { flex: 1; }
+    ${P} .tb-au-review > summary > svg:last-child, ${P} .tb-au-rv-item > summary > svg:last-child { transition: transform .15s; color: var(--tb-text-muted, #8A91A5); flex-shrink: 0; }
+    ${P} .tb-au-review[open] > summary > svg:last-child, ${P} .tb-au-rv-item[open] > summary > svg:last-child { transform: rotate(90deg); }
+    ${P} .tb-au-rv-intro { padding: 0 12px 8px; }
+    ${P} .tb-au-rv-item { border-top: 1px solid var(--tb-border, #252A38); }
+    ${P} .tb-au-rv-item > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; list-style: none; font-size: 12.5px; }
+    ${P} .tb-au-rv-t { flex: 1; font-weight: 600; }
+    ${P} .tb-au-rv-b { padding: 0 12px 12px; display: grid; gap: 8px; font-size: 12.5px; color: var(--tb-text-secondary, #A8AEBE); }
     /* Locate highlight */
     ${H} { position: fixed !important; left: 0 !important; top: 0 !important; z-index: 2147483645 !important; pointer-events: none !important;
       border: 2px solid var(--tb-accent, #FF5C6C) !important; border-radius: 6px !important; background: rgba(255,92,108,.10) !important;

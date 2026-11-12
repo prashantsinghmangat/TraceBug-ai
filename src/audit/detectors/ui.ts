@@ -14,7 +14,7 @@
 
 import type { Issue, IssueSeverity } from "../../types";
 import { buildSelector, makeIssueId } from "../../scanner/helpers";
-import { elementEvidence, isRendered, isTraceBugUi, isVisuallyHidden } from "./evidence";
+import { elementEvidence, isRendered, isTraceBugUi, isVisuallyHidden, styleOf } from "./evidence";
 
 const MAX_PER_RULE = 15;
 const INTERACTIVE = "a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=link], [tabindex]:not([tabindex='-1'])";
@@ -39,17 +39,18 @@ const elementFinding = (el: Element, ruleId: string, severity: IssueSeverity, ti
 
 /** An ancestor clips horizontally, so sticking out past it is invisible, not overflow. */
 function clippedByAncestor(el: Element): boolean {
-  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
-    const ox = getComputedStyle(p).overflowX;
+  const doc = el.ownerDocument;
+  for (let p = el.parentElement; p && p !== doc.body && p !== doc.documentElement; p = p.parentElement) {
+    const ox = styleOf(p).overflowX;
     if (ox === "hidden" || ox === "clip" || ox === "auto" || ox === "scroll") return true;
   }
   return false;
 }
 
-function overflowFindings(): Issue[] {
+function overflowFindings(doc: Document): Issue[] {
   const out: Issue[] = [];
-  const vw = document.documentElement.clientWidth;
-  const sw = document.documentElement.scrollWidth;
+  const vw = doc.documentElement.clientWidth;
+  const sw = doc.documentElement.scrollWidth;
   if (sw <= vw + 1) return out;
 
   out.push(uiFinding("ui/horizontal-overflow", "serious", `Page scrolls sideways by ${sw - vw}px`,
@@ -58,13 +59,13 @@ function overflowFindings(): Issue[] {
 
   // The culprits: the outermost elements that stick out (not every descendant of one).
   const culprits: Element[] = [];
-  for (const el of Array.from(document.body.querySelectorAll("*"))) {
+  for (const el of Array.from(doc.body.querySelectorAll("*"))) {
     if (culprits.length >= MAX_PER_RULE) break;
     if (isTraceBugUi(el) || culprits.some((c) => c.contains(el))) continue;
     const r = el.getBoundingClientRect();
     if (r.right <= vw + 1 || r.width === 0) continue;
     if (!isRendered(el) || clippedByAncestor(el) || isVisuallyHidden(el)) continue;
-    if (getComputedStyle(el).position === "fixed") continue;
+    if (styleOf(el).position === "fixed") continue;
     culprits.push(el);
   }
   for (const el of culprits) {
@@ -77,9 +78,10 @@ function overflowFindings(): Issue[] {
 }
 
 /** The element under a point, or null when the point is outside the window (elementFromPoint can't see it). */
-function hitAt(x: number, y: number): Element | null {
-  if (x < 0 || y < 0 || x >= window.innerWidth || y >= window.innerHeight) return null;
-  return document.elementFromPoint(x, y);
+function hitAt(doc: Document, x: number, y: number): Element | null {
+  const win = doc.defaultView || window;
+  if (x < 0 || y < 0 || x >= win.innerWidth || y >= win.innerHeight) return null;
+  return doc.elementFromPoint(x, y);
 }
 
 /**
@@ -89,9 +91,9 @@ function hitAt(x: number, y: number): Element | null {
  * a stacked card link that still receives clicks, or a skip link parked under
  * the header is not a bug. Only overlaps inside the window can be checked.
  */
-function overlapFindings(): Issue[] {
+function overlapFindings(doc: Document): Issue[] {
   const out: Issue[] = [];
-  const controls = Array.from(document.querySelectorAll(INTERACTIVE))
+  const controls = Array.from(doc.querySelectorAll(INTERACTIVE))
     .filter((el) => !isTraceBugUi(el) && isRendered(el) && !isVisuallyHidden(el))
     .slice(0, 400);
   const rects = controls.map((el) => el.getBoundingClientRect());
@@ -108,7 +110,7 @@ function overlapFindings(): Issue[] {
       for (const [covered, coveredRect, other] of [[a, ra, b], [b, rb, a]] as const) {
         if (reported.has(covered)) continue;
         if (w * h < 0.25 * coveredRect.width * coveredRect.height) continue;
-        const hit = hitAt(coveredRect.left + coveredRect.width / 2, coveredRect.top + coveredRect.height / 2);
+        const hit = hitAt(doc, coveredRect.left + coveredRect.width / 2, coveredRect.top + coveredRect.height / 2);
         if (!hit || covered === hit || covered.contains(hit) || !(other === hit || other.contains(hit))) continue;
         reported.add(covered);
         out.push(elementFinding(covered, "ui/overlap", "serious", "A control is covered and can't be clicked",
@@ -123,14 +125,14 @@ function overlapFindings(): Issue[] {
 
 const CONTROL_TEXT = "a, button, label, input, select, textarea, th, td, summary, [role=button], [role=tab], [role=menuitem], h1, h2, h3, h4, h5, h6";
 
-function clippedTextFindings(): Issue[] {
+function clippedTextFindings(doc: Document): Issue[] {
   const out: Issue[] = [];
-  for (const el of Array.from(document.body.querySelectorAll("*"))) {
+  for (const el of Array.from(doc.body.querySelectorAll("*"))) {
     if (out.length >= MAX_PER_RULE) break;
     if (isTraceBugUi(el)) continue;
     const hasOwnText = Array.from(el.childNodes).some((n) => n.nodeType === 3 && (n.textContent || "").trim().length > 2);
     if (!hasOwnText) continue;
-    const cs = getComputedStyle(el);
+    const cs = styleOf(el);
     if (cs.textOverflow === "ellipsis") continue; // truncation on purpose
     if (cs.webkitLineClamp && cs.webkitLineClamp !== "none") continue; // line clamp: on purpose
     const he = el as HTMLElement;
@@ -151,7 +153,7 @@ function clippedTextFindings(): Issue[] {
 
 /** Style rules that set a height or aspect-ratio, flattened once per run. null = some stylesheet
  *  could not be read (another origin), so "no rule sets a height" can't be proven. */
-function heightRules(): CSSStyleRule[] | null {
+function heightRules(doc: Document): CSSStyleRule[] | null {
   const out: CSSStyleRule[] = [];
   let unreadable = false;
   const visit = (list: CSSRuleList) => {
@@ -164,17 +166,17 @@ function heightRules(): CSSStyleRule[] | null {
       if ((h && h !== "auto") || (ar && ar !== "auto")) out.push(rule as CSSStyleRule);
     }
   };
-  for (const sheet of Array.from(document.styleSheets)) {
+  for (const sheet of Array.from(doc.styleSheets)) {
     try { visit(sheet.cssRules); } catch { unreadable = true; }
   }
   return unreadable ? null : out;
 }
 
-function imageFindings(): Issue[] {
+function imageFindings(doc: Document): Issue[] {
   const out: Issue[] = [];
   let noDims = 0, broken = 0;
   let sized: CSSStyleRule[] | null | undefined;
-  for (const img of Array.from(document.images)) {
+  for (const img of Array.from(doc.images)) {
     if (isTraceBugUi(img)) continue;
     const src = img.currentSrc || img.src;
     if (img.complete && img.naturalWidth === 0 && src && broken < MAX_PER_RULE) {
@@ -186,7 +188,7 @@ function imageFindings(): Issue[] {
     }
     if (noDims >= MAX_PER_RULE) continue;
     const hasAttrs = img.hasAttribute("width") && img.hasAttribute("height");
-    const cs = getComputedStyle(img);
+    const cs = styleOf(img);
     const sizedByCss = cs.aspectRatio !== "auto" || (img.style.width !== "" && img.style.height !== "");
     const r = img.getBoundingClientRect();
     if (hasAttrs || sizedByCss || r.width < 32 || r.height < 32 || !isRendered(img)) continue;
@@ -200,11 +202,11 @@ function imageFindings(): Issue[] {
     // Inside a box with a fixed height or aspect-ratio, the image can't push content down.
     const parent = img.parentElement;
     if (parent) {
-      const pcs = getComputedStyle(parent);
+      const pcs = styleOf(parent);
       if (pcs.aspectRatio !== "auto" || (pcs.position === "relative" && cs.position === "absolute")) continue;
     }
     // Does any stylesheet give it a height? If a sheet can't be read we can't prove it doesn't: skip.
-    if (sized === undefined) sized = heightRules();
+    if (sized === undefined) sized = heightRules(doc);
     if (sized === null) continue;
     if (sized.some((rule) => { try { return img.matches(rule.selectorText); } catch { return false; } })) continue;
     noDims++;
@@ -215,11 +217,13 @@ function imageFindings(): Issue[] {
   return out;
 }
 
-export function detectUiFindings(): Issue[] {
-  const runs = [overflowFindings, overlapFindings, clippedTextFindings, imageFindings];
+/** Layout checks on `doc` (the page, or the hidden phone-width frame); `only` picks checks by name. */
+export function detectUiFindings(doc: Document = document, only?: Array<"overflow" | "overlap" | "clipped" | "images">): Issue[] {
+  const runs = { overflow: overflowFindings, overlap: overlapFindings, clipped: clippedTextFindings, images: imageFindings };
   const out: Issue[] = [];
-  for (const run of runs) {
-    try { out.push(...run()); } catch (err) { console.warn("[TraceBug] UI check failed:", err); }
+  for (const [name, run] of Object.entries(runs)) {
+    if (only && !only.includes(name as keyof typeof runs)) continue;
+    try { out.push(...run(doc)); } catch (err) { console.warn("[TraceBug] UI check failed:", err); }
   }
   return out;
 }

@@ -738,7 +738,7 @@ export const TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         ...FILE_PROP,
-        category: { type: "string", enum: ["accessibility", "ui", "performance", "seo", "runtime"], description: "Only this category." },
+        category: { type: "string", enum: ["accessibility", "ui", "mobile", "performance", "seo", "runtime"], description: "Only this category." },
         severity: { type: "string", enum: ["critical", "serious", "moderate", "minor"], description: "Minimum severity: \"serious\" returns critical and serious." },
       },
       required: ["file"],

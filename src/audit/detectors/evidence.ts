@@ -37,6 +37,11 @@ export function elementEvidence(el: Element, extra?: Partial<AuditEvidence>): Au
   return { html: htmlSnippet(el), text, hints, ...extra };
 }
 
+/** Computed style from the element's own window (works for elements in a same-origin frame). */
+export function styleOf(el: Element): CSSStyleDeclaration {
+  return (el.ownerDocument.defaultView || window).getComputedStyle(el);
+}
+
 /** True for TraceBug's own UI, which every audit must ignore. */
 export function isTraceBugUi(el: Element): boolean {
   return !!el.closest("#tracebug-root, [id^='tracebug-']");
@@ -50,15 +55,15 @@ export function isTraceBugUi(el: Element): boolean {
  */
 export function isVisuallyHidden(el: Element, depth = 6): boolean {
   let n: Element | null = el;
-  for (let i = 0; n && i < depth && n !== document.body; i++, n = n.parentElement) {
+  for (let i = 0; n && i < depth && n !== el.ownerDocument.body; i++, n = n.parentElement) {
     const r = n.getBoundingClientRect();
-    const cs = getComputedStyle(n);
+    const cs = styleOf(n);
     if ((r.width <= 2 || r.height <= 2) && (cs.overflow !== "visible" || cs.position === "absolute")) return true;
     if (cs.clip && cs.clip !== "auto") return true;
     if (cs.clipPath && /inset\((50|100)%/.test(cs.clipPath)) return true;
     if (parseFloat(cs.textIndent) <= -999) return true;
     if (cs.position === "absolute" || cs.position === "fixed") {
-      if (r.right < -100 || r.bottom < -100 || r.left > window.innerWidth + 2000) return true;
+      if (r.right < -100 || r.bottom < -100 || r.left > (n.ownerDocument.defaultView || window).innerWidth + 2000) return true;
     }
   }
   return false;
@@ -68,6 +73,14 @@ export function isVisuallyHidden(el: Element, depth = 6): boolean {
 export function isRendered(el: Element): boolean {
   const r = el.getBoundingClientRect();
   if (r.width === 0 && r.height === 0) return false;
-  const cs = getComputedStyle(el);
-  return cs.display !== "none" && cs.visibility !== "hidden" && cs.visibility !== "collapse" && cs.opacity !== "0";
+  // Invisible because of an ANCESTOR too: a closed mega-menu is often a container at opacity 0
+  // whose links are still laid out (Shopify). Nobody can see or click those.
+  const check = (el as Element & { checkVisibility?: (o?: Record<string, boolean>) => boolean }).checkVisibility;
+  if (typeof check === "function") return check.call(el, { opacityProperty: true, visibilityProperty: true });
+  for (let n: Element | null = el; n; n = n.parentElement) {
+    const cs = styleOf(n);
+    if (cs.display === "none" || cs.opacity === "0") return false;
+    if (n === el && (cs.visibility === "hidden" || cs.visibility === "collapse")) return false;
+  }
+  return true;
 }

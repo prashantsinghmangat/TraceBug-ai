@@ -81,6 +81,15 @@ const server = createServer((req, res) => {
     }, 250);
     return;
   }
+  if (url.pathname === "/phone") {
+    // Fine at desktop width; at 390px a promo banner becomes wider than the screen and the code block scrolls.
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Phone fixture</title>
+<style>body{margin:0;font-family:system-ui,sans-serif} main{padding:16px} pre{overflow-x:auto;background:#eee;font-size:14px} @media (max-width:500px){ .promo{width:620px;height:40px;background:#fc0} }</style></head>
+<body><main><h1>Phone</h1><div class="promo" id="promo">Promo</div><pre id="code">npx -y tracebug mcp --dir ./reports --verbose --a-long-flag-for-width</pre></main>
+<script src="/tracebug-sdk.js"></script><script>window.TraceBug.init({ projectId: "site-audit-e2e", enabled: "all" });</script></body></html>`);
+    return;
+  }
   if (url.pathname === "/robots.txt") {
     res.writeHead(200, { "content-type": "text/plain" });
     res.end(["User-agent: *", "Disallow: /reveal", ""].join("\n"));
@@ -95,6 +104,7 @@ const server = createServer((req, res) => {
 main{padding:80px 16px} .spacer{height:2400px} .reveal{opacity:0;transition:opacity .2s} .reveal.on{opacity:1} .low{color:#b45309;background:#f4eae4;font-size:11px}</style></head>
 <body><header><a href="/">Home</a></header><main><h1>Reveal</h1>
 <a href="/demo" id="demo" aria-label="Play the 57-second product video">Watch the demo</a>
+<p id="over-gradient" style="background-image:linear-gradient(90deg,#000,#fff);color:#777">Text over a gradient</p>
 <div class="spacer"></div><div class="reveal" id="rev"><p class="low" id="hidden-low">Only after scrolling</p></div></main>
 <script>new IntersectionObserver(([e],o)=>{if(e.isIntersecting){e.target.classList.add("on");o.disconnect();}}).observe(document.getElementById("rev"));</script>
 <script src="/tracebug-sdk.js"></script><script>window.TraceBug.init({ projectId: "site-audit-e2e", enabled: "all" });</script></body></html>`);
@@ -175,7 +185,7 @@ try {
   const names = (run) => run.categories.map((c) => c.name).join();
   const scanRun = (scan) => tab.evaluate((s) => window.TraceBug.runAudit({ scan: s }), scan);
   const auto = await scanRun("auto-review");
-  check("scan auto-review = layout + runtime", auto.scan === "auto-review" && names(auto) === "ui,runtime", names(auto));
+  check("scan auto-review = layout + phone width + runtime", auto.scan === "auto-review" && names(auto) === "ui,mobile,runtime", names(auto));
   const a11y = await scanRun("accessibility");
   check("scan accessibility = axe + keyboard only", names(a11y) === "accessibility" && has(a11y, "kbd/positive-tabindex") && has(a11y, "image-alt"), names(a11y));
   const ps = await scanRun("performance-seo");
@@ -183,7 +193,7 @@ try {
   const cross = await tab.evaluate(([b, a]) => window.TraceBug.compareAudits(b, a), [before, ps]);
   check("comparing a full run with a partial scan skips what the scan didn't run", cross.comparable && ["accessibility", "runtime", "ui"].every((c) => cross.skippedCategories.includes(c)) && !cross.fixed.some((f) => f.category === "accessibility"), short(cross.skippedCategories));
   const full = await tab.evaluate(() => window.TraceBug.runAudit());
-  check("no scan = all checks", full.scan === "full" && full.categories.length === 5);
+  check("no scan = all checks", full.scan === "full" && full.categories.length === 6, names(full));
 
   // Performance (lab, this page load)
   const perfCat = cat(before, "performance");
@@ -300,6 +310,25 @@ try {
   await tab.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 15000 });
   const scoreTxt = await tab.locator("#tracebug-audit-panel .tb-au-score").innerText();
   check("the panel shows the score", /\b\d{1,3}\b[\s\S]*(Good|Needs work|Poor)/.test(scoreTxt), scoreTxt.slice(0, 120));
+  const rvReview = await tab.evaluate(() => window.TraceBug.getLastAudit());
+  const cc2 = (rvReview.review || []).find((r) => r.ruleId === "color-contrast");
+  check("needs review: text over a gradient is listed for a person, not as a finding or in the score",
+    !!cc2 && cc2.elements.some((e) => /over-gradient/.test(e.selector || "")) && !rvReview.findings.some((f) => /over-gradient/.test(f.selector || "")), JSON.stringify(rvReview.review)?.slice(0, 300));
+  const reviewTxt = await tab.locator("#tracebug-audit-panel .tb-au-review").evaluate((el) => el.textContent || "");
+  check("the panel shows the needs-review section, marked not scored", /Needs a person to check/.test(reviewTxt) && /not failures/.test(reviewTxt), reviewTxt.slice(0, 160));
+
+  // ── Phone width: checked in a hidden 390px frame, only what the current width doesn't already show ──
+  await tab.goto(`${ORIGIN}/phone`, { waitUntil: "load" });
+  await tab.waitForFunction(() => window.TraceBug && window.TraceBug.runAudit, null, { timeout: 15000 });
+  const ph = await tab.evaluate(() => window.TraceBug.runAudit({ scan: "auto-review" }));
+  const phIds = rules(ph);
+  check("phone width ran and stays out of the current-width layout results",
+    cat(ph, "mobile")?.ran === true && !phIds.includes("ui/horizontal-overflow") && /390/.test(cat(ph, "mobile")?.limitation || ""), short(ph.categories));
+  check("phone width: the banner that only overflows on phones is found, with WCAG 1.4.10",
+    has(ph, "mobile/horizontal-overflow", (f) => (f.wcag || []).includes("1.4.10")) && has(ph, "mobile/off-screen", (f) => /promo/.test(f.selector || "")), short(phIds));
+  check("phone width: the code block that only scrolls on phones is flagged as unreachable by keyboard",
+    has(ph, "mobile/scroll-not-focusable", (f) => /code/.test(f.selector || "") && !!f.fix), short(phIds));
+  check("phone width: the hidden frame is removed afterwards", (await tab.locator("#tracebug-phone-frame").count()) === 0);
 } catch (err) {
   console.error(err);
   failures++;

@@ -526,7 +526,8 @@ body { min-height: 100vh; }
 .tb-vau-score-n { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 4px solid var(--tb-border); font-size: 18px; font-weight: 800; flex: none; }
 .tb-vau-pill { display: inline-block; min-width: 30px; text-align: center; padding: 0 5px; border-radius: 999px; border: 2px solid var(--tb-border); font-size: 11px; font-weight: 700; }
 .tb-vau-b-good { border-color: #22C55E; } .tb-vau-b-fair { border-color: #F59E0B; } .tb-vau-b-poor { border-color: #EF4444; }
-.tb-vau-how { margin-top: 2px; font-size: 11px; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
+.tb-vau-how { margin-top: 2px; font-size: 11px; }
+.tb-vau-review { margin-top: 14px; border: 1px dashed var(--tb-border); border-radius: 8px; padding: 8px 10px; font-size: 12px; } .tb-vau-review summary { cursor: pointer; } .tb-vau-how summary { cursor: pointer; color: var(--tb-text-3); }
 .tb-vau-fix { font-size: 12px; margin-top: 4px; padding: 6px 8px; border-radius: 6px; background: var(--tb-surface-2, rgba(127,127,127,.08)); }
 .tb-vtabpanels { background: var(--tb-bg-2); border: 1px solid var(--tb-border); border-top: none; border-radius: 0 0 var(--tb-radius-md) var(--tb-radius-md); padding: 14px; max-height: 500px; overflow-y: auto; }
 .tb-vpanel { display: none; }
@@ -1319,7 +1320,7 @@ const REPLAY_RUNTIME = `(function(){
   // Every string in it came from the audited page: escaped, never trusted.
   var audit = data.audit;
   if (audit && audit.categories) {
-    var CAT = { accessibility: "Accessibility", ui: "Layout", performance: "Performance", seo: "SEO", runtime: "Runtime" };
+    var CAT = { accessibility: "Accessibility", ui: "Layout", mobile: "Phone width", performance: "Performance", seo: "SEO", runtime: "Runtime" };
     var SEV = { critical: "Critical", serious: "High", moderate: "Medium", minor: "Low" };
     var DOT = " \\u00b7 ";
     var fmtMetrics = function(m){
@@ -1381,6 +1382,15 @@ const REPLAY_RUNTIME = `(function(){
         '<div class="tb-vau-meta"><code>' + esc(f.ruleId || "") + '</code>' + (f.selector ? DOT + '<code>' + esc(f.selector) + '</code>' : '') + DOT + '<code>' + esc(f.id) + '</code></div>' +
         help + '</div></div>';
     });
+    if (Array.isArray(audit.review) && audit.review.length) {
+      ah += '<details class="tb-vau-review"><summary><b>Needs a person to check</b> · ' + esc(audit.review.length) + ' rule(s) the automated checks couldn’t decide. Not failures, not scored.</summary>' +
+        audit.review.map(function(r){
+          var w = (Array.isArray(r.wcag) ? r.wcag : []).filter(function(x){ return typeof x === "string" && WCAG_NAMES[x]; }).map(function(x){ return "WCAG " + x + " " + WCAG_NAMES[x]; }).join(DOT);
+          return '<div class="tb-vau-rvrow"><div class="tb-vau-main"><div class="tb-vau-t">' + esc(r.title) + ' <span class="tb-vau-muted">×' + esc(r.count) + '</span></div>' +
+            (r.reason ? '<div class="tb-vau-d">' + esc(r.reason) + '</div>' : '') + (w ? '<div class="tb-vau-meta">' + esc(w) + '</div>' : '') +
+            '<div class="tb-vau-meta">' + (r.elements || []).map(function(e){ return e.selector ? '<code>' + esc(e.selector) + '</code>' : ''; }).filter(Boolean).join(DOT) + '</div></div></div>';
+        }).join("") + '</details>';
+    }
     if (audit.truncated > 0) ah += '<div class="tb-vau-muted">' + esc(audit.truncated) + ' more not included (the file keeps the ' + esc(auditFindings.length) + ' most severe).</div>';
     document.getElementById("panel-audit").innerHTML = ah;
     var auditBtn = document.querySelector('[data-tab="audit"]');

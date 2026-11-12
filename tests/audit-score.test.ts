@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { scoreAudit, scoreBand, scoreCategory, SCORE_WEIGHTS } from '../src/audit/score';
 import { contrastRatio, parseHex, parseExpectedRatio, suggestTextColor } from '../src/audit/contrast';
 import { cleanWcag, wcagFromAxeTags, wcagLabel } from '../src/audit/wcag';
@@ -188,5 +188,78 @@ describe('runtime findings belong to the audited page', () => {
     expect(sessionForThisPage(sessions, '/try.html')?.events).toHaveLength(2);
     expect(sessionForThisPage([s(5, ['/try.html'])], '/')).toBeNull();
     expect(sessionForThisPage([s(5, ['http://localhost:3001/pricing/'])], '/pricing')?.events).toHaveLength(1);
+  });
+});
+
+describe('needs review (axe incomplete)', () => {
+  it('groups undecided elements per rule with the most common reason; never findings, never scored', async () => {
+    const { reviewItems } = await import('../src/audit/detectors/a11y');
+    const node = (sel: string, msg: string) => ({ target: [sel], html: `<p class="${sel}">x</p>`, any: [{ message: msg }] });
+    const items = reviewItems([
+      { id: 'color-contrast', help: 'Elements must meet minimum color contrast ratio thresholds', helpUrl: 'https://dequeuniversity.com/rules/axe/4.11/color-contrast', tags: ['wcag2aa', 'wcag143'],
+        nodes: [node('.a', 'overlapped by another element'), node('.b', 'overlapped by another element'), node('.c', 'contains an image node'),
+          ...Array.from({ length: 9 }, (_, i) => node(`.z${i}`, 'overlapped by another element'))] },
+      { id: 'aria-prohibited-attr', help: 'Elements must only use permitted ARIA attributes', tags: ['wcag2a', 'wcag412'], nodes: [node('.k', 'aria-label attribute is not well supported on a span')] },
+      { id: 'empty-rule', nodes: [] },
+    ]);
+    expect(items.map((r) => [r.ruleId, r.count, r.elements.length])).toEqual([['color-contrast', 12, 8], ['aria-prohibited-attr', 1, 1]]);
+    expect(items[0].reason).toBe('overlapped by another element');
+    expect(items[0].wcag).toEqual(['1.4.3']);
+    expect(items[1].wcag).toEqual(['4.1.2']);
+
+    const run = buildAuditRun([], { url: 'https://x.test/', viewport: { width: 1, height: 1 }, categories: { accessibility: { ran: true } }, review: items });
+    expect(run.findings).toEqual([]);
+    expect(run.score?.overall).toBe(100);
+    expect(run.review?.[0]).toMatchObject({ ruleId: 'color-contrast', count: 12 });
+  });
+
+  it('bounds and redacts what reaches the export', async () => {
+    const { boundReview } = await import('../src/audit/run');
+    const [r] = boundReview([{ ruleId: 'x', title: 't', count: 3, helpUrl: 'javascript:alert(1)', wcag: ['1.4.3', '<b>'],
+      elements: [{ selector: '#a', html: '<a href="https://x.test/?token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.c2VjcmV0c2lnbmF0dXJlMTIzNDU2">x</a>' }] }]);
+    expect(r.helpUrl).toBeUndefined();
+    expect(r.wcag).toEqual(['1.4.3']);
+    expect(r.elements[0].html).not.toContain('c2VjcmV0c2lnbmF0dXJlMTIzNDU2');
+  });
+});
+
+describe('phone width', () => {
+  const f = (ruleId: string, selector?: string, title = 'Text is cut off'): Issue =>
+    ({ id: 'x', detector: 'audit-ui', category: 'ui', ruleId, severity: 'moderate', title, description: 'd.', selector, page: '/', detectedAt: 0 } as Issue);
+
+  it('relabels phone-only layout findings and drops what the current width already reported', async () => {
+    const { toMobileFindings } = await import('../src/audit/detectors/mobile');
+    const desktop = [f('ui/text-clipped', '.a')];
+    const raw = [f('ui/text-clipped', '.a'), f('ui/text-clipped', '.b'), f('ui/horizontal-overflow', undefined, 'Page scrolls sideways by 120px'), f('ui/off-screen', 'pre')];
+    const out = toMobileFindings(raw, desktop, 390);
+    expect(out.map((x) => [x.ruleId, x.category, x.selector])).toEqual([
+      ['mobile/text-clipped', 'mobile', '.b'], ['mobile/horizontal-overflow', 'mobile', undefined], ['mobile/off-screen', 'mobile', 'pre']]);
+    expect(out[1].title).toBe('At 390px: page scrolls sideways by 120px');
+    expect(out[1].wcag).toEqual(['1.4.10']);
+    expect(out[1].description).toMatch(/Only at phone width \(390px\)/);
+    // The page already scrolls sideways at the current width: not repeated for the phone.
+    expect(toMobileFindings([f('ui/horizontal-overflow')], [f('ui/horizontal-overflow')])).toEqual([]);
+  });
+
+  it('a scrolling box with nothing focusable is flagged; focusable or tabindex=0 boxes are not', async () => {
+    const { scrollableNotFocusable } = await import('../src/audit/detectors/mobile');
+    document.body.innerHTML = '<pre id="p1" style="overflow-x:auto">long</pre><pre id="p2" style="overflow-x:auto" tabindex="0">long</pre><div id="p3" style="overflow-x:auto"><a href="/x">a</a></div><div id="p4" style="overflow-x:hidden">x</div>';
+    for (const id of ['p1', 'p2', 'p3', 'p4']) {
+      const el = document.getElementById(id)!;
+      Object.defineProperty(el, 'scrollWidth', { value: 510, configurable: true });
+      Object.defineProperty(el, 'clientWidth', { value: 356, configurable: true });
+    }
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width: 356, height: 40, top: 0, left: 0, right: 356, bottom: 40, x: 0, y: 0, toJSON() {} }) as DOMRect);
+    const out = scrollableNotFocusable(document);
+    expect(out.map((x) => [x.ruleId, x.selector])).toEqual([['mobile/scroll-not-focusable', '#p1']]);
+    expect(out[0].description).toMatch(/510px of content in 356px/);
+    vi.restoreAllMocks();
+  });
+
+  it('phone-width rules get a fix', async () => {
+    const { fixFor } = await import('../src/audit/fixes');
+    expect(fixFor('mobile/scroll-not-focusable', undefined)).toMatch(/tabindex="0"/);
+    expect(fixFor('mobile/text-clipped', undefined)).toMatch(/390px/);
+    expect(fixFor('mobile/horizontal-overflow', undefined)).toMatch(/max-width: 100%/);
   });
 });

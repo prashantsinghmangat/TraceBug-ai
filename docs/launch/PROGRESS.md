@@ -127,3 +127,13 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 
 - Compared Rank Math, Seobility, SEOptimer, DotPlus on tracebug.dev against the live page: all four wrongly flag `alt=""` avatars; DotPlus wrongly reports 10 render-blocking scripts and no HTTP/2. Added: social tags, JSON-LD validity, robots.txt blocking (critical) + sitemap (`detectCrawlFindings`, skipped on dev hosts), image oversize (≥4× pixels at ≥2× density, ≥50 KB) and format (JPEG/PNG ≥100 KB by real content type).
 - Noise study: new findings only where true (HN/BBC/Wikipedia lack og tags; GitHub retina images and Shopify CDN images no longer flagged). Gates green (1212/81, 84/84, 68/68 incl. robots.txt fixture, 33/33).
+
+## Audit: "Needs a person to check" + 5 more a11y reports compared (2026-11-12, `site-audit`)
+
+- Compared ratemysite (Lighthouse), ratedwithai, accessibilityscore.in, Accessibility Analyzer (.xlsx), accessibilitychecker.org on tracebug.dev. Ours = careful tools (label-in-name ×2, contrast ×2 light theme, focus-obscured). Analyzer's rel/blank-button/tabpanel/figcaption/section errors are false; ratemysite's "0/15 AI bots allowed" is false (robots.txt allows all). accessibilitychecker's scrollable `pre` is real at 390px only (we audit the current width).
+- Added axe incomplete → `AuditRun.review` (a11y.ts `reviewItems`, run.ts `boundReview`), panel collapsed section, viewer, MCP `needsReview`. resultTypes now includes "incomplete". Live: contrast ×50, aria-prohibited-attr ×3, score unchanged. Gates green (1214/81, 84/84, 70/70, 33/33).
+
+## Audit: phone-width check (2026-11-12, `site-audit`)
+
+- New category `mobile`: page reloaded in a hidden same-site 390×844 iframe; ui.ts layout checks (now take a `doc`) + `mobile/scroll-not-focusable`; only what the current width doesn't already report. Not run (with reason) when framing is forbidden (GitHub, MDN) or the window is already phone-sized. Fixed `isRendered`: opacity-0 ancestors (Shopify's closed mega-menu gave 4 false overlaps).
+- Live tracebug.dev from a 1440px window: the two code blocks accessibilitychecker.org reported at mobile. Ten-site study: no other phone-width findings. Gates green (1217/81, 84/84, 74/74 incl. /phone fixture, 33/33).

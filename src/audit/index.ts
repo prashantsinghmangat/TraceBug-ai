@@ -15,13 +15,14 @@ import { detectMixedContent } from "../scanner/detectors/mixed-content";
 import { buildAuditRun } from "./run";
 import { detectA11yFindings } from "./detectors/a11y";
 import { detectUiFindings } from "./detectors/ui";
+import { detectMobileFindings } from "./detectors/mobile";
 import { detectCrawlFindings, detectSeoFindings } from "./detectors/seo";
 import { detectPerfFindings } from "./detectors/performance";
 import { detectKeyboardFindings } from "./detectors/keyboard";
 import { detectFrustration } from "../scanner/detectors/frustration";
-import { AUDIT_SCANS, type AuditScan } from "./types";
+import { AUDIT_SCANS, type AuditReviewItem, type AuditScan } from "./types";
 
-export const ALL_AUDIT_CATEGORIES: AuditCategory[] = ["accessibility", "ui", "performance", "seo", "runtime"];
+export const ALL_AUDIT_CATEGORIES: AuditCategory[] = ["accessibility", "ui", "mobile", "performance", "seo", "runtime"];
 
 export const CATEGORY_LIMITATIONS: Partial<Record<AuditCategory, string>> = {
   ui: "Checked at the current window size only. No design judgement.",
@@ -107,6 +108,7 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
   _inFlight = (async () => {
     const categories: Partial<Record<AuditCategory, { ran: boolean; limitation?: string; metrics?: Record<string, number> }>> = {};
     const findings: Issue[] = [];
+    let review: AuditReviewItem[] | undefined;
     const guard = async (name: AuditCategory, fn: () => Promise<Issue[]> | Issue[]) => {
       if (!wanted.has(name)) return;
       try {
@@ -156,9 +158,15 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
         metrics.wcagCriteriaFailed = wcag.size;
         if (hidden > 0) metrics.transparentText = hidden;
       }
+      review = a11y.review;
       categories.accessibility = { ran: a11y.ran, limitation, ...(Object.keys(metrics).length ? { metrics } : {}) };
     }
-    await guard("ui", detectUiFindings);
+    await guard("ui", () => detectUiFindings());
+    if (wanted.has("mobile")) {
+      const m = await detectMobileFindings(findings.filter((f) => f.category === "ui"));
+      findings.push(...m.findings);
+      categories.mobile = { ran: m.ran, limitation: m.limitation };
+    }
     if (wanted.has("performance")) {
       try {
         const perf = await detectPerfFindings();
@@ -208,6 +216,7 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
       userAgent: navigator.userAgent,
       categories,
       scan: options.categories?.length ? undefined : scan,
+      review,
     });
     _lastRun = run;
     return run;

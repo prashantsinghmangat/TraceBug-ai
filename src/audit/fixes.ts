@@ -37,6 +37,8 @@ export const DEFAULT_FIXES: Record<string, string> = {
   "seo/no-sitemap": "Publish /sitemap.xml listing your pages (most frameworks generate one) and add \"Sitemap: https://your-site/sitemap.xml\" to robots.txt.",
   "perf/image-oversized": "Serve the image at the size it's shown: resize the file, or use srcset/sizes (or your framework's image component) so each screen downloads the right size.",
   "perf/image-format": "Convert the image to WebP or AVIF (or let your image CDN or framework do it) and keep the JPEG/PNG only as a fallback in <picture>.",
+  "mobile/horizontal-overflow": "Find what is wider than the phone screen (the elements listed with it) and let it shrink: max-width: 100%, wrapping long words (overflow-wrap: anywhere), or a container with overflow-x: auto for wide tables and code. Check at 390px wide.",
+  "mobile/scroll-not-focusable": "Make the scrolling box reachable by keyboard: add tabindex=\"0\" plus role=\"region\" and an aria-label naming its content (e.g. aria-label=\"Code example\"), or let it wrap so it doesn't scroll at all.",
   "runtime/console-error": "Open the error's stack trace (Export report → your coding agent can read it) and fix the code that throws.",
   "runtime/failed-request": "Check the failed request (the evidence names it): the endpoint, its status code and the response body tell you whether the client or the server is wrong.",
   "runtime/mixed-content": "Load this resource over https://, or remove it.",
@@ -47,5 +49,9 @@ export const DEFAULT_FIXES: Record<string, string> = {
 /** The detector's own fix, else the rule's default, else nothing. */
 export function fixFor(ruleId: string | undefined, own: string | undefined): string | undefined {
   if (own) return own;
-  return ruleId && Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ruleId) ? DEFAULT_FIXES[ruleId] : undefined;
+  if (!ruleId) return undefined;
+  if (Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ruleId)) return DEFAULT_FIXES[ruleId];
+  // Phone-width findings reuse the layout fixes, aimed at the narrow-screen CSS.
+  const ui = ruleId.startsWith("mobile/") ? "ui/" + ruleId.slice(7) : "";
+  return ui && Object.prototype.hasOwnProperty.call(DEFAULT_FIXES, ui) ? DEFAULT_FIXES[ui] + " Fix it in the styles for narrow screens (e.g. a max-width media query) and check at 390px." : undefined;
 }

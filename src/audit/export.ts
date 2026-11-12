@@ -11,7 +11,7 @@ import { captureEnvironment } from "../environment";
 import { exportSessionAsHtml, type ExportedReplay } from "../exporters/html-replay";
 
 const CATEGORY_LABEL: Record<string, string> = {
-  accessibility: "Accessibility", ui: "Layout", performance: "Performance", seo: "SEO", runtime: "Runtime",
+  accessibility: "Accessibility", ui: "Layout", mobile: "Phone width", performance: "Performance", seo: "SEO", runtime: "Runtime",
 };
 
 /** The capture on this page, or an empty one when TraceBug has recorded nothing yet. */
