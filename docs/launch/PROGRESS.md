@@ -174,3 +174,4 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - Docs: TBT + worst-burst CLS added to site-audit.md, AGENT-BRIEF, architecture, website docs (after the Lighthouse calibration session).
 - Verified: check.mjs --full green (1226/81, 76/76, 35/35), ext-sdk-isolation 17/17, zips + release sheet rebuilt. Merge to main: 8 website conflicts, all "keep ours".
 - 2026-11-12: decided 1.11.6 skips the stores; 1.11.6 highlights added to the Chrome New-in and AMO release notes; release sheet regenerated.
+- 2026-11-13: 1.12.0 live on npm + MCP registry; submitted to CWS and AMO. main-merge safety check passed (12 files, all on develop). Sheet marks the check as Git Bash only. Next: §5 after CWS approval.

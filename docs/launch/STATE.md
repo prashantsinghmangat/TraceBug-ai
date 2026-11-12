@@ -31,19 +31,17 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   posts in `website/lib/blog.ts` still say "nine"; dated, left). axe is `vendor/axe.min.js`, injected on demand
   (popup: `TB_RUN_AUDIT`; toolbar: `TB_LOAD_AXE`). ext:lint baseline 22, approved (axe's own code).
   Agent acceptance test passed; rerun `node e2e/audit-agent-loop.mjs setup|verify <dir>`.
-- **1.12.0 (the audit release) is ready to ship** (2026-11-12), uncommitted on `site-audit`: all `check:versions`
-  surfaces, CHANGELOG `[1.12.0]` (fix the date on release day), `WHATS_NEW["1.12.0"]`, STORE-LISTINGS (Chrome "AUDIT ANY
-  PAGE" section, permission rows mention the audit, AMO notes, manifest summary now leads with the audit),
-  store images regenerated (audit slide first; old set in `assets/archive/store-pre-audit-2026-11-12/`), zips +
-  `docs/release-sheets/1.12.0.md` (all assets ready except the source zip, made at tag time). Lockfile root version:
-  confirm it says 1.12.0. **Merge to `main` conflicts in 8 website files** that are identical on `main` and `develop`
-  (cherry-picked history): resolve each by keeping the `site-audit`/`develop` side. **Decided 2026-11-12: 1.11.6 skips
-  the stores**; 1.12.0 ships it (its highlights are in the Chrome New-in and the AMO release notes). No `v1.11.6` tag needed.
+- **1.12.0 (the audit release) is half-released.** Live: npm `tracebug-sdk` + `tracebug`, MCP registry (`isLatest`),
+  2026-11-12; `develop` = `site-audit`, pushed. **Submitted to Chrome Web Store and AMO 2026-11-13, in review.** 1.11.6
+  skipped the stores (1.12.0 carries it). **After CWS approves:** release sheet §5 — merge `develop` → `main` with
+  `-X theirs` (12 website files conflict with themselves; safety check passed 2026-11-13: all "on develop", merged tree =
+  `develop`), push (Netlify deploys), tag `v1.12.0`, GitHub release (§6), checks (§7), then announce. Registry
+  description still says "bug reports" only — update `server.json` next version.
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
 
 ## Open — needs a person
 
-1. Chrome/AMO upload of 1.12.0 (sheet `1.12.0.md`), after hand checks: `dist/chrome` unpacked, `npm run ext:firefox`.
+1. Watch CWS/AMO review of 1.12.0; on CWS approval run release sheet §5–7 (merge to `main`, tag, GitHub release).
 2. `RELEASE_CHECKLIST.md` rows never recorded as run: 1–3, 9, 10, 12b, 13 (best on the real store update), 14 (macOS).
 3. AMO slide/caption say "Record a tab, window or screen" — confirm Firefox's picker offers tabs.
 4. Pricing rule vs. paid pilots (audit plan B4): decide before the sprint's paid-pilot step.
