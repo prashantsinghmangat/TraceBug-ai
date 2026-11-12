@@ -35,7 +35,7 @@ export default function Comparison() {
           </p>
         </div>
         <div className="min-w-0 lg:col-span-7">
-          <div className="overflow-x-auto rounded-2xl border border-border bg-background">
+          <div tabIndex={0} role="region" aria-label="TraceBug compared with Sentry and LogRocket" className="overflow-x-auto rounded-2xl border border-border bg-background">
           <div className="grid min-w-[520px] grid-cols-[1fr_100px_100px_100px]">
             <div className="px-6 py-4 text-[13px] text-text-subtle border-b border-border">Filing a bug</div>
             <div className="px-4 py-4 text-center border-b border-border bg-surface">

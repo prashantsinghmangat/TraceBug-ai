@@ -106,7 +106,7 @@ export default function AgentHandoff() {
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
-            <pre className="overflow-x-auto px-5 py-5 font-mono text-[14px] leading-7 text-[#EEF0F5]">
+            <pre tabIndex={0} role="region" aria-label="Setup command" className="overflow-x-auto px-5 py-5 font-mono text-[14px] leading-7 text-[#EEF0F5]">
               <code>
                 {tab === "claude" && <span className="select-none text-[#7A8296]">$ </span>}
                 {active.code}
