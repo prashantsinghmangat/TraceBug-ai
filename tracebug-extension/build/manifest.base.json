@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "TraceBug: Bug Report Recorder & Replay",
   "short_name": "TraceBug",
-  "description": "Record a bug once: replay, console errors and network in one offline file. For QA and devs. Free, no account, no upload.",
+  "description": "Audit a page or record a bug: accessibility and SEO fixes, replay, console and network in one offline file. Free, no upload.",
   "author": "Prashant Singh Mangat",
   "homepage_url": "https://tracebug.dev",
 

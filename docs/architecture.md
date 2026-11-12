@@ -108,6 +108,15 @@ src/
 │   ├── ai-prompt.ts        # AI prompt + .md report + "Export for AI (.html)"
 │   ├── har-export.ts       # HAR 1.2 network export
 │   └── share-link.ts       # Cloud share upload (PHASE2-CLOUD, gated off)
+├── audit/                  # Site Audit (1.12) — see "Site Audit" below
+│   ├── index.ts            # runAudit: runs each category, guards failures, limits
+│   ├── run.ts              # buildAuditRun: bounds, redaction, score, review items
+│   ├── score.ts            # 0–100 score (multiplicative shares), bands
+│   ├── wcag.ts / contrast.ts / fixes.ts  # WCAG labels, colour suggestion, default fixes
+│   ├── prompt.ts           # "Copy for AI" prompt
+│   ├── compare.ts / fingerprint.ts      # run-to-run diff by fingerprint
+│   ├── export.ts           # audit .html export (read by the MCP audit tools)
+│   └── detectors/          # a11y (axe), keyboard, ui, mobile (390px frame), performance, seo
 ├── patterns/               # Heuristic detectors (frustration, etc.)
 ├── scanner/                # Auto-bug scanner + detector modules
 └── ui/
@@ -116,6 +125,7 @@ src/
     ├── toast.ts            # Toast notifications
     ├── quick-bug.ts        # Tabbed ticket modal
     ├── issues-panel.ts     # Session list + scanner findings panel
+    ├── audit-panel.ts      # Site Audit panel: docked/draggable, score, findings, Locate
     ├── recording-hud.ts    # Floating recording timer + Stop / Capture / Draw
     ├── replay-scrubber.ts  # Timeline scrubber for video replay
     └── live-bug-card.ts    # Inline notification card for auto-detected bugs
@@ -203,6 +213,35 @@ Screen recording lives in an **offscreen document** so it survives host-page rel
 | `isUsableRecording()` | Never stashes a recording with an empty dataUrl over a real one |
 | `restoreLastRecordingFromOffscreen()` | Pulls the recording from storage when the page-side cache was lost (reload, race) |
 | `window.__TRACEBUG_CS_LOADED__` | Idempotent content-script injection |
+
+## Site Audit (1.12)
+
+`runAudit({ scan })` runs the categories of a scan (`src/audit/types.ts`
+`AUDIT_SCANS`) inside a guard: a category that throws is recorded as
+`ran: false` with a limitation, never as passing.
+
+- **accessibility** — axe-core 4.11.4 (MPL-2.0). npm and script-tag builds load
+  it with `import("axe-core")`. The extension bundle stubs it out (tsup.config.ts):
+  the page asks for it (`tracebug-request-axe`), the content script forwards
+  `TB_LOAD_AXE`, and the background worker injects the packaged
+  `vendor/axe.min.js` into that tab only. With neither, the category reports
+  "did not run". Violations become findings; `incomplete` results become
+  `review` items ("Needs a person to check"), not scored. Keyboard checks read
+  stylesheets and tab order without focusing anything.
+- **ui / mobile** — the same DOM detectors take a `doc`; mobile runs them in a
+  hidden same-origin 390×844 iframe (`#tracebug-phone-frame`).
+- **performance** — Navigation/Resource/Paint timing, LCP, CLS (worst session
+  window) and long-task (TBT, Chromium) observers for this load; sizes skipped on dev hosts.
+- **seo** — head tags, Open Graph/Twitter, JSON-LD, plus same-origin fetches of
+  `/robots.txt` and the sitemap (skipped on dev hosts).
+- **runtime** — scanner findings from this page's events only.
+
+`buildAuditRun` (`run.ts`) bounds and redacts evidence, attaches WCAG labels
+and fixes, fingerprints each finding, and computes `score` (`score.ts`). The
+panel (`ui/audit-panel.ts`) is plain DOM inside `#tracebug-root`, docked
+left/right or free (localStorage `tracebug_audit_dock`, UI position only).
+Exports go through `audit/export.ts` into the same single-file `.html`
+template; the MCP server's `cli/audit-tools.ts` reads them.
 
 ## Dashboard UI Architecture
 
