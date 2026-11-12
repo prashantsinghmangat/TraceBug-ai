@@ -167,3 +167,10 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
 - New `perf/blocking` (Total Blocking Time, Lighthouse method; load only: first paint → 5 s after load / first click / audit start; TraceBug's own startup task excluded; Chromium only). `perf/cls` is now the worst session window (web-vitals), not the visit's sum. Files: src/audit/detectors/performance.ts, index.ts, fixes.ts, score.ts (comment), tests/audit-score.test.ts (+7), e2e/audit-noise.mjs (wheel scroll after 5.5 s).
 - Results: TBT verdict matches Lighthouse on 9/10 (MDN missed); Shopify CLS 0.577 → 0, BBC LCP 5.9 s → 0.65 s (study artifact). Accessibility: no false positives; gap is weighting (Lighthouse fixed points per rule) + scroll-revealed content + rules LH skips. No formula change.
 - Verified: check.mjs --full green (1226/81, 76/76 audit, 35/35 ext audit).
+
+## 2026-11-12 — 1.12.0 release prep: store text + images
+- STORE-LISTINGS: Chrome New-in rewritten + "AUDIT ANY PAGE" section, AMO audit section + Firefox perf note, release notes (phone width, needs review, drag), activeTab/scripting rows mention the audit, reviewer note (toolbar path, robots.txt fetch). Manifest summary (both manifests) leads with the audit (124 chars).
+- Store images: new slide-7 (real audit panel crops on a demo shop page), popup shots refreshed; Chrome 1-audit..5-privacy, AMO 1-audit..7-export, promo tiles re-rendered; old set archived. scripts/release-sheet.mjs reads the Chrome screenshot order from STORE-LISTINGS (was hard-coded).
+- Docs: TBT + worst-burst CLS added to site-audit.md, AGENT-BRIEF, architecture, website docs (after the Lighthouse calibration session).
+- Verified: check.mjs --full green (1226/81, 76/76, 35/35), ext-sdk-isolation 17/17, zips + release sheet rebuilt. Merge to main: 8 website conflicts, all "keep ours".
+- 2026-11-12: decided 1.11.6 skips the stores; 1.11.6 highlights added to the Chrome New-in and AMO release notes; release sheet regenerated.

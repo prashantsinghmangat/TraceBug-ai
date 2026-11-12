@@ -129,6 +129,47 @@ Returns the current session ID, or `null` if not initialized.
 
 ---
 
+## Site Audit
+
+> User guide: [site-audit.md](site-audit.md).
+
+### `TraceBug.runAudit(options?): Promise<AuditRun>`
+
+Checks the current page. Read-only. `options.scan` is one of `"full"`
+(default), `"auto-review"`, `"accessibility"`, `"performance-seo"`;
+`options.categories` (`"accessibility" | "ui" | "mobile" | "performance" | "seo" | "runtime"`)
+overrides the scan. A category that could not run has `ran: false` and a
+`limitation` explaining why; it is never reported as passing.
+
+```typescript
+const run = await TraceBug.runAudit({ scan: "full" });
+run.score;        // { overall: number | null, categories: { accessibility: 92, ... } }
+run.categories;   // [{ name, ran, count, limitation, metrics }]
+run.findings;     // Issue[]: ruleId, severity, title, selector, evidence, fix, wcag, fingerprint
+run.review;       // "Needs a person to check" items (not scored)
+```
+
+Score: starts at 100; each distinct problem takes a share of what is left
+(critical 20%, serious 12%, moderate 6%, minor 2%; more elements raise it up
+to double). Bands: 90+ good, 50–89 fair, below 50 poor.
+
+### `TraceBug.getLastAudit(): AuditRun | null`
+The last run on this page (memory only).
+
+### `TraceBug.compareAudits(before, after): AuditComparison`
+Matches findings by fingerprint: fixed, still present, new, regressed.
+
+### `TraceBug.exportAudit(run?): Promise<{ filename, sizeBytes } | null>`
+Downloads a run (default: the last) as a self-contained `.html` that opens on
+its Audit tab. The MCP server reads it with `get_audit`, `get_finding` and
+`compare_audits`.
+
+### `TraceBug.showAuditPanel(scan?): Promise<AuditRun | null>`
+Runs an audit and shows it in the Site Audit panel (needs the dashboard).
+Running it again shows what changed since the previous run.
+
+---
+
 ## Bug Ticket Flow
 
 > Full step-by-step flow with all options: see [docs/ticket-flow.md](ticket-flow.md).

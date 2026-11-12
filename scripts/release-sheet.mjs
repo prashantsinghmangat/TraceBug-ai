@@ -96,7 +96,12 @@ const have = (p) => (existsSync(join(ROOT, p)) ? "ready" : "**MISSING**");
 const chromeZip = `releases/tracebug-extension-v${V}.zip`;
 const firefoxZip = `releases/tracebug-firefox-v${V}.zip`;
 const sourceZip = `releases/tracebug-source-v${V}.zip`;
-const chromeShots = ["1-report", "2-record", "3-console", "4-ai-agent", "5-privacy"].map((n) => `assets/chrome-store/${n}.jpg`);
+// Chrome screenshot order comes from STORE-LISTINGS.md ("**Screenshots** … in this order — `1-…`, `2-…`"),
+// so changing the set there updates the sheet (a hard-coded list went stale when 1.12.0 added the audit slide).
+const shotLine = listings.slice(listings.indexOf("**Screenshots**"), listings.indexOf("**Promo tiles:**"));
+const chromeNames = [...shotLine.matchAll(/`([0-9]+-[a-z-]+)`/g)].map((m) => m[1]);
+if (!chromeNames.length) fail("no Chrome screenshot names after **Screenshots** in docs/STORE-LISTINGS.md");
+const chromeShots = chromeNames.map((n) => `assets/chrome-store/${n}.jpg`);
 const tiles = ["assets/banners/promo-tiles/small-440x280.jpg", "assets/banners/promo-tiles/marquee-1400x560.jpg"];
 
 const fence = (lang, body) => "```" + lang + "\n" + body + "\n```";

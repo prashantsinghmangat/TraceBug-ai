@@ -63,6 +63,10 @@ That's it. The CLI detects your framework and prints the exact 2-line snippet. P
 ```
 Tester opens the page
   ↓
+Audit the page first (optional):
+  • 🩺 Audit this page — score + accessibility, layout, phone width,
+                        speed, SEO and error findings with fixes
+  ↓
 Arm a session (idle until you act):
   • ⚡ Quick Bug      — Ctrl+Shift+B opens the ticket-review modal
   • 📷 Screenshot / Region
@@ -142,6 +146,17 @@ screenshot gallery. The **extension** runs on Chromium browsers and Firefox 128+
 Safari build — on Safari, use the npm SDK).
 
 ## Features
+
+### 🩺 Site Audit — Score a Page, Then Let Your Agent Fix It (v1.12)
+
+One click (**Audit this page** in the extension popup, or the toolbar's **Audit** button) checks the page you are on for **accessibility** (axe-core, WCAG 2.0–2.2 A/AA, plus keyboard checks), **layout**, **phone width** (390px), **performance** (LCP, CLS, heavy images), **SEO** (tags, structured data, robots.txt, sitemap) and **runtime errors**. Read-only and local: nothing is clicked or uploaded.
+
+- A 0–100 score per category and overall, coloured good / fair / poor, with the formula shown.
+- One finding per real problem, grouped by rule: the WCAG criterion, found vs required values, how to fix it, and every element with **Locate** and **Copy selector**. Contrast findings suggest a passing colour.
+- Results axe can't decide go to **Needs a person to check**, not the score.
+- **Copy for AI** pastes a fix prompt; **Export report** gives an `.html` your agent reads with `get_audit` / `get_finding`, and `compare_audits` confirms the fix after a re-run.
+
+Guide: [docs/site-audit.md](docs/site-audit.md).
 
 ### 🧠 Debugging Assistant (v1.3)
 
@@ -381,6 +396,16 @@ TraceBug.init({
 
 ## Programmatic API
 
+### Site Audit
+
+```typescript
+const run = await TraceBug.runAudit({ scan: "full" }); // "full" | "auto-review" | "accessibility" | "performance-seo"
+run.score?.overall;                 // 0–100, with per-category scores
+await TraceBug.showAuditPanel("accessibility"); // run and show the panel
+await TraceBug.exportAudit();       // download the last run as .html (read by the MCP server)
+TraceBug.compareAudits(before, after); // fixed / still present / new / regressed
+```
+
 ### Core
 
 ```typescript
@@ -560,6 +585,7 @@ Full documentation is in the [`docs/`](docs/) folder:
 - [Configuration](docs/configuration.md) — All config options explained
 - [Bug Reporting](docs/bug-reporting.md) — Screenshots, notes, voice, export
 - [MCP Server](docs/mcp.md) — Let AI agents (Claude Code, Cursor) debug your reports
+- [Site Audit](docs/site-audit.md) — Score a page and fix what it finds with your agent
 - [Annotate & Draw](docs/annotate-and-draw.md) — UI annotation features
 - [Chrome Extension](docs/chrome-extension.md) — Extension install & usage
 - [Architecture](docs/architecture.md) — How TraceBug works internally
@@ -592,6 +618,7 @@ The TraceBug Chrome Extension lets **non-developers** use all TraceBug features 
 
 ### Extension Features
 
+- **Site Audit** — *Audit this page* is the first popup action: score the page and get fixes for your AI ([guide](docs/site-audit.md))
 - **Per-site toggle** — enable only on sites you're testing
 - **Badge indicator** — shows "ON" in green when active on current tab
 - **Quick actions** — Annotate, Draw, Screenshot, PDF Report, GitHub Issue, Jira Ticket from the popup

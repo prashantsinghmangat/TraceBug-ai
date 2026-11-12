@@ -6,21 +6,12 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 
 ## Where things stand
 
-- **1.11.6 is half-released.** Live: npm `tracebug-sdk` + `tracebug` (`bin` OK) and the MCP Registry
-  (`isLatest`), 2026-11-12. **Not yet:** Chrome Web Store and AMO uploads, then merge `develop` → `main`
-  and tag `v1.11.6`. Everything for it is in `docs/release-sheets/1.11.6.md` (regenerate with
-  `node scripts/release-sheet.mjs` after any change; rebuild zips with `npm run zip:ext` first, they
-  predate `a0596f6`). Store screenshots, promo tiles and banners are regenerated in coral (`assets/`).
-- **1.11.6 contents** (CHANGELOG `[1.11.6]`): the "1.12 Evidence Integrity" work (real failures only,
-  evidence block, privacy by default, lead-up kept), Midnight coral look incl. the exported report,
-  one setup command `CLAUDE_MCP_ADD`, no duplicated issue text, theme tokens actually applied to the
-  in-page UI (broken since 1.11.3), video + audio kept in exports, description rendered as markdown.
-- **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y/UI fixes, two SEO blog posts with
-  FAQ schema are live. `website/public/try.html` coral recolour is on `develop` — cherry-pick it.
-  The 1.11.6 SDK + setup-command pages go live only with the release merge. `website/public/llms.txt` (for
-  Lighthouse "Agentic Browsing") is on `site-audit`: it mentions the Site Audit, so ship it with 1.12.0.
-  Also on `site-audit`: the website fixes our own audit found (labels, scroll-padding, focusable scroll boxes,
-  light-theme --error/--warning, hero loop without re-mount, 152-char description) — local audit 100/100.
+- **1.11.6 is npm-only** (`tracebug-sdk`, `tracebug`, MCP Registry, 2026-11-12). It will not go to the stores:
+  1.12.0 carries it there. `docs/release-sheets/1.11.6.md` is obsolete. Contents: CHANGELOG `[1.11.6]`
+  (evidence integrity, coral look, one setup command, theme tokens fixed, video + audio kept in exports).
+- **Website** (`main` → Netlify): coral redesign, canonical URLs, a11y fixes, two SEO posts are live. Waiting on the
+  release merge: 1.11.6 SDK + setup pages, `try.html` recolour, `llms.txt`, the fixes our own audit found (local
+  audit 100/100), and the Site Audit docs/home tab/features cell.
 - **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1226/81, ext:lint 0/22 (baseline 22),
   84/84 report, 76/76 audit, 35/35 extension audit; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
@@ -40,16 +31,19 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   posts in `website/lib/blog.ts` still say "nine"; dated, left). axe is `vendor/axe.min.js`, injected on demand
   (popup: `TB_RUN_AUDIT`; toolbar: `TB_LOAD_AXE`). ext:lint baseline 22, approved (axe's own code).
   Agent acceptance test passed; rerun `node e2e/audit-agent-loop.mjs setup|verify <dir>`.
-- **1.12.0 (the audit release) is prepared**, uncommitted: all `check:versions` surfaces, CHANGELOG `[1.12.0]`
-  (fix the date on release day), `WHATS_NEW["1.12.0"]`, STORE-LISTINGS (New in, Firefox notes, single purpose, axe
-  AMO note), `docs/release-sheets/1.12.0.md`, zips. `package-lock.json` root version **not bumped** (run
-  `npm install --package-lock-only`). **Never build or regenerate 1.11.6 from this branch** — do it on `develop`.
-  Chrome description body has no Site Audit section yet; store screenshots predate the new popup. Merge `site-audit` only after 1.11.6 ships.
+- **1.12.0 (the audit release) is ready to ship** (2026-11-12), uncommitted on `site-audit`: all `check:versions`
+  surfaces, CHANGELOG `[1.12.0]` (fix the date on release day), `WHATS_NEW["1.12.0"]`, STORE-LISTINGS (Chrome "AUDIT ANY
+  PAGE" section, permission rows mention the audit, AMO notes, manifest summary now leads with the audit),
+  store images regenerated (audit slide first; old set in `assets/archive/store-pre-audit-2026-11-12/`), zips +
+  `docs/release-sheets/1.12.0.md` (all assets ready except the source zip, made at tag time). Lockfile root version:
+  confirm it says 1.12.0. **Merge to `main` conflicts in 8 website files** that are identical on `main` and `develop`
+  (cherry-picked history): resolve each by keeping the `site-audit`/`develop` side. **Decided 2026-11-12: 1.11.6 skips
+  the stores**; 1.12.0 ships it (its highlights are in the Chrome New-in and the AMO release notes). No `v1.11.6` tag needed.
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
 
 ## Open — needs a person
 
-1. Chrome/AMO upload of 1.11.6 (sheet §1–2), after hand checks: `dist/chrome` unpacked, `npm run ext:firefox`.
+1. Chrome/AMO upload of 1.12.0 (sheet `1.12.0.md`), after hand checks: `dist/chrome` unpacked, `npm run ext:firefox`.
 2. `RELEASE_CHECKLIST.md` rows never recorded as run: 1–3, 9, 10, 12b, 13 (best on the real store update), 14 (macOS).
 3. AMO slide/caption say "Record a tab, window or screen" — confirm Firefox's picker offers tabs.
 4. Pricing rule vs. paid pilots (audit plan B4): decide before the sprint's paid-pilot step.
