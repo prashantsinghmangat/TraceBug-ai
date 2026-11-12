@@ -15,8 +15,12 @@ import type { AuditScan } from "./types";
 import { redactUrl, redactUrlsInText } from "../url-hygiene";
 import { sanitizeTokenShapes } from "../sanitize/cloud-upload";
 import { auditFallbackFingerprint, auditFingerprint } from "./fingerprint";
+import { scoreAudit } from "./score";
+import { cleanWcag } from "./wcag";
+import { fixFor } from "./fixes";
 
 export const MAX_AUDIT_FINDINGS = 200;
+export const MAX_FIX = 400;
 export const MAX_EVIDENCE_HTML = 600;
 export const MAX_EVIDENCE_TEXT = 80;
 export const MAX_HINTS = 8;
@@ -114,6 +118,8 @@ export function buildAuditRun(findings: Issue[], ctx: AuditRunContext): AuditRun
       ...raw,
       title: bound(raw.title, 120) ?? "",
       description: bound(raw.description, 600) ?? "",
+      fix: bound(fixFor(raw.ruleId, raw.fix), MAX_FIX),
+      wcag: cleanWcag(raw.wcag),
       url: raw.url ? redactUrl(raw.url) : undefined,
       page: raw.page ? redactUrl(raw.page) : page,
       evidence,
@@ -121,6 +127,8 @@ export function buildAuditRun(findings: Issue[], ctx: AuditRunContext): AuditRun
       fallbackFingerprint: auditFallbackFingerprint(fpInput),
     };
     if (shaped.url === undefined) delete shaped.url;
+    if (!shaped.fix) delete shaped.fix;
+    if (!shaped.wcag) delete shaped.wcag;
     if (shaped.evidence === undefined) delete shaped.evidence;
     if (shaped.fallbackFingerprint === undefined) delete shaped.fallbackFingerprint;
     byKey.set(fingerprint, shaped);
@@ -157,5 +165,7 @@ export function buildAuditRun(findings: Issue[], ctx: AuditRunContext): AuditRun
     findings: kept,
     truncated: all.length - kept.length,
     ...(ctx.scan ? { scan: ctx.scan } : {}),
+    // From `all`, not `kept`: the cap must never raise the score.
+    score: scoreAudit(categories, all),
   };
 }

@@ -55,7 +55,9 @@ the same step.
 - **Audit core** `src/audit/` (pure, no DOM): `fingerprint.ts` `auditFingerprint`/`normalizeSelector` · `run.ts`
   `buildAuditRun` (caps, redaction, `MAX_*` limits) · `compare.ts` `compareAudits` (generic) · `types.ts` audit types,
   dependency-free because the CLI imports them (`src/types.ts` re-exports, `AuditRun = AuditRunOf<Issue>`).
-  Tests: `tests/audit-core.test.ts`, `tests/audit-seo.test.ts`, `tests/audit-mcp.test.ts`.
+  `score.ts` (`scoreAudit`, `SCORE_EXPLANATION`; stored by run.ts) · `wcag.ts` (criteria names, `wcagFromAxeTags`) ·
+  `contrast.ts` (`suggestTextColor`) · `fixes.ts` (`DEFAULT_FIXES`, applied in `buildAuditRun`).
+  Tests: `tests/audit-core.test.ts`, `audit-score.test.ts`, `audit-keyboard.test.ts`, `audit-seo.test.ts`, `audit-mcp.test.ts`.
 - **Audit engine** `src/audit/index.ts` `runAudit()` (categories, limitations) → detectors in `src/audit/detectors/`:
   `a11y.ts` (axe, `loadAxe` falls back to `window.axe`) · `ui.ts` (layout) · `performance.ts` (Performance timeline,
   category `metrics`) · `keyboard.ts` (Tab order + focus styles) · `seo.ts` (page tags) · `evidence.ts`. Scan menu:
@@ -64,7 +66,9 @@ the same step.
   SDK API `runAudit`/`getLastAudit`/`compareAudits` next to `scanPage` in `src/index.ts`. e2e `e2e/site-audit.e2e.mjs`.
 - **Audit in the extension**: popup `btnAudit` → `runCombo("TB_RUN_AUDIT")` → `background.js` `handleComboAction` +
   `injectAxe` (`vendor/axe.min.js`, copied by `build/build-ext.mjs`) → `content-script.js` → `tracebug-init.js` case
-  "audit" → `showAuditPanel` (`src/ui/audit-panel.ts`). e2e `e2e/ext-site-audit.e2e.mjs`.
+  "audit" → `showAuditPanel` (`src/ui/audit-panel.ts`: docked panel, `locate` highlight, `placePanel` beside the
+  toolbar). Toolbar `#tracebug-toolbar-audit-btn` (`compact-toolbar.ts`) → `toggleAuditPanel` → `ensureAxe` →
+  `tracebug-request-axe` → content-script → `TB_LOAD_AXE` → `injectAxe`. e2e `e2e/ext-site-audit.e2e.mjs`.
 - **MCP audit tools** `cli/audit-tools.ts`: `toolGetAudit` · `toolGetFinding` + `searchHints` · `toolCompareAudits` ·
   `UNTRUSTED_NOTE`; registered in `TOOL_DEFINITIONS`/`callTool` of `mcp-server.ts`. Manual agent loop:
   `e2e/audit-agent-loop.mjs` + `e2e/mcp-call.mjs` (call any tool on the built `dist/bin.mjs`).

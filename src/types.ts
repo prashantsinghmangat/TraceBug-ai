@@ -624,6 +624,10 @@ export interface Issue {
   ruleId?: string;
   /** Audit only: bounded, redacted evidence for the agent. */
   evidence?: AuditEvidence;
+  /** Audit only: WCAG success criteria this finding maps to, e.g. ["1.4.3"] (src/audit/wcag.ts). */
+  wcag?: string[];
+  /** Audit only: what to change, in one or two sentences. May quote page values (colours, text). */
+  fix?: string;
   /** When fingerprint dedup grouped multiple events into one issue, this is the count (≥1). */
   occurrences?: number;
   /** First and last timestamps when the underlying signal was seen — populated when occurrences > 1. */

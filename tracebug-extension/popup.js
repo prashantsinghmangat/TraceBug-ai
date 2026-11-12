@@ -1242,8 +1242,8 @@ const WHATS_NEW = {
   "1.12.0": {
     label: "New in 1.12.0",
     lines: [
-      "Site Audit: check any page for accessibility, layout, performance and SEO issues",
-      "Re-run the audit to see what you fixed, what is new and what regressed",
+      "Site Audit: score any page for accessibility, layout, performance and SEO",
+      "A side panel stays open while you locate each problem, with how to fix it",
       "Export the audit and your coding agent can fix it, with three new MCP tools",
     ],
   },

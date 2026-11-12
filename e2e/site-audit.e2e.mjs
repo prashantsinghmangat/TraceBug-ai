@@ -80,6 +80,20 @@ const server = createServer((req, res) => {
     }, 250);
     return;
   }
+  if (url.pathname === "/reveal") {
+    // 1.12.0 accessibility additions: a fixed header with no scroll-padding (2.4.11), a link whose
+    // aria-label drops its visible text (2.5.3), and low-contrast text that only fades in on scroll.
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Reveal fixture</title>
+<style>body{margin:0;font-family:system-ui,sans-serif} header{position:fixed;top:0;left:0;right:0;height:64px;box-sizing:border-box;background:#fff;border-bottom:1px solid #ddd}
+main{padding:80px 16px} .spacer{height:2400px} .reveal{opacity:0;transition:opacity .2s} .reveal.on{opacity:1} .low{color:#b45309;background:#f4eae4;font-size:11px}</style></head>
+<body><header><a href="/">Home</a></header><main><h1>Reveal</h1>
+<a href="/demo" id="demo" aria-label="Play the 57-second product video">Watch the demo</a>
+<div class="spacer"></div><div class="reveal" id="rev"><p class="low" id="hidden-low">Only after scrolling</p></div></main>
+<script>new IntersectionObserver(([e],o)=>{if(e.isIntersecting){e.target.classList.add("on");o.disconnect();}}).observe(document.getElementById("rev"));</script>
+<script src="/tracebug-sdk.js"></script><script>window.TraceBug.init({ projectId: "site-audit-e2e", enabled: "all" });</script></body></html>`);
+    return;
+  }
   if (url.pathname === "/checkout") {
     res.writeHead(200, { "content-type": "text/html" });
     res.end(page({ fixed: url.searchParams.get("v") === "after" }));
@@ -241,6 +255,36 @@ try {
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
+
+  // ── 1.12.0: label in name, focus not obscured, content hidden until scrolled, score ──
+  await tab.goto(`${ORIGIN}/reveal`, { waitUntil: "load" });
+  await tab.waitForFunction(() => window.TraceBug && window.TraceBug.runAudit, null, { timeout: 15000 });
+  await tab.waitForTimeout(400);
+  const rv = await tab.evaluate(() => window.TraceBug.runAudit({ scan: "accessibility" }));
+  const rvA = cat(rv, "accessibility");
+  check("label in name (2.5.3): the demo link is flagged, with WCAG 2.5.3 and a fix quoting the visible text",
+    has(rv, "label-content-name-mismatch", (f) => /demo/.test(f.selector || "") && (f.wcag || []).includes("2.5.3") && /Watch the demo/.test(f.fix || "")), short(rules(rv)));
+  check("focus not obscured (2.4.11): the 64px fixed header is flagged with a scroll-padding fix",
+    has(rv, "kbd/focus-obscured", (f) => (f.fix || "").includes("scroll-padding-top: 64px") && (f.wcag || []).includes("2.4.11")), short(rv.findings.filter((f) => f.ruleId.startsWith("kbd/"))));
+  check("text hidden until scroll is not checked — and the run says so",
+    !has(rv, "color-contrast") && (rvA?.metrics?.transparentText ?? 0) >= 1 && /invisible \(opacity 0\)/.test(rvA?.limitation || ""), short(rvA));
+  check("score: accessibility = 100 − 10 (label) − 5 (header) = 85", rv.score?.categories?.accessibility === 85 && rv.score?.overall === 85, short(rv.score));
+
+  // The panel's "Scroll the page and re-run" reveals it; the contrast finding then appears with a passing colour.
+  await tab.evaluate(() => window.TraceBug.showAuditPanel("accessibility"));
+  await tab.waitForSelector('#tracebug-audit-panel [data-tb-au="reveal"]', { timeout: 15000 });
+  const startY = await tab.evaluate(() => scrollY);
+  await tab.click('#tracebug-audit-panel [data-tb-au="reveal"]');
+  await tab.waitForFunction(() => (window.TraceBug.getLastAudit()?.findings || []).some((f) => f.ruleId === "color-contrast"), null, { timeout: 30000 });
+  const rv2 = await tab.evaluate(() => window.TraceBug.getLastAudit());
+  const cc = rv2.findings.find((f) => f.ruleId === "color-contrast");
+  check("after the scroll pass: the hidden low-contrast text is checked, with suggested colour #ad5009",
+    /hidden-low/.test(cc?.selector || "") && cc?.evidence?.metrics?.suggestedFgColor === "#ad5009" && (cc?.wcag || []).includes("1.4.3"), short(cc && { sel: cc.selector, m: cc.evidence?.metrics, wcag: cc.wcag }));
+  check("after the scroll pass: nothing is reported as invisible, and the page is back where it was",
+    !cat(rv2, "accessibility")?.metrics?.transparentText && (await tab.evaluate(() => scrollY)) === startY);
+  await tab.waitForSelector("#tracebug-audit-panel .tb-au-score", { timeout: 15000 });
+  const scoreTxt = await tab.locator("#tracebug-audit-panel .tb-au-score").innerText();
+  check("the panel shows the score", /\b\d{1,3}\b[\s\S]*(Good|Needs work|Poor)/.test(scoreTxt), scoreTxt.slice(0, 120));
 } catch (err) {
   console.error(err);
   failures++;

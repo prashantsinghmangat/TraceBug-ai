@@ -61,7 +61,11 @@ export interface AuditRunOf<F> {
   truncated: number;
   /** Which menu scan produced the run. Absent = "full" (runs before the menu existed). */
   scan?: AuditScan;
+  /** Scores computed from ALL findings, before the cap (src/audit/score.ts). Absent in runs from before 1.12.0. */
+  score?: AuditScore;
 }
+
+import type { AuditScore } from "./score";
 
 /** The finding fields compareAudits matches on. */
 export interface AuditFindingKeys {

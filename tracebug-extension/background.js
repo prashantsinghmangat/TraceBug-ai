@@ -1012,6 +1012,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // async
   }
 
+  // The toolbar's Audit button (page world) asks for axe via the content script.
+  // Injects only into the sender's own tab, which TraceBug is already running in.
+  if (message.type === "TB_LOAD_AXE") {
+    const tabId = sender?.tab?.id;
+    if (!tabId) { sendResponse({ ok: false }); return true; }
+    injectAxe(tabId).then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
   // User turned TraceBug OFF from the floating toolbar (✕). Forget the tab so
   // it isn't re-injected on the next navigation. Hydration-await inside the
   // async block (sendResponse stays sync-safe via return true).
