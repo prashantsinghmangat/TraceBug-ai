@@ -4,6 +4,7 @@ import { confirmEmail, emailConfigured, sendEmail } from "@/lib/mailer.mjs";
 
 const ALLOWED_SOURCES = new Set([
   "pricing-pro", "pricing-team", "viewer-footer", "blog", "milestone-5",
+  "home", // home page #updates section: also the fallback link from the extension and SDK cards
   // Extension popup ask (docs/launch/email-capture-plan.md): which result came just before it.
   "ext-audit-2", "ext-ticket-2", "ext-export-2", "ext-retry-10",
 ]);
