@@ -1,11 +1,11 @@
 import { notFound, redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import DashboardClient from "./DashboardClient";
+import { PHASE2_CLOUD_LIVE } from "@/lib/flags";
 
 export const dynamic = "force-dynamic";
 
 // PHASE2-CLOUD: cloud dashboard is not live — 404 until Phase 2 ships (see auth/page.tsx).
-const PHASE2_CLOUD_LIVE = false;
 
 // Server side: only enforce auth + pass identity to the client. Data fetch
 // happens on the client via /api/sessions and /api/me — those endpoints are
