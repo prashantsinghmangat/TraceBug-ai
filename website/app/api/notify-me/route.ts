@@ -148,8 +148,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_SIGNUPS_PER_EMAIL_PER_DAY = 5;
 const RESEND_CONFIRM_AFTER_MS = 10 * 60 * 1000;
 // Resend's free plan sends 100 emails a day across everything (confirms, the
-// monthly update, Supabase Auth SMTP). Leave room for the rest.
-const CONFIRM_DAILY_CAP = Number(process.env.CONFIRM_DAILY_CAP) || 60;
+// monthly update, Supabase Auth SMTP: Site Audit sign-in and delete codes).
+// 30 leaves ~70 for codes and the monthly send. Override with CONFIRM_DAILY_CAP.
+const CONFIRM_DAILY_CAP = Number(process.env.CONFIRM_DAILY_CAP) || 30;
 
 async function underDailyCap(admin: ReturnType<typeof createSupabaseAdminClient>): Promise<boolean> {
   const { count, error } = await admin

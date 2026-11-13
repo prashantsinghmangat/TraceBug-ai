@@ -1,13 +1,13 @@
 # Launch state — read this, not the archives
 
-Current facts only, verified against code and git. Last updated **2026-11-13** (1.12.0 live; email ask + sending built, unreleased). **Keep this file under
+Current facts only, verified against code and git. Last updated **2026-11-13** (1.12.0 live; email built + committed, not deployed; audit saved results uncommitted). **Keep this file under
 ~80 lines: rewrite it, never append** — history goes in `PROGRESS.md` (append-only, never read whole).
 Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 
 ## Where things stand
 
-- **Gates** (2026-11-12, `site-audit`): `check.mjs --full` green — 1226/81, ext:lint 0/22 (baseline 22),
-  84/84 report, 76/76 audit, 35/35 extension audit; all e2e green
+- **Gates** (2026-11-13, `develop` + uncommitted work): `check.mjs --full` green — 1233/82, ext:lint 0/22 (baseline 22),
+  84/84 report, 80/80 audit, 40/40 extension audit, 22/22 audit gate, 23/23 email ask; all e2e green
   (`ext-shipping-path` / `ext-feature-matrix` can flake under load — rerun alone before believing a fail).
 - **Site Audit on branch `site-audit`** (from `develop`; plan `docs/audit-quality/implementation-plan.md`), committed
   through `f96db4d`; docs pass uncommitted. User guide `docs/site-audit.md`; agent brief `docs/AGENT-BRIEF.md` (update it
@@ -29,18 +29,22 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
   registry `isLatest`, AMO 1.12.0 public, CWS approved (per owner; the CWS page can't be fetched by script), `main` =
   `develop` = merge `10c7595`, tag `v1.12.0` pushed, tracebug.dev serves the new SDK (hash matches) with the audit pages
   and `llms.txt`, `npx -y tracebug@1.12.0 mcp --help` works in an empty folder. 1.11.6 skipped the stores.
-- **Unreleased on `develop` (uncommitted):** audit panel **Fix with AI** (downloads the audit + copies "Fix the latest
-  TraceBug site audit."; can't detect MCP, so it always offers "Agent not set up?"), MCP prompt `fix_site_audit`
-  (steps in `src/exporters/agent-workflow.ts` `auditFixWorkflowSteps`), METRICS.md trust metrics (no data yet).
-  Also uncommitted: **optional email ask** in the popup after the 2nd audit/ticket/export (`email-capture-plan.md`;
-  `e2e/ext-email-ask.e2e.mjs` 20/20, not in `check.mjs`), opt-in usage counts, notify-me sources + migration 0007
-  (not applied), privacy page updated. **Email sending built** (Resend free, plain fetch): double opt-in on
-  notify-me + rate limits, `/api/confirm`, `/api/unsubscribe` (+ RFC 8058), `/email` status page, migration 0008
-  (not applied), monthly/backlog script `website/scripts/email.mjs` — details + owner setup in
-  `email-capture-plan.md` *Sending*. All signup surfaces now say "at most one email a month" and "check your inbox".
-  **Before release:** owner sets up Resend + DNS + env, applies 0007/0008, tests a signup end to end;
-  CWS data-use answers (STORE-LISTINGS). 1.12.0 blog post in `website/lib/blog.ts` (no cover yet) + kit
-  `docs-internal/marketing/posts-1.12.0.md`.
+- **On `develop`, not on `main` / not deployed** (checked 2026-11-13: tracebug.dev `/email`, `/api/confirm`, the new blog
+  post all 404). Committed: Fix with AI + MCP `fix_site_audit` (`c7a37fa`); popup **email ask** after the 2nd
+  saved ticket/export (audits counted, not triggering — the gate covers them) + sending via Resend free — double opt-in, `/api/confirm`, `/api/unsubscribe` (+ RFC 8058),
+  `/email`, `website/scripts/email.mjs` (`01df764`, `9a8674a`; `e2e/ext-email-ask.e2e.mjs` 21/21, not in `check.mjs`).
+  Owner setup done and tested locally end to end (Resend domain + DNS, migrations 0007/0008, Netlify env, Auth SMTP).
+  **Uncommitted:** audit **saved results** — last run per page + scan in `sessionStorage` (`src/audit/last-run.ts`,
+  own quota, never page `localStorage`); popup/toolbar Audit shows it instead of scanning ("Your last scan…"), Re-scan
+  compares against it even after a reload, with **old → new score** pills (`.tb-au-delta`); **Open in Claude** in the
+  panel footer (2×2 grid). Tests: `tests/audit-last-run.test.ts`, `ext-site-audit` 40/40.
+  **Also uncommitted — Site Audit sign-in gate** (ADR 009; `sign-in-gate-plan.md` "As built"): 3 free audits, then a
+  free email + code account on `signin.html`; audit only; fail open; separate unticked marketing box; website
+  `/api/ext/otp/start|verify`, `/api/keepalive` + `.github/workflows/keepalive.yml`. e2e `ext-audit-gate` 22/22.
+  `check.mjs --full` now also runs `e2e:audit-gate` and `e2e:email-ask`. Email card: audits no longer trigger it;
+  never shown when signed in for Site Audit. Popup header **account icon** (menu: who's signed in / free audits left,
+  Sign in / Sign out / Delete) + Audit card shows free audits left; welcome page **optional, skippable** sign-in card.
+  1.12.0 blog post in `website/lib/blog.ts` (no cover yet) + kit `docs-internal/marketing/posts-1.12.0.md`.
   Follow-ups: drop the Chrome "New in 1.12.0" paragraph in a few weeks; registry description still says "bug reports"
   only (`server.json`, next version); blog/announce posts (RELEASING §8).
   Next per plan: the day-14 gate (incl. pricing, B4), then Design Tokens → Components → Visual Comparison.
@@ -50,13 +54,18 @@ Code locations: `CODEMAP.md`. Release mechanics: `docs/RELEASING.md`.
 1. Announce 1.12.0 (RELEASING §8: blog post, posts, dev.to); confirm the GitHub release for `v1.12.0` exists.
 2. `RELEASE_CHECKLIST.md` rows never recorded as run: 1–3, 9, 10, 12b, 13 (best on the real store update), 14 (macOS).
 3. AMO slide/caption say "Record a tab, window or screen" — confirm Firefox's picker offers tabs.
-4. Pricing (B4) decided 2026-11-13: `monetization-plan.md` (approved; no licensing/Pro code until a Founder
-   pre-sale validates one feature). Email ask + sending: `email-capture-plan.md` (built; owner setup pending, Open #6).
+4. Pricing (B4) decided 2026-11-13: `monetization-plan.md`; sign-in gate decided (ADR 009) and built.
 5. Accepted gaps: no fullscreen in the video player; no site-wide CSP; Next 14 advisories (upgrade deferred).
-6. Email setup (owner): Resend + DNS **done** 2026-11-13. Left: migrations 0007 + 0008 on the existing
-   project, Netlify env (`RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO`), Supabase Auth custom SMTP, end-to-end
-   test (`email-capture-plan.md` *Sending*).
-   Free Supabase pauses after 7 idle days: signups and unsubscribe links then fail until restored.
+7. Sign-in gate go-live (owner): Supabase templates (code + link) and OTP length 6 **done**, local sign-in tested
+   2026-11-13; still: Auth email limit ~30/hour, deploy website first, live sign-in + delete test, run keep-alive once,
+   store/website copy at release — `sign-in-gate-plan.md` *Owner setup before release*.
+6. Email go-live (owner): merge `develop` → `main`; live test on tracebug.dev (sign up, confirm, unsubscribe);
+   send the backlog (`website`: `node --env-file=.env.local scripts/email.mjs confirm`, then `--send`); CWS data-use
+   answers at the next extension release; free Supabase **keep-alive** Action (required if the sign-in gate ships).
+   Link-scanner fix done (uncommitted): GET shows `/email` with a button, the button POSTs. Netlify env
+   `CONFIRM_DAILY_CAP=30`; Supabase Auth email limit ~30/hour.
+   Live test: the confirm link must start `https://tracebug.dev/api/confirm`; `scripts/email.mjs --send` now refuses
+   a localhost/non-https `NEXT_PUBLIC_SITE_URL` (a dev `.env.local` would otherwise mail localhost links to the list).
 
 ## Gotchas that are still true
 

@@ -9,6 +9,7 @@
 // requests and mixed content seen in the current capture).
 
 import type { AuditCategory, AuditRun, Issue } from "../types";
+import { auditPageKey, clearSavedAuditRuns, loadAuditRun, saveAuditRun } from "./last-run";
 import { getAllSessions } from "../storage";
 import { detectConsoleErrors, detectFailedRequests } from "../scanner/detectors/session-data";
 import { detectMixedContent } from "../scanner/detectors/mixed-content";
@@ -45,11 +46,21 @@ export interface RunAuditOptions {
 }
 
 let _lastRun: AuditRun | null = null;
+/** auditPageKey of the address `_lastRun` ran on (its own url is masked). */
+let _lastRunPage = "";
 let _inFlight: Promise<AuditRun> | null = null;
 
-/** The most recent run on this page, or null. Kept in memory only. */
+/** The most recent run on this page, or null. In memory, and saved per page in
+ *  sessionStorage so it survives a reload of the same tab (last-run.ts). */
 export function getLastAuditRun(): AuditRun | null {
-  return _lastRun;
+  if (_lastRun && _lastRunPage === auditPageKey(location.href)) return _lastRun;
+  return loadAuditRun(location.href);
+}
+
+/** Make a saved run the current one (the panel shows it without re-scanning). */
+export function setLastAuditRun(run: AuditRun): void {
+  _lastRun = run;
+  _lastRunPage = auditPageKey(location.href);
 }
 
 /** Runtime detectors (scanner) as audit findings: same evidence, audit fields added. */
@@ -221,6 +232,8 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
       review,
     });
     _lastRun = run;
+    _lastRunPage = auditPageKey(location.href);
+    saveAuditRun(run, location.href);
     return run;
   })();
 
@@ -233,4 +246,5 @@ export async function runAudit(options: RunAuditOptions = {}): Promise<AuditRun>
 
 export function clearAuditRun(): void {
   _lastRun = null;
+  clearSavedAuditRuns();
 }

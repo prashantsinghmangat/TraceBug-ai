@@ -2303,13 +2303,14 @@ class TraceBugSDK {
 
   /** Run an audit and show it in the Site Audit panel (needs the dashboard). `scan` picks a menu scan
    *  ("full", "auto-review", "accessibility", "performance-seo"); default: the last one chosen.
-   *  Running it again shows what changed since the previous run. */
-  async showAuditPanel(scan?: AuditScan): Promise<AuditRun | null> {
+   *  Running it again shows what changed since the previous run, also after a reload of the tab.
+   *  `{ showLast: true }` shows this page's last result for the scan instead of running it, if there is one. */
+  async showAuditPanel(scan?: AuditScan, opts?: { showLast?: boolean }): Promise<AuditRun | null> {
     if (!this.config?.enableDashboard) return null;
     const root = document.getElementById("tracebug-root");
     if (!root) return null;
     const m = await import("./ui/audit-panel");
-    return m.showAuditPanel(root, scan);
+    return m.showAuditPanel(root, scan, opts);
   }
 
   /**

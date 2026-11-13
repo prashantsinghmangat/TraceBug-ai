@@ -1,6 +1,6 @@
 # ADR 001 — Local-first, zero backend
 
-**Status:** Accepted (founding decision)
+**Status:** Accepted (founding decision). Amended by [ADR 009](009-free-account-for-site-audit.md): Site Audit needs a free account after 3 audits; capture stays account-free.
 
 ## Context
 

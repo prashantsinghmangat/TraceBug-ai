@@ -32,15 +32,30 @@ async function unsubscribe(token: string): Promise<"unsubscribed" | "invalid" | 
   return "unsubscribed";
 }
 
-// The link in every update email: one click, no login, no "are you sure?".
+const go = (req: Request, qs: string) => NextResponse.redirect(new URL(`/email?${qs}`, req.url), 303);
+
+// The link in every update email. GET never changes anything — mail security
+// scanners open links on their own — it shows /email with one "Unsubscribe"
+// button (no login, no questions). That button POSTs here with from=page.
 export async function GET(req: Request) {
-  const result = await unsubscribe(new URL(req.url).searchParams.get("token") ?? "");
-  return NextResponse.redirect(new URL(`/email?s=${result}`, req.url), 303);
+  const token = new URL(req.url).searchParams.get("token") ?? "";
+  if (!TOKEN_RE.test(token)) return go(req, "s=invalid");
+  return go(req, `s=unsubscribe&token=${token}`);
 }
 
-// RFC 8058 one-click: mail clients POST here from the List-Unsubscribe header.
+// Two callers:
+//  - the /email page button: form with token + from=page → redirect to the result page;
+//  - RFC 8058 one-click from mail clients (List-Unsubscribe-Post header): token in
+//    the query, body "List-Unsubscribe=One-Click" → plain status. Scanners don't POST.
 export async function POST(req: Request) {
-  const result = await unsubscribe(new URL(req.url).searchParams.get("token") ?? "");
+  const url = new URL(req.url);
+  let form: FormData | null = null;
+  try { form = await req.formData(); } catch { /* RFC 8058 body may not parse as a form everywhere */ }
+  if (form?.get("from") === "page") {
+    const result = await unsubscribe(String(form.get("token") ?? ""));
+    return go(req, `s=${result}`);
+  }
+  const result = await unsubscribe(url.searchParams.get("token") ?? "");
   const status = result === "unsubscribed" ? 200 : result === "invalid" ? 400 : 500;
   return new NextResponse(result, { status });
 }

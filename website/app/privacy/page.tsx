@@ -247,6 +247,17 @@ export default function PrivacyPage() {
                 your address deleted entirely, reply to any email from us.
               </li>
               <li>
+                <strong className="text-text-primary">Site Audit account</strong> — when the
+                extension version you use asks for a free account after 3 audits, signing in
+                stores your email address, an account id, and when you signed up and last signed
+                in (in our database host, Supabase). The 6-digit sign-in code is emailed through
+                Resend. We never receive your audits, the pages you audit or their addresses —
+                the extension only tells itself that you are signed in. A separate, unticked box
+                adds you to the email list above; signing in alone does not. You can delete the
+                account from the extension (Options → Site Audit account → Delete my account),
+                which also removes your address from the email list.
+              </li>
+              <li>
                 <strong className="text-text-primary">Feedback and uninstall forms</strong>{" "}
                 — what you type, plus the extension version on the uninstall form.
               </li>

@@ -1,0 +1,20 @@
+name: Supabase keep-alive
+
+# Free Supabase projects pause after 7 days without activity (ADR 009: Site Audit
+# sign-in, email confirm and unsubscribe depend on it). Twice a week, ask
+# tracebug.dev to run one cheap query. Free on GitHub Actions.
+# Note: GitHub turns scheduled workflows off after 60 days with no commits to the
+# repo — re-enable it from the Actions tab if that happens.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1,4"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping tracebug.dev
+        run: curl --fail --silent --show-error --max-time 30 https://tracebug.dev/api/keepalive

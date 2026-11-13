@@ -3,6 +3,8 @@
 Status: **approved working strategy, 2026-11-13.** No code, no licensing work, no Pro infrastructure until the
 evidence justifies it — monetization planning must not become an engineering project. The $29 Founder offer is an experiment.
 Resolves audit plan B4 for now: no paid pilots on local features until the validation below passes.
+**Update 2026-11-13:** the owner wants a free account required for Site Audit after 3 audits — `sign-in-gate-plan.md`
+(plan; reverses "Account: None" below for the audit only once ADR 009 is written).
 Companion: `email-capture-plan.md` (optional email ask + opt-in usage snapshot).
 
 ## Decisions (owner, 2026-11-13)

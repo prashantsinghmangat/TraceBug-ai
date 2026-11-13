@@ -38,6 +38,15 @@ function die(msg) {
 
 for (const k of ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]) if (!process.env[k]) die(`Missing env ${k}`);
 if (SEND && !emailConfigured()) die("Missing env RESEND_API_KEY / EMAIL_FROM / EMAIL_REPLY_TO");
+// Every confirm/unsubscribe link is built from NEXT_PUBLIC_SITE_URL (lib/mailer.mjs). A local .env.local often
+// points it at localhost — real people would get links that can't work. Refuse to send those.
+{
+  const site = (process.env.NEXT_PUBLIC_SITE_URL || "https://tracebug.dev").replace(/\/$/, "");
+  if (SEND && !/^https:\/\/(?!localhost\b|127\.)/.test(site)) {
+    die(`NEXT_PUBLIC_SITE_URL is ${site} — links would not work for real people. Run with NEXT_PUBLIC_SITE_URL=https://tracebug.dev (or remove it from .env.local).`);
+  }
+  console.log(`Links point at ${site}`);
+}
 
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },

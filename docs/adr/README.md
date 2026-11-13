@@ -12,3 +12,4 @@ New ADRs: copy the pattern, number sequentially, keep it under a page.
 | [004](004-manifest-v3.md) | Chrome extension on Manifest V3 |
 | [005](005-zero-dependency-policy.md) | Zero runtime dependencies (hand-rolled MCP/ZIP/source-map) |
 | [006](006-stdio-only-mcp.md) | MCP server is stdio-only |
+| [009](009-free-account-for-site-audit.md) | A free account for Site Audit after 3 audits (amends 001 for the audit only) |

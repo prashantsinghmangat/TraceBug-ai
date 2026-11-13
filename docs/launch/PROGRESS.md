@@ -195,3 +195,18 @@ Newest entry at the bottom. Keep the last two entries here; move older ones to
   Local end to end: popup + website signup → confirm email → confirmed → monthly send → one-click unsubscribe → view empty. Fixes from testing:
   popup fetch `credentials: "omit"` (was sending tracebug.dev cookies), notify-me returns `status` (`subscribed`|`pending`) so forms say
   "already on the list" instead of a false "check your inbox", skip reasons logged, dry-run preview link labelled. e2e email-ask 21/21, `check.mjs --full` green.
+
+- 2026-11-13 — Audit saved results + Open in Claude (uncommitted): `src/audit/last-run.ts` (sessionStorage), panel
+  show-last / old→new score / 2×2 footer, SDK `showAuditPanel(scan, { showLast })`. Verified: audit-last-run 5/5,
+  ext-site-audit 40/40, screenshots. Email work checked: committed, not deployed (live URLs 404). Wrote
+  `sign-in-gate-plan.md` (3 free audits → email-code account; awaiting owner decisions + ADR 009).
+
+- 2026-11-13 — Site Audit sign-in gate (uncommitted): ADR 009; 3 free audits → email + code on signin.html (audit only,
+  fail open, unticked marketing box); worker `auditPermit`, panel gate/notes, `/api/ext/otp/start|verify` (+ delete),
+  keep-alive route + workflow. Verified: ext-audit-gate 22/22, screenshots. Owner: Supabase `{{ .Token }}` templates, deploy, live test.
+- 2026-11-13 — Email card: audits no longer trigger it, hidden when signed in. Confirm/unsubscribe GET now shows a
+  button page (POST acts; RFC 8058 kept); confirm cap default 30. Verified: curl + browser on local dev, gates.
+- 2026-11-13 — Sign-in UX: popup header account icon + menu (signed in / free audits left, sign in/out, delete),
+  Audit card shows free audits left; welcome page optional skippable sign-in card; signin.html footer spacing + copy
+  when audits remain; welcome chip "No account to capture". Files: popup.*, styles.css, signin.*, welcome.*. Verified:
+  check.mjs --full green, local sign-in with Supabase templates + OTP length 6. Not covered by e2e: menu + welcome card.

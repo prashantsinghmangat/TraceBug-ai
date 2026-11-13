@@ -1,7 +1,7 @@
 // Optional email ask in the extension popup (docs/launch/email-capture-plan.md).
 //
 // Proves: a real audit sends the success signal and the worker counts it; the
-// ask is due only after the 2nd result; the popup shows it once, sends only the
+// ask is due only after the 2nd saved ticket/export (audits are counted but don't trigger it — ADR 009); the popup shows it once, sends only the
 // typed address (+ counts only when ticked), and every exit path ends or snoozes
 // it; ✕ comes back exactly once at the 10th result; nothing is ever blocked.
 //
@@ -78,12 +78,16 @@ try {
 
   // Unknown kinds are ignored by the content script.
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("tracebug-success", { detail: { kind: "bogus" } })));
-  // 2nd result (an export) → due, attributed to it.
+  // An export: the first result that counts (audits don't — Site Audit has its own sign-in, ADR 009).
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("tracebug-success", { detail: { kind: "export" } })));
-  st = await waitFor((s) => s?.state === "due");
-  check("2nd result makes the ask due", st?.state === "due", short(st));
-  check("source names the result just before it", st?.source === "ext-export-2", short(st));
+  st = await waitFor((s) => s?.counts?.export === 1);
+  check("audits don't move the ask: audit + export is not due", st?.state === "waiting", short(st));
   check("unknown kinds are not counted", !("bogus" in (st?.counts || {})) && st?.counts?.export === 1, short(st));
+  // 2nd counting result (a saved ticket) → due, attributed to it.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("tracebug-success", { detail: { kind: "ticket" } })));
+  st = await waitFor((s) => s?.state === "due");
+  check("2nd ticket/export makes the ask due", st?.state === "due", short(st));
+  check("source names the result just before it", st?.source === "ext-ticket-2", short(st));
 
   // 2. Popup shows it; showing it counts as ✕ (snoozed); submit sends address + ticked counts.
   const popup = await ctx.newPage();
@@ -99,7 +103,7 @@ try {
   check("the audit card is still usable beside it", await popup.isEnabled("#btnAuditRun"));
   st = await getState();
   check("showing it snoozes (ignoring = ✕)", st?.state === "snoozed", short(st));
-  check("counts are shown before sending", /1 audit, 0 saved tickets, 1 export/.test(await popup.textContent("#emailAskCounts")));
+  check("counts are shown before sending", /1 audit, 1 saved ticket, 1 export/.test(await popup.textContent("#emailAskCounts")));
 
   await popup.fill("#emailAskInput", "not-an-email");
   await popup.click("#emailAskSubmit");
@@ -108,7 +112,7 @@ try {
   await popup.fill("#emailAskInput", "dev@example.com");
   await popup.click("#emailAskSubmit");
   await popup.waitForFunction(() => /check your inbox/.test(document.getElementById("emailAskMsg").textContent), null, { timeout: 5000 }).catch(() => {});
-  check("without the box ticked, counts are not sent", posted && posted.email === "dev@example.com" && posted.source === "ext-export-2" && !("usage" in posted), short(posted));
+  check("without the box ticked, counts are not sent", posted && posted.email === "dev@example.com" && posted.source === "ext-ticket-2" && !("usage" in posted), short(posted));
   st = await getState();
   check("a signup ends the ask for good", st?.state === "done", short(st));
   await popup.reload();
@@ -145,16 +149,25 @@ try {
   st = await getState();
   check("No thanks ends it for good", st?.state === "done" && !(await popup.isVisible("#emailAsk")), short(st));
 
+  // Signed in for Site Audit (ADR 009): the card never shows, even when due.
+  await setState({ counts: { audit: 0, ticket: 2, export: 0 }, state: "due", source: "ext-ticket-2" });
+  await sw.evaluate(() => chrome.storage.local.set({ tb_audit_gate_v1: { audits: 3, account: { email: "dev@example.com", userId: "u", verifiedAt: Date.now() } } }));
+  await popup.reload();
+  await sleep(700);
+  st = await getState();
+  check("signed in: the card never shows", !(await popup.isVisible("#emailAsk")) && st?.state === "due", short(st));
+  await sw.evaluate(() => chrome.storage.local.remove("tb_audit_gate_v1"));
+
   // 5. ✕ → snoozed → due again at the 10th result, once.
   await setState({ counts: { audit: 2, ticket: 0, export: 0 }, state: "due", source: "ext-audit-2" });
   await popup.reload();
   await popup.waitForSelector("#emailAsk", { state: "visible", timeout: 5000 });
   await popup.click("#emailAskClose");
   check("✕ hides it", !(await popup.isVisible("#emailAsk")));
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 9; i++) {
     await page.evaluate(() => window.dispatchEvent(new CustomEvent("tracebug-success", { detail: { kind: "ticket" } })));
   }
-  st = await waitFor((s) => s?.counts?.ticket === 7);
+  st = await waitFor((s) => s?.counts?.ticket === 9);
   check("9 results after ✕: still snoozed", st?.state === "snoozed", short(st));
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("tracebug-success", { detail: { kind: "ticket" } })));
   st = await waitFor((s) => s?.state === "due");

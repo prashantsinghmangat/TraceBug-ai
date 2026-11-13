@@ -1,7 +1,9 @@
 # Email capture plan — earned ask, not a wall
 
-Status: **built on `develop` 2026-11-13 (uncommitted, unreleased).** Sending (double opt-in, unsubscribe, monthly
-script) built the same day; needs the owner's Resend account, DNS, env vars and migrations 0007 + 0008 (see *Sending*). Soft ask chosen (no gate). Paid plans: `monetization-plan.md`.
+Status: **built and committed on `develop` (`01df764`, `9a8674a`), tested locally end to end, not deployed** (2026-11-13).
+Go-live steps: STATE.md Open #6. For Site Audit this soft ask is to be replaced by `sign-in-gate-plan.md` once that is
+approved and built; it stays for tickets/exports, and is never shown to a user signed in for Site Audit. Link scanners: fixed 2026-11-13 (uncommitted) — opening a
+confirm/unsubscribe link only shows `/email` with a button; the button POSTs. RFC 8058 one-click POST unchanged.
 
 ## Goal
 
@@ -31,7 +33,9 @@ Accounts arrive naturally later, with the paid **cloud** tier (share links, team
 
 ## Proposal — "earned ask" v2
 
-1. **When:** after the **2nd successful outcome** of any kind — audit finished with a score, ticket saved,
+1. **When (changed 2026-11-13):** after the **2nd saved ticket or export**. Audits are still counted for the opt-in
+   usage snapshot but no longer trigger the ask: Site Audit users get the sign-in after 3 audits (ADR 009), one ask is enough.
+   Original wording: after the **2nd successful outcome** of any kind — audit finished with a score, ticket saved,
    or recording saved/exported. Cancelled/empty runs don't count. Counted locally in `chrome.storage.local`
    (not page `localStorage`); nothing is sent.
 2. **Where:** in extension UI only — the audit side panel or the popup, right after the success state.

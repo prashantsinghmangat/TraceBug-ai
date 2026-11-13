@@ -12,7 +12,8 @@ Last updated: 2026-11-12 (version 1.12.0).
 ## 1. What TraceBug is
 
 A local-first tool that turns front-end problems into evidence an AI coding
-agent can fix from. No account, no backend, no telemetry, nothing uploaded.
+agent can fix from. No backend for your data, no telemetry, nothing uploaded. No account for capture; in the
+extension, Site Audit asks for a free account (email + code) after 3 audits (ADR 009) — results are never sent.
 MIT licence.
 
 Three surfaces, one code base:
