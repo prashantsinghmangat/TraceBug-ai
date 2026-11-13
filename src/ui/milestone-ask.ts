@@ -97,9 +97,10 @@ export function maybeShowMilestoneAsk(root: HTMLElement): void {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, source: "milestone-5" }),
     })
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
-        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">✓ Almost done: check your inbox for a link to confirm.</div>`);
+        const already = (await res.json().catch(() => ({})))?.status === "subscribed";
+        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">${already ? "✓ You're already on the list. Thanks!" : "✓ Almost done: check your inbox for a link to confirm."}</div>`);
         setTimeout(close, 2500);
       })
       .catch(() => {

@@ -100,7 +100,8 @@ async function sendUpdate() {
   console.log(`Issue "${issue}": "${subject}"`);
   console.log(`${subs.length} subscriber(s), ${todo.length} not sent yet; this run: ${Math.min(limit, todo.length)}${SEND ? "" : " (dry run)"}`);
   if (!SEND) {
-    console.log("\n--- preview ---\n" + updateEmail({ subject, body, unsubscribeToken: "0".repeat(64) }).text);
+    console.log("\n--- preview (dry run: the unsubscribe link below is a stand-in and will not work) ---\n"
+      + updateEmail({ subject, body, unsubscribeToken: "PREVIEW-NOT-A-REAL-LINK" }).text);
     return;
   }
   let sent = 0;

@@ -1449,11 +1449,15 @@ async function initEmailAsk() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        // Host permission would otherwise attach the user's tracebug.dev cookies;
+        // the signup needs nothing but the body.
+        credentials: "omit",
       });
       if (!res.ok) throw new Error(String(res.status));
+      const already = (await res.json().catch(() => ({})))?.status === "subscribed";
       void setEmailAskState("done");
       for (const el of form.querySelectorAll(".ea-text, .ea-row, .ea-usage, .ea-foot")) el.style.display = "none";
-      msg.textContent = "✓ Almost done: check your inbox for a link to confirm.";
+      msg.textContent = already ? "✓ You're already on the list. Thanks!" : "✓ Almost done: check your inbox for a link to confirm.";
       hideSoon(5000);
     } catch {
       btn.disabled = false;

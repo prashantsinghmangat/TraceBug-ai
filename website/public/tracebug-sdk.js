@@ -29078,9 +29078,11 @@ details.tb-vnet-row:hover { background: var(--tb-bg-2); }
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, source: "milestone-5" })
-      }).then((res) => {
+      }).then(async (res) => {
+        var _a3;
         if (!res.ok) throw new Error(String(res.status));
-        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">\u2713 Almost done: check your inbox for a link to confirm.</div>`);
+        const already = ((_a3 = await res.json().catch(() => ({}))) == null ? void 0 : _a3.status) === "subscribed";
+        setInnerHTML(card, `<div style="font-size:12.5px;line-height:1.5">${already ? "\u2713 You're already on the list. Thanks!" : "\u2713 Almost done: check your inbox for a link to confirm."}</div>`);
         setTimeout(close, 2500);
       }).catch(() => {
         setInnerHTML(card, `<div style="font-size:12px;line-height:1.5">This page blocked the request \u2014 you can sign up at
